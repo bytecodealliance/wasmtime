@@ -1325,6 +1325,12 @@ who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.3.1 -> 0.3.0"
 
+[[audits.h2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.19 -> 0.4.0"
+notes = "A number of changes but nothing adding new `unsafe` or anything outside the purview of what this crate already manages."
+
 [[audits.hashbrown]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -1348,10 +1354,22 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.3.0"
 
+[[audits.http]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.9 -> 1.0.0"
+notes = "Minor changes leading up to the 1.0.0 release and nothing fundamentally new here."
+
 [[audits.http-body]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "1.0.0-rc.2"
+
+[[audits.http-body]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.0-rc.2 -> 1.0.0"
+notes = "Only minor changes made for a stable release."
 
 [[audits.http-body-util]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -1359,11 +1377,27 @@ criteria = "safe-to-deploy"
 version = "0.1.0-rc.2"
 notes = "only one use of unsafe related to pin projection. unclear to me why pin_project! is used in many modules of the project, but the expanded output of that macro is inlined in either.rs"
 
+[[audits.http-body-util]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.0-rc.2 -> 0.1.0"
+notes = "Minor documentation updates an additions, nothing major."
+
 [[audits.httpdate]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "1.0.2"
 notes = "No unsafety, no io"
+
+[[audits.hyper]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.0-rc.3 -> 1.0.1"
+notes = """
+Quite a few changes here relative to the last RC but everything is related to
+refactorings and such. No new fundamental addition of functionality or
+substantially new unsafe code.
+"""
 
 [[audits.id-arena]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"

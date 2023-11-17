@@ -7,6 +7,7 @@ use std::{
     thread::JoinHandle,
 };
 use tokio::net::TcpListener;
+use wasmtime_wasi_http::io::TokioIo;
 
 async fn test(
     mut req: Request<hyper::body::Incoming>,
@@ -30,7 +31,9 @@ pub struct Server {
 }
 
 impl Server {
-    fn new<F>(run: impl FnOnce(tokio::net::TcpStream) -> F + Send + Sync + 'static) -> Result<Self>
+    fn new<F>(
+        run: impl FnOnce(TokioIo<tokio::net::TcpStream>) -> F + Send + Sync + 'static,
+    ) -> Result<Self>
     where
         F: Future<Output = Result<()>>,
     {
@@ -52,7 +55,7 @@ impl Server {
             rt.block_on(async move {
                 tracing::debug!("preparing to accept connection");
                 let (stream, _) = listener.accept().await.map_err(anyhow::Error::from)?;
-                run(stream).await
+                run(TokioIo::new(stream)).await
             })
         });
         Ok(Self {

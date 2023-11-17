@@ -1,6 +1,7 @@
 //! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
 //! implementation of the wasi-http API.
 
+use crate::io::TokioIo;
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
@@ -200,6 +201,7 @@ async fn handler(
                 tracing::warn!("tls protocol error: {e:?}");
                 types::ErrorCode::TlsProtocolError
             })?;
+            let stream = TokioIo::new(stream);
 
             let (sender, conn) = timeout(
                 connect_timeout,
@@ -221,6 +223,7 @@ async fn handler(
             (sender, worker)
         }
     } else {
+        let tcp_stream = TokioIo::new(tcp_stream);
         let (sender, conn) = timeout(
             connect_timeout,
             // TODO: we should plumb the builder through the http context, and use it here
@@ -253,6 +256,7 @@ async fn handler(
         between_bytes_timeout,
     })
 }
+
 impl From<http::Method> for types::Method {
     fn from(method: http::Method) -> Self {
         if method == http::Method::GET {

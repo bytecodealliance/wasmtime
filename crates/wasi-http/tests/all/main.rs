@@ -17,6 +17,7 @@ use wasmtime_wasi::preview2::{
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
     body::HyperIncomingBody,
+    io::TokioIo,
     types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequest},
     WasiHttpCtx, WasiHttpView,
 };
@@ -287,6 +288,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         let server = async move {
             loop {
                 let (stream, _) = listener.accept().await?;
+                let stream = TokioIo::new(stream);
                 let handle = handle.clone();
                 task::spawn(async move {
                     if let Err(e) = http1::Builder::new()
@@ -385,6 +387,7 @@ async fn wasi_http_double_echo() -> Result<()> {
     let server = async move {
         loop {
             let (stream, _) = listener.accept().await?;
+            let stream = TokioIo::new(stream);
             task::spawn(async move {
                 if let Err(e) = http1::Builder::new()
                     .keep_alive(true)
