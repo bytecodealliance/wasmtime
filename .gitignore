@@ -23,3 +23,6 @@ vendor
 examples/build
 examples/.cache
 *.coredump
+
+# JS dependencies
+node_modules/

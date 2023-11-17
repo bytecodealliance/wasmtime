@@ -1,0 +1,25 @@
+{
+  "name": "zkasm-test",
+  "version": "1.0.0",
+  "description": "zkASM Test Utils",
+  "scripts": {
+    "test": "node run-tests-zkasm.js"
+  },
+  "keywords": [
+  ],
+  "author": "Andrei Kashin",
+  "license": "AGPL",
+  "dependencies": {
+    "@0xpolygonhermez/zkasmcom": "https://github.com/0xPolygonHermez/zkasmcom.git#v1.0.0",
+    "yargs": "^17.5.1"
+  },
+  "devDependencies": {
+    "@0xpolygonhermez/zkevm-proverjs": "github:0xPolygonHermez/zkevm-proverjs#feature/64bits",
+    "@0xpolygonhermez/zkevm-commonjs": "github:0xPolygonHermez/zkevm-commonjs#v2.0.0-fork.5",
+    "chai": "^4.3.6",
+    "chalk": "^3.0.0",
+    "eslint": "^8.25.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-mocha": "^10.1.0"
+  }
+}
