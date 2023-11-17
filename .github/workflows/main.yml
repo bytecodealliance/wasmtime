@@ -45,6 +45,9 @@ jobs:
     - uses: actions/setup-node@v3
       with:
         node-version: '20.8.0'
+        cache: 'npm'
+        cache-dependency-path: tests/zkasm/package-lock.json
+    - run: npm ci --prefix tests/zkasm
     - run: ./ci/test-zkasm.sh
 
   rustfmt:
