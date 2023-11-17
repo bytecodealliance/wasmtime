@@ -1,7 +1,7 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, create_file, open_scratch_directory};
 
-unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
+unsafe fn test_remove_directory(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
     wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
@@ -9,11 +9,9 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
     wasi::path_remove_directory(dir_fd, "dir")
         .expect("remove_directory on a directory should succeed");
 
-    wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
-
-    // Test that removing it with a trailing slash succeeds.
-    wasi::path_remove_directory(dir_fd, "dir/")
-        .expect("remove_directory with a trailing slash on a directory should succeed");
+    // There isn't consistient behavior across operating systems of whether removing with a
+    // directory where the path has a trailing slash succeeds or fails, so we won't test
+    // that behavior.
 
     // Create a temporary file.
     create_file(dir_fd, "file");
@@ -29,8 +27,7 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
     assert_errno!(
         wasi::path_remove_directory(dir_fd, "file/")
             .expect_err("remove_directory with a trailing slash on a file should fail"),
-        unix => wasi::ERRNO_NOTDIR,
-        windows => wasi::ERRNO_NOENT
+        wasi::ERRNO_NOTDIR
     );
 
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
@@ -56,5 +53,5 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_remove_directory_trailing_slashes(dir_fd) }
+    unsafe { test_remove_directory(dir_fd) }
 }
