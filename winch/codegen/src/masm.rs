@@ -23,8 +23,21 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+/// The direction to perform the memory move.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum MemMoveDirection {
+    /// From high memory addresses to low memory addresses.
+    /// Invariant: the source location is closer to the FP than the destination
+    /// location, which will be closer to the SP.
+    HighToLow,
+    /// From low memory addresses to high memory addresses.
+    /// Invariant: the source location is closer to the SP than the destination
+    /// location, which will be closer to the FP.
+    LowToHigh,
+}
+
 /// Representation of the stack pointer offset.
-#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Default)]
 pub struct SPOffset(u32);
 
 impl SPOffset {
@@ -430,8 +443,11 @@ pub(crate) trait MacroAssembler {
 
     /// Performs a memory move of bytes from src to dest.
     /// Bytes are moved in blocks of 8 bytes, where possible.
-    fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32) {
-        debug_assert!(dst.as_u32() < src.as_u32());
+    fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32, direction: MemMoveDirection) {
+        match direction {
+            MemMoveDirection::LowToHigh => debug_assert!(dst.as_u32() < src.as_u32()),
+            MemMoveDirection::HighToLow => debug_assert!(dst.as_u32() > src.as_u32()),
+        }
         // At least 4 byte aligned.
         debug_assert!(bytes % 4 == 0);
         let mut remaining = bytes;

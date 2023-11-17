@@ -710,7 +710,7 @@ impl Masm for MacroAssembler {
     }
 
     fn epilogue(&mut self, locals_size: u32) {
-        assert!(self.sp_offset == locals_size);
+        debug_assert_eq!(self.sp_offset, locals_size);
 
         let rsp = rsp();
         if locals_size > 0 {

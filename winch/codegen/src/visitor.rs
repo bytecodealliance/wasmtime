@@ -4,11 +4,11 @@
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
 
-use crate::abi::ABI;
+use crate::abi::{RetArea, ABI};
 use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, RemKind,
-    RoundingMode, ShiftKind,
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
+    RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
 };
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
@@ -922,19 +922,7 @@ where
             self.handle_unreachable_end();
         } else {
             let mut control = self.control_frames.pop().unwrap();
-            let is_outermost = self.control_frames.len() == 0;
-            // If it's not the outermost control stack frame, emit the the full "end" sequence,
-            // which involves, popping results from the value stack, pushing results back to the
-            // value stack and binding the exit label.
-            // Else, pop values from the value stack and bind the exit label.
-            if !is_outermost {
-                control.emit_end(self.masm, &mut self.context);
-            } else {
-                if let Some(data) = control.results() {
-                    self.context.pop_abi_results(data, self.masm);
-                }
-                control.bind_exit_label(self.masm);
-            }
+            control.emit_end(self.masm, &mut self.context);
         }
     }
 
@@ -1340,8 +1328,7 @@ where
 
     fn visit_if(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::r#if(
-            self.env.resolve_block_results_data::<M::ABI>(blockty),
-            self.env.resolve_block_type_info(blockty),
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1361,8 +1348,7 @@ where
 
     fn visit_block(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::block(
-            self.env.resolve_block_results_data::<M::ABI>(blockty),
-            self.env.resolve_block_type_info(blockty),
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1370,7 +1356,7 @@ where
 
     fn visit_loop(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::r#loop(
-            self.env.resolve_block_type_info(blockty),
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1381,9 +1367,8 @@ where
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                if let Some(r) = frame.as_target_results() {
-                    cx.pop_abi_results(r, masm);
-                }
+                frame
+                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
             });
     }
 
@@ -1392,23 +1377,39 @@ where
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
 
-        let top = if let Some(data) = frame.as_target_results() {
+        let top = {
             let top = self.context.without::<TypedReg, M, _>(
-                data.results.regs(),
+                frame.results::<M>().regs(),
                 self.masm,
                 |ctx, masm| ctx.pop_to_reg(masm, None),
             );
-            self.context.top_abi_results(data, self.masm);
+            frame.top_abi_results::<M, _>(
+                &mut self.context,
+                self.masm,
+                |results, context, masm| {
+                    // In the case of `br_if` theres a possibility that we'll
+                    // exit early from the block or falltrough, for
+                    // a falltrough, we cannot rely on the pre-computed return area;
+                    // it must be recalculated so that any values that are
+                    // generated are correctly placed near the current stack
+                    // pointer.
+                    results.on_stack().then(|| {
+                        let stack_consumed = context.stack.sizeof(results.stack_operands_len());
+                        let base = masm.sp_offset().as_u32() - stack_consumed;
+                        let offs = base + results.size();
+                        RetArea::sp(SPOffset::from_u32(offs))
+                    })
+                },
+            );
             top
-        } else {
-            self.context.pop_to_reg(self.masm, None)
         };
 
         // Emit instructions to balance the machine stack if the frame has
         // a different offset.
         let current_sp_offset = self.masm.sp_offset();
-        let (_, frame_sp_offset) = frame.base_stack_len_and_sp();
-        let (label, cmp, needs_cleanup) = if current_sp_offset > frame_sp_offset {
+        let results_size = frame.results::<M>().size();
+        let state = frame.stack_state();
+        let (label, cmp, needs_cleanup) = if current_sp_offset > state.target_offset {
             (self.masm.get_label(), IntCmpKind::Eq, true)
         } else {
             (*frame.label(), IntCmpKind::Ne, false)
@@ -1421,7 +1422,13 @@ where
         if needs_cleanup {
             // Emit instructions to balance the stack and jump if not falling
             // through.
-            self.masm.ensure_sp_for_jump(frame_sp_offset);
+            self.masm.memmove(
+                current_sp_offset,
+                state.target_offset,
+                results_size,
+                MemMoveDirection::LowToHigh,
+            );
+            self.masm.ensure_sp_for_jump(state.target_offset);
             self.masm.jmp(*frame.label());
 
             // Restore sp_offset to what it was for falling through and emit
@@ -1440,24 +1447,22 @@ where
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
         let default_index = control_index(targets.default(), self.control_frames.len());
-        let default_result = self.control_frames[default_index].as_target_results();
+        let default_frame = &mut self.control_frames[default_index];
+        let default_result = default_frame.results::<M>();
 
-        let (index, tmp) = if let Some(data) = default_result {
+        let (index, tmp) = {
             let index_and_tmp = self.context.without::<(TypedReg, _), M, _>(
-                data.results.regs(),
+                default_result.regs(),
                 self.masm,
                 |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
             );
 
             // Materialize any constants or locals into their result representation,
             // so that when reachability is restored, they are correctly located.
-            self.context.top_abi_results(data, self.masm);
+            default_frame.top_abi_results::<M, _>(&mut self.context, self.masm, |results, _, _| {
+                results.ret_area().copied()
+            });
             index_and_tmp
-        } else {
-            (
-                self.context.pop_to_reg(self.masm, None),
-                self.context.any_gpr(self.masm),
-            )
         };
 
         self.masm.jmp_table(&labels, index.into(), tmp);
@@ -1486,8 +1491,8 @@ where
             self.masm.bind(*l);
             // Ensure that the stack pointer is correctly positioned before
             // jumping to the jump table code.
-            let (_, offset) = frame.base_stack_len_and_sp();
-            self.masm.ensure_sp_for_jump(offset);
+            let state = frame.stack_state();
+            self.masm.ensure_sp_for_jump(state.target_offset);
             self.masm.jmp(*frame.label());
             frame.set_as_target();
         }
@@ -1508,9 +1513,8 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                if let Some(data) = frame.as_target_results() {
-                    cx.pop_abi_results(data, masm);
-                }
+                frame
+                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
             });
     }
 

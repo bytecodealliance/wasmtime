@@ -1,8 +1,4 @@
-use crate::{
-    abi::{ABIResults, ABIResultsData},
-    codegen::{BuiltinFunction, OperandSize, ABI},
-    CallingConvention,
-};
+use crate::codegen::{control, BlockSig, BuiltinFunction, OperandSize};
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
@@ -66,34 +62,6 @@ pub struct CalleeInfo {
     pub ty: WasmFuncType,
     /// The callee index in the WebAssembly function index space.
     pub index: FuncIndex,
-}
-
-/// Holds information about a block's param and return count.
-#[derive(Default, Debug, Copy, Clone)]
-pub(crate) struct BlockTypeInfo {
-    /// Parameter count.
-    pub param_count: usize,
-    /// Result count.
-    pub result_count: usize,
-}
-
-impl BlockTypeInfo {
-    /// Creates a [`BlockTypeInfo`] with one result.
-    pub fn with_single_result() -> Self {
-        Self {
-            param_count: 0,
-            result_count: 1,
-        }
-    }
-
-    /// Creates a new [`BlockTypeInfo`] with the given param and result
-    /// count.
-    pub fn new(params: usize, results: usize) -> Self {
-        Self {
-            param_count: params,
-            result_count: results,
-        }
-    }
 }
 
 /// The function environment.
@@ -167,41 +135,20 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         }
     }
 
-    pub(crate) fn resolve_block_type_info(&self, ty: BlockType) -> BlockTypeInfo {
+    /// Converts a [wasmparser::BlockType] into a [BlockSig].
+    pub(crate) fn resolve_block_sig(&self, ty: BlockType) -> BlockSig {
         use BlockType::*;
         match ty {
-            Empty => BlockTypeInfo::default(),
-            Type(_) => BlockTypeInfo::with_single_result(),
+            Empty => BlockSig::new(control::BlockType::void()),
+            Type(ty) => {
+                let ty = self.convert_valtype(ty);
+                BlockSig::new(control::BlockType::single(ty))
+            }
             FuncType(idx) => {
                 let sig_index =
                     self.translation.module.types[TypeIndex::from_u32(idx)].unwrap_function();
                 let sig = &self.types[sig_index];
-                BlockTypeInfo::new(sig.params().len(), sig.returns().len())
-            }
-        }
-    }
-
-    /// Resolves the type of the block in terms of [`wasmtime_environ::WasmType`].
-    // TODO::
-    // Profile this operation and if proven to be significantly expensive,
-    // intern ABIResultsData instead of recreating it every time.
-    pub(crate) fn resolve_block_results_data<A: ABI>(&self, blockty: BlockType) -> ABIResultsData {
-        use BlockType::*;
-        match blockty {
-            Empty => ABIResultsData::wrap(ABIResults::default()),
-            Type(ty) => {
-                let ty = self.convert_valtype(ty);
-                let results = <A as ABI>::abi_results(&[ty], &CallingConvention::Default);
-                ABIResultsData::wrap(results)
-            }
-            FuncType(idx) => {
-                let sig_index =
-                    self.translation.module.types[TypeIndex::from_u32(idx)].unwrap_function();
-                let results = <A as ABI>::abi_results(
-                    &self.types[sig_index].returns(),
-                    &CallingConvention::Default,
-                );
-                ABIResultsData::wrap(results)
+                BlockSig::new(control::BlockType::func(sig.clone()))
             }
         }
     }
