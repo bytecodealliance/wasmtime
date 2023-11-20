@@ -4,7 +4,6 @@
 //! which shows how to use some of the features of `cranelift_jit`.
 
 #![deny(missing_docs, unreachable_pub)]
-#![warn(unused_import_braces)]
 
 mod backend;
 mod compiled_blob;

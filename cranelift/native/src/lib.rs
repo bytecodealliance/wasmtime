@@ -2,7 +2,6 @@
 //! Cranelift to generate code to run on the same machine.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;

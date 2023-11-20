@@ -3,7 +3,6 @@
 //! This re-exports `object` so you don't have to explicitly keep the versions in sync.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 mod backend;
 

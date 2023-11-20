@@ -4,7 +4,6 @@
 //! available filetest commands.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 pub use crate::function_runner::TestFileCompiler;
 use crate::runner::TestRunner;

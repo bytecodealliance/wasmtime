@@ -10,7 +10,6 @@
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 #![no_std]
 
 #[cfg(not(feature = "std"))]

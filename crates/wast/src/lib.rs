@@ -1,7 +1,6 @@
 //! Implementation of the WAST text format for wasmtime.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 #[cfg(feature = "component-model")]
 mod component;

@@ -1,7 +1,5 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-#![warn(unused_import_braces)]
-
 use anyhow::Result;
 use clap::Parser;
 use std::time::Duration;

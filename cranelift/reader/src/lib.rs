@@ -4,7 +4,6 @@
 //! testing Cranelift, but is not essential for a JIT compiler.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 pub use crate::error::{Location, ParseError, ParseResult};
 pub use crate::isaspec::{parse_option, parse_options, IsaSpec, ParseOptionError};

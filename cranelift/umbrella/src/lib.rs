@@ -1,7 +1,6 @@
 //! Cranelift umbrella crate, providing a convenient one-line dependency.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 #![no_std]
 
 /// Provide these crates, renamed to reduce stutter.

@@ -161,7 +161,6 @@
 //! ```
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 #![no_std]
 
 #[allow(unused_imports)] // #[macro_use] is required for no_std

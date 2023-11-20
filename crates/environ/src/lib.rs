@@ -4,7 +4,6 @@
 //! linear memories.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 mod address_map;
 mod builtin;

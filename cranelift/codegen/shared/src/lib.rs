@@ -2,7 +2,6 @@
 //! `cranelift-codegen-meta` libraries.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 pub mod constant_hash;
 pub mod constants;

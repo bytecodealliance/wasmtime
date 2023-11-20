@@ -14,7 +14,6 @@
 //! - All the trees in a forest can be cleared in constant time.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 #![no_std]
 
 #[cfg(test)]

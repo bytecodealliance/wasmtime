@@ -1,7 +1,6 @@
 //! Runtime library support for Wasmtime.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 
 use anyhow::{Error, Result};
 use std::fmt;

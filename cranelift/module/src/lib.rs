@@ -1,7 +1,6 @@
 //! Top-level lib.rs for `cranelift_module`.
 
 #![deny(missing_docs)]
-#![warn(unused_import_braces)]
 #![no_std]
 
 #[cfg(not(feature = "std"))]
