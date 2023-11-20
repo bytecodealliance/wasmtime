@@ -1,4 +1,4 @@
-#![warn(unused_import_braces, unstable_features)]
+#![warn(unused_import_braces)]
 
 use clap::Parser;
 use std::path::PathBuf;

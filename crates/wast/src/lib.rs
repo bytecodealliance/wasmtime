@@ -2,7 +2,6 @@
 
 #![deny(missing_docs)]
 #![warn(unused_import_braces)]
-#![deny(unstable_features)]
 
 #[cfg(feature = "component-model")]
 mod component;

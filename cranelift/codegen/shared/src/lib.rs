@@ -3,7 +3,6 @@
 
 #![deny(missing_docs)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
 
 pub mod constant_hash;
 pub mod constants;

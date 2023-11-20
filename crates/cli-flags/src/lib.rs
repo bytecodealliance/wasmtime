@@ -1,6 +1,5 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-#![deny(unstable_features)]
 #![warn(unused_import_braces)]
 
 use anyhow::Result;

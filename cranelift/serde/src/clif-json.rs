@@ -1,6 +1,6 @@
 //! Utility for `cranelift_serde`.
 
-#![deny(missing_docs, unstable_features)]
+#![deny(missing_docs)]
 #![warn(unused_import_braces)]
 
 use clap::Parser;
