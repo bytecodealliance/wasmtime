@@ -13,7 +13,7 @@
 //! - Empty trees have a very small 32-bit footprint.
 //! - All the trees in a forest can be cleared in constant time.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![deny(missing_docs, trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 #![no_std]
 

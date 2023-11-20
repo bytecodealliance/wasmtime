@@ -3,7 +3,7 @@
 //! the translation the base addresses of regions of memory that will hold the globals, tables and
 //! linear memories.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![deny(missing_docs, trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 
 mod address_map;

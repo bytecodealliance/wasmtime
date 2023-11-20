@@ -1,6 +1,6 @@
 //! Implementation of the WAST text format for wasmtime.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![deny(missing_docs, trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 #![deny(unstable_features)]
 

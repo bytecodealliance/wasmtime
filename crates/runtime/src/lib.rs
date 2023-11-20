@@ -1,6 +1,6 @@
 //! Runtime library support for Wasmtime.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![deny(missing_docs, trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 
 use anyhow::{Error, Result};

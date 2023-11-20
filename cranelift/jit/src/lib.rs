@@ -6,7 +6,6 @@
 #![deny(
     missing_docs,
     trivial_numeric_casts,
-    unused_extern_crates,
     unstable_features,
     unreachable_pub
 )]

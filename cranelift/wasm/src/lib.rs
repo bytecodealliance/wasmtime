@@ -9,7 +9,7 @@
 //!
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![deny(missing_docs, trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "std", deny(unstable_features))]
 #![no_std]

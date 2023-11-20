@@ -1,6 +1,6 @@
 //! JIT-style runtime for WebAssembly using Cranelift.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![deny(missing_docs, trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 
 mod code_memory;
