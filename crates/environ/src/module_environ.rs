@@ -607,7 +607,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let memory_index = MemoryIndex::from_u32(memory_index);
                             let mut offset_expr_reader = offset_expr.get_binary_reader();
                             let (base, offset) = match offset_expr_reader.read_operator()? {
-                                Operator::I32Const { value } => (None, value as u64),
+                                Operator::I32Const { value } => (None, (value as u32).into()),
                                 Operator::I64Const { value } => (None, value as u64),
                                 Operator::GlobalGet { global_index } => {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
