@@ -3359,7 +3359,6 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "rayon",
- "regex",
  "rustix",
  "serde",
  "serde_derive",

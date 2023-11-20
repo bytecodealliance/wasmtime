@@ -55,7 +55,7 @@ bytes = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
-regex = "1.10.2"
+
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }
