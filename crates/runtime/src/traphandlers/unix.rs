@@ -1,3 +1,5 @@
+#![allow(clippy::cast_sign_loss)] // platforms too fiddly to worry about this
+
 use crate::traphandlers::{tls, wasmtime_longjmp};
 use std::cell::RefCell;
 use std::io;
