@@ -140,6 +140,9 @@ trivial_numeric_casts = 'warn'
 unstable_features = 'warn'
 unused_import_braces = 'warn'
 
+[workspace.lints.clippy]
+all = 'allow'
+
 [workspace.dependencies]
 arbitrary = { version = "1.3.1" }
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=16.0.0" }
