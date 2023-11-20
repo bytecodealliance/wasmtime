@@ -29,7 +29,7 @@
 //!   references allocated from an associated memory pool. It has a much smaller footprint than
 //!   `Vec`.
 
-#![deny(missing_docs, trivial_numeric_casts)]
+#![deny(missing_docs)]
 #![warn(unused_import_braces)]
 #![no_std]
 

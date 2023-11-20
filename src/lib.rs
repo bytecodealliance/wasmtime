@@ -2,7 +2,7 @@
 //!
 //! This crate implements the Wasmtime command line tools.
 
-#![deny(missing_docs, trivial_numeric_casts, unstable_features)]
+#![deny(missing_docs, unstable_features)]
 #![warn(unused_import_braces)]
 
 pub mod commands;

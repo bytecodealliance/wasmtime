@@ -191,7 +191,7 @@ impl Masm for MacroAssembler {
                 };
 
                 let scratch = regs::scratch();
-                self.asm.load_constant(imm as u64, scratch);
+                self.asm.load_constant(imm, scratch);
                 self.asm.mov_rr(scratch, rd, size);
             }
             (RegImm::Reg(rs), rd) => {

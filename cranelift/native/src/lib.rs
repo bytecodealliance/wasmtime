@@ -1,7 +1,7 @@
 //! Performs autodetection of the host for the purposes of running
 //! Cranelift to generate code to run on the same machine.
 
-#![deny(missing_docs, trivial_numeric_casts, unstable_features)]
+#![deny(missing_docs, unstable_features)]
 #![warn(unused_import_braces)]
 
 use cranelift_codegen::isa;

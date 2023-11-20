@@ -12,7 +12,7 @@ pub(super) fn define_variant(
 ) -> TokenStream {
     let ident = names::type_(name);
     let size = v.mem_size_align().size as u32;
-    let align = v.mem_size_align().align as usize;
+    let align = v.mem_size_align().align;
     let contents_offset = v.payload_offset() as u32;
 
     let lifetime = quote!('a);

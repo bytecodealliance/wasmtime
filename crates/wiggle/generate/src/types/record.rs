@@ -8,7 +8,7 @@ use witx::Layout;
 pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenStream {
     let ident = names::type_(name);
     let size = s.mem_size_align().size as u32;
-    let align = s.mem_size_align().align as usize;
+    let align = s.mem_size_align().align;
 
     let member_names = s.members.iter().map(|m| names::struct_member(&m.name));
     let member_decls = s.members.iter().map(|m| {

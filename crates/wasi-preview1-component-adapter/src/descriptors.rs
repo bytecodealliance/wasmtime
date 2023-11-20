@@ -316,7 +316,7 @@ impl Descriptors {
         // First, ensure from_fd is in bounds:
         let _ = self.get(from_fd)?;
         // Expand table until to_fd is in bounds as well:
-        while self.table_len.get() as u32 <= to_fd as u32 {
+        while self.table_len.get() as u32 <= to_fd {
             self.push_closed()?;
         }
         // Then, close from_fd and put its contents into to_fd:

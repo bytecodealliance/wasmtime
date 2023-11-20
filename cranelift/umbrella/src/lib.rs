@@ -1,6 +1,6 @@
 //! Cranelift umbrella crate, providing a convenient one-line dependency.
 
-#![deny(missing_docs, trivial_numeric_casts, unstable_features)]
+#![deny(missing_docs, unstable_features)]
 #![warn(unused_import_braces)]
 #![no_std]
 

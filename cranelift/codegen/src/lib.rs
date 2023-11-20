@@ -1,5 +1,5 @@
 //! Cranelift code generation library.
-#![deny(missing_docs, trivial_numeric_casts)]
+#![deny(missing_docs)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "std", deny(unstable_features))]
 #![no_std]

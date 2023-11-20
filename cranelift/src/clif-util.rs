@@ -1,4 +1,3 @@
-#![deny(trivial_numeric_casts)]
 #![warn(unused_import_braces, unstable_features)]
 
 use clap::Parser;

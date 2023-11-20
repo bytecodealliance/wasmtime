@@ -909,7 +909,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         ms: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.connect_timeout =
-            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
+            ms.map(|ms| std::time::Duration::from_millis(ms));
         Ok(Ok(()))
     }
 
@@ -936,7 +936,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         ms: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.first_byte_timeout =
-            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
+            ms.map(|ms| std::time::Duration::from_millis(ms));
         Ok(Ok(()))
     }
 
@@ -963,7 +963,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         ms: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.between_bytes_timeout =
-            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
+            ms.map(|ms| std::time::Duration::from_millis(ms));
         Ok(Ok(()))
     }
 

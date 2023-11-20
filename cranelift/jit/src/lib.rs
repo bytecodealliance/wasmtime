@@ -3,12 +3,7 @@
 //! There is an [example project](https://github.com/bytecodealliance/cranelift-jit-demo/)
 //! which shows how to use some of the features of `cranelift_jit`.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unstable_features,
-    unreachable_pub
-)]
+#![deny(missing_docs, unstable_features, unreachable_pub)]
 #![warn(unused_import_braces)]
 
 mod backend;

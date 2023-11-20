@@ -332,7 +332,7 @@ impl Masm for MacroAssembler {
             },
             (RegImm::Imm(imm), dst) => match imm {
                 I::I32(v) => self.asm.mov_ir(v as u64, dst, size),
-                I::I64(v) => self.asm.mov_ir(v as u64, dst, size),
+                I::I64(v) => self.asm.mov_ir(v, dst, size),
                 I::F32(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
                     self.asm.xmm_mov_mr(&addr, dst, size);
