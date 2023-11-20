@@ -12,7 +12,7 @@ Unreleased.
 
 ## 15.0.0
 
-Unreleased.
+Released 2023-11-20
 
 ### Added
 
