@@ -297,7 +297,7 @@ fn get_diff_value(
     scope: &mut v8::HandleScope<'_>,
 ) -> DiffValue {
     match ty {
-        DiffValueType::I32 => DiffValue::I32(val.to_int32(scope).unwrap().value() as i32),
+        DiffValueType::I32 => DiffValue::I32(val.to_int32(scope).unwrap().value()),
         DiffValueType::I64 => {
             let (val, todo) = val.to_big_int(scope).unwrap().i64_value();
             assert!(todo);

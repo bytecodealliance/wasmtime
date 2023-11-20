@@ -554,7 +554,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let whence = match whence {
             types::Whence::Cur => SeekFrom::Current(offset),
             types::Whence::End => SeekFrom::End(offset),
-            types::Whence::Set => SeekFrom::Start(offset as u64),
+            types::Whence::Set => {
+                SeekFrom::Start(offset.try_into().map_err(|_| Error::invalid_argument())?)
+            }
         };
         let newoffset = self
             .table()

@@ -10,6 +10,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-codegen = { workspace = true }
 cranelift-control = { workspace = true }

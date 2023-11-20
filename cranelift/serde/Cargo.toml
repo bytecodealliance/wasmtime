@@ -9,6 +9,9 @@ readme = "README.md"
 keywords = ["webassembly", "serde"]
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "clif-json"
 path = "src/clif-json.rs"

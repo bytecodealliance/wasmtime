@@ -10,7 +10,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
 include = ["src/**/*", "README.md", "LICENSE", "build.rs", "witx/*", "wit/**/*"]
-build = "build.rs"
+
+[lints]
+workspace = true
 
 [dependencies]
 wasmtime = { workspace = true }

@@ -5,6 +5,9 @@ edition.workspace = true
 publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 test = false

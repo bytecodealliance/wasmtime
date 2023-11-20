@@ -5,8 +5,8 @@ use crate::module::{
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
     GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialValue, Tunables, TypeConvert, TypeIndex, WasmError, WasmFuncType, WasmHeapType,
-    WasmResult, WasmType,
+    TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmFuncType,
+    WasmHeapType, WasmResult, WasmType,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -487,7 +487,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let table_index = TableIndex::from_u32(table_index.unwrap_or(0));
                             let mut offset_expr_reader = offset_expr.get_binary_reader();
                             let (base, offset) = match offset_expr_reader.read_operator()? {
-                                Operator::I32Const { value } => (None, value as u32),
+                                Operator::I32Const { value } => (None, value.unsigned()),
                                 Operator::GlobalGet { global_index } => {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
                                 }
@@ -607,8 +607,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let memory_index = MemoryIndex::from_u32(memory_index);
                             let mut offset_expr_reader = offset_expr.get_binary_reader();
                             let (base, offset) = match offset_expr_reader.read_operator()? {
-                                Operator::I32Const { value } => (None, (value as u32).into()),
-                                Operator::I64Const { value } => (None, value as u64),
+                                Operator::I32Const { value } => (None, value.unsigned().into()),
+                                Operator::I64Const { value } => (None, value.unsigned()),
                                 Operator::GlobalGet { global_index } => {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
                                 }

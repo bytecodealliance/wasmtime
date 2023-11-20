@@ -143,7 +143,7 @@ pub trait HostOutputStream: Subscribe {
     fn write_zeroes(&mut self, nelem: usize) -> StreamResult<()> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
-        let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
+        let bs = Bytes::from_iter(core::iter::repeat(0).take(nelem));
         self.write(bs)?;
         Ok(())
     }

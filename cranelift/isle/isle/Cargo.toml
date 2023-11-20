@@ -8,6 +8,9 @@ readme = "../README.md"
 repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
 version = "0.103.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 codespan-reporting = { version = "0.11.1", optional = true }
 log = { workspace = true, optional = true }

@@ -409,8 +409,7 @@ impl ResourceLimiter for MemoryContext {
         // Check if the desired exceeds a maximum (either from Wasm or from the host)
         assert!(desired < maximum.unwrap_or(usize::MAX));
 
-        assert_eq!(current as usize, self.wasm_memory_used);
-        let desired = desired as usize;
+        assert_eq!(current, self.wasm_memory_used);
 
         if desired + self.host_memory_used > self.memory_limit {
             self.limit_exceeded = true;
@@ -524,8 +523,7 @@ impl ResourceLimiterAsync for MemoryContext {
         // Check if the desired exceeds a maximum (either from Wasm or from the host)
         assert!(desired < maximum.unwrap_or(usize::MAX));
 
-        assert_eq!(current as usize, self.wasm_memory_used);
-        let desired = desired as usize;
+        assert_eq!(current, self.wasm_memory_used);
 
         if desired + self.host_memory_used > self.memory_limit {
             self.limit_exceeded = true;

@@ -1075,7 +1075,7 @@ where
             let overflow = if is_signed {
                 x < (min as i128) || x > (max as i128)
             } else {
-                x < 0 || (x as u128) > (max as u128)
+                x < 0 || (x as u128) > max
             };
             // bounds check
             if overflow {
@@ -1102,7 +1102,7 @@ where
                         x
                     } else {
                         let x = if x < 0 { 0 } else { x };
-                        let x = u128::min(x as u128, max as u128);
+                        let x = u128::min(x as u128, max);
                         x as i128
                     };
 

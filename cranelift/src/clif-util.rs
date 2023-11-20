@@ -1,6 +1,3 @@
-#![deny(trivial_numeric_casts)]
-#![warn(unused_import_braces, unstable_features, unused_extern_crates)]
-
 use clap::Parser;
 use std::path::PathBuf;
 

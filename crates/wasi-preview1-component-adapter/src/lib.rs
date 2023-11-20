@@ -815,7 +815,7 @@ pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_max_len
     State::with(|state| {
         let ds = state.descriptors();
         if let Some(preopen) = ds.get_preopen(fd) {
-            if preopen.path.len > path_max_len as usize {
+            if preopen.path.len > path_max_len {
                 Err(ERRNO_NAMETOOLONG)
             } else {
                 ptr::copy_nonoverlapping(preopen.path.ptr, path, preopen.path.len);
@@ -1247,7 +1247,7 @@ pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_seekable_file(fd)?;
-        *offset = file.position.get() as Filesize;
+        *offset = file.position.get();
         Ok(())
     })
 }

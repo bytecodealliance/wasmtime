@@ -10,6 +10,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 include = ["src/**/*", "LICENSE" ]
 
+[lints]
+workspace = true
+
 [dependencies]
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }

@@ -1,7 +1,5 @@
 //! Cranelift code generation library.
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
+#![deny(missing_docs)]
 #![no_std]
 // Various bits and pieces of this crate might only be used for one platform or
 // another, but it's not really too useful to learn about that all the time. On

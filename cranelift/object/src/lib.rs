@@ -2,13 +2,7 @@
 //!
 //! This re-exports `object` so you don't have to explicitly keep the versions in sync.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 mod backend;
 

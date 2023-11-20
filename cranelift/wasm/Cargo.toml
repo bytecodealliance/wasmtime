@@ -11,6 +11,9 @@ readme = "README.md"
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 wasmparser = { workspace = true }
 cranelift-codegen = { workspace = true }

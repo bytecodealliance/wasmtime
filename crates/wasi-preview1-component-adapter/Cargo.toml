@@ -5,6 +5,9 @@ authors.workspace = true
 edition.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 wasi = { version = "0.11.0", default-features = false }
 wit-bindgen = { workspace = true, default-features = false, features = ["macros"] }

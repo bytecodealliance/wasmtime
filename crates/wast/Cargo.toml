@@ -9,6 +9,9 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift', 'wat'] }

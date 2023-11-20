@@ -77,7 +77,7 @@ mod not_for_windows {
         }
 
         fn wasm_accessible(&self) -> Range<usize> {
-            let base = self.mem as usize;
+            let base = self.mem;
             let end = base + self.size;
             base..end
         }
