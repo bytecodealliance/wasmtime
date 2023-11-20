@@ -35,7 +35,12 @@ impl BackendInner for WinMLBackend {
         let model = LearningModel::LoadFromStream(&RandomAccessStreamReference::CreateFromStream(
             &model_stream,
         )?)?;
-        let graph = WinMLGraph(model);
+        let device_kind = match target {
+            ExecutionTarget::Cpu => LearningModelDeviceKind::Cpu,
+            ExecutionTarget::Gpu => LearningModelDeviceKind::DirectX,
+            ExecutionTarget::Tpu => unimplemented!(),
+        };
+        let graph = WinMLGraph { model, device_kind };
 
         let box_: Box<dyn BackendGraph> = Box::new(graph);
         Ok(box_.into())
@@ -52,21 +57,23 @@ impl BackendFromDir for WinMLBackend {
         path: &Path,
         target: ExecutionTarget,
     ) -> Result<Graph, BackendError> {
-        // TODO: Use ONNX files.
         let model = read(&path.join("mobilenet.onnx"))?;
         self.load(&[&model], target)
     }
 }
 
-struct WinMLGraph(LearningModel);
+struct WinMLGraph {
+    model: LearningModel,
+    device_kind: LearningModelDeviceKind,
+}
 
 unsafe impl Send for WinMLGraph {}
 unsafe impl Sync for WinMLGraph {}
 
 impl BackendGraph for WinMLGraph {
     fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
-        let device = LearningModelDevice::Create(LearningModelDeviceKind::Default)?;
-        let session = LearningModelSession::CreateFromModelOnDevice(&self.0, &device)?;
+        let device = LearningModelDevice::Create(self.device_kind.clone())?;
+        let session = LearningModelSession::CreateFromModelOnDevice(&self.model, &device)?;
         let box_: Box<dyn BackendExecutionContext> = Box::new(WinMLExecutionContext::new(session));
         Ok(box_.into())
     }
