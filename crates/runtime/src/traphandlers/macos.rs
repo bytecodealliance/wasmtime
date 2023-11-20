@@ -31,7 +31,7 @@
 //! function declarations. Many bits and pieces are copied or translated from
 //! the SpiderMonkey implementation and it should pass all the tests!
 
-#![allow(non_snake_case)]
+#![allow(non_snake_case, clippy::cast_sign_loss)]
 
 use crate::traphandlers::{tls, wasmtime_longjmp};
 use mach::exception_types::*;

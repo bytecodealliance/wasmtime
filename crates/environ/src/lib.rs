@@ -4,6 +4,7 @@
 //! linear memories.
 
 #![deny(missing_docs)]
+#![warn(clippy::cast_sign_loss)]
 
 mod address_map;
 mod builtin;

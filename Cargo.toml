@@ -135,12 +135,16 @@ edition = "2021"
 rust-version = "1.72.0"
 
 [workspace.lints.rust]
+# Turn on some lints which are otherwise allow-by-default in rustc.
 unused_extern_crates = 'warn'
 trivial_numeric_casts = 'warn'
 unstable_features = 'warn'
 unused_import_braces = 'warn'
 
 [workspace.lints.clippy]
+# The default set of lints in Clippy is viewed as "too noisy" right now so
+# they're all turned off by default. Selective lints are then enabled below as
+# necessary.
 all = 'allow'
 
 [workspace.dependencies]
