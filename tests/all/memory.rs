@@ -642,3 +642,21 @@ fn shared_memory_wait_notify() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn init_with_negative_segment() -> Result<()> {
+    let engine = Engine::default();
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 65536)
+                (data (i32.const 0x8000_0000) "x")
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
