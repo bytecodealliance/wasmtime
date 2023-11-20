@@ -9,8 +9,8 @@ use std::collections::{
 };
 use wasmparser::BlockType;
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, ModuleTranslation, ModuleTypes, PtrSize, TableIndex, TablePlan,
-    TypeConvert, TypeIndex, VMOffsets, WasmFuncType, WasmType,
+    FuncIndex, GlobalIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, TableIndex, TablePlan,
+    TypeConvert, TypeIndex, VMOffsets, WasmFuncType, WasmHeapType, WasmType,
 };
 
 /// Table metadata.
@@ -92,7 +92,7 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     /// Metadata about the translation process of a WebAssembly module.
     pub translation: &'translation ModuleTranslation<'data>,
     /// The module's function types.
-    pub types: &'translation ModuleTypes,
+    pub types: &'translation ModuleTypesBuilder,
     /// Track resolved table information.
     resolved_tables: HashMap<TableIndex, TableData>,
 }
@@ -108,7 +108,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     pub fn new(
         vmoffsets: &'a VMOffsets<P>,
         translation: &'translation ModuleTranslation<'data>,
-        types: &'translation ModuleTypes,
+        types: &'translation ModuleTypesBuilder,
     ) -> Self {
         Self {
             vmoffsets,
@@ -139,7 +139,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     pub fn callee_from_index(&self, idx: FuncIndex) -> Callee {
         let types = &self.translation.get_types();
         let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
-        let ty = self.translation.module.convert_func_type(ty);
+        let ty = self.convert_func_type(ty);
         let import = self.translation.module.is_imported_function(idx);
 
         let info = CalleeInfo { ty, index: idx };
@@ -174,7 +174,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         match blockty {
             Empty => ABIResultsData::wrap(ABIResults::default()),
             Type(ty) => {
-                let ty = self.translation.module.convert_valtype(ty);
+                let ty = self.convert_valtype(ty);
                 let results = <A as ABI>::abi_results(&[ty], &CallingConvention::Default);
                 ABIResultsData::wrap(results)
             }
@@ -237,5 +237,15 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     /// Get a [`TablePlan`] from a [`TableIndex`].
     pub fn table_plan(&mut self, index: TableIndex) -> &TablePlan {
         &self.translation.module.table_plans[index]
+    }
+}
+
+impl<P: PtrSize> TypeConvert for FuncEnv<'_, '_, '_, P> {
+    fn lookup_heap_type(&self, idx: wasmparser::UnpackedIndex) -> WasmHeapType {
+        wasmtime_environ::WasmparserTypeConverter {
+            module: &self.translation.module,
+            types: self.types,
+        }
+        .lookup_heap_type(idx)
     }
 }

@@ -5,7 +5,7 @@ use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{Parser as WasmParser, Validator},
-    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, ModuleTypes,
+    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder,
     Tunables, TypeConvert, VMOffsets,
 };
 use winch_codegen::{lookup, BuiltinFunctions, TargetIsa};
@@ -36,7 +36,6 @@ pub fn run(opt: &Options) -> Result<()> {
     let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
-    let types = types.finish();
     let body_inputs = std::mem::take(&mut translation.function_body_inputs);
 
     body_inputs
@@ -49,13 +48,13 @@ pub fn run(opt: &Options) -> Result<()> {
 fn compile(
     isa: &Box<dyn TargetIsa>,
     translation: &ModuleTranslation,
-    module_types: &ModuleTypes,
+    module_types: &ModuleTypesBuilder,
     f: (DefinedFuncIndex, FunctionBodyData<'_>),
 ) -> Result<()> {
     let index = translation.module.func_index(f.0);
     let types = &translation.get_types();
     let sig = types[types.core_function_at(index.as_u32())].unwrap_func();
-    let sig = translation.module.convert_func_type(sig);
+    let sig = DummyConvert.convert_func_type(sig);
     let FunctionBodyData { body, validator } = f.1;
     let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
     let mut builtins = BuiltinFunctions::new(&vmoffsets, isa.wasmtime_call_conv());
@@ -77,4 +76,12 @@ fn compile(
         .for_each(|s| println!("{}", s));
 
     Ok(())
+}
+
+struct DummyConvert;
+
+impl TypeConvert for DummyConvert {
+    fn lookup_heap_type(&self, _: wasmparser::UnpackedIndex) -> wasmtime_environ::WasmHeapType {
+        todo!()
+    }
 }

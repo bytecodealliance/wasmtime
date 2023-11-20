@@ -28,7 +28,7 @@ use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
     Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleType,
-    ModuleTypes, PrimaryMap, SignatureIndex, StaticModuleIndex, WasmFunctionInfo,
+    ModuleTypesBuilder, PrimaryMap, SignatureIndex, StaticModuleIndex, WasmFunctionInfo,
 };
 use wasmtime_jit::{CompiledFunctionInfo, CompiledModuleInfo};
 
@@ -173,7 +173,7 @@ impl<'a> CompileInputs<'a> {
 
     /// Create the `CompileInputs` for a core Wasm module.
     pub fn for_module(
-        types: &'a ModuleTypes,
+        types: &'a ModuleTypesBuilder,
         translation: &'a ModuleTranslation<'a>,
         functions: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'a>>,
     ) -> Self {
@@ -188,7 +188,7 @@ impl<'a> CompileInputs<'a> {
     /// Create a `CompileInputs` for a component.
     #[cfg(feature = "component-model")]
     pub fn for_component(
-        types: &'a wasmtime_environ::component::ComponentTypes,
+        types: &'a wasmtime_environ::component::ComponentTypesBuilder,
         component: &'a wasmtime_environ::component::ComponentTranslation,
         module_translations: impl IntoIterator<
             Item = (
@@ -200,7 +200,7 @@ impl<'a> CompileInputs<'a> {
     ) -> Self {
         let mut ret = CompileInputs::default();
 
-        ret.collect_inputs_in_translations(types.module_types(), module_translations);
+        ret.collect_inputs_in_translations(types.module_types_builder(), module_translations);
 
         for (idx, trampoline) in component.trampolines.iter() {
             ret.push_input(move |compiler| {
@@ -241,7 +241,7 @@ impl<'a> CompileInputs<'a> {
 
     fn collect_inputs_in_translations(
         &mut self,
-        types: &'a ModuleTypes,
+        types: &'a ModuleTypesBuilder,
         translations: impl IntoIterator<
             Item = (
                 StaticModuleIndex,

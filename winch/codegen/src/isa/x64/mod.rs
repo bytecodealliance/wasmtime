@@ -19,7 +19,7 @@ use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFin
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
 
@@ -91,7 +91,7 @@ impl TargetIsa for X64 {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
@@ -107,7 +107,8 @@ impl TargetIsa for X64 {
         let stack = Stack::new();
         let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new::<abi::X64ABI>(translation, &mut body, validator)?;
+        let env = FuncEnv::new(&vmoffsets, translation, types);
+        let defined_locals = DefinedLocals::new::<abi::X64ABI>(&env, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),
@@ -121,7 +122,6 @@ impl TargetIsa for X64 {
         );
 
         let regalloc = RegAlloc::from(gpr, fpr);
-        let env = FuncEnv::new(&vmoffsets, translation, types);
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 

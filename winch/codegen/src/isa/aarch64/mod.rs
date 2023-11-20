@@ -17,7 +17,7 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 mod abi;
 mod address;
@@ -87,7 +87,7 @@ impl TargetIsa for Aarch64 {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
@@ -98,8 +98,8 @@ impl TargetIsa for Aarch64 {
         let stack = Stack::new();
         let abi_sig = abi::Aarch64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals =
-            DefinedLocals::new::<abi::Aarch64ABI>(translation, &mut body, validator)?;
+        let env = FuncEnv::new(&vmoffsets, translation, types);
+        let defined_locals = DefinedLocals::new::<abi::Aarch64ABI>(&env, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),
@@ -110,7 +110,6 @@ impl TargetIsa for Aarch64 {
         let fpr = RegBitSet::float(0, 0, usize::try_from(MAX_FPR).unwrap());
         let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
-        let env = FuncEnv::new(&vmoffsets, translation, types);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;

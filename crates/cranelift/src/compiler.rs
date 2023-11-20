@@ -32,8 +32,8 @@ use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FlagValue, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, TrapEncodingBuilder, Tunables,
-    VMOffsets, WasmFunctionInfo,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapInformation, TrapEncodingBuilder,
+    Tunables, VMOffsets, WasmFunctionInfo,
 };
 
 #[cfg(feature = "component-model")]
@@ -131,7 +131,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
@@ -240,7 +240,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_array_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
@@ -308,7 +308,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_native_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
