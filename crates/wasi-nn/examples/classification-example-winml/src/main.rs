@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use wasi_nn::*;
 
 pub fn main() {
@@ -32,8 +34,9 @@ pub fn main() {
         .unwrap();
 
     // Execute the inference.
+    let before_compute = Instant::now();
     context.compute().unwrap();
-    println!("Executed graph inference");
+    println!("Executed graph inference, took {} ms.", before_compute.elapsed().as_millis());
 
     // Retrieve the output.
     let mut output_buffer = vec![0f32; 1000];
