@@ -10,6 +10,9 @@ categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 test = false

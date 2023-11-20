@@ -4181,7 +4181,6 @@ version = "0.9.1"
 dependencies = [
  "anyhow",
  "log",
- "rayon",
  "thiserror",
  "wast 35.0.2",
 ]

@@ -10,6 +10,9 @@ readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "nightlydoc"]
 # Docs.rs will use the `component-model` feature for documentation;

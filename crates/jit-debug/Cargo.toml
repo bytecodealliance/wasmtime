@@ -10,6 +10,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 once_cell = { workspace = true, optional = true }
 object = { workspace = true, optional = true }

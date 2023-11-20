@@ -11,5 +11,8 @@ readme = "README.md"
 keywords = ["btree", "forest", "set", "map"]
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-entity = { workspace = true }
