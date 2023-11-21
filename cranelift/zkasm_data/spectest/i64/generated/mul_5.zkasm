@@ -1,0 +1,29 @@
+start:
+  zkPC + 2 => RR
+  :JMP(function_1)
+  :JMP(finalizeExecution)
+function_1:
+  SP + 1 => SP
+  RR :MSTORE(SP - 1)
+  SP + 4 => SP
+  C :MSTORE(SP - 1)
+  D :MSTORE(SP - 2)
+  B :MSTORE(SP - 3)
+  9223372036854775808n => A
+  0n => B
+  0 => D
+  0 => C
+  $${var _mulArith = A * B}
+  ${_mulArith} => A :ARITH
+  0n => B
+  B :ASSERT
+  $ => C :MLOAD(SP - 1)
+  $ => D :MLOAD(SP - 2)
+  $ => B :MLOAD(SP - 3)
+  SP - 4 => SP
+  $ => RR :MLOAD(SP - 1)
+  SP - 1 => SP
+  :JMP(RR)
+finalizeExecution:
+  ${beforeLast()}  :JMPN(finalizeExecution)
+                   :JMP(start)

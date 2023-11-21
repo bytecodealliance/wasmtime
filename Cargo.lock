@@ -647,6 +647,7 @@ dependencies = [
  "gimli",
  "log",
  "num_cpus",
+ "regex",
  "serde",
  "serde_derive",
  "similar",

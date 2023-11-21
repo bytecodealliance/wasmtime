@@ -2,6 +2,10 @@
 mod tests {
     use std::collections::HashMap;
 
+    use regex::Regex;
+    use std::fs::read_to_string;
+    use std::io::Error;
+
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::function::FunctionParameters;
     use cranelift_codegen::ir::ExternalName;
@@ -173,6 +177,82 @@ mod tests {
         let expected =
             expect_test::expect_file![format!("../../zkasm_data/generated/{name}.zkasm")];
         expected.assert_eq(&program);
+    }
+
+    // This function asserts that none of tests generated from
+    // spectest has been changed.
+    fn check_spectests() -> Result<(), Error> {
+        let spectests_path = "../../tests/spec_testsuite/i64.wast";
+        let file_content = read_to_string(spectests_path)?;
+        let re = Regex::new(
+            r#"\(assert_return \(invoke \"(\w+)\"\s*((?:\([^\)]+\)\s*)+)\)\s*\(([^\)]+)\)\)"#,
+        )
+        .unwrap();
+        let mut test_counters = HashMap::new();
+        for cap in re.captures_iter(&file_content) {
+            let function_name = &cap[1];
+            let arguments = &cap[2];
+            let expected_result = &cap[3];
+            let assert_type = &expected_result[0..3];
+            let count = test_counters.entry(function_name.to_string()).or_insert(0);
+            *count += 1;
+            let mut testcase = String::new();
+            testcase.push_str(&format!("(module\n (import \"env\" \"assert_eq\" (func $assert_eq (param {}) (param {})))\n (func $main\n", assert_type, assert_type));
+            testcase.push_str(&format!(
+                "\t{}\n",
+                arguments
+                    .replace(") (", "\n\t")
+                    .replace("(", "")
+                    .replace(")", "")
+            ));
+            testcase.push_str(&format!("\ti64.{}\n", function_name));
+            testcase.push_str(&format!(
+                "\t{}\n\tcall $assert_eq)\n (start $main))\n",
+                expected_result.trim()
+            ));
+            let file_name = format!(
+                "../../zkasm_data/spectest/i64/{}_{}.wat",
+                function_name, count
+            );
+            let expected_test = expect_test::expect_file![file_name];
+            expected_test.assert_eq(&testcase);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn run_spectests() {
+        check_spectests().unwrap();
+        let path = "../zkasm_data/spectest/i64/";
+        let mut failures = 0;
+        let mut count = 0;
+        for entry in std::fs::read_dir(path).expect("Directory not found") {
+            let entry = entry.expect("Failed to read entry");
+            let file_name = entry.file_name();
+            if entry.path().extension().and_then(|s| s.to_str()) != Some("wat") {
+                continue;
+            }
+            if let Some(name) = std::path::Path::new(&file_name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+            {
+                let module_binary =
+                    wat::parse_file(format!("../zkasm_data/spectest/i64/{name}.wat")).unwrap();
+                let expected = expect_test::expect_file![format!(
+                    "../../zkasm_data/spectest/i64/generated/{name}.zkasm"
+                )];
+                let result = std::panic::catch_unwind(|| {
+                    let program = generate_zkasm(&module_binary);
+                    expected.assert_eq(&program);
+                });
+                count += 1;
+                if let Err(err) = result {
+                    failures += 1;
+                    println!("{} fails with {:#?}", name, err);
+                }
+            }
+        }
+        println!("Failed {} spectests out of {}", failures, count);
     }
 
     macro_rules! testcases {

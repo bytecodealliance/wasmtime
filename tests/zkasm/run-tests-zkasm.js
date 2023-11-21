@@ -32,19 +32,24 @@ async function main() {
     const pathZkasm = path.join(process.cwd(), process.argv[2]);
     const files = await getTestFiles(pathZkasm);
 
-    let hasUnexpectedFailures = false;
+    let unexpectedFailures = 0;
+    let totalTests = 0;
     // Run all zkasm files
     // eslint-disable-next-line no-restricted-syntax
     console.log(chalk.yellow('--> Start running zkasm files'));
     for (const file of files) {
         if (file.includes('ignore'))
             continue;
-
+        
         let shouldFail = file.split("/").pop().startsWith("_should_fail_");
         let testFailed = await runTest(file, cmPols);
-        hasUnexpectedFailures |= (testFailed && !shouldFail) || (shouldFail && !testFailed);
+        if ((testFailed && !shouldFail) || (shouldFail && !testFailed)) {
+            unexpectedFailures += 1;
+        }
+        totalTests += 1;
     }
-    if (hasUnexpectedFailures) {
+    console.log('Failed', unexpectedFailures, 'tests out of ', totalTests);
+    if (unexpectedFailures > 0) {
         process.exit(1);
     }
 }

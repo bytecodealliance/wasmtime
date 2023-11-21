@@ -255,6 +255,7 @@ cfg-if = "1.0"
 tempfile = "3.1.0"
 filecheck = "0.5.0"
 libc = "0.2.60"
+regex = "1.9.1"
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.26.0", features = [ "rt", "time" ] }
 hyper = "=1.0.0-rc.3"

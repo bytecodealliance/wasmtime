@@ -39,3 +39,4 @@ cranelift.workspace = true
 env_logger = { workspace = true }
 expect-test = { workspace = true }
 smallvec = { workspace = true }
+regex = { workspace = true }
