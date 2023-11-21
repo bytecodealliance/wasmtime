@@ -9,11 +9,6 @@
     (Label
       (imm usize))
 
-    ;; load immediate
-    (Lui
-      (rd WritableReg)
-      (imm Imm20))
-
     (LoadConst32
       (rd WritableReg)
       (imm u32))
@@ -21,11 +16,6 @@
     (LoadConst64
       (rd WritableReg)
       (imm u64))
-
-     (Auipc
-      (rd WritableReg)
-      (imm Imm20))
-
 
     ;; An ALU operation with two register sources and a register destination.
     (AluRRR
