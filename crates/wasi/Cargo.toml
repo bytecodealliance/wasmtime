@@ -87,3 +87,8 @@ preview1-on-preview2 = [
     "preview2",
     "wiggle",
 ]
+
+[[test]]
+name = "process_stdin"
+harness = false
+
