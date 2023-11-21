@@ -45,11 +45,11 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
 
     // Support accuracy up to at least 1ms
     if cfg.support_accurate_time() {
-        assert_eq!(stat.mtim / 1000, new_mtim / 1000, "mtim should change");
-        assert_eq!(stat.atim / 1000, old_atim / 1000, "atim should not change");
-    } else {
         assert_eq!(stat.mtim, new_mtim, "mtim should change");
         assert_eq!(stat.atim, old_atim, "atim should not change");
+    } else {
+        assert_eq!(stat.mtim / 1000, new_mtim / 1000, "mtim should change");
+        assert_eq!(stat.atim / 1000, old_atim / 1000, "atim should not change");
     }
 
     // let status = wasi_fd_filestat_set_times(file_fd, new_mtim, new_mtim, wasi::FILESTAT_SET_MTIM | wasi::FILESTAT_SET_MTIM_NOW);
