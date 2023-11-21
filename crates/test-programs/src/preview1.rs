@@ -116,6 +116,7 @@ macro_rules! assert_errno {
 
 pub struct TestConfig {
     errno_mode: ErrnoMode,
+    no_accurate_time: bool,
     no_dangling_filesystem: bool,
     no_rename_dir_to_empty_dir: bool,
     no_fdflags_sync_support: bool,
@@ -139,11 +140,13 @@ impl TestConfig {
         } else {
             ErrnoMode::Permissive
         };
+        let no_accurate_time = std::env::var("NO_ACCURATE_TIME").is_ok();
         let no_dangling_filesystem = std::env::var("NO_DANGLING_FILESYSTEM").is_ok();
         let no_rename_dir_to_empty_dir = std::env::var("NO_RENAME_DIR_TO_EMPTY_DIR").is_ok();
         let no_fdflags_sync_support = std::env::var("NO_FDFLAGS_SYNC_SUPPORT").is_ok();
         TestConfig {
             errno_mode,
+            no_accurate_time,
             no_dangling_filesystem,
             no_rename_dir_to_empty_dir,
             no_fdflags_sync_support,
@@ -166,6 +169,9 @@ impl TestConfig {
             ErrnoMode::Windows => true,
             _ => false,
         }
+    }
+    pub fn support_accurate_time(&self) -> bool {
+        !self.no_accurate_time
     }
     pub fn support_dangling_filesystem(&self) -> bool {
         !self.no_dangling_filesystem
