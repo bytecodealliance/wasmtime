@@ -65,7 +65,8 @@ impl FiberStack {
 
 /// A creator of RuntimeFiberStacks.
 pub unsafe trait RuntimeFiberStackCreator: Send + Sync {
-    /// Creates a new RuntimeFiberStack with the specified size, guard pages should be included.
+    /// Creates a new RuntimeFiberStack with the specified size, guard pages should be included,
+    /// memory should be zeroed.
     ///
     /// This is useful to plugin previously allocated memory instead of mmap'ing a new stack for
     /// every instance.

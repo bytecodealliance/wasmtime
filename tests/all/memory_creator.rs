@@ -28,6 +28,9 @@ mod not_for_windows {
             let mem = mmap_anonymous(null_mut(), size, ProtFlags::empty(), MapFlags::PRIVATE)
                 .expect("mmap failed");
 
+            // NOTE: mmap_anonymous returns zero initialized memory, which is relied upon by this
+            // API.
+
             mprotect(mem, minimum, MprotectFlags::READ | MprotectFlags::WRITE)
                 .expect("mprotect failed");
             *glob_counter.lock().unwrap() += minimum;

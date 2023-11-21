@@ -55,6 +55,8 @@ impl CustomStackCreator {
             let mem = System.alloc(layout);
             let notnull = NonNull::new(mem);
             if let Some(mem) = notnull {
+                // It's required that stack memory is zeroed for wasmtime
+                libc::memset(mem.as_ptr().cast(), 0, layout.size());
                 // Mark guard page as protected
                 rustix::mm::mprotect(
                     mem.as_ptr().cast(),
