@@ -395,7 +395,7 @@ impl WasmtimeOptionValue for wasmtime::ProfilingStrategy {
             "VTune"|"vtune" => Ok(wasmtime::ProfilingStrategy::VTune),
             "JitDump"|"jitdump" => Ok(wasmtime::ProfilingStrategy::JitDump),
             "PerfMap"|"perfmap" => Ok(wasmtime::ProfilingStrategy::PerfMap),
-            other => bail!("unknown compiler `{other}` only `VTune`,`JitDump`, or `PerfMap` are accepted",),
+            other => bail!("unknown profiler `{other}` only `VTune`,`JitDump`, or `PerfMap` are accepted",),
         }
     }
 }
