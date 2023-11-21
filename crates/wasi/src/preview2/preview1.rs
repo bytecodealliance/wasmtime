@@ -1565,7 +1565,9 @@ impl<
         let position = position.clone();
         drop(t);
         let pos = match whence {
-            types::Whence::Set if offset >= 0 => offset as _,
+            types::Whence::Set if offset >= 0 => {
+                offset.try_into().map_err(|_| types::Errno::Inval)?
+            }
             types::Whence::Cur => position
                 .load(Ordering::Relaxed)
                 .checked_add_signed(offset)

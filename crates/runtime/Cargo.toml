@@ -10,6 +10,9 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 wasmtime-wmemcheck = { workspace = true }
 wasmtime-asm-macros = { workspace = true }

@@ -9,6 +9,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 publish = false
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "clif-util"
 path = "src/clif-util.rs"

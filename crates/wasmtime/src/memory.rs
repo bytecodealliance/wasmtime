@@ -670,6 +670,8 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// are tuned from the various [`Config`](crate::Config) methods about
     /// memory sizes/guards. Additionally these two values are guaranteed to be
     /// multiples of the system page size.
+    ///
+    /// Memory created from this method should be zero filled.
     fn new_memory(
         &self,
         ty: MemoryType,

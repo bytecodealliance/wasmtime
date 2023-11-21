@@ -70,7 +70,7 @@ fn generate_line_info(
             out_program.row().address_offset = address_offset;
             out_program.row().op_index = 0;
             out_program.row().file = file_index;
-            let wasm_offset = w.code_section_offset + addr_map.wasm as u64;
+            let wasm_offset = w.code_section_offset + addr_map.wasm;
             out_program.row().line = wasm_offset;
             out_program.row().column = 0;
             out_program.row().discriminator = 1;
@@ -363,7 +363,7 @@ pub fn generate_simulated_dwarf(
         );
         die.set(
             gimli::DW_AT_high_pc,
-            write::AttributeValue::Udata((end - start) as u64),
+            write::AttributeValue::Udata(end - start),
         );
 
         let func_index = imported_func_count + (index as u32);
@@ -383,7 +383,7 @@ pub fn generate_simulated_dwarf(
         );
 
         let f_start = map.addresses[0].wasm;
-        let wasm_offset = di.wasm_file.code_section_offset + f_start as u64;
+        let wasm_offset = di.wasm_file.code_section_offset + f_start;
         die.set(
             gimli::DW_AT_decl_file,
             write::AttributeValue::Udata(wasm_offset),

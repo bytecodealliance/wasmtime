@@ -186,7 +186,7 @@ impl<T: WasiView> streams::HostInputStream for T {
             InputStream::Host(s) => s.read(len)?,
             InputStream::File(s) => s.read(len).await?,
         };
-        debug_assert!(bytes.len() <= len as usize);
+        debug_assert!(bytes.len() <= len);
         Ok(bytes.into())
     }
 

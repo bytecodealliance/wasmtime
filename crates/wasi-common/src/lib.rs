@@ -50,6 +50,9 @@
 //! `WasiCtx::builder(...)` function. The
 //! `wasi_cap_std_sync::WasiCtxBuilder::new()` function uses this public
 //! interface to plug in its own implementations of each of these resources.
+
+#![warn(clippy::cast_sign_loss)]
+
 pub mod clocks;
 mod ctx;
 pub mod dir;

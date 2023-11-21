@@ -29,8 +29,7 @@
 //!   references allocated from an associated memory pool. It has a much smaller footprint than
 //!   `Vec`.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 #![no_std]
 
 extern crate alloc;
@@ -203,6 +202,7 @@ mod map;
 mod primary;
 mod set;
 mod sparse;
+mod unsigned;
 
 pub use self::boxed_slice::BoxedSlice;
 pub use self::iter::{Iter, IterMut};
@@ -212,6 +212,7 @@ pub use self::map::SecondaryMap;
 pub use self::primary::PrimaryMap;
 pub use self::set::EntitySet;
 pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
+pub use self::unsigned::Unsigned;
 
 /// A collection of tests to ensure that use of the different `entity_impl!` forms will generate
 /// `EntityRef` implementations that behave the same way.

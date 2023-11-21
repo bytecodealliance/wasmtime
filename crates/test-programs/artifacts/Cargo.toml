@@ -6,6 +6,9 @@ edition.workspace = true
 publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 
+[lints]
+workspace = true
+
 [build-dependencies]
 heck = { workspace = true }
 wit-component = { workspace = true }

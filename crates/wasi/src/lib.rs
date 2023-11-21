@@ -7,6 +7,8 @@
 //! Individual snapshots are available through
 //! `wasmtime_wasi::snapshots::preview_{0, 1}::Wasi::new(&Store, Rc<RefCell<WasiCtx>>)`.
 
+#![warn(clippy::cast_sign_loss)]
+
 #[cfg(feature = "preview2")]
 pub mod preview2;
 

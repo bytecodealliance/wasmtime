@@ -10,6 +10,9 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "README.md", "LICENSE"]
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror = { workspace = true }
 witx = { path = "../wasi-common/WASI/tools/witx", version = "0.9.1", optional = true }

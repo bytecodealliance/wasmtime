@@ -1,7 +1,7 @@
 //! Runtime library support for Wasmtime.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
+#![warn(clippy::cast_sign_loss)]
 
 use anyhow::{Error, Result};
 use std::fmt;
@@ -241,7 +241,7 @@ pub fn page_size() -> usize {
 
     #[cfg(unix)]
     fn get_page_size() -> usize {
-        unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
+        unsafe { libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap() }
     }
 }
 

@@ -3,13 +3,7 @@
 //! This crate contains the main test driver as well as implementations of the
 //! available filetest commands.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 pub use crate::function_runner::TestFileCompiler;
 use crate::runner::TestRunner;
