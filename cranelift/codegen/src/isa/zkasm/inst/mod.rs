@@ -261,8 +261,6 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_early_def(tmp1);
             collector.reg_early_def(tmp2);
         }
-        &Inst::Auipc { rd, .. } => collector.reg_def(rd),
-        &Inst::Lui { rd, .. } => collector.reg_def(rd),
         &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
         &Inst::LoadConst64 { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
@@ -948,21 +946,10 @@ impl Inst {
                     format_reg(tmp2.to_reg(), allocs),
                 )
             }
-            &Inst::Auipc { rd, imm } => {
-                format!(
-                    "{} {},{}",
-                    "auipc",
-                    format_reg(rd.to_reg(), allocs),
-                    imm.bits
-                )
-            }
             &Inst::Jalr { rd, base, offset } => {
                 let base = format_reg(base, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}({})", "jalr", rd, offset.bits, base)
-            }
-            &Inst::Lui { rd, ref imm } => {
-                format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
             &Inst::LoadConst32 { rd, imm } => {
                 let rd = format_reg(rd.to_reg(), allocs);

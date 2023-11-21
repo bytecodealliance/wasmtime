@@ -427,11 +427,6 @@ impl MachInstEmit for Inst {
                 // for more information see https://github.com/bytecodealliance/wasmtime/pull/5612.
                 todo!() // sink.put_data(&data[..]);
             }
-            &Inst::Lui { rd, ref imm } => {
-                todo!() /* let rd = allocs.next_writable(rd);
-                        let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
-                        sink.put4(x); */
-            }
             &Inst::LoadConst32 { rd, imm } => {
                 let rd = allocs.next_writable(rd);
                 put_string(&format!("{imm} => {}\n", reg_name(rd.to_reg())), sink);
@@ -1068,12 +1063,6 @@ impl MachInstEmit for Inst {
                         // Compute the jump table offset.
                         // We need to emit a PC relative offset,
 
-                        // Get the current PC.
-                        Inst::Auipc {
-                            rd: tmp1,
-                            imm: Imm20::from_bits(0),
-                        }
-                        .emit(&[], sink, emit_info, state);
 
                         // Multiply the index by 8, since that is the size in
                         // bytes of each jump table entry
@@ -1142,11 +1131,6 @@ impl MachInstEmit for Inst {
                 //     state.virtual_sp_offset + amount
                 //     );
                 // state.virtual_sp_offset += amount;
-            }
-            &Inst::Auipc { rd, imm } => {
-                todo!() /* let rd = allocs.next_writable(rd);
-                        let x = enc_auipc(rd, imm);
-                        sink.put4(x); */
             }
 
             &Inst::LoadAddr { rd, mem } => {
