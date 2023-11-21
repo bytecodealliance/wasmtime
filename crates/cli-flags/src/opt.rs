@@ -387,3 +387,15 @@ impl WasmtimeOptionValue for WasiNnGraph {
         })
     }
 }
+
+impl WasmtimeOptionValue for wasmtime::ProfilingStrategy {
+    const VAL_HELP: &'static str = "=VTune|JitDump|PerfMap";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match String::parse(val)?.as_str() {
+            "VTune"|"vtune" => Ok(wasmtime::ProfilingStrategy::VTune),
+            "JitDump"|"jitdump" => Ok(wasmtime::ProfilingStrategy::JitDump),
+            "PerfMap"|"perfmap" => Ok(wasmtime::ProfilingStrategy::PerfMap),
+            other => bail!("unknown compiler `{other}` only `VTune`,`JitDump`, or `PerfMap` are accepted",),
+        }
+    }
+}

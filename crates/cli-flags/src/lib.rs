@@ -126,6 +126,8 @@ wasmtime_option_group! {
         pub log_to_files: Option<bool>,
         /// Enable coredump generation to this file after a WebAssembly trap.
         pub coredump: Option<String>,
+        /// configure profiler as VTune, JitDump, or PerfMap
+        pub profile: Option<wasmtime::ProfilingStrategy>,
     }
 
     enum Debug {
@@ -405,6 +407,15 @@ impl CommonOptions {
         }
         if let Some(enable) = self.debug.debug_info {
             config.debug_info(enable);
+        }
+        if let Some(wasmtime::ProfilingStrategy::VTune) = self.debug.profile {
+            config.profiler(wasmtime::ProfilingStrategy::VTune);
+        }
+        if let Some(wasmtime::ProfilingStrategy::JitDump) = self.debug.profile {
+            config.profiler(wasmtime::ProfilingStrategy::JitDump);
+        }
+        if let Some(wasmtime::ProfilingStrategy::PerfMap) = self.debug.profile {
+            config.profiler(wasmtime::ProfilingStrategy::PerfMap);
         }
         if self.debug.coredump.is_some() {
             #[cfg(feature = "coredump")]
