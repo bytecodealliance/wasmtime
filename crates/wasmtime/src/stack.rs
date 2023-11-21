@@ -22,7 +22,7 @@ pub unsafe trait StackCreator: Send + Sync {
     ///
     /// Note there should be at least one guard page of protected memory at the bottom
     /// of the stack to catch potential stack overflow scenarios. Additionally, stacks should be
-    /// page aligned.
+    /// page aligned and zero filled.
     fn new_stack(&self, size: usize) -> Result<Box<dyn StackMemory>, Error>;
 }
 
