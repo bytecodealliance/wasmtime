@@ -251,8 +251,7 @@ impl Inst {
 //=============================================================================
 fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
-        &Inst::Nop0 => {}
-        &Inst::Nop4 => {}
+        &Inst::Nop => {}
         &Inst::Label { .. } => {}
         &Inst::BrTable {
             index, tmp1, tmp2, ..
@@ -618,12 +617,7 @@ impl MachInst for Inst {
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
-        if preferred_size == 0 {
-            return Inst::Nop0;
-        }
-        // We can't give a NOP (or any insn) < 4 bytes.
-        assert!(preferred_size >= 4);
-        Inst::Nop4
+        return Inst::Nop;
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
@@ -786,11 +780,8 @@ impl Inst {
 
         let mut empty_allocs = AllocationConsumer::default();
         match self {
-            &Inst::Nop0 => {
-                format!("##zero length nop")
-            }
-            &Inst::Nop4 => {
-                format!("##fixed 4-size nop")
+            &Inst::Nop => {
+                format!("NOP")
             }
             &Inst::Label { imm } => {
                 format!("")

@@ -1,9 +1,7 @@
 ;; Instruction formats.
 (type MInst
   (enum
-    ;; A no-op of zero size.
-    (Nop0)
-    (Nop4)
+    (Nop)
 
     ;; Label to output at the beginning of a block
     (Label

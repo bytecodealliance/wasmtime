@@ -402,19 +402,7 @@ impl MachInstEmit for Inst {
         // emitted following an `EmitIsland`.
         let mut start_off = sink.cur_offset();
         match self {
-            &Inst::Nop0 => {
-                // do nothing
-            }
-            // Addi x0, x0, 0
-            &Inst::Nop4 => {
-                todo!() /* let x = Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Addi,
-                            rd: Writable::from_reg(zero_reg()),
-                            rs: zero_reg(),
-                            imm12: Imm12::zero(),
-                        };
-                        x.emit(&[], sink, emit_info, state) */
-            }
+            &Inst::Nop => {}
             &Inst::Label { imm } => {
                 sink.put_data(format!("label_{imm}:\n").as_bytes());
             }
