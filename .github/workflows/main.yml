@@ -49,6 +49,8 @@ jobs:
         cache-dependency-path: tests/zkasm/package-lock.json
     - run: npm ci --prefix tests/zkasm
     - run: ./ci/test-zkasm.sh
+    - run: ./ci/spectest-zkasm.sh
+    
 
   rustfmt:
     name: Rustfmt
