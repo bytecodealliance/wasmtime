@@ -314,6 +314,7 @@ impl FnCall {
         // space they consumed.
         let mut stack_consumed = 0;
         context.drop_last(sig.params.len_without_retptr(), |_regalloc, v| {
+            debug_assert!(v.is_mem() || v.is_const());
             if let Val::Memory(mem) = v {
                 stack_consumed += mem.slot.size;
             }
