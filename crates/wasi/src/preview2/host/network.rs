@@ -306,8 +306,10 @@ pub(crate) mod util {
         binder
             .bind_existing_tcp_listener(listener)
             .map_err(|error| match Errno::from_io_error(&error) {
+                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+                // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
                 #[cfg(windows)]
-                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(),
                 _ => error,
             })
     }
@@ -315,8 +317,10 @@ pub(crate) mod util {
     pub fn udp_bind(socket: &UdpSocket, binder: &UdpBinder) -> std::io::Result<()> {
         binder.bind_existing_udp_socket(socket).map_err(|error| {
             match Errno::from_io_error(&error) {
+                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+                // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
                 #[cfg(windows)]
-                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(),
                 _ => error,
             }
         })
@@ -325,12 +329,34 @@ pub(crate) mod util {
     pub fn tcp_connect(listener: &TcpListener, connecter: &TcpConnecter) -> std::io::Result<()> {
         connecter.connect_existing_tcp_listener(listener).map_err(
             |error| match Errno::from_io_error(&error) {
-                // On POSIX, non-blocking `connect` returns `EINPROGRESS`. Windows returns `WSAEWOULDBLOCK`.
+                // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
+                // Windows returns `WSAEWOULDBLOCK`.
+                //
+                // This normalized error code is depended upon by: tcp.rs
                 #[cfg(windows)]
                 Some(Errno::WOULDBLOCK) => Errno::INPROGRESS.into(),
                 _ => error,
             },
         )
+    }
+
+    pub fn tcp_listen(listener: &TcpListener, backlog: Option<i32>) -> std::io::Result<()> {
+        listener
+            .listen(backlog)
+            .map_err(|error| match Errno::from_io_error(&error) {
+                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
+                // According to the docs, `listen` can return EMFILE on Windows.
+                // This is odd, because we're not trying to create a new socket
+                // or file descriptor of any kind. So we rewrite it to less
+                // surprising error code.
+                //
+                // At the time of writing, this behavior has never been experimentally
+                // observed by any of the wasmtime authors, so we're relying fully
+                // on Microsoft's documentation here.
+                #[cfg(windows)]
+                Some(Errno::MFILE) => Errno::NOBUFS.into(),
+                _ => error,
+            })
     }
 
     pub fn tcp_accept(
@@ -340,11 +366,22 @@ pub(crate) mod util {
         listener
             .accept_with(blocking)
             .map_err(|error| match Errno::from_io_error(&error) {
+                // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
+                // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
+                // > or the service provider is still processing a callback function.
+                //
+                // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
+                // because in POSIX this error is only returned by a non-blocking
+                // `connect` and wasi-sockets has a different solution for that.
                 #[cfg(windows)]
-                Some(Errno::INPROGRESS) => Errno::INTR.into(), // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
+                Some(Errno::INPROGRESS) => Errno::INTR.into(),
 
                 // Normalize Linux' non-standard behavior.
-                // "Linux accept() passes already-pending network errors on the new socket as an error code from accept(). This behavior differs from other BSD socket implementations."
+                //
+                // From https://man7.org/linux/man-pages/man2/accept.2.html:
+                // > Linux accept() passes already-pending network errors on the
+                // > new socket as an error code from accept(). This behavior
+                // > differs from other BSD socket implementations. (...)
                 #[cfg(target_os = "linux")]
                 Some(
                     Errno::CONNRESET
@@ -366,6 +403,16 @@ pub(crate) mod util {
     pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
         match rustix::net::connect_unspec(sockfd) {
             // BSD platforms return an error even if the UDP socket was disconnected successfully.
+            //
+            // MacOS was kind enough to document this: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/connect.2.html
+            // > Datagram sockets may dissolve the association by connecting to an
+            // > invalid address, such as a null address or an address with the address
+            // > family set to AF_UNSPEC (the error EAFNOSUPPORT will be harmlessly
+            // > returned).
+            //
+            // ... except that this appears to be incomplete, because experiments
+            // have shown that MacOS actually returns EINVAL, depending on the
+            // address family of the socket.
             #[cfg(target_os = "macos")]
             Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
             r => r,
@@ -374,6 +421,7 @@ pub(crate) mod util {
 
     pub fn set_tcp_keepidle<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
         if value <= Duration::ZERO {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL);
         }
 
@@ -391,6 +439,7 @@ pub(crate) mod util {
 
     pub fn set_tcp_keepintvl<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
         if value <= Duration::ZERO {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL);
         }
 
@@ -408,6 +457,7 @@ pub(crate) mod util {
 
     pub fn set_tcp_keepcnt<Fd: AsFd>(sockfd: Fd, value: u32) -> rustix::io::Result<()> {
         if value == 0 {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL);
         }
 
@@ -430,6 +480,8 @@ pub(crate) mod util {
 
     pub fn set_ip_ttl<Fd: AsFd>(sockfd: Fd, value: u8) -> rustix::io::Result<()> {
         match value {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            //
             // A well-behaved IP application should never send out new packets with TTL 0.
             // We validate the value ourselves because OS'es are not consistent in this.
             // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
@@ -440,10 +492,7 @@ pub(crate) mod util {
 
     pub fn set_ipv6_unicast_hops<Fd: AsFd>(sockfd: Fd, value: u8) -> rustix::io::Result<()> {
         match value {
-            // A well-behaved IP application should never send out new packets with TTL 0.
-            // We validate the value ourselves because OS'es are not consistent in this.
-            // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
-            0 => Err(Errno::INVAL),
+            0 => Err(Errno::INVAL), // See `set_ip_ttl`
             _ => sockopt::set_ipv6_unicast_hops(sockfd, Some(value)),
         }
     }
@@ -453,6 +502,8 @@ pub(crate) mod util {
             // Linux doubles the value passed to setsockopt to allow space for bookkeeping overhead.
             // getsockopt returns this internally doubled value.
             // We'll half the value to at least get it back into the same ballpark that the application requested it in.
+            //
+            // This normalized behavior is tested for in: test-programs/src/bin/preview2_tcp_sockopts.rs
             value / 2
         } else {
             value
@@ -478,6 +529,7 @@ pub(crate) mod util {
         value: usize,
     ) -> rustix::io::Result<()> {
         if value == 0 {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL);
         }
 
@@ -492,6 +544,8 @@ pub(crate) mod util {
             // "performance hint" semantics. In other words; even ENOBUFS is "Ok".
             // A future improvement could be to query the corresponding sysctl on *BSD platforms and clamp the input
             // `size` ourselves, to completely close the gap with other platforms.
+            //
+            // This normalized behavior is tested for in: test-programs/src/bin/preview2_tcp_sockopts.rs
             Err(Errno::NOBUFS) => Ok(()),
             r => r,
         }
@@ -502,6 +556,7 @@ pub(crate) mod util {
         value: usize,
     ) -> rustix::io::Result<()> {
         if value == 0 {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL);
         }
 

@@ -55,7 +55,14 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             // Perform the OS bind call.
             util::udp_bind(udp_socket, &binder).map_err(|error| {
                 match Errno::from_io_error(&error) {
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
+                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+                    //
+                    // The most common reasons for this error should have already
+                    // been handled by our own validation slightly higher up in this
+                    // function. This error mapping is here just in case there is
+                    // an edge case we didn't catch.
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
                     _ => ErrorCode::from(error),
                 }
             })?;
@@ -125,7 +132,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
-                    Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
+                    Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // See `bind` implementation.
                     Errno::INPROGRESS => {
                         log::debug!("UDP connect returned EINPROGRESS, which should never happen");
                         ErrorCode::Unknown

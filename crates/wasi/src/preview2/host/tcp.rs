@@ -9,7 +9,7 @@ use crate::preview2::{
     network::SocketAddressFamily,
 };
 use crate::preview2::{Pollable, SocketResult, WasiView};
-use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
+use cap_net_ext::{Blocking, PoolExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
@@ -49,7 +49,14 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             // Perform the OS bind call.
             util::tcp_bind(listener, &binder).map_err(|error| {
                 match Errno::from_io_error(&error) {
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
+                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+                    //
+                    // The most common reasons for this error should have already
+                    // been handled by our own validation slightly higher up in this
+                    // function. This error mapping is here just in case there is
+                    // an edge case we didn't catch.
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
                     _ => ErrorCode::from(error),
                 }
             })?;
@@ -122,7 +129,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             // or fail immediately.
             Err(err) => {
                 return Err(match Errno::from_io_error(&err) {
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(), // Just in case our own validations weren't sufficient.
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(), // See `bind` implementation.
                     _ => err.into(),
                 });
             }
@@ -194,15 +201,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             | TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
         }
 
-        socket
-            .tcp_socket()
-            .as_socketlike_view::<TcpListener>()
-            .listen(socket.listen_backlog_size)
-            .map_err(|error| match Errno::from_io_error(&error) {
-                #[cfg(windows)]
-                Some(Errno::MFILE) => ErrorCode::OutOfMemory, // We're not trying to create a new socket. Rewrite it to less surprising error code.
-                _ => ErrorCode::from(error),
-            })?;
+        {
+            let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
+            util::tcp_listen(listener, socket.listen_backlog_size)?;
+        }
 
         socket.tcp_state = TcpState::ListenStarted;
 
