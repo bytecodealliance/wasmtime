@@ -170,3 +170,11 @@ pub unsafe extern "C" fn wasmtime_instance_pre_instantiate(
     let result = instance_pre.underlying.instantiate(store);
     handle_instantiate(result, instance_ptr, trap_ptr)
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_instance_pre_module(
+    instance_pre: &wasmtime_instance_pre_t,
+) -> Box<wasmtime_module_t> {
+    let module = instance_pre.underlying.module().clone();
+    Box::new(wasmtime_module_t { module })
+}

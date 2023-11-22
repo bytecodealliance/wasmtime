@@ -135,7 +135,7 @@ typedef struct wasmtime_instance_pre wasmtime_instance_pre_t;
  * \brief Delete a previously created wasmtime_instance_pre_t.
  */
 WASM_API_EXTERN void
-wasmtime_instance_pre_delete(wasmtime_instance_pre_t *instance);
+wasmtime_instance_pre_delete(wasmtime_instance_pre_t *instance_pre);
 
 /**
  * \brief Instantiates instance within the given store.
@@ -165,6 +165,15 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_instance_pre_instantiate(
     wasmtime_store_t *store,
     wasmtime_instance_t* instance,
     wasm_trap_t **trap_ptr);
+
+/**
+ * \brief Get the module (as a shallow clone) for a instance_pre.
+ *
+ * The returned module is owned by the caller and the caller **must**
+ * delete it via `wasmtime_module_delete`.
+ */
+WASM_API_EXTERN wasmtime_module_t*
+wasmtime_instance_pre_module(wasmtime_instance_pre_t *instance_pre);
 
 #ifdef __cplusplus
 }  // extern "C"
