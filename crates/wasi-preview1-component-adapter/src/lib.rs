@@ -145,6 +145,26 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
     }
 }
 
+/// Allocate a file descriptor which will generate an `ERRNO_BADF` if passed to
+/// any WASI Preview 1 function implemented by this adapter.
+///
+/// This is intended for use by `wasi-libc` during its incremental transition
+/// from WASI Preview 1 to Preview 2.  It will use this function to reserve
+/// descriptors for its own use, valid only for use with libc functions.
+#[no_mangle]
+pub unsafe extern "C" fn adapter_open_badfd(fd: *mut u32) -> bool {
+    State::with(|state| {
+        *fd = state.descriptors_mut().open(Descriptor::Bad)?;
+        Ok(())
+    }) == wasi::ERRNO_SUCCESS
+}
+
+/// Close a descriptor previously opened using `adapter_open_badfd`.
+#[no_mangle]
+pub unsafe extern "C" fn adapter_close_badfd(fd: u32) -> bool {
+    State::with(|state| state.descriptors_mut().close(fd)) == wasi::ERRNO_SUCCESS
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn reset_adapter_state() {
     let state = get_state_ptr();
@@ -525,6 +545,10 @@ pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) 
 #[no_mangle]
 pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
     State::with(|state| {
+        if let Descriptor::Bad = state.descriptors().get(fd)? {
+            return Err(wasi::ERRNO_BADF);
+        }
+
         // If there's a dirent cache entry for this file descriptor then drop
         // it since the descriptor is being closed and future calls to
         // `fd_readdir` should return an error.
@@ -669,7 +693,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                     });
                     Ok(())
                 }
-                Descriptor::Closed(_) => Err(ERRNO_BADF),
+                Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
             }
         })
     }
@@ -716,7 +740,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
         let ds = state.descriptors();
         match ds.get(fd)? {
             Descriptor::Streams(..) => Ok(()),
-            Descriptor::Closed(..) => Err(wasi::ERRNO_BADF),
+            Descriptor::Closed(..) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     })
 }
@@ -1028,7 +1052,7 @@ pub unsafe extern "C" fn fd_read(
                 forget(data);
                 Ok(())
             }
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
         }
     })
 }
@@ -1446,7 +1470,7 @@ pub unsafe extern "C" fn fd_write(
                 *nwritten = nbytes;
                 Ok(())
             }
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
         }
     })
 }
