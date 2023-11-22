@@ -22,6 +22,7 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
         buf: buffer.as_mut_ptr(),
         buf_len: buffer.len(),
     };
+
     let nread = wasi::fd_read(f_readonly, &[iovec]).expect("reading readonly file");
     assert_eq!(nread, 0, "readonly file is empty");
 
