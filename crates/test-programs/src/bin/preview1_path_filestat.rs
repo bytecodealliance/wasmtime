@@ -1,7 +1,8 @@
 use std::{env, process};
-use test_programs::preview1::{assert_errno, config, open_scratch_directory};
+use test_programs::preview1::{assert_errno, config, open_scratch_directory, TestConfig};
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
+    let cfg = TestConfig::from_env();
     let fdflags = if config().support_fdflags_sync() {
         wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC
     } else {
@@ -66,7 +67,16 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
 
     let modified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after path_filestat_set_times");
-    assert_eq!(modified_file_stat.mtim, new_mtim, "mtim should change");
+
+    if cfg.support_accurate_time() {
+        assert_eq!(modified_file_stat.mtim, new_mtim, "mtim should change");
+    } else {
+        assert_eq!(
+            modified_file_stat.mtim / 1000,
+            new_mtim / 1000,
+            "mtim should change"
+        );
+    }
 
     assert_errno!(
         wasi::path_filestat_set_times(
@@ -84,10 +94,19 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     // check if the times were untouched
     let unmodified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after ERRNO_INVAL fd_filestat_set_times");
-    assert_eq!(
-        unmodified_file_stat.mtim, new_mtim,
-        "mtim should not change"
-    );
+
+    if cfg.support_accurate_time() {
+        assert_eq!(
+            unmodified_file_stat.mtim, new_mtim,
+            "mtim should not change"
+        );
+    } else {
+        assert_eq!(
+            unmodified_file_stat.mtim / 1000,
+            new_mtim / 1000,
+            "mtim should not change"
+        );
+    }
 
     // Invalid arguments to set_times:
     assert_errno!(

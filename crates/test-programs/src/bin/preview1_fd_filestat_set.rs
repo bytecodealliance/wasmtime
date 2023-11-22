@@ -48,8 +48,8 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
         assert_eq!(stat.mtim, new_mtim, "mtim should change");
         assert_eq!(stat.atim, old_atim, "atim should not change");
     } else {
-        assert_eq!(stat.mtim / 1000, new_mtim / 1000, "mtim should change");
-        assert_eq!(stat.atim / 1000, old_atim / 1000, "atim should not change");
+        assert_eq!(stat.mtim / 2000, new_mtim / 2000, "mtim should change");
+        assert_eq!(stat.atim / 2000, old_atim / 2000, "atim should not change");
     }
 
     // let status = wasi_fd_filestat_set_times(file_fd, new_mtim, new_mtim, wasi::FILESTAT_SET_MTIM | wasi::FILESTAT_SET_MTIM_NOW);

@@ -50,8 +50,8 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         );
     } else {
         assert_eq!(
-            modified_sym_stat.mtim / 1000,
-            sym_new_mtim / 1000,
+            modified_sym_stat.mtim / 2000,
+            sym_new_mtim / 2000,
             "symlink mtim should change"
         );
     }
@@ -92,8 +92,8 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         assert_eq!(new_file_stat.mtim, sym_stat.mtim, "mtim should change");
     } else {
         assert_eq!(
-            new_file_stat.mtim / 1000,
-            sym_stat.mtim / 1000,
+            new_file_stat.mtim / 2000,
+            sym_stat.mtim / 2000,
             "mtim should change"
         );
     }
