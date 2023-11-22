@@ -7,32 +7,29 @@
 //!
 //! 1. [`Callee`] resolution.
 //! 2. Mapping of the [`Callee`] to the [`CalleeKind`].
-//! 3. Calculation of the stack space consumed by the call.
+//! 3. Spilling the value stack.
 //! 4. Calculate the return area, for 1+ results.
 //! 5. Emission.
 //! 6. Stack space cleanup.
 //!
-//! The stack space consumed by the function call; that is,
-//! the sum of:
+//! The stack space consumed by the function call is the amount
+//! of space used by any memory entries in the value stack present
+//! at the callsite (after spilling the value stack), that will be
+//! used as arguments for the function call. Any memory values in the
+//! value stack that are needed as part of the function
+//! arguments will be consumed by the function call (either by
+//! assigning those values to a register or by storing those
+//! values in a memory location if the callee argument is on
+//! the stack).
+//! This could also be done when assigning arguments every time a
+//! memory entry needs to be assigned to a particular location,
+//! but doing so will emit more instructions (e.g. a pop per
+//! argument that needs to be assigned); it's more efficient to
+//! calculate the space used by those memory values and reclaim it
+//! at once when cleaning up the stack after the call has been
+//! emitted.
 //!
-//! 1. The amount of stack space created by saving any live
-//!    registers at the callsite.
-//! 2. The amount of space used by any memory entries in the value
-//!    stack present at the callsite, that will be used as
-//!    arguments for the function call. Any memory values in the
-//!    value stack that are needed as part of the function
-//!    arguments, will be consumed by the function call (either by
-//!    assigning those values to a register or by storing those
-//!    values to a memory location if the callee argument is on
-//!    the stack), so we track that stack space to reclaim it once
-//!    the function call has ended. This could also be done in
-//!    when assigning arguments everytime a memory entry needs to be assigned
-//!    to a particular location, but doing so, will incur in more
-//!    instructions (e.g. a pop per argument that needs to be
-//!    assigned); it's more efficient to track the space needed by
-//!    those memory values and reclaim it at once.
-//!
-//! The machine stack throghout the function call is as follows:
+//! The machine stack throughout the function call is as follows:
 //! ┌──────────────────────────────────────────────────┐
 //! │                                                  │
 //! │                  1                               │
@@ -41,18 +38,18 @@
 //! │  are used as function arguments.                 │
 //! │                                                  │
 //! ├──────────────────────────────────────────────────┤ ---> The Wasm value stack at this point in time would look like:
-//! │                                                  │      [ Reg | Reg | Mem(offset) | Mem(offset) ]
+//! │                                                  │      [ Mem(offset) | Mem(offset) | Local(index) | Local(index) ]
 //! │                   2                              │
-//! │   Stack space created by saving                  │
-//! │   any live registers at the callsite.            │
+//! │   Stack space created by spilling locals and     |
+//! │   registers at the callsite.                     │
 //! │                                                  │
 //! │                                                  │
 //! ├─────────────────────────────────────────────────┬┤ ---> The Wasm value stack at this point in time would look like:
 //! │                                                  │      [ Mem(offset) | Mem(offset) | Mem(offset) | Mem(offset) ]
 //! │                                                  │      Assuming that the callee takes 4 arguments, we calculate
-//! │                                                  │      2 spilled registers + 2 memory values; all of which will be used
-//! │   Stack space allocated for                      │      as arguments to the call via `assign_args`, thus the memory they represent is
-//! │   the callee function arguments in the stack;    │      is considered to be consumed by the call.
+//! │                                                  │      4 memory values; all of which will be used as arguments to
+//! │   Stack space allocated for                      │      the call via `assign_args`, thus the sum of the size of the
+//! │   the callee function arguments in the stack;    │      memory they represent is considered to be consumed by the call.
 //! │   represented by `arg_stack_space`               │
 //! │                                                  │
 //! │                                                  │
@@ -82,10 +79,10 @@ impl FnCall {
     /// Orchestrates the emission of a function call:
     /// 1. Resolves the [`Callee`] through the given callback.
     /// 2. Maps the resolved [`Callee`] to the [`CalleeKind`].
-    /// 3. Saves any live registers and calculates the stack space consumed
-    ///    by the function call.
+    /// 3. Spills the value stack.
     /// 4. Creates the stack space needed for the return area.
     /// 5. Emits the call.
+    /// 6. Cleans up the stack space.
     pub fn emit<M: MacroAssembler, P: PtrSize, R>(
         masm: &mut M,
         context: &mut CodeGenContext,
