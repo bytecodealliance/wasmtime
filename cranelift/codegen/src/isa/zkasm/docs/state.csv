@@ -1,0 +1,377 @@
+Test,Status
+add_1,pass
+add_2,pass
+add_3,pass
+add_4,pass
+add_5,runtime error
+add_6,pass
+add_7,pass
+add_8,pass
+and_1,pass
+and_2,pass
+and_3,pass
+and_4,pass
+and_5,pass
+and_6,pass
+and_7,pass
+and_8,pass
+clz_1,compilation failed
+clz_2,compilation failed
+clz_3,compilation failed
+clz_4,compilation failed
+clz_5,compilation failed
+clz_6,compilation failed
+clz_7,compilation failed
+clz_8,compilation failed
+ctz_1,compilation failed
+ctz_2,compilation failed
+ctz_3,compilation failed
+ctz_4,compilation failed
+ctz_5,compilation failed
+ctz_6,compilation failed
+div_s_1,pass
+div_s_10,runtime error
+div_s_11,pass
+div_s_12,runtime error
+div_s_13,runtime error
+div_s_14,runtime error
+div_s_15,pass
+div_s_16,pass
+div_s_2,pass
+div_s_3,pass
+div_s_4,pass
+div_s_5,runtime error
+div_s_6,runtime error
+div_s_7,pass
+div_s_8,runtime error
+div_s_9,runtime error
+div_u_1,compilation failed
+div_u_10,compilation failed
+div_u_11,compilation failed
+div_u_12,compilation failed
+div_u_13,compilation failed
+div_u_14,compilation failed
+div_u_2,compilation failed
+div_u_3,compilation failed
+div_u_4,compilation failed
+div_u_5,compilation failed
+div_u_6,compilation failed
+div_u_7,compilation failed
+div_u_8,compilation failed
+div_u_9,compilation failed
+eq_1,pass
+eq_10,pass
+eq_11,pass
+eq_12,pass
+eq_13,pass
+eq_14,pass
+eq_2,pass
+eq_3,pass
+eq_4,pass
+eq_5,pass
+eq_6,pass
+eq_7,pass
+eq_8,pass
+eq_9,pass
+eqz_1,pass
+eqz_2,pass
+eqz_3,pass
+eqz_4,pass
+eqz_5,pass
+extend16_s_1,pass
+extend16_s_2,pass
+extend16_s_3,runtime error
+extend16_s_4,runtime error
+extend16_s_5,runtime error
+extend16_s_6,runtime error
+extend16_s_7,pass
+extend32_s_1,pass
+extend32_s_10,pass
+extend32_s_2,pass
+extend32_s_3,pass
+extend32_s_4,pass
+extend32_s_5,pass
+extend32_s_6,runtime error
+extend32_s_7,runtime error
+extend32_s_8,runtime error
+extend32_s_9,runtime error
+extend8_s_1,pass
+extend8_s_2,pass
+extend8_s_3,runtime error
+extend8_s_4,runtime error
+extend8_s_5,runtime error
+extend8_s_6,runtime error
+extend8_s_7,pass
+ge_s_1,compilation failed
+ge_s_10,compilation failed
+ge_s_11,compilation failed
+ge_s_12,compilation failed
+ge_s_13,compilation failed
+ge_s_14,compilation failed
+ge_s_2,compilation failed
+ge_s_3,compilation failed
+ge_s_4,compilation failed
+ge_s_5,compilation failed
+ge_s_6,compilation failed
+ge_s_7,compilation failed
+ge_s_8,compilation failed
+ge_s_9,compilation failed
+ge_u_1,compilation failed
+ge_u_10,compilation failed
+ge_u_11,compilation failed
+ge_u_12,compilation failed
+ge_u_13,compilation failed
+ge_u_14,compilation failed
+ge_u_2,compilation failed
+ge_u_3,compilation failed
+ge_u_4,compilation failed
+ge_u_5,compilation failed
+ge_u_6,compilation failed
+ge_u_7,compilation failed
+ge_u_8,compilation failed
+ge_u_9,compilation failed
+gt_s_1,compilation failed
+gt_s_10,compilation failed
+gt_s_11,compilation failed
+gt_s_12,compilation failed
+gt_s_13,compilation failed
+gt_s_14,compilation failed
+gt_s_2,compilation failed
+gt_s_3,compilation failed
+gt_s_4,compilation failed
+gt_s_5,compilation failed
+gt_s_6,compilation failed
+gt_s_7,compilation failed
+gt_s_8,compilation failed
+gt_s_9,compilation failed
+gt_u_1,compilation failed
+gt_u_10,compilation failed
+gt_u_11,compilation failed
+gt_u_12,compilation failed
+gt_u_13,compilation failed
+gt_u_14,compilation failed
+gt_u_2,compilation failed
+gt_u_3,compilation failed
+gt_u_4,compilation failed
+gt_u_5,compilation failed
+gt_u_6,compilation failed
+gt_u_7,compilation failed
+gt_u_8,compilation failed
+gt_u_9,compilation failed
+le_s_1,compilation failed
+le_s_10,compilation failed
+le_s_11,compilation failed
+le_s_12,compilation failed
+le_s_13,compilation failed
+le_s_14,compilation failed
+le_s_2,compilation failed
+le_s_3,compilation failed
+le_s_4,compilation failed
+le_s_5,compilation failed
+le_s_6,compilation failed
+le_s_7,compilation failed
+le_s_8,compilation failed
+le_s_9,compilation failed
+le_u_1,compilation failed
+le_u_10,compilation failed
+le_u_11,compilation failed
+le_u_12,compilation failed
+le_u_13,compilation failed
+le_u_14,compilation failed
+le_u_2,compilation failed
+le_u_3,compilation failed
+le_u_4,compilation failed
+le_u_5,compilation failed
+le_u_6,compilation failed
+le_u_7,compilation failed
+le_u_8,compilation failed
+le_u_9,compilation failed
+lt_s_1,pass
+lt_s_10,pass
+lt_s_11,pass
+lt_s_12,pass
+lt_s_13,pass
+lt_s_14,pass
+lt_s_2,pass
+lt_s_3,pass
+lt_s_4,pass
+lt_s_5,pass
+lt_s_6,pass
+lt_s_7,pass
+lt_s_8,pass
+lt_s_9,pass
+lt_u_1,pass
+lt_u_10,pass
+lt_u_11,pass
+lt_u_12,pass
+lt_u_13,pass
+lt_u_14,pass
+lt_u_2,pass
+lt_u_3,pass
+lt_u_4,pass
+lt_u_5,pass
+lt_u_6,pass
+lt_u_7,pass
+lt_u_8,pass
+lt_u_9,pass
+mul_1,pass
+mul_2,pass
+mul_3,pass
+mul_4,pass
+mul_5,pass
+mul_6,pass
+mul_7,pass
+mul_8,pass
+mul_9,pass
+ne_1,pass
+ne_10,pass
+ne_11,pass
+ne_12,pass
+ne_13,pass
+ne_14,pass
+ne_2,pass
+ne_3,pass
+ne_4,pass
+ne_5,pass
+ne_6,pass
+ne_7,pass
+ne_8,pass
+ne_9,pass
+or_1,pass
+or_2,pass
+or_3,pass
+or_4,pass
+or_5,pass
+or_6,pass
+or_7,pass
+or_8,pass
+popcnt_1,compilation failed
+popcnt_2,compilation failed
+popcnt_3,compilation failed
+popcnt_4,compilation failed
+popcnt_5,compilation failed
+popcnt_6,compilation failed
+popcnt_7,compilation failed
+popcnt_8,compilation failed
+rem_s_1,runtime error
+rem_s_10,runtime error
+rem_s_11,runtime error
+rem_s_12,runtime error
+rem_s_13,pass
+rem_s_14,runtime error
+rem_s_15,runtime error
+rem_s_16,runtime error
+rem_s_17,pass
+rem_s_18,pass
+rem_s_2,pass
+rem_s_3,pass
+rem_s_4,pass
+rem_s_5,pass
+rem_s_6,runtime error
+rem_s_7,pass
+rem_s_8,runtime error
+rem_s_9,pass
+rem_u_1,compilation failed
+rem_u_10,compilation failed
+rem_u_11,compilation failed
+rem_u_12,compilation failed
+rem_u_13,compilation failed
+rem_u_14,compilation failed
+rem_u_2,compilation failed
+rem_u_3,compilation failed
+rem_u_4,compilation failed
+rem_u_5,compilation failed
+rem_u_6,compilation failed
+rem_u_7,compilation failed
+rem_u_8,compilation failed
+rem_u_9,compilation failed
+rotl_1,compilation failed
+rotl_10,compilation failed
+rotl_11,compilation failed
+rotl_12,compilation failed
+rotl_13,compilation failed
+rotl_2,compilation failed
+rotl_3,compilation failed
+rotl_4,compilation failed
+rotl_5,compilation failed
+rotl_6,compilation failed
+rotl_7,compilation failed
+rotl_8,compilation failed
+rotl_9,compilation failed
+rotr_1,compilation failed
+rotr_10,compilation failed
+rotr_11,compilation failed
+rotr_12,compilation failed
+rotr_13,compilation failed
+rotr_2,compilation failed
+rotr_3,compilation failed
+rotr_4,compilation failed
+rotr_5,compilation failed
+rotr_6,compilation failed
+rotr_7,compilation failed
+rotr_8,compilation failed
+rotr_9,compilation failed
+shl_1,runtime error
+shl_10,runtime error
+shl_11,runtime error
+shl_2,runtime error
+shl_3,runtime error
+shl_4,runtime error
+shl_5,runtime error
+shl_6,runtime error
+shl_7,runtime error
+shl_8,runtime error
+shl_9,runtime error
+shr_s_1,runtime error
+shr_s_10,runtime error
+shr_s_11,runtime error
+shr_s_12,runtime error
+shr_s_13,runtime error
+shr_s_14,runtime error
+shr_s_15,runtime error
+shr_s_16,runtime error
+shr_s_17,runtime error
+shr_s_2,runtime error
+shr_s_3,runtime error
+shr_s_4,runtime error
+shr_s_5,runtime error
+shr_s_6,runtime error
+shr_s_7,runtime error
+shr_s_8,runtime error
+shr_s_9,runtime error
+shr_u_1,runtime error
+shr_u_10,runtime error
+shr_u_11,runtime error
+shr_u_12,runtime error
+shr_u_13,runtime error
+shr_u_14,runtime error
+shr_u_15,runtime error
+shr_u_16,runtime error
+shr_u_17,runtime error
+shr_u_2,runtime error
+shr_u_3,runtime error
+shr_u_4,runtime error
+shr_u_5,runtime error
+shr_u_6,runtime error
+shr_u_7,runtime error
+shr_u_8,runtime error
+shr_u_9,runtime error
+sub_1,runtime error
+sub_2,runtime error
+sub_3,runtime error
+sub_4,runtime error
+sub_5,runtime error
+sub_6,runtime error
+sub_7,runtime error
+xor_1,pass
+xor_10,pass
+xor_2,pass
+xor_3,pass
+xor_4,pass
+xor_5,pass
+xor_6,pass
+xor_7,pass
+xor_8,pass
+xor_9,pass
+Total Passed,132
+Amount of Tests,374
