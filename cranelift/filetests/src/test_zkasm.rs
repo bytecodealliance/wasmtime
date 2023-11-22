@@ -82,12 +82,16 @@ mod tests {
         for (index, line) in code.iter().enumerate() {
             let mut line = line.to_string();
             if line.starts_with(&"label_") {
+                // Handles lines with a label marker, e.g.:
+                //   label_XXX:
                 let label_index: usize = line[6..line.len() - 1]
                     .parse()
                     .expect("Failed to parse label index");
                 line = format!("L{func_index}_{label_index}:");
                 label_definition.insert(label_index, index);
             } else if line.contains(&"label_") {
+                // Handles lines with a jump to label, e.g.:
+                // A : JMPNZ(label_XXX)
                 let pos = line.find(&"label_").unwrap();
                 let pos_end = pos + line[pos..].find(&")").unwrap();
                 let label_index: usize = line[pos + 6..pos_end]
