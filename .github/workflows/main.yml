@@ -475,7 +475,10 @@ jobs:
     # to CPU-specific features.
     - name: CPU information
       run: lscpu
-      if: matrix.os != 'windows-latest'
+      if: matrix.os == 'ubuntu-latest'
+    - name: CPU information
+      run: sysctl hw
+      if: matrix.os == 'macos-latest'
     - name: CPU information
       run: wmic cpu list /format:list
       shell: pwsh
