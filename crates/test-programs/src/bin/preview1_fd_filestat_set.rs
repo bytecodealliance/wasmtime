@@ -1,5 +1,5 @@
-use std::{env, process};
-use test_programs::preview1::{open_scratch_directory, TestConfig};
+use std::{env, process, time::Duration};
+use test_programs::preview1::{assert_fs_time_eq, open_scratch_directory, TestConfig};
 
 unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
     let cfg = TestConfig::from_env();
@@ -30,27 +30,30 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
     assert_eq!(stat.size, 100, "file size should be 100");
 
     // Check fd_filestat_set_times
-    let old_atim = stat.atim;
-    let new_mtim = stat.mtim
-        - if cfg.support_accurate_time() {
-            100
-        } else {
-            2000
-        };
-    wasi::fd_filestat_set_times(file_fd, new_mtim, new_mtim, wasi::FSTFLAGS_MTIM)
-        .expect("fd_filestat_set_times");
+    let old_atim = Duration::from_nanos(stat.atim);
+    let new_mtim = Duration::from_nanos(stat.mtim) - cfg.fs_time_precision() * 2;
+    wasi::fd_filestat_set_times(
+        file_fd,
+        new_mtim.as_nanos() as u64,
+        new_mtim.as_nanos() as u64,
+        wasi::FSTFLAGS_MTIM,
+    )
+    .expect("fd_filestat_set_times");
 
     let stat = wasi::fd_filestat_get(file_fd).expect("failed filestat 3");
     assert_eq!(stat.size, 100, "file size should remain unchanged at 100");
 
     // Support accuracy up to at least 1ms
-    if cfg.support_accurate_time() {
-        assert_eq!(stat.mtim, new_mtim, "mtim should change");
-        assert_eq!(stat.atim, old_atim, "atim should not change");
-    } else {
-        assert_eq!(stat.mtim / 2000, new_mtim / 2000, "mtim should change");
-        assert_eq!(stat.atim / 2000, old_atim / 2000, "atim should not change");
-    }
+    assert_fs_time_eq!(
+        Duration::from_nanos(stat.mtim),
+        new_mtim,
+        "mtim should change"
+    );
+    assert_fs_time_eq!(
+        Duration::from_nanos(stat.atim),
+        old_atim,
+        "atim should not change"
+    );
 
     // let status = wasi_fd_filestat_set_times(file_fd, new_mtim, new_mtim, wasi::FILESTAT_SET_MTIM | wasi::FILESTAT_SET_MTIM_NOW);
     // assert_eq!(status, wasi::EINVAL, "ATIM & ATIM_NOW can't both be set");

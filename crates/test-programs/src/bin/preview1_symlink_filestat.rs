@@ -1,5 +1,5 @@
-use std::{env, process};
-use test_programs::preview1::{open_scratch_directory, TestConfig};
+use std::{env, process, time::Duration};
+use test_programs::preview1::{assert_fs_time_eq, open_scratch_directory, TestConfig};
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let cfg = TestConfig::from_env();
@@ -30,31 +30,26 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let sym_stat = wasi::path_filestat_get(dir_fd, 0, "symlink").expect("reading symlink stats");
 
     // Modify mtim of symlink
-    let sym_new_mtim = sym_stat.mtim
-        - if cfg.support_accurate_time() {
-            200
-        } else {
-            2000
-        };
-    wasi::path_filestat_set_times(dir_fd, 0, "symlink", 0, sym_new_mtim, wasi::FSTFLAGS_MTIM)
-        .expect("path_filestat_set_times should succeed on symlink");
+    let sym_new_mtim = Duration::from_nanos(sym_stat.mtim) - cfg.fs_time_precision() * 2;
+    wasi::path_filestat_set_times(
+        dir_fd,
+        0,
+        "symlink",
+        0,
+        sym_new_mtim.as_nanos() as u64,
+        wasi::FSTFLAGS_MTIM,
+    )
+    .expect("path_filestat_set_times should succeed on symlink");
 
     // Check that symlink mtim motification worked
     let modified_sym_stat = wasi::path_filestat_get(dir_fd, 0, "symlink")
         .expect("reading file stats after path_filestat_set_times");
 
-    if cfg.support_accurate_time() {
-        assert_eq!(
-            modified_sym_stat.mtim, sym_new_mtim,
-            "symlink mtim should change"
-        );
-    } else {
-        assert_eq!(
-            modified_sym_stat.mtim / 2000,
-            sym_new_mtim / 2000,
-            "symlink mtim should change"
-        );
-    }
+    assert_fs_time_eq!(
+        Duration::from_nanos(modified_sym_stat.mtim),
+        sym_new_mtim,
+        "symlink mtim should change"
+    );
 
     // Check that pointee mtim is not modified
     let unmodified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
@@ -88,15 +83,11 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let new_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after path_filestat_set_times");
 
-    if cfg.support_accurate_time() {
-        assert_eq!(new_file_stat.mtim, sym_stat.mtim, "mtim should change");
-    } else {
-        assert_eq!(
-            new_file_stat.mtim / 2000,
-            sym_stat.mtim / 2000,
-            "mtim should change"
-        );
-    }
+    assert_fs_time_eq!(
+        Duration::from_nanos(new_file_stat.mtim),
+        Duration::from_nanos(sym_stat.mtim),
+        "mtim should change"
+    );
 
     wasi::fd_close(file_fd).expect("closing a file");
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");

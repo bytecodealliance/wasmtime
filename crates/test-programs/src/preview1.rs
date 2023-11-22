@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{sync::OnceLock, time::Duration};
 
 pub fn config() -> &'static TestConfig {
     static TESTCONFIG: OnceLock<TestConfig> = OnceLock::new();
@@ -45,9 +45,9 @@ pub unsafe fn create_file(dir_fd: wasi::Fd, filename: &str) {
     wasi::fd_close(file_fd).expect("closing a file");
 }
 
-// Small workaround to get the crate's `assert_errno`, through the
+// Small workaround to get the crate's macros, through the
 // `#[macro_export]` attribute below, also available from this module.
-pub use crate::assert_errno;
+pub use crate::{assert_errno, assert_fs_time_eq};
 
 #[macro_export]
 macro_rules! assert_errno {
@@ -114,9 +114,20 @@ macro_rules! assert_errno {
     };
 }
 
+#[macro_export]
+macro_rules! assert_fs_time_eq {
+    ($l:expr, $r:expr, $n:literal) => {
+        assert_eq!(
+            $crate::preview1::config().fs_duration_to_precision($l),
+            $crate::preview1::config().fs_duration_to_precision($r),
+            $n
+        );
+    };
+}
+
 pub struct TestConfig {
     errno_mode: ErrnoMode,
-    no_accurate_time: bool,
+    fs_time_precision: u64,
     no_dangling_filesystem: bool,
     no_rename_dir_to_empty_dir: bool,
     no_fdflags_sync_support: bool,
@@ -140,13 +151,16 @@ impl TestConfig {
         } else {
             ErrnoMode::Permissive
         };
-        let no_accurate_time = std::env::var("NO_ACCURATE_TIME").is_ok();
+        let fs_time_precision = match std::env::var("FS_TIME_PRECISION") {
+            Ok(p) => p.parse().unwrap(),
+            Err(_) => 100,
+        };
         let no_dangling_filesystem = std::env::var("NO_DANGLING_FILESYSTEM").is_ok();
         let no_rename_dir_to_empty_dir = std::env::var("NO_RENAME_DIR_TO_EMPTY_DIR").is_ok();
         let no_fdflags_sync_support = std::env::var("NO_FDFLAGS_SYNC_SUPPORT").is_ok();
         TestConfig {
             errno_mode,
-            no_accurate_time,
+            fs_time_precision,
             no_dangling_filesystem,
             no_rename_dir_to_empty_dir,
             no_fdflags_sync_support,
@@ -170,8 +184,18 @@ impl TestConfig {
             _ => false,
         }
     }
-    pub fn support_accurate_time(&self) -> bool {
-        !self.no_accurate_time
+    pub fn fs_time_precision(&self) -> Duration {
+        Duration::from_nanos(self.fs_time_precision)
+    }
+    pub fn fs_duration_to_precision(&self, duration: Duration) -> Duration {
+        let duration_nanos: u64 = duration.as_nanos().try_into().unwrap();
+        let precision_ceil = duration_nanos.next_multiple_of(self.fs_time_precision);
+        let precision_floor = precision_ceil - self.fs_time_precision;
+        if precision_ceil - duration_nanos > duration_nanos - precision_floor {
+            Duration::from_nanos(precision_floor)
+        } else {
+            Duration::from_nanos(precision_ceil)
+        }
     }
     pub fn support_dangling_filesystem(&self) -> bool {
         !self.no_dangling_filesystem
