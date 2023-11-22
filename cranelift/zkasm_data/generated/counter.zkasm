@@ -8,15 +8,15 @@ function_1:
   SP + 2 => SP
   B :MSTORE(SP - 1)
   0 => A
-  :JMP(L1_1)
-L1_1:
+  :JMP(label_1)
+label_1:
   1 => B
   $ => A :ADD
   10 => B
   $ => B :EQ
-  B :JMPNZ(L1_3)
-  :JMP(L1_1)
-L1_3:
+  B :JMPNZ(label_3)
+  :JMP(label_1)
+label_3:
   10 => B
   B :ASSERT
   $ => B :MLOAD(SP - 1)

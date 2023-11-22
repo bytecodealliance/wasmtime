@@ -75,19 +75,19 @@ mod tests {
 
     // TODO: Labels optimization already happens in `MachBuffer`, we need to find a way to leverage
     // it.
-    fn optimize_labels(code: &[&str], func_index: usize) -> Vec<String> {
+    fn optimize_labels(code: &[&str], _func_index: usize) -> Vec<String> {
         let mut label_definition: HashMap<usize, usize> = HashMap::new();
         let mut label_uses: HashMap<usize, Vec<usize>> = HashMap::new();
         let mut lines = Vec::new();
         for (index, line) in code.iter().enumerate() {
-            let mut line = line.to_string();
+            let line = line.to_string();
             if line.starts_with(&"label_") {
                 // Handles lines with a label marker, e.g.:
                 //   label_XXX:
-                let label_index: usize = line[6..line.len() - 1]
+                let index_begin = line.rfind("_").expect("Failed to parse label index") + 1;
+                let label_index: usize = line[index_begin..line.len() - 1]
                     .parse()
                     .expect("Failed to parse label index");
-                line = format!("L{func_index}_{label_index}:");
                 label_definition.insert(label_index, index);
             } else if line.contains(&"label_") {
                 // Handles lines with a jump to label, e.g.:
@@ -97,7 +97,6 @@ mod tests {
                 let label_index: usize = line[pos + 6..pos_end]
                     .parse()
                     .expect("Failed to parse label index");
-                line.replace_range(pos..pos_end, &format!("L{func_index}_{label_index}"));
                 label_uses.entry(label_index).or_default().push(index);
             }
             lines.push(line);

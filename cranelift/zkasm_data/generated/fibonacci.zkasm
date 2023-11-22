@@ -15,8 +15,8 @@ function_1:
   0 => A
   1 => B
   B :MSTORE(SP)
-  :JMP(L1_1)
-L1_1:
+  :JMP(label_1)
+label_1:
   $ => A :ADD
   A => C
   B :MSTORE(SP)
@@ -25,12 +25,12 @@ L1_1:
   $ => A :ADD
   10 => B
   $ => E :EQ
-  E :JMPNZ(L1_3)
+  E :JMPNZ(label_3)
   C => B
   A => D
   $ => A :MLOAD(SP)
-  :JMP(L1_1)
-L1_3:
+  :JMP(label_1)
+label_3:
   89 => B
   C => A
   B :ASSERT
