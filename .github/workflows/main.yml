@@ -473,7 +473,13 @@ jobs:
 
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
-    - run: lscpu
+    - name: CPU information
+      run: lscpu
+      if: matrix.os != 'windows-latest'
+    - name: CPU information
+      run: wmic cpu list /format:list
+      shell: pwsh
+      if: matrix.os == 'windows-latest'
 
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
