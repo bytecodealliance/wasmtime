@@ -1,7 +1,7 @@
 # Introduction
 
-[Wasmtime][github] is a [Bytecode Alliance][BA] project that is a standalone
-optimizing runtime for [WebAssembly], [the Component Model], and [WASI]. It runs
+[Wasmtime][github] is a standalone optimizing runtime for [WebAssembly],
+[the Component Model], and [WASI] by the [Bytecode Alliance][BA]. It runs
 WebAssembly code [outside of the Web], and can be used both as a command-line
 utility or as a library embedded in a larger application. Wasmtime strives to be
 a highly configurable and embeddable runtime to run on any scale of application.
