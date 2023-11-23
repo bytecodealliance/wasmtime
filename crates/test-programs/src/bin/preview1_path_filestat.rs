@@ -89,7 +89,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
             0,
             "file",
             0,
-            new_mtim.as_nanos().try_into().unwrap(),
+            new_mtim.as_nanos() as u64,
             wasi::FSTFLAGS_MTIM | wasi::FSTFLAGS_MTIM_NOW,
         )
         .expect_err("MTIM and MTIM_NOW can't both be set"),
