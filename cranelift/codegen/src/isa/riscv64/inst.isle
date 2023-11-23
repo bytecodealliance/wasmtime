@@ -1937,8 +1937,8 @@
 ;; Like imm5_from_value, but first negates the `Value`.
 (decl pure partial imm5_from_negated_value (Value) Imm5)
 (rule (imm5_from_negated_value (has_type ty (iconst n)))
-(if-let (imm5_from_i64 imm) (i64_neg (i64_sextend_imm64 ty n)))
-imm)
+  (if-let (imm5_from_i64 imm) (i64_neg (i64_sextend_imm64 ty n)))
+  imm)
 
 ;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
 (decl pure partial replicated_imm5 (Value) Imm5)
