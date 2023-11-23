@@ -117,11 +117,8 @@ macro_rules! assert_errno {
 #[macro_export]
 macro_rules! assert_fs_time_eq {
     ($l:expr, $r:expr, $n:literal) => {
-        assert_eq!(
-            $crate::preview1::config().fs_duration_to_precision($l),
-            $crate::preview1::config().fs_duration_to_precision($r),
-            $n
-        );
+        let diff = if $l > $r { $l - $r } else { $r - $l };
+        assert!(diff < $crate::preview1::config().fs_time_precision(), $n);
     };
 }
 
@@ -186,16 +183,6 @@ impl TestConfig {
     }
     pub fn fs_time_precision(&self) -> Duration {
         Duration::from_nanos(self.fs_time_precision)
-    }
-    pub fn fs_duration_to_precision(&self, duration: Duration) -> Duration {
-        let duration_nanos: u64 = duration.as_nanos().try_into().unwrap();
-        let precision_ceil = duration_nanos.next_multiple_of(self.fs_time_precision);
-        let precision_floor = precision_ceil - self.fs_time_precision;
-        if precision_ceil - duration_nanos > duration_nanos - precision_floor {
-            Duration::from_nanos(precision_floor)
-        } else {
-            Duration::from_nanos(precision_ceil)
-        }
     }
     pub fn support_dangling_filesystem(&self) -> bool {
         !self.no_dangling_filesystem
