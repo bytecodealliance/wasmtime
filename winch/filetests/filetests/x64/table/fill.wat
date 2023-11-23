@@ -57,7 +57,7 @@
 ;;   2d:	 4c89f2               	mov	rdx, r14
 ;;   30:	 8b5a50               	mov	ebx, dword ptr [rdx + 0x50]
 ;;   33:	 39d9                 	cmp	ecx, ebx
-;;   35:	 0f8394000000         	jae	0xcf
+;;   35:	 0f83b5000000         	jae	0xf0
 ;;   3b:	 4189cb               	mov	r11d, ecx
 ;;   3e:	 4d6bdb08             	imul	r11, r11, 8
 ;;   42:	 488b5248             	mov	rdx, qword ptr [rdx + 0x48]
@@ -86,16 +86,24 @@
 ;;   99:	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
 ;;   9d:	 498b4368             	mov	rax, qword ptr [r11 + 0x68]
 ;;   a1:	 4156                 	push	r14
-;;   a3:	 4883ec08             	sub	rsp, 8
-;;   a7:	 488b7c2408           	mov	rdi, qword ptr [rsp + 8]
-;;   ac:	 be01000000           	mov	esi, 1
-;;   b1:	 8b54242c             	mov	edx, dword ptr [rsp + 0x2c]
-;;   b5:	 488b4c241c           	mov	rcx, qword ptr [rsp + 0x1c]
-;;   ba:	 448b442424           	mov	r8d, dword ptr [rsp + 0x24]
-;;   bf:	 ffd0                 	call	rax
-;;   c1:	 4883c408             	add	rsp, 8
-;;   c5:	 4883c408             	add	rsp, 8
-;;   c9:	 4883c420             	add	rsp, 0x20
-;;   cd:	 5d                   	pop	rbp
-;;   ce:	 c3                   	ret	
-;;   cf:	 0f0b                 	ud2	
+;;   a3:	 448b5c2424           	mov	r11d, dword ptr [rsp + 0x24]
+;;   a8:	 4883ec04             	sub	rsp, 4
+;;   ac:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   b0:	 4c8b5c2418           	mov	r11, qword ptr [rsp + 0x18]
+;;   b5:	 4153                 	push	r11
+;;   b7:	 448b5c2428           	mov	r11d, dword ptr [rsp + 0x28]
+;;   bc:	 4883ec04             	sub	rsp, 4
+;;   c0:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   c4:	 4883ec08             	sub	rsp, 8
+;;   c8:	 488b7c2418           	mov	rdi, qword ptr [rsp + 0x18]
+;;   cd:	 be01000000           	mov	esi, 1
+;;   d2:	 8b542414             	mov	edx, dword ptr [rsp + 0x14]
+;;   d6:	 488b4c240c           	mov	rcx, qword ptr [rsp + 0xc]
+;;   db:	 448b442408           	mov	r8d, dword ptr [rsp + 8]
+;;   e0:	 ffd0                 	call	rax
+;;   e2:	 4883c408             	add	rsp, 8
+;;   e6:	 4883c418             	add	rsp, 0x18
+;;   ea:	 4883c420             	add	rsp, 0x20
+;;   ee:	 5d                   	pop	rbp
+;;   ef:	 c3                   	ret	
+;;   f0:	 0f0b                 	ud2	

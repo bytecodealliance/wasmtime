@@ -155,6 +155,14 @@ impl Val {
         }
     }
 
+    /// Check whether the value is a constant.
+    pub fn is_const(&self) -> bool {
+        match *self {
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) => true,
+            _ => false,
+        }
+    }
+
     /// Check whether the value is local with a particular index.
     pub fn is_local_at_index(&self, index: u32) -> bool {
         match *self {

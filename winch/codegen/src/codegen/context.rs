@@ -11,7 +11,6 @@ use crate::{
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };
-use std::ops::RangeBounds;
 
 /// The code generation context.
 /// The code generation context is made up of three
@@ -313,35 +312,6 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                 emit(masm, dst, src.into(), size)
             });
         }
-    }
-
-    /// Saves any live registers in the value stack in a particular
-    /// range defined by the caller.  This is a specialization of the
-    /// spill function; made available for cases in which spilling
-    /// locals is not required, like for example for function calls in
-    /// which locals are not reachable by the callee.  
-    ///
-    /// Returns the size in bytes of the specified range.
-    pub fn save_live_registers_and_calculate_sizeof<M, R>(&mut self, masm: &mut M, range: R) -> u32
-    where
-        R: RangeBounds<usize>,
-        M: MacroAssembler,
-    {
-        let mut size = 0u32;
-        for v in self.stack.inner_mut().range_mut(range) {
-            match v {
-                Val::Reg(TypedReg { reg, ty }) => {
-                    let slot = masm.push(*reg, (*ty).into());
-                    self.regalloc.free(*reg);
-                    *v = Val::mem(*ty, slot);
-                    size += slot.size
-                }
-                Val::Memory(mem) => size += mem.slot.size,
-                _ => {}
-            }
-        }
-
-        size
     }
 
     /// Drops the last `n` elements of the stack, calling the provided

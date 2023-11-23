@@ -49,7 +49,7 @@ use crate::masm::{OperandSize, SPOffset};
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmRefType, WasmType};
 
 pub(crate) mod local;
 pub(crate) use local::*;
@@ -106,7 +106,12 @@ pub(crate) trait ABI {
     /// Returns the designated scratch register for the given [WasmType].
     fn scratch_for(ty: &WasmType) -> Reg {
         match ty {
-            WasmType::I32 | WasmType::I64 => Self::scratch_reg(),
+            WasmType::I32
+            | WasmType::I64
+            | WasmType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func,
+                ..
+            }) => Self::scratch_reg(),
             WasmType::F32 | WasmType::F64 => Self::float_scratch_reg(),
             _ => unimplemented!(),
         }
