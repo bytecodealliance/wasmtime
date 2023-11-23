@@ -1934,6 +1934,12 @@
 (decl imm5_from_value (Imm5) Value)
 (extractor (imm5_from_value n) (i64_from_iconst (imm5_from_i64 n)))
 
+;; Like imm5_from_value, but first negates the `Value`.
+(decl pure partial imm5_from_negated_value (Value) Imm5)
+(rule (imm5_from_negated_value (has_type ty (iconst n)))
+  (if-let (imm5_from_i64 imm) (i64_neg (i64_sextend_imm64 ty n)))
+  imm)
+
 ;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
 (decl pure partial replicated_imm5 (Value) Imm5)
 (rule (replicated_imm5 (splat (imm5_from_value n))) n)
@@ -1943,6 +1949,19 @@
   (if-let (u32_replicated_u16 n16) n32)
   (if-let (u16_replicated_u8 n8) n16)
   (if-let n (i8_to_imm5 (u8_as_i8 n8)))
+  n)
+
+;; Like replicated_imm5, but first negates the `Value`.
+(decl pure partial negated_replicated_imm5 (Value) Imm5)
+(rule (negated_replicated_imm5 (splat n))
+  (if-let imm5 (imm5_from_negated_value n))
+  imm5)
+(rule (negated_replicated_imm5 (vconst (u128_from_constant n128)))
+  (if-let (u128_replicated_u64 n64) n128)
+  (if-let (u64_replicated_u32 n32) n64)
+  (if-let (u32_replicated_u16 n16) n32)
+  (if-let (u16_replicated_u8 n8) n16)
+  (if-let n (i8_to_imm5 (i8_neg (u8_as_i8 n8))))
   n)
 
 ;; UImm5 Helpers
