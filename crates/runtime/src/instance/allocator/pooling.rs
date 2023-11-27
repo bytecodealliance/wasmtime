@@ -225,13 +225,6 @@ pub struct PoolingInstanceAllocatorConfig {
 
 impl Default for PoolingInstanceAllocatorConfig {
     fn default() -> PoolingInstanceAllocatorConfig {
-        // When testing, we may choose to start with MPK force-enabled to ensure
-        // we use that functionality.
-        let memory_protection_keys = if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
-            MpkEnabled::Enable
-        } else {
-            MpkEnabled::Disable
-        };
         PoolingInstanceAllocatorConfig {
             max_unused_warm_slots: 100,
             stack_size: 2 << 20,
@@ -240,7 +233,7 @@ impl Default for PoolingInstanceAllocatorConfig {
             async_stack_keep_resident: 0,
             linear_memory_keep_resident: 0,
             table_keep_resident: 0,
-            memory_protection_keys,
+            memory_protection_keys: MpkEnabled::Disable,
             max_memory_protection_keys: 16,
         }
     }
