@@ -79,6 +79,48 @@ unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
     wasi::fd_close(file_fd).expect("closing a file");
     wasi::path_unlink_file(dir_fd, "file").expect("deleting a file");
 }
+
+// Test that when a file is opened with `O_APPEND` that acquiring the current
+// position indicates the end of the file.
+unsafe fn seek_and_o_append(dir_fd: wasi::Fd) {
+    let path = "file2";
+    let file_fd = wasi::path_open(
+        dir_fd,
+        0,
+        path,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        wasi::FDFLAGS_APPEND,
+    )
+    .expect("opening a file");
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
+
+    let mut offset = wasi::fd_seek(file_fd, 0, wasi::WHENCE_CUR).unwrap();
+    assert_eq!(offset, 0);
+    offset = wasi::fd_tell(file_fd).unwrap();
+    assert_eq!(offset, 0);
+
+    let data = &[0u8; 100];
+    let iov = wasi::Ciovec {
+        buf: data.as_ptr() as *const _,
+        buf_len: data.len(),
+    };
+    let nwritten = wasi::fd_write(file_fd, &[iov]).unwrap();
+    assert_eq!(nwritten, 100);
+
+    let mut offset = wasi::fd_seek(file_fd, 0, wasi::WHENCE_CUR).unwrap();
+    assert_eq!(offset, 100);
+    offset = wasi::fd_tell(file_fd).unwrap();
+    assert_eq!(offset, 100);
+
+    wasi::fd_close(file_fd).unwrap();
+    wasi::path_unlink_file(dir_fd, path).unwrap();
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -99,5 +141,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_file_seek_tell(dir_fd) }
+    unsafe {
+        test_file_seek_tell(dir_fd);
+        seek_and_o_append(dir_fd);
+    }
 }
