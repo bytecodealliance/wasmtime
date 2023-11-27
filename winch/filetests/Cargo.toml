@@ -24,3 +24,4 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 cranelift-codegen = { workspace = true }
 capstone = { workspace = true }
+wasmparser = { workspace = true }

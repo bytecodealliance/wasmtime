@@ -248,7 +248,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
 }
 
 impl<'dummy_environment> TypeConvert for DummyFuncEnvironment<'dummy_environment> {
-    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+    fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
         unimplemented!()
     }
 }
@@ -704,7 +704,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 }
 
 impl TypeConvert for DummyEnvironment {
-    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+    fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
         unimplemented!()
     }
 }

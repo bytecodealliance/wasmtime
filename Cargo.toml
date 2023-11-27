@@ -227,18 +227,18 @@ io-extras = "0.18.0"
 rustix = "0.38.21"
 is-terminal = "0.4.0"
 # wit-bindgen:
-wit-bindgen = { version = "0.13.1", default-features = false }
+wit-bindgen = { version = "0.15.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.116.0"
-wat = "1.0.79"
-wast = "67.0.1"
-wasmprinter = "0.2.72"
-wasm-encoder = "0.36.2"
-wasm-smith = "0.12.23"
-wasm-mutate = "0.2.40"
+wasmparser = "0.118.0"
+wat = "1.0.81"
+wast = "69.0.0"
+wasmprinter = "0.2.74"
+wasm-encoder = "0.38.0"
+wasm-smith = "0.13.0"
+wasm-mutate = "0.2.42"
 wit-parser = "0.13.0"
-wit-component = "0.18.0"
+wit-component = "0.18.2"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

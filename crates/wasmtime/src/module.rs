@@ -415,10 +415,10 @@ impl Module {
             .translate(parser, wasm)
             .context("failed to parse WebAssembly module")?;
         let functions = mem::take(&mut translation.function_body_inputs);
-        let types = types.finish();
 
         let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
         let unlinked_compile_outputs = compile_inputs.compile(engine)?;
+        let types = types.finish();
         let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
         // Emplace all compiled functions into the object file with any other

@@ -187,7 +187,6 @@ impl Component {
             Translator::new(tunables, &mut validator, &mut types, &scope)
                 .translate(binary)
                 .context("failed to parse WebAssembly module")?;
-        let types = types.finish();
 
         let compile_inputs = CompileInputs::for_component(
             &types,
@@ -198,6 +197,7 @@ impl Component {
             }),
         );
         let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
+        let types = types.finish();
         let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
         let mut object = compiler.object(ObjectKind::Component)?;
