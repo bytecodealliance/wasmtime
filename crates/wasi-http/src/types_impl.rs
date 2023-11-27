@@ -1,6 +1,6 @@
 use crate::{
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
-    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
+    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
     types::{
         is_forbidden_header, remove_forbidden_headers, FieldMap, HostFields,
         HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
@@ -384,7 +384,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
             Err(e) => return Ok(Err(e)),
         };
 
-        let (host_body, hyper_body) = HostOutgoingBody::new(size);
+        let (host_body, hyper_body) = HostOutgoingBody::new(StreamContext::Request, size);
 
         req.body = Some(hyper_body);
 
@@ -728,7 +728,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
             Err(e) => return Ok(Err(e)),
         };
 
-        let (host, body) = HostOutgoingBody::new(size);
+        let (host, body) = HostOutgoingBody::new(StreamContext::Response, size);
 
         resp.body.replace(body);
 

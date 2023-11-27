@@ -54,11 +54,7 @@ fn main() {
             http_types::OutgoingBody::finish(outgoing_body, None).expect_err("finish should fail");
 
         assert!(
-            matches!(
-                &e,
-                http_types::ErrorCode::InternalError(Some(s))
-                  if s == "not enough written to body stream",
-            ),
+            matches!(&e, http_types::ErrorCode::HttpRequestBodySize(Some(3))),
             "unexpected error: {e:#?}"
         );
     }
@@ -75,25 +71,26 @@ fn main() {
                 .expect_err("write should fail");
 
             let e = match e {
-                test_programs::wasi::io::streams::StreamError::LastOperationFailed(e) => e,
+                test_programs::wasi::io::streams::StreamError::LastOperationFailed(e) => {
+                    http_types::http_error_code(&e)
+                }
                 test_programs::wasi::io::streams::StreamError::Closed => panic!("request closed"),
             };
 
-            assert!(matches!(
-                http_types::http_error_code(&e),
-                Some(http_types::ErrorCode::InternalError(Some(msg)))
-                  if msg == "too much written to output stream"));
+            assert!(
+                matches!(
+                    e,
+                    Some(http_types::ErrorCode::HttpRequestBodySize(Some(18)))
+                ),
+                "unexpected error {e:?}"
+            );
         }
 
         let e =
             http_types::OutgoingBody::finish(outgoing_body, None).expect_err("finish should fail");
 
         assert!(
-            matches!(
-                &e,
-                http_types::ErrorCode::InternalError(Some(s))
-                  if s == "too much written to body stream",
-            ),
+            matches!(&e, http_types::ErrorCode::HttpRequestBodySize(Some(18))),
             "unexpected error: {e:#?}"
         );
     }
