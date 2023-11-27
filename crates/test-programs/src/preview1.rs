@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{sync::OnceLock, time::Duration};
 
 pub fn config() -> &'static TestConfig {
     static TESTCONFIG: OnceLock<TestConfig> = OnceLock::new();
@@ -45,9 +45,9 @@ pub unsafe fn create_file(dir_fd: wasi::Fd, filename: &str) {
     wasi::fd_close(file_fd).expect("closing a file");
 }
 
-// Small workaround to get the crate's `assert_errno`, through the
+// Small workaround to get the crate's macros, through the
 // `#[macro_export]` attribute below, also available from this module.
-pub use crate::assert_errno;
+pub use crate::{assert_errno, assert_fs_time_eq};
 
 #[macro_export]
 macro_rules! assert_errno {
@@ -114,8 +114,17 @@ macro_rules! assert_errno {
     };
 }
 
+#[macro_export]
+macro_rules! assert_fs_time_eq {
+    ($l:expr, $r:expr, $n:literal) => {
+        let diff = if $l > $r { $l - $r } else { $r - $l };
+        assert!(diff < $crate::preview1::config().fs_time_precision(), $n);
+    };
+}
+
 pub struct TestConfig {
     errno_mode: ErrnoMode,
+    fs_time_precision: u64,
     no_dangling_filesystem: bool,
     no_rename_dir_to_empty_dir: bool,
     no_fdflags_sync_support: bool,
@@ -139,11 +148,16 @@ impl TestConfig {
         } else {
             ErrnoMode::Permissive
         };
+        let fs_time_precision = match std::env::var("FS_TIME_PRECISION") {
+            Ok(p) => p.parse().unwrap(),
+            Err(_) => 100,
+        };
         let no_dangling_filesystem = std::env::var("NO_DANGLING_FILESYSTEM").is_ok();
         let no_rename_dir_to_empty_dir = std::env::var("NO_RENAME_DIR_TO_EMPTY_DIR").is_ok();
         let no_fdflags_sync_support = std::env::var("NO_FDFLAGS_SYNC_SUPPORT").is_ok();
         TestConfig {
             errno_mode,
+            fs_time_precision,
             no_dangling_filesystem,
             no_rename_dir_to_empty_dir,
             no_fdflags_sync_support,
@@ -166,6 +180,9 @@ impl TestConfig {
             ErrnoMode::Windows => true,
             _ => false,
         }
+    }
+    pub fn fs_time_precision(&self) -> Duration {
+        Duration::from_nanos(self.fs_time_precision)
     }
     pub fn support_dangling_filesystem(&self) -> bool {
         !self.no_dangling_filesystem
