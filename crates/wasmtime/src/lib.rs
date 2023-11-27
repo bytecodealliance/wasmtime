@@ -1,6 +1,6 @@
 //! Wasmtime's embedding API
 //!
-//! Wasmtime is a WebAssembly engine for JIT-complied or ahead-of-time compiled
+//! Wasmtime is a WebAssembly engine for JIT-compiled or ahead-of-time compiled
 //! WebAssembly modules. More information about the Wasmtime project as a whole
 //! can be found [in the documentation book](https://docs.wasmtime.dev) whereas
 //! this documentation mostly focuses on the API reference of the `wasmtime`
