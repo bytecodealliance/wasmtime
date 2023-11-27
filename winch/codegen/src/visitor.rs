@@ -1189,13 +1189,39 @@ where
             self.context.pop_to_reg(self.masm, None)
         };
 
-        self.masm.branch(
-            IntCmpKind::Ne,
-            top.reg.into(),
-            top.reg.into(),
-            *frame.label(),
-            OperandSize::S32,
-        );
+        // Emit instructions to balance the machine stack if the frame has
+        // a different offset.
+        let current_sp_offset = self.masm.sp_offset();
+        let (_, frame_sp_offset) = frame.base_stack_len_and_sp();
+        if current_sp_offset == frame_sp_offset {
+            self.masm.branch(
+                IntCmpKind::Ne,
+                top.reg.into(),
+                top.reg.into(),
+                *frame.label(),
+                OperandSize::S32,
+            );
+        } else {
+            let br_fallthrough_label = self.masm.get_label();
+            self.masm.branch(
+                IntCmpKind::Eq,
+                top.reg.into(),
+                top.reg.into(),
+                br_fallthrough_label,
+                OperandSize::S32,
+            );
+
+            // Emit instructions to balance the stack and jump if not falling
+            // through.
+            let current_sp_offset = self.masm.sp_offset();
+            let (_, frame_sp_offset) = frame.base_stack_len_and_sp();
+            self.masm.ensure_sp_for_jump(frame_sp_offset);
+            self.masm.jmp(*frame.label());
+
+            // Restore sp_offset to what it was for falling through.
+            self.masm.reset_stack_pointer(current_sp_offset);
+            self.masm.bind(br_fallthrough_label);
+        }
         self.context.free_reg(top);
     }
 

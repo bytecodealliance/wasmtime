@@ -35,8 +35,10 @@
 ;;   56:	 8b0424               	mov	eax, dword ptr [rsp]
 ;;   59:	 4883c404             	add	rsp, 4
 ;;   5d:	 85c9                 	test	ecx, ecx
-;;   5f:	 0f8502000000         	jne	0x67
-;;   65:	 0f0b                 	ud2	
-;;   67:	 4883c410             	add	rsp, 0x10
-;;   6b:	 5d                   	pop	rbp
-;;   6c:	 c3                   	ret	
+;;   5f:	 0f8409000000         	je	0x6e
+;;   65:	 4883c404             	add	rsp, 4
+;;   69:	 e902000000           	jmp	0x70
+;;   6e:	 0f0b                 	ud2	
+;;   70:	 4883c410             	add	rsp, 0x10
+;;   74:	 5d                   	pop	rbp
+;;   75:	 c3                   	ret	
