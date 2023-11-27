@@ -1428,6 +1428,7 @@ impl<
                 position,
             }) if t.view.table().get(fd)?.is_file() => {
                 let fd = fd.borrowed();
+                let fd2 = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 let position = position.clone();
                 let append = *append;
@@ -1452,7 +1453,10 @@ impl<
                     (stream, pos)
                 };
                 let n = blocking_mode.write(self, stream, &buf).await?;
-                if !append {
+                if append {
+                    let len = self.stat(fd2).await?;
+                    position.store(len.size, Ordering::Relaxed);
+                } else {
                     let pos = pos.checked_add(n as u64).ok_or(types::Errno::Overflow)?;
                     position.store(pos, Ordering::Relaxed);
                 }

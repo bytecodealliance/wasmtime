@@ -1293,12 +1293,18 @@ pub unsafe extern "C" fn fd_write(
                         BlockingMode::Blocking.write(wasi_stream, bytes)?
                     };
 
-                    // If this is a file, keep the current-position pointer up to date.
+                    // If this is a file, keep the current-position pointer up
+                    // to date. Note that for files that perform appending
+                    // writes this function will always update the current
+                    // position to the end of the file.
+                    //
+                    // NB: this isn't "atomic" as it doesn't necessarily account
+                    // for concurrent writes, but there's not much that can be
+                    // done about that.
                     if let StreamType::File(file) = &streams.type_ {
-                        // But don't update if we're in append mode. Strictly speaking,
-                        // we should set the position to the new end of the file, but
-                        // we don't have an API to do that atomically.
-                        if !file.append {
+                        if file.append {
+                            file.position.set(file.fd.stat()?.size);
+                        } else {
                             file.position.set(file.position.get() + nbytes as u64);
                         }
                     }
