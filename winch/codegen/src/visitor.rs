@@ -1213,8 +1213,6 @@ where
 
             // Emit instructions to balance the stack and jump if not falling
             // through.
-            let current_sp_offset = self.masm.sp_offset();
-            let (_, frame_sp_offset) = frame.base_stack_len_and_sp();
             self.masm.ensure_sp_for_jump(frame_sp_offset);
             self.masm.jmp(*frame.label());
 
