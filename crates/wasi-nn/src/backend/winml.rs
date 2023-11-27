@@ -1,11 +1,10 @@
 //! Implements a `wasi-nn` [`BackendInner`] using WinML.
 
 use super::{BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
-use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
-use crate::{Backend, ExecutionContext, Graph};
-use std::sync::{Arc, Mutex};
+use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
+use crate::{ExecutionContext, Graph};
 use std::{fs::File, io::Read, path::Path};
-use windows::core::{ComInterface, Error, HSTRING};
+use windows::core::{ComInterface, HSTRING};
 use windows::Storage::Streams::{
     DataWriter, InMemoryRandomAccessStream, RandomAccessStreamReference,
 };

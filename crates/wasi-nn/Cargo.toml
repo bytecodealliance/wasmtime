@@ -27,7 +27,7 @@ tracing = { workspace = true }
 openvino = { version = "0.6.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 
-[dependencies.windows]
+[target.'cfg(windows)'.dependencies.windows]
 version = "0.51"
 features = [
     "AI_MachineLearning",
