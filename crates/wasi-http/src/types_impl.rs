@@ -637,32 +637,31 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
     fn get(
         &mut self,
         id: Resource<HostFutureTrailers>,
-    ) -> wasmtime::Result<Option<Result<Option<Resource<Trailers>>, types::ErrorCode>>> {
+    ) -> wasmtime::Result<Option<Result<Result<Option<Resource<Trailers>>, types::ErrorCode>, ()>>>
+    {
         let trailers = self.table().get_mut(&id)?;
         match trailers {
             HostFutureTrailers::Waiting(_) => return Ok(None),
-            HostFutureTrailers::Done(Err(e)) => return Ok(Some(Err(e.clone()))),
-            HostFutureTrailers::Done(Ok(None)) => return Ok(Some(Ok(None))),
-            HostFutureTrailers::Done(Ok(_)) => {}
-        }
+            HostFutureTrailers::Consumed => return Ok(Some(Err(()))),
+            HostFutureTrailers::Done(_) => {}
+        };
 
-        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
-            let trailers = elem.downcast_mut::<HostFutureTrailers>().unwrap();
-            match trailers {
-                HostFutureTrailers::Done(Ok(Some(e))) => e,
-                _ => unreachable!(),
-            }
-        }
+        let res = match std::mem::replace(trailers, HostFutureTrailers::Consumed) {
+            HostFutureTrailers::Done(res) => res,
+            _ => unreachable!(),
+        };
 
-        let hdrs = self.table().push_child(
-            HostFields::Ref {
-                parent: id.rep(),
-                get_fields,
-            },
-            &id,
-        )?;
+        let mut fields = match res {
+            Ok(Some(fields)) => fields,
+            Ok(None) => return Ok(Some(Ok(Ok(None)))),
+            Err(e) => return Ok(Some(Ok(Err(e)))),
+        };
 
-        Ok(Some(Ok(Some(hdrs))))
+        remove_forbidden_headers(self, &mut fields);
+
+        let ts = self.table().push(HostFields::Owned { fields })?;
+
+        Ok(Some(Ok(Ok(Some(ts)))))
     }
 }
 

@@ -436,16 +436,20 @@ interface types {
     /// The outer `option` represents future readiness. Users can wait on this
     /// `option` to become `some` using the `subscribe` method.
     ///
-    /// The `result` represents that either the HTTP Request or Response body,
-    /// as well as any trailers, were received successfully, or that an error
-    /// occured receiving them. The optional `trailers` indicates whether or not
-    /// trailers were present in the body.
+    /// The outer `result` is used to retrieve the trailers or error at most
+    /// once. It will be success on the first call in which the outer option
+    /// is `some`, and error on subsequent calls.
+    ///
+    /// The inner `result` represents that either the HTTP Request or Response
+    /// body, as well as any trailers, were received successfully, or that an
+    /// error occured receiving them. The optional `trailers` indicates whether
+    /// or not trailers were present in the body.
     ///
     /// When some `trailers` are returned by this method, the `trailers`
     /// resource is immutable, and a child. Use of the `set`, `append`, or
     /// `delete` methods will return an error, and the resource must be
     /// dropped before the parent `future-trailers` is dropped.
-    get: func() -> option<result<option<trailers>, error-code>>;
+    get: func() -> option<result<result<option<trailers>, error-code>>>;
   }
 
   /// Represents an outgoing HTTP Response.
