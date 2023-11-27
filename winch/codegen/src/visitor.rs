@@ -1208,7 +1208,8 @@ where
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
         let default_index = control_index(targets.default(), self.control_frames.len());
-        let default_result = self.control_frames[default_index].as_target_results();
+        let default_frame = &self.control_frames[default_index];
+        let default_result = default_frame.as_target_results();
 
         let (index, tmp) = if let Some(data) = default_result {
             let index_and_tmp = self.context.without::<(TypedReg, _), M, _>(
@@ -1228,6 +1229,10 @@ where
             )
         };
 
+        let (_, offset) = default_frame.base_stack_len_and_sp();
+        // Ensure that the stack pointer is correctly positioned before
+        // jumping to the jump table code.
+        self.masm.ensure_sp_for_jump(offset);
         self.masm.jmp_table(&labels, index.into(), tmp);
 
         for (t, l) in targets
