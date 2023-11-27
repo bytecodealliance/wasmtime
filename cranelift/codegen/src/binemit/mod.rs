@@ -81,7 +81,7 @@ pub enum Reloc {
     Aarch64TlsDescCall,
 
     /// AArch64 GOT Page
-    /// Set the immediate value of an ADRP to bits 32:12 of X; check that –232 <= X < 232
+    /// Set the immediate value of an ADRP to bits 32:12 of X; check that –2^32 <= X < 2^32
     /// This is equivalent to `R_AARCH64_ADR_GOT_PAGE` (311) in the  [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#static-aarch64-relocations)
     Aarch64AdrGotPage21,
 
