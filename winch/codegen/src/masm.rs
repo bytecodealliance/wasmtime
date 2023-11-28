@@ -24,7 +24,7 @@ pub(crate) enum RemKind {
 }
 
 /// Representation of the stack pointer offset.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
 pub struct SPOffset(u32);
 
 impl SPOffset {
