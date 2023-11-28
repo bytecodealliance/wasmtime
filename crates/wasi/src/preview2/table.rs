@@ -95,7 +95,7 @@ impl Table {
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        assert!(capacity > 2);
+        assert!(capacity > 3);
 
         let mut entries = Vec::with_capacity(capacity);
 
@@ -103,6 +103,7 @@ impl Table {
         // indicies are still valid ways to access stdio, they are deliberately left empty.
         // Once we have a full implementation of resources, this confusion should hopefully be
         // impossible :)
+        entries.push(Entry::Free { next: None });
         entries.push(Entry::Free { next: None });
         entries.push(Entry::Free { next: None });
 
