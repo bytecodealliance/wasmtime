@@ -336,3 +336,43 @@ impl Default for Table {
         Table::new()
     }
 }
+
+#[test]
+pub fn test_free_queue() {
+    let mut table = Table::with_capacity(0);
+
+    let x = table.push(()).unwrap();
+    assert_eq!(x.rep(), 0);
+
+    let y = table.push(()).unwrap();
+    assert_eq!(y.rep(), 1);
+
+    let start = y.rep() + 1;
+    let end = table.entries.capacity() as u32;
+
+    for i in start..end {
+        let x = table.push(()).unwrap();
+        assert_eq!(x.rep(), i);
+        assert_eq!(table.entries.capacity() as u32, end);
+    }
+
+    // Deleting x should put it on the free queue, so the next entry should have the same rep.
+    table.delete(x).unwrap();
+    let x = table.push(()).unwrap();
+    assert_eq!(x.rep(), 0);
+
+    // Deleting y and then x should yield indices 1 and then 0.
+    table.delete(y).unwrap();
+    table.delete(x).unwrap();
+
+    let y = table.push(()).unwrap();
+    assert_eq!(y.rep(), 1);
+
+    let x = table.push(()).unwrap();
+    assert_eq!(x.rep(), 0);
+
+    // As the vector is at capacity, this new entry should force it to grow, making the next entry
+    // the previous capacity.
+    let x = table.push(()).unwrap();
+    assert_eq!(x.rep(), end);
+}
