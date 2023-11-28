@@ -1193,7 +1193,7 @@ where
         // a different offset.
         let current_sp_offset = self.masm.sp_offset();
         let (_, frame_sp_offset) = frame.base_stack_len_and_sp();
-        let (label, cmp, needs_cleanup) = if current_sp_offset.as_u32() > frame_sp_offset.as_u32() {
+        let (label, cmp, needs_cleanup) = if current_sp_offset > frame_sp_offset {
             (self.masm.get_label(), IntCmpKind::Eq, true)
         } else {
             (*frame.label(), IntCmpKind::Ne, false)
