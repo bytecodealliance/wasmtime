@@ -11,10 +11,10 @@ use crate::{
 use anyhow::Context;
 use std::any::Any;
 use std::str::FromStr;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
-    Pollable, Table,
+    Pollable,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -49,7 +49,7 @@ fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
 
 /// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
 /// fields resource references another fields, the returned [`FieldMap`] will be cloned.
-fn move_fields(table: &mut Table, id: Resource<HostFields>) -> wasmtime::Result<FieldMap> {
+fn move_fields(table: &mut ResourceTable, id: Resource<HostFields>) -> wasmtime::Result<FieldMap> {
     match table.delete(id)? {
         HostFields::Ref { parent, get_fields } => {
             let entry = table.get_any_mut(parent)?;
@@ -61,7 +61,7 @@ fn move_fields(table: &mut Table, id: Resource<HostFields>) -> wasmtime::Result<
 }
 
 fn get_fields<'a>(
-    table: &'a mut Table,
+    table: &'a mut ResourceTable,
     id: &Resource<HostFields>,
 ) -> wasmtime::Result<&'a FieldMap> {
     let fields = table.get(&id)?;
@@ -80,7 +80,7 @@ fn get_fields<'a>(
 }
 
 fn get_fields_mut<'a>(
-    table: &'a mut Table,
+    table: &'a mut ResourceTable,
     id: &Resource<HostFields>,
 ) -> wasmtime::Result<Result<&'a mut FieldMap, types::HeaderError>> {
     match table.get_mut(&id)? {

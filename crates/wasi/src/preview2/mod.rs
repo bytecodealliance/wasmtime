@@ -36,7 +36,6 @@ pub mod preview1;
 mod random;
 mod stdio;
 mod stream;
-mod table;
 mod tcp;
 mod udp;
 mod write_stream;
@@ -54,7 +53,6 @@ pub use self::stdio::{
 pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
-pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 

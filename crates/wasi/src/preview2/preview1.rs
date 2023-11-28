@@ -8,7 +8,7 @@ use crate::preview2::bindings::{
     filesystem::{preopens, types as filesystem},
     io::{poll, streams},
 };
-use crate::preview2::{FsError, IsATTY, StreamError, StreamResult, TableError, WasiView};
+use crate::preview2::{FsError, IsATTY, StreamError, StreamResult, WasiView};
 use anyhow::{bail, Context};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashSet};
@@ -772,8 +772,8 @@ impl From<filesystem::ErrorCode> for types::Error {
     }
 }
 
-impl From<TableError> for types::Error {
-    fn from(err: TableError) -> Self {
+impl From<wasmtime::component::ResourceTableError> for types::Error {
+    fn from(err: wasmtime::component::ResourceTableError) -> Self {
         types::Error::trap(err.into())
     }
 }

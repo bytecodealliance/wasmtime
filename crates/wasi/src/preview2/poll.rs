@@ -1,11 +1,11 @@
-use crate::preview2::{bindings::io::poll, Table, WasiView};
+use crate::preview2::{bindings::io::poll, WasiView};
 use anyhow::Result;
 use std::any::Any;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 
 pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> PollableFuture<'a>;
@@ -20,7 +20,7 @@ pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync +
 pub struct Pollable {
     index: u32,
     make_future: MakeFuture,
-    remove_index_on_delete: Option<fn(&mut Table, u32) -> Result<()>>,
+    remove_index_on_delete: Option<fn(&mut ResourceTable, u32) -> Result<()>>,
 }
 
 #[async_trait::async_trait]
@@ -35,7 +35,7 @@ pub trait Subscribe: Send + Sync + 'static {
 /// resource is deleted. Otherwise the returned resource is considered a "child"
 /// of the given `resource` which means that the given resource cannot be
 /// deleted while the `pollable` is still alive.
-pub fn subscribe<T>(table: &mut Table, resource: Resource<T>) -> Result<Resource<Pollable>>
+pub fn subscribe<T>(table: &mut ResourceTable, resource: Resource<T>) -> Result<Resource<Pollable>>
 where
     T: Subscribe,
 {

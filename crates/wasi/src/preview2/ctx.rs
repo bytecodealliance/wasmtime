@@ -4,7 +4,7 @@ use crate::preview2::{
     filesystem::Dir,
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
-    DirPerms, FilePerms, Table,
+    DirPerms, FilePerms,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 use cap_std::ipnet::{self, IpNet};
@@ -12,6 +12,7 @@ use cap_std::net::Pool;
 use cap_std::{ambient_authority, AmbientAuthority};
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use wasmtime::component::ResourceTable;
 
 pub struct WasiCtxBuilder {
     stdin: Box<dyn StdinStream>,
@@ -302,8 +303,8 @@ impl WasiCtxBuilder {
 }
 
 pub trait WasiView: Send {
-    fn table(&self) -> &Table;
-    fn table_mut(&mut self) -> &mut Table;
+    fn table(&self) -> &ResourceTable;
+    fn table_mut(&mut self) -> &mut ResourceTable;
     fn ctx(&self) -> &WasiCtx;
     fn ctx_mut(&mut self) -> &mut WasiCtx;
 }

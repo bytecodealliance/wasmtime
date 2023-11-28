@@ -2,17 +2,17 @@ use anyhow::Result;
 use cap_std::ambient_authority;
 use tempfile::TempDir;
 use wasmtime::{
-    component::{Component, Linker},
+    component::{Component, Linker, ResourceTable},
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
     pipe::MemoryOutputPipe,
     preview1::{WasiPreview1Adapter, WasiPreview1View},
-    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct Ctx {
-    table: Table,
+    table: ResourceTable,
     wasi: WasiCtx,
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
@@ -20,10 +20,10 @@ struct Ctx {
 }
 
 impl WasiView for Ctx {
-    fn table(&self) -> &Table {
+    fn table(&self) -> &ResourceTable {
         &self.table
     }
-    fn table_mut(&mut self) -> &mut Table {
+    fn table_mut(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
     fn ctx(&self) -> &WasiCtx {
@@ -75,7 +75,7 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
     }
 
     let ctx = Ctx {
-        table: Table::new(),
+        table: ResourceTable::new(),
         wasi: builder.build(),
         stderr,
         stdout,
