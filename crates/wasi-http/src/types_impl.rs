@@ -889,14 +889,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<types::Duration>> {
-        let millis = self
+        let nanos = self
             .table()
             .get(&opts)?
             .connect_timeout
-            .map(|d| d.as_millis());
+            .map(|d| d.as_nanos());
 
-        if let Some(millis) = millis {
-            Ok(Some(millis.try_into()?))
+        if let Some(nanos) = nanos {
+            Ok(Some(nanos.try_into()?))
         } else {
             Ok(None)
         }
@@ -908,7 +908,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         duration: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.connect_timeout =
-            duration.map(std::time::Duration::from_millis);
+            duration.map(std::time::Duration::from_nanos);
         Ok(Ok(()))
     }
 
@@ -916,14 +916,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<types::Duration>> {
-        let millis = self
+        let nanos = self
             .table()
             .get(&opts)?
             .first_byte_timeout
-            .map(|d| d.as_millis());
+            .map(|d| d.as_nanos());
 
-        if let Some(millis) = millis {
-            Ok(Some(millis.try_into()?))
+        if let Some(nanos) = nanos {
+            Ok(Some(nanos.try_into()?))
         } else {
             Ok(None)
         }
@@ -935,7 +935,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         duration: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.first_byte_timeout =
-            duration.map(std::time::Duration::from_millis);
+            duration.map(std::time::Duration::from_nanos);
         Ok(Ok(()))
     }
 
@@ -943,14 +943,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<types::Duration>> {
-        let millis = self
+        let nanos = self
             .table()
             .get(&opts)?
             .between_bytes_timeout
-            .map(|d| d.as_millis());
+            .map(|d| d.as_nanos());
 
-        if let Some(millis) = millis {
-            Ok(Some(millis.try_into()?))
+        if let Some(nanos) = nanos {
+            Ok(Some(nanos.try_into()?))
         } else {
             Ok(None)
         }
@@ -962,7 +962,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         duration: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.between_bytes_timeout =
-            duration.map(std::time::Duration::from_millis);
+            duration.map(std::time::Duration::from_nanos);
         Ok(Ok(()))
     }
 
