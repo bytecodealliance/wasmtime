@@ -3,26 +3,20 @@ use std::collections::{BTreeSet, HashMap};
 use wasmtime::component::Resource;
 
 #[derive(thiserror::Error, Debug)]
-pub enum TableError {
-    #[error("table has no free keys")]
+pub enum ResourceTableError {
+    #[error("resource table has no free keys")]
     Full,
-    #[error("value not present")]
+    #[error("resource not present")]
     NotPresent,
-    #[error("value is of another type")]
+    #[error("resource is of another type")]
     WrongType,
-    #[error("entry still has children")]
+    #[error("resource still has children")]
     HasChildren,
 }
 
-/// The `Table` type is designed to map u32 handles to resources. The table is now part of the
-/// public interface to a `WasiCtx` - it is reference counted so that it can be shared beyond a
-/// `WasiCtx` with other WASI proposals (e.g. `wasi-crypto` and `wasi-nn`) to manage their
-/// resources. Elements in the `Table` are `Any` typed.
-///
-/// The `Table` type is intended to model how the Interface Types concept of Resources is shaping
-/// up. Right now it is just an approximation.
+/// The `ResourceTable` type is designed to map u32 handles to `Resource`s.
 #[derive(Debug)]
-pub struct Table {
+pub struct ResourceTable {
     map: HashMap<u32, TableEntry>,
     next_key: u32,
 }
@@ -64,10 +58,10 @@ impl TableEntry {
     }
 }
 
-impl Table {
+impl ResourceTable {
     /// Create an empty table
     pub fn new() -> Self {
-        Table {
+        ResourceTable {
             map: HashMap::new(),
             // 0, 1 and 2 are formerly (preview 1) for stdio. To prevent users from assuming these
             // indicies are still valid ways to access stdio, they are deliberately left empty.
@@ -79,7 +73,7 @@ impl Table {
 
     /// Inserts a new value `T` into this table, returning a corresponding
     /// `Resource<T>` which can be used to refer to it after it was inserted.
-    pub fn push<T>(&mut self, entry: T) -> Result<Resource<T>, TableError>
+    pub fn push<T>(&mut self, entry: T) -> Result<Resource<T>, ResourceTableError>
     where
         T: Send + Sync + 'static,
     {
@@ -87,11 +81,11 @@ impl Table {
         Ok(Resource::new_own(idx))
     }
 
-    fn push_(&mut self, e: TableEntry) -> Result<u32, TableError> {
+    fn push_(&mut self, e: TableEntry) -> Result<u32, ResourceTableError> {
         // NOTE: The performance of this new key calculation could be very bad once keys wrap
         // around.
         if self.map.len() == u32::MAX as usize {
-            return Err(TableError::Full);
+            return Err(ResourceTableError::Full);
         }
         loop {
             let key = self.next_key;
@@ -126,7 +120,7 @@ impl Table {
         &mut self,
         entry: T,
         parent: &Resource<U>,
-    ) -> Result<Resource<T>, TableError>
+    ) -> Result<Resource<T>, ResourceTableError>
     where
         T: Send + Sync + 'static,
         U: 'static,
@@ -139,9 +133,9 @@ impl Table {
         &mut self,
         entry: Box<dyn Any + Send + Sync>,
         parent: u32,
-    ) -> Result<u32, TableError> {
+    ) -> Result<u32, ResourceTableError> {
         if !self.map.contains_key(&parent) {
-            return Err(TableError::NotPresent);
+            return Err(ResourceTableError::NotPresent);
         }
         let child = self.push_(TableEntry::new(entry, Some(parent)))?;
         self.map
@@ -155,33 +149,39 @@ impl Table {
     /// index.
     ///
     /// Multiple shared references can be borrowed at any given time.
-    pub fn get<T: Any + Sized>(&self, key: &Resource<T>) -> Result<&T, TableError> {
+    pub fn get<T: Any + Sized>(&self, key: &Resource<T>) -> Result<&T, ResourceTableError> {
         self.get_(key.rep())?
             .downcast_ref()
-            .ok_or(TableError::WrongType)
+            .ok_or(ResourceTableError::WrongType)
     }
 
-    fn get_(&self, key: u32) -> Result<&dyn Any, TableError> {
-        let r = self.map.get(&key).ok_or(TableError::NotPresent)?;
+    fn get_(&self, key: u32) -> Result<&dyn Any, ResourceTableError> {
+        let r = self.map.get(&key).ok_or(ResourceTableError::NotPresent)?;
         Ok(&*r.entry)
     }
 
     /// Get an mutable reference to a resource of a given type at a given
     /// index.
-    pub fn get_mut<T: Any + Sized>(&mut self, key: &Resource<T>) -> Result<&mut T, TableError> {
+    pub fn get_mut<T: Any + Sized>(
+        &mut self,
+        key: &Resource<T>,
+    ) -> Result<&mut T, ResourceTableError> {
         self.get_any_mut(key.rep())?
             .downcast_mut()
-            .ok_or(TableError::WrongType)
+            .ok_or(ResourceTableError::WrongType)
     }
 
     /// Returns the raw `Any` at the `key` index provided.
-    pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, TableError> {
-        let r = self.map.get_mut(&key).ok_or(TableError::NotPresent)?;
+    pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, ResourceTableError> {
+        let r = self
+            .map
+            .get_mut(&key)
+            .ok_or(ResourceTableError::NotPresent)?;
         Ok(&mut *r.entry)
     }
 
     /// Same as `delete`, but typed
-    pub fn delete<T>(&mut self, resource: Resource<T>) -> Result<T, TableError>
+    pub fn delete<T>(&mut self, resource: Resource<T>) -> Result<T, ResourceTableError>
     where
         T: Any,
     {
@@ -189,19 +189,19 @@ impl Table {
         let entry = self.delete_entry(resource.rep())?;
         match entry.entry.downcast() {
             Ok(t) => Ok(*t),
-            Err(_e) => Err(TableError::WrongType),
+            Err(_e) => Err(ResourceTableError::WrongType),
         }
     }
 
-    fn delete_entry(&mut self, key: u32) -> Result<TableEntry, TableError> {
+    fn delete_entry(&mut self, key: u32) -> Result<TableEntry, ResourceTableError> {
         if !self
             .map
             .get(&key)
-            .ok_or(TableError::NotPresent)?
+            .ok_or(ResourceTableError::NotPresent)?
             .children
             .is_empty()
         {
-            return Err(TableError::HasChildren);
+            return Err(ResourceTableError::HasChildren);
         }
         let e = self.map.remove(&key).unwrap();
         if let Some(parent) = e.parent {
@@ -222,7 +222,7 @@ impl Table {
     pub fn iter_entries<'a, T>(
         &'a mut self,
         map: HashMap<u32, T>,
-    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, TableError>, T)> {
+    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, ResourceTableError>, T)> {
         map.into_iter().map(move |(k, v)| {
             let item = self
                 .map
@@ -230,7 +230,7 @@ impl Table {
                 .map(|e| Box::as_mut(&mut e.entry))
                 // Safety: extending the lifetime of the mutable reference.
                 .map(|item| unsafe { &mut *(item as *mut dyn Any) })
-                .ok_or(TableError::NotPresent);
+                .ok_or(ResourceTableError::NotPresent);
             (item, v)
         })
     }
@@ -239,11 +239,14 @@ impl Table {
     pub fn iter_children<T>(
         &self,
         parent: &Resource<T>,
-    ) -> Result<impl Iterator<Item = &(dyn Any + Send + Sync)>, TableError>
+    ) -> Result<impl Iterator<Item = &(dyn Any + Send + Sync)>, ResourceTableError>
     where
         T: 'static,
     {
-        let parent_entry = self.map.get(&parent.rep()).ok_or(TableError::NotPresent)?;
+        let parent_entry = self
+            .map
+            .get(&parent.rep())
+            .ok_or(ResourceTableError::NotPresent)?;
         Ok(parent_entry.children.iter().map(|child_index| {
             let child = self.map.get(child_index).expect("missing child");
             child.entry.as_ref()
@@ -251,8 +254,8 @@ impl Table {
     }
 }
 
-impl Default for Table {
+impl Default for ResourceTable {
     fn default() -> Self {
-        Table::new()
+        ResourceTable::new()
     }
 }
