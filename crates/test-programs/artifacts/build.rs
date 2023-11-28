@@ -19,6 +19,11 @@ fn build_and_generate_tests() {
         "command",
         &["--no-default-features", "--features=command"],
     );
+    let proxy_adapter = build_adapter(
+        &out_dir,
+        "proxy",
+        &["--no-default-features", "--features=proxy"],
+    );
 
     println!("cargo:rerun-if-changed=../src");
 
@@ -62,6 +67,7 @@ fn build_and_generate_tests() {
 
         let adapter = match target.as_str() {
             "reactor" => &reactor_adapter,
+            s if s.starts_with("api_proxy") => &proxy_adapter,
             _ => &command_adapter,
         };
         let path = compile_component(&wasm, adapter);
