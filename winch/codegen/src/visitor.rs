@@ -1193,34 +1193,27 @@ where
         // a different offset.
         let current_sp_offset = self.masm.sp_offset();
         let (_, frame_sp_offset) = frame.base_stack_len_and_sp();
-        if current_sp_offset == frame_sp_offset {
-            self.masm.branch(
-                IntCmpKind::Ne,
-                top.reg.into(),
-                top.reg.into(),
-                *frame.label(),
-                OperandSize::S32,
-            );
+        let (label, cmp, needs_cleanup) = if current_sp_offset.as_u32() > frame_sp_offset.as_u32() {
+            (self.masm.get_label(), IntCmpKind::Eq, true)
         } else {
-            let br_fallthrough_label = self.masm.get_label();
-            self.masm.branch(
-                IntCmpKind::Eq,
-                top.reg.into(),
-                top.reg.into(),
-                br_fallthrough_label,
-                OperandSize::S32,
-            );
+            (*frame.label(), IntCmpKind::Ne, false)
+        };
 
+        self.masm
+            .branch(cmp, top.reg.into(), top.reg.into(), label, OperandSize::S32);
+        self.context.free_reg(top);
+
+        if needs_cleanup {
             // Emit instructions to balance the stack and jump if not falling
             // through.
             self.masm.ensure_sp_for_jump(frame_sp_offset);
             self.masm.jmp(*frame.label());
 
-            // Restore sp_offset to what it was for falling through.
+            // Restore sp_offset to what it was for falling through and emit
+            // fallthrough label.
             self.masm.reset_stack_pointer(current_sp_offset);
-            self.masm.bind(br_fallthrough_label);
+            self.masm.bind(label);
         }
-        self.context.free_reg(top);
     }
 
     fn visit_br_table(&mut self, targets: BrTable<'a>) {
