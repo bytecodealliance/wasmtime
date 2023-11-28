@@ -367,6 +367,17 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_enable(wasm_config_t*, const
  */
 WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const char *key, const char *value);
 
+/**
+ * \brief Configures whether, when on macOS, Mach ports are used for exception handling
+ * instead of traditional Unix-based signal handling.
+ *
+ * This option defaults to true, using Mach ports by default.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.macos_use_mach_ports
+ */
+WASMTIME_CONFIG_PROP(void, macos_use_mach_ports, bool)
+
 
 /**
  * Return the data from a LinearMemory instance.
