@@ -101,6 +101,9 @@ use wasmtime_runtime::{
     VMExternRef, VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
 };
 
+#[cfg(feature = "component-model")]
+use crate::component::ResourceTable;
+
 mod context;
 pub use self::context::*;
 mod data;
@@ -357,6 +360,9 @@ pub struct StoreOpaque {
     component_host_table: wasmtime_runtime::component::ResourceTable,
     #[cfg(feature = "component-model")]
     component_calls: wasmtime_runtime::component::CallContexts,
+
+    #[cfg(feature = "component-model")]
+    resource_table: ManuallyDrop<ResourceTable>,
 }
 
 #[cfg(feature = "async")]
@@ -508,6 +514,8 @@ impl<T> Store<T> {
                 component_host_table: Default::default(),
                 #[cfg(feature = "component-model")]
                 component_calls: Default::default(),
+                #[cfg(feature = "component-model")]
+                resource_table: ManuallyDrop::new(ResourceTable::new()),
             },
             limiter: None,
             call_hook: None,
@@ -573,8 +581,28 @@ impl<T> Store<T> {
         self.inner.data_mut()
     }
 
+    /// Access the underlying data, and `ResourceTable`, owned by this `Store`.
+    #[cfg(feature = "component-model")]
+    #[inline]
+    pub fn data_table(&self) -> (&T, &ResourceTable) {
+        self.inner.data_table()
+    }
+
+    /// Access the underlying data, and `ResourceTable`, owned by this `Store`.
+    #[cfg(feature = "component-model")]
+    #[inline]
+    pub fn data_table_mut(&mut self) -> (&mut T, &mut ResourceTable) {
+        self.inner.data_table_mut()
+    }
+
     /// Consumes this [`Store`], destroying it, and returns the underlying data.
     pub fn into_data(mut self) -> T {
+        let (data, table) = self.into_data_table();
+        data
+    }
+    /// Consumes this [`Store`], destroying it, and returns the underlying data and
+    /// `ResourceTable`.
+    pub fn into_data_table(mut self) -> (T, ResourceTable) {
         // This is an unsafe operation because we want to avoid having a runtime
         // check or boolean for whether the data is actually contained within a
         // `Store`. The data itself is stored as `ManuallyDrop` since we're
@@ -602,7 +630,10 @@ impl<T> Store<T> {
         unsafe {
             let mut inner = ManuallyDrop::take(&mut self.inner);
             std::mem::forget(self);
-            ManuallyDrop::take(&mut inner.data)
+            (
+                ManuallyDrop::take(&mut inner.inner.resource_table),
+                ManuallyDrop::take(&mut inner.data),
+            )
         }
     }
 
@@ -1077,6 +1108,18 @@ impl<T> StoreInner<T> {
     #[inline]
     fn data_mut(&mut self) -> &mut T {
         &mut self.data
+    }
+
+    #[cfg(feature = "component-model")]
+    #[inline]
+    fn data_table(&self) -> (&T, &ResourceTable) {
+        (&self.data, &self.inner.resource_table)
+    }
+
+    #[cfg(feature = "component-model")]
+    #[inline]
+    fn data_table_mut(&mut self) -> (&mut T, &mut ResourceTable) {
+        (&mut self.data, &mut self.inner.resource_table)
     }
 
     pub fn call_hook(&mut self, s: CallHook) -> Result<()> {
