@@ -16,3 +16,15 @@ block0:
     v8 ! range(64, 0xffff_0000_0000_ffff, 0xffff_0000_0000_ffff) = iconst.i64 0xffff_0000_0000_ffff
     return
 }
+
+function %f1() -> i32 {
+block0:
+    v0 = iconst.i32 0x10_0010
+    return v0
+}
+
+function %f2() -> i64 {
+block0:
+    v0 = iconst.i64 0x9_ffff_ffff
+    return v0
+}

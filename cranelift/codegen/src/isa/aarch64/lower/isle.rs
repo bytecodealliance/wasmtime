@@ -174,6 +174,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         ImmLogic::maybe_from_u64(n, ty)
     }
 
+    fn imm_size_from_type(&mut self, ty: Type) -> Option<u16> {
+        match ty {
+            I32 => Some(32),
+            I64 => Some(64),
+            _ => None,
+        }
+    }
+
     fn imm_logic_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ImmLogic> {
         let ty = if ty.bits() < 32 { I32 } else { ty };
         self.imm_logic_from_u64(ty, n.bits() as u64)
@@ -395,7 +403,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         size,
                     });
                     if pcc {
-                        running_value = !(imm16 << shift);
+                        running_value = !(u64::from(imm.bits) << shift);
                         self.lower_ctx.add_range_fact(
                             rd.to_reg(),
                             64,
