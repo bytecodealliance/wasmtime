@@ -1,18 +1,32 @@
+use super::Resource;
 use std::any::Any;
 use std::collections::{BTreeSet, HashMap};
-use wasmtime::component::Resource;
 
-#[derive(thiserror::Error, Debug)]
+/// Errors for `ResourceTable` operations
+#[derive(Debug)]
 pub enum ResourceTableError {
-    #[error("resource table has no free keys")]
+    /// `ResourceTable` has no free keys
     Full,
-    #[error("resource not present")]
+    /// `Resource` not found in table
     NotPresent,
-    #[error("resource is of another type")]
+    /// `Resource` in table is of another type
     WrongType,
-    #[error("resource still has children")]
+    /// `Resource` in table cannot be removed while child resources are present in table
     HasChildren,
 }
+
+impl std::fmt::Display for ResourceTableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Full => write!(f, "resource table has no free keys"),
+            Self::NotPresent => write!(f, "resource not present"),
+            Self::WrongType => write!(f, "resource is of another type"),
+            Self::HasChildren => write!(f, "resource has children"),
+        }
+    }
+}
+
+impl std::error::Error for ResourceTableError {}
 
 /// The `ResourceTable` type is designed to map u32 handles to `Resource`s.
 #[derive(Debug)]
