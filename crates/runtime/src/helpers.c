@@ -30,7 +30,7 @@ typedef jmp_buf platform_jmp_buf;
 // [clang docs]: https://llvm.org/docs/ExceptionHandling.html#llvm-eh-sjlj-setjmp
 #define platform_setjmp(buf) __builtin_setjmp(buf)
 #define platform_longjmp(buf, arg) __builtin_longjmp(buf, arg)
-typedef void *platform_jmp_buf[5]; // this is the documented size; see the docs links for details.
+typedef void* platform_jmp_buf[5]; // this is the documented size; see the docs links for details.
 
 #else
 
@@ -46,67 +46,70 @@ typedef sigjmp_buf platform_jmp_buf;
 
 #endif
 
-#define CONCAT2(a, b) a ## b
-#define CONCAT(a, b) CONCAT2(a , b)
+#define CONCAT2(a, b) a##b
+#define CONCAT(a, b) CONCAT2(a, b)
 #define VERSIONED_SYMBOL(a) CONCAT(a, VERSIONED_SUFFIX)
 
 int VERSIONED_SYMBOL(wasmtime_setjmp)(
-    void **buf_storage,
+    void** buf_storage,
     void (*body)(void*, void*),
-    void *payload,
-    void *callee) {
-  platform_jmp_buf buf;
-  if (platform_setjmp(buf) != 0) {
-    return 0;
-  }
-  *buf_storage = &buf;
-  body(payload, callee);
-  return 1;
+    void* payload,
+    void* callee)
+{
+    platform_jmp_buf buf;
+    if (platform_setjmp(buf) != 0) {
+        return 0;
+    }
+    *buf_storage = &buf;
+    body(payload, callee);
+    return 1;
 }
 
-void VERSIONED_SYMBOL(wasmtime_longjmp)(void *JmpBuf) {
-  platform_jmp_buf *buf = (platform_jmp_buf*) JmpBuf;
-  platform_longjmp(*buf, 1);
+void VERSIONED_SYMBOL(wasmtime_longjmp)(void* JmpBuf)
+{
+    platform_jmp_buf* buf = (platform_jmp_buf*)JmpBuf;
+    platform_longjmp(*buf, 1);
 }
 
 #ifdef CFG_TARGET_OS_windows
-  // export required for external access.
+// export required for external access.
 __declspec(dllexport)
 #else
-  // Note the `weak` linkage here, though, which is intended to let other code
-  // override this symbol if it's defined elsewhere, since this definition doesn't
-  // matter.
-  // Just in case cross-language LTO is enabled we set the `noinline` attribute
-  // and also try to have some sort of side effect in this function with a dummy
-  // `asm` statement.
+// Note the `weak` linkage here, though, which is intended to let other code
+// override this symbol if it's defined elsewhere, since this definition doesn't
+// matter.
+// Just in case cross-language LTO is enabled we set the `noinline` attribute
+// and also try to have some sort of side effect in this function with a dummy
+// `asm` statement.
 __attribute__((weak, noinline))
 #endif
-void __jit_debug_register_code() {
+    void __jit_debug_register_code()
+{
 #ifndef CFG_TARGET_OS_windows
-  __asm__("");
+    __asm__("");
 #endif
 }
 
 struct JITDescriptor {
-  uint32_t version_;
-  uint32_t action_flag_;
-  void* relevant_entry_;
-  void* first_entry_;
+    uint32_t version_;
+    uint32_t action_flag_;
+    void* relevant_entry_;
+    void* first_entry_;
 };
 
 #ifdef CFG_TARGET_OS_windows
-  // export required for external access.
-  __declspec(dllexport)
+// export required for external access.
+__declspec(dllexport)
 #else
-  // Note the `weak` linkage here which is the same purpose as above. We want to
-  // let other runtimes be able to override this since our own definition isn't
-  // important.
-  __attribute__((weak))
+// Note the `weak` linkage here which is the same purpose as above. We want to
+// let other runtimes be able to override this since our own definition isn't
+// important.
+__attribute__((weak))
 #endif
-struct JITDescriptor __jit_debug_descriptor = {1, 0, NULL, NULL};
+    struct JITDescriptor __jit_debug_descriptor
+    = { 1, 0, NULL, NULL };
 
-
-
-struct JITDescriptor* VERSIONED_SYMBOL(wasmtime_jit_debug_descriptor)() {
-  return &__jit_debug_descriptor;
+struct JITDescriptor* VERSIONED_SYMBOL(wasmtime_jit_debug_descriptor)()
+{
+    return &__jit_debug_descriptor;
 }
