@@ -113,7 +113,7 @@ impl Table {
     }
 
     /// Pop an index off of the free queue, if it's not empty.
-    fn pop_free_queue_(&mut self) -> Option<usize> {
+    fn pop_free_queue(&mut self) -> Option<usize> {
         let res = self.free_head;
         if let Some(ix) = res {
             // Advance free_head to the next entry if one is available.
@@ -134,7 +134,7 @@ impl Table {
         res
     }
 
-    fn free_entry_(&mut self, ix: usize) -> TableEntry {
+    fn free_entry(&mut self, ix: usize) -> TableEntry {
         if let Some(tail) = self.free_tail {
             debug_assert!(self.free_head.is_some());
             let tail = &mut self.entries[tail];
@@ -171,7 +171,7 @@ impl Table {
             let ix = len.try_into().map_err(|_| TableError::Full)?;
             self.entries.push(Entry::Occupied { entry: e });
             Ok(ix)
-        } else if let Some(free) = self.pop_free_queue_() {
+        } else if let Some(free) = self.pop_free_queue() {
             self.entries[free] = Entry::Occupied { entry: e };
             Ok(free as u32)
         } else {
@@ -181,14 +181,14 @@ impl Table {
         }
     }
 
-    fn occupied_(&self, key: u32) -> Result<&TableEntry, TableError> {
+    fn occupied(&self, key: u32) -> Result<&TableEntry, TableError> {
         self.entries
             .get(key as usize)
             .and_then(Entry::occupied)
             .ok_or(TableError::NotPresent)
     }
 
-    fn occupied_mut_(&mut self, key: u32) -> Result<&mut TableEntry, TableError> {
+    fn occupied_mut(&mut self, key: u32) -> Result<&mut TableEntry, TableError> {
         self.entries
             .get_mut(key as usize)
             .and_then(Entry::occupied_mut)
@@ -231,9 +231,9 @@ impl Table {
         entry: Box<dyn Any + Send + Sync>,
         parent: u32,
     ) -> Result<u32, TableError> {
-        self.occupied_(parent)?;
+        self.occupied(parent)?;
         let child = self.push_(TableEntry::new(entry, Some(parent)))?;
-        self.occupied_mut_(parent)?.add_child(child);
+        self.occupied_mut(parent)?.add_child(child);
         Ok(child)
     }
 
@@ -248,7 +248,7 @@ impl Table {
     }
 
     fn get_(&self, key: u32) -> Result<&dyn Any, TableError> {
-        let r = self.occupied_(key)?;
+        let r = self.occupied(key)?;
         Ok(&*r.entry)
     }
 
@@ -262,7 +262,7 @@ impl Table {
 
     /// Returns the raw `Any` at the `key` index provided.
     pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, TableError> {
-        let r = self.occupied_mut_(key)?;
+        let r = self.occupied_mut(key)?;
         Ok(&mut *r.entry)
     }
 
@@ -280,15 +280,15 @@ impl Table {
     }
 
     fn delete_entry(&mut self, key: u32) -> Result<TableEntry, TableError> {
-        if !self.occupied_(key)?.children.is_empty() {
+        if !self.occupied(key)?.children.is_empty() {
             return Err(TableError::HasChildren);
         }
-        let e = self.free_entry_(key as usize);
+        let e = self.free_entry(key as usize);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
             // Parent must still be present because it cant be deleted while still having
             // children:
-            self.occupied_mut_(parent)
+            self.occupied_mut(parent)
                 .expect("missing parent")
                 .remove_child(key);
         }
@@ -323,9 +323,9 @@ impl Table {
     where
         T: 'static,
     {
-        let parent_entry = self.occupied_(parent.rep())?;
+        let parent_entry = self.occupied(parent.rep())?;
         Ok(parent_entry.children.iter().map(|child_index| {
-            let child = self.occupied_(*child_index).expect("missing child");
+            let child = self.occupied(*child_index).expect("missing child");
             child.entry.as_ref()
         }))
     }
