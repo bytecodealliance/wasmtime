@@ -673,8 +673,7 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     // to define a slot as "all of the memory and guard region."
     let slot_bytes = expected_slot_bytes
         .max(max_memory_bytes)
-        .checked_add(guard_bytes)
-        .unwrap_or(usize::MAX);
+        .saturating_add(guard_bytes);
 
     let (num_stripes, slot_bytes) = if guard_bytes == 0 || max_memory_bytes == 0 || num_slots == 0 {
         // In the uncommon case where the memory/guard regions are empty or we don't need any slots , we
@@ -736,10 +735,8 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     // `post_slab_guard_bytes` is large enough to ensure the last slot meets the
     // `expected_slot_bytes + guard_bytes` guarantees.
     let post_slab_guard_bytes = expected_slot_bytes
-        .checked_add(guard_bytes)
-        .unwrap_or(usize::MAX)
-        .checked_sub(slot_bytes)
-        .unwrap_or(0);
+        .saturating_add(guard_bytes)
+        .saturating_sub(slot_bytes);
 
     // Check that we haven't exceeded the slab we can calculate given the limits
     // of `usize`.
