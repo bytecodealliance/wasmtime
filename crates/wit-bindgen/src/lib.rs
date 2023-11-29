@@ -810,7 +810,8 @@ impl Wasmtime {
                 "linker.resource::<{camel}>(
                     \"{name}\",
                     move |mut store, rep| -> wasmtime::Result<()> {{
-                        Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                        let (host, resource_table) = store.data_table_mut();
+                        Host{camel}::drop(get(host), wasmtime::component::Resource::new_own(rep))
                     }},
                 )?;"
             )
@@ -1006,7 +1007,7 @@ impl<'a> InterfaceGenerator<'a> {
 
             uwrite!(
                 self.src,
-                "fn drop(&mut self, rep: wasmtime::component::Resource<{camel}>) -> wasmtime::Result<()>;");
+                "fn drop(&mut self, resource_table: &mut wasmtime::component::ResourceTable, rep: wasmtime::component::Resource<{camel}>) -> wasmtime::Result<()>;");
 
             uwriteln!(self.src, "}}");
         } else {
@@ -1568,7 +1569,7 @@ impl<'a> InterfaceGenerator<'a> {
                         let root = self.path_to_root();
                         uwriteln!(
                             self.src,
-                            "fn convert_{err_snake}(&mut self, err: {root}{custom_name}) -> wasmtime::Result<{err_camel}>;"
+                            "fn convert_{err_snake}(&mut self, table: &mut wasmtime::component::ResourceTable, err: {root}{custom_name}) -> wasmtime::Result<{err_camel}>;"
                         );
                     }
                 }
@@ -1607,7 +1608,8 @@ impl<'a> InterfaceGenerator<'a> {
                 "inst.resource::<{camel}>(
                     \"{name}\",
                     move |mut store, rep| -> wasmtime::Result<()> {{
-                        Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                        let (host, resource_table) = store.data_table_mut();
+                        Host{camel}::drop(get(host), resource_table, wasmtime::component::Resource::new_own(rep))
                     }},
                 )?;"
             )
@@ -1698,7 +1700,8 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        self.src.push_str("let host = get(caller.data_mut());\n");
+        self.src
+            .push_str("let (host, resource_table) = get(caller.data_table_mut());\n");
         let func_name = rust_function_name(func);
         let host_trait = match func.kind {
             FunctionKind::Freestanding => match owner {
@@ -1717,7 +1720,10 @@ impl<'a> InterfaceGenerator<'a> {
                 format!("Host{resource}")
             }
         };
-        uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
+        uwrite!(
+            self.src,
+            "let r = {host_trait}::{func_name}(host, resource_table, "
+        );
 
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{},", i);
@@ -1751,7 +1757,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.src,
                 "Ok((match r {{
                     Ok(a) => Ok(a),
-                    Err(e) => Err({convert}(host, e)?),
+                    Err(e) => Err({convert}(host, resource_table, e)?),
                 }},))"
             );
         } else if func.results.iter_types().len() == 1 {
@@ -1776,7 +1782,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
         self.push_str("fn ");
         self.push_str(&rust_function_name(func));
-        self.push_str("(&mut self, ");
+        self.push_str("(&mut self, resource_table: &mut wasmtime::component::ResourceTable, ");
         for (name, param) in func.params.iter() {
             let name = to_rust_ident(name);
             self.push_str(&name);

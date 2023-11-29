@@ -9,7 +9,7 @@ use std::net::{Ipv6Addr, ToSocketAddrs};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::vec;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 
 use super::network::{from_ipv4_addr, from_ipv6_addr};
 
@@ -22,10 +22,11 @@ pub enum ResolveAddressStream {
 impl<T: WasiView> Host for T {
     fn resolve_addresses(
         &mut self,
+        table: &mut ResourceTable,
         network: Resource<Network>,
         name: String,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
-        let network = self.table().get(&network)?;
+        let network = table.get(&network)?;
 
         let host = parse(&name)?;
 
@@ -34,7 +35,7 @@ impl<T: WasiView> Host for T {
         }
 
         let task = spawn_blocking(move || blocking_resolve(&host));
-        let resource = self.table_mut().push(ResolveAddressStream::Waiting(task))?;
+        let resource = table.push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
 }
@@ -43,9 +44,10 @@ impl<T: WasiView> Host for T {
 impl<T: WasiView> HostResolveAddressStream for T {
     fn resolve_next_address(
         &mut self,
+        table: &mut ResourceTable,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Option<IpAddress>, SocketError> {
-        let stream = self.table_mut().get_mut(&resource)?;
+        let stream = table.get_mut(&resource)?;
         loop {
             match stream {
                 ResolveAddressStream::Waiting(future) => {
@@ -67,13 +69,18 @@ impl<T: WasiView> HostResolveAddressStream for T {
 
     fn subscribe(
         &mut self,
+        table: &mut ResourceTable,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Resource<Pollable>> {
-        subscribe(self.table_mut(), resource)
+        subscribe(table, resource)
     }
 
-    fn drop(&mut self, resource: Resource<ResolveAddressStream>) -> Result<()> {
-        self.table_mut().delete(resource)?;
+    fn drop(
+        &mut self,
+        table: &mut ResourceTable,
+        resource: Resource<ResolveAddressStream>,
+    ) -> Result<()> {
+        table.delete(resource)?;
         Ok(())
     }
 }

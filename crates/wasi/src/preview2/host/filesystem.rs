@@ -15,11 +15,11 @@ mod sync;
 impl<T: WasiView> preopens::Host for T {
     fn get_directories(
         &mut self,
+        table: &mut ResourceTable,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
         let mut results = Vec::new();
         for (dir, name) in self.ctx().preopens.clone() {
-            let fd = self
-                .table_mut()
+            let fd = table
                 .push(Descriptor::Dir(dir))
                 .with_context(|| format!("failed to push preopen {name}"))?;
             results.push((fd, name));
@@ -30,15 +30,20 @@ impl<T: WasiView> preopens::Host for T {
 
 #[async_trait::async_trait]
 impl<T: WasiView> types::Host for T {
-    fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
+    fn convert_error_code(
+        &mut self,
+        _: &mut ResourceTable,
+        err: FsError,
+    ) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
 
     fn filesystem_error_code(
         &mut self,
+        table: &mut ResourceTable,
         err: Resource<anyhow::Error>,
     ) -> anyhow::Result<Option<ErrorCode>> {
-        let err = self.table_mut().get(&err)?;
+        let err = table.get(&err)?;
 
         // Currently `err` always comes from the stream implementation which
         // uses standard reads/writes so only check for `std::io::Error` here.
@@ -54,6 +59,7 @@ impl<T: WasiView> types::Host for T {
 impl<T: WasiView> HostDescriptor for T {
     async fn advise(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
         len: types::Filesize,
@@ -71,15 +77,17 @@ impl<T: WasiView> HostDescriptor for T {
             Advice::NoReuse => A::NoReuse,
         };
 
-        let f = self.table().get(&fd)?.file()?;
+        let f = table.get(&fd)?.file()?;
         f.spawn_blocking(move |f| f.advise(offset, len, advice))
             .await?;
         Ok(())
     }
 
-    async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let table = self.table();
-
+    async fn sync_data(
+        &mut self,
+        table: &mut ResourceTable,
+        fd: Resource<types::Descriptor>,
+    ) -> FsResult<()> {
         match table.get(&fd)? {
             Descriptor::File(f) => {
                 match f.spawn_blocking(|f| f.sync_data()).await {
@@ -106,6 +114,7 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn get_flags(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::DescriptorFlags> {
         use system_interface::fs::{FdFlags, GetSetFdFlags};
@@ -125,7 +134,6 @@ impl<T: WasiView> HostDescriptor for T {
             out
         }
 
-        let table = self.table();
         match table.get(&fd)? {
             Descriptor::File(f) => {
                 let flags = f.spawn_blocking(|f| f.get_fd_flags()).await?;
@@ -154,10 +162,9 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn get_type(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::DescriptorType> {
-        let table = self.table();
-
         match table.get(&fd)? {
             Descriptor::File(f) => {
                 let meta = f.spawn_blocking(|f| f.metadata()).await?;
@@ -169,10 +176,11 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn set_size(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         size: types::Filesize,
     ) -> FsResult<()> {
-        let f = self.table().get(&fd)?.file()?;
+        let f = table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             Err(ErrorCode::NotPermitted)?;
         }
@@ -182,13 +190,12 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn set_times(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
         use fs_set_times::SetTimes;
-
-        let table = self.table();
         match table.get(&fd)? {
             Descriptor::File(f) => {
                 if !f.perms.contains(FilePerms::WRITE) {
@@ -213,14 +220,13 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn read(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         len: types::Filesize,
         offset: types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
         use std::io::IoSliceMut;
         use system_interface::fs::FileIoExt;
-
-        let table = self.table();
 
         let f = table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::READ) {
@@ -251,6 +257,7 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn write(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         buf: Vec<u8>,
         offset: types::Filesize,
@@ -258,7 +265,6 @@ impl<T: WasiView> HostDescriptor for T {
         use std::io::IoSlice;
         use system_interface::fs::FileIoExt;
 
-        let table = self.table();
         let f = table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -273,9 +279,9 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn read_directory(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<types::DirectoryEntryStream>> {
-        let table = self.table_mut();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
@@ -336,9 +342,11 @@ impl<T: WasiView> HostDescriptor for T {
         Ok(table.push(ReaddirIterator::new(entries))?)
     }
 
-    async fn sync(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let table = self.table();
-
+    async fn sync(
+        &mut self,
+        table: &mut ResourceTable,
+        fd: Resource<types::Descriptor>,
+    ) -> FsResult<()> {
         match table.get(&fd)? {
             Descriptor::File(f) => {
                 match f.spawn_blocking(|f| f.sync_all()).await {
@@ -365,10 +373,10 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn create_directory_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -377,8 +385,11 @@ impl<T: WasiView> HostDescriptor for T {
         Ok(())
     }
 
-    async fn stat(&mut self, fd: Resource<types::Descriptor>) -> FsResult<types::DescriptorStat> {
-        let table = self.table();
+    async fn stat(
+        &mut self,
+        table: &mut ResourceTable,
+        fd: Resource<types::Descriptor>,
+    ) -> FsResult<types::DescriptorStat> {
         match table.get(&fd)? {
             Descriptor::File(f) => {
                 // No permissions check on stat: if opened, allowed to stat it
@@ -395,11 +406,11 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn stat_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::DescriptorStat> {
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
@@ -415,6 +426,7 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn set_times_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path_flags: types::PathFlags,
         path: String,
@@ -423,7 +435,6 @@ impl<T: WasiView> HostDescriptor for T {
     ) -> FsResult<()> {
         use cap_fs_ext::DirExt;
 
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -454,14 +465,13 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn link_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
-        // TODO delete the path flags from this function
         old_path_flags: types::PathFlags,
         old_path: String,
         new_descriptor: Resource<types::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
-        let table = self.table();
         let old_dir = table.get(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -482,6 +492,7 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn open_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path_flags: types::PathFlags,
         path: String,
@@ -492,7 +503,6 @@ impl<T: WasiView> HostDescriptor for T {
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
 
-        let table = self.table_mut();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             Err(ErrorCode::NotPermitted)?;
@@ -595,9 +605,11 @@ impl<T: WasiView> HostDescriptor for T {
         }
     }
 
-    fn drop(&mut self, fd: Resource<types::Descriptor>) -> anyhow::Result<()> {
-        let table = self.table_mut();
-
+    fn drop(
+        &mut self,
+        table: &mut ResourceTable,
+        fd: Resource<types::Descriptor>,
+    ) -> anyhow::Result<()> {
         // The Drop will close the file/dir, but if the close syscall
         // blocks the thread, I will face god and walk backwards into hell.
         // tokio::fs::File just uses std::fs::File's Drop impl to close, so
@@ -610,10 +622,10 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn readlink_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<String> {
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
@@ -627,10 +639,10 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn remove_directory_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -640,12 +652,12 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn rename_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         old_path: String,
         new_fd: Resource<types::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
-        let table = self.table();
         let old_dir = table.get(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -662,6 +674,7 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn symlink_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         src_path: String,
         dest_path: String,
@@ -670,7 +683,6 @@ impl<T: WasiView> HostDescriptor for T {
         #[cfg(windows)]
         use cap_fs_ext::DirExt;
 
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -681,12 +693,12 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn unlink_file_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
         use cap_fs_ext::DirExt;
 
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -697,11 +709,12 @@ impl<T: WasiView> HostDescriptor for T {
 
     fn read_via_stream(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
     ) -> FsResult<Resource<InputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::READ) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -720,11 +733,12 @@ impl<T: WasiView> HostDescriptor for T {
 
     fn write_via_stream(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
     ) -> FsResult<Resource<OutputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -745,10 +759,11 @@ impl<T: WasiView> HostDescriptor for T {
 
     fn append_via_stream(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<OutputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -768,11 +783,11 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn is_same_object(
         &mut self,
+        table: &mut ResourceTable,
         a: Resource<types::Descriptor>,
         b: Resource<types::Descriptor>,
     ) -> anyhow::Result<bool> {
         use cap_fs_ext::MetadataExt;
-        let table = self.table();
         let meta_a = get_descriptor_metadata(table, a).await?;
         let meta_b = get_descriptor_metadata(table, b).await?;
         if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
@@ -794,19 +809,19 @@ impl<T: WasiView> HostDescriptor for T {
     }
     async fn metadata_hash(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::MetadataHashValue> {
-        let table = self.table();
         let meta = get_descriptor_metadata(table, fd).await?;
         Ok(calculate_metadata_hash(&meta))
     }
     async fn metadata_hash_at(
         &mut self,
+        table: &mut ResourceTable,
         fd: Resource<types::Descriptor>,
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::MetadataHashValue> {
-        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         // No permissions check on metadata: if dir opened, allowed to stat it
         let meta = d
@@ -826,15 +841,19 @@ impl<T: WasiView> HostDescriptor for T {
 impl<T: WasiView> HostDirectoryEntryStream for T {
     async fn read_directory_entry(
         &mut self,
+        table: &mut ResourceTable,
         stream: Resource<types::DirectoryEntryStream>,
     ) -> FsResult<Option<types::DirectoryEntry>> {
-        let table = self.table();
         let readdir = table.get(&stream)?;
         readdir.next()
     }
 
-    fn drop(&mut self, stream: Resource<types::DirectoryEntryStream>) -> anyhow::Result<()> {
-        self.table_mut().delete(stream)?;
+    fn drop(
+        &mut self,
+        table: &mut ResourceTable,
+        stream: Resource<types::DirectoryEntryStream>,
+    ) -> anyhow::Result<()> {
+        table.delete(stream)?;
         Ok(())
     }
 }

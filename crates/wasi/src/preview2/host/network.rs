@@ -6,20 +6,25 @@ use crate::preview2::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_
 use crate::preview2::{SocketError, WasiView};
 use rustix::io::Errno;
 use std::io;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 
 impl<T: WasiView> network::Host for T {
-    fn convert_error_code(&mut self, error: SocketError) -> anyhow::Result<ErrorCode> {
+    fn convert_error_code(
+        &mut self,
+        _: &mut ResourceTable,
+        error: SocketError,
+    ) -> anyhow::Result<ErrorCode> {
         error.downcast()
     }
 }
 
 impl<T: WasiView> crate::preview2::bindings::sockets::network::HostNetwork for T {
-    fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
-        let table = self.table_mut();
-
+    fn drop(
+        &mut self,
+        table: &mut ResourceTable,
+        this: Resource<network::Network>,
+    ) -> Result<(), anyhow::Error> {
         table.delete(this)?;
-
         Ok(())
     }
 }

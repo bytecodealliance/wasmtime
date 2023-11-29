@@ -54,13 +54,16 @@ impl BlockingMode {
     async fn read(
         &self,
         host: &mut impl streams::Host,
+        table: &mut ResourceTable,
         input_stream: Resource<streams::InputStream>,
         max_size: usize,
     ) -> Result<Vec<u8>, types::Error> {
         let max_size = max_size.try_into().unwrap_or(u64::MAX);
         match self {
             BlockingMode::Blocking => {
-                match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
+                match streams::HostInputStream::blocking_read(host, table, input_stream, max_size)
+                    .await
+                {
                     Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
                     Ok(r) => Ok(r),
                     Err(StreamError::Closed) => Ok(Vec::new()),
@@ -69,7 +72,7 @@ impl BlockingMode {
             }
 
             BlockingMode::NonBlocking => {
-                match streams::HostInputStream::read(host, input_stream, max_size).await {
+                match streams::HostInputStream::read(host, table, input_stream, max_size).await {
                     Ok(r) => Ok(r),
                     Err(StreamError::Closed) => Ok(Vec::new()),
                     Err(e) => Err(e.into()),
@@ -1338,7 +1341,7 @@ impl<
                         .context("failed to call `read-via-stream`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
-                let read = blocking_mode.read(self, stream, buf.len()).await?;
+                let read = blocking_mode.read(self, table, stream, buf.len()).await?;
                 let n = read.len().try_into()?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
@@ -1351,7 +1354,9 @@ impl<
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
-                let read = BlockingMode::Blocking.read(self, stream, buf.len()).await?;
+                let read = BlockingMode::Blocking
+                    .read(self, table, stream, buf.len())
+                    .await?;
                 (buf, read)
             }
             _ => return Err(types::Errno::Badf.into()),

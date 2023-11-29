@@ -8,7 +8,7 @@ use crate::preview2::poll::{subscribe, Subscribe};
 use crate::preview2::{Pollable, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 
 impl TryFrom<SystemTime> for Datetime {
     type Error = anyhow::Error;
@@ -25,7 +25,7 @@ impl TryFrom<SystemTime> for Datetime {
 }
 
 impl<T: WasiView> wall_clock::Host for T {
-    fn now(&mut self) -> anyhow::Result<Datetime> {
+    fn now(&mut self, _: &mut ResourceTable) -> anyhow::Result<Datetime> {
         let now = self.ctx().wall_clock.now();
         Ok(Datetime {
             seconds: now.as_secs(),
@@ -33,7 +33,7 @@ impl<T: WasiView> wall_clock::Host for T {
         })
     }
 
-    fn resolution(&mut self) -> anyhow::Result<Datetime> {
+    fn resolution(&mut self, _: &mut ResourceTable) -> anyhow::Result<Datetime> {
         let res = self.ctx().wall_clock.resolution();
         Ok(Datetime {
             seconds: res.as_secs(),
@@ -62,26 +62,34 @@ fn subscribe_to_duration(
 }
 
 impl<T: WasiView> monotonic_clock::Host for T {
-    fn now(&mut self) -> anyhow::Result<Instant> {
+    fn now(&mut self, _: &mut ResourceTable) -> anyhow::Result<Instant> {
         Ok(self.ctx().monotonic_clock.now())
     }
 
-    fn resolution(&mut self) -> anyhow::Result<Instant> {
+    fn resolution(&mut self, _: &mut ResourceTable) -> anyhow::Result<Instant> {
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe_instant(
+        &mut self,
+        table: &mut ResourceTable,
+        when: Instant,
+    ) -> anyhow::Result<Resource<Pollable>> {
         let clock_now = self.ctx().monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
         } else {
             Duration::from_nanos(0)
         };
-        subscribe_to_duration(&mut self.table_mut(), duration)
+        subscribe_to_duration(table, duration)
     }
 
-    fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
-        subscribe_to_duration(&mut self.table_mut(), Duration::from_nanos(duration))
+    fn subscribe_duration(
+        &mut self,
+        table: &mut ResourceTable,
+        duration: WasiDuration,
+    ) -> anyhow::Result<Resource<Pollable>> {
+        subscribe_to_duration(table, Duration::from_nanos(duration))
     }
 }
 

@@ -596,8 +596,8 @@ impl<T> Store<T> {
     }
 
     /// Consumes this [`Store`], destroying it, and returns the underlying data.
-    pub fn into_data(mut self) -> T {
-        let (data, table) = self.into_data_table();
+    pub fn into_data(self) -> T {
+        let (data, _) = self.into_data_table();
         data
     }
     /// Consumes this [`Store`], destroying it, and returns the underlying data and
@@ -631,8 +631,8 @@ impl<T> Store<T> {
             let mut inner = ManuallyDrop::take(&mut self.inner);
             std::mem::forget(self);
             (
-                ManuallyDrop::take(&mut inner.inner.resource_table),
                 ManuallyDrop::take(&mut inner.data),
+                ManuallyDrop::take(&mut inner.inner.resource_table),
             )
         }
     }
@@ -1038,6 +1038,22 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Same as [`Store::data_mut`].
     pub fn data_mut(&mut self) -> &mut T {
         self.0.data_mut()
+    }
+
+    #[cfg(feature = "component-model")]
+    /// Access the underlying data and `ResourceTable` owned by this `Store`.
+    ///
+    /// Same as [`Store::data_table`].
+    pub fn data_table(&self) -> (&T, &ResourceTable) {
+        self.0.data_table()
+    }
+
+    #[cfg(feature = "component-model")]
+    /// Access the underlying data and `ResourceTable` owned by this `Store`.
+    ///
+    /// Same as [`Store::data_table_mut`].
+    pub fn data_table_mut(&mut self) -> (&mut T, &mut ResourceTable) {
+        self.0.data_table_mut()
     }
 
     /// Returns the underlying [`Engine`] this store is connected to.
