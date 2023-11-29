@@ -127,7 +127,7 @@ impl Table {
         res
     }
 
-    /// Free an entry in the table, returning its entry. Add the entry to the free list.
+    /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     fn free_entry(&mut self, ix: usize) -> TableEntry {
         let entry = match std::mem::replace(
             &mut self.entries[ix],
