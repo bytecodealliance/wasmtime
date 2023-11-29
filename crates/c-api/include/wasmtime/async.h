@@ -145,8 +145,8 @@ typedef struct wasmtime_async_continuation_t {
  * \param caller a temporary object that can only be used during this function
  *        call. Used to acquire #wasmtime_context_t or caller's state
  * \param args the arguments provided to this function invocation
- * \param nargs how many arguments are provided \param results where to write
- *        the results of this function
+ * \param nargs how many arguments are provided
+ * \param results where to write the results of this function
  * \param nresults how many results must be produced
  * \param trap_ret if assigned a not `NULL` value then the called
  *        function will trap with the returned error. Note that ownership of
