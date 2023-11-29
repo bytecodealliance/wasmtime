@@ -28,16 +28,12 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-hello
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
 
-static wasm_trap_t* hello_callback(
-    void *env,
-    wasmtime_caller_t *caller,
-    const wasmtime_val_t *args,
-    size_t nargs,
-    wasmtime_val_t *results,
-    size_t nresults
-) {
+static wasm_trap_t *hello_callback(void *env, wasmtime_caller_t *caller,
+                                   const wasmtime_val_t *args, size_t nargs,
+                                   wasmtime_val_t *results, size_t nresults) {
   printf("Calling back...\n");
   printf("> Hello World!\n");
   return NULL;
@@ -60,7 +56,7 @@ int main() {
   wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Read our input file, which in this case is a wasm text file.
-  FILE* file = fopen("examples/hello.wat", "r");
+  FILE *file = fopen("examples/hello.wat", "r");
   assert(file != NULL);
   fseek(file, 0L, SEEK_END);
   size_t file_size = ftell(file);
@@ -80,7 +76,7 @@ int main() {
   // Now that we've got our binary webassembly we can compile our module.
   printf("Compiling module...\n");
   wasmtime_module_t *module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
+  error = wasmtime_module_new(engine, (uint8_t *)wasm.data, wasm.size, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
@@ -131,7 +127,8 @@ int main() {
   return ret;
 }
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
@@ -141,7 +138,7 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
     wasm_trap_message(trap, &error_message);
     wasm_trap_delete(trap);
   }
-  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }

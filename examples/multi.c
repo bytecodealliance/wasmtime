@@ -25,26 +25,22 @@ https://github.com/WebAssembly/wasm-c-api/blob/master/example/multi.c
 originally
 */
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
 
 // A function to be called from Wasm code.
-wasm_trap_t* callback(
-  void *env,
-  wasmtime_caller_t *caller,
-  const wasmtime_val_t* args,
-  size_t nargs,
-  wasmtime_val_t* results,
-  size_t nresults
-) {
+wasm_trap_t *callback(void *env, wasmtime_caller_t *caller,
+                      const wasmtime_val_t *args, size_t nargs,
+                      wasmtime_val_t *results, size_t nresults) {
   printf("Calling back...\n");
-  printf("> %"PRIu32" %"PRIu64"\n", args[0].of.i32, args[1].of.i64);
+  printf("> %" PRIu32 " %" PRIu64 "\n", args[0].of.i32, args[1].of.i64);
   printf("\n");
 
   results[0] = args[1];
@@ -52,17 +48,11 @@ wasm_trap_t* callback(
   return NULL;
 }
 
-
 // A function closure.
-wasm_trap_t* closure_callback(
-  void* env,
-  wasmtime_caller_t *caller,
-  const wasmtime_val_t* args,
-  size_t nargs,
-  wasmtime_val_t* results,
-  size_t nresults
-) {
-  int i = *(int*)env;
+wasm_trap_t *closure_callback(void *env, wasmtime_caller_t *caller,
+                              const wasmtime_val_t *args, size_t nargs,
+                              wasmtime_val_t *results, size_t nresults) {
+  int i = *(int *)env;
   printf("Calling back closure...\n");
   printf("> %d\n", i);
 
@@ -71,16 +61,15 @@ wasm_trap_t* closure_callback(
   return NULL;
 }
 
-
-int main(int argc, const char* argv[]) {
+int main(int argc, const char *argv[]) {
   // Initialize.
   printf("Initializing...\n");
-  wasm_engine_t* engine = wasm_engine_new();
-  wasmtime_store_t* store = wasmtime_store_new(engine, NULL, NULL);
+  wasm_engine_t *engine = wasm_engine_new();
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Load our input file to parse it next
-  FILE* file = fopen("examples/multi.wat", "r");
+  FILE *file = fopen("examples/multi.wat", "r");
   if (!file) {
     printf("> Error loading file!\n");
     return 1;
@@ -105,22 +94,21 @@ int main(int argc, const char* argv[]) {
 
   // Compile.
   printf("Compiling module...\n");
-  wasmtime_module_t* module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t*) binary.data, binary.size, &module);
+  wasmtime_module_t *module = NULL;
+  error =
+      wasmtime_module_new(engine, (uint8_t *)binary.data, binary.size, &module);
   if (error)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
 
   // Create external print functions.
   printf("Creating callback...\n");
-  wasm_functype_t* callback_type = wasm_functype_new_2_2(
-      wasm_valtype_new_i32(),
-      wasm_valtype_new_i64(),
-      wasm_valtype_new_i64(),
-      wasm_valtype_new_i32()
-  );
+  wasm_functype_t *callback_type =
+      wasm_functype_new_2_2(wasm_valtype_new_i32(), wasm_valtype_new_i64(),
+                            wasm_valtype_new_i64(), wasm_valtype_new_i32());
   wasmtime_func_t callback_func;
-  wasmtime_func_new(context, callback_type, callback, NULL, NULL, &callback_func);
+  wasmtime_func_new(context, callback_type, callback, NULL, NULL,
+                    &callback_func);
   wasm_functype_delete(callback_type);
 
   // Instantiate.
@@ -129,7 +117,7 @@ int main(int argc, const char* argv[]) {
   imports[0].kind = WASMTIME_EXTERN_FUNC;
   imports[0].of.func = callback_func;
   wasmtime_instance_t instance;
-  wasm_trap_t* trap = NULL;
+  wasm_trap_t *trap = NULL;
   error = wasmtime_instance_new(context, module, imports, 1, &instance, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
@@ -156,8 +144,7 @@ int main(int argc, const char* argv[]) {
 
   // Print result.
   printf("Printing result...\n");
-  printf("> %"PRIu64" %"PRIu32"\n",
-    results[0].of.i64, results[1].of.i32);
+  printf("> %" PRIu64 " %" PRIu32 "\n", results[0].of.i64, results[1].of.i32);
 
   assert(results[0].kind == WASMTIME_I64);
   assert(results[0].of.i64 == 2);
@@ -174,7 +161,8 @@ int main(int argc, const char* argv[]) {
   return 0;
 }
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
@@ -184,7 +172,7 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
     wasm_trap_message(trap, &error_message);
     wasm_trap_delete(trap);
   }
-  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }

@@ -55,6 +55,22 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Check Code style quickly by running `clang-format` over all the C/C++ code
+  clangformat:
+    name: Clang format
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - run: git ls-files '*.h' '*.c' '*.cpp' | xargs clang-format-15 --dry-run --Werror --verbose
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
   cargo_deny:

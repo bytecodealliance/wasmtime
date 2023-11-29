@@ -19,7 +19,8 @@ to tweak the `-lpthread` and such annotations as well as the name of the
 
 You can also build using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-interrupt
+mkdir build && cd build && cmake .. && \
+  cmake --build . --target wasmtime-interrupt
 */
 
 #include <assert.h>
@@ -36,7 +37,7 @@ static void spawn_interrupt(wasm_engine_t *engine) {
 #include <pthread.h>
 #include <time.h>
 
-static void* helper(void *_engine) {
+static void *helper(void *_engine) {
   wasm_engine_t *engine = _engine;
   struct timespec sleep_dur;
   sleep_dur.tv_sec = 1;
@@ -54,7 +55,8 @@ static void spawn_interrupt(wasm_engine_t *engine) {
 }
 #endif
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
 
 int main() {
   // Create a `wasm_store_t` with interrupts enabled
@@ -71,7 +73,7 @@ int main() {
   wasmtime_context_set_epoch_deadline(context, 1);
 
   // Read our input file, which in this case is a wasm text file.
-  FILE* file = fopen("examples/interrupt.wat", "r");
+  FILE *file = fopen("examples/interrupt.wat", "r");
   assert(file != NULL);
   fseek(file, 0L, SEEK_END);
   size_t file_size = ftell(file);
@@ -90,7 +92,7 @@ int main() {
 
   // Now that we've got our binary webassembly we can compile our module.
   wasmtime_module_t *module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
+  error = wasmtime_module_new(engine, (uint8_t *)wasm.data, wasm.size, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
@@ -123,7 +125,8 @@ int main() {
   return 0;
 }
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
@@ -133,7 +136,7 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
     wasm_trap_message(trap, &error_message);
     wasm_trap_delete(trap);
   }
-  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }
