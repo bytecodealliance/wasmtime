@@ -17,7 +17,7 @@ use std::ops::Range;
 const TIMEOUT_NS: u64 = 1_000_000_000;
 
 impl Pollable {
-    pub fn wait_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
+    pub fn block_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
         let ready = poll::poll(&[self, timeout]);
         assert!(ready.len() > 0);
         match ready[0] {
@@ -30,10 +30,11 @@ impl Pollable {
 
 impl OutputStream {
     pub fn blocking_write_util(&self, mut bytes: &[u8]) -> Result<(), StreamError> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let pollable = self.subscribe();
 
         while !bytes.is_empty() {
-            pollable.block();
+            pollable.block_until(&timeout).expect("write timed out");
 
             let permit = self.check_write()?;
 
@@ -73,7 +74,7 @@ impl Network {
                     _ => return Ok(addresses),
                 },
                 Err(ErrorCode::WouldBlock) => {
-                    pollable.wait_until(&timeout)?;
+                    pollable.block_until(&timeout)?;
                 }
                 Err(err) => return Err(err),
             }
@@ -91,26 +92,28 @@ impl TcpSocket {
         network: &Network,
         local_address: IpSocketAddress,
     ) -> Result<(), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_bind(&network, local_address)?;
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
     }
 
     pub fn blocking_listen(&self) -> Result<(), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_listen()?;
 
         loop {
             match self.finish_listen() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
@@ -121,24 +124,26 @@ impl TcpSocket {
         network: &Network,
         remote_address: IpSocketAddress,
     ) -> Result<(InputStream, OutputStream), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_connect(&network, remote_address)?;
 
         loop {
             match self.finish_connect() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
     }
 
     pub fn blocking_accept(&self) -> Result<(TcpSocket, InputStream, OutputStream), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         loop {
             match self.accept() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
@@ -155,13 +160,14 @@ impl UdpSocket {
         network: &Network,
         local_address: IpSocketAddress,
     ) -> Result<(), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_bind(&network, local_address)?;
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
@@ -181,7 +187,7 @@ impl OutgoingDatagramStream {
 
         loop {
             match self.check_send() {
-                Ok(0) => sub.wait_until(timeout)?,
+                Ok(0) => sub.block_until(timeout)?,
                 result => return result,
             }
         }
@@ -221,7 +227,7 @@ impl IncomingDatagramStream {
                     if datagrams.len() >= count.start as usize {
                         return Ok(datagrams);
                     } else {
-                        pollable.wait_until(&timeout)?;
+                        pollable.block_until(&timeout)?;
                     }
                 }
                 Err(err) => return Err(err),
