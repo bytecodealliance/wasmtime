@@ -1700,8 +1700,10 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        self.src
-            .push_str("let (host, resource_table) = get(caller.data_table_mut());\n");
+        self.src.push_str(
+            "let (host, resource_table) = caller.data_table_mut();\n
+                       let host = get(host);\n",
+        );
         let func_name = rust_function_name(func);
         let host_trait = match func.kind {
             FunctionKind::Freestanding => match owner {
