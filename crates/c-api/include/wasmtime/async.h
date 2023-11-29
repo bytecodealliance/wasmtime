@@ -141,15 +141,18 @@ typedef struct wasmtime_async_continuation_t {
  * returns that it has errored or has completed.
  *
  * \param env user-provided argument passed to
- * #wasmtime_linker_define_async_func \param caller a temporary object that can
- * only be used during this function call. Used to acquire #wasmtime_context_t
- * or caller's state \param args the arguments provided to this function
- * invocation \param nargs how many arguments are provided \param results where
- * to write the results of this function \param nresults how many results must
- * be produced \param trap_ret if assigned a not `NULL` value then the called
- * function will trap with the returned error. Note that ownership of trap is
- * transferred to wasmtime. \param continuation_ret the returned continuation
- * that determines when the async function has completed executing.
+ *        #wasmtime_linker_define_async_func
+ * \param caller a temporary object that can only be used during this function
+ *        call. Used to acquire #wasmtime_context_t or caller's state
+ * \param args the arguments provided to this function invocation
+ * \param nargs how many arguments are provided \param results where to write
+ *        the results of this function
+ * \param nresults how many results must be produced
+ * \param trap_ret if assigned a not `NULL` value then the called
+ *        function will trap with the returned error. Note that ownership of
+ *        trap is transferred to wasmtime.
+ * \param continuation_ret the returned continuation
+ *        that determines when the async function has completed executing.
  *
  * Only supported for async stores.
  *

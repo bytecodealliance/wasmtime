@@ -89,7 +89,8 @@ wasmtime_linker_define(wasmtime_linker_t *linker, wasmtime_context_t *store,
  * \param ty the type of the function that's being defined
  * \param cb the host callback to invoke when the function is called
  * \param data the host-provided data to provide as the first argument to the
- * callback \param finalizer an optional finalizer for the `data` argument.
+ *        callback
+ * \param finalizer an optional finalizer for the `data` argument.
  *
  * \return On success `NULL` is returned, otherwise an error is returned which
  * describes why the definition failed.
