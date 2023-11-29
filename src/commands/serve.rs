@@ -202,17 +202,39 @@ impl ServeCommand {
     }
 
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
-        // wasi-http and the component model are implicitly enabled for `wasmtime serve`, so we
-        // don't test for `self.run.common.wasi.common` or `self.run.common.wasi.http` in this
-        // function.
-
-        wasmtime_wasi_http::proxy::add_to_linker(linker)?;
+        // Repurpose the `-Scommon` flag of `wasmtime run` for `wasmtime serve`
+        // to serve as a signal to enable all WASI interfaces instead of just
+        // those in the `proxy` world. If `-Scommon` is present then add all
+        // `command` APIs which includes all "common" or base WASI APIs and then
+        // additionally add in the required HTTP APIs.
+        //
+        // If `-Scommon` isn't passed then use the `proxy::add_to_linker`
+        // bindings which adds just those interfaces that the proxy interface
+        // uses.
+        if self.run.common.wasi.common == Some(true) {
+            preview2::command::add_to_linker(linker)?;
+            wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
+        } else {
+            wasmtime_wasi_http::proxy::add_to_linker(linker)?;
+        }
 
         if self.run.common.wasi.nn == Some(true) {
+            #[cfg(not(feature = "wasi-nn"))]
+            {
+                bail!("support for wasi-nn was disabled at compile time");
+            }
             #[cfg(feature = "wasi-nn")]
             {
                 wasmtime_wasi_nn::wit::ML::add_to_linker(linker, |host| host.nn.as_mut().unwrap())?;
             }
+        }
+
+        if self.run.common.wasi.threads == Some(true) {
+            bail!("support for wasi-threads is not available with components");
+        }
+
+        if self.run.common.wasi.http == Some(false) {
+            bail!("support for wasi-http must be enabled for `serve` subcommand");
         }
 
         Ok(())
