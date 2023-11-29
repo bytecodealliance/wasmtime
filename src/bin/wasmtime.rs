@@ -9,7 +9,7 @@ use clap::Parser;
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser, PartialEq)]
 #[clap(
-    version,
+    version = version(),
     after_help = "If a subcommand is not provided, the `run` subcommand will be used.\n\
                   \n\
                   Usage examples:\n\
@@ -38,6 +38,11 @@ struct Wasmtime {
     subcommand: Option<Subcommand>,
     #[clap(flatten)]
     run: wasmtime_cli::commands::RunCommand,
+}
+
+/// If WASMTIME_VERSION_INFO is set, use it, otherwise use CARGO_PKG_VERSION.
+fn version() -> &'static str {
+    option_env!("WASMTIME_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
 }
 
 #[derive(Parser, PartialEq)]
