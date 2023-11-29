@@ -490,7 +490,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         let req = self.table().get_mut(&request)?;
 
         if let Some(s) = authority.as_ref() {
-            println!("checking authority {s}");
             let auth = match http::uri::Authority::from_str(s.as_str()) {
                 Ok(auth) => auth,
                 Err(_) => return Ok(Err(())),
