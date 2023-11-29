@@ -596,10 +596,24 @@ impl<T> Store<T> {
     }
 
     /// Consumes this [`Store`], destroying it, and returns the underlying data.
-    pub fn into_data(self) -> T {
-        let (data, _) = self.into_data_table();
-        data
+    pub fn into_data(mut self) -> T {
+        // Ideally this would be implemented in terms of `into_data_table` but because
+        // the types and fields in there don't exist unless the component-model feature
+        // is turned on, we have to inline a hacked up version here.
+        //
+        // See more comments below in `into_data_table`.
+        unsafe {
+            let mut inner = ManuallyDrop::take(&mut self.inner);
+            std::mem::forget(self);
+
+            #[cfg(feature = "component-model")]
+            let _ = ManuallyDrop::take(&mut inner.inner.resource_table);
+
+            ManuallyDrop::take(&mut inner.data)
+        }
     }
+
+    #[cfg(feature = "component-model")]
     /// Consumes this [`Store`], destroying it, and returns the underlying data and
     /// `ResourceTable`.
     pub fn into_data_table(mut self) -> (T, ResourceTable) {
