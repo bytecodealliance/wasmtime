@@ -95,6 +95,14 @@ impl Table {
         }
     }
 
+    /// Create an empty table with at least the specified capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Table {
+            entries: Vec::with_capacity(capacity),
+            free_head: None,
+        }
+    }
+
     /// Inserts a new value `T` into this table, returning a corresponding
     /// `Resource<T>` which can be used to refer to it after it was inserted.
     pub fn push<T>(&mut self, entry: T) -> Result<Resource<T>, TableError>
