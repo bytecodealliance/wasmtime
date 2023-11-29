@@ -68,15 +68,15 @@ typedef struct wasmtime_context wasmtime_context_t;
  * This function creates a fresh store with the provided configuration settings.
  * The returned store must be deleted with #wasmtime_store_delete.
  */
-WASM_API_EXTERN wasmtime_store_t* wasmtime_store_new(
-    wasm_engine_t* engine,
-    void* data,
-    void (*finalizer)(void*));
+WASM_API_EXTERN wasmtime_store_t *wasmtime_store_new(wasm_engine_t *engine,
+                                                     void *data,
+                                                     void (*finalizer)(void *));
 
 /**
  * \brief Returns the interior #wasmtime_context_t pointer to this store
  */
-WASM_API_EXTERN wasmtime_context_t* wasmtime_store_context(wasmtime_store_t* store);
+WASM_API_EXTERN wasmtime_context_t *
+wasmtime_store_context(wasmtime_store_t *store);
 
 /**
  * \brief Provides limits for a store. Used by hosts to limit resource
@@ -107,23 +107,22 @@ WASM_API_EXTERN wasmtime_context_t* wasmtime_store_context(wasmtime_store_t* sto
  * resources in the future, this does not retroactively attempt to apply
  * limits to the store.
  */
-WASM_API_EXTERN void wasmtime_store_limiter(
-    wasmtime_store_t* store,
-    int64_t memory_size,
-    int64_t table_elements,
-    int64_t instances,
-    int64_t tables,
-    int64_t memories);
+WASM_API_EXTERN void wasmtime_store_limiter(wasmtime_store_t *store,
+                                            int64_t memory_size,
+                                            int64_t table_elements,
+                                            int64_t instances, int64_t tables,
+                                            int64_t memories);
 
 /**
  * \brief Deletes a store.
  */
-WASM_API_EXTERN void wasmtime_store_delete(wasmtime_store_t* store);
+WASM_API_EXTERN void wasmtime_store_delete(wasmtime_store_t *store);
 
 /**
  * \brief Returns the user-specified data associated with the specified store
  */
-WASM_API_EXTERN void* wasmtime_context_get_data(const wasmtime_context_t* context);
+WASM_API_EXTERN void *
+wasmtime_context_get_data(const wasmtime_context_t *context);
 
 /**
  * \brief Overwrites the user-specified data associated with this store.
@@ -132,7 +131,8 @@ WASM_API_EXTERN void* wasmtime_context_get_data(const wasmtime_context_t* contex
  * and the original finalizer will be executed for the provided data when the
  * store is deleted.
  */
-WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t* context, void* data);
+WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t *context,
+                                               void *data);
 
 /**
  * \brief Perform garbage collection within the given context.
@@ -143,7 +143,7 @@ WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t* context, void
  *
  * The `context` argument must not be NULL.
  */
-WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
+WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t *context);
 
 /**
  * \brief Set fuel to this context's store for wasm to consume while executing.
@@ -159,7 +159,8 @@ WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
  * If fuel is not enabled within this store then an error is returned. If fuel
  * is successfully added then NULL is returned.
  */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_context_set_fuel(wasmtime_context_t* store, uint64_t fuel);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_context_set_fuel(wasmtime_context_t *store, uint64_t fuel);
 
 /**
  * \brief Returns the amount of fuel remaining in this context's store.
@@ -171,7 +172,8 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_context_set_fuel(wasmtime_context_t* 
  * Also note that fuel, if enabled, must be originally configured via
  * #wasmtime_context_set_fuel.
  */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_context_get_fuel(const wasmtime_context_t* context, uint64_t* fuel);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_context_get_fuel(const wasmtime_context_t *context, uint64_t *fuel);
 
 /**
  * \brief Configures WASI state within the specified store.
@@ -184,7 +186,8 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_context_get_fuel(const wasmtime_conte
  * of `wasi`. The caller should no longer use `wasi` after calling this function
  * (even if an error is returned).
  */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_context_set_wasi(wasmtime_context_t* context, wasi_config_t* wasi);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 
 /**
  * \brief Configures the relative deadline at which point WebAssembly code will
@@ -196,7 +199,9 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_context_set_wasi(wasmtime_context_t* 
  * See also #wasmtime_config_epoch_interruption_set and
  * #wasmtime_store_epoch_deadline_callback.
  */
-WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t* context, uint64_t ticks_beyond_current);
+WASM_API_EXTERN void
+wasmtime_context_set_epoch_deadline(wasmtime_context_t *context,
+                                    uint64_t ticks_beyond_current);
 
 /// \brief An enum for the behavior before extending the epoch deadline.
 typedef uint8_t wasmtime_update_deadline_kind_t;
@@ -226,14 +231,11 @@ typedef uint8_t wasmtime_update_deadline_kind_t;
  * #wasmtime_context_set_epoch_deadline.
  */
 WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(
-    wasmtime_store_t* store,
-    wasmtime_error_t* (*func)(
-        wasmtime_context_t* context,
-        void* data,
-        uint64_t* epoch_deadline_delta,
-        wasmtime_update_deadline_kind_t* update_kind),
-    void* data,
-    void (*finalizer)(void*));
+    wasmtime_store_t *store,
+    wasmtime_error_t *(*func)(wasmtime_context_t *context, void *data,
+                              uint64_t *epoch_deadline_delta,
+                              wasmtime_update_deadline_kind_t *update_kind),
+    void *data, void (*finalizer)(void *));
 
 #ifdef __cplusplus
 } // extern "C"

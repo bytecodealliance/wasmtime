@@ -25,7 +25,7 @@ extern "C" {
  *
  * See also #wasmtime_config_epoch_interruption_set.
  */
-WASM_API_EXTERN void wasmtime_engine_increment_epoch(wasm_engine_t* engine);
+WASM_API_EXTERN void wasmtime_engine_increment_epoch(wasm_engine_t *engine);
 
 #ifdef __cplusplus
 } // extern "C"

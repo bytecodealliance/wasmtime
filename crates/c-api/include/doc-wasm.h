@@ -211,8 +211,8 @@
  * initialized and after this function is called you are then responsible for
  * ensuring #wasm_byte_vec_delete is called.
  *
- * \fn void wasm_byte_vec_new(wasm_byte_vec_t *out, size_t, wasm_byte_t const[]);
- * \brief Copies the specified data into a new byte vector.
+ * \fn void wasm_byte_vec_new(wasm_byte_vec_t *out, size_t, wasm_byte_t
+ * const[]); \brief Copies the specified data into a new byte vector.
  *
  * This function will copy the provided data into this byte vector. The byte
  * vector should not be previously initialized and the caller is responsible for
@@ -269,13 +269,13 @@
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_valtype_vec_new(wasm_valtype_vec_t *out, size_t, wasm_valtype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_valtype_vec_new(wasm_valtype_vec_t *out, size_t, wasm_valtype_t
+ * *const[]); \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_valtype_vec_copy(wasm_valtype_vec_t *out, const wasm_valtype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_valtype_vec_copy(wasm_valtype_vec_t *out, const
+ * wasm_valtype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -330,18 +330,19 @@
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_functype_vec_new_uninitialized(wasm_functype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
+ * \fn void wasm_functype_vec_new_uninitialized(wasm_functype_vec_t *out,
+ * size_t); \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_functype_vec_new(wasm_functype_vec_t *out, size_t, wasm_functype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_functype_vec_new(wasm_functype_vec_t *out, size_t,
+ * wasm_functype_t *const[]); \brief Creates a vector with the provided
+ * contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_functype_vec_copy(wasm_functype_vec_t *out, const wasm_functype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_functype_vec_copy(wasm_functype_vec_t *out, const
+ * wasm_functype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -355,9 +356,9 @@
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn wasm_functype_t* wasm_functype_new(wasm_valtype_vec_t *params, wasm_valtype_vec_t *results);
- * \brief Creates a new function type with the provided parameter and result
- * types.
+ * \fn wasm_functype_t* wasm_functype_new(wasm_valtype_vec_t *params,
+ * wasm_valtype_vec_t *results); \brief Creates a new function type with the
+ * provided parameter and result types.
  *
  * This function takes ownership of the `params` and `results` arguments.
  *
@@ -403,18 +404,19 @@
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_globaltype_vec_new_uninitialized(wasm_globaltype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
+ * \fn void wasm_globaltype_vec_new_uninitialized(wasm_globaltype_vec_t *out,
+ * size_t); \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_globaltype_vec_new(wasm_globaltype_vec_t *out, size_t, wasm_globaltype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_globaltype_vec_new(wasm_globaltype_vec_t *out, size_t,
+ * wasm_globaltype_t *const[]); \brief Creates a vector with the provided
+ * contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_globaltype_vec_copy(wasm_globaltype_vec_t *out, const wasm_globaltype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_globaltype_vec_copy(wasm_globaltype_vec_t *out, const
+ * wasm_globaltype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -428,8 +430,8 @@
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn wasm_globaltype_t* wasm_globaltype_new(wasm_valtype_t *, wasm_mutability_t)
- * \brief Creates a new global type.
+ * \fn wasm_globaltype_t* wasm_globaltype_new(wasm_valtype_t *,
+ * wasm_mutability_t) \brief Creates a new global type.
  *
  * This function takes ownership of the #wasm_valtype_t argument.
  *
@@ -477,18 +479,19 @@
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_tabletype_vec_new_uninitialized(wasm_tabletype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
+ * \fn void wasm_tabletype_vec_new_uninitialized(wasm_tabletype_vec_t *out,
+ * size_t); \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_tabletype_vec_new(wasm_tabletype_vec_t *out, size_t, wasm_tabletype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_tabletype_vec_new(wasm_tabletype_vec_t *out, size_t,
+ * wasm_tabletype_t *const[]); \brief Creates a vector with the provided
+ * contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_tabletype_vec_copy(wasm_tabletype_vec_t *out, const wasm_tabletype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_tabletype_vec_copy(wasm_tabletype_vec_t *out, const
+ * wasm_tabletype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -502,8 +505,8 @@
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn wasm_tabletype_t* wasm_tabletype_new(wasm_valtype_t *, const wasm_limits_t *)h
- * \brief Creates a new table type.
+ * \fn wasm_tabletype_t* wasm_tabletype_new(wasm_valtype_t *, const
+ * wasm_limits_t *)h \brief Creates a new table type.
  *
  * This function takes ownership of the #wasm_valtype_t argument, but does not
  * take ownership of the #wasm_limits_t.
@@ -563,18 +566,19 @@
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_memorytype_vec_new_uninitialized(wasm_memorytype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
+ * \fn void wasm_memorytype_vec_new_uninitialized(wasm_memorytype_vec_t *out,
+ * size_t); \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_memorytype_vec_new(wasm_memorytype_vec_t *out, size_t, wasm_memorytype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_memorytype_vec_new(wasm_memorytype_vec_t *out, size_t,
+ * wasm_memorytype_t *const[]); \brief Creates a vector with the provided
+ * contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_memorytype_vec_copy(wasm_memorytype_vec_t *out, const wasm_memorytype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_memorytype_vec_copy(wasm_memorytype_vec_t *out, const
+ * wasm_memorytype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -638,18 +642,19 @@
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_externtype_vec_new_uninitialized(wasm_externtype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
+ * \fn void wasm_externtype_vec_new_uninitialized(wasm_externtype_vec_t *out,
+ * size_t); \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_externtype_vec_new(wasm_externtype_vec_t *out, size_t, wasm_externtype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_externtype_vec_new(wasm_externtype_vec_t *out, size_t,
+ * wasm_externtype_t *const[]); \brief Creates a vector with the provided
+ * contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_externtype_vec_copy(wasm_externtype_vec_t *out, const wasm_externtype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_externtype_vec_copy(wasm_externtype_vec_t *out, const
+ * wasm_externtype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -700,26 +705,29 @@
  * The returned value is owned by the #wasm_memorytype_t argument and should not
  * be deleted.
  *
- * \fn const wasm_externtype_t* wasm_functype_as_externtype_const(const wasm_functype_t *)
- * \brief Converts a #wasm_functype_t to a #wasm_externtype_t
+ * \fn const wasm_externtype_t* wasm_functype_as_externtype_const(const
+ * wasm_functype_t *) \brief Converts a #wasm_functype_t to a #wasm_externtype_t
  *
  * The returned value is owned by the #wasm_functype_t argument and should not
  * be deleted.
  *
- * \fn const wasm_externtype_t* wasm_tabletype_as_externtype_const(const wasm_tabletype_t *)
- * \brief Converts a #wasm_tabletype_t to a #wasm_externtype_t
+ * \fn const wasm_externtype_t* wasm_tabletype_as_externtype_const(const
+ * wasm_tabletype_t *) \brief Converts a #wasm_tabletype_t to a
+ * #wasm_externtype_t
  *
  * The returned value is owned by the #wasm_tabletype_t argument and should not
  * be deleted.
  *
- * \fn const wasm_externtype_t* wasm_globaltype_as_externtype_const(const wasm_globaltype_t *)
- * \brief Converts a #wasm_globaltype_t to a #wasm_externtype_t
+ * \fn const wasm_externtype_t* wasm_globaltype_as_externtype_const(const
+ * wasm_globaltype_t *) \brief Converts a #wasm_globaltype_t to a
+ * #wasm_externtype_t
  *
  * The returned value is owned by the #wasm_globaltype_t argument and should not
  * be deleted.
  *
- * \fn const wasm_externtype_t* wasm_memorytype_as_externtype_const(const wasm_memorytype_t *)
- * \brief Converts a #wasm_memorytype_t to a #wasm_externtype_t
+ * \fn const wasm_externtype_t* wasm_memorytype_as_externtype_const(const
+ * wasm_memorytype_t *) \brief Converts a #wasm_memorytype_t to a
+ * #wasm_externtype_t
  *
  * The returned value is owned by the #wasm_memorytype_t argument and should not
  * be deleted.
@@ -752,29 +760,33 @@
  * be deleted. Returns `NULL` if the provided argument is not a
  * #wasm_globaltype_t.
  *
- * \fn const wasm_functype_t* wasm_externtype_as_functype_const(const wasm_externtype_t *)
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_functype_t
+ * \fn const wasm_functype_t* wasm_externtype_as_functype_const(const
+ * wasm_externtype_t *) \brief Attempts to convert a #wasm_externtype_t to a
+ * #wasm_functype_t
  *
  * The returned value is owned by the #wasm_functype_t argument and should not
  * be deleted. Returns `NULL` if the provided argument is not a
  * #wasm_functype_t.
  *
- * \fn const wasm_tabletype_t* wasm_externtype_as_tabletype_const(const wasm_externtype_t *)
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_tabletype_t
+ * \fn const wasm_tabletype_t* wasm_externtype_as_tabletype_const(const
+ * wasm_externtype_t *) \brief Attempts to convert a #wasm_externtype_t to a
+ * #wasm_tabletype_t
  *
  * The returned value is owned by the #wasm_tabletype_t argument and should not
  * be deleted. Returns `NULL` if the provided argument is not a
  * #wasm_tabletype_t.
  *
- * \fn const wasm_memorytype_t* wasm_externtype_as_memorytype_const(const wasm_externtype_t *)
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_memorytype_t
+ * \fn const wasm_memorytype_t* wasm_externtype_as_memorytype_const(const
+ * wasm_externtype_t *) \brief Attempts to convert a #wasm_externtype_t to a
+ * #wasm_memorytype_t
  *
  * The returned value is owned by the #wasm_memorytype_t argument and should not
  * be deleted. Returns `NULL` if the provided argument is not a
  * #wasm_memorytype_t.
  *
- * \fn const wasm_globaltype_t* wasm_externtype_as_globaltype_const(const wasm_externtype_t *)
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_globaltype_t
+ * \fn const wasm_globaltype_t* wasm_externtype_as_globaltype_const(const
+ * wasm_externtype_t *) \brief Attempts to convert a #wasm_externtype_t to a
+ * #wasm_globaltype_t
  *
  * The returned value is owned by the #wasm_globaltype_t argument and should not
  * be deleted. Returns `NULL` if the provided argument is not a
@@ -808,18 +820,19 @@
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_importtype_vec_new_uninitialized(wasm_importtype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
+ * \fn void wasm_importtype_vec_new_uninitialized(wasm_importtype_vec_t *out,
+ * size_t); \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_importtype_vec_new(wasm_importtype_vec_t *out, size_t, wasm_importtype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_importtype_vec_new(wasm_importtype_vec_t *out, size_t,
+ * wasm_importtype_t *const[]); \brief Creates a vector with the provided
+ * contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_importtype_vec_copy(wasm_importtype_vec_t *out, const wasm_importtype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_importtype_vec_copy(wasm_importtype_vec_t *out, const
+ * wasm_importtype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -833,8 +846,8 @@
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn wasm_importtype_t* wasm_importtype_new(wasm_name_t *module, wasm_name_t *name, wasm_externtype_t *)
- * \brief Creates a new import type.
+ * \fn wasm_importtype_t* wasm_importtype_new(wasm_name_t *module, wasm_name_t
+ * *name, wasm_externtype_t *) \brief Creates a new import type.
  *
  * This function takes ownership of the `module`, `name`, and
  * #wasm_externtype_t arguments. The caller is responsible for deleting the
@@ -889,18 +902,19 @@
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_exporttype_vec_new_uninitialized(wasm_exporttype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
+ * \fn void wasm_exporttype_vec_new_uninitialized(wasm_exporttype_vec_t *out,
+ * size_t); \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_exporttype_vec_new(wasm_exporttype_vec_t *out, size_t, wasm_exporttype_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_exporttype_vec_new(wasm_exporttype_vec_t *out, size_t,
+ * wasm_exporttype_t *const[]); \brief Creates a vector with the provided
+ * contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_exporttype_vec_copy(wasm_exporttype_vec_t *out, const wasm_exporttype_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_exporttype_vec_copy(wasm_exporttype_vec_t *out, const
+ * wasm_exporttype_vec_t *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -914,8 +928,8 @@
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn wasm_exporttype_t* wasm_exporttype_new(wasm_name_t *name, wasm_externtype_t *)
- * \brief Creates a new export type.
+ * \fn wasm_exporttype_t* wasm_exporttype_new(wasm_name_t *name,
+ * wasm_externtype_t *) \brief Creates a new export type.
  *
  * This function takes ownership of the `name` and
  * #wasm_externtype_t arguments. The caller is responsible for deleting the
@@ -1051,8 +1065,9 @@
  * \fn void wasm_ref_set_host_info(wasm_ref_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_ref_set_host_info_with_finalizer(wasm_ref_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_ref_set_host_info_with_finalizer(wasm_ref_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  */
 
 /**
@@ -1087,8 +1102,8 @@
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_frame_vec_new(wasm_frame_vec_t *out, size_t, wasm_frame_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_frame_vec_new(wasm_frame_vec_t *out, size_t, wasm_frame_t
+ * *const[]); \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
@@ -1147,8 +1162,9 @@
  * \fn void wasm_trap_set_host_info(wasm_trap_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_trap_set_host_info_with_finalizer(wasm_trap_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_trap_set_host_info_with_finalizer(wasm_trap_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_trap_as_ref(wasm_trap_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1220,8 +1236,9 @@
  * \fn void wasm_foreign_set_host_info(wasm_foreign_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_foreign_set_host_info_with_finalizer(wasm_foreign_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_foreign_set_host_info_with_finalizer(wasm_foreign_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_foreign_as_ref(wasm_foreign_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1274,8 +1291,9 @@
  * \fn void wasm_module_set_host_info(wasm_module_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_module_set_host_info_with_finalizer(wasm_module_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_module_set_host_info_with_finalizer(wasm_module_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_module_as_ref(wasm_module_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1304,8 +1322,9 @@
  * This function does not take ownership of the argument, but the caller is
  * expected to deallocate the returned #wasm_shared_module_t.
  *
- * \fn wasm_module_t *wasm_module_obtain(wasm_store_t *, const wasm_shared_module_t *);
- * \brief Attempts to create a #wasm_module_t from the shareable module.
+ * \fn wasm_module_t *wasm_module_obtain(wasm_store_t *, const
+ * wasm_shared_module_t *); \brief Attempts to create a #wasm_module_t from the
+ * shareable module.
  *
  * > Note that this API is not necessary in Wasmtime because #wasm_module_t can
  * > be shared across threads. This is implemented for compatibility, however.
@@ -1316,8 +1335,8 @@
  * This function may fail if the engines associated with the #wasm_store_t or
  * #wasm_shared_module_t are different.
  *
- * \fn wasm_module_t *wasm_module_new(wasm_store_t *, const wasm_byte_vec_t *binary)
- * \brief Compiles a raw WebAssembly binary to a #wasm_module_t.
+ * \fn wasm_module_t *wasm_module_new(wasm_store_t *, const wasm_byte_vec_t
+ * *binary) \brief Compiles a raw WebAssembly binary to a #wasm_module_t.
  *
  * This function will validate and compile the provided binary. The returned
  * #wasm_module_t is ready for instantiation after this call returns.
@@ -1335,8 +1354,8 @@
  * `binary` is a valid WebAssembly binary according to the configuration of the
  * #wasm_store_t provided.
  *
- * \fn void wasm_module_imports(const wasm_module_t *, wasm_importtype_vec_t *out);
- * \brief Returns the list of imports that this module expects.
+ * \fn void wasm_module_imports(const wasm_module_t *, wasm_importtype_vec_t
+ * *out); \brief Returns the list of imports that this module expects.
  *
  * The list of imports returned are the types of items expected to be passed to
  * #wasm_instance_new. You can use #wasm_importtype_type to learn about the
@@ -1346,8 +1365,8 @@
  * `out` is passed to the caller. Note that `out` is treated as uninitialized
  * when passed to this function.
  *
- * \fn void wasm_module_exports(const wasm_module_t *, wasm_exporttype_vec_t *out);
- * \brief Returns the list of exports that this module provides.
+ * \fn void wasm_module_exports(const wasm_module_t *, wasm_exporttype_vec_t
+ * *out); \brief Returns the list of exports that this module provides.
  *
  * The list of exports returned are in the same order as the items returned by
  * #wasm_instance_exports.
@@ -1363,8 +1382,8 @@
  * deallocate the `out` vector. The byte vector can later be deserialized
  * through #wasm_module_deserialize.
  *
- * \fn wasm_module_t *wasm_module_deserialize(wasm_store_t *, const wasm_byte_vec_t *);
- * \brief Deserializes a previously-serialized module.
+ * \fn wasm_module_t *wasm_module_deserialize(wasm_store_t *, const
+ * wasm_byte_vec_t *); \brief Deserializes a previously-serialized module.
  *
  * The input bytes must have been created from a previous call to
  * #wasm_module_serialize.
@@ -1419,8 +1438,9 @@
  * \fn void wasm_func_set_host_info(wasm_func_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_func_set_host_info_with_finalizer(wasm_func_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_func_set_host_info_with_finalizer(wasm_func_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_func_as_ref(wasm_func_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1437,8 +1457,9 @@
  * \fn wasm_ref_as_func_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn wasm_func_t *wasm_func_new(wasm_store_t *, const wasm_functype_t *, wasm_func_callback_t);
- * \brief Creates a new WebAssembly function with host functionality.
+ * \fn wasm_func_t *wasm_func_new(wasm_store_t *, const wasm_functype_t *,
+ * wasm_func_callback_t); \brief Creates a new WebAssembly function with host
+ * functionality.
  *
  * This function creates a new #wasm_func_t from a host-provided function. The
  * host provided function must implement the type signature matching the
@@ -1478,8 +1499,9 @@
  * \fn size_t wasm_func_result_arity(const wasm_func_t *);
  * \brief Returns the number of results returned by this function.
  *
- * \fn wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
- * \brief Calls the provided function with the arguments given.
+ * \fn wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_vec_t
+ * *args, wasm_val_vec_t *results); \brief Calls the provided function with the
+ * arguments given.
  *
  * This function is used to call WebAssembly from the host. The parameter array
  * provided must be valid for #wasm_func_param_arity number of arguments, and
@@ -1525,8 +1547,9 @@
  * \fn void wasm_global_set_host_info(wasm_global_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_global_set_host_info_with_finalizer(wasm_global_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_global_set_host_info_with_finalizer(wasm_global_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_global_as_ref(wasm_global_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1543,8 +1566,8 @@
  * \fn wasm_ref_as_global_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn wasm_global_t *wasm_global_new(wasm_store_t *, const wasm_globaltype_t *, const wasm_val_t *);
- * \brief Creates a new WebAssembly global.
+ * \fn wasm_global_t *wasm_global_new(wasm_store_t *, const wasm_globaltype_t *,
+ * const wasm_val_t *); \brief Creates a new WebAssembly global.
  *
  * This function is used to create a wasm global from the host, typically to
  * provide as the import of a module. The type of the global is specified along
@@ -1607,8 +1630,9 @@
  * \fn void wasm_table_set_host_info(wasm_table_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_table_set_host_info_with_finalizer(wasm_table_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_table_set_host_info_with_finalizer(wasm_table_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_table_as_ref(wasm_table_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1625,8 +1649,8 @@
  * \fn wasm_ref_as_table_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn wasm_table_t *wasm_table_new(wasm_store_t *, const wasm_tabletype_t *, wasm_ref_t *init);
- * \brief Creates a new WebAssembly table.
+ * \fn wasm_table_t *wasm_table_new(wasm_store_t *, const wasm_tabletype_t *,
+ * wasm_ref_t *init); \brief Creates a new WebAssembly table.
  *
  * Creates a new host-defined table of values. This table has the type provided
  * and is filled with the provided initial value (which can be `NULL`).
@@ -1641,16 +1665,16 @@
  *
  * The caller is expected to deallocate the returned #wasm_tabletype_t.
  *
- * \fn wasm_ref_t *wasm_table_get(const wasm_table_t *, wasm_table_size_t index);
- * \brief Gets an element from this table.
+ * \fn wasm_ref_t *wasm_table_get(const wasm_table_t *, wasm_table_size_t
+ * index); \brief Gets an element from this table.
  *
  * Attempts to get a value at an index in this table. This function returns
  * `NULL` if the index is out of bounds.
  *
  * Gives ownership of the resulting `wasm_ref_t*`.
  *
- * \fn void wasm_table_set(wasm_table_t *, wasm_table_size_t index, wasm_ref_t *);
- * \brief Sets an element in this table.
+ * \fn void wasm_table_set(wasm_table_t *, wasm_table_size_t index, wasm_ref_t
+ * *); \brief Sets an element in this table.
  *
  * Attempts to set a value at an index in this table. This function does nothing
  * in erroneous situations such as:
@@ -1664,8 +1688,8 @@
  * \fn wasm_table_size_t wasm_table_size(const wasm_table_t *);
  * \brief Gets the current size, in elements, of this table.
  *
- * \fn bool wasm_table_grow(wasm_table_t *, wasm_table_size_t delta, wasm_ref_t *init);
- * \brief Attempts to grow this table by `delta` elements.
+ * \fn bool wasm_table_grow(wasm_table_t *, wasm_table_size_t delta, wasm_ref_t
+ * *init); \brief Attempts to grow this table by `delta` elements.
  *
  * This function will grow the table by `delta` elements, initializing all new
  * elements to the `init` value provided.
@@ -1707,8 +1731,9 @@
  * \fn void wasm_memory_set_host_info(wasm_memory_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_memory_set_host_info_with_finalizer(wasm_memory_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_memory_set_host_info_with_finalizer(wasm_memory_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_memory_as_ref(wasm_memory_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1725,8 +1750,8 @@
  * \fn wasm_ref_as_memory_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn wasm_memory_t *wasm_memory_new(wasm_store_t *, const wasm_memorytype_t *);
- * \brief Creates a new WebAssembly memory.
+ * \fn wasm_memory_t *wasm_memory_new(wasm_store_t *, const wasm_memorytype_t
+ * *); \brief Creates a new WebAssembly memory.
  *
  * \fn wasm_memorytype_t *wasm_memory_type(const wasm_memory_t *);
  * \brief Returns the type of this memory.
@@ -1786,13 +1811,13 @@
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_extern_vec_new(wasm_extern_vec_t *out, size_t, wasm_extern_t *const[]);
- * \brief Creates a vector with the provided contents.
+ * \fn void wasm_extern_vec_new(wasm_extern_vec_t *out, size_t, wasm_extern_t
+ * *const[]); \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_extern_vec_copy(wasm_extern_vec_t *out, const wasm_extern_vec_t *)
- * \brief Copies one vector to another
+ * \fn void wasm_extern_vec_copy(wasm_extern_vec_t *out, const wasm_extern_vec_t
+ * *) \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
@@ -1815,8 +1840,9 @@
  * \fn void wasm_extern_set_host_info(wasm_extern_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_extern_set_host_info_with_finalizer(wasm_extern_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_extern_set_host_info_with_finalizer(wasm_extern_t *, void *,
+ * void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_extern_as_ref(wasm_extern_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1924,7 +1950,8 @@
  * should not delete the returned value, and it only lives as long as the
  * #wasm_extern_t argument.
  *
- * If the #wasm_extern_t argument isn't a #wasm_memory_t then `NULL` is returned.
+ * If the #wasm_extern_t argument isn't a #wasm_memory_t then `NULL` is
+ * returned.
  *
  * \fn wasm_global_t *wasm_extern_as_global(wasm_extern_t *);
  * \brief Converts a #wasm_extern_t to #wasm_global_t.
@@ -1933,7 +1960,8 @@
  * should not delete the returned value, and it only lives as long as the
  * #wasm_extern_t argument.
  *
- * If the #wasm_extern_t argument isn't a #wasm_global_t then `NULL` is returned.
+ * If the #wasm_extern_t argument isn't a #wasm_global_t then `NULL` is
+ * returned.
  *
  * \fn const wasm_func_t *wasm_extern_as_func_const(const wasm_extern_t *);
  * \brief Converts a #wasm_extern_t to #wasm_func_t.
@@ -1960,7 +1988,8 @@
  * should not delete the returned value, and it only lives as long as the
  * #wasm_extern_t argument.
  *
- * If the #wasm_extern_t argument isn't a #wasm_memory_t then `NULL` is returned.
+ * If the #wasm_extern_t argument isn't a #wasm_memory_t then `NULL` is
+ * returned.
  *
  * \fn const wasm_global_t *wasm_extern_as_global_const(const wasm_extern_t *);
  * \brief Converts a #wasm_extern_t to #wasm_global_t.
@@ -1969,7 +1998,8 @@
  * should not delete the returned value, and it only lives as long as the
  * #wasm_extern_t argument.
  *
- * If the #wasm_extern_t argument isn't a #wasm_global_t then `NULL` is returned.
+ * If the #wasm_extern_t argument isn't a #wasm_global_t then `NULL` is
+ * returned.
  */
 
 /**
@@ -1996,8 +2026,9 @@
  * \fn void wasm_instance_set_host_info(wasm_instance_t *, void *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_instance_set_host_info_with_finalizer(wasm_instance_t *, void *, void(*)(void*));
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \fn void wasm_instance_set_host_info_with_finalizer(wasm_instance_t *, void
+ * *, void(*)(void*)); \brief Unimplemented in Wasmtime, aborts the process if
+ * called.
  *
  * \fn wasm_ref_t *wasm_instance_as_ref(wasm_instance_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -2014,8 +2045,9 @@
  * \fn wasm_ref_as_instance_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn wasm_instance_t *wasm_instance_new(wasm_store_t *, const wasm_module_t *, const wasm_extern_vec_t *, wasm_trap_t **);
- * \brief Instantiates a module with the provided imports.
+ * \fn wasm_instance_t *wasm_instance_new(wasm_store_t *, const wasm_module_t *,
+ * const wasm_extern_vec_t *, wasm_trap_t **); \brief Instantiates a module with
+ * the provided imports.
  *
  * This function will instantiate the provided #wasm_module_t into the provided
  * #wasm_store_t. The `imports` specified are used to satisfy the imports of the
@@ -2033,8 +2065,8 @@
  * This function does not take ownership of any of its arguments, and the
  * returned #wasm_instance_t and #wasm_trap_t are owned by the caller.
  *
- * \fn void wasm_instance_exports(const wasm_instance_t *, wasm_extern_vec_t *out);
- * \brief Returns the exports of an instance.
+ * \fn void wasm_instance_exports(const wasm_instance_t *, wasm_extern_vec_t
+ * *out); \brief Returns the exports of an instance.
  *
  * This function returns a list of #wasm_extern_t values, which will be owned by
  * the caller, which are exported from the instance. The `out` list will have

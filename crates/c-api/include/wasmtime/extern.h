@@ -22,10 +22,10 @@ extern "C" {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_func {
-    /// Internal identifier of what store this belongs to, never zero.
-    uint64_t store_id;
-    /// Internal index within the store.
-    size_t index;
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
 } wasmtime_func_t;
 
 /// \brief Representation of a table in Wasmtime.
@@ -36,10 +36,10 @@ typedef struct wasmtime_func {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_table {
-    /// Internal identifier of what store this belongs to, never zero.
-    uint64_t store_id;
-    /// Internal index within the store.
-    size_t index;
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
 } wasmtime_table_t;
 
 /// \brief Representation of a memory in Wasmtime.
@@ -50,10 +50,10 @@ typedef struct wasmtime_table {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_memory {
-    /// Internal identifier of what store this belongs to, never zero.
-    uint64_t store_id;
-    /// Internal index within the store.
-    size_t index;
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
 } wasmtime_memory_t;
 
 /// \brief Representation of a global in Wasmtime.
@@ -64,10 +64,10 @@ typedef struct wasmtime_memory {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_global {
-    /// Internal identifier of what store this belongs to, never zero.
-    uint64_t store_id;
-    /// Internal index within the store.
-    size_t index;
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
 } wasmtime_global_t;
 
 /// \brief Discriminant of #wasmtime_extern_t
@@ -97,14 +97,14 @@ typedef uint8_t wasmtime_extern_kind_t;
  * various kinds of items an extern wasm item can be.
  */
 typedef union wasmtime_extern_union {
-    /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_FUNC
-    wasmtime_func_t func;
-    /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_GLOBAL
-    wasmtime_global_t global;
-    /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_TABLE
-    wasmtime_table_t table;
-    /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_MEMORY
-    wasmtime_memory_t memory;
+  /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_FUNC
+  wasmtime_func_t func;
+  /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_GLOBAL
+  wasmtime_global_t global;
+  /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_TABLE
+  wasmtime_table_t table;
+  /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_MEMORY
+  wasmtime_memory_t memory;
 } wasmtime_extern_union_t;
 
 /**
@@ -121,21 +121,22 @@ typedef union wasmtime_extern_union {
  * deallocate the value.
  */
 typedef struct wasmtime_extern {
-    /// Discriminant of which field of #of is valid.
-    wasmtime_extern_kind_t kind;
-    /// Container for the extern item's value.
-    wasmtime_extern_union_t of;
+  /// Discriminant of which field of #of is valid.
+  wasmtime_extern_kind_t kind;
+  /// Container for the extern item's value.
+  wasmtime_extern_union_t of;
 } wasmtime_extern_t;
 
 /// \brief Deletes a #wasmtime_extern_t.
-void wasmtime_extern_delete(wasmtime_extern_t* val);
+void wasmtime_extern_delete(wasmtime_extern_t *val);
 
 /// \brief Returns the type of the #wasmtime_extern_t defined within the given
 /// store.
 ///
 /// Does not take ownership of `context` or `val`, but the returned
 /// #wasm_externtype_t is an owned value that needs to be deleted.
-wasm_externtype_t* wasmtime_extern_type(wasmtime_context_t* context, wasmtime_extern_t* val);
+wasm_externtype_t *wasmtime_extern_type(wasmtime_context_t *context,
+                                        wasmtime_extern_t *val);
 
 #ifdef __cplusplus
 } // extern "C"
