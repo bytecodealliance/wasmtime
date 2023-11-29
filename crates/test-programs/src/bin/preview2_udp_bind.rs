@@ -28,7 +28,7 @@ fn test_udp_bind_specific_port(net: &Network, ip: IpAddress) {
 
         // Concurrent invocations of this test can yield `AddressInUse` and that
         // same error can show up on Windows as `AccessDenied`.
-        Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => {}
+        Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => return,
         r => r.unwrap(),
     }
 
