@@ -1,14 +1,13 @@
 ;; rewrites for integer and floating-point arithmetic
 ;; eg: `iadd`, `isub`, `ineg`, `imul`, `fadd`, `fsub`, `fmul`
 
-;; x+0 == 0+x == x.
+;; For commutative instructions, we depend on cprop.isle pushing immediates to
+;; the right, and thus only simplify patterns like `x+0`, not `0+x`.
+
+;; x+0 == x.
 (rule (simplify (iadd ty
                       x
                       (iconst ty (u64_from_imm64 0))))
-      (subsume x))
-(rule (simplify (iadd ty
-                      (iconst ty (u64_from_imm64 0))
-                      x))
       (subsume x))
 ;; x-0 == x.
 (rule (simplify (isub ty
@@ -39,31 +38,20 @@
 ;; x-x == 0.
 (rule (simplify (isub (fits_in_64 (ty_int ty)) x x)) (subsume (iconst ty (imm64 0))))
 
-;; x*1 == 1*x == x.
+;; x*1 == x.
 (rule (simplify (imul ty
                       x
                       (iconst ty (u64_from_imm64 1))))
       (subsume x))
-(rule (simplify (imul ty
-                      (iconst ty (u64_from_imm64 1))
-                      x))
-      (subsume x))
 
-;; x*0 == 0*x == 0.
+;; x*0 == 0.
 (rule (simplify (imul ty
                       _
                       zero @ (iconst ty (u64_from_imm64 0))))
       (subsume zero))
-(rule (simplify (imul ty
-                      zero @ (iconst ty (u64_from_imm64 0))
-                      _))
-      (subsume zero))
 
-;; x*-1 == -1*x == ineg(x).
+;; x*-1 == ineg(x).
 (rule (simplify (imul ty x (iconst ty c)))
-      (if-let -1 (i64_sextend_imm64 ty c))
-      (ineg ty x))
-(rule (simplify (imul ty (iconst ty c) x))
       (if-let -1 (i64_sextend_imm64 ty c))
       (ineg ty x))
 
@@ -99,10 +87,8 @@
 ;; TODO: strength reduction: div to shifts
 ;; TODO: div/rem by constants -> magic multiplications
 
-;; x*2 == 2*x == x+x.
+;; x*2 == x+x.
 (rule (simplify (imul ty x (iconst _ (simm32 2))))
-      (iadd ty x x))
-(rule (simplify (imul ty (iconst _ (simm32 2)) x))
       (iadd ty x x))
 
 ;; x*c == x<<log2(c) when c is a power of two.
