@@ -56,7 +56,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
 
   # Check Code style quickly by running `clang-format` over all the C/C++ code
-  rustfmt:
+  clangformat:
     name: Clang format
     runs-on: ubuntu-latest
     steps:
