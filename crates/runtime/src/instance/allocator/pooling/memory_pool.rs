@@ -673,8 +673,7 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     // to define a slot as "all of the memory and guard region."
     let slot_bytes = expected_slot_bytes
         .max(max_memory_bytes)
-        .checked_add(guard_bytes)
-        .unwrap_or(usize::MAX);
+        .saturating_add(guard_bytes);
 
     let (num_stripes, slot_bytes) = if guard_bytes == 0 || max_memory_bytes == 0 || num_slots == 0 {
         // In the uncommon case where the memory/guard regions are empty or we don't need any slots , we
@@ -703,20 +702,22 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         // 3`), we will run into failures if we attempt to set up more than
         // three stripes.
         let needed_num_stripes =
-            slot_bytes / max_memory_bytes + usize::from(slot_bytes % max_memory_bytes != 0) + 1;
+            slot_bytes / max_memory_bytes + usize::from(slot_bytes % max_memory_bytes != 0);
+        assert!(needed_num_stripes > 0);
         let num_stripes = num_pkeys_available.min(needed_num_stripes).min(num_slots);
 
-        // Next, we try to reduce the slot size by "overlapping" the
-        // stripes: we can make slot `n` smaller since we know that slot
-        // `n+1` and following are in different stripes and will look just
-        // like `PROT_NONE` memory.
-        let next_slots_overlapping_bytes = max_memory_bytes
-            .checked_mul(num_stripes - 1)
-            .unwrap_or(usize::MAX);
+        // Next, we try to reduce the slot size by "overlapping" the stripes: we
+        // must respect the `expected_slot_bytes + guard bytes` expectations
+        // that codegen constrains us to, but, since a stripe of a different
+        // color is just as inaccessible as `PROT_NONE`, we can squeeze them
+        // together, effectively reducing the size of `slot_bytes` but still
+        // guaranteeing the codegen constraints.
         let needed_slot_bytes = slot_bytes
-            .checked_sub(next_slots_overlapping_bytes)
-            .unwrap_or(0)
+            .checked_div(num_stripes)
+            .unwrap_or(slot_bytes)
             .max(max_memory_bytes);
+        assert!(needed_slot_bytes >= max_memory_bytes);
+
         (num_stripes, needed_slot_bytes)
     };
 
@@ -728,13 +729,14 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         .ok_or_else(|| anyhow!("slot size is too large"))?;
 
     // We may need another guard region (like `pre_slab_guard_bytes`) at the end
-    // of our slab. We could be conservative and just create it as large as
-    // `guard_bytes`, but because we know that the last slot already has
-    // `guard_bytes` factored in to its guard region, we can reduce the final
-    // guard region by that much.
-    let post_slab_guard_bytes = guard_bytes
-        .checked_sub(slot_bytes - max_memory_bytes)
-        .unwrap_or(0);
+    // of our slab. If we have overlapped stripes of different colors to reduce
+    // the slot size, the last stripe will be vulnerable--it is not followed by
+    // other inaccessible stripes. To fix this, we ensure that the
+    // `post_slab_guard_bytes` is large enough to ensure the last slot meets the
+    // `expected_slot_bytes + guard_bytes` guarantees.
+    let post_slab_guard_bytes = expected_slot_bytes
+        .saturating_add(guard_bytes)
+        .saturating_sub(slot_bytes);
 
     // Check that we haven't exceeded the slab we can calculate given the limits
     // of `usize`.
