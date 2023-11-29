@@ -213,7 +213,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
 
         table.get_mut(&src)?.ready().await;
 
-        self.splice(dest, src, len).await
+        self.splice(table, dest, src, len).await
     }
 }
 
@@ -252,7 +252,7 @@ impl<T: WasiView> streams::HostInputStream for T {
         if let InputStream::Host(s) = table.get_mut(&stream)? {
             s.ready().await;
         }
-        self.read(stream, len).await
+        self.read(table, stream, len).await
     }
 
     async fn skip(
@@ -278,7 +278,7 @@ impl<T: WasiView> streams::HostInputStream for T {
         if let InputStream::Host(s) = table.get_mut(&stream)? {
             s.ready().await;
         }
-        self.skip(stream, len).await
+        self.skip(table, stream, len).await
     }
 
     fn subscribe(
@@ -317,7 +317,7 @@ pub mod sync {
             table: &mut ResourceTable,
             err: StreamError,
         ) -> anyhow::Result<streams::StreamError> {
-            Ok(AsyncHost::convert_stream_error(self, err)?.into())
+            Ok(AsyncHost::convert_stream_error(self, table, err)?.into())
         }
     }
 

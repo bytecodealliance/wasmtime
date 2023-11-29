@@ -9,7 +9,7 @@ use crate::preview2::{
 };
 use bytes::Bytes;
 use std::io::IsTerminal;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 
 /// A trait used to represent the standard input to a guest program.
 ///
@@ -190,23 +190,32 @@ pub enum IsATTY {
 }
 
 impl<T: WasiView> stdin::Host for T {
-    fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
+    fn get_stdin(
+        &mut self,
+        table: &mut ResourceTable,
+    ) -> Result<Resource<streams::InputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stdin.stream();
-        Ok(self.table_mut().push(streams::InputStream::Host(stream))?)
+        Ok(table.push(streams::InputStream::Host(stream))?)
     }
 }
 
 impl<T: WasiView> stdout::Host for T {
-    fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+    fn get_stdout(
+        &mut self,
+        table: &mut ResourceTable,
+    ) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stdout.stream();
-        Ok(self.table_mut().push(stream)?)
+        Ok(table.push(stream)?)
     }
 }
 
 impl<T: WasiView> stderr::Host for T {
-    fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+    fn get_stderr(
+        &mut self,
+        table: &mut ResourceTable,
+    ) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stderr.stream();
-        Ok(self.table_mut().push(stream)?)
+        Ok(table.push(stream)?)
     }
 }
 
@@ -215,43 +224,60 @@ pub struct TerminalOutput;
 
 impl<T: WasiView> terminal_input::Host for T {}
 impl<T: WasiView> terminal_input::HostTerminalInput for T {
-    fn drop(&mut self, r: Resource<TerminalInput>) -> anyhow::Result<()> {
-        self.table_mut().delete(r)?;
+    fn drop(
+        &mut self,
+        table: &mut ResourceTable,
+        r: Resource<TerminalInput>,
+    ) -> anyhow::Result<()> {
+        table.delete(r)?;
         Ok(())
     }
 }
 impl<T: WasiView> terminal_output::Host for T {}
 impl<T: WasiView> terminal_output::HostTerminalOutput for T {
-    fn drop(&mut self, r: Resource<TerminalOutput>) -> anyhow::Result<()> {
-        self.table_mut().delete(r)?;
+    fn drop(
+        &mut self,
+        table: &mut ResourceTable,
+        r: Resource<TerminalOutput>,
+    ) -> anyhow::Result<()> {
+        table.delete(r)?;
         Ok(())
     }
 }
 impl<T: WasiView> terminal_stdin::Host for T {
-    fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
+    fn get_terminal_stdin(
+        &mut self,
+        table: &mut ResourceTable,
+    ) -> anyhow::Result<Option<Resource<TerminalInput>>> {
         if self.ctx().stdin.isatty() {
-            let fd = self.table_mut().push(TerminalInput)?;
-            Ok(Some(fd))
+            let r = table.push(TerminalInput)?;
+            Ok(Some(r))
         } else {
             Ok(None)
         }
     }
 }
 impl<T: WasiView> terminal_stdout::Host for T {
-    fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
+    fn get_terminal_stdout(
+        &mut self,
+        table: &mut ResourceTable,
+    ) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stdout.isatty() {
-            let fd = self.table_mut().push(TerminalOutput)?;
-            Ok(Some(fd))
+            let r = table.push(TerminalOutput)?;
+            Ok(Some(r))
         } else {
             Ok(None)
         }
     }
 }
 impl<T: WasiView> terminal_stderr::Host for T {
-    fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
+    fn get_terminal_stderr(
+        &mut self,
+        table: &mut ResourceTable,
+    ) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stderr.isatty() {
-            let fd = self.table_mut().push(TerminalOutput)?;
-            Ok(Some(fd))
+            let r = table.push(TerminalOutput)?;
+            Ok(Some(r))
         } else {
             Ok(None)
         }

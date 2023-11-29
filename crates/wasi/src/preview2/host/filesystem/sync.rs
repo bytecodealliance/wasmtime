@@ -384,10 +384,8 @@ impl<T: async_filesystem::HostDirectoryEntryStream> sync_filesystem::HostDirecto
         stream: Resource<sync_filesystem::DirectoryEntryStream>,
     ) -> FsResult<Option<sync_filesystem::DirectoryEntry>> {
         Ok(in_tokio(async {
-            async_filesystem::HostDirectoryEntryStream::read_directory_entry(
-                self, table, table, stream,
-            )
-            .await
+            async_filesystem::HostDirectoryEntryStream::read_directory_entry(self, table, stream)
+                .await
         })?
         .map(|e| e.into()))
     }
