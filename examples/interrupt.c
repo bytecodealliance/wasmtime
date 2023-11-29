@@ -19,8 +19,8 @@ to tweak the `-lpthread` and such annotations as well as the name of the
 
 You can also build using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target
-wasmtime-interrupt
+mkdir build && cd build && cmake .. && \
+  cmake --build . --target wasmtime-interrupt
 */
 
 #include <assert.h>

@@ -17,8 +17,8 @@ to tweak the `-lpthread` and such annotations.
 
 You can also build using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target
-wasmtime-multimemory
+mkdir build && cd build && cmake .. && \
+  cmake --build . --target wasmtime-multimemory
 */
 
 #include <inttypes.h>
