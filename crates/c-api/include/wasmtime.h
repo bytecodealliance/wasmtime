@@ -181,6 +181,7 @@
 #define WASMTIME_API_H
 
 #include <wasi.h>
+// clang-format off
 // IWYU pragma: begin_exports
 #include <wasmtime/config.h>
 #include <wasmtime/engine.h>
@@ -198,6 +199,7 @@
 #include <wasmtime/val.h>
 #include <wasmtime/async.h>
 // IWYU pragma: end_exports
+// clang-format on
 
 /**
  * \brief Wasmtime version string.
