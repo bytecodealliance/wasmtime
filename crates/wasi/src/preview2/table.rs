@@ -115,16 +115,16 @@ impl Table {
 
     /// Pop an index off of the free list, if it's not empty.
     fn pop_free_list(&mut self) -> Option<usize> {
-        let res = self.free_head;
-        if let Some(ix) = res {
+        if let Some(ix) = self.free_head {
             // Advance free_head to the next entry if one is available.
             match &self.entries[ix] {
                 Entry::Free { next } => self.free_head = *next,
                 Entry::Occupied { .. } => unreachable!(),
             }
+            Some(ix)
+        } else {
+            None
         }
-
-        res
     }
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
