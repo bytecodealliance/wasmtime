@@ -276,13 +276,10 @@ impl Table {
     ) -> impl Iterator<Item = (Result<&'a mut dyn Any, TableError>, T)> {
         map.into_iter().map(move |(k, v)| {
             let item = self
-                .entries
-                .get_mut(k as usize)
-                .and_then(Entry::occupied_mut)
+                .occupied_mut(k)
                 .map(|e| Box::as_mut(&mut e.entry))
                 // Safety: extending the lifetime of the mutable reference.
-                .map(|item| unsafe { &mut *(item as *mut dyn Any) })
-                .ok_or(TableError::NotPresent);
+                .map(|item| unsafe { &mut *(item as *mut dyn Any) });
             (item, v)
         })
     }
