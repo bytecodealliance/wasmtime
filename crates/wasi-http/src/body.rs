@@ -300,6 +300,9 @@ pub enum HostFutureTrailers {
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
     Done(Result<Option<FieldMap>, types::ErrorCode>),
+
+    /// Trailers have been consumed by `future-trailers.get`.
+    Consumed,
 }
 
 #[async_trait::async_trait]
@@ -308,6 +311,7 @@ impl Subscribe for HostFutureTrailers {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
             HostFutureTrailers::Done(_) => return,
+            HostFutureTrailers::Consumed => return,
         };
 
         // If the body is itself being read by a body stream then we need to
@@ -337,6 +341,7 @@ impl Subscribe for HostFutureTrailers {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
             HostFutureTrailers::Done(_) => return,
+            HostFutureTrailers::Consumed => return,
         };
         let hyper_body = match &mut body.body {
             IncomingBodyState::Start(body) => body,
