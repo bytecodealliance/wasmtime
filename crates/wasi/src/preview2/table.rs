@@ -222,19 +222,11 @@ impl Table {
         T: Send + Sync + 'static,
         U: 'static,
     {
-        let idx = self.push_child_(Box::new(entry), parent.rep())?;
-        Ok(Resource::new_own(idx))
-    }
-
-    fn push_child_(
-        &mut self,
-        entry: Box<dyn Any + Send + Sync>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
+        let parent = parent.rep();
         self.occupied(parent)?;
-        let child = self.push_(TableEntry::new(entry, Some(parent)))?;
+        let child = self.push_(TableEntry::new(Box::new(entry), Some(parent)))?;
         self.occupied_mut(parent)?.add_child(child);
-        Ok(child)
+        Ok(Resource::new_own(child))
     }
 
     /// Get an immutable reference to a resource of a given type at a given
