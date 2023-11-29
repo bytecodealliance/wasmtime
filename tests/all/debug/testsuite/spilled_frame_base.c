@@ -4,7 +4,8 @@ void func_12(int x, int y, int z, int a, int b, int c, int d, int e, int f, int 
 void func_13(int x, int y, int z, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) { }
 void func_14(int x, int y, int z, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, int k) { }
 
-int main() {
+int main()
+{
     int i = 1;
 
     func_11(55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65);

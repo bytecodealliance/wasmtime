@@ -3,9 +3,10 @@
 //     -O0 -nostdlib -fdebug-prefix-map=$PWD=.
 #include <stdlib.h>
 
-void reverse(char *s, size_t len)
+void reverse(char* s, size_t len)
 {
-    if (!len) return;
+    if (!len)
+        return;
     size_t i = 0, j = len - 1;
     while (i < j) {
         char t = s[i];
