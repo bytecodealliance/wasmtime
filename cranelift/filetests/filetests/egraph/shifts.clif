@@ -651,9 +651,9 @@ block0(v0: i8):
     return v4
 }
 
-; check: v11 = iconst.i8 2
-; check: v13 = rotr v0, v11  ; v11 = 2
-; check: return v13
+; check: v6 = iconst.i8 2
+; check: v12 = rotr v0, v6  ; v6 = 2
+; check: return v12
 
 function %rotr_rotr_add(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
@@ -675,9 +675,9 @@ block0(v0: i8):
     return v4
 }
 
-; check: v11 = iconst.i8 2
-; check: v13 = rotl v0, v11  ; v11 = 2
-; check: return v13
+; check: v6 = iconst.i8 2
+; check: v12 = rotl v0, v6  ; v6 = 2
+; check: return v12
 
 function %rotl_rotl_add(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):

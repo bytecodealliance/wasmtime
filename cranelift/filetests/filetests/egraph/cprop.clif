@@ -9,8 +9,8 @@ block0:
     return v2
 }
 
-; check: v9 = iconst.i8 41
-; nextln: return v9
+; check: v3 = iconst.i8 41
+; nextln: return v3
 
 function %f1() -> i16 {
 block0:
