@@ -19,6 +19,8 @@ pub struct CodegenSettings {
     /// Determine whether the context structure will use `&mut self` (true) or
     /// simply `&self`.
     pub mutable: bool,
+    /// Do
+    pub resource_table: bool,
 }
 impl CodegenSettings {
     pub fn new(
@@ -28,6 +30,7 @@ impl CodegenSettings {
         wasmtime: bool,
         tracing: &TracingConf,
         mutable: bool,
+        resource_table: bool,
     ) -> Result<Self, Error> {
         let errors = ErrorTransform::new(error_conf, doc)?;
         Ok(Self {
@@ -36,6 +39,7 @@ impl CodegenSettings {
             wasmtime,
             tracing: tracing.clone(),
             mutable,
+            resource_table,
         })
     }
     pub fn get_async(&self, module: &Module, func: &InterfaceFunc) -> Asyncness {

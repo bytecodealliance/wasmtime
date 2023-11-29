@@ -17,6 +17,7 @@ pub struct Config {
     pub wasmtime: bool,
     pub tracing: TracingConf,
     pub mutable: bool,
+    pub resource_table: bool,
 }
 
 mod kw {
@@ -30,6 +31,7 @@ mod kw {
     syn::custom_keyword!(tracing);
     syn::custom_keyword!(disable_for);
     syn::custom_keyword!(trappable);
+    syn::custom_keyword!(resource_table);
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +42,7 @@ pub enum ConfigField {
     Wasmtime(bool),
     Tracing(TracingConf),
     Mutable(bool),
+    ResourceTable(bool),
 }
 
 impl Parse for ConfigField {
@@ -90,6 +93,12 @@ impl Parse for ConfigField {
             input.parse::<kw::mutable>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Mutable(input.parse::<syn::LitBool>()?.value))
+        } else if lookahead.peek(kw::resource_table) {
+            input.parse::<kw::resource_table>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::ResourceTable(
+                input.parse::<syn::LitBool>()?.value,
+            ))
         } else {
             Err(lookahead.error())
         }
@@ -104,6 +113,7 @@ impl Config {
         let mut wasmtime = None;
         let mut tracing = None;
         let mut mutable = None;
+        let mut resource_table = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -142,6 +152,12 @@ impl Config {
                     }
                     mutable = Some(c);
                 }
+                ConfigField::ResourceTable(c) => {
+                    if resource_table.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `resource_table` field"));
+                    }
+                    resource_table = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -153,6 +169,7 @@ impl Config {
             wasmtime: wasmtime.unwrap_or(true),
             tracing: tracing.unwrap_or_default(),
             mutable: mutable.unwrap_or(true),
+            resource_table: mutable.unwrap_or_default(),
         })
     }
 
