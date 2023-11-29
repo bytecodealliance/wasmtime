@@ -1478,7 +1478,7 @@
  * \fn size_t wasm_func_result_arity(const wasm_func_t *);
  * \brief Returns the number of results returned by this function.
  *
-* \fn wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
+ * \fn wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
  * \brief Calls the provided function with the arguments given.
  *
  * This function is used to call WebAssembly from the host. The parameter array

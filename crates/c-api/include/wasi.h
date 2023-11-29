@@ -7,8 +7,8 @@
 #ifndef WASI_H
 #define WASI_H
 
-#include <stdint.h>
 #include "wasm.h"
+#include <stdint.h>
 
 #ifndef WASI_API_EXTERN
 #ifdef _WIN32
@@ -24,9 +24,9 @@ extern "C" {
 
 #define own
 
-#define WASI_DECLARE_OWN(name) \
-  typedef struct wasi_##name##_t wasi_##name##_t; \
-  WASI_API_EXTERN void wasi_##name##_delete(own wasi_##name##_t*);
+#define WASI_DECLARE_OWN(name)                      \
+    typedef struct wasi_##name##_t wasi_##name##_t; \
+    WASI_API_EXTERN void wasi_##name##_delete(own wasi_##name##_t*);
 
 /**
  * \typedef wasi_config_t
@@ -173,7 +173,7 @@ WASI_API_EXTERN bool wasi_config_preopen_socket(wasi_config_t* config, uint32_t 
 #undef own
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
-#endif  // #ifdef WASI_H
+#endif // #ifdef WASI_H

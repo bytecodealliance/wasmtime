@@ -24,10 +24,10 @@ extern "C" {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_instance {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Internal index within the store.
+    size_t index;
 } wasmtime_instance_t;
 
 /**
@@ -62,14 +62,13 @@ typedef struct wasmtime_instance {
  * This function does not take ownership of any of its arguments, but all return
  * values are owned by the caller.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_new(
-    wasmtime_context_t *store,
-    const wasmtime_module_t *module,
+WASM_API_EXTERN wasmtime_error_t* wasmtime_instance_new(
+    wasmtime_context_t* store,
+    const wasmtime_module_t* module,
     const wasmtime_extern_t* imports,
     size_t nimports,
-    wasmtime_instance_t *instance,
-    wasm_trap_t **trap
-);
+    wasmtime_instance_t* instance,
+    wasm_trap_t** trap);
 
 /**
  * \brief Get an export by name from an instance.
@@ -87,12 +86,11 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_new(
  * #wasmtime_extern_t.
  */
 WASM_API_EXTERN bool wasmtime_instance_export_get(
-    wasmtime_context_t *store,
-    const wasmtime_instance_t *instance,
-    const char *name,
+    wasmtime_context_t* store,
+    const wasmtime_instance_t* instance,
+    const char* name,
     size_t name_len,
-    wasmtime_extern_t *item
-);
+    wasmtime_extern_t* item);
 
 /**
  * \brief Get an export by index from an instance.
@@ -113,13 +111,12 @@ WASM_API_EXTERN bool wasmtime_instance_export_get(
  * #wasmtime_context_t.
  */
 WASM_API_EXTERN bool wasmtime_instance_export_nth(
-    wasmtime_context_t *store,
-    const wasmtime_instance_t *instance,
+    wasmtime_context_t* store,
+    const wasmtime_instance_t* instance,
     size_t index,
-    char **name,
-    size_t *name_len,
-    wasmtime_extern_t *item
-);
+    char** name,
+    size_t* name_len,
+    wasmtime_extern_t* item);
 
 /**
  * \brief A #wasmtime_instance_t, pre-instantiation, that is ready to be instantiated.
@@ -135,7 +132,7 @@ typedef struct wasmtime_instance_pre wasmtime_instance_pre_t;
  * \brief Delete a previously created wasmtime_instance_pre_t.
  */
 WASM_API_EXTERN void
-wasmtime_instance_pre_delete(wasmtime_instance_pre_t *instance_pre);
+wasmtime_instance_pre_delete(wasmtime_instance_pre_t* instance_pre);
 
 /**
  * \brief Instantiates instance within the given store.
@@ -162,9 +159,9 @@ wasmtime_instance_pre_delete(wasmtime_instance_pre_t *instance_pre);
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_instance_pre_instantiate(
     const wasmtime_instance_pre_t* instance_pre,
-    wasmtime_store_t *store,
+    wasmtime_store_t* store,
     wasmtime_instance_t* instance,
-    wasm_trap_t **trap_ptr);
+    wasm_trap_t** trap_ptr);
 
 /**
  * \brief Get the module (as a shallow clone) for a instance_pre.
@@ -173,10 +170,10 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_instance_pre_instantiate(
  * delete it via `wasmtime_module_delete`.
  */
 WASM_API_EXTERN wasmtime_module_t*
-wasmtime_instance_pre_module(wasmtime_instance_pre_t *instance_pre);
+wasmtime_instance_pre_module(wasmtime_instance_pre_t* instance_pre);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_INSTANCE_H

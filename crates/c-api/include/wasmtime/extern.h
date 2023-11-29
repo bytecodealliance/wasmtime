@@ -22,10 +22,10 @@ extern "C" {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_func {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Internal index within the store.
+    size_t index;
 } wasmtime_func_t;
 
 /// \brief Representation of a table in Wasmtime.
@@ -36,10 +36,10 @@ typedef struct wasmtime_func {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_table {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Internal index within the store.
+    size_t index;
 } wasmtime_table_t;
 
 /// \brief Representation of a memory in Wasmtime.
@@ -50,10 +50,10 @@ typedef struct wasmtime_table {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_memory {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Internal index within the store.
+    size_t index;
 } wasmtime_memory_t;
 
 /// \brief Representation of a global in Wasmtime.
@@ -64,10 +64,10 @@ typedef struct wasmtime_memory {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_global {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Internal index within the store.
+    size_t index;
 } wasmtime_global_t;
 
 /// \brief Discriminant of #wasmtime_extern_t
@@ -128,18 +128,17 @@ typedef struct wasmtime_extern {
 } wasmtime_extern_t;
 
 /// \brief Deletes a #wasmtime_extern_t.
-void wasmtime_extern_delete(wasmtime_extern_t *val);
+void wasmtime_extern_delete(wasmtime_extern_t* val);
 
 /// \brief Returns the type of the #wasmtime_extern_t defined within the given
 /// store.
 ///
 /// Does not take ownership of `context` or `val`, but the returned
 /// #wasm_externtype_t is an owned value that needs to be deleted.
-wasm_externtype_t *wasmtime_extern_type(wasmtime_context_t *context, wasmtime_extern_t *val);
+wasm_externtype_t* wasmtime_extern_type(wasmtime_context_t* context, wasmtime_extern_t* val);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_EXTERN_H
-

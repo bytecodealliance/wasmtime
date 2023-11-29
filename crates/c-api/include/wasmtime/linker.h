@@ -9,8 +9,8 @@
 
 #include <wasm.h>
 #include <wasmtime/error.h>
-#include <wasmtime/store.h>
 #include <wasmtime/extern.h>
+#include <wasmtime/store.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,14 +73,13 @@ WASM_API_EXTERN void wasmtime_linker_allow_shadowing(wasmtime_linker_t* linker, 
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define(
-    wasmtime_linker_t *linker,
-    wasmtime_context_t *store,
-    const char *module,
+    wasmtime_linker_t* linker,
+    wasmtime_context_t* store,
+    const char* module,
     size_t module_len,
-    const char *name,
+    const char* name,
     size_t name_len,
-    const wasmtime_extern_t *item
-);
+    const wasmtime_extern_t* item);
 
 /**
  * \brief Defines a new function in this linker.
@@ -108,16 +107,15 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define(
  * For more information about host callbacks see #wasmtime_func_new.
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func(
-    wasmtime_linker_t *linker,
-    const char *module,
+    wasmtime_linker_t* linker,
+    const char* module,
     size_t module_len,
-    const char *name,
+    const char* name,
     size_t name_len,
-    const wasm_functype_t *ty,
+    const wasm_functype_t* ty,
     wasmtime_func_callback_t cb,
-    void *data,
-    void (*finalizer)(void*)
-);
+    void* data,
+    void (*finalizer)(void*));
 
 /**
  * \brief Defines a new function in this linker.
@@ -129,16 +127,15 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func(
  * unsafe API.
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func_unchecked(
-    wasmtime_linker_t *linker,
-    const char *module,
+    wasmtime_linker_t* linker,
+    const char* module,
     size_t module_len,
-    const char *name,
+    const char* name,
     size_t name_len,
-    const wasm_functype_t *ty,
+    const wasm_functype_t* ty,
     wasmtime_func_unchecked_callback_t cb,
-    void *data,
-    void (*finalizer)(void*)
-);
+    void* data,
+    void (*finalizer)(void*));
 
 /**
  * \brief Defines WASI functions in this linker.
@@ -158,8 +155,7 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func_unchecked(
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_wasi(
-    wasmtime_linker_t *linker
-);
+    wasmtime_linker_t* linker);
 
 /**
  * \brief Defines an instance under the specified name in this linker.
@@ -181,12 +177,11 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_wasi(
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_instance(
-    wasmtime_linker_t *linker,
-    wasmtime_context_t *store,
-    const char *name,
+    wasmtime_linker_t* linker,
+    wasmtime_context_t* store,
+    const char* name,
     size_t name_len,
-    const wasmtime_instance_t *instance
-);
+    const wasmtime_instance_t* instance);
 
 /**
  * \brief Instantiates a #wasm_module_t with the items defined in this linker.
@@ -211,12 +206,11 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_instance(
  * defined item is of the wrong type).
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate(
-    const wasmtime_linker_t *linker,
-    wasmtime_context_t *store,
-    const wasmtime_module_t *module,
-    wasmtime_instance_t *instance,
-    wasm_trap_t **trap
-);
+    const wasmtime_linker_t* linker,
+    wasmtime_context_t* store,
+    const wasmtime_module_t* module,
+    wasmtime_instance_t* instance,
+    wasm_trap_t** trap);
 
 /**
  * \brief Defines automatic instantiations of a #wasm_module_t in this linker.
@@ -238,12 +232,11 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate(
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#method.module).
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_module(
-    wasmtime_linker_t *linker,
-    wasmtime_context_t *store,
-    const char *name,
+    wasmtime_linker_t* linker,
+    wasmtime_context_t* store,
+    const char* name,
     size_t name_len,
-    const wasmtime_module_t *module
-);
+    const wasmtime_module_t* module);
 
 /**
  * \brief Acquires the "default export" of the named module in this linker.
@@ -261,12 +254,11 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_module(
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#method.get_default).
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_get_default(
-    const wasmtime_linker_t *linker,
-    wasmtime_context_t *store,
-    const char *name,
+    const wasmtime_linker_t* linker,
+    wasmtime_context_t* store,
+    const char* name,
     size_t name_len,
-    wasmtime_func_t *func
-);
+    wasmtime_func_t* func);
 
 /**
  * \brief Loads an item by name from this linker.
@@ -283,14 +275,13 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_get_default(
  * filled in. Otherwise zero is returned.
  */
 WASM_API_EXTERN bool wasmtime_linker_get(
-    const wasmtime_linker_t *linker,
-    wasmtime_context_t *store,
-    const char *module,
+    const wasmtime_linker_t* linker,
+    wasmtime_context_t* store,
+    const char* module,
     size_t module_len,
-    const char *name,
+    const char* name,
     size_t name_len,
-    wasmtime_extern_t *item
-);
+    wasmtime_extern_t* item);
 
 /**
  * \brief Preform all the checks for instantiating `module` with the linker,
@@ -306,12 +297,12 @@ WASM_API_EXTERN bool wasmtime_linker_get(
  * https://docs.wasmtime.dev/api/wasmtime/struct.Linker.html#method.instantiate_pre
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate_pre(
-    const wasmtime_linker_t *linker,
-    const wasmtime_module_t *module,
-    wasmtime_instance_pre_t **instance_pre);
+    const wasmtime_linker_t* linker,
+    const wasmtime_module_t* module,
+    wasmtime_instance_pre_t** instance_pre);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_LINKER_H

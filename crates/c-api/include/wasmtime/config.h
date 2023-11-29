@@ -26,13 +26,13 @@ typedef uint8_t wasmtime_strategy_t;
  * The default value is #WASMTIME_STRATEGY_AUTO.
  */
 enum wasmtime_strategy_enum { // Strategy
-  /// Automatically picks the compilation backend, currently always defaulting
-  /// to Cranelift.
-  WASMTIME_STRATEGY_AUTO,
+    /// Automatically picks the compilation backend, currently always defaulting
+    /// to Cranelift.
+    WASMTIME_STRATEGY_AUTO,
 
-  /// Indicates that Wasmtime will unconditionally use Cranelift to compile
-  /// WebAssembly code.
-  WASMTIME_STRATEGY_CRANELIFT,
+    /// Indicates that Wasmtime will unconditionally use Cranelift to compile
+    /// WebAssembly code.
+    WASMTIME_STRATEGY_CRANELIFT,
 };
 
 /**
@@ -48,13 +48,13 @@ typedef uint8_t wasmtime_opt_level_t;
  * The default value is #WASMTIME_OPT_LEVEL_SPEED.
  */
 enum wasmtime_opt_level_enum { // OptLevel
-  /// Generated code will not be optimized at all.
-  WASMTIME_OPT_LEVEL_NONE,
-  /// Generated code will be optimized purely for speed.
-  WASMTIME_OPT_LEVEL_SPEED,
-  /// Generated code will be optimized, but some speed optimizations are
-  /// disabled if they cause the generated code to be significantly larger.
-  WASMTIME_OPT_LEVEL_SPEED_AND_SIZE,
+    /// Generated code will not be optimized at all.
+    WASMTIME_OPT_LEVEL_NONE,
+    /// Generated code will be optimized purely for speed.
+    WASMTIME_OPT_LEVEL_SPEED,
+    /// Generated code will be optimized, but some speed optimizations are
+    /// disabled if they cause the generated code to be significantly larger.
+    WASMTIME_OPT_LEVEL_SPEED_AND_SIZE,
 };
 
 /**
@@ -70,20 +70,20 @@ typedef uint8_t wasmtime_profiling_strategy_t;
  * The default is #WASMTIME_PROFILING_STRATEGY_NONE.
  */
 enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
-  /// No profiling is enabled at runtime.
-  WASMTIME_PROFILING_STRATEGY_NONE,
-  /// Linux's "jitdump" support in `perf` is enabled and when Wasmtime is run
-  /// under `perf` necessary calls will be made to profile generated JIT code.
-  WASMTIME_PROFILING_STRATEGY_JITDUMP,
-  /// Support for VTune will be enabled and the VTune runtime will be informed,
-  /// at runtime, about JIT code.
-  ///
-  /// Note that this isn't always enabled at build time.
-  WASMTIME_PROFILING_STRATEGY_VTUNE,
-  /// Linux's simple "perfmap" support in `perf` is enabled and when Wasmtime is
-  /// run under `perf` necessary calls will be made to profile generated JIT
-  /// code.
-  WASMTIME_PROFILING_STRATEGY_PERFMAP,
+    /// No profiling is enabled at runtime.
+    WASMTIME_PROFILING_STRATEGY_NONE,
+    /// Linux's "jitdump" support in `perf` is enabled and when Wasmtime is run
+    /// under `perf` necessary calls will be made to profile generated JIT code.
+    WASMTIME_PROFILING_STRATEGY_JITDUMP,
+    /// Support for VTune will be enabled and the VTune runtime will be informed,
+    /// at runtime, about JIT code.
+    ///
+    /// Note that this isn't always enabled at build time.
+    WASMTIME_PROFILING_STRATEGY_VTUNE,
+    /// Linux's simple "perfmap" support in `perf` is enabled and when Wasmtime is
+    /// run under `perf` necessary calls will be made to profile generated JIT
+    /// code.
+    WASMTIME_PROFILING_STRATEGY_PERFMAP,
 };
 
 #define WASMTIME_CONFIG_PROP(ret, name, ty) \
@@ -365,7 +365,7 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_enable(wasm_config_t*, const
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.cranelift_flag_set
  */
-WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const char *key, const char *value);
+WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const char* key, const char* value);
 
 /**
  * \brief Configures whether, when on macOS, Mach ports are used for exception handling
@@ -378,7 +378,6 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const ch
  */
 WASMTIME_CONFIG_PROP(void, macos_use_mach_ports, bool)
 
-
 /**
  * Return the data from a LinearMemory instance.
  *
@@ -388,10 +387,10 @@ WASMTIME_CONFIG_PROP(void, macos_use_mach_ports, bool)
  * For more information about see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
  */
-typedef uint8_t *(*wasmtime_memory_get_callback_t)(
-    void *env,
-    size_t *byte_size,
-    size_t *maximum_byte_size);
+typedef uint8_t* (*wasmtime_memory_get_callback_t)(
+    void* env,
+    size_t* byte_size,
+    size_t* maximum_byte_size);
 
 /**
  * Grow the memory to the `new_size` in bytes.
@@ -399,8 +398,8 @@ typedef uint8_t *(*wasmtime_memory_get_callback_t)(
  * For more information about the parameters see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html#tymethod.grow_to
  */
-typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
-    void *env,
+typedef wasmtime_error_t* (*wasmtime_memory_grow_callback_t)(
+    void* env,
     size_t new_size);
 
 /**
@@ -410,14 +409,14 @@ typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
  */
 typedef struct wasmtime_linear_memory {
-  /// User provided value to be passed to get_memory and grow_memory
-  void *env;
-  /// Callback to get the memory and size of this LinearMemory
-  wasmtime_memory_get_callback_t get_memory;
-  /// Callback to request growing the memory
-  wasmtime_memory_grow_callback_t grow_memory;
-  /// An optional finalizer for env
-  void (*finalizer)(void*);
+    /// User provided value to be passed to get_memory and grow_memory
+    void* env;
+    /// Callback to get the memory and size of this LinearMemory
+    wasmtime_memory_get_callback_t get_memory;
+    /// Callback to request growing the memory
+    wasmtime_memory_grow_callback_t grow_memory;
+    /// An optional finalizer for env
+    void (*finalizer)(void*);
 } wasmtime_linear_memory_t;
 
 /**
@@ -431,14 +430,14 @@ typedef struct wasmtime_linear_memory {
  * For more information about the parameters see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html#tymethod.new_memory
  */
-typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
-    void *env,
-    const wasm_memorytype_t *ty,
+typedef wasmtime_error_t* (*wasmtime_new_memory_callback_t)(
+    void* env,
+    const wasm_memorytype_t* ty,
     size_t minimum,
     size_t maximum,
     size_t reserved_size_in_bytes,
     size_t guard_size_in_bytes,
-    wasmtime_linear_memory_t *memory_ret);
+    wasmtime_linear_memory_t* memory_ret);
 
 /**
  * A representation of custom memory creator and methods for an instance of LinearMemory.
@@ -447,12 +446,12 @@ typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
  * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html
  */
 typedef struct wasmtime_memory_creator {
-  /// User provided value to be passed to new_memory
-  void* env;
-  /// The callback to create new memory, must be thread safe
-  wasmtime_new_memory_callback_t new_memory;
-  /// An optional finalizer for env.
-  void (*finalizer)(void*);
+    /// User provided value to be passed to new_memory
+    void* env;
+    /// The callback to create new memory, must be thread safe
+    wasmtime_new_memory_callback_t new_memory;
+    /// An optional finalizer for env.
+    void (*finalizer)(void*);
 } wasmtime_memory_creator_t;
 
 /**
@@ -488,8 +487,7 @@ WASM_API_EXTERN void wasmtime_config_host_memory_creator_set(
 WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_CONFIG_H
-
