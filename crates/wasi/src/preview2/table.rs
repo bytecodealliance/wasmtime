@@ -25,7 +25,6 @@ pub enum TableError {
 pub struct Table {
     entries: Vec<Entry>,
     free_head: Option<usize>,
-    free_tail: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -90,15 +89,9 @@ impl TableEntry {
 impl Table {
     /// Create an empty table
     pub fn new() -> Self {
-        // TODO: what's a good default here?
-        Table::with_capacity(100)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
         Table {
-            entries: Vec::with_capacity(capacity),
+            entries: Vec::new(),
             free_head: None,
-            free_tail: None,
         }
     }
 
@@ -112,21 +105,13 @@ impl Table {
         Ok(Resource::new_own(idx))
     }
 
-    /// Pop an index off of the free queue, if it's not empty.
-    fn pop_free_queue(&mut self) -> Option<usize> {
+    /// Pop an index off of the free list, if it's not empty.
+    fn pop_free_list(&mut self) -> Option<usize> {
         let res = self.free_head;
         if let Some(ix) = res {
             // Advance free_head to the next entry if one is available.
             match &self.entries[ix] {
-                Entry::Free { next: Some(next) } => {
-                    self.free_head.replace(*next);
-                }
-
-                Entry::Free { next: None } => {
-                    self.free_head = None;
-                    self.free_tail = None;
-                }
-
+                Entry::Free { next } => self.free_head = *next,
                 Entry::Occupied { .. } => unreachable!(),
             }
         }
@@ -134,48 +119,35 @@ impl Table {
         res
     }
 
+    /// Free an entry in the table, returning its entry. Add the entry to the free list.
     fn free_entry(&mut self, ix: usize) -> TableEntry {
-        if let Some(tail) = self.free_tail {
-            debug_assert!(self.free_head.is_some());
-            let tail = &mut self.entries[tail];
-            match tail {
-                Entry::Free { next } => {
-                    debug_assert!(next.is_none());
-                    next.replace(ix);
-                }
-
-                Entry::Occupied { .. } => unreachable!(),
-            }
-        } else {
-            debug_assert!(self.free_head.is_none());
-            self.free_head.replace(ix);
-        }
-
-        let entry = match std::mem::replace(&mut self.entries[ix], Entry::Free { next: None }) {
+        let entry = match std::mem::replace(
+            &mut self.entries[ix],
+            Entry::Free {
+                next: self.free_head,
+            },
+        ) {
             Entry::Occupied { entry } => entry,
             Entry::Free { .. } => unreachable!(),
         };
 
-        self.free_tail = Some(ix);
+        self.free_head = Some(ix);
 
         entry
     }
 
-    /// Push a new entry into the table, returning its handle. The following strategy is used:
-    /// 1. if there's capacity in the vector, push a new entry at the end,
-    /// 2. if the free queue is non-empty, use the entry at the head of the queue,
-    /// 3. finally, grow the vector and push on the end.
+    /// Push a new entry into the table, returning its handle. This will prefer to use free entries
+    /// if they exist, falling back on pushing new entries onto the end of the table.
     fn push_(&mut self, e: TableEntry) -> Result<u32, TableError> {
-        let len = self.entries.len();
-        if len < self.entries.capacity() {
-            let ix = len.try_into().map_err(|_| TableError::Full)?;
-            self.entries.push(Entry::Occupied { entry: e });
-            Ok(ix)
-        } else if let Some(free) = self.pop_free_queue() {
+        if let Some(free) = self.pop_free_list() {
             self.entries[free] = Entry::Occupied { entry: e };
             Ok(free as u32)
         } else {
-            let ix = len.try_into().map_err(|_| TableError::Full)?;
+            let ix = self
+                .entries
+                .len()
+                .try_into()
+                .map_err(|_| TableError::Full)?;
             self.entries.push(Entry::Occupied { entry: e });
             Ok(ix)
         }
@@ -330,8 +302,8 @@ impl Default for Table {
 }
 
 #[test]
-pub fn test_free_queue() {
-    let mut table = Table::with_capacity(0);
+pub fn test_free_list() {
+    let mut table = Table::new();
 
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
@@ -339,23 +311,14 @@ pub fn test_free_queue() {
     let y = table.push(()).unwrap();
     assert_eq!(y.rep(), 1);
 
-    let start = y.rep() + 1;
-    let end = table.entries.capacity() as u32;
-
-    for i in start..end {
-        let x = table.push(()).unwrap();
-        assert_eq!(x.rep(), i);
-        assert_eq!(table.entries.capacity() as u32, end);
-    }
-
-    // Deleting x should put it on the free queue, so the next entry should have the same rep.
+    // Deleting x should put it on the free list, so the next entry should have the same rep.
     table.delete(x).unwrap();
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
 
-    // Deleting y and then x should yield indices 1 and then 0.
+    // Deleting x and then y should yield indices 1 and then 0 for new entries.
+    table.delete(x).unwrap();
     table.delete(y).unwrap();
-    table.delete(x).unwrap();
 
     let y = table.push(()).unwrap();
     assert_eq!(y.rep(), 1);
@@ -363,8 +326,7 @@ pub fn test_free_queue() {
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
 
-    // As the vector is at capacity, this new entry should force it to grow, making the next entry
-    // the previous capacity.
+    // As the free list is empty, this entry will have a new id.
     let x = table.push(()).unwrap();
-    assert_eq!(x.rep(), end);
+    assert_eq!(x.rep(), 2);
 }
