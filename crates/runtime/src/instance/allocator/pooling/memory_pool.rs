@@ -703,7 +703,8 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         // 3`), we will run into failures if we attempt to set up more than
         // three stripes.
         let needed_num_stripes =
-            slot_bytes / max_memory_bytes + usize::from(slot_bytes % max_memory_bytes != 0) + 1;
+            slot_bytes / max_memory_bytes + usize::from(slot_bytes % max_memory_bytes != 0);
+        assert!(needed_num_stripes > 0);
         let num_stripes = num_pkeys_available.min(needed_num_stripes).min(num_slots);
 
         // Next, we try to reduce the slot size by "overlapping" the stripes: we
