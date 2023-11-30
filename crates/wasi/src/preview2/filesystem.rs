@@ -1,7 +1,6 @@
 use crate::preview2::bindings::filesystem::types;
 use crate::preview2::{
-    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe, TableError,
-    TrappableError,
+    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe, TrappableError,
 };
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
@@ -13,8 +12,8 @@ pub type FsResult<T> = Result<T, FsError>;
 
 pub type FsError = TrappableError<types::ErrorCode>;
 
-impl From<TableError> for FsError {
-    fn from(error: TableError) -> Self {
+impl From<wasmtime::component::ResourceTableError> for FsError {
+    fn from(error: wasmtime::component::ResourceTableError) -> Self {
         Self::trap(error)
     }
 }
