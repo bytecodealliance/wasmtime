@@ -14,8 +14,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use wasmtime::component::Resource;
-use wasmtime_wasi::preview2::{self, AbortOnDropJoinHandle, Subscribe, Table};
+use wasmtime::component::{Resource, ResourceTable};
+use wasmtime_wasi::preview2::{self, AbortOnDropJoinHandle, Subscribe};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;
@@ -31,7 +31,7 @@ pub struct OutgoingRequest {
 
 pub trait WasiHttpView: Send {
     fn ctx(&mut self) -> &mut WasiHttpCtx;
-    fn table(&mut self) -> &mut Table;
+    fn table(&mut self) -> &mut ResourceTable;
 
     fn new_incoming_request(
         &mut self,
