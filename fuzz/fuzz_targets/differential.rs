@@ -5,6 +5,7 @@ use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
+use wasmparser::ValType;
 use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
@@ -283,12 +284,28 @@ impl RuntimeStats {
 fn winch_supports_module(module: &[u8]) -> bool {
     use wasmparser::{Operator::*, Parser, Payload};
 
+    fn is_type_supported(ty: &ValType) -> bool {
+        match ty {
+            ValType::V128 => false,
+            ValType::Ref(r) => r.is_func_ref(),
+            _ => true,
+        }
+    }
+
     let mut supported = true;
     let mut parser = Parser::new(0).parse_all(module);
 
     'main: while let Some(payload) = parser.next() {
         match payload.unwrap() {
             Payload::CodeSectionEntry(body) => {
+                let local_reader = body.get_locals_reader().unwrap();
+                for local in local_reader {
+                    let (_, ty) = local.unwrap();
+                    if !is_type_supported(&ty) {
+                        supported = false;
+                        break 'main;
+                    }
+                }
                 let op_reader = body.get_operators_reader().unwrap();
                 for op in op_reader {
                     match op.unwrap() {
@@ -416,6 +433,37 @@ fn winch_supports_module(module: &[u8]) -> bool {
                             supported = false;
                             break 'main;
                         }
+                    }
+                }
+            }
+            Payload::TypeSection(section) => {
+                for ty in section.into_iter_err_on_gc_types() {
+                    if let Ok(t) = ty {
+                        for p in t.params().iter().chain(t.results()) {
+                            if !is_type_supported(p) {
+                                supported = false;
+                                break 'main;
+                            }
+                        }
+                    } else {
+                        supported = false;
+                        break 'main;
+                    }
+                }
+            }
+            Payload::GlobalSection(section) => {
+                for global in section {
+                    if !is_type_supported(&global.unwrap().ty.content_type) {
+                        supported = false;
+                        break 'main;
+                    }
+                }
+            }
+            Payload::TableSection(section) => {
+                for t in section {
+                    if !t.unwrap().ty.element_type.is_func_ref() {
+                        supported = false;
+                        break 'main;
                     }
                 }
             }
