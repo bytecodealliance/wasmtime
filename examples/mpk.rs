@@ -39,7 +39,7 @@ use std::str::FromStr;
 use wasmtime::*;
 
 fn main() -> Result<()> {
-    drop(env_logger::try_init());
+    env_logger::init();
     let args = Args::parse();
     info!("{:?}", args);
 
