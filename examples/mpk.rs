@@ -20,10 +20,10 @@
 //! $ RUST_LOG=debug cargo run --example mpk -- --memory-size 512MiB
 //! ```
 //!
-//! Note that OS limits on the number of virtual memory areas (VMAs) can
-//! significantly restrict the total number MPK-striped memory slots; each
-//! MPK-protected slot ends up using a new VMA entry. On Linux, one can raise
-//! this limit:
+//! Note that MPK support is limited to x86 Linux systems. OS limits on the
+//! number of virtual memory areas (VMAs) can significantly restrict the total
+//! number MPK-striped memory slots; each MPK-protected slot ends up using a new
+//! VMA entry. On Linux, one can raise this limit:
 //!
 //! ```console
 //! $ sysctl vm.max_map_count
