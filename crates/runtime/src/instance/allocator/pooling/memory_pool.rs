@@ -92,21 +92,21 @@ struct Stripe {
 
 /// Represents a pool of WebAssembly linear memories.
 ///
-/// A linear memory is divided into accessible pages and guard pages.
-///
-/// A diagram for this struct's fields is:
+/// A linear memory is divided into accessible pages and guard pages. A memory
+/// pool contains linear memories: each memory occupies a slot in an
+/// allocated slab (i.e., `mapping`):
 ///
 /// ```text
 ///          layout.max_memory_bytes                 layout.slot_bytes
 ///                    |                                   |
-///              <-----+---->                  <-----------+----------->
-/// +-----------+------------+-----------+     +--------+---+-----------+-----------+
-/// | PROT_NONE |            | PROT_NONE | ... |            | PROT_NONE | PROT_NONE |
-/// +-----------+------------+-----------+     +--------+---+-----------+-----------+
-/// |           |<------------------+----------------------------------> <----+---->
-/// \           |                    \                                        |
-///  mapping    |            `layout.num_slots` memories         layout.post_slab_guard_size
-///            /
+///              ◄─────┴────►                  ◄───────────┴──────────►
+/// ┌───────────┬────────────┬───────────┐     ┌───────────┬───────────┬───────────┐
+/// | PROT_NONE |            | PROT_NONE | ... |           | PROT_NONE | PROT_NONE |
+/// └───────────┴────────────┴───────────┘     └───────────┴───────────┴───────────┘
+/// |           |◄──────────────────┬─────────────────────────────────► ◄────┬────►
+/// |           |                   |                                        |
+/// mapping     |            `layout.num_slots` memories         layout.post_slab_guard_size
+///             |
 ///   layout.pre_slab_guard_size
 /// ```
 #[derive(Debug)]
@@ -275,7 +275,7 @@ impl MemoryPool {
         {
             match plan.style {
                 MemoryStyle::Static { bound } => {
-                    if u64::try_from(self.layout.pages_to_next_stripe_slot()).unwrap() < bound {
+                    if self.layout.pages_to_next_stripe_slot() < bound {
                         bail!(
                             "memory size allocated per-memory is too small to \
                              satisfy static bound of {bound:#x} pages"
@@ -341,9 +341,7 @@ impl MemoryPool {
             // but double-check here to be sure.
             match memory_plan.style {
                 MemoryStyle::Static { bound } => {
-                    let pages_to_next_stripe_slot =
-                        u64::try_from(self.layout.pages_to_next_stripe_slot()).unwrap();
-                    assert!(bound <= pages_to_next_stripe_slot);
+                    assert!(bound <= self.layout.pages_to_next_stripe_slot());
                 }
                 MemoryStyle::Dynamic { .. } => {}
             }
@@ -375,7 +373,7 @@ impl MemoryPool {
                 base_ptr,
                 base_capacity,
                 slot,
-                self.layout.slot_bytes,
+                self.layout.bytes_to_next_stripe_slot(),
                 unsafe { &mut *request.store.get().unwrap() },
             )
         })() {
@@ -595,17 +593,16 @@ struct SlabLayout {
     /// guard region after the memory to catch OOB access. On these guard
     /// regions, note that:
     /// - users can configure how aggressively (or not) to elide bounds checks
-    ///   via `Config::static_memory_guard_size`
+    ///   via `Config::static_memory_guard_size` (see also:
+    ///   `memory_and_guard_size`)
     /// - memory protection keys can compress the size of the guard region by
     ///   placing slots from a different key (i.e., a stripe) in the guard
     ///   region; this means the slot itself can be smaller and we can allocate
     ///   more of them.
     slot_bytes: usize,
-    // The maximum size that can become accessible, in bytes, for each linear
-    // memory. Guaranteed to be a whole number of wasm pages.
+    /// The maximum size that can become accessible, in bytes, for each linear
+    /// memory. Guaranteed to be a whole number of Wasm pages.
     max_memory_bytes: usize,
-    /// The total number of bytes to allocate for the memory pool slab.
-    // total_slab_bytes: usize,
     /// If necessary, the number of bytes to reserve as a guard region at the
     /// beginning of the slab.
     pre_slab_guard_bytes: usize,
@@ -632,7 +629,7 @@ impl SlabLayout {
             .ok_or_else(|| anyhow!("total size of memory reservation exceeds addressable memory"))
     }
 
-    /// Returns the number of Wasm pages from the beginning of one slot to the
+    /// Returns the number of Wasm bytes from the beginning of one slot to the
     /// next slot in the same stripe--this is the striped equivalent of
     /// `static_memory_bound`. Recall that between slots of the same stripe we
     /// will see a slot from every other stripe.
@@ -641,13 +638,20 @@ impl SlabLayout {
     /// from the beginning of slot 1 to slot 4, which are of the same stripe:
     ///
     /// ```text
+    ///  ◄────────────────────►
     /// ┌────────┬──────┬──────┬────────┬───┐
     /// │*slot 1*│slot 2│slot 3│*slot 4*│...|
     /// └────────┴──────┴──────┴────────┴───┘
     /// ```
-    fn pages_to_next_stripe_slot(&self) -> usize {
-        let slot_pages = self.slot_bytes / WASM_PAGE_SIZE as usize;
-        slot_pages * self.num_stripes
+    fn bytes_to_next_stripe_slot(&self) -> usize {
+        self.slot_bytes * self.num_stripes
+    }
+
+    /// Same as `bytes_to_next_stripe_slot` but in Wasm pages.
+    fn pages_to_next_stripe_slot(&self) -> u64 {
+        let bytes = self.bytes_to_next_stripe_slot();
+        let pages = bytes / WASM_PAGE_SIZE as usize;
+        u64::try_from(pages).unwrap()
     }
 }
 
@@ -671,21 +675,20 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     // To calculate the slot size, we start with the default configured size and
     // attempt to chip away at this via MPK protection. Note here how we begin
     // to define a slot as "all of the memory and guard region."
-    let slot_bytes = expected_slot_bytes
+    let faulting_region_bytes = expected_slot_bytes
         .max(max_memory_bytes)
-        .checked_add(guard_bytes)
-        .unwrap_or(usize::MAX);
+        .saturating_add(guard_bytes);
 
     let (num_stripes, slot_bytes) = if guard_bytes == 0 || max_memory_bytes == 0 || num_slots == 0 {
         // In the uncommon case where the memory/guard regions are empty or we don't need any slots , we
         // will not need any stripes: we just lay out the slots back-to-back
         // using a single stripe.
-        (1, slot_bytes)
+        (1, faulting_region_bytes)
     } else if num_pkeys_available < 2 {
         // If we do not have enough protection keys to stripe the memory, we do
         // the same. We can't elide any of the guard bytes because we aren't
         // overlapping guard regions with other stripes...
-        (1, slot_bytes)
+        (1, faulting_region_bytes)
     } else {
         // ...but if we can create at least two stripes, we can use another
         // stripe (i.e., a different pkey) as this slot's guard region--this
@@ -702,21 +705,22 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         // pool is configured with only three slots (`num_memory_slots =
         // 3`), we will run into failures if we attempt to set up more than
         // three stripes.
-        let needed_num_stripes =
-            slot_bytes / max_memory_bytes + usize::from(slot_bytes % max_memory_bytes != 0) + 1;
+        let needed_num_stripes = faulting_region_bytes / max_memory_bytes
+            + usize::from(faulting_region_bytes % max_memory_bytes != 0);
+        assert!(needed_num_stripes > 0);
         let num_stripes = num_pkeys_available.min(needed_num_stripes).min(num_slots);
 
-        // Next, we try to reduce the slot size by "overlapping" the
-        // stripes: we can make slot `n` smaller since we know that slot
-        // `n+1` and following are in different stripes and will look just
-        // like `PROT_NONE` memory.
-        let next_slots_overlapping_bytes = max_memory_bytes
-            .checked_mul(num_stripes - 1)
-            .unwrap_or(usize::MAX);
-        let needed_slot_bytes = slot_bytes
-            .checked_sub(next_slots_overlapping_bytes)
-            .unwrap_or(0)
+        // Next, we try to reduce the slot size by "overlapping" the stripes: we
+        // can make slot `n` smaller since we know that slot `n+1` and following
+        // are in different stripes and will look just like `PROT_NONE` memory.
+        // Recall that codegen expects a guarantee that at least
+        // `faulting_region_bytes` will catch OOB accesses via segfaults.
+        let needed_slot_bytes = faulting_region_bytes
+            .checked_div(num_stripes)
+            .unwrap_or(faulting_region_bytes)
             .max(max_memory_bytes);
+        assert!(needed_slot_bytes >= max_memory_bytes);
+
         (num_stripes, needed_slot_bytes)
     };
 
@@ -728,13 +732,11 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         .ok_or_else(|| anyhow!("slot size is too large"))?;
 
     // We may need another guard region (like `pre_slab_guard_bytes`) at the end
-    // of our slab. We could be conservative and just create it as large as
-    // `guard_bytes`, but because we know that the last slot already has
-    // `guard_bytes` factored in to its guard region, we can reduce the final
-    // guard region by that much.
-    let post_slab_guard_bytes = guard_bytes
-        .checked_sub(slot_bytes - max_memory_bytes)
-        .unwrap_or(0);
+    // of our slab to maintain our `faulting_region_bytes` guarantee. We could
+    // be conservative and just create it as large as `faulting_region_bytes`,
+    // but because we know that the last slot's `slot_bytes` make up the first
+    // part of that region, we reduce the final guard region by that much.
+    let post_slab_guard_bytes = faulting_region_bytes.saturating_sub(slot_bytes);
 
     // Check that we haven't exceeded the slab we can calculate given the limits
     // of `usize`.
@@ -979,13 +981,14 @@ mod tests {
 
         // Check that the memory-striping will not allow OOB access.
         // - we may have reduced the slot size from `expected_slot_bytes` to
-        //   `slot_bytes` assuming MPK striping; we check that the expectation
-        //   still holds
+        //   `slot_bytes` assuming MPK striping; we check that our guaranteed
+        //   "faulting region" is respected
         // - the last slot won't have MPK striping after it; we check that the
         //   `post_slab_guard_bytes` accounts for this
         assert!(
-            s.slot_bytes * s.num_stripes >= c.expected_slot_bytes + c.guard_bytes,
-            "slot may allow OOB access: {c:?} => {s:?}"
+            s.bytes_to_next_stripe_slot()
+                >= c.expected_slot_bytes.max(c.max_memory_bytes) + c.guard_bytes,
+            "faulting region not large enough: {c:?} => {s:?}"
         );
         assert!(
             s.slot_bytes + s.post_slab_guard_bytes >= c.expected_slot_bytes,
