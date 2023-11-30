@@ -1246,6 +1246,11 @@ where
         };
 
         self.masm.jmp_table(&labels, index.into(), tmp);
+        // Save the original stack pointer offset; we will reset the stack
+        // pointer to this offset after jumping to each of the targets. Each
+        // jump might adjust the stack according to the base offset of the
+        // target.
+        let current_sp = self.masm.sp_offset();
 
         for (t, l) in targets
             .targets()
@@ -1255,14 +1260,26 @@ where
         {
             let control_index = control_index(t.unwrap(), self.control_frames.len());
             let frame = &mut self.control_frames[control_index];
+            // Reset the stack pointer to its original offset. This is needed
+            // because each jump will potentially adjust the stack pointer
+            // according to the base offset of the target.
+            self.masm.reset_stack_pointer(current_sp);
 
             // NB: We don't perform any result handling as it was
             // already taken care of above before jumping to the
             // jump table.
             self.masm.bind(*l);
+            // Ensure that the stack pointer is correctly positioned before
+            // jumping to the jump table code.
+            let (_, offset) = frame.base_stack_len_and_sp();
+            self.masm.ensure_sp_for_jump(offset);
             self.masm.jmp(*frame.label());
             frame.set_as_target();
         }
+        // Finally reset the stack pointer to the original location.
+        // The reachability analysis, will ensure it's correctly located
+        // once reachability is restored.
+        self.masm.reset_stack_pointer(current_sp);
         self.context.reachable = false;
         self.context.free_reg(index.reg);
         self.context.free_reg(tmp);
