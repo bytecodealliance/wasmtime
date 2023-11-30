@@ -53,3 +53,59 @@ block0:
 ;     v5 = icmp ne v2, v3  ; v3 = 0
 ;     return v5
 ; }
+
+function %sge_one(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = icmp sge v0, v1
+    return v2
+}
+
+; function %sge_one(i64) -> i8 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 0
+;     v4 = icmp sgt v0, v3  ; v3 = 0
+;     return v4
+; }
+
+function %slt_one(i16) -> i8 {
+block0(v0: i16):
+    v1 = iconst.i16 1
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; function %slt_one(i16) -> i8 fast {
+; block0(v0: i16):
+;     v3 = iconst.i16 0
+;     v4 = icmp sle v0, v3  ; v3 = 0
+;     return v4
+; }
+
+function %uge_one(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = icmp uge v0, v1
+    return v2
+}
+
+; function %uge_one(i32) -> i8 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 0
+;     v4 = icmp ne v0, v3  ; v3 = 0
+;     return v4
+; }
+
+function %ult_one(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 1
+    v2 = icmp ult v0, v1
+    return v2
+}
+
+; function %ult_one(i8) -> i8 fast {
+; block0(v0: i8):
+;     v3 = iconst.i8 0
+;     v4 = icmp eq v0, v3  ; v3 = 0
+;     return v4
+; }

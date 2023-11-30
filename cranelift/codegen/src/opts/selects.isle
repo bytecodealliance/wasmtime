@@ -4,6 +4,17 @@
 (rule (simplify (select    ty _ x x)) x)
 (rule (simplify (bitselect ty _ x x)) x)
 
+;; if icmp(x, y) { 1 } else { 0 } => uextend(icmp(x, y))
+(rule (simplify (select ty cmp@(icmp _ cc x y)
+                        (iconst _ (u64_from_imm64 1))
+                        (iconst _ (u64_from_imm64 0))))
+    (uextend_from_i8 ty cmp))
+;; if icmp(x, y) { 0 } else { 1 } => uextend(!icmp(x, y))
+(rule (simplify (select sty (icmp cty cc x y)
+                        (iconst _ (u64_from_imm64 0))
+                        (iconst _ (u64_from_imm64 1))))
+    (uextend_from_i8 sty (icmp cty (intcc_complement cc) x y)))
+
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
 (rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
 (rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))
@@ -57,3 +68,9 @@
 (rule (simplify (bor (ty_vec128 ty) (band ty (bnot ty c) y) (band ty x c))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty c x))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty x c))) (bitselect ty c x y))
+
+;; extend from i8 to i8 is invalid CLIF, so this allows fixing that in the output
+;; rather than needing to duplicate rules for the different width categories
+(decl uextend_from_i8 (Type Value) Value)
+(rule 0 (uextend_from_i8 ty val) (uextend ty val))
+(rule 1 (uextend_from_i8 $I8 val) val)
