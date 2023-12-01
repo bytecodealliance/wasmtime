@@ -35,18 +35,9 @@ use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
 use clap::Parser;
 use log::{info, warn};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use wasmtime::*;
 
-#[cfg(not(target_os = "linux"))]
-fn main() -> Result<()> {
-    println!("due to how this example measures reserved memory it only works on Linux");
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
 fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
@@ -227,7 +218,7 @@ fn build_engine(args: &Args, num_memories: u32, enable_mpk: MpkEnabled) -> Resul
 }
 
 /// Add up the sizes of all the mapped virtual memory regions for the current
-/// process.
+/// Linux process.
 ///
 /// This manually parses `/proc/self/maps` to avoid a rather-large `proc-maps`
 /// dependency. We do expect this example to be Linux-specific anyways. For
@@ -238,7 +229,11 @@ fn build_engine(args: &Args, num_memories: u32, enable_mpk: MpkEnabled) -> Resul
 /// ```
 ///
 /// We parse the start and end addresses: <start>-<end> [ignore the rest].
+#[cfg(target_os = "linux")]
 fn num_bytes_mapped() -> Result<usize> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
     let file = File::open("/proc/self/maps")?;
     let reader = BufReader::new(file);
     let mut total = 0;
@@ -261,4 +256,9 @@ fn num_bytes_mapped() -> Result<usize> {
         total += end - start;
     }
     Ok(total)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn num_bytes_mapped() -> Result<usize> {
+    anyhow::bail!("this example can only read virtual memory maps on Linux")
 }
