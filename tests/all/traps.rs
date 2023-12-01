@@ -1365,6 +1365,7 @@ fn wasm_fault_address_reported_by_default() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn wasm_fault_address_reported_from_mpk_protected_memory() -> Result<()> {
     // Trigger the case where an OOB memory access causes a segfault and the
