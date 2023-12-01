@@ -1013,6 +1013,13 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.syn]]
+version = "2.0.32"
+when = "2023-09-10"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.system-interface]]
 version = "0.26.0"
 when = "2023-06-30"
