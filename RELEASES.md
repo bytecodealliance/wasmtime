@@ -1,5 +1,20 @@
 --------------------------------------------------------------------------------
 
+## 15.0.1
+
+Released 2023-12-01.
+
+### Fixed
+
+* The `wasi:random/insecure{,_seed}` interfaces are now available through the
+  CLI.
+  [#7614](https://github.com/bytecodealliance/wasmtime/pull/7614)
+
+* A stray debugging `println!` was removed.
+  [#7618](https://github.com/bytecodealliance/wasmtime/pull/7618)
+
+--------------------------------------------------------------------------------
+
 ## 15.0.0
 
 Released 2023-11-20.
