@@ -40,6 +40,12 @@ use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use wasmtime::*;
 
+#[cfg(not(target_os = "linux"))]
+fn main() -> Result<()> {
+    println!("due to how this example measures reserved memory it only works on Linux");
+    Ok(())
+}
+
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
     env_logger::init();
