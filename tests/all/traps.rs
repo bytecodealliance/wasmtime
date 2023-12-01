@@ -1349,18 +1349,57 @@ fn wasm_fault_address_reported_by_default() -> Result<()> {
 
     // NB: at this time there's no programmatic access to the fault address
     // because it's not always available for load/store traps. Only static
-    // memories on 32-bit have this information, but bounds-checked memories
-    // use manual trapping instructions and otherwise don't have a means of
+    // memories on 32-bit have this information, but bounds-checked memories use
+    // manual trapping instructions and otherwise don't have a means of
     // communicating the faulting address at this time.
     //
     // It looks like the exact reported fault address may not be deterministic,
-    // so assert that we have the right error message, but not the exact address.
+    // so assert that we have the right error message, but not the exact
+    // address.
     let err = format!("{err:?}");
     assert!(
         err.contains("memory fault at wasm address ")
             && err.contains(" in linear memory of size 0x10000"),
         "bad error: {err}"
     );
+    Ok(())
+}
+
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn wasm_fault_address_reported_from_mpk_protected_memory() -> Result<()> {
+    // Trigger the case where an OOB memory access causes a segfault and the
+    // store attempts to convert it into a `WasmFault`, calculating the Wasm
+    // address from the raw faulting address. Previously, a store could not do
+    // this calculation for MPK-protected, causing an abort.
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(16);
+    pool.memory_protection_keys(MpkEnabled::Auto);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 1)
+                (func $start
+                    i32.const 0xdeadbeef
+                    i32.load
+                    drop)
+                (start $start)
+            )
+        "#,
+    )?;
+    let err = Instance::new(&mut store, &module, &[]).unwrap_err();
+
+    // We expect an error here, not an abort; but we also check that the store
+    // can now calculate the correct Wasm address. If this test is failing with
+    // an abort, use `--nocapture` to see more details.
+    let err = format!("{err:?}");
+    assert!(err.contains("0xdeadbeef"), "bad error: {err}");
     Ok(())
 }
 
