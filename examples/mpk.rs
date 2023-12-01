@@ -35,9 +35,12 @@ use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
 use clap::Parser;
 use log::{info, warn};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use wasmtime::*;
 
+#[cfg(target_os = "linux")]
 fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
@@ -218,12 +221,38 @@ fn build_engine(args: &Args, num_memories: u32, enable_mpk: MpkEnabled) -> Resul
 }
 
 /// Add up the sizes of all the mapped virtual memory regions for the current
-/// process. On Linux, this is parsed from `/proc/PID/maps` ([reference]).
+/// process.
 ///
-/// [reference]: https://github.com/rbspy/proc-maps/blob/93cdede6e626c272badfe51f0062f87befb0c024/src/linux_maps.rs#L52
+/// This manually parses `/proc/self/maps` to avoid a rather-large `proc-maps`
+/// dependency. We do expect this example to be Linux-specific anyways. For
+/// reference, lines of that file look like:
+///
+/// ```text
+/// 5652d4418000-5652d441a000 r--p 00000000 00:23 84629427 /usr/bin/...
+/// ```
+///
+/// We parse the start and end addresses: <start>-<end> [ignore the rest].
 fn num_bytes_mapped() -> Result<usize> {
-    let pid = std::process::id().try_into().unwrap();
-    let maps = proc_maps::get_process_maps(pid)?;
-    let total = maps.iter().map(|m| m.size()).sum();
+    let file = File::open("/proc/self/maps")?;
+    let reader = BufReader::new(file);
+    let mut total = 0;
+    for line in reader.lines() {
+        let line = line?;
+        let range = line
+            .split_whitespace()
+            .next()
+            .ok_or(anyhow!("parse failure: expected whitespace"))?;
+        let mut addresses = range.split("-");
+        let start = addresses
+            .next()
+            .ok_or(anyhow!("parse failure: expected dash-separated address"))?;
+        let start = usize::from_str_radix(start, 16)?;
+        let end = addresses
+            .next()
+            .ok_or(anyhow!("parse failure: expected dash-separated address"))?;
+        let end = usize::from_str_radix(end, 16)?;
+
+        total += end - start;
+    }
     Ok(total)
 }
