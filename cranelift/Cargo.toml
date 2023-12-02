@@ -23,7 +23,7 @@ harness = false
 
 [dependencies]
 cfg-if = { workspace = true }
-cranelift-codegen = { workspace = true, features = ["disas", "trace-log"] }
+cranelift-codegen = { workspace = true, features = ["disas", "trace-log", "timing"] }
 cranelift-entity = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-reader = { workspace = true }
