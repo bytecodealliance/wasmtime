@@ -89,6 +89,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 walkdir = { workspace = true }
 test-programs-artifacts = { workspace = true }
+bytesize = "1.3.0"
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }

@@ -833,6 +833,11 @@ criteria = "safe-to-deploy"
 version = "3.11.1"
 notes = "I am the author of this crate."
 
+[[audits.bytesize]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+version = "1.3.0"
+
 [[audits.camino]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"

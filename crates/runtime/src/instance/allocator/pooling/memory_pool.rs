@@ -189,7 +189,10 @@ impl MemoryPool {
         // region to start--`PROT_NONE`.
         let constraints = SlabConstraints::new(&config.limits, tunables, pkeys.len())?;
         let layout = calculate(&constraints)?;
-        log::debug!("creating memory pool: {constraints:?} -> {layout:?}");
+        log::debug!(
+            "creating memory pool: {constraints:?} -> {layout:?} (total: {})",
+            layout.total_slab_bytes()?
+        );
         let mut mapping = Mmap::accessible_reserved(0, layout.total_slab_bytes()?)
             .context("failed to create memory pool mapping")?;
 
