@@ -34,6 +34,7 @@ pub mod debug_builtins;
 pub mod libcalls;
 pub mod mpk;
 
+#[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
 pub use crate::export::*;
