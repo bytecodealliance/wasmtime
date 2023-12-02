@@ -80,6 +80,7 @@ use wasmtime_wmemcheck::AccessError::{
 /// now to ensure that the fp/sp on exit are recorded for backtraces to work
 /// properly.
 pub mod trampolines {
+    use crate::arch::wasm_to_libcall_trampoline;
     use crate::{Instance, TrapReason, VMContext};
 
     macro_rules! libcall {

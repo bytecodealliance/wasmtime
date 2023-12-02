@@ -1,8 +1,24 @@
-use crate::traphandlers::{tls, wasmtime_longjmp};
+use crate::traphandlers::tls;
+use crate::VMContext;
 use std::io;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Diagnostics::Debug::*;
 use windows_sys::Win32::System::Kernel::*;
+
+#[link(name = "wasmtime-helpers")]
+extern "C" {
+    #[wasmtime_versioned_export_macros::versioned_link]
+    #[allow(improper_ctypes)]
+    pub fn wasmtime_setjmp(
+        jmp_buf: *mut *const u8,
+        callback: extern "C" fn(*mut u8, *mut VMContext),
+        payload: *mut u8,
+        callee: *mut VMContext,
+    ) -> i32;
+
+    #[wasmtime_versioned_export_macros::versioned_link]
+    pub fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
+}
 
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler<'a> = dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync + 'a;

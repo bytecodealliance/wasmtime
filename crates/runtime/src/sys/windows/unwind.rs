@@ -10,8 +10,10 @@ pub struct UnwindRegistration {
 }
 
 impl UnwindRegistration {
+    #[allow(missing_docs)]
     pub const SECTION_NAME: &'static str = ".pdata";
 
+    #[allow(missing_docs)]
     pub unsafe fn new(
         base_address: *const u8,
         unwind_info: *const u8,

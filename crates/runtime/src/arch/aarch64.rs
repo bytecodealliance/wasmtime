@@ -1,3 +1,24 @@
+//! Arm64-specific definitions of architecture-specific functions in Wasmtime.
+
+/// AArch64 uses vector registered which here is used with a vector type.
+/// Note that the specific type shouldn't matter too much but the choice
+/// of using a vector is the significant part.
+pub type V128Abi = std::arch::aarch64::uint8x16_t;
+
+#[inline]
+#[allow(missing_docs)]
+pub fn get_stack_pointer() -> usize {
+    let stack_pointer: usize;
+    unsafe {
+        std::arch::asm!(
+            "mov {}, sp",
+            out(reg) stack_pointer,
+            options(nostack,nomem),
+        );
+    }
+    stack_pointer
+}
+
 // The aarch64 calling conventions save the return PC one i64 above the FP and
 // the previous FP is pointed to by the current FP:
 //
@@ -52,4 +73,48 @@ pub fn assert_fp_is_aligned(_fp: usize) {
     // alignment.
     //
     // [0]: https://github.com/ARM-software/abi-aa/blob/2022Q1/aapcs64/aapcs64.rst#the-frame-pointer
+}
+
+#[rustfmt::skip]
+macro_rules! wasm_to_libcall_trampoline {
+    ($libcall:ident ; $libcall_impl:ident) => {
+        wasmtime_asm_macros::asm_func!(
+            wasmtime_versioned_export_macros::versioned_stringify_ident!($libcall),
+            "
+                .cfi_startproc
+                bti c
+
+                // Load the pointer to `VMRuntimeLimits` in `x9`.
+                ldur x9, [x0, #8]
+
+                // Store the last Wasm FP into the `last_wasm_exit_fp` in the limits.
+                stur fp, [x9, #24]
+
+                // Store the last Wasm PC into the `last_wasm_exit_pc` in the limits.
+                stur lr, [x9, #32]
+
+                // Tail call to the actual implementation of this libcall.
+                b {}
+
+                .cfi_endproc
+            ",
+            sym $libcall_impl
+        );
+    };
+}
+pub(crate) use wasm_to_libcall_trampoline;
+
+#[cfg(test)]
+mod wasm_to_libcall_trampoline_offsets_tests {
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
+
+    #[test]
+    fn test() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(std::mem::size_of::<*mut u8>() as u8, &module);
+
+        assert_eq!(8, offsets.vmctx_runtime_limits());
+        assert_eq!(24, offsets.ptr.vmruntime_limits_last_wasm_exit_fp());
+        assert_eq!(32, offsets.ptr.vmruntime_limits_last_wasm_exit_pc());
+    }
 }
