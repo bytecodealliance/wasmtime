@@ -402,6 +402,7 @@ impl CallThreadState {
     ///   instance, and the trap handler should quickly return.
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
+    #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
     pub(crate) fn take_jmp_buf_if_trap(
         &self,
         pc: *const u8,
@@ -435,6 +436,7 @@ impl CallThreadState {
         self.jmp_buf.replace(ptr::null())
     }
 
+    #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
     pub(crate) fn set_jit_trap(&self, pc: *const u8, fp: usize, faulting_addr: Option<usize>) {
         let backtrace = self.capture_backtrace(self.limits, Some((pc as usize, fp)));
         let coredump = self.capture_coredump(self.limits, Some((pc as usize, fp)));
