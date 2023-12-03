@@ -1,0 +1,14 @@
+[package]
+name = "min-platform-host"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+libloading = "0.8"
+object = { workspace = true }

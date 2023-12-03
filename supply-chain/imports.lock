@@ -466,6 +466,13 @@ user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
 
+[[publisher.dlmalloc]]
+version = "0.2.4"
+when = "2022-08-17"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.equivalent]]
 version = "1.0.1"
 when = "2023-07-10"
