@@ -158,4 +158,4 @@ addr2line = ["wasmtime-jit/addr2line"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["wasmtime-runtime/debug-builtins"]
+debug-builtins = ["wasmtime-runtime/debug-builtins", "wasmtime-jit/debug-builtins"]
