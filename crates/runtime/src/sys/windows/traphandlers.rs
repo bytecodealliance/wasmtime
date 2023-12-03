@@ -23,7 +23,7 @@ extern "C" {
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler<'a> = dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync + 'a;
 
-pub unsafe fn platform_init() {
+pub unsafe fn platform_init(_macos_use_mach_ports: bool) {
     // our trap handler needs to go first, so that we can recover from
     // wasm faults and continue execution, so pass `1` as a true value
     // here.
