@@ -1,7 +1,7 @@
 //! OS-related abstractions required by Wasmtime.
 //!
 //! This module is intended to house all logic that's specific to either Unix
-//! for Windows, for example. The goal of this module is to be the "single
+//! or Windows, for example. The goal of this module is to be the "single
 //! module" to edit if Wasmtime is ported to a new platform. Ideally all that's
 //! needed is an extra block below and a new platform should be good to go after
 //! filling out the implementation.

@@ -1,4 +1,4 @@
-// With MIRI set up just enough of a setjmp/longjmp with catching panics
+// For MIRI, set up just enough of a setjmp/longjmp with catching panics
 // to get a few tests working that use this.
 //
 // Note that no actual JIT code runs in MIRI so this is purely here for
