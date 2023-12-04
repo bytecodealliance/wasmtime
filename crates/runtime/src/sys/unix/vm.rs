@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io;
 use std::sync::Arc;
 
-pub unsafe fn expose_exisiting_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
+pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
     mprotect(ptr.cast(), len, MprotectFlags::READ | MprotectFlags::WRITE)?;
     Ok(())
 }

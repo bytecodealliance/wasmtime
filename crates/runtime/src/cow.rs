@@ -600,7 +600,7 @@ impl MemoryImageSlot {
         unsafe {
             let start = self.base.as_ptr().add(range.start);
             if readwrite {
-                vm::expose_exisiting_mapping(start, range.len())?;
+                vm::expose_existing_mapping(start, range.len())?;
             } else {
                 vm::hide_existing_mapping(start, range.len())?;
             }
