@@ -30,12 +30,12 @@ impl ModuleMemoryImages {
 /// One backing image for one memory.
 #[derive(Debug, PartialEq)]
 pub struct MemoryImage {
-    /// The file descriptor source of this image.
+    /// The platform-specific source of this image.
     ///
-    /// This might be an mmaped `*.cwasm` file or on Linux it could also be a
-    /// `Memfd` as an anonymous file in memory. In either case this is used as
-    /// the backing-source for the CoW image.
-    fd: MemoryImageSource,
+    /// This might be a mapped `*.cwasm` file or on Unix it could also be a
+    /// `Memfd` as an anonymous file in memory on Linux. In either case this is
+    /// used as the backing-source for the CoW image.
+    source: MemoryImageSource,
 
     /// Length of image, in bytes.
     ///
@@ -45,13 +45,13 @@ pub struct MemoryImage {
     /// Must be a multiple of the system page size.
     len: usize,
 
-    /// Image starts this many bytes into `fd` source.
+    /// Image starts this many bytes into `source`.
     ///
-    /// This is 0 for anonymous-backed memfd files and is the offset of the data
-    /// section in a `*.cwasm` file for `*.cwasm`-backed images.
+    /// This is 0 for anonymous-backed memfd files and is the offset of the
+    /// data section in a `*.cwasm` file for `*.cwasm`-backed images.
     ///
     /// Must be a multiple of the system page size.
-    fd_offset: u64,
+    source_offset: u64,
 
     /// Image starts this many bytes into heap space.
     ///
@@ -101,10 +101,10 @@ impl MemoryImage {
             assert_eq!((mmap.original_offset() as u32) % page_size, 0);
 
             if let Some(file) = mmap.original_file() {
-                if let Some(fd) = MemoryImageSource::from_file(file) {
+                if let Some(source) = MemoryImageSource::from_file(file) {
                     return Ok(Some(MemoryImage {
-                        fd,
-                        fd_offset: u64::try_from(mmap.original_offset() + (data_start - start))
+                        source,
+                        source_offset: u64::try_from(mmap.original_offset() + (data_start - start))
                             .unwrap(),
                         linear_memory_offset,
                         len,
@@ -115,10 +115,10 @@ impl MemoryImage {
 
         // If `mmap` doesn't come from a file then platform-specific mechanisms
         // may be used to place the data in a form that's amenable to an mmap.
-        if let Some(fd) = MemoryImageSource::from_data(data)? {
+        if let Some(source) = MemoryImageSource::from_data(data)? {
             return Ok(Some(MemoryImage {
-                fd,
-                fd_offset: 0,
+                source,
+                source_offset: 0,
                 linear_memory_offset,
                 len,
             }));
@@ -128,16 +128,16 @@ impl MemoryImage {
     }
 
     unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
-        self.fd.map_at(
+        self.source.map_at(
             base.add(self.linear_memory_offset),
             self.len,
-            self.fd_offset,
+            self.source_offset,
         )?;
         Ok(())
     }
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
-        self.fd
+        self.source
             .remap_as_zeros_at(base.add(self.linear_memory_offset), self.len)?;
         Ok(())
     }
@@ -695,9 +695,9 @@ mod test {
         let image_len = (data.len() + page_size - 1) & !(page_size - 1);
 
         Ok(MemoryImage {
-            fd: MemoryImageSource::from_data(data)?.unwrap(),
+            source: MemoryImageSource::from_data(data)?.unwrap(),
             len: image_len,
-            fd_offset: 0,
+            source_offset: 0,
             linear_memory_offset: offset,
         })
     }
