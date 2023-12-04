@@ -10,9 +10,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
 
-#[macro_use]
-mod trampolines;
-
+mod arch;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod export;
@@ -25,6 +23,7 @@ mod mmap_vec;
 mod parking_spot;
 mod send_sync_ptr;
 mod store_box;
+mod sys;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -34,8 +33,10 @@ pub mod debug_builtins;
 pub mod libcalls;
 pub mod mpk;
 
+#[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
+pub use crate::arch::{get_stack_pointer, V128Abi};
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
@@ -54,6 +55,7 @@ pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
 pub use crate::mpk::MpkEnabled;
 pub use crate::store_box::*;
+pub use crate::sys::unwind::UnwindRegistration;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::*;
 pub use crate::vmcontext::{
@@ -219,30 +221,13 @@ pub fn page_size() -> usize {
 
     return match PAGE_SIZE.load(Ordering::Relaxed) {
         0 => {
-            let size = get_page_size();
+            let size = sys::vm::get_page_size();
             assert!(size != 0);
             PAGE_SIZE.store(size, Ordering::Relaxed);
             size
         }
         n => n,
     };
-
-    #[cfg(windows)]
-    fn get_page_size() -> usize {
-        use std::mem::MaybeUninit;
-        use windows_sys::Win32::System::SystemInformation::*;
-
-        unsafe {
-            let mut info = MaybeUninit::uninit();
-            GetSystemInfo(info.as_mut_ptr());
-            info.assume_init_ref().dwPageSize as usize
-        }
-    }
-
-    #[cfg(unix)]
-    fn get_page_size() -> usize {
-        unsafe { libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap() }
-    }
 }
 
 /// Result of [`Memory::atomic_wait32`] and [`Memory::atomic_wait64`]

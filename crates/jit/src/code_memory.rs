@@ -1,7 +1,6 @@
 //! Memory management for executable code.
 
 use crate::subslice_range;
-use crate::unwind::UnwindRegistration;
 use anyhow::{anyhow, bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
 use object::ObjectSymbol;
@@ -9,8 +8,7 @@ use std::mem::ManuallyDrop;
 use std::ops::Range;
 use wasmtime_environ::obj;
 use wasmtime_jit_icache_coherence as icache_coherence;
-use wasmtime_runtime::libcalls;
-use wasmtime_runtime::MmapVec;
+use wasmtime_runtime::{libcalls, MmapVec, UnwindRegistration};
 
 /// Management of executable memory within a `MmapVec`
 ///

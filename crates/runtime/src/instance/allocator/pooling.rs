@@ -65,16 +65,6 @@ mod table_pool;
 #[cfg(all(feature = "async", unix, not(miri)))]
 mod stack_pool;
 
-cfg_if::cfg_if! {
-    if #[cfg(windows)] {
-        mod windows;
-        use windows as imp;
-    } else {
-        mod unix;
-        use unix as imp;
-    }
-}
-
 use super::{
     InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
 };

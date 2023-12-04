@@ -20,38 +20,12 @@
 //! exit FP and stopping once we reach the entry SP (meaning that the next older
 //! frame is a host frame).
 
+use crate::arch;
 use crate::{
     traphandlers::{tls, CallThreadState},
     VMRuntimeLimits,
 };
-use cfg_if::cfg_if;
 use std::ops::ControlFlow;
-
-// Architecture-specific bits for stack walking. Each of these modules should
-// define and export the following functions:
-//
-// * `unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize`
-// * `unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize`
-// * `fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool`
-// * `fn assert_entry_sp_is_aligned(sp: usize)`
-// * `fn assert_fp_is_aligned(fp: usize)`
-cfg_if! {
-    if #[cfg(target_arch = "x86_64")] {
-        mod x86_64;
-        use x86_64 as arch;
-    } else if #[cfg(target_arch = "aarch64")] {
-        mod aarch64;
-        use aarch64 as arch;
-    } else if #[cfg(target_arch = "s390x")] {
-        mod s390x;
-        use s390x as arch;
-    } else if #[cfg(target_arch = "riscv64")] {
-        mod riscv64;
-        use riscv64 as arch;
-    } else {
-        compile_error!("unsupported architecture");
-    }
-}
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]

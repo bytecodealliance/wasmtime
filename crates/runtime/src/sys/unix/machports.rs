@@ -33,7 +33,8 @@
 
 #![allow(non_snake_case, clippy::cast_sign_loss)]
 
-use crate::traphandlers::{tls, wasmtime_longjmp};
+use crate::sys::traphandlers::wasmtime_longjmp;
+use crate::traphandlers::tls;
 use mach::exception_types::*;
 use mach::kern_return::*;
 use mach::mach_init::*;
@@ -167,9 +168,6 @@ static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;
 static mut CHILD_OF_FORKED_PROCESS: bool = false;
 
 pub unsafe fn platform_init() {
-    if cfg!(miri) {
-        return;
-    }
     // Mach ports do not currently work across forks, so configure Wasmtime to
     // panic in `lazy_per_thread_init` if the child attempts to invoke
     // WebAssembly.
@@ -404,7 +402,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // pointer value and if `MAP` changes happen after we read our entry that's
     // ok since they won't invalidate our entry.
     let (pc, fp) = get_pc_and_fp(&thread_state);
-    if !super::IS_WASM_PC(pc as usize) {
+    if !crate::traphandlers::IS_WASM_PC(pc as usize) {
         return false;
     }
 
@@ -443,7 +441,7 @@ unsafe extern "C" fn unwind(
             None
         };
         state.set_jit_trap(wasm_pc, wasm_fp, faulting_addr);
-        state.jmp_buf.get()
+        state.take_jmp_buf()
     });
     debug_assert!(!jmp_buf.is_null());
     wasmtime_longjmp(jmp_buf);
@@ -468,9 +466,6 @@ unsafe extern "C" fn unwind(
 /// exception handlers to get registered.
 #[cold]
 pub fn lazy_per_thread_init() {
-    if cfg!(miri) {
-        return;
-    }
     unsafe {
         assert!(
             !CHILD_OF_FORKED_PROCESS,

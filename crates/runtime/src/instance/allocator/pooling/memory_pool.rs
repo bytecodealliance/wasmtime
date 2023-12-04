@@ -68,7 +68,7 @@ use crate::{
     MpkEnabled, PoolingInstanceAllocatorConfig,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use libc::c_void;
+use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use wasmtime_environ::{

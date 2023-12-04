@@ -58,9 +58,6 @@ features = [
   "Win32_System_Diagnostics_Debug",
 ]
 
-[target.'cfg(target_arch = "s390x")'.dependencies]
-psm = "0.1.11"
-
 [dev-dependencies]
 tempfile = "3.0"
 wasmtime-wasi = { path = "../wasi", default-features = true }
@@ -161,4 +158,4 @@ addr2line = ["wasmtime-jit/addr2line"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["wasmtime-runtime/debug-builtins"]
+debug-builtins = ["wasmtime-runtime/debug-builtins", "wasmtime-jit/debug-builtins"]

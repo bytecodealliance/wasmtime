@@ -14,6 +14,7 @@ extern "C" {
 }
 
 impl UnwindRegistration {
+    #[allow(missing_docs)]
     pub const SECTION_NAME: &'static str = ".eh_frame";
 
     /// Registers precompiled unwinding information with the system.
@@ -28,7 +29,7 @@ impl UnwindRegistration {
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
         debug_assert_eq!(
-            unwind_info as usize % wasmtime_runtime::page_size(),
+            unwind_info as usize % crate::page_size(),
             0,
             "The unwind info must always be aligned to a page"
         );

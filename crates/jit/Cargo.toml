@@ -15,9 +15,7 @@ workspace = true
 
 [dependencies]
 wasmtime-environ = { workspace = true }
-wasmtime-jit-debug = { workspace = true, features = [
-  "perf_jitdump",
-], optional = true }
+wasmtime-jit-debug = { workspace = true, features = ["perf_jitdump"], optional = true }
 wasmtime-runtime = { workspace = true }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
@@ -44,5 +42,6 @@ features = ["Win32_System_Diagnostics_Debug"]
 ittapi = { version = "0.4.0", optional = true }
 
 [features]
-profiling = ['dep:wasmtime-jit-debug', 'dep:ittapi']
+profiling = ['dep:ittapi', 'dep:wasmtime-jit-debug']
 demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
+debug-builtins = ['wasmtime-runtime/debug-builtins']

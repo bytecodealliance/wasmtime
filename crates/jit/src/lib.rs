@@ -3,11 +3,11 @@
 #![deny(missing_docs)]
 
 mod code_memory;
+#[cfg(feature = "debug-builtins")]
 mod debug;
 mod demangling;
 mod instantiate;
 pub mod profiling;
-mod unwind;
 
 pub use crate::code_memory::CodeMemory;
 #[cfg(feature = "addr2line")]

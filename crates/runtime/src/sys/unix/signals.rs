@@ -1,10 +1,26 @@
-#![allow(clippy::cast_sign_loss)] // platforms too fiddly to worry about this
+//! Trap handling on Unix based on POSIX signals.
 
-use crate::traphandlers::{tls, wasmtime_longjmp};
+use crate::traphandlers::tls;
+use crate::VMContext;
 use std::cell::RefCell;
 use std::io;
 use std::mem::{self, MaybeUninit};
 use std::ptr::{self, null_mut};
+
+#[link(name = "wasmtime-helpers")]
+extern "C" {
+    #[wasmtime_versioned_export_macros::versioned_link]
+    #[allow(improper_ctypes)]
+    pub fn wasmtime_setjmp(
+        jmp_buf: *mut *const u8,
+        callback: extern "C" fn(*mut u8, *mut VMContext),
+        payload: *mut u8,
+        callee: *mut VMContext,
+    ) -> i32;
+
+    #[wasmtime_versioned_export_macros::versioned_link]
+    pub fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
+}
 
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler<'a> =
@@ -15,10 +31,11 @@ static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGILL: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGFPE: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
-pub unsafe fn platform_init() {
-    if cfg!(miri) {
-        return;
-    }
+pub unsafe fn platform_init(macos_use_mach_ports: bool) {
+    // Either mach ports shouldn't be in use or we shouldn't be on macOS,
+    // otherwise the `machports.rs` module should be used instead.
+    assert!(!macos_use_mach_ports || !cfg!(target_os = "macos"));
+
     let register = |slot: &mut MaybeUninit<libc::sigaction>, signal: i32| {
         let mut handler: libc::sigaction = mem::zeroed();
         // The flags here are relatively careful, and they are...
@@ -317,10 +334,6 @@ pub fn lazy_per_thread_init() {
     });
 
     unsafe fn allocate_sigaltstack() -> Option<Stack> {
-        if cfg!(miri) {
-            return None;
-        }
-
         // Check to see if the existing sigaltstack, if it exists, is big
         // enough. If so we don't need to allocate our own.
         let mut old_stack = mem::zeroed();

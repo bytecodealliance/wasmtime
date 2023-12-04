@@ -48,7 +48,7 @@ cranelift-codegen-meta = { path = "meta", version = "0.103.0" }
 cranelift-isle = { path = "../isle/isle", version = "=0.103.0" }
 
 [features]
-default = ["std", "unwind", "host-arch"]
+default = ["std", "unwind", "host-arch", "timing"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
@@ -113,6 +113,11 @@ isle-errors = ["cranelift-isle/fancy-errors"]
 # Put ISLE generated files in isle_generated_code/, for easier
 # inspection, rather than inside of target/.
 isle-in-source-tree = []
+
+# Enable tracking how long passes take in Cranelift.
+#
+# Enabled by default.
+timing = []
 
 [[bench]]
 name = "x64-evex-encoding"
