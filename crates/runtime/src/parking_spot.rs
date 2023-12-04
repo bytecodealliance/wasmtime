@@ -37,8 +37,13 @@ pub struct Waiter {
 }
 
 struct WaiterInner {
-    notified: bool,
+    // NB: this field may be read concurrently, but is only written under the
+    // lock of a `ParkingSpot`.
     thread: Thread,
+
+    // NB: these fields are only modified/read under the lock of a
+    // `ParkingSpot`.
+    notified: bool,
     next: Option<SendSyncPtr<WaiterInner>>,
     prev: Option<SendSyncPtr<WaiterInner>>,
 }
@@ -114,9 +119,7 @@ impl ParkingSpot {
         }
 
         // Lazily initialize the `waiter` node if it hasn't been already, and
-        // additionally ensure it's not accidentally in some other queue. Clear
-        // the `notified` flag if it was previously notified and then start
-        // blocking.
+        // additionally ensure it's not accidentally in some other queue.
         let waiter = waiter.inner.get_or_insert_with(|| {
             Box::new(WaiterInner {
                 next: None,
@@ -127,6 +130,9 @@ impl ParkingSpot {
         });
         assert!(waiter.next.is_none());
         assert!(waiter.prev.is_none());
+
+        // Clear the `notified` flag if it was previously notified and
+        // configure the thread to wakeup as our own.
         waiter.notified = false;
         waiter.thread = thread::current();
 
