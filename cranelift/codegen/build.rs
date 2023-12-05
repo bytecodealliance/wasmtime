@@ -228,6 +228,7 @@ fn get_isle_compilations(
                     src_opts.join("icmp.isle"),
                     src_opts.join("remat.isle"),
                     src_opts.join("selects.isle"),
+                    src_opts.join("spaceship.isle"),
                     src_opts.join("shifts.isle"),
                     src_opts.join("vector.isle"),
                 ],
