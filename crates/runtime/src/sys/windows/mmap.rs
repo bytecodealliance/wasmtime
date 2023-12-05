@@ -104,7 +104,7 @@ impl Mmap {
                 0,
                 0,
                 len,
-            ) as *mut std::ffi::c_void;
+            ).Value;
             let err = io::Error::last_os_error();
             CloseHandle(mapping);
             if ptr.is_null() {
