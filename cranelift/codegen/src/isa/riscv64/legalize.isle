@@ -1,0 +1,7 @@
+;; ========= `{u,s}extend` ====================================================
+
+(rule (legalize (uextend $I128 x))
+  (uextend_i128 x))
+
+(rule (legalize (sextend $I128 x))
+  (sextend_i128 x))

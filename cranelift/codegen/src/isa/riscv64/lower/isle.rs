@@ -190,6 +190,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm12::from_i16(imm.as_i16() & (x as i16))
     }
 
+    fn u64_from_imm12(&mut self, imm: Imm12) -> Option<u64> {
+        u64::try_from(imm.as_i16()).ok()
+    }
+
     fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
         MInst::generate_imm(imm as u64)
     }

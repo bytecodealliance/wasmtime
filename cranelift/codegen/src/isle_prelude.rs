@@ -833,6 +833,16 @@ macro_rules! isle_common_prelude_methods {
             MemFlags::trusted()
         }
 
+        fn mem_flags_notrap(&mut self) -> MemFlags {
+            let mut mflags = MemFlags::new();
+            mflags.set_notrap();
+            mflags
+        }
+
+        fn mem_flags_empty(&mut self) -> MemFlags {
+            MemFlags::new()
+        }
+
         #[inline]
         fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
             x.unsigned()

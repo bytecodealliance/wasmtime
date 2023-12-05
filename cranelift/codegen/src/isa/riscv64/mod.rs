@@ -1,6 +1,7 @@
 //! risc-v 64-bit Instruction Set Architecture.
 
 use crate::dominator_tree::DominatorTree;
+use crate::flowgraph;
 use crate::ir::{Function, Type};
 use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, OwnedTargetIsa, TargetIsa};
@@ -17,6 +18,7 @@ use cranelift_control::ControlPlane;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;
+mod legalize;
 mod lower;
 mod settings;
 #[cfg(feature = "unwind")]
@@ -99,6 +101,10 @@ impl TargetIsa for Riscv64Backend {
     }
     fn dynamic_vector_bytes(&self, _dynamic_ty: ir::Type) -> u32 {
         16
+    }
+
+    fn legalize_function(&self, func: &mut ir::Function, cfg: &mut flowgraph::ControlFlowGraph) {
+        legalize::run(self, func, cfg);
     }
 
     fn triple(&self) -> &Triple {

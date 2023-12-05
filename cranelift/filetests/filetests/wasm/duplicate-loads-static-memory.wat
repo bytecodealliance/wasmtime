@@ -44,10 +44,11 @@
 ;;
 ;;                                 block0(v0: i32, v1: i64):
 ;;                                     v12 -> v1
-;;                                     v13 -> v1
-;; @0057                               v5 = load.i64 notrap aligned readonly v1
+;;                                     v14 -> v1
+;;                                     v13 = load.i64 notrap aligned readonly v1
+;;                                     v5 -> v13
 ;; @0057                               v4 = uextend.i64 v0
-;; @0057                               v6 = iadd v5, v4
+;; @0057                               v6 = iadd v13, v4
 ;; @0057                               v7 = load.i32 little heap v6
 ;;                                     v2 -> v7
 ;; @005f                               jump block1
@@ -62,10 +63,11 @@
 ;;
 ;;                                 block0(v0: i32, v1: i64):
 ;;                                     v16 -> v1
-;;                                     v17 -> v1
-;; @0064                               v5 = load.i64 notrap aligned readonly v1
+;;                                     v18 -> v1
+;;                                     v17 = load.i64 notrap aligned readonly v1
+;;                                     v5 -> v17
 ;; @0064                               v4 = uextend.i64 v0
-;; @0064                               v6 = iadd v5, v4
+;; @0064                               v6 = iadd v17, v4
 ;; @0064                               v7 = iconst.i64 1234
 ;; @0064                               v8 = iadd v6, v7  ; v7 = 1234
 ;; @0064                               v9 = load.i32 little heap v8

@@ -108,7 +108,6 @@ impl Inst {
             | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
-            | Inst::CvtUint64ToFloatSeq { .. }
             | Inst::Div { .. }
             | Inst::Div8 { .. }
             | Inst::Fence { .. }
@@ -474,6 +473,7 @@ impl Inst {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn shift_r(
         size: OperandSize,
         kind: ShiftKind,
@@ -1324,29 +1324,6 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(src2_size.to_bytes(), allocs);
                 let op = ljustify(op.to_string());
                 format!("{op} {src1}, {src2}, {dst}")
-            }
-
-            Inst::CvtUint64ToFloatSeq {
-                src,
-                dst,
-                dst_size,
-                tmp_gpr1,
-                tmp_gpr2,
-                ..
-            } => {
-                let src = pretty_print_reg(src.to_reg(), 8, allocs);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
-                let tmp_gpr1 = pretty_print_reg(tmp_gpr1.to_reg().to_reg(), 8, allocs);
-                let tmp_gpr2 = pretty_print_reg(tmp_gpr2.to_reg().to_reg(), 8, allocs);
-                let op = ljustify(format!(
-                    "u64_to_{}_seq",
-                    if *dst_size == OperandSize::Size64 {
-                        "f64"
-                    } else {
-                        "f32"
-                    }
-                ));
-                format!("{op} {src}, {dst}, {tmp_gpr1}, {tmp_gpr2}")
             }
 
             Inst::CvtFloatToSintSeq {
@@ -2207,18 +2184,6 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
             collector.reg_use(src1.to_reg());
             src2.get_operands(collector);
-        }
-        Inst::CvtUint64ToFloatSeq {
-            src,
-            dst,
-            tmp_gpr1,
-            tmp_gpr2,
-            ..
-        } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_early_def(dst.to_writable_reg());
-            collector.reg_early_def(tmp_gpr1.to_writable_reg());
-            collector.reg_early_def(tmp_gpr2.to_writable_reg());
         }
         Inst::CvtFloatToSintSeq {
             src,

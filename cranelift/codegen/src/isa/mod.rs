@@ -264,6 +264,12 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-dependent maximum vector register size, in bytes.
     fn dynamic_vector_bytes(&self, dynamic_ty: ir::Type) -> u32;
 
+    /// Edit the IR of `func` to remove any CLIF operations which aren't
+    /// supported by this backend.
+    ///
+    /// Note that this is done before optimizations are executed.
+    fn legalize_function(&self, func: &mut ir::Function, cfg: &mut flowgraph::ControlFlowGraph);
+
     /// Compile the given function.
     fn compile_function(
         &self,

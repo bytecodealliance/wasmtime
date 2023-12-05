@@ -1,0 +1,8 @@
+;; ========= `fcvt_from_uint` =================================================
+
+(rule (legalize (fcvt_from_uint ty v @ (value_type $I64)))
+  (x64_replace_fcvt_from_u64 ty v))
+
+(decl x64_replace_fcvt_from_u64 (Type Value) CursorPosition)
+(extern constructor x64_replace_fcvt_from_u64 x64_replace_fcvt_from_u64)
+

@@ -1,0 +1,200 @@
+test optimize precise-output
+set enable_nan_canonicalization=true
+target x86_64
+
+function %ceil(f32) -> f32 {
+block0(v0: f32):
+  v1 = ceil v0
+  return v1
+}
+
+; function %ceil(f32) -> f32 fast {
+; block0(v0: f32):
+;     v2 = ceil v0
+;     v3 = fcmp ne v2, v2
+;     v4 = f32const +NaN
+;     v5 = select v3, v4, v2  ; v4 = +NaN
+;     v1 -> v5
+;     return v1
+; }
+
+function %floor(f64) -> f64 {
+block0(v0: f64):
+  v1 = floor v0
+  return v1
+}
+
+; function %floor(f64) -> f64 fast {
+; block0(v0: f64):
+;     v2 = floor v0
+;     v3 = fcmp ne v2, v2
+;     v4 = f64const +NaN
+;     v5 = select v3, v4, v2  ; v4 = +NaN
+;     v1 -> v5
+;     return v1
+; }
+
+function %nearest(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = nearest v0
+  return v1
+}
+
+; function %nearest(f32x4) -> f32x4 fast {
+; block0(v0: f32x4):
+;     v2 = nearest v0
+;     v3 = fcmp ne v2, v2
+;     v4 = f32const +NaN
+;     v5 = splat.f32x4 v4  ; v4 = +NaN
+;     v6 = bitcast.f32x4 v3
+;     v7 = bitselect v6, v5, v2
+;     v1 -> v7
+;     return v1
+; }
+
+function %sqrt(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = sqrt v0
+  return v1
+}
+
+; function %sqrt(f64x2) -> f64x2 fast {
+; block0(v0: f64x2):
+;     v2 = sqrt v0
+;     v3 = f64const +NaN
+;     v4 = splat.f64x2 v3  ; v3 = +NaN
+;     v5 = fcmp ne v2, v2
+;     v6 = bitcast.f64x2 v5
+;     v7 = bitselect v6, v4, v2
+;     v1 -> v7
+;     return v1
+; }
+
+function %trunc(f32) -> f32 {
+block0(v0: f32):
+  v1 = trunc v0
+  return v1
+}
+
+; function %trunc(f32) -> f32 fast {
+; block0(v0: f32):
+;     v2 = trunc v0
+;     v3 = fcmp ne v2, v2
+;     v4 = f32const +NaN
+;     v5 = select v3, v4, v2  ; v4 = +NaN
+;     v1 -> v5
+;     return v1
+; }
+
+function %fadd(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; function %fadd(f32, f32) -> f32 fast {
+; block0(v0: f32, v1: f32):
+;     v3 = fadd v0, v1
+;     v4 = fcmp ne v3, v3
+;     v5 = f32const +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
+;     return v2
+; }
+
+function %fsub(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; function %fsub(f32, f32) -> f32 fast {
+; block0(v0: f32, v1: f32):
+;     v3 = fsub v0, v1
+;     v4 = fcmp ne v3, v3
+;     v5 = f32const +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
+;     return v2
+; }
+
+function %fdiv(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; function %fdiv(f64, f64) -> f64 fast {
+; block0(v0: f64, v1: f64):
+;     v3 = fdiv v0, v1
+;     v4 = fcmp ne v3, v3
+;     v5 = f64const +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
+;     return v2
+; }
+
+function %fmul(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; function %fmul(f64, f64) -> f64 fast {
+; block0(v0: f64, v1: f64):
+;     v3 = fmul v0, v1
+;     v4 = fcmp ne v3, v3
+;     v5 = f64const +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
+;     return v2
+; }
+
+function %fmax(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; function %fmax(f64, f64) -> f64 fast {
+; block0(v0: f64, v1: f64):
+;     v3 = fmax v0, v1
+;     v4 = fcmp ne v3, v3
+;     v5 = f64const +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
+;     return v2
+; }
+
+function %fmin(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; function %fmin(f64, f64) -> f64 fast {
+; block0(v0: f64, v1: f64):
+;     v3 = fmin v0, v1
+;     v4 = fcmp ne v3, v3
+;     v5 = f64const +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
+;     return v2
+; }
+
+function %fma(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; function %fma(f64, f64, f64) -> f64 fast {
+; block0(v0: f64, v1: f64, v2: f64):
+;     v4 = fma v0, v1, v2
+;     v5 = fcmp ne v4, v4
+;     v6 = f64const +NaN
+;     v7 = select v5, v6, v4  ; v6 = +NaN
+;     v3 -> v7
+;     return v3
+; }
+

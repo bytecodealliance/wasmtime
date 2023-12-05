@@ -1,0 +1,459 @@
+;; Legalizing CLIF to CLIF
+;;
+;; This file is one of the main entry points for performing "legalizations" that
+;; transform CLIF to CLIF to simplify the IR for one phase or another. One
+;; example of a legalization is replacing "macro instructions" with their
+;; components, such as the `stack_store` CLIF instruction with a `stack_addr`
+;; plus a `store`. This way backends don't need to implement lowering for
+;; all three instructions, only the latter two.
+;;
+;; Backends also have their own forms of legalization as well. For example
+;; instead of natively implementing a `uextend`-to-128-bits backends can choose
+;; to legalize the `uextend` instruction in this case to be replaced with an
+;; `iconcat`. This can help reduce the number of lowerings that a backend needs
+;; while sharing legalization code with other backends.
+;;
+;; This file is organized as shared support for all backends. This contains
+;; the definition of the `legalize` function which is the main entrypoint for
+;; transforming instructions. Some required legalizations are defined in this
+;; file such as legalizing the CLIF `stack_store` pseudo-instruction. Otherwise
+;; platform-neutral helpers are defined in this file that each backend can
+;; opt-in to as desired.
+
+;; ========= Type Definitions =================================================
+
+(type Inst (primitive Inst))
+(type CursorPosition (primitive CursorPosition))
+(type ExternalName extern (enum))
+
+;; ========= Helper extractors/constructors ===================================
+
+;; Helper used in generated extractors for each CLIF instruction to extract
+;; information from an `Inst`.
+(decl inst_data (Type InstructionData) Inst)
+(extern extractor infallible inst_data inst_data)
+
+;; Helper used to perform an `ins()` operation which inserts just before the
+;; current instruction being legalized.
+;;
+;; This is invoked by generated constructors for each CLIF instruction.
+(decl ins (Type InstructionData) Inst)
+(extern constructor ins ins)
+
+;; Constructors for value arrays.
+(decl value_array_2_ctor (Value Value) ValueArray2)
+(extern constructor value_array_2_ctor value_array_2_ctor)
+(decl value_array_3_ctor (Value Value Value) ValueArray3)
+(extern constructor value_array_3_ctor value_array_3_ctor)
+(decl value_list_slice (ValueSlice) ValueList)
+(extern extractor infallible value_list_slice value_list_slice)
+(decl value_slice_unwrap (Value ValueSlice) ValueSlice)
+(extern extractor value_slice_unwrap value_slice_unwrap)
+(decl unwrap_head_value_list_1 (Value ValueSlice) ValueList)
+(extractor (unwrap_head_value_list_1 head tail)
+           (value_list_slice (value_slice_unwrap head tail)))
+
+(decl pure first_result (Inst) Value)
+(extern constructor first_result first_result)
+(convert Inst Value first_result)
+
+(decl has_type (Type Inst) Inst)
+(extractor (has_type ty inst) (and (result_type ty) inst))
+(decl result_type (Type) Inst)
+(extern extractor result_type result_type)
+
+(decl cursor_position_at (Inst) CursorPosition)
+(extern constructor cursor_position_at cursor_position_at)
+(convert Inst CursorPosition cursor_position_at)
+
+;; Returns the position of the cursor just before the current instruction was
+;; being legalized. This can be used to re-legalize the sequence of instructions
+;; used to replace another instruction.
+(decl prev_position () CursorPosition)
+(extern constructor prev_position prev_position)
+
+(decl pointer_type () Type)
+(extern constructor pointer_type pointer_type)
+
+;; Helper to generate an `iconst` value which has type `I64` and the provided
+;; value.
+(decl ins_i64 (i64) Value)
+(rule (ins_i64 val) (iconst $I64 (imm64 (i64_as_u64 val))))
+
+;; Optionally "legalize" an instruction by replacing the current instruction or
+;; inserting new instructions/blocks.
+;;
+;; This is used to transform CLIF into something which can be handled by each
+;; individual backend. There is both common functionality of legalization for
+;; all backends in addition to backend-specific legalization.
+;;
+;; Note that this function is defined here and while some legalizations are
+;; performed in this file there are also backend-specific legalizations
+;; throughout each backend as well.
+;;
+;; The return value of this function is where to resume legalization. By default
+;; this is the current instruction which means that legalization will continue
+;; after the current instruction. If the inserted code itself needs to be
+;; re-legalized then the `(prev_position)` constructor can be used to rerun
+;; over the sequence of replaced instructions.
+(decl partial legalize (Inst) CursorPosition)
+
+;; ========= `{u,s}extend` ====================================================
+
+;; Helper to replace a `uextend` to i128 with an `iconcat` instruction instead.
+(decl uextend_i128 (Value) Inst)
+(rule 0 (uextend_i128 x @ (value_type (fits_in_32 _)))
+  (iconcat $I64 (uextend $I64 x) (ins_i64 0)))
+(rule 1 (uextend_i128 x @ (value_type $I64))
+  (iconcat $I64 x (ins_i64 0)))
+
+;; Helper to replace a `sextend` to i128 with an `iconcat` instruction instead.
+(decl sextend_i128 (Value) Inst)
+(rule 0 (sextend_i128 x @ (value_type (fits_in_32 _)))
+  (let ((val64 Value (sextend $I64 x)))
+    (iconcat $I64 val64 (sshr $I64 val64 (ins_i64 63)))))
+(rule 1 (sextend_i128 x @ (value_type $I64))
+  (iconcat $I64 x (sshr $I64 x (ins_i64 63))))
+
+;; ========= `{dynamic_,}stack_{load,store}` ==================================
+
+;; stack_load(slot, offset) => load(stack_addr(slot, offset), 0)
+(rule (legalize (stack_load ty slot offset))
+  (let ((addr Value (stack_addr $I64 slot offset)))
+    (load ty (mem_flags_notrap) addr (i32_to_offset32 0))))
+
+;; stack_store(val, slot, offset) => store(val, stack_addr(slot, offset), 0)
+(rule (legalize (stack_store ty val slot offset))
+  (let ((addr Value (stack_addr $I64 slot offset)))
+    (store ty (mem_flags_notrap) val addr (i32_to_offset32 0))))
+
+;; dynamic_stack_load(slot) => load(dynamic_stack_addr(slot), 0)
+(rule (legalize (dynamic_stack_load ty slot))
+  (let ((addr Value (dynamic_stack_addr $I64 slot)))
+    (load ty (mem_flags_notrap) addr (i32_to_offset32 0))))
+
+;; dynamic_stack_store(val, slot) => store(val, dynamic_stack_addr(slot), 0)
+(rule (legalize (dynamic_stack_store ty val slot))
+  (let ((addr Value (dynamic_stack_addr $I64 slot)))
+    (store ty (mem_flags_notrap) val addr (i32_to_offset32 0))))
+
+;; ========= `trapz`, `trapnz`, `resumable_trapnz` ============================
+
+;; Delegate back to Rust to perform the basic-block manipulation necessary to
+;; expand these instructions
+
+(rule (legalize (trapz _ val code)) (expand_trapz val code))
+(decl expand_trapz (Value TrapCode) CursorPosition)
+(extern constructor expand_trapz expand_trapz)
+
+(rule (legalize (trapnz _ val code)) (expand_trapnz val code))
+(decl expand_trapnz (Value TrapCode) CursorPosition)
+(extern constructor expand_trapnz expand_trapnz)
+
+(rule (legalize (resumable_trapnz _ val code)) (expand_resumable_trapnz val code))
+(decl expand_resumable_trapnz (Value TrapCode) CursorPosition)
+(extern constructor expand_resumable_trapnz expand_resumable_trapnz)
+
+;; ========= `*_imm` instrs ===================================================
+
+(rule (legalize (band_imm ty val imm))
+  (band ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (bor_imm ty val imm))
+  (bor ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (bxor_imm ty val imm))
+  (bxor ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (ishl_imm ty val imm))
+  (ishl ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (sshr_imm ty val imm))
+  (sshr ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (ushr_imm ty val imm))
+  (ushr ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (rotl_imm ty val imm))
+  (rotl ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (rotr_imm ty val imm))
+  (rotr ty val (unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (iadd_imm ty val imm))
+  (iadd ty val (signed_const (lane_type ty) imm)))
+
+;; note the reversed arguments in the `isub`
+(rule (legalize (irsub_imm ty val imm))
+  (isub ty (signed_const (lane_type ty) imm) val))
+
+(rule (legalize (imul_imm ty val imm))
+  (imul ty val (signed_const (lane_type ty) imm)))
+
+(rule (legalize (sdiv_imm ty val imm))
+  (sdiv ty val (signed_const (lane_type ty) imm)))
+
+(rule (legalize (srem_imm ty val imm))
+  (srem ty val (signed_const (lane_type ty) imm)))
+
+(rule (legalize (udiv_imm ty val imm))
+  (udiv ty val (signed_const (lane_type ty) imm)))
+
+(rule (legalize (urem_imm ty val imm))
+  (urem ty val (signed_const (lane_type ty) imm)))
+
+(rule (legalize (icmp_imm ty cc val imm))
+  (icmp ty cc val (signed_const (lane_type ty) imm)))
+
+(decl unsigned_const (Type Imm64) Value)
+(rule (unsigned_const $I8 (u64_from_imm64 n))
+  (iconst $I8 (imm64 (u64_and n 0xff))))
+(rule (unsigned_const $I16 (u64_from_imm64 n))
+  (iconst $I16 (imm64 (u64_and n 0xffff))))
+(rule (unsigned_const $I32 (u64_from_imm64 n))
+  (iconst $I32 (imm64 (u64_and n 0xffffffff))))
+(rule (unsigned_const $I64 imm)
+  (iconst $I64 imm))
+(rule (unsigned_const $I128 imm)
+  (iconcat $I64 (iconst $I64 imm) (ins_i64 0)))
+
+(decl signed_const (Type Imm64) Value)
+(rule 0 (signed_const (fits_in_64 ty) imm)
+  (unsigned_const ty imm))
+(rule 1 (signed_const $I128 imm)
+  (iconcat $I64
+    (iconst $I64 imm)
+    (iconst $I64 (imm64_sshr $I64 imm (imm64 63)))))
+
+;; ========= `*_not` instrs ===================================================
+
+;; Legalize the fused bitwise-plus-not instructions into simpler
+;; instructions to assist with optimizations. Lowering will
+;; pattern match this sequence regardless when architectures
+;; support the instruction natively.
+
+(rule (legalize (band_not ty a b))
+  (band ty a (bnot ty b)))
+
+(rule (legalize (bor_not ty a b))
+  (bor ty a (bnot ty b)))
+
+(rule (legalize (bxor_not ty a b))
+  (bxor ty a (bnot ty b)))
+
+;; ========= `global_value` ===================================================
+
+(rule (legalize (global_value _ gv @ (gv_vmcontext)))
+  (vmctx_addr gv))
+(decl vmctx_addr (GlobalValue) CursorPosition)
+(extern constructor vmctx_addr vmctx_addr)
+
+(rule (legalize (global_value _ (gv_load base offset ty flags)))
+  (let ((base Value (global_value_copy_facts (pointer_type) base))
+        (_ Inst (load ty flags base offset)))
+    ;; re-legalize the previous instrs to legalize the new `global_value` node
+    (prev_position)))
+
+(rule (legalize (global_value _ (gv_iadd_imm gv_base offset ty)))
+  (let ((base Value (global_value_copy_facts ty gv_base))
+        (offset Value (iconst_with_fact ty offset gv_base))
+        (_ Inst (iadd ty base offset)))
+    ;; re-legalize the previous instrs to legalize the new `global_value` node
+    (prev_position)))
+
+(rule (legalize (global_value _ (gv_const_vector_scale ty)))
+  (iconst (pointer_type) (imm64 (const_vector_scale ty))))
+(decl const_vector_scale (Type) u64)
+(extern constructor const_vector_scale const_vector_scale)
+
+(rule (legalize (global_value _ gv @ (gv_symbol _ _)))
+  (symbol_value (pointer_type) gv))
+
+(rule (legalize (global_value _ gv @ (gv_tls_symbol _ _)))
+  (tls_value (pointer_type) gv))
+
+(type GlobalValueData extern (enum
+  (VMContext)
+  (Load
+    (base GlobalValue)
+    (offset Offset32)
+    (global_type Type)
+    (flags MemFlags))
+  (IAddImm
+    (base GlobalValue)
+    (offset Imm64)
+    (global_type Type))
+  (Symbol
+    (name ExternalName)
+    (offset Imm64)
+    (colocated bool)
+    (tls bool))
+  (DynScaleTargetConst
+    (vector_type Type))
+))
+
+;; Convert from `GlobalValue` to `GlobalValueData`
+(decl gv_data (GlobalValueData) GlobalValue)
+(extern extractor infallible gv_data gv_data)
+
+;; Helper extractors for each variant of `GlobalValue`
+(decl gv_vmcontext () GlobalValue)
+(extractor (gv_vmcontext)
+  (gv_data (GlobalValueData.VMContext)))
+(decl gv_load (GlobalValue Offset32 Type MemFlags) GlobalValue)
+(extractor (gv_load base offset ty flags)
+  (gv_data (GlobalValueData.Load base offset ty flags)))
+(decl gv_iadd_imm (GlobalValue Offset32 Type) GlobalValue)
+(extractor (gv_iadd_imm base offset ty)
+  (gv_data (GlobalValueData.IAddImm base offset ty)))
+(decl gv_symbol (Imm64 bool) GlobalValue)
+(extractor (gv_symbol offset colocated)
+  (gv_data (GlobalValueData.Symbol _ offset colocated $false)))
+(decl gv_tls_symbol (Imm64 bool) GlobalValue)
+(extractor (gv_tls_symbol offset colocated)
+  (gv_data (GlobalValueData.Symbol _ offset colocated $true)))
+(decl gv_const_vector_scale (Type) GlobalValue)
+(extractor (gv_const_vector_scale ty)
+  (gv_data (GlobalValueData.DynScaleTargetConst ty)))
+
+;; This is the dual of the `global_value` constructor except that this one
+;; additionally copies PCC facts from the `GlobalValue` onto the returned
+;; `Inst`.
+(decl global_value_copy_facts (Type GlobalValue) Inst)
+(rule (global_value_copy_facts ty gv)
+  (let ((ret Inst (global_value ty gv))
+        (_ Unit (update_inst_facts_with_gv gv ret)))
+    ret))
+(decl iconst_with_fact (Type Imm64 GlobalValue) Inst)
+(rule (iconst_with_fact ty imm gv)
+  (let ((ret Inst (iconst ty imm))
+        (_ Unit (update_const_facts ty imm gv ret)))
+    ret))
+(decl update_inst_facts_with_gv (GlobalValue Value) Unit)
+(extern constructor update_inst_facts_with_gv update_inst_facts_with_gv)
+(decl update_const_facts (Type Imm64 GlobalValue Value) Unit)
+(extern constructor update_const_facts update_const_facts)
+
+;; ========= `table_addr` =====================================================
+
+(rule (legalize (table_addr addr_ty table idx @ (value_type idx_ty) offset))
+  (let (
+    ;; Start with the bounds check. Trap if `index + 1 > bound`.
+    ;; `index > bound - 1` is the same as `index >= bound`.
+    (bound Inst (global_value_copy_facts idx_ty (table_bound_gv table)))
+    (cmp Inst (icmp $I8 (IntCC.UnsignedGreaterThanOrEqual) idx bound))
+    (_ Inst (trapnz $I8 cmp (TrapCode.TableOutOfBounds)))
+
+    ;; Calculate the offset, in bytes, by multiplying `idx` by the byte size
+    ;; of the table element.
+    (idx Value (extend_index_to_addr idx addr_ty))
+    (mul_imm Value (iconst addr_ty (imm64 (table_element_size table))))
+    (idx_offset Value (imul addr_ty idx mul_imm))
+
+    ;; Calculate the final address by adding the table base address to the
+    ;; element offset to the static offset in the `table_addr` instruction.
+    (base Value (global_value_copy_facts addr_ty (table_base_gv table)))
+    (offset Value (iconst addr_ty (imm64 (i64_as_u64 (offset32_to_i32 offset)))))
+    (elem_addr Value (iadd addr_ty (iadd addr_ty base idx_offset) offset))
+
+    ;; Generate the final `result` and replace the current instruction with that.
+    (_ Value (select_table_addr cmp base elem_addr))
+  )
+  ;; re-legalize the above instructions
+  (prev_position)))
+
+(decl select_table_addr (Value Value Value) Value)
+(rule (select_table_addr cmp base @ (value_type ty) element_addr)
+  (if-let $true (enable_table_access_spectre_mitigation))
+  (select_spectre_guard ty cmp base element_addr))
+(rule (select_table_addr cmp base @ (value_type ty) element_addr)
+  (if-let $false (enable_table_access_spectre_mitigation))
+  element_addr)
+
+(decl extend_index_to_addr (Value Type) Value)
+(rule 0 (extend_index_to_addr val ty) (uextend ty val))
+(rule 1 (extend_index_to_addr val @ (value_type ty) ty) val)
+
+(decl table_bound_gv (Table) GlobalValue)
+(extern constructor table_bound_gv table_bound_gv)
+(decl table_base_gv (Table) GlobalValue)
+(extern constructor table_base_gv table_base_gv)
+(decl table_element_size (Table) u64)
+(extern constructor table_element_size table_element_size)
+(decl pure enable_table_access_spectre_mitigation () bool)
+(extern constructor enable_table_access_spectre_mitigation enable_table_access_spectre_mitigation)
+
+;; ========= NaN canonicalization =============================================
+
+(rule (legalize (ceil ty val))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (ceil ty val)))
+
+(rule (legalize (floor ty val))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (floor ty val)))
+
+(rule (legalize (nearest ty val))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (nearest ty val)))
+
+(rule (legalize (trunc ty val))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (trunc ty val)))
+
+(rule (legalize (sqrt ty val))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (sqrt ty val)))
+
+(rule (legalize (fadd ty a b))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (fadd ty a b)))
+
+(rule (legalize (fsub ty a b))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (fsub ty a b)))
+
+(rule (legalize (fmul ty a b))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (fmul ty a b)))
+
+(rule (legalize (fdiv ty a b))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (fdiv ty a b)))
+
+(rule (legalize (fmin ty a b))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (fmin ty a b)))
+
+(rule (legalize (fmax ty a b))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (fmax ty a b)))
+
+(rule (legalize (fma ty a b c))
+  (if-let $true (enable_nan_canonicalization))
+  (canonicalized ty (fma ty a b c)))
+
+(decl canonicalized (Type Value) Inst)
+(rule (canonicalized $F32 val)
+  (select $F32 (fcmp $I8 (FloatCC.NotEqual) val val) (canon_nan32) val))
+(rule (canonicalized $F64 val)
+  (select $F64 (fcmp $I8 (FloatCC.NotEqual) val val) (canon_nan64) val))
+(rule (canonicalized $F32X4 val)
+  (let ((cmp Value (fcmp $I32X4 (FloatCC.NotEqual) val val))
+        (canon Value (splat $F32X4 (canon_nan32)))
+        (mask Value (bitcast $F32X4 (mem_flags_empty) cmp)))
+    (bitselect $F32X4 mask canon val)))
+(rule (canonicalized $F64X2 val)
+  (let ((canon Value (splat $F64X2 (canon_nan64)))
+        (cmp Value (fcmp $I64X2 (FloatCC.NotEqual) val val))
+        (mask Value (bitcast $F64X2 (mem_flags_empty) cmp)))
+    (bitselect $F64X2 mask canon val)))
+
+(decl pure enable_nan_canonicalization () bool)
+(extern constructor enable_nan_canonicalization enable_nan_canonicalization)
+
+(decl canon_nan32 () Value)
+(extern constructor canon_nan32 canon_nan32)
+
+(decl canon_nan64 () Value)
+(extern constructor canon_nan64 canon_nan64)

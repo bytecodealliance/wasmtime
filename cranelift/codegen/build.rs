@@ -15,6 +15,7 @@
 // current directory is used to find the sources.
 
 use cranelift_codegen_meta as meta;
+use cranelift_codegen_meta::isa::Isa;
 use cranelift_isle::error::Errors;
 
 use std::env;
@@ -28,7 +29,7 @@ fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
 
-    let mut isas = meta::isa::Isa::all()
+    let mut isas = Isa::all()
         .iter()
         .cloned()
         .filter(|isa| {
@@ -82,7 +83,7 @@ fn main() {
     }
 
     if &std::env::var("SKIP_ISLE").unwrap_or("0".to_string()) != "1" {
-        if let Err(err) = build_isle(crate_dir, isle_dir) {
+        if let Err(err) = build_isle(crate_dir, isle_dir, &isas) {
             eprintln!("Error: {}", err);
             process::exit(1);
         }
@@ -175,18 +176,24 @@ struct IsleCompilation {
 fn get_isle_compilations(
     crate_dir: &std::path::Path,
     out_dir: &std::path::Path,
+    isas: &[Isa],
 ) -> Result<IsleCompilations, std::io::Error> {
     let cur_dir = std::env::current_dir()?;
 
     // Preludes.
     let clif_lower_isle = out_dir.join("clif_lower.isle");
     let clif_opt_isle = out_dir.join("clif_opt.isle");
+    let clif_legalize_isle = out_dir.join("clif_legalize.isle");
     let prelude_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude.isle"));
     let prelude_opt_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_opt.isle"));
     let prelude_lower_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_lower.isle"));
+    let legalize_shared_isle = make_isle_source_path_relative(
+        &cur_dir,
+        crate_dir.join("src/legalizer/legalize_shared.isle"),
+    );
 
     // Directory for mid-end optimizations.
     let src_opts = make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("opts"));
@@ -213,82 +220,135 @@ fn get_isle_compilations(
     // N.B.: add any new compilation outputs to
     // `scripts/force-rebuild-isle.sh` if they do not fit the pattern
     // `cranelift/codegen/src/isa/*/lower/isle/generated_code.rs`!
-    Ok(IsleCompilations {
-        items: vec![
-            // The mid-end optimization rules.
-            IsleCompilation {
-                output: out_dir.join("isle_opt.rs"),
-                inputs: vec![
-                    prelude_isle.clone(),
-                    prelude_opt_isle,
-                    src_opts.join("arithmetic.isle"),
-                    src_opts.join("bitops.isle"),
-                    src_opts.join("cprop.isle"),
-                    src_opts.join("extends.isle"),
-                    src_opts.join("icmp.isle"),
-                    src_opts.join("remat.isle"),
-                    src_opts.join("selects.isle"),
-                    src_opts.join("shifts.isle"),
-                    src_opts.join("vector.isle"),
-                ],
-                untracked_inputs: vec![clif_opt_isle],
-            },
-            // The x86-64 instruction selector.
-            IsleCompilation {
-                output: out_dir.join("isle_x64.rs"),
-                inputs: vec![
-                    prelude_isle.clone(),
-                    prelude_lower_isle.clone(),
-                    src_isa_x64.join("inst.isle"),
-                    src_isa_x64.join("lower.isle"),
-                ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
-            },
-            // The aarch64 instruction selector.
-            IsleCompilation {
-                output: out_dir.join("isle_aarch64.rs"),
-                inputs: vec![
-                    prelude_isle.clone(),
-                    prelude_lower_isle.clone(),
-                    src_isa_aarch64.join("inst.isle"),
-                    src_isa_aarch64.join("inst_neon.isle"),
-                    src_isa_aarch64.join("lower.isle"),
-                    src_isa_aarch64.join("lower_dynamic_neon.isle"),
-                ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
-            },
-            // The s390x instruction selector.
-            IsleCompilation {
-                output: out_dir.join("isle_s390x.rs"),
-                inputs: vec![
-                    prelude_isle.clone(),
-                    prelude_lower_isle.clone(),
-                    src_isa_s390x.join("inst.isle"),
-                    src_isa_s390x.join("lower.isle"),
-                ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
-            },
-            // The risc-v instruction selector.
-            IsleCompilation {
-                output: out_dir.join("isle_riscv64.rs"),
-                inputs: vec![
-                    prelude_isle.clone(),
-                    prelude_lower_isle.clone(),
-                    src_isa_risc_v.join("inst.isle"),
-                    src_isa_risc_v.join("inst_vector.isle"),
-                    src_isa_risc_v.join("lower.isle"),
-                ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
-            },
-        ],
-    })
+    let mut items = vec![
+        // The mid-end optimization rules.
+        IsleCompilation {
+            output: out_dir.join("isle_opt.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                prelude_opt_isle,
+                src_opts.join("arithmetic.isle"),
+                src_opts.join("bitops.isle"),
+                src_opts.join("cprop.isle"),
+                src_opts.join("extends.isle"),
+                src_opts.join("icmp.isle"),
+                src_opts.join("remat.isle"),
+                src_opts.join("selects.isle"),
+                src_opts.join("shifts.isle"),
+                src_opts.join("vector.isle"),
+            ],
+            untracked_inputs: vec![clif_opt_isle],
+        },
+    ];
+
+    if isas.contains(&Isa::X86) {
+        // The x86-64 instruction selector.
+        items.push(IsleCompilation {
+            output: out_dir.join("isle_x64.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                prelude_lower_isle.clone(),
+                src_isa_x64.join("inst.isle"),
+                src_isa_x64.join("lower.isle"),
+            ],
+            untracked_inputs: vec![clif_lower_isle.clone()],
+        });
+        // The x86-64 legalizer.
+        items.push(IsleCompilation {
+            output: out_dir.join("legalize_x64.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                legalize_shared_isle.clone(),
+                src_isa_x64.join("legalize.isle"),
+            ],
+            untracked_inputs: vec![clif_legalize_isle.clone()],
+        });
+    }
+
+    if isas.contains(&Isa::Arm64) {
+        // The aarch64 instruction selector.
+        items.push(IsleCompilation {
+            output: out_dir.join("isle_aarch64.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                prelude_lower_isle.clone(),
+                src_isa_aarch64.join("inst.isle"),
+                src_isa_aarch64.join("inst_neon.isle"),
+                src_isa_aarch64.join("lower.isle"),
+                src_isa_aarch64.join("lower_dynamic_neon.isle"),
+            ],
+            untracked_inputs: vec![clif_lower_isle.clone()],
+        });
+        // The aarch64 legalizer.
+        items.push(IsleCompilation {
+            output: out_dir.join("legalize_aarch64.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                legalize_shared_isle.clone(),
+                // NB: aarch64-specific legalization here when it exists
+            ],
+            untracked_inputs: vec![clif_legalize_isle.clone()],
+        });
+    }
+
+    if isas.contains(&Isa::S390x) {
+        // The s390x instruction selector.
+        items.push(IsleCompilation {
+            output: out_dir.join("isle_s390x.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                prelude_lower_isle.clone(),
+                src_isa_s390x.join("inst.isle"),
+                src_isa_s390x.join("lower.isle"),
+            ],
+            untracked_inputs: vec![clif_lower_isle.clone()],
+        });
+        // The s390x legalizer.
+        items.push(IsleCompilation {
+            output: out_dir.join("legalize_s390x.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                legalize_shared_isle.clone(),
+                // NB: s390x-specific legalization here when it exists
+            ],
+            untracked_inputs: vec![clif_legalize_isle.clone()],
+        });
+    }
+
+    if isas.contains(&Isa::Riscv64) {
+        // The risc-v instruction selector.
+        items.push(IsleCompilation {
+            output: out_dir.join("isle_riscv64.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                prelude_lower_isle.clone(),
+                src_isa_risc_v.join("inst.isle"),
+                src_isa_risc_v.join("inst_vector.isle"),
+                src_isa_risc_v.join("lower.isle"),
+            ],
+            untracked_inputs: vec![clif_lower_isle.clone()],
+        });
+        // The risc-v legalizer.
+        items.push(IsleCompilation {
+            output: out_dir.join("legalize_riscv64.rs"),
+            inputs: vec![
+                prelude_isle.clone(),
+                legalize_shared_isle.clone(),
+                src_isa_risc_v.join("legalize.isle"),
+            ],
+            untracked_inputs: vec![clif_legalize_isle.clone()],
+        });
+    }
+
+    Ok(IsleCompilations { items })
 }
 
 fn build_isle(
     crate_dir: &std::path::Path,
     isle_dir: &std::path::Path,
+    isas: &[Isa],
 ) -> Result<(), Box<dyn std::error::Error + 'static>> {
-    let isle_compilations = get_isle_compilations(crate_dir, isle_dir)?;
+    let isle_compilations = get_isle_compilations(crate_dir, isle_dir, isas)?;
 
     let mut had_error = false;
     for compilation in &isle_compilations.items {

@@ -49,15 +49,17 @@
 ;;
 ;;                                 block0(v0: i32, v1: i64):
 ;;                                     v20 -> v1
-;;                                     v21 -> v1
 ;;                                     v22 -> v1
-;;                                     v23 -> v1
-;; @0057                               v5 = load.i64 notrap aligned v1+8
-;; @0057                               v7 = load.i64 notrap aligned v1
+;;                                     v24 -> v1
+;;                                     v26 -> v1
+;;                                     v21 = load.i64 notrap aligned v1+8
+;;                                     v5 -> v21
+;;                                     v23 = load.i64 notrap aligned v1
+;;                                     v7 -> v23
 ;; @0057                               v4 = uextend.i64 v0
-;; @0057                               v6 = icmp ugt v4, v5
+;; @0057                               v6 = icmp ugt v4, v21
 ;; @0057                               v9 = iconst.i64 0
-;; @0057                               v8 = iadd v7, v4
+;; @0057                               v8 = iadd v23, v4
 ;; @0057                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
 ;; @0057                               v11 = load.i32 little heap v10
 ;;                                     v2 -> v11
@@ -74,15 +76,17 @@
 ;;
 ;;                                 block0(v0: i32, v1: i64):
 ;;                                     v24 -> v1
-;;                                     v25 -> v1
 ;;                                     v26 -> v1
-;;                                     v27 -> v1
-;; @0064                               v5 = load.i64 notrap aligned v1+8
-;; @0064                               v7 = load.i64 notrap aligned v1
+;;                                     v28 -> v1
+;;                                     v30 -> v1
+;;                                     v25 = load.i64 notrap aligned v1+8
+;;                                     v5 -> v25
+;;                                     v27 = load.i64 notrap aligned v1
+;;                                     v7 -> v27
 ;; @0064                               v4 = uextend.i64 v0
-;; @0064                               v6 = icmp ugt v4, v5
+;; @0064                               v6 = icmp ugt v4, v25
 ;; @0064                               v11 = iconst.i64 0
-;; @0064                               v8 = iadd v7, v4
+;; @0064                               v8 = iadd v27, v4
 ;; @0064                               v9 = iconst.i64 1234
 ;; @0064                               v10 = iadd v8, v9  ; v9 = 1234
 ;; @0064                               v12 = select_spectre_guard v6, v11, v10  ; v11 = 0

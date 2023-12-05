@@ -661,18 +661,6 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
-        Inst::CvtUint64ToFloatSeq {
-            dst,
-            tmp_gpr1,
-            tmp_gpr2,
-            ..
-        } => {
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())?;
-            ensure_no_fact(vcode, tmp_gpr1.to_writable_reg().to_reg())?;
-            ensure_no_fact(vcode, tmp_gpr2.to_writable_reg().to_reg())?;
-            Ok(())
-        }
-
         Inst::CvtFloatToSintSeq {
             dst,
             tmp_gpr,

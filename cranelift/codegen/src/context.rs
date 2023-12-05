@@ -16,10 +16,8 @@ use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
-use crate::legalizer::simple_legalize;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{CompiledCode, CompiledCodeStencil};
-use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
@@ -169,9 +167,6 @@ impl Context {
         );
 
         self.compute_cfg();
-        if isa.flags().enable_nan_canonicalization() {
-            self.canonicalize_nans(isa)?;
-        }
 
         self.legalize(isa)?;
 
@@ -276,12 +271,6 @@ impl Context {
         Ok(())
     }
 
-    /// Perform NaN canonicalizing rewrites on the function.
-    pub fn canonicalize_nans(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_nan_canonicalization(&mut self.func);
-        self.verify_if(isa)
-    }
-
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
         // Legalization invalidates the domtree and loop_analysis by mutating the CFG.
@@ -290,7 +279,7 @@ impl Context {
         self.loop_analysis.clear();
 
         // Run some specific legalizations only.
-        simple_legalize(&mut self.func, &mut self.cfg, isa);
+        isa.legalize_function(&mut self.func, &mut self.cfg);
         self.verify_if(isa)
     }
 

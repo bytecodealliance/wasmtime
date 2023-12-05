@@ -41,12 +41,12 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lgr %r5, %r2
-;;   ag %r5, 0(%r4)
-;;   lghi %r4, 0
+;;   lg %r5, 0(%r4)
+;;   agrk %r4, %r5, %r2
+;;   lghi %r5, 0
 ;;   clgfi %r2, 268435455
-;;   locgrh %r5, %r4
-;;   stc %r3, 0(%r5)
+;;   locgrh %r4, %r5
+;;   stc %r3, 0(%r4)
 ;;   jg label1
 ;; block1:
 ;;   br %r14
@@ -55,12 +55,12 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lgr %r5, %r2
-;;   ag %r5, 0(%r3)
-;;   lghi %r4, 0
+;;   lg %r5, 0(%r3)
+;;   agrk %r3, %r5, %r2
+;;   lghi %r5, 0
 ;;   clgfi %r2, 268435455
-;;   locgrh %r5, %r4
-;;   llc %r2, 0(%r5)
+;;   locgrh %r3, %r5
+;;   llc %r2, 0(%r3)
 ;;   jg label1
 ;; block1:
 ;;   br %r14

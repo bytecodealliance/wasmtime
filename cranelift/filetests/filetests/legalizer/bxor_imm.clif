@@ -9,4 +9,6 @@ block0(v0: i64, v1: i64):
 }
 
 ; check: v3 = iconst.i64 0x0001_0000_0000
-; check: v2 = bxor v0, v3
+; check: v4 = bxor v0, v3
+; check: v2 -> v4
+; check: return v2
