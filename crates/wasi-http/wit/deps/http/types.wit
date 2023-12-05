@@ -330,14 +330,14 @@ interface types {
 
     /// Set the timeout for the initial connect to the HTTP Server. An error
     /// return value indicates that this timeout is not supported.
-    set-connect-timeout: func(ms: option<duration>) -> result;
+    set-connect-timeout: func(duration: option<duration>) -> result;
 
     /// The timeout for receiving the first byte of the Response body.
     first-byte-timeout: func() -> option<duration>;
 
     /// Set the timeout for receiving the first byte of the Response body. An
     /// error return value indicates that this timeout is not supported.
-    set-first-byte-timeout: func(ms: option<duration>) -> result;
+    set-first-byte-timeout: func(duration: option<duration>) -> result;
 
     /// The timeout for receiving subsequent chunks of bytes in the Response
     /// body stream.
@@ -346,7 +346,7 @@ interface types {
     /// Set the timeout for receiving subsequent chunks of bytes in the Response
     /// body stream. An error return value indicates that this timeout is not
     /// supported.
-    set-between-bytes-timeout: func(ms: option<duration>) -> result;
+    set-between-bytes-timeout: func(duration: option<duration>) -> result;
   }
 
   /// Represents the ability to send an HTTP Response.
