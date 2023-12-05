@@ -204,7 +204,7 @@ impl Drop for Mmap {
         if self.is_file {
             let r = unsafe {
                 UnmapViewOfFile(MEMORY_MAPPED_VIEW_ADDRESS {
-                    Value: self.as_mut_ptr(),
+                    Value: self.as_mut_ptr().cast(),
                 })
             };
             assert_ne!(r, 0);
