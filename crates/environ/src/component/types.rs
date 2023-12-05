@@ -1003,7 +1003,7 @@ pub enum TypeDef {
     ComponentInstance(TypeComponentInstanceIndex),
     /// A component function, not to be confused with a core wasm function.
     ComponentFunc(TypeFuncIndex),
-    /// An interface type.
+    /// An type in an interface.
     Interface(InterfaceType),
     /// A core wasm module and its type.
     Module(TypeModuleIndex),
@@ -1014,6 +1014,21 @@ pub enum TypeDef {
     /// Note that different resource tables may point to the same underlying
     /// actual resource type, but that's a private detail.
     Resource(TypeResourceTableIndex),
+}
+
+impl TypeDef {
+    /// A human readable description of what kind of type definition this is.
+    pub fn desc(&self) -> &str {
+        match self {
+            TypeDef::Component(_) => "component",
+            TypeDef::ComponentInstance(_) => "instance",
+            TypeDef::ComponentFunc(_) => "function",
+            TypeDef::Interface(_) => "type",
+            TypeDef::Module(_) => "core module",
+            TypeDef::CoreFunc(_) => "core function",
+            TypeDef::Resource(_) => "resource",
+        }
+    }
 }
 
 // NB: Note that maps below are stored as an `IndexMap` now but the order
