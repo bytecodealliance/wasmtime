@@ -2,7 +2,7 @@ package wasmtime:wasi;
 
 // only used as part of `test-programs`
 world test-reactor {
-  include wasi:cli/reactor@0.2.0-rc-2023-11-10;
+  include wasi:cli/imports@0.2.0-rc-2023-12-05;
 
   export add-strings: func(s: list<string>) -> u32;
   export get-strings: func() -> list<string>;
@@ -16,7 +16,7 @@ world test-reactor {
 }
 
 world test-command {
-  include wasi:cli/reactor@0.2.0-rc-2023-11-10;
-  import wasi:http/types@0.2.0-rc-2023-11-10;
-  import wasi:http/outgoing-handler@0.2.0-rc-2023-11-10;
+  include wasi:cli/imports@0.2.0-rc-2023-12-05;
+  import wasi:http/types@0.2.0-rc-2023-12-05;
+  import wasi:http/outgoing-handler@0.2.0-rc-2023-12-05;
 }
