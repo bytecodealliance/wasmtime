@@ -169,8 +169,15 @@ interface types {
       entries: list<tuple<field-key,field-value>>
     ) -> result<fields, header-error>;
 
-    /// Get all of the values corresponding to a key.
+    /// Get all of the values corresponding to a key. If the key is not present
+    /// in this `fields`, an empty list is returned. However, if the key is
+    /// present but empty, this is represented by a list with one or more
+    /// empty field-values present.
     get: func(name: field-key) -> list<field-value>;
+
+    /// Returns `true` when the key is present in this `fields`. If the key is
+    /// syntactically invalid, `false` is returned.
+    has: func(name: field-key) -> bool;
 
     /// Set all of the values for a key. Clears any existing values for that
     /// key, if they have been set.
@@ -191,7 +198,7 @@ interface types {
     append: func(name: field-key, value: field-value) -> result<_, header-error>;
 
     /// Retrieve the full set of keys and values in the Fields. Like the
-    /// constructor, the list represents each key-value pair. 
+    /// constructor, the list represents each key-value pair.
     ///
     /// The outer list represents each key-value pair in the Fields. Keys
     /// which have multiple values are represented by multiple entries in this
@@ -308,8 +315,9 @@ interface types {
     headers: func() -> headers;
   }
 
-  /// Parameters for making an HTTP Request. Each of these parameters is an
-  /// optional timeout, applicable to the transport layer of the HTTP protocol.
+  /// Parameters for making an HTTP Request. Each of these parameters is
+  /// currently an optional timeout applicable to the transport layer of the
+  /// HTTP protocol.
   ///
   /// These timeouts are separate from any the user may use to bound a
   /// blocking call to `wasi:io/poll.poll`.
