@@ -26,13 +26,16 @@
 ;;   33:	 49630c83             	movsxd	rcx, dword ptr [r11 + rax*4]
 ;;   37:	 4901cb               	add	r11, rcx
 ;;   3a:	 41ffe3               	jmp	r11
-;;   3d:	 0c00                 	or	al, 0
+;;   3d:	 1a00                 	sbb	al, byte ptr [rax]
 ;;   3f:	 0000                 	add	byte ptr [rax], al
-;;   41:	 1000                 	adc	byte ptr [rax], al
+;;   41:	 1100                 	adc	dword ptr [rax], eax
 ;;   43:	 0000                 	add	byte ptr [rax], al
-;;   45:	 0c00                 	or	al, 0
+;;   45:	 1a00                 	sbb	al, byte ptr [rax]
 ;;   47:	 0000                 	add	byte ptr [rax], al
-;;   49:	 4883c404             	add	rsp, 4
-;;   4d:	 4883c410             	add	rsp, 0x10
-;;   51:	 5d                   	pop	rbp
-;;   52:	 c3                   	ret	
+;;   49:	 e909000000           	jmp	0x57
+;;   4e:	 4883c404             	add	rsp, 4
+;;   52:	 e904000000           	jmp	0x5b
+;;   57:	 4883c404             	add	rsp, 4
+;;   5b:	 4883c410             	add	rsp, 0x10
+;;   5f:	 5d                   	pop	rbp
+;;   60:	 c3                   	ret	
