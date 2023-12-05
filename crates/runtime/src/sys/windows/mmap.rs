@@ -104,7 +104,8 @@ impl Mmap {
                 0,
                 0,
                 len,
-            ).Value;
+            )
+            .Value;
             let err = io::Error::last_os_error();
             CloseHandle(mapping);
             if ptr.is_null() {
