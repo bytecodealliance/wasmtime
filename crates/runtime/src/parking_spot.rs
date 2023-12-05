@@ -10,24 +10,19 @@
 //! and resuming it.
 
 #![deny(missing_docs)]
-#![deny(unsafe_code)]
 
-use crate::WaitResult;
+use crate::{SendSyncPtr, WaitResult};
 use std::collections::BTreeMap;
-use std::sync::{Arc, Condvar, Mutex};
-use std::time::Instant;
+use std::ptr::NonNull;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::SeqCst};
+use std::sync::Mutex;
+use std::thread::{self, Thread};
+use std::time::{Duration, Instant};
 
 #[derive(Default, Debug)]
 struct Spot {
-    /// The number of threads parked on this spot.
-    num_parked: u32,
-
-    /// The number of threads that have been unparked but not yet woken up.
-    /// This is used to avoid spurious wakeups.
-    to_unpark: u32,
-
-    /// The [`Condvar`] used to notify parked threads.
-    cvar: Arc<Condvar>,
+    head: Option<SendSyncPtr<WaiterInner>>,
+    tail: Option<SendSyncPtr<WaiterInner>>,
 }
 
 /// The thread global `ParkingSpot`.
@@ -36,167 +31,194 @@ pub struct ParkingSpot {
     inner: Mutex<BTreeMap<u64, Spot>>,
 }
 
+#[derive(Default)]
+pub struct Waiter {
+    inner: Option<Box<WaiterInner>>,
+}
+
+struct WaiterInner {
+    // NB: this field may be read concurrently, but is only written under the
+    // lock of a `ParkingSpot`.
+    thread: Thread,
+
+    // NB: these fields are only modified/read under the lock of a
+    // `ParkingSpot`.
+    notified: bool,
+    next: Option<SendSyncPtr<WaiterInner>>,
+    prev: Option<SendSyncPtr<WaiterInner>>,
+}
+
 impl ParkingSpot {
-    /// Park the current thread until it is unparked or a timeout is reached.
+    /// Atomically validates if `atomic == expected` and, if so, blocks the
+    /// current thread.
     ///
-    /// The `key` is used to identify the parking spot. If another thread calls
-    /// `unpark_all` or `unpark` with the same key, the current thread will be unparked.
+    /// This method will first check to see if `atomic == expected` using a
+    /// `SeqCst` load ordering. If the values are not equal then the method
+    /// immediately returns with `WaitResult::Mismatch`. Otherwise the thread
+    /// will be blocked and can only be woken up with `notify` on the same
+    /// address. Note that the check-and-block operation is atomic with respect
+    /// to `notify`.
     ///
-    /// The `validate` callback is called before parking.
-    /// If it returns `false`, the thread is not parked and `WaitResult::Mismatch` is returned.
+    /// The optional `deadline` specified can indicate a point in time after
+    /// which this thread will be unblocked. If this thread is not notified and
+    /// `deadline` is reached then `WaitResult::TimedOut` is returned. If
+    /// `deadline` is `None` then this thread will block forever waiting for
+    /// `notify`.
     ///
-    /// The `timeout` argument specifies the maximum amount of time the thread will be parked.
-    pub fn park(
+    /// The `waiter` argument is metadata used by this structure to block
+    /// the current thread.
+    ///
+    /// This method will not spuriously wake up one blocked.
+    pub fn wait32(
         &self,
-        key: u64,
-        validate: impl FnOnce() -> bool,
-        timeout: impl Into<Option<Instant>>,
+        atomic: &AtomicU32,
+        expected: u32,
+        deadline: impl Into<Option<Instant>>,
+        waiter: &mut Waiter,
     ) -> WaitResult {
-        self.park_inner(key, validate, timeout.into())
+        self.wait(
+            atomic.as_ptr() as u64,
+            || atomic.load(SeqCst) == expected,
+            deadline.into(),
+            waiter,
+        )
     }
 
-    fn park_inner(
+    /// Same as `wait32`, but for 64-bit values.
+    pub fn wait64(
+        &self,
+        atomic: &AtomicU64,
+        expected: u64,
+        deadline: impl Into<Option<Instant>>,
+        waiter: &mut Waiter,
+    ) -> WaitResult {
+        self.wait(
+            atomic.as_ptr() as u64,
+            || atomic.load(SeqCst) == expected,
+            deadline.into(),
+            waiter,
+        )
+    }
+
+    fn wait(
         &self,
         key: u64,
         validate: impl FnOnce() -> bool,
-        timeout: Option<Instant>,
+        deadline: Option<Instant>,
+        waiter: &mut Waiter,
     ) -> WaitResult {
         let mut inner = self
             .inner
             .lock()
             .expect("failed to lock inner parking table");
 
-        // check validation with lock held
+        // This is the "atomic" part of the `validate` check which ensure that
+        // the memory location still indicates that we're allowed to block.
         if !validate() {
             return WaitResult::Mismatch;
         }
 
-        // clone the condvar, so we can move the lock
-        let cvar = {
-            let spot = inner.entry(key).or_insert_with(Spot::default);
-            spot.num_parked = spot
-                .num_parked
-                .checked_add(1)
-                .expect("parking spot number overflow");
-            spot.cvar.clone()
-        };
+        // Lazily initialize the `waiter` node if it hasn't been already, and
+        // additionally ensure it's not accidentally in some other queue.
+        let waiter = waiter.inner.get_or_insert_with(|| {
+            Box::new(WaiterInner {
+                next: None,
+                prev: None,
+                notified: false,
+                thread: thread::current(),
+            })
+        });
+        assert!(waiter.next.is_none());
+        assert!(waiter.prev.is_none());
 
-        loop {
-            let timed_out = if let Some(timeout) = timeout {
-                let now = Instant::now();
-                if now >= timeout {
-                    true
-                } else {
-                    let dur = timeout - now;
-                    let (lock, result) = cvar
-                        .wait_timeout(inner, dur)
-                        .expect("failed to wait for condition");
-                    inner = lock;
-                    result.timed_out()
+        // Clear the `notified` flag if it was previously notified and
+        // configure the thread to wakeup as our own.
+        waiter.notified = false;
+        waiter.thread = thread::current();
+
+        let ptr = SendSyncPtr::new(NonNull::from(&mut **waiter));
+        let spot = inner.entry(key).or_insert_with(Spot::default);
+        unsafe {
+            // Enqueue our `waiter` in the internal queue for this spot.
+            spot.push(ptr);
+
+            // Wait for a notification to arrive. This is done through
+            // `std::thread::park_timeout` by dropping the lock that is held.
+            // This loop is somewhat similar to a condition variable.
+            //
+            // If no timeout was given then the maximum duration is effectively
+            // infinite (500 billion years), otherwise the timeout is
+            // calculated relative to the `deadline` specified.
+            //
+            // To handle spurious wakeups if the thread wakes up but a
+            // notification wasn't received then the thread goes back to sleep.
+            let timed_out = loop {
+                let timeout = match deadline {
+                    Some(deadline) => {
+                        let now = Instant::now();
+                        if deadline <= now {
+                            break true;
+                        } else {
+                            deadline - now
+                        }
+                    }
+                    None => Duration::MAX,
+                };
+
+                drop(inner);
+                thread::park_timeout(timeout);
+                inner = self.inner.lock().unwrap();
+
+                if ptr.as_ref().notified {
+                    break false;
                 }
-            } else {
-                inner = cvar.wait(inner).expect("failed to wait for condition");
-                false
             };
 
-            let spot = inner.get_mut(&key).expect("failed to get spot");
-
             if timed_out {
-                // If waiting on the cvar timed out then due to how system cvars
-                // are implemented we may need to continue to sleep longer. If
-                // the deadline has not been reached then turn the crank again
-                // and go back to sleep.
-                if Instant::now() < timeout.unwrap() {
-                    continue;
-                }
-
-                // Opportunistically consume `to_unpark` signals even on
-                // timeout. From the perspective of `unpark` this "agent" raced
-                // between its own timeout and receiving the unpark signal, but
-                // from unpark's perspective it's definitely going to wake up N
-                // agents as returned from the `unpark` return value.
-                //
-                // Note that this may actually prevent other threads from
-                // getting unparked. For example:
-                //
-                // * Thread A parks with a timeout
-                // * Thread B parks with no timeout
-                // * Thread C decides to unpark 1 thread
-                // * Thread A's cvar wakes up due to a timeout, blocks on the
-                //   lock
-                // * Thread C finishes unpark and signals the cvar once
-                // * Thread B wakes up
-                // * Thread A and B contend for the lock and A wins
-                // * A consumes the "to_unpark" value
-                // * B goes back to sleep since `to_unpark == 0`, thinking that
-                //   a spurious wakeup happened.
-                //
-                // It's believed that this is ok, however, since from C's
-                // perspective one agent was still woken up and is allowed to
-                // continue, notably A in this case. C doesn't know that A raced
-                // with B and "stole" its wakeup signal.
-                if spot.to_unpark > 0 {
-                    spot.to_unpark -= 1;
-                }
+                // If this thread timed out then it is still present in the
+                // waiter queue, so remove it.
+                inner.get_mut(&key).unwrap().remove(ptr);
+                WaitResult::TimedOut
             } else {
-                if spot.to_unpark == 0 {
-                    // If no timeout happen but nothing has unparked this spot (as
-                    // signaled through `to_unpark`) then this is indicative of a
-                    // spurious wakeup. In this situation turn the crank again and
-                    // go back to sleep as this interface doesn't allow for spurious
-                    // wakeups.
-                    continue;
-                }
-                // No timeout happened, and some other thread registered to
-                // unpark this thread, so consume one unpark notification.
-                spot.to_unpark -= 1;
+                // If this node was notified then we should not be in a queue
+                // at this point.
+                assert!(ptr.as_ref().next.is_none());
+                assert!(ptr.as_ref().prev.is_none());
+                WaitResult::Ok
             }
-
-            spot.num_parked = spot
-                .num_parked
-                .checked_sub(1)
-                .expect("corrupted parking spot state");
-
-            if spot.num_parked == 0 {
-                assert_eq!(spot.to_unpark, 0);
-                inner
-                    .remove(&key)
-                    .expect("failed to remove spot from inner parking table");
-            }
-
-            if timed_out {
-                return WaitResult::TimedOut;
-            }
-
-            return WaitResult::Ok;
         }
     }
 
-    /// Unpark at most `n` threads that are parked with the given key.
+    /// Notify at most `n` threads that are blocked on the given address.
     ///
     /// Returns the number of threads that were actually unparked.
-    pub fn unpark(&self, key: u64, n: u32) -> u32 {
+    pub fn notify<T>(&self, addr: &T, n: u32) -> u32 {
         if n == 0 {
             return 0;
         }
-        let mut num_unpark = 0;
+        let mut unparked = 0;
 
-        self.with_lot(key, |spot| {
-            num_unpark = n.min(spot.num_parked - spot.to_unpark);
-            spot.to_unpark += num_unpark;
-            if n >= num_unpark {
-                spot.cvar.notify_all();
-            } else {
-                for _ in 0..num_unpark {
-                    spot.cvar.notify_one();
+        // It's known here that `n > 0` so dequeue items until `unparked`
+        // equals `n` or the queue runs out. Each thread dequeued is signaled
+        // that it's been notified and then woken up.
+        self.with_lot(addr, |spot| unsafe {
+            while let Some(mut head) = spot.pop() {
+                let head = head.as_mut();
+                assert!(head.next.is_none());
+                head.notified = true;
+                head.thread.unpark();
+                unparked += 1;
+                if unparked == n {
+                    break;
                 }
             }
         });
 
-        num_unpark
+        unparked
     }
 
-    fn with_lot<F: FnMut(&mut Spot)>(&self, key: u64, mut f: F) {
+    fn with_lot<T, F: FnMut(&mut Spot)>(&self, addr: &T, mut f: F) {
+        let key = addr as *const _ as u64;
         let mut inner = self
             .inner
             .lock()
@@ -207,51 +229,127 @@ impl ParkingSpot {
     }
 }
 
+impl Waiter {
+    pub const fn new() -> Waiter {
+        Waiter { inner: None }
+    }
+}
+
+impl Spot {
+    /// Adds `waiter` to the queue at the end.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is `unsafe` as it can only be invoked under the parking
+    /// spot's mutex. Additionally `waiter` must be a valid pointer not already
+    /// in any other queue and additionally only exclusively used by this queue
+    /// now.
+    unsafe fn push(&mut self, mut waiter: SendSyncPtr<WaiterInner>) {
+        assert!(waiter.as_ref().next.is_none());
+        assert!(waiter.as_ref().prev.is_none());
+
+        waiter.as_mut().prev = self.tail;
+        match self.tail {
+            Some(mut tail) => tail.as_mut().next = Some(waiter),
+            None => self.head = Some(waiter),
+        }
+        self.tail = Some(waiter);
+    }
+
+    /// Removes `waiter` from the queue.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is `unsafe` as it can only be invoked under the parking
+    /// spot's mutex. Additionally `waiter` must be a valid pointer in this
+    /// queue.
+    unsafe fn remove(&mut self, mut waiter: SendSyncPtr<WaiterInner>) {
+        let w = waiter.as_mut();
+        match w.prev {
+            Some(mut prev) => prev.as_mut().next = w.next,
+            None => self.head = w.next,
+        }
+        match w.next {
+            Some(mut next) => next.as_mut().prev = w.prev,
+            None => self.tail = w.prev,
+        }
+        w.prev = None;
+        w.next = None;
+    }
+
+    /// Pops the head of the queue from this linked list to wake up a waiter.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is `unsafe` as it can only be invoked under the parking
+    /// spot's mutex.
+    unsafe fn pop(&mut self) -> Option<SendSyncPtr<WaiterInner>> {
+        let ret = self.head?;
+        self.remove(ret);
+        Some(ret)
+    }
+
+    #[cfg(test)]
+    fn num_parked(&self) -> u32 {
+        let mut ret = 0;
+        let mut cur = self.head;
+        while let Some(next) = cur {
+            ret += 1;
+            cur = unsafe { next.as_ref().next };
+        }
+        ret
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ParkingSpot;
-    use std::ptr::addr_of;
+    use super::{ParkingSpot, Waiter};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::thread;
     use std::time::{Duration, Instant};
 
     #[test]
     fn atomic_wait_notify() {
-        let parking_spot = &ParkingSpot::default();
-        let atomic = &AtomicU64::new(0);
+        let parking_spot = ParkingSpot::default();
+        let atomic = AtomicU64::new(0);
+
+        let wait_until_value = |val: u64, waiter: &mut Waiter| loop {
+            let cur = atomic.load(Ordering::SeqCst);
+            if cur == val {
+                break;
+            } else {
+                parking_spot.wait64(&atomic, cur, None, waiter);
+            }
+        };
 
         thread::scope(|s| {
-            let atomic_key = addr_of!(atomic) as u64;
-            let thread1 = s.spawn(move || {
+            let thread1 = s.spawn(|| {
+                let mut waiter = Waiter::default();
                 atomic.store(1, Ordering::SeqCst);
-                parking_spot.unpark(atomic_key, u32::MAX);
-                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) == 1, None);
+                parking_spot.notify(&atomic, u32::MAX);
+                parking_spot.wait64(&atomic, 1, None, &mut waiter);
             });
 
-            let thread2 = s.spawn(move || {
-                while atomic.load(Ordering::SeqCst) != 1 {
-                    parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) != 1, None);
-                }
+            let thread2 = s.spawn(|| {
+                let mut waiter = Waiter::default();
+                wait_until_value(1, &mut waiter);
                 atomic.store(2, Ordering::SeqCst);
-                parking_spot.unpark(atomic_key, u32::MAX);
-                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) == 2, None);
+                parking_spot.notify(&atomic, u32::MAX);
+                parking_spot.wait64(&atomic, 2, None, &mut waiter);
             });
 
-            let thread3 = s.spawn(move || {
-                while atomic.load(Ordering::SeqCst) != 2 {
-                    parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) != 2, None);
-                }
+            let thread3 = s.spawn(|| {
+                let mut waiter = Waiter::default();
+                wait_until_value(2, &mut waiter);
                 atomic.store(3, Ordering::SeqCst);
-                parking_spot.unpark(atomic_key, u32::MAX);
-
-                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) == 3, None);
+                parking_spot.notify(&atomic, u32::MAX);
+                parking_spot.wait64(&atomic, 3, None, &mut waiter);
             });
 
-            while atomic.load(Ordering::SeqCst) != 3 {
-                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) != 3, None);
-            }
+            let mut waiter = Waiter::default();
+            wait_until_value(3, &mut waiter);
             atomic.store(4, Ordering::SeqCst);
-            parking_spot.unpark(atomic_key, u32::MAX);
+            parking_spot.notify(&atomic, u32::MAX);
 
             thread1.join().unwrap();
             thread2.join().unwrap();
@@ -263,7 +361,7 @@ mod tests {
         // This is a modified version of the parking_lot_core tests,
         // which are licensed under the MIT and Apache 2.0 licenses.
         use super::*;
-        use std::sync::atomic::{AtomicIsize, AtomicU32};
+        use std::sync::atomic::AtomicU32;
         use std::sync::Arc;
         use std::time::Duration;
 
@@ -367,7 +465,7 @@ mod tests {
         }
 
         struct SingleLatchTest<'a> {
-            semaphore: AtomicIsize,
+            semaphore: AtomicU32,
             num_awake: AtomicU32,
             /// Total number of threads participating in this test.
             num_threads: u32,
@@ -378,7 +476,7 @@ mod tests {
             pub fn new(num_threads: u32, spot: &'a ParkingSpot) -> Self {
                 Self {
                     // This implements a fair (FIFO) semaphore, and it starts out unavailable.
-                    semaphore: AtomicIsize::new(0),
+                    semaphore: AtomicU32::new(0),
                     num_awake: AtomicU32::new(0),
                     num_threads,
                     spot,
@@ -412,14 +510,14 @@ mod tests {
                 // still be threads that has not yet parked.
                 while num_threads_left > 0 {
                     let mut num_waiting_on_address = 0;
-                    self.spot.with_lot(self.semaphore_addr(), |thread_data| {
-                        num_waiting_on_address = thread_data.num_parked;
+                    self.spot.with_lot(&self.semaphore, |thread_data| {
+                        num_waiting_on_address = thread_data.num_parked();
                     });
                     assert!(num_waiting_on_address <= num_threads_left);
 
                     let num_awake_before_unpark = self.num_awake.load(Ordering::SeqCst);
 
-                    let num_unparked = self.spot.unpark(self.semaphore_addr(), u32::MAX);
+                    let num_unparked = self.spot.notify(&self.semaphore, u32::MAX);
                     assert!(num_unparked >= num_waiting_on_address);
                     assert!(num_unparked <= num_threads_left);
 
@@ -437,27 +535,36 @@ mod tests {
 
                 // Make sure no thread is parked on our semaphore address
                 let mut num_waiting_on_address = 0;
-                self.spot.with_lot(self.semaphore_addr(), |thread_data| {
-                    num_waiting_on_address = thread_data.num_parked;
+                self.spot.with_lot(&self.semaphore, |thread_data| {
+                    num_waiting_on_address = thread_data.num_parked();
                 });
                 assert_eq!(num_waiting_on_address, 0);
             }
 
             pub fn down(&self) {
-                let old_semaphore_value = self.semaphore.fetch_sub(1, Ordering::SeqCst);
+                let mut old_semaphore_value = self.semaphore.fetch_sub(1, Ordering::SeqCst);
 
-                if old_semaphore_value > 0 {
+                if (old_semaphore_value as i32) > 0 {
                     // We acquired the semaphore. Done.
                     return;
                 }
 
-                // We need to wait.
-                let validate = || true;
-                self.spot.park(self.semaphore_addr(), validate, None);
+                // Force this thread to go to sleep.
+                let mut waiter = Waiter::new();
+                loop {
+                    match self
+                        .spot
+                        .wait32(&self.semaphore, old_semaphore_value, None, &mut waiter)
+                    {
+                        crate::WaitResult::Mismatch => {}
+                        _ => break,
+                    }
+                    old_semaphore_value = self.semaphore.load(Ordering::SeqCst);
+                }
             }
 
             pub fn up(&self) {
-                let old_semaphore_value = self.semaphore.fetch_add(1, Ordering::SeqCst);
+                let old_semaphore_value = self.semaphore.fetch_add(1, Ordering::SeqCst) as i32;
 
                 // Check if anyone was waiting on the semaphore. If they were, then pass ownership to them.
                 if old_semaphore_value < 0 {
@@ -465,7 +572,7 @@ mod tests {
                     // the thread we want to pass ownership to has decremented the semaphore counter,
                     // but not yet parked.
                     loop {
-                        match self.spot.unpark(self.semaphore_addr(), 1) {
+                        match self.spot.notify(&self.semaphore, 1) {
                             1 => break,
                             0 => (),
                             i => panic!("Should not wake up {i} threads"),
@@ -473,41 +580,36 @@ mod tests {
                     }
                 }
             }
-
-            fn semaphore_addr(&self) -> u64 {
-                addr_of!(self.semaphore) as _
-            }
         }
     }
 
     #[test]
     fn wait_with_timeout() {
-        let parking_spot = &ParkingSpot::default();
-        let atomic = &AtomicU64::new(0);
+        let parking_spot = ParkingSpot::default();
+        let atomic = AtomicU64::new(0);
 
         thread::scope(|s| {
-            let atomic_key = addr_of!(atomic) as u64;
-
             const N: u64 = 5;
             const M: u64 = if cfg!(miri) { 10 } else { 1000 };
 
-            let thread = s.spawn(move || {
-                while atomic.load(Ordering::SeqCst) != N * M {
+            let thread = s.spawn(|| {
+                let mut waiter = Waiter::new();
+                loop {
+                    let cur = atomic.load(Ordering::SeqCst);
+                    if cur == N * M {
+                        break;
+                    }
                     let timeout = Instant::now() + Duration::from_millis(1);
-                    parking_spot.park(
-                        atomic_key,
-                        || atomic.load(Ordering::SeqCst) != N * M,
-                        Some(timeout),
-                    );
+                    parking_spot.wait64(&atomic, cur, Some(timeout), &mut waiter);
                 }
             });
 
             let mut threads = vec![thread];
             for _ in 0..N {
-                threads.push(s.spawn(move || {
+                threads.push(s.spawn(|| {
                     for _ in 0..M {
                         atomic.fetch_add(1, Ordering::SeqCst);
-                        parking_spot.unpark(atomic_key, 1);
+                        parking_spot.notify(&atomic, 1);
                     }
                 }));
             }
