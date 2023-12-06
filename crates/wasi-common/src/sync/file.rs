@@ -111,6 +111,9 @@ impl WasiFile for File {
         bufs: &[io::IoSlice<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
+        if bufs.iter().map(|i| i.len()).sum::<usize>() == 0 {
+            return Ok(0);
+        }
         let n = self.0.write_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }

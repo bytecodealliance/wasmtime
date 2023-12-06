@@ -148,6 +148,9 @@ macro_rules! wasi_file_impl {
                 bufs: &[io::IoSlice<'a>],
                 offset: u64,
             ) -> Result<u64, Error> {
+                if bufs.iter().map(|i| i.len()).sum::<usize>() == 0 {
+                    return Ok(0);
+                }
                 block_on_dummy_executor(move || self.0.write_vectored_at(bufs, offset))
             }
             async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
