@@ -35,8 +35,10 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     ) -> SocketResult<()> {
         self.ctx().allowed_network_uses.check_allowed_udp()?;
         let table = self.table_mut();
+        // Set the pool on the socket so later functions have access to it through the socket handle
+        table.get_mut(&this)?.pool = table.get(&network)?.pool.clone();
+
         let socket = table.get(&this)?;
-        let network = table.get(&network)?;
         let local_address: SocketAddr = local_address.into();
 
         match socket.udp_state {
@@ -48,7 +50,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            let binder = network.pool.udp_binder(local_address)?;
+            let binder = socket.pool.udp_binder(local_address)?;
             let udp_socket = &*socket
                 .udp_socket()
                 .as_socketlike_view::<cap_std::net::UdpSocket>();
@@ -130,6 +132,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         if let Some(connect_addr) = remote_address {
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
+            // We don't actually use the connecter, we just use it to verify that `connect_addr` is allowed
+            let _ = socket.pool.udp_connecter(connect_addr)?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -345,7 +349,6 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
                 _ => {}
             }
 
-            // FIXME: check permission to receive from `received_addr`.
             Ok(Some(udp::IncomingDatagram {
                 data: buf[..size].into(),
                 remote_address: received_addr.into(),
