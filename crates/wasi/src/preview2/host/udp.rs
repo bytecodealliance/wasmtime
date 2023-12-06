@@ -33,6 +33,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
+        self.ctx().allowed_network_uses.check_allowed_udp()?;
         let table = self.table_mut();
         let socket = table.get(&this)?;
         let network = table.get(&network)?;

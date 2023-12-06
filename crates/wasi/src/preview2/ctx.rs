@@ -27,7 +27,7 @@ pub struct WasiCtxBuilder {
     insecure_random_seed: u128,
     wall_clock: Box<dyn HostWallClock + Send + Sync>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
-    allow_ip_name_lookup: bool,
+    allowed_network_uses: AllowedNetworkUses,
     built: bool,
 }
 
@@ -77,7 +77,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
-            allow_ip_name_lookup: false,
+            allowed_network_uses: AllowedNetworkUses::default(),
             built: false,
         }
     }
@@ -250,7 +250,19 @@ impl WasiCtxBuilder {
 
     /// Allow usage of `wasi:sockets/ip-name-lookup`
     pub fn allow_ip_name_lookup(&mut self, enable: bool) -> &mut Self {
-        self.allow_ip_name_lookup = enable;
+        self.allowed_network_uses.ip_name_lookup = enable;
+        self
+    }
+
+    /// Disallow usage of UDP
+    pub fn disallow_udp(&mut self, disable: bool) -> &mut Self {
+        self.allowed_network_uses.udp = !disable;
+        self
+    }
+
+    /// Disallow usage of TCP
+    pub fn disallow_tcp(&mut self, disable: bool) -> &mut Self {
+        self.allowed_network_uses.tcp = !disable;
         self
     }
 
@@ -278,7 +290,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-            allow_ip_name_lookup,
+            allowed_network_uses,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -296,7 +308,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-            allow_ip_name_lookup,
+            allowed_network_uses,
         }
     }
 }
@@ -321,5 +333,47 @@ pub struct WasiCtx {
     pub(crate) stdout: Box<dyn StdoutStream>,
     pub(crate) stderr: Box<dyn StdoutStream>,
     pub(crate) pool: Pool,
-    pub(crate) allow_ip_name_lookup: bool,
+    pub(crate) allowed_network_uses: AllowedNetworkUses,
+}
+
+pub struct AllowedNetworkUses {
+    pub ip_name_lookup: bool,
+    pub udp: bool,
+    pub tcp: bool,
+}
+
+impl Default for AllowedNetworkUses {
+    fn default() -> Self {
+        Self {
+            ip_name_lookup: false,
+            udp: true,
+            tcp: true,
+        }
+    }
+}
+
+impl AllowedNetworkUses {
+    pub(crate) fn check_allowed_udp(&self) -> std::io::Result<()> {
+        if !self.udp {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "UDP is not allowed",
+            )
+            .into());
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn check_allowed_tcp(&self) -> std::io::Result<()> {
+        if !self.tcp {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "TCP is not allowed",
+            )
+            .into());
+        }
+
+        Ok(())
+    }
 }
