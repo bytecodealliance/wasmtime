@@ -178,7 +178,14 @@ int main(int argc, const char *argv[]) {
     args->engine = engine;
     args->module = shared;
     printf("Initializing thread %d...\n", i);
-    pthread_create(&threads[i], NULL, &run, args);
+
+    // Guarantee at least 2MB of stack to allow running Cranelift in debug mode
+    // on CI.
+    pthread_attr_t attrs;
+    pthread_attr_init(&attrs);
+    pthread_attr_setstacksize(&attrs, 2 << 20);
+    pthread_create(&threads[i], &attrs, &run, args);
+    pthread_attr_destroy(&attrs);
   }
 
   for (int i = 0; i < N_THREADS; i++) {
