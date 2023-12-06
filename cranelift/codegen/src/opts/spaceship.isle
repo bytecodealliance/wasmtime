@@ -1,0 +1,237 @@
+;; Simplifications for C++20's `<=>` "spaceship" operator, aka Rust's `Ord::cmp`.
+;;
+;; There's no cranelift instruction for this, nor usually a machine instruction.
+;; Inspired by <https://graphics.stanford.edu/~seander/bithacks.html#CopyIntegerSign>
+;; we canonicalize the various implementations of `x <=> y` to `(x > y) - (x < y)`.
+
+;; Unfortunately, there's at least 3!×2 reasonable ways to write this as nested
+;; selects, and no broad agreement which is the best -- notably Rust 1.74 and
+;; Clang 17 use different sequences -- so we just match all of them.
+
+;; x < y ? -1 : x == y ? 0 : +1
+;; x < y ? -1 : x != y ? +1 : 0
+(rule (simplify (select ty (ult rty x y)
+                           (iconst ty neg_1)
+                           (ne rty x y)))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+(rule (simplify (select ty (ult rty x y)
+                           (iconst ty neg_1)
+                           (uextend ty (ne rty x y))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+;; x < y ? -1 : x <= y ? 0 : +1
+;; x < y ? -1 : x > y ? +1 : 0
+(rule (simplify (select ty (ult rty x y)
+                           (iconst ty neg_1)
+                           (ugt rty x y)))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+(rule (simplify (select ty (ult rty x y)
+                           (iconst ty neg_1)
+                           (uextend ty (ugt rty x y))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+
+;; x == y ? 0 : x < y ? -1 : +1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (ult rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 1)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+;; x == y ? 0 : x <= y ? -1 : +1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (ule rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 1)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+;; x == y ? 0 : x > y ? +1 : -1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (ugt rty x y)
+                                      (iconst ty (u64_from_imm64 1))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+;; x == y ? 0 : x >= y ? +1 : -1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (uge rty x y)
+                                      (iconst ty (u64_from_imm64 1))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+
+;; x > y ? 1 : x < y ? -1 : 0
+(rule (simplify (select ty (ugt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (ult rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 0)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+;; x > y ? 1 : x != y ? -1 : 0
+(rule (simplify (select ty (ugt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (ne rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 0)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+;; x > y ? 1 : x == y ? 0 : -1
+(rule (simplify (select ty (ugt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (eq rty x y)
+                                      (iconst ty (u64_from_imm64 0))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+;; x > y ? 1 : x >= y ? 0 : -1
+(rule (simplify (select ty (ugt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (uge rty x y)
+                                      (iconst ty (u64_from_imm64 0))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_u rty x y)))
+
+;; Same, but for signed comparisons this time
+
+;; x < y ? -1 : x == y ? 0 : +1
+;; x < y ? -1 : x != y ? +1 : 0
+(rule (simplify (select ty (slt rty x y)
+                           (iconst ty neg_1)
+                           (ne rty x y)))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (spaceship_s rty x y))
+(rule (simplify (select ty (slt rty x y)
+                           (iconst ty neg_1)
+                           (uextend ty (ne rty x y))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+;; x < y ? -1 : x <= y ? 0 : +1
+;; x < y ? -1 : x > y ? +1 : 0
+(rule (simplify (select ty (slt rty x y)
+                           (iconst ty neg_1)
+                           (sgt rty x y)))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (spaceship_s rty x y))
+(rule (simplify (select ty (slt rty x y)
+                           (iconst ty neg_1)
+                           (uextend ty (sgt rty x y))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+
+;; x == y ? 0 : x < y ? -1 : +1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (slt rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 1)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+;; x == y ? 0 : x <= y ? -1 : +1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (sle rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 1)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+;; x == y ? 0 : x > y ? +1 : -1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (sgt rty x y)
+                                      (iconst ty (u64_from_imm64 1))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+;; x == y ? 0 : x >= y ? +1 : -1
+(rule (simplify (select ty (eq rty x y)
+                           (iconst ty (u64_from_imm64 0))
+                           (select ty (sge rty x y)
+                                      (iconst ty (u64_from_imm64 1))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+
+;; x > y ? 1 : x < y ? -1 : 0
+(rule (simplify (select ty (sgt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (slt rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 0)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+;; x > y ? 1 : x != y ? -1 : 0
+(rule (simplify (select ty (sgt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (ne rty x y)
+                                      (iconst ty neg_1)
+                                      (iconst ty (u64_from_imm64 0)))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+;; x > y ? 1 : x == y ? 0 : -1
+(rule (simplify (select ty (sgt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (eq rty x y)
+                                      (iconst ty (u64_from_imm64 0))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+;; x > y ? 1 : x >= y ? 0 : -1
+(rule (simplify (select ty (sgt rty x y)
+                           (iconst ty (u64_from_imm64 1))
+                           (select ty (sge rty x y)
+                                      (iconst ty (u64_from_imm64 0))
+                                      (iconst ty neg_1))))
+      (if-let -1 (i64_sextend_imm64 ty neg_1))
+      (sextend_from_i8 ty (spaceship_s rty x y)))
+
+;; Then once we have it normalized, we can apply some basic simplifications.
+;; For example, a derived `PartialOrd::lt` on a newtype in Rust will essentially
+;; emit `(a <=> b) < 0`, and replacing that with `a < b` can really help.
+;; `icmp.isle` prefers comparing against zero so we don't need to worry about
+;; also matching things like `(a <=> b) < 1` or `(a <=> b) <= -1`.
+
+;; (a <=> b) == 0 --> a == b
+(rule (simplify (eq _ (spaceship_s ty x y) (iconst _ (u64_from_imm64 0))))
+      (eq ty x y))
+(rule (simplify (eq _ (spaceship_u ty x y) (iconst _ (u64_from_imm64 0))))
+      (eq ty x y))
+;; (a <=> b) != 0 --> a != b
+(rule (simplify (ne _ (spaceship_s ty x y) (iconst _ (u64_from_imm64 0))))
+      (ne ty x y))
+(rule (simplify (ne _ (spaceship_u ty x y) (iconst _ (u64_from_imm64 0))))
+      (ne ty x y))
+
+;; (a <=> b) < 0 --> a < b
+(rule (simplify (slt _ (spaceship_s ty x y) (iconst _ (u64_from_imm64 0))))
+      (slt ty x y))
+(rule (simplify (slt _ (spaceship_u ty x y) (iconst _ (u64_from_imm64 0))))
+      (ult ty x y))
+;; (a <=> b) <= 0 --> a <= b
+(rule (simplify (sle _ (spaceship_s ty x y) (iconst _ (u64_from_imm64 0))))
+      (sle ty x y))
+(rule (simplify (sle _ (spaceship_u ty x y) (iconst _ (u64_from_imm64 0))))
+      (ule ty x y))
+;; (a <=> b) > 0 --> a > b
+(rule (simplify (sgt _ (spaceship_s ty x y) (iconst _ (u64_from_imm64 0))))
+      (sgt ty x y))
+(rule (simplify (sgt _ (spaceship_u ty x y) (iconst _ (u64_from_imm64 0))))
+      (ugt ty x y))
+;; (a <=> b) >= 0 --> a >= b
+(rule (simplify (sge _ (spaceship_s ty x y) (iconst _ (u64_from_imm64 0))))
+      (sge ty x y))
+(rule (simplify (sge _ (spaceship_u ty x y) (iconst _ (u64_from_imm64 0))))
+      (uge ty x y))
+
+;; extend from i8 to i8 is invalid CLIF, so this allows fixing that in the output
+;; rather than needing to duplicate rules for the different width categories
+(decl sextend_from_i8 (Type Value) Value)
+(rule 0 (sextend_from_i8 ty val) (sextend ty val))
+(rule 1 (sextend_from_i8 $I8 val) val)
