@@ -95,7 +95,7 @@ pub mod bindings {
 
     wasmtime::component::bindgen!({
         path: "wit",
-        world: "wasi:cli/reactor",
+        world: "wasi:cli/imports",
         tracing: true,
         async: {
             // Only these functions are `async` and everything else is sync
