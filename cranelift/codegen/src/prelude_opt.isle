@@ -28,6 +28,14 @@
 (rule (sgt ty x y) (icmp ty (IntCC.SignedGreaterThan) x y))
 (rule (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
 
+;; 3-way comparison, returning -1/0/+1 in I8
+(decl spaceship_s (Type Value Value) Value)
+(rule (spaceship_s ty x y) (isub $I8 (sgt ty x y) (slt ty x y)))
+(extractor (spaceship_s ty x y) (isub $I8 (sgt ty x y) (slt ty x y)))
+(decl spaceship_u (Type Value Value) Value)
+(rule (spaceship_u ty x y) (isub $I8 (ugt ty x y) (ult ty x y)))
+(extractor (spaceship_u ty x y) (isub $I8 (ugt ty x y) (ult ty x y)))
+
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The main matcher rule invoked by the toplevel driver.
