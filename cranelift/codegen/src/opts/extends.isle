@@ -4,6 +4,14 @@
 (rule (simplify (sextend ty (sextend _intermediate_ty x)))
       (sextend ty x))
 
+;; Once something has be `uextend`ed, further `sextend`ing is the same as `uextend`
+(rule (simplify (sextend ty (uextend _intermediate_ty x)))
+      (uextend ty x))
+
+;; `icmp` is zero or one, so sign-extending is the same as zero-extending
+(rule (simplify (sextend ty x@(icmp _ _ _ _)))
+      (uextend ty x))
+
 ;; Masking out any of the top bits of the result of `uextend` is a no-op. (This
 ;; is like a cheap version of known-bits analysis.)
 (rule (simplify (band wide x @ (uextend _ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))

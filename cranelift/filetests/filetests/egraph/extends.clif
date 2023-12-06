@@ -54,6 +54,28 @@ block0(v1: i16):
 ; check: v4 = sextend.i64 v1
 ; check: return v4
 
+function %suextend_icmp(i16, i16) -> i64 {
+block0(v0: i16, v1: i16):
+    v2 = icmp slt v0, v1
+    v3 = uextend.i32 v2
+    v4 = sextend.i64 v3
+    return v4
+}
+
+; check: v5 = uextend.i64 v2
+; check: return v5
+
+function %usextend_icmp(i16, i16) -> i64 {
+block0(v0: i16, v1: i16):
+    v2 = icmp uge v0, v1
+    v3 = sextend.i32 v2
+    v4 = uextend.i64 v3
+    return v4
+}
+
+; check: v7 = uextend.i64 v2
+; check: return v7
+
 function %sextend_then_reduce(i16) -> i16 {
 block0(v1: i16):
     v2 = sextend.i32 v1
