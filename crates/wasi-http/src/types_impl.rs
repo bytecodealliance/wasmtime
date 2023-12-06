@@ -145,18 +145,32 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
     ) -> wasmtime::Result<Vec<Vec<u8>>> {
+        let fields = get_fields(self.table(), &fields).context("[fields_get] getting fields")?;
+
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
             Err(_) => return Ok(vec![]),
         };
 
-        let res = get_fields(self.table(), &fields)
-            .context("[fields_get] getting fields")?
-            .get_all(header)
+        if !fields.contains_key(&header) {
+            return Ok(vec![]);
+        }
+
+        let res = fields
+            .get_all(&header)
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
             .collect();
         Ok(res)
+    }
+
+    fn has(&mut self, fields: Resource<HostFields>, name: String) -> wasmtime::Result<bool> {
+        let fields = get_fields(self.table(), &fields).context("[fields_get] getting fields")?;
+
+        match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => Ok(fields.contains_key(&header)),
+            Err(_) => Ok(false),
+        }
     }
 
     fn set(

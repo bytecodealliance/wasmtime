@@ -24,7 +24,7 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
         let req_hdrs = request.headers();
 
         assert!(
-            req_hdrs.get(&header).is_empty(),
+            !req_hdrs.has(&header),
             "forbidden `custom-forbidden-header` found in request"
         );
 
@@ -32,7 +32,7 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
         assert!(req_hdrs.append(&header, &b"no".to_vec()).is_err());
 
         assert!(
-            req_hdrs.get(&header).is_empty(),
+            !req_hdrs.has(&header),
             "append of forbidden header succeeded"
         );
 
