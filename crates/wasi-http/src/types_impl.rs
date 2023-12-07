@@ -12,7 +12,7 @@ use anyhow::Context;
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::preview2::{
+use wasmtime_wasi::{
     bindings::io::streams::{InputStream, OutputStream},
     Pollable,
 };
@@ -644,7 +644,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
         &mut self,
         index: Resource<HostFutureTrailers>,
     ) -> wasmtime::Result<Resource<Pollable>> {
-        wasmtime_wasi::preview2::subscribe(self.table(), index)
+        wasmtime_wasi::subscribe(self.table(), index)
     }
 
     fn get(
@@ -852,7 +852,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
     ) -> wasmtime::Result<Resource<Pollable>> {
-        wasmtime_wasi::preview2::subscribe(self.table(), id)
+        wasmtime_wasi::subscribe(self.table(), id)
     }
 }
 
