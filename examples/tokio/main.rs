@@ -5,7 +5,7 @@ use wasmtime::{Config, Engine, Linker, Module, Store};
 // For this example we want to use the async version of wasmtime_wasi.
 // Notably, this version of wasi uses a scheduler that will async yield
 // when sleeping in `poll_oneoff`.
-use wasmtime_wasi::{tokio::WasiCtxBuilder, WasiCtx};
+use wasmtime_wasi::{preview1::WasiPreview1Ctx, WasiCtxBuilder};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Error> {
 struct Environment {
     engine: Engine,
     module: Module,
-    linker: Arc<Linker<WasiCtx>>,
+    linker: Arc<Linker<WasiPreview1Ctx>>,
 }
 
 impl Environment {
@@ -61,7 +61,7 @@ impl Environment {
         // adds WASI functions to the linker, notably the async versions built
         // on tokio.
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::tokio::add_to_linker(&mut linker, |cx| cx)?;
+        wasmtime_wasi::preview1::add_to_linker_async(&mut linker)?;
 
         Ok(Self {
             engine,
@@ -90,8 +90,9 @@ async fn run_wasm(inputs: Inputs) -> Result<(), Error> {
         // Let wasi print to this process's stdout.
         .inherit_stdout()
         // Set an environment variable so the wasm knows its name.
-        .env("NAME", &inputs.name)?
-        .build();
+        .env("NAME", &inputs.name)
+        .build()
+        .into();
     let mut store = Store::new(&inputs.env.engine, wasi);
 
     // Put effectively unlimited fuel so it can run forever.

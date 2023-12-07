@@ -754,12 +754,12 @@ fn parse_dwarf_info() -> Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
+    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker)?;
     let mut store = Store::new(
         &engine,
-        wasmtime_wasi::sync::WasiCtxBuilder::new()
-            .inherit_stdio()
-            .build(),
+        wasmtime_wasi::preview1::WasiPreview1Ctx::from(
+            wasmtime_wasi::WasiCtxBuilder::new().inherit_stdio().build(),
+        ),
     );
     linker.module(&mut store, "", &module)?;
     let run = linker.get_default(&mut store, "")?;

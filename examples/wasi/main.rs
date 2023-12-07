@@ -8,21 +8,23 @@ You can execute this example with:
 
 use anyhow::Result;
 use wasmtime::*;
-use wasmtime_wasi::sync::WasiCtxBuilder;
+use wasmtime_wasi::{preview1::WasiPreview1Ctx, WasiCtxBuilder};
 
 fn main() -> Result<()> {
     // Define the WASI functions globally on the `Config`.
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
+    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker)?;
 
     // Create a WASI context and put it in a Store; all instances in the store
     // share this context. `WasiCtxBuilder` provides a number of ways to
     // configure what the target program will have access to.
-    let wasi = WasiCtxBuilder::new()
-        .inherit_stdio()
-        .inherit_args()?
-        .build();
+    let wasi = WasiPreview1Ctx::from(
+        WasiCtxBuilder::new()
+            .inherit_stdio()
+            .args(&std::env::args().into_iter().collect::<Vec<String>>())
+            .build(),
+    );
     let mut store = Store::new(&engine, wasi);
 
     // Instantiate our module with the imports we've created, and run it.
