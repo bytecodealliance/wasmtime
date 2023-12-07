@@ -3348,6 +3348,8 @@ dependencies = [
  "tokio",
  "tracing",
  "walkdir",
+ "wasi-cap-std-sync",
+ "wasi-common",
  "wasmparser",
  "wasmtime",
  "wasmtime-cache",

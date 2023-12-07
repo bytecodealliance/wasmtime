@@ -9,9 +9,9 @@ use std::{
         Arc,
     },
 };
-use wasmtime::component::{InstancePre, Linker};
+use wasmtime::component::{InstancePre, Linker, ResourceTable};
 use wasmtime::{Engine, Store, StoreLimits};
-use wasmtime_wasi::preview2::{self, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
@@ -22,7 +22,7 @@ use wasmtime_wasi_http::{
 use wasmtime_wasi_nn::WasiNnCtx;
 
 struct Host {
-    table: wasmtime::component::ResourceTable,
+    table: ResourceTable,
     ctx: WasiCtx,
     http: WasiHttpCtx,
 
@@ -33,11 +33,11 @@ struct Host {
 }
 
 impl WasiView for Host {
-    fn table(&self) -> &wasmtime::component::ResourceTable {
+    fn table(&self) -> &ResourceTable {
         &self.table
     }
 
-    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
+    fn table_mut(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 
@@ -51,7 +51,7 @@ impl WasiView for Host {
 }
 
 impl WasiHttpView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 
@@ -154,7 +154,7 @@ impl ServeCommand {
         });
 
         let mut host = Host {
-            table: wasmtime::component::ResourceTable::new(),
+            table: ResourceTable::new(),
             ctx: builder.build(),
             http: WasiHttpCtx,
 
@@ -209,7 +209,7 @@ impl ServeCommand {
         // bindings which adds just those interfaces that the proxy interface
         // uses.
         if self.run.common.wasi.common == Some(true) {
-            preview2::command::add_to_linker(linker)?;
+            wasmtime_wasi::command::add_to_linker(linker)?;
             wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
         } else {
             wasmtime_wasi_http::proxy::add_to_linker(linker)?;
@@ -471,8 +471,8 @@ struct LogStream {
     output: Output,
 }
 
-impl preview2::StdoutStream for LogStream {
-    fn stream(&self) -> Box<dyn preview2::HostOutputStream> {
+impl wasmtime_wasi::StdoutStream for LogStream {
+    fn stream(&self) -> Box<dyn wasmtime_wasi::HostOutputStream> {
         Box::new(self.clone())
     }
 
@@ -486,7 +486,7 @@ impl preview2::StdoutStream for LogStream {
     }
 }
 
-impl preview2::HostOutputStream for LogStream {
+impl wasmtime_wasi::HostOutputStream for LogStream {
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
         let mut msg = Vec::new();
 
@@ -513,6 +513,6 @@ impl preview2::HostOutputStream for LogStream {
 }
 
 #[async_trait::async_trait]
-impl preview2::Subscribe for LogStream {
+impl wasmtime_wasi::Subscribe for LogStream {
     async fn ready(&mut self) {}
 }

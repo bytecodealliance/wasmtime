@@ -1,8 +1,7 @@
 use anyhow::{bail, Result};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
-use wasmtime_wasi::sync::WasiCtxBuilder;
-use wasmtime_wasi::I32Exit;
+use wasmtime_wasi::{preview1::WasiPreview1Ctx, I32Exit, WasiCtxBuilder};
 
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]
@@ -708,7 +707,7 @@ fn store_with_context() -> Result<()> {
 fn wasi_imports() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
+    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker)?;
 
     let wasm = wat::parse_str(
         r#"
@@ -721,7 +720,10 @@ fn wasi_imports() -> Result<()> {
     )?;
 
     let module = Module::new(&engine, wasm)?;
-    let mut store = Store::new(&engine, WasiCtxBuilder::new().build());
+    let mut store = Store::new(
+        &engine,
+        WasiPreview1Ctx::from(WasiCtxBuilder::new().build()),
+    );
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
