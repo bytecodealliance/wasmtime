@@ -508,6 +508,47 @@ pub fn add_to_linker_sync<T: WasiPreview1View + Sync>(
     sync::add_wasi_snapshot_preview1_to_linker(linker, |t| t)
 }
 
+/// Convenient implementation of an analog to `wasi-common::WasiCtx`: a context struct that
+/// works for users who only care about consuming wasmtime-wasi's support for WASI Preview 1.
+pub struct WasiPreview1Ctx {
+    table: crate::Table,
+    wasi: crate::WasiCtx,
+    adapter: WasiPreview1Adapter,
+}
+
+impl From<crate::WasiCtx> for WasiPreview1Ctx {
+    fn from(wasi: crate::WasiCtx) -> WasiPreview1Ctx {
+        Self {
+            table: crate::Table::new(),
+            wasi,
+            adapter: WasiPreview1Adapter::new(),
+        }
+    }
+}
+
+impl WasiView for WasiPreview1Ctx {
+    fn table(&self) -> &crate::Table {
+        &self.table
+    }
+    fn table_mut(&mut self) -> &mut crate::Table {
+        &mut self.table
+    }
+    fn ctx(&self) -> &crate::WasiCtx {
+        &self.wasi
+    }
+    fn ctx_mut(&mut self) -> &mut crate::WasiCtx {
+        &mut self.wasi
+    }
+}
+impl WasiPreview1View for WasiPreview1Ctx {
+    fn adapter(&self) -> &WasiPreview1Adapter {
+        &self.adapter
+    }
+    fn adapter_mut(&mut self) -> &mut WasiPreview1Adapter {
+        &mut self.adapter
+    }
+}
+
 // Generate the wasi_snapshot_preview1::WasiSnapshotPreview1 trait,
 // and the module types.
 // None of the generated modules, traits, or types should be used externally
