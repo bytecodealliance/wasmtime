@@ -35,17 +35,18 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     ) -> SocketResult<()> {
         self.ctx().allowed_network_uses.check_allowed_udp()?;
         let table = self.table_mut();
+
+        match table.get(&this)?.udp_state {
+            UdpState::Default => {}
+            UdpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            UdpState::Bound | UdpState::Connected => return Err(ErrorCode::InvalidState.into()),
+        }
+
         // Set the pool on the socket so later functions have access to it through the socket handle
         table.get_mut(&this)?.pool = table.get(&network)?.pool.clone();
 
         let socket = table.get(&this)?;
         let local_address: SocketAddr = local_address.into();
-
-        match socket.udp_state {
-            UdpState::Default => {}
-            UdpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
-            UdpState::Bound | UdpState::Connected => return Err(ErrorCode::InvalidState.into()),
-        }
 
         util::validate_address_family(&local_address, &socket.family)?;
 

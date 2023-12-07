@@ -45,7 +45,7 @@ pub struct UdpSocket {
     pub(crate) family: SocketAddressFamily,
 
     /// The pool of allowed address
-    pub(crate) pool: Pool,
+    pub(crate) pool: Arc<Pool>,
 }
 
 #[async_trait]
@@ -71,7 +71,7 @@ impl UdpSocket {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
             family: socket_address_family,
-            pool: Pool::new(),
+            pool: Arc::new(Pool::new()),
         })
     }
 
