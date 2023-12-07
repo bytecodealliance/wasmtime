@@ -2974,6 +2974,7 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "io-extras",
+ "libc",
  "log",
  "rustix",
  "tempfile",
@@ -2983,8 +2984,9 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wasi-cap-std-sync",
+ "wasi-tokio",
  "wasmtime",
- "wasmtime-wasi",
  "wiggle",
  "windows-sys",
 ]
@@ -3681,9 +3683,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "wasi-cap-std-sync",
- "wasi-common",
- "wasi-tokio",
  "wasmtime",
  "wiggle",
  "windows-sys",
@@ -3737,7 +3736,6 @@ dependencies = [
  "rand",
  "wasi-common",
  "wasmtime",
- "wasmtime-wasi",
 ]
 
 [[package]]

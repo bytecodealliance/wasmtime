@@ -355,7 +355,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
-wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper", "wasmtime-wasi-http?/sync"]
+wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",
@@ -390,7 +390,6 @@ harness = false
 
 [[example]]
 name = "tokio"
-required-features = ["wasmtime-wasi/tokio"]
 
 [[bench]]
 name = "instantiation"

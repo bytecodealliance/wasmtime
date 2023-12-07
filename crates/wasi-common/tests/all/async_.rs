@@ -1,6 +1,7 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime_wasi::tokio::{add_to_linker, WasiCtxBuilder};
+use wasi_common::tokio::add_to_linker;
+use wasi_tokio::WasiCtxBuilder;
 
 foreach_preview1!(assert_test_exists);
 

@@ -29,6 +29,7 @@ tracing = { workspace = true }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 bitflags = { workspace = true }
+libc = { workspace = true }
 log = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
@@ -49,7 +50,8 @@ tempfile = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift', 'async'] }
-wasmtime-wasi = { path = '../wasi', features = ['sync', 'tokio'] }
+wasi-cap-std-sync = { workspace = true }
+wasi-tokio = { workspace = true }
 test-programs-artifacts = { workspace = true }
 tokio = { workspace = true, features = ['macros', 'rt-multi-thread'] }
 
@@ -62,3 +64,5 @@ trace_log = [ "wiggle/tracing_log", "tracing/log" ]
 # Need to make the wiggle_metadata feature available to consumers of this
 # crate if they want the snapshots to have metadata available.
 wiggle_metadata = ["wiggle/wiggle_metadata"]
+# Used for wasi-threads's exit functionality
+exit = []

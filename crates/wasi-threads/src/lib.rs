@@ -7,8 +7,8 @@ use rand::Rng;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 use std::thread;
+use wasi_common::maybe_exit_on_error;
 use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store, ValType};
-use wasmtime_wasi::maybe_exit_on_error;
 
 // This name is a function export designated by the wasi-threads specification:
 // https://github.com/WebAssembly/wasi-threads/#detailed-design-discussion
