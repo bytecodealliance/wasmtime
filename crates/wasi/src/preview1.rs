@@ -1,4 +1,4 @@
-use crate::preview2::bindings::{
+use crate::bindings::{
     self,
     cli::{
         stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
@@ -8,7 +8,7 @@ use crate::preview2::bindings::{
     filesystem::{preopens, types as filesystem},
     io::{poll, streams},
 };
-use crate::preview2::{FsError, IsATTY, StreamError, StreamResult, WasiView};
+use crate::{FsError, IsATTY, StreamError, StreamResult, WasiView};
 use anyhow::{bail, Context};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashSet};
@@ -352,7 +352,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 
     /// Borrows [`File`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
+    /// if it describes a [`Descriptor::File`] of [`crate::filesystem::File`] type
     fn get_file(&self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
@@ -365,7 +365,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 
     /// Mutably borrows [`File`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
+    /// if it describes a [`Descriptor::File`] of [`crate::filesystem::File`] type
     fn get_file_mut(&mut self, fd: types::Fd) -> Result<&mut File> {
         let fd = fd.into();
         match self.descriptors.get_mut(&fd) {
@@ -378,7 +378,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 
     /// Borrows [`File`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type.
+    /// if it describes a [`Descriptor::File`] of [`crate::filesystem::File`] type.
     ///
     /// # Errors
     ///
@@ -413,14 +413,14 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
+    /// if it describes a [`Descriptor::File`] of [`crate::filesystem::File`] type
     fn get_file_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         self.get_file(fd).map(|File { fd, .. }| fd.borrowed())
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
-    /// of [`crate::preview2::filesystem::Dir`] type
+    /// of [`crate::filesystem::Dir`] type
     fn get_dir_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
@@ -470,7 +470,7 @@ trait WasiPreview1ViewExt:
 
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
+    /// if it describes a [`Descriptor::File`] of [`crate::filesystem::File`] type
     fn get_file_fd(
         &mut self,
         fd: types::Fd,
@@ -483,7 +483,7 @@ trait WasiPreview1ViewExt:
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
-    /// of [`crate::preview2::filesystem::Dir`] type
+    /// of [`crate::filesystem::Dir`] type
     fn get_dir_fd(
         &mut self,
         fd: types::Fd,
@@ -548,7 +548,7 @@ mod sync {
     // Small wrapper around `in_tokio` to add a `Result` layer which is always
     // `Ok`
     fn in_tokio<F: Future>(future: F) -> Result<F::Output> {
-        Ok(crate::preview2::in_tokio(future))
+        Ok(crate::in_tokio(future))
     }
 }
 
@@ -2270,7 +2270,7 @@ impl<
         if status >= 126 {
             return anyhow::Error::msg("exit with invalid exit status outside of [0..126)");
         }
-        crate::preview2::I32Exit(status as i32).into()
+        crate::I32Exit(status as i32).into()
     }
 
     #[instrument(skip(self))]

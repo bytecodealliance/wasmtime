@@ -1,6 +1,6 @@
-use crate::preview2::bindings::{sockets::network::IpAddressFamily, sockets::udp_create_socket};
-use crate::preview2::udp::UdpSocket;
-use crate::preview2::{SocketResult, WasiView};
+use crate::bindings::{sockets::network::IpAddressFamily, sockets::udp_create_socket};
+use crate::udp::UdpSocket;
+use crate::{SocketResult, WasiView};
 use wasmtime::component::Resource;
 
 impl<T: WasiView> udp_create_socket::Host for T {

@@ -1,5 +1,5 @@
-use crate::preview2::bindings::random::{insecure, insecure_seed, random};
-use crate::preview2::WasiView;
+use crate::bindings::random::{insecure, insecure_seed, random};
+use crate::WasiView;
 use cap_rand::{distributions::Standard, Rng};
 
 impl<T: WasiView> random::Host for T {

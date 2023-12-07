@@ -1,5 +1,5 @@
-use crate::preview2::bindings::filesystem::types;
-use crate::preview2::{
+use crate::bindings::filesystem::types;
+use crate::{
     spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe, TrappableError,
 };
 use anyhow::anyhow;

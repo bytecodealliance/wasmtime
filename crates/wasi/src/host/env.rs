@@ -1,5 +1,5 @@
-use crate::preview2::bindings::cli::environment;
-use crate::preview2::WasiView;
+use crate::bindings::cli::environment;
+use crate::WasiView;
 
 impl<T: WasiView> environment::Host for T {
     fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {

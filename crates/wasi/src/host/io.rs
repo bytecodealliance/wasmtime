@@ -1,4 +1,4 @@
-use crate::preview2::{
+use crate::{
     bindings::io::error,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::subscribe,
@@ -163,7 +163,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
         src: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<u64> {
-        use crate::preview2::Subscribe;
+        use crate::Subscribe;
 
         self.table_mut().get_mut(&dest)?.ready().await;
 
@@ -222,12 +222,12 @@ impl<T: WasiView> streams::HostInputStream for T {
     }
 
     fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table_mut(), stream)
+        crate::poll::subscribe(self.table_mut(), stream)
     }
 }
 
 pub mod sync {
-    use crate::preview2::{
+    use crate::{
         bindings::io::streams::{
             self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
             HostOutputStream as AsyncHostOutputStream,

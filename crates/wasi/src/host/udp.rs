@@ -1,6 +1,6 @@
-use crate::preview2::host::network::util;
-use crate::preview2::network::SocketAddressFamily;
-use crate::preview2::{
+use crate::host::network::util;
+use crate::network::SocketAddressFamily;
+use crate::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
         sockets::udp,
@@ -8,7 +8,7 @@ use crate::preview2::{
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
     Subscribe,
 };
-use crate::preview2::{Pollable, SocketError, SocketResult, WasiView};
+use crate::{Pollable, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use cap_net_ext::PoolExt;
@@ -318,7 +318,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     }
 
     fn subscribe(&mut self, this: Resource<udp::UdpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table_mut(), this)
+        crate::poll::subscribe(self.table_mut(), this)
     }
 
     fn drop(&mut self, this: Resource<udp::UdpSocket>) -> Result<(), anyhow::Error> {
@@ -398,7 +398,7 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table_mut(), this)
+        crate::poll::subscribe(self.table_mut(), this)
     }
 
     fn drop(&mut self, this: Resource<udp::IncomingDatagramStream>) -> Result<(), anyhow::Error> {
@@ -535,7 +535,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table_mut(), this)
+        crate::poll::subscribe(self.table_mut(), this)
     }
 
     fn drop(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> Result<(), anyhow::Error> {

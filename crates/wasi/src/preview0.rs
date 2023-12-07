@@ -1,7 +1,7 @@
-use crate::preview2::preview0::types::Error;
-use crate::preview2::preview1::types as snapshot1_types;
-use crate::preview2::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
-use crate::preview2::preview1::WasiPreview1View;
+use crate::preview0::types::Error;
+use crate::preview1::types as snapshot1_types;
+use crate::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
+use crate::preview1::WasiPreview1View;
 use wiggle::{GuestError, GuestPtr};
 
 pub fn add_to_linker_async<T: WasiPreview1View + Sync>(
@@ -52,7 +52,7 @@ mod sync {
     // Small wrapper around `in_tokio` to add a `Result` layer which is always
     // `Ok`
     fn in_tokio<F: Future>(future: F) -> Result<F::Output> {
-        Ok(crate::preview2::in_tokio(future))
+        Ok(crate::in_tokio(future))
     }
 }
 

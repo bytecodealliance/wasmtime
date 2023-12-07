@@ -1,6 +1,6 @@
-use crate::preview2::host::network::util;
-use crate::preview2::tcp::{TcpSocket, TcpState};
-use crate::preview2::{
+use crate::host::network::util;
+use crate::tcp::{TcpSocket, TcpState};
+use crate::{
     bindings::{
         io::streams::{InputStream, OutputStream},
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -8,7 +8,7 @@ use crate::preview2::{
     },
     network::SocketAddressFamily,
 };
-use crate::preview2::{Pollable, SocketResult, WasiView};
+use crate::{Pollable, SocketResult, WasiView};
 use cap_net_ext::{Blocking, PoolExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
@@ -21,7 +21,7 @@ use wasmtime::component::Resource;
 
 impl<T: WasiView> tcp::Host for T {}
 
-impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
+impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
     fn start_bind(
         &mut self,
         this: Resource<tcp::TcpSocket>,
@@ -591,7 +591,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     }
 
     fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table_mut(), this)
+        crate::poll::subscribe(self.table_mut(), this)
     }
 
     fn shutdown(

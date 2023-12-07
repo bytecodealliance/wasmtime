@@ -1,11 +1,11 @@
 #![allow(unused_variables)]
 
-use crate::preview2::bindings::{
+use crate::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use crate::preview2::poll::{subscribe, Subscribe};
-use crate::preview2::{Pollable, WasiView};
+use crate::poll::{subscribe, Subscribe};
+use crate::{Pollable, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;

@@ -1,4 +1,4 @@
-use crate::preview2::{HostOutputStream, StreamError, Subscribe};
+use crate::{HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
@@ -139,7 +139,7 @@ impl Worker {
 /// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream {
     worker: Arc<Worker>,
-    _join_handle: crate::preview2::AbortOnDropJoinHandle<()>,
+    _join_handle: crate::AbortOnDropJoinHandle<()>,
 }
 
 impl AsyncWriteStream {
@@ -152,7 +152,7 @@ impl AsyncWriteStream {
         let worker = Arc::new(Worker::new(write_budget));
 
         let w = Arc::clone(&worker);
-        let join_handle = crate::preview2::spawn(async move { w.work(writer).await });
+        let join_handle = crate::spawn(async move { w.work(writer).await });
 
         AsyncWriteStream {
             worker,

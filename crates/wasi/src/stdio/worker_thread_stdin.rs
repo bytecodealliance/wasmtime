@@ -23,9 +23,9 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::preview2::poll::Subscribe;
-use crate::preview2::stdio::StdinStream;
-use crate::preview2::{HostInputStream, StreamError};
+use crate::poll::Subscribe;
+use crate::stdio::StdinStream;
+use crate::{HostInputStream, StreamError};
 use bytes::{Bytes, BytesMut};
 use std::io::{IsTerminal, Read};
 use std::mem;

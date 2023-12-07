@@ -1,9 +1,9 @@
-use crate::preview2::bindings::sockets::network::{
+use crate::bindings::sockets::network::{
     self, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress,
     Ipv6SocketAddress,
 };
-use crate::preview2::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
-use crate::preview2::{SocketError, WasiView};
+use crate::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
+use crate::{SocketError, WasiView};
 use rustix::io::Errno;
 use std::io;
 use wasmtime::component::Resource;
@@ -14,7 +14,7 @@ impl<T: WasiView> network::Host for T {
     }
 }
 
-impl<T: WasiView> crate::preview2::bindings::sockets::network::HostNetwork for T {
+impl<T: WasiView> crate::bindings::sockets::network::HostNetwork for T {
     fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
@@ -215,9 +215,9 @@ pub(crate) mod util {
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::time::Duration;
 
-    use crate::preview2::bindings::sockets::network::ErrorCode;
-    use crate::preview2::network::SocketAddressFamily;
-    use crate::preview2::SocketResult;
+    use crate::bindings::sockets::network::ErrorCode;
+    use crate::network::SocketAddressFamily;
+    use crate::SocketResult;
     use cap_net_ext::{Blocking, TcpBinder, TcpConnecter, TcpListenerExt, UdpBinder};
     use cap_std::net::{TcpListener, TcpStream, UdpSocket};
     use rustix::fd::AsFd;

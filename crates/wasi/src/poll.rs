@@ -1,4 +1,4 @@
-use crate::preview2::{bindings::io::poll, WasiView};
+use crate::{bindings::io::poll, WasiView};
 use anyhow::Result;
 use std::any::Any;
 use std::collections::HashMap;
@@ -119,7 +119,7 @@ impl<T: WasiView> poll::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
+impl<T: WasiView> crate::bindings::io::poll::HostPollable for T {
     async fn block(&mut self, pollable: Resource<Pollable>) -> Result<()> {
         let table = self.table_mut();
         let pollable = table.get(&pollable)?;
@@ -147,7 +147,7 @@ impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
 }
 
 pub mod sync {
-    use crate::preview2::{
+    use crate::{
         bindings::io::poll as async_poll,
         bindings::sync_io::io::poll::{self, Pollable},
         in_tokio, WasiView,
@@ -161,7 +161,7 @@ pub mod sync {
         }
     }
 
-    impl<T: WasiView> crate::preview2::bindings::sync_io::io::poll::HostPollable for T {
+    impl<T: WasiView> crate::bindings::sync_io::io::poll::HostPollable for T {
         fn ready(&mut self, pollable: Resource<Pollable>) -> Result<bool> {
             in_tokio(async { async_poll::HostPollable::ready(self, pollable).await })
         }

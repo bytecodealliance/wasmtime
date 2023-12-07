@@ -1,8 +1,8 @@
-use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
-use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
-use crate::preview2::host::network::util;
-use crate::preview2::poll::{subscribe, Pollable, Subscribe};
-use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
+use crate::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
+use crate::bindings::sockets::network::{ErrorCode, IpAddress, Network};
+use crate::host::network::util;
+use crate::poll::{subscribe, Pollable, Subscribe};
+use crate::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
 use std::net::{Ipv6Addr, ToSocketAddrs};
@@ -48,14 +48,12 @@ impl<T: WasiView> HostResolveAddressStream for T {
         let stream = self.table_mut().get_mut(&resource)?;
         loop {
             match stream {
-                ResolveAddressStream::Waiting(future) => {
-                    match crate::preview2::poll_noop(Pin::new(future)) {
-                        Some(result) => {
-                            *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
-                        }
-                        None => return Err(ErrorCode::WouldBlock.into()),
+                ResolveAddressStream::Waiting(future) => match crate::poll_noop(Pin::new(future)) {
+                    Some(result) => {
+                        *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
                     }
-                }
+                    None => return Err(ErrorCode::WouldBlock.into()),
+                },
                 ResolveAddressStream::Done(slot @ Err(_)) => {
                     mem::replace(slot, Ok(Vec::new().into_iter()))?;
                     unreachable!();

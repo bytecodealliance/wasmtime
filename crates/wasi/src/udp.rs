@@ -1,5 +1,5 @@
-use crate::preview2::poll::Subscribe;
-use crate::preview2::with_ambient_tokio_runtime;
+use crate::poll::Subscribe;
+use crate::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
 use cap_std::net::Pool;

@@ -1,7 +1,7 @@
-use crate::preview2::bindings::filesystem::types as async_filesystem;
-use crate::preview2::bindings::sync_io::filesystem::types as sync_filesystem;
-use crate::preview2::bindings::sync_io::io::streams;
-use crate::preview2::{in_tokio, FsError, FsResult};
+use crate::bindings::filesystem::types as async_filesystem;
+use crate::bindings::sync_io::filesystem::types as sync_filesystem;
+use crate::bindings::sync_io::io::streams;
+use crate::{in_tokio, FsError, FsResult};
 use wasmtime::component::Resource;
 
 impl<T: async_filesystem::Host> sync_filesystem::Host for T {

@@ -1,5 +1,15 @@
+<<<<<<< HEAD:crates/wasi/src/preview2/stream.rs
 use crate::preview2::filesystem::FileInputStream;
 use crate::preview2::poll::Subscribe;
+||||||| constructed merge base:crates/wasi/src/preview2/stream.rs
+use crate::preview2::filesystem::FileInputStream;
+use crate::preview2::poll::Subscribe;
+use crate::preview2::TableError;
+=======
+use crate::filesystem::FileInputStream;
+use crate::poll::Subscribe;
+use crate::TableError;
+>>>>>>> move preview2 to root of wasmtime_wasi crate:crates/wasi/src/stream.rs
 use anyhow::Result;
 use bytes::Bytes;
 

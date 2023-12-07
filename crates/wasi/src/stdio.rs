@@ -1,12 +1,10 @@
-use crate::preview2::bindings::cli::{
+use crate::bindings::cli::{
     stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
     terminal_stdout,
 };
-use crate::preview2::bindings::io::streams;
-use crate::preview2::pipe;
-use crate::preview2::{
-    HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, WasiView,
-};
+use crate::bindings::io::streams;
+use crate::pipe;
+use crate::{HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, WasiView};
 use bytes::Bytes;
 use std::io::IsTerminal;
 use wasmtime::component::Resource;

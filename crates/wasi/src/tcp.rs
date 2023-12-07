@@ -1,7 +1,6 @@
-use super::network::SocketAddressFamily;
-use super::{HostInputStream, HostOutputStream, StreamError};
-use crate::preview2::{
-    with_ambient_tokio_runtime, AbortOnDropJoinHandle, InputStream, OutputStream, Subscribe,
+use crate::{
+    network::SocketAddressFamily, with_ambient_tokio_runtime, AbortOnDropJoinHandle,
+    HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, Subscribe,
 };
 use anyhow::{Error, Result};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
@@ -162,7 +161,7 @@ impl TcpWriteStream {
         assert!(matches!(self.last_write, LastWrite::Done));
 
         let stream = self.stream.clone();
-        self.last_write = LastWrite::Waiting(crate::preview2::spawn(async move {
+        self.last_write = LastWrite::Waiting(crate::spawn(async move {
             // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
             // primitive try_write, which goes directly to attempt a write with mio. This has
             // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream

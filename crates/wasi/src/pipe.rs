@@ -7,14 +7,14 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::preview2::poll::Subscribe;
-use crate::preview2::{HostInputStream, HostOutputStream, StreamError};
+use crate::poll::Subscribe;
+use crate::{HostInputStream, HostOutputStream, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
-pub use crate::preview2::write_stream::AsyncWriteStream;
+pub use crate::write_stream::AsyncWriteStream;
 
 #[derive(Debug, Clone)]
 pub struct MemoryInputPipe {
@@ -112,7 +112,7 @@ pub struct AsyncReadStream {
     closed: bool,
     buffer: Option<Result<Bytes, StreamError>>,
     receiver: mpsc::Receiver<Result<Bytes, StreamError>>,
-    _join_handle: crate::preview2::AbortOnDropJoinHandle<()>,
+    _join_handle: crate::AbortOnDropJoinHandle<()>,
 }
 
 impl AsyncReadStream {
@@ -120,7 +120,7 @@ impl AsyncReadStream {
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = mpsc::channel(1);
-        let join_handle = crate::preview2::spawn(async move {
+        let join_handle = crate::spawn(async move {
             loop {
                 use tokio::io::AsyncReadExt;
                 let mut buf = bytes::BytesMut::with_capacity(4096);

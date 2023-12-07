@@ -1,6 +1,8 @@
-use super::clocks::host::{monotonic_clock, wall_clock};
-use crate::preview2::{
-    clocks::{self, HostMonotonicClock, HostWallClock},
+use crate::{
+    clocks::{
+        host::{monotonic_clock, wall_clock},
+        HostMonotonicClock, HostWallClock,
+    },
     filesystem::Dir,
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
@@ -178,15 +180,12 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn wall_clock(&mut self, clock: impl clocks::HostWallClock + 'static) -> &mut Self {
+    pub fn wall_clock(&mut self, clock: impl HostWallClock + 'static) -> &mut Self {
         self.wall_clock = Box::new(clock);
         self
     }
 
-    pub fn monotonic_clock(
-        &mut self,
-        clock: impl clocks::HostMonotonicClock + 'static,
-    ) -> &mut Self {
+    pub fn monotonic_clock(&mut self, clock: impl HostMonotonicClock + 'static) -> &mut Self {
         self.monotonic_clock = Box::new(clock);
         self
     }
