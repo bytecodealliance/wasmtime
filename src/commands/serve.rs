@@ -11,9 +11,7 @@ use std::{
 };
 use wasmtime::component::{InstancePre, Linker};
 use wasmtime::{Engine, Store, StoreLimits};
-use wasmtime_wasi::preview2::{
-    self, StreamError, StreamResult, Table, WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::preview2::{self, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
@@ -24,7 +22,7 @@ use wasmtime_wasi_http::{
 use wasmtime_wasi_nn::WasiNnCtx;
 
 struct Host {
-    table: Table,
+    table: wasmtime::component::ResourceTable,
     ctx: WasiCtx,
     http: WasiHttpCtx,
 
@@ -35,11 +33,11 @@ struct Host {
 }
 
 impl WasiView for Host {
-    fn table(&self) -> &Table {
+    fn table(&self) -> &wasmtime::component::ResourceTable {
         &self.table
     }
 
-    fn table_mut(&mut self) -> &mut Table {
+    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
 
@@ -53,7 +51,7 @@ impl WasiView for Host {
 }
 
 impl WasiHttpView for Host {
-    fn table(&mut self) -> &mut Table {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
 
@@ -157,7 +155,7 @@ impl ServeCommand {
         });
 
         let mut host = Host {
-            table: Table::new(),
+            table: wasmtime::component::ResourceTable::new(),
             ctx: builder.build(),
             http: WasiHttpCtx,
 
