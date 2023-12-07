@@ -109,6 +109,9 @@ pub struct OutgoingDatagramStream {
     pub(crate) family: SocketAddressFamily,
 
     pub(crate) send_state: SendState,
+
+    /// The pool of allowed addresses
+    pub(crate) pool: Arc<Pool>,
 }
 
 pub(crate) enum SendState {

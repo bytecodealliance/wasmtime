@@ -158,6 +158,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             remote_address,
             family: socket.family,
             send_state: SendState::Idle,
+            pool: socket.pool.clone(),
         };
 
         Ok((
@@ -452,7 +453,13 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
 
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (stream.remote_address, provided_addr) {
-                (None, Some(addr)) => addr,
+                (None, Some(addr)) => {
+                    // We don't actually use the connecter, we just use it to verify that `addr`
+                    // is allowed. We only need to check the provided addr as the stream's remote
+                    // address was checked when the stream was created.
+                    let _ = stream.pool.udp_connecter(addr)?;
+                    addr
+                }
                 (Some(addr), None) => addr,
                 (Some(connected_addr), Some(provided_addr)) if connected_addr == provided_addr => {
                     connected_addr
@@ -463,7 +470,6 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             util::validate_remote_address(&addr)?;
             util::validate_address_family(&addr, &stream.family)?;
 
-            // FIXME: check permission to send to `addr`.
             if stream.remote_address == Some(addr) {
                 stream.inner.try_send(&datagram.data)?;
             } else {
