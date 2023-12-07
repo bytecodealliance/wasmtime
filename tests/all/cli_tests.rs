@@ -1498,4 +1498,20 @@ mod test_programs {
         ])?;
         Ok(())
     }
+
+    #[test]
+    fn cli_no_tcp() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but turn off TCP
+                "-Sinherit-network,tcp=no",
+                CLI_NO_TCP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
 }
