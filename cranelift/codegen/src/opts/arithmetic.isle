@@ -20,6 +20,17 @@
                       x))
       (ineg ty x))
 
+;; x + -y == -y + x == -(y - x) == x - y
+(rule (simplify (iadd ty x (ineg ty y)))
+      (isub ty x y))
+(rule (simplify (iadd ty (ineg ty y) x))
+      (isub ty x y))
+(rule (simplify (ineg ty (isub ty y x)))
+      (isub ty x y))
+;; x - -y == x + y
+(rule (simplify (isub ty x (ineg ty y)))
+      (iadd ty x y))
+
 ;; ineg(ineg(x)) == x.
 (rule (simplify (ineg ty (ineg ty x))) (subsume x))
 
@@ -55,22 +66,14 @@
       (if-let -1 (i64_sextend_imm64 ty c))
       (ineg ty x))
 
-;; (!x) + 1 == 1 + (!x) == !(x) - (-1) == ineg(x)
+;; (!x) + 1 == ineg(x)
 (rule (simplify (iadd ty (bnot ty x) (iconst ty (u64_from_imm64 1))))
       (ineg ty x))
-(rule (simplify (iadd ty (iconst ty (u64_from_imm64 1)) (bnot ty x)))
-      (ineg ty x))
-(rule (simplify (isub ty (bnot ty x) (iconst ty c)))
-      (if-let -1 (i64_sextend_imm64 ty c))
-      (ineg ty x))
 
-;; !(x - 1) == !(x + (-1)) == !((-1) + x) == ineg(x)
+;; !(x - 1) == !(x + (-1)) == ineg(x)
 (rule (simplify (bnot ty (isub ty x (iconst ty (u64_from_imm64 1)))))
       (ineg ty x))
 (rule (simplify (bnot ty (iadd ty x (iconst ty c))))
-      (if-let -1 (i64_sextend_imm64 ty c))
-      (ineg ty x))
-(rule (simplify (bnot ty (iadd ty (iconst ty c) x)))
       (if-let -1 (i64_sextend_imm64 ty c))
       (ineg ty x))
 

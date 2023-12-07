@@ -260,3 +260,25 @@ block0:
 
 ; check: v3 = iconst.i32 0xfff6
 ; nextln: return v3
+
+function %sub_u8max(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 255
+    v2 = isub v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: v4 = iadd v0, v3  ; v3 = 1
+; nextln: return v4
+
+function %sub_u32max(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0xFFFF_FFFF
+    v2 = isub v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i32 1
+; nextln: v4 = iadd v0, v3  ; v3 = 1
+; nextln: return v4

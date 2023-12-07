@@ -1,25 +1,17 @@
 ;; Rewrites for `band`, `bnot`, `bor`, `bxor`
 
-;; x | 0 == 0 | x == x | x == x.
+;; x | 0 == x | x == x.
 (rule (simplify (bor ty
                      x
                      (iconst ty (u64_from_imm64 0))))
-      (subsume x))
-(rule (simplify (bor ty
-                     (iconst ty (u64_from_imm64 0))
-                     x))
       (subsume x))
 (rule (simplify (bor ty x x))
       (subsume x))
 
-;; x ^ 0 == 0 ^ x == x.
+;; x ^ 0 == x.
 (rule (simplify (bxor ty
                      x
                      (iconst ty (u64_from_imm64 0))))
-      (subsume x))
-(rule (simplify (bxor ty
-                     (iconst ty (u64_from_imm64 0))
-                     x))
       (subsume x))
 
 ;; x ^ x == 0.
@@ -34,18 +26,14 @@
 (rule (simplify (bor (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 (ty_mask ty)))))
 (rule (simplify (bor (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 (ty_mask ty)))))
 
-;; x & -1 == -1 & x == x & x == x.
+;; x & x == x & -1 == x.
 (rule (simplify (band ty x x)) (subsume x))
 (rule (simplify (band ty x (iconst ty k)))
       (if-let -1 (i64_sextend_imm64 ty k))
       (subsume x))
-(rule (simplify (band ty (iconst ty k) x))
-      (if-let -1 (i64_sextend_imm64 ty k))
-      (subsume x))
 
-;; x & 0 == 0 & x == x & not(x) == not(x) & x == 0.
+;; x & 0 == x & not(x) == not(x) & x == 0.
 (rule (simplify (band ty _ zero @ (iconst ty (u64_from_imm64 0)))) (subsume zero))
-(rule (simplify (band ty zero @ (iconst ty (u64_from_imm64 0)) _)) (subsume zero))
 (rule (simplify (band (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 0))))
 (rule (simplify (band (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 0))))
 
