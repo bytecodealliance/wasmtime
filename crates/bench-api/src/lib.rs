@@ -142,9 +142,10 @@ use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
+use wasi_cap_std_sync::WasiCtxBuilder;
+use wasi_common::{I32Exit, WasiCtx};
 use wasmtime::{Engine, Instance, Linker, Module, Store};
 use wasmtime_cli_flags::CommonOptions;
-use wasmtime_wasi::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -460,7 +461,7 @@ impl BenchState {
         let fuel = options.wasm.fuel;
 
         if options.wasi.common != Some(false) {
-            wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
+            wasi_common::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
         }
 
         #[cfg(feature = "wasi-nn")]

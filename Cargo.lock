@@ -3249,9 +3249,9 @@ dependencies = [
  "shuffling-allocator",
  "target-lexicon",
  "wasi-cap-std-sync",
+ "wasi-common",
  "wasmtime",
  "wasmtime-cli-flags",
- "wasmtime-wasi",
  "wasmtime-wasi-nn",
  "wat",
 ]
