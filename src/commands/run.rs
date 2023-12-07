@@ -782,7 +782,7 @@ impl RunCommand {
             builder.allow_tcp(enable);
         }
         if let Some(enable) = self.run.common.wasi.udp {
-            builder.allow_tcp(enable);
+            builder.allow_udp(enable);
         }
 
         store.data_mut().preview2_ctx = Some(Arc::new(builder.build()));

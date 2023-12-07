@@ -1514,4 +1514,20 @@ mod test_programs {
         assert!(output.status.success());
         Ok(())
     }
+
+    #[test]
+    fn cli_no_udp() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but turn off UDP
+                "-Sinherit-network,udp=no",
+                CLI_NO_UDP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
 }
