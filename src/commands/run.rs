@@ -778,6 +778,12 @@ impl RunCommand {
         if let Some(enable) = self.run.common.wasi.allow_ip_name_lookup {
             builder.allow_ip_name_lookup(enable);
         }
+        if let Some(enable) = self.run.common.wasi.tcp {
+            builder.allow_tcp(enable);
+        }
+        if let Some(enable) = self.run.common.wasi.udp {
+            builder.allow_tcp(enable);
+        }
 
         store.data_mut().preview2_ctx = Some(Arc::new(builder.build()));
         Ok(())

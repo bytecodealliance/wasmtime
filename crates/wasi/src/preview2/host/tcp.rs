@@ -28,6 +28,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
+        self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table_mut();
         let socket = table.get(&this)?;
         let network = table.get(&network)?;
@@ -88,6 +89,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
+        self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table_mut();
         let r = {
             let socket = table.get(&this)?;
@@ -186,6 +188,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     }
 
     fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
+        self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
@@ -233,6 +236,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Resource<InputStream>,
         Resource<OutputStream>,
     )> {
+        self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table();
         let socket = table.get(&this)?;
 
