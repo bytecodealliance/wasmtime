@@ -254,15 +254,15 @@ impl WasiCtxBuilder {
         self
     }
 
-    /// Disallow usage of UDP
-    pub fn disallow_udp(&mut self, disable: bool) -> &mut Self {
-        self.allowed_network_uses.udp = !disable;
+    /// Allow usage of UDP
+    pub fn allow_udp(&mut self, enable: bool) -> &mut Self {
+        self.allowed_network_uses.udp = enable;
         self
     }
 
-    /// Disallow usage of TCP
-    pub fn disallow_tcp(&mut self, disable: bool) -> &mut Self {
-        self.allowed_network_uses.tcp = !disable;
+    /// Allow usage of TCP
+    pub fn allow_tcp(&mut self, enable: bool) -> &mut Self {
+        self.allowed_network_uses.tcp = enable;
         self
     }
 

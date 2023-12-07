@@ -259,6 +259,10 @@ wasmtime_option_group! {
         pub inherit_network: Option<bool>,
         /// Indicates whether `wasi:sockets/ip-name-lookup` is enabled or not.
         pub allow_ip_name_lookup: Option<bool>,
+        /// Indicates whether `wasi:sockets` TCP support is enabled or not.
+        pub tcp: Option<bool>,
+        /// Indicates whether `wasi:sockets` UDP support is enabled or not.
+        pub udp: Option<bool>,
         /// Allows imports from the `wasi_unstable` core wasm module.
         pub preview0: Option<bool>,
     }
