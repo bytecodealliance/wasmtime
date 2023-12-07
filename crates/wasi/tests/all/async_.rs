@@ -351,6 +351,6 @@ async fn preview2_stream_pollable_traps() {
         .unwrap_err();
     assert_eq!(
         format!("{}", e.source().expect("trap source")),
-        "entry still has children"
+        "resource has children"
     )
 }
