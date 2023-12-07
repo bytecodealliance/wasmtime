@@ -9,7 +9,7 @@ use crate::preview2::{
     network::SocketAddressFamily,
 };
 use crate::preview2::{Pollable, SocketResult, WasiView};
-use cap_net_ext::{Blocking, PoolExt};
+use cap_net_ext::Blocking;
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;

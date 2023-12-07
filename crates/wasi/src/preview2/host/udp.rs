@@ -11,7 +11,6 @@ use crate::preview2::{
 use crate::preview2::{Pollable, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
-use cap_net_ext::PoolExt;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -461,8 +460,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
                     let Some(pool) = stream.pool.as_ref() else {
                         return Err(ErrorCode::InvalidState.into());
                     };
-                    // We don't actually use the connecter, we just use it to verify that `addr`
-                    // is allowed. We only need to check the provided addr as the stream's remote
+                    // We only need to check the provided addr as the stream's remote
                     // address was checked when the stream was created.
                     let _ = pool.udp_connecter(addr)?;
                     addr

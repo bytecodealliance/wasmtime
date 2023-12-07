@@ -2,13 +2,12 @@ use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
-use cap_std::net::Pool;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use super::network::SocketAddressFamily;
+use super::network::{Pool, SocketAddressFamily};
 
 /// The state of a UDP socket.
 ///

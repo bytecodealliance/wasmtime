@@ -1,4 +1,7 @@
-use super::clocks::host::{monotonic_clock, wall_clock};
+use super::{
+    clocks::host::{monotonic_clock, wall_clock},
+    network::Pool,
+};
 use crate::preview2::{
     clocks::{self, HostMonotonicClock, HostWallClock},
     filesystem::Dir,
@@ -7,12 +10,9 @@ use crate::preview2::{
     DirPerms, FilePerms,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
-use cap_std::ipnet::{self, IpNet};
-use cap_std::net::Pool;
-use cap_std::{ambient_authority, AmbientAuthority};
-use std::mem;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use cap_std::ipnet;
 use std::sync::Arc;
+use std::{mem, net::SocketAddr};
 use wasmtime::component::ResourceTable;
 
 pub struct WasiCtxBuilder {
@@ -191,16 +191,22 @@ impl WasiCtxBuilder {
         self
     }
 
-    /// Add all network addresses accessable to the host to the pool.
-    pub fn inherit_network(&mut self, ambient_authority: AmbientAuthority) -> &mut Self {
-        self.pool.insert_ip_net_port_any(
-            IpNet::new(Ipv4Addr::UNSPECIFIED.into(), 0).unwrap(),
-            ambient_authority,
-        );
-        self.pool.insert_ip_net_port_any(
-            IpNet::new(Ipv6Addr::UNSPECIFIED.into(), 0).unwrap(),
-            ambient_authority,
-        );
+    /// Add all network addresses accessible to the host to the pool.
+    pub fn inherit_network(&mut self) -> &mut Self {
+        self.pool.inherit_network();
+        self
+    }
+
+    /// Add a dynamic check of whether a socket addr is allowed
+    ///
+    /// Returning `true` will permit socket connections to the `SocketAddr`,
+    /// while returning `false` will lead to the other non-dynamic checks
+    /// being performed.
+    pub fn dynamic_socket_addr_check<F>(&mut self, check: F) -> &mut Self
+    where
+        F: Fn(SocketAddr) -> bool + Send + Sync + 'static,
+    {
+        self.pool.add_dynamic_check(Box::new(check));
         self
     }
 
@@ -209,13 +215,13 @@ impl WasiCtxBuilder {
         &mut self,
         addrs: A,
     ) -> std::io::Result<&mut Self> {
-        self.pool.insert(addrs, ambient_authority())?;
+        self.pool.insert(addrs)?;
         Ok(self)
     }
 
     /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
     pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) -> &mut Self {
-        self.pool.insert_socket_addr(addr, ambient_authority());
+        let _ = self.insert_addr(addr);
         self
     }
 
@@ -223,8 +229,7 @@ impl WasiCtxBuilder {
     ///
     /// Unlike `insert_ip_net`, this function grants access to any requested port.
     pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) -> &mut Self {
-        self.pool
-            .insert_ip_net_port_any(ip_net, ambient_authority());
+        self.pool.insert_ip_net_port_any(ip_net);
         self
     }
 
@@ -240,13 +245,13 @@ impl WasiCtxBuilder {
         ports_end: Option<u16>,
     ) -> &mut Self {
         self.pool
-            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority());
+            .insert_ip_net_port_range(ip_net, ports_start, ports_end);
         self
     }
 
     /// Add a range of network addresses with a specific port to the pool.
     pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) -> &mut Self {
-        self.pool.insert_ip_net(ip_net, port, ambient_authority());
+        self.pool.insert_ip_net(ip_net, port);
         self
     }
 
