@@ -233,7 +233,7 @@ fn mismatch_intrinsics() -> Result<()> {
     let ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "ctor")?;
     assert_eq!(
         ctor.call(&mut store, (100,)).unwrap_err().to_string(),
-        "unknown handle index 0"
+        "unknown handle index 1"
     );
 
     Ok(())
@@ -371,7 +371,7 @@ fn drop_guest_twice() -> Result<()> {
 
     assert_eq!(
         dtor.call(&mut store, (&t,)).unwrap_err().to_string(),
-        "unknown handle index 0"
+        "unknown handle index 1"
     );
 
     Ok(())
@@ -1250,7 +1250,7 @@ fn pass_guest_back_as_borrow() -> Result<()> {
 
     // Should not be valid to use `resource` again
     let err = take.call(&mut store, (&resource,)).unwrap_err();
-    assert_eq!(err.to_string(), "unknown handle index 0");
+    assert_eq!(err.to_string(), "unknown handle index 1");
 
     Ok(())
 }
@@ -1412,9 +1412,9 @@ fn guest_different_host_same() -> Result<()> {
                     (import "" "drop2" (func $drop2 (param i32)))
 
                     (func (export "f") (param i32 i32)
-                        ;; separate tables both have initial index of 0
-                        (if (i32.ne (local.get 0) (i32.const 0)) (then (unreachable)))
-                        (if (i32.ne (local.get 1) (i32.const 0)) (then (unreachable)))
+                        ;; separate tables both have initial index of 1
+                        (if (i32.ne (local.get 0) (i32.const 1)) (then (unreachable)))
+                        (if (i32.ne (local.get 1) (i32.const 1)) (then (unreachable)))
 
                         ;; host should end up getting the same resource
                         (call $f (local.get 0) (local.get 1))

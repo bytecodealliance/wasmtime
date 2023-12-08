@@ -28,6 +28,11 @@ use std::mem;
 use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::PrimaryMap;
 
+/// The maximum handle value is specified in
+/// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
+/// currently and keeps the upper bit free for use in the component.
+const MAX_RESOURCE_HANDLE: u32 = 1 << 30;
+
 /// Contextual state necessary to perform resource-related operations.
 ///
 /// This state a bit odd since it has a few optional bits, but the idea is that
@@ -125,7 +130,7 @@ impl ResourceTables<'_> {
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
-    pub fn resource_new(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> u32 {
+    pub fn resource_new(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> Result<u32> {
         self.table(ty).insert(Slot::Own { rep, lend_count: 0 })
     }
 
@@ -173,7 +178,11 @@ impl ResourceTables<'_> {
     /// the same as `resource_new` implementation-wise.
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
-    pub fn resource_lower_own(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> u32 {
+    pub fn resource_lower_own(
+        &mut self,
+        ty: Option<TypeResourceTableIndex>,
+        rep: u32,
+    ) -> Result<u32> {
         self.table(ty).insert(Slot::Own { rep, lend_count: 0 })
     }
 
@@ -237,7 +246,11 @@ impl ResourceTables<'_> {
     /// function. The other half of this implementation is located on
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
-    pub fn resource_lower_borrow(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> u32 {
+    pub fn resource_lower_borrow(
+        &mut self,
+        ty: Option<TypeResourceTableIndex>,
+        rep: u32,
+    ) -> Result<u32> {
         let scope = self.calls.scopes.len() - 1;
         let borrow_count = &mut self.calls.scopes.last_mut().unwrap().borrow_count;
         *borrow_count = borrow_count.checked_add(1).unwrap();
@@ -278,12 +291,8 @@ impl ResourceTables<'_> {
 }
 
 impl ResourceTable {
-    fn next(&self) -> usize {
-        self.next as usize
-    }
-
-    fn insert(&mut self, new: Slot) -> u32 {
-        let next = self.next();
+    fn insert(&mut self, new: Slot) -> Result<u32> {
+        let next = self.next as usize;
         if next == self.slots.len() {
             self.slots.push(Slot::Free {
                 next: self.next.checked_add(1).unwrap(),
@@ -294,36 +303,49 @@ impl ResourceTable {
             Slot::Free { next } => next,
             _ => unreachable!(),
         };
-        u32::try_from(ret).unwrap()
+
+        // The component model reserves index 0 as never allocatable so add one
+        // to the table index to start the numbering at 1 instead. Also note
+        // that the component model places an upper-limit per-table on the
+        // maximum allowed index.
+        let ret = ret + 1;
+        if ret >= MAX_RESOURCE_HANDLE {
+            bail!("cannot allocate another handle: index overflow");
+        }
+        Ok(ret)
+    }
+
+    fn handle_index_to_table_index(&self, idx: u32) -> Option<usize> {
+        // NB: `idx` is decremented by one to account for the `+1` above during
+        // allocation.
+        let idx = idx.checked_sub(1)?;
+        usize::try_from(idx).ok()
     }
 
     fn rep(&self, idx: u32) -> Result<u32> {
-        match usize::try_from(idx).ok().and_then(|i| self.slots.get(i)) {
+        let slot = self
+            .handle_index_to_table_index(idx)
+            .and_then(|i| self.slots.get(i));
+        match slot {
             None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
             Some(Slot::Own { rep, .. } | Slot::Borrow { rep, .. }) => Ok(*rep),
         }
     }
 
     fn get_mut(&mut self, idx: u32) -> Result<&mut Slot> {
-        match usize::try_from(idx)
-            .ok()
-            .and_then(|i| self.slots.get_mut(i))
-        {
+        let slot = self
+            .handle_index_to_table_index(idx)
+            .and_then(|i| self.slots.get_mut(i));
+        match slot {
             None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
             Some(other) => Ok(other),
         }
     }
 
     fn remove(&mut self, idx: u32) -> Result<Slot> {
-        match usize::try_from(idx).ok().and_then(|i| self.slots.get(i)) {
-            Some(Slot::Own { .. }) | Some(Slot::Borrow { .. }) => {}
-            _ => bail!("unknown handle index {idx}"),
-        };
-        let ret = mem::replace(
-            &mut self.slots[idx as usize],
-            Slot::Free { next: self.next },
-        );
-        self.next = idx;
+        let to_fill = Slot::Free { next: self.next };
+        let ret = mem::replace(self.get_mut(idx)?, to_fill);
+        self.next = idx - 1;
         Ok(ret)
     }
 }
