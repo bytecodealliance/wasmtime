@@ -791,7 +791,6 @@ struct Host {
 
     // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
     // "just" an empty table.
-    #[cfg(feature = "component-model")]
     preview2_table: Arc<wasmtime::component::ResourceTable>,
 
     // State necessary for the preview1 implementation of WASI backed by the
@@ -810,7 +809,6 @@ struct Host {
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
 }
 
-#[cfg(feature = "component-model")]
 impl preview2::WasiView for Host {
     fn table(&self) -> &wasmtime::component::ResourceTable {
         &self.preview2_table
