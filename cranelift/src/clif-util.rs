@@ -43,15 +43,15 @@ enum Commands {
 #[derive(Parser)]
 struct TestOptions {
     /// Be more verbose
-    #[clap(short, long)]
+    #[arg(short, long)]
     verbose: bool,
 
     /// Print pass timing report for test
-    #[clap(short = 'T')]
+    #[arg(short = 'T')]
     time_passes: bool,
 
     /// Specify an input file to be used. Use '-' for stdin.
-    #[clap(required = true)]
+    #[arg(required = true)]
     files: Vec<PathBuf>,
 }
 
@@ -59,11 +59,11 @@ struct TestOptions {
 #[derive(Parser)]
 struct PassOptions {
     /// Be more verbose
-    #[clap(short, long)]
+    #[arg(short, long)]
     verbose: bool,
 
     /// Print pass timing report for test
-    #[clap(short = 'T')]
+    #[arg(short = 'T')]
     time_passes: bool,
 
     /// Specify an input file to be used. Use '-' for stdin.
@@ -73,7 +73,7 @@ struct PassOptions {
     target: String,
 
     /// Specify pass(es) to be run on the input file
-    #[clap(required = true)]
+    #[arg(required = true)]
     passes: Vec<String>,
 }
 

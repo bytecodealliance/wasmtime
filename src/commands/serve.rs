@@ -67,17 +67,16 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
 
 /// Runs a WebAssembly module
 #[derive(Parser, PartialEq)]
-#[structopt(name = "serve")]
 pub struct ServeCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     run: RunCommon,
 
     /// Socket address for the web server to bind to.
-    #[clap(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
+    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
     addr: std::net::SocketAddr,
 
     /// The WebAssembly component to run.
-    #[clap(value_name = "WASM", required = true)]
+    #[arg(value_name = "WASM", required = true)]
     component: PathBuf,
 }
 

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]
-#[clap(
+#[command(
     version,
     after_help = "If a subcommand is not provided, the `run` subcommand will be used.\n\
                   \n\
@@ -50,23 +50,23 @@ pub enum Subcommand {
 }
 
 #[derive(Parser)]
-#[structopt(name = "run", trailing_var_arg = true)]
+#[command(trailing_var_arg = true)]
 pub struct RunCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     common: CommonOptions,
 
     /// Allow unknown exports when running commands.
-    #[clap(long = "allow-unknown-exports")]
+    #[arg(long = "allow-unknown-exports")]
     allow_unknown_exports: bool,
 
     /// Allow the main module to import unknown functions, using an
     /// implementation that immediately traps, when running commands.
-    #[clap(long = "trap-unknown-imports")]
+    #[arg(long = "trap-unknown-imports")]
     trap_unknown_imports: bool,
 
     /// Allow the main module to import unknown functions, using an
     /// implementation that returns default values, when running commands.
-    #[clap(long = "default-values-unknown-imports")]
+    #[arg(long = "default-values-unknown-imports")]
     default_values_unknown_imports: bool,
 
     /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
@@ -75,16 +75,16 @@ pub struct RunCommand {
     /// is arbitrary user input. Only `wasmtime`-precompiled modules generated
     /// via the `wasmtime compile` command or equivalent should be passed as an
     /// argument with this option specified.
-    #[clap(long = "allow-precompiled")]
+    #[arg(long = "allow-precompiled")]
     allow_precompiled: bool,
 
     /// Inherit environment variables and file descriptors following the
     /// systemd listen fd specification (UNIX only)
-    #[clap(long = "listenfd")]
+    #[arg(long = "listenfd")]
     listenfd: bool,
 
     /// Grant access to the given TCP listen socket
-    #[clap(
+    #[arg(
         long = "tcplisten",
         number_of_values = 1,
         value_name = "SOCKET ADDRESS"
@@ -92,7 +92,7 @@ pub struct RunCommand {
     tcplisten: Vec<String>,
 
     /// Grant access to the given host directory
-    #[clap(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
+    #[arg(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
     dirs: Vec<String>,
 
     /// Pass an environment variable to the program.
@@ -102,15 +102,15 @@ pub struct RunCommand {
     /// form will set the environment variable named `FOO` to the same value it
     /// has in the calling process for the guest, or in other words it will
     /// cause the environment variable `FOO` to be inherited.
-    #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
     vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
-    #[clap(long, value_name = "FUNCTION")]
+    #[arg(long, value_name = "FUNCTION")]
     invoke: Option<String>,
 
     /// Grant access to a guest directory mapped as a host directory
-    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
+    #[arg(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
     map_dirs: Vec<(String, String)>,
 
     /// Pre-load machine learning graphs (i.e., models) for use by wasi-nn.
@@ -121,11 +121,11 @@ pub struct RunCommand {
     /// an OpenVINO model named `bar`. Note that which model encodings are
     /// available is dependent on the backends implemented in the
     /// `wasmtime_wasi_nn` crate.
-    #[clap(long = "wasi-nn-graph", value_name = "FORMAT::HOST_DIR", value_parser = parse_graphs)]
+    #[arg(long = "wasi-nn-graph", value_name = "FORMAT::HOST_DIR", value_parser = parse_graphs)]
     graphs: Vec<(String, String)>,
 
     /// The path of the WebAssembly module to run
-    #[clap(
+    #[arg(
 		required = true,
         value_name = "MODULE",
         value_parser = OsStringValueParser::new().try_map(parse_module),
@@ -133,7 +133,7 @@ pub struct RunCommand {
     module: PathBuf,
 
     /// Load the given WebAssembly module before the main module
-    #[clap(
+    #[arg(
         long = "preload",
         number_of_values = 1,
         value_name = "NAME=MODULE_PATH",
@@ -142,7 +142,7 @@ pub struct RunCommand {
     preloads: Vec<(String, PathBuf)>,
 
     /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
-    #[clap(
+    #[arg(
         long = "wasm-timeout",
         value_name = "TIME",
         value_parser = parse_dur,
@@ -164,7 +164,7 @@ pub struct RunCommand {
     /// where `path` is where to write the profile and `interval` is the
     /// duration between samples. When used with `--wasm-timeout` the timeout
     /// will be rounded up to the nearest multiple of this interval.
-    #[clap(
+    #[arg(
         long,
         value_name = "STRATEGY",
         value_parser = parse_profile,
@@ -172,35 +172,35 @@ pub struct RunCommand {
     profile: Option<Profile>,
 
     /// Enable coredump generation after a WebAssembly trap.
-    #[clap(long = "coredump-on-trap", value_name = "PATH")]
+    #[arg(long = "coredump-on-trap", value_name = "PATH")]
     coredump_on_trap: Option<String>,
 
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
-    #[clap(value_name = "ARGS")]
+    #[arg(value_name = "ARGS")]
     module_args: Vec<String>,
 
     /// Maximum size, in bytes, that a linear memory is allowed to reach.
     ///
     /// Growth beyond this limit will cause `memory.grow` instructions in
     /// WebAssembly modules to return -1 and fail.
-    #[clap(long, value_name = "BYTES")]
+    #[arg(long, value_name = "BYTES")]
     max_memory_size: Option<usize>,
 
     /// Maximum size, in table elements, that a table is allowed to reach.
-    #[clap(long)]
+    #[arg(long)]
     max_table_elements: Option<u32>,
 
     /// Maximum number of WebAssembly instances allowed to be created.
-    #[clap(long)]
+    #[arg(long)]
     max_instances: Option<usize>,
 
     /// Maximum number of WebAssembly tables allowed to be created.
-    #[clap(long)]
+    #[arg(long)]
     max_tables: Option<usize>,
 
     /// Maximum number of WebAssembly linear memories allowed to be created.
-    #[clap(long)]
+    #[arg(long)]
     max_memories: Option<usize>,
 
     /// Force a trap to be raised on `memory.grow` and `table.grow` failure
@@ -209,7 +209,7 @@ pub struct RunCommand {
     /// This is not necessarily a spec-compliant option to enable but can be
     /// useful for tracking down a backtrace of what is requesting so much
     /// memory, for example.
-    #[clap(long)]
+    #[arg(long)]
     trap_on_grow_failure: bool,
 
     /// Indicates that the implementation of WASI preview1 should be backed by
@@ -217,18 +217,18 @@ pub struct RunCommand {
     ///
     /// This will become the default in the future and this option will be
     /// removed. For now this is primarily here for testing.
-    #[clap(long)]
+    #[arg(long)]
     preview2: bool,
 
     /// Enables memory error checking.
     ///
     /// See wmemcheck.md for documentation on how to use.
-    #[clap(long)]
+    #[arg(long)]
     wmemcheck: bool,
 
     /// Flag for WASI preview2 to inherit the host's network within the guest so
     /// it has full access to all addresses/ports/etc.
-    #[clap(long)]
+    #[arg(long)]
     inherit_network: bool,
 }
 fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
@@ -315,23 +315,23 @@ fn parse_profile(s: &str) -> Result<Profile> {
 /// Compiles a WebAssembly module.
 #[derive(Parser)]
 pub struct CompileCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub common: CommonOptions,
 
     /// The target triple; default is the host triple
-    #[clap(long, value_name = "TARGET")]
+    #[arg(long, value_name = "TARGET")]
     pub target: Option<String>,
 
     /// The path of the output compiled module; defaults to <MODULE>.cwasm
-    #[clap(short = 'o', long, value_name = "OUTPUT")]
+    #[arg(short = 'o', long, value_name = "OUTPUT")]
     pub output: Option<PathBuf>,
 
     /// The directory path to write clif files into, one clif file per wasm function.
-    #[clap(long = "emit-clif", value_name = "PATH")]
+    #[arg(long = "emit-clif", value_name = "PATH")]
     pub emit_clif: Option<PathBuf>,
 
     /// The path of the WebAssembly to compile
-    #[clap(index = 1, value_name = "MODULE")]
+    #[arg(index = 1, value_name = "MODULE")]
     pub module: PathBuf,
 }
 
@@ -340,45 +340,45 @@ pub struct CompileCommand {
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct CommonOptions {
     /// Use specified configuration file
-    #[clap(long, value_name = "CONFIG_PATH")]
+    #[arg(long, value_name = "CONFIG_PATH")]
     pub config: Option<PathBuf>,
 
     /// Disable logging
-    #[clap(long, conflicts_with = "log_to_files")]
+    #[arg(long, conflicts_with = "log_to_files")]
     pub disable_logging: bool,
 
     /// Log to per-thread log files instead of stderr
-    #[clap(long)]
+    #[arg(long)]
     pub log_to_files: bool,
 
     /// Generate debug information
-    #[clap(short = 'g')]
+    #[arg(short = 'g')]
     pub debug_info: bool,
 
     /// Disable cache system
-    #[clap(long)]
+    #[arg(long)]
     pub disable_cache: bool,
 
     /// Disable parallel compilation
-    #[clap(long)]
+    #[arg(long)]
     pub disable_parallel_compilation: bool,
 
     /// Enable or disable WebAssembly features
-    #[clap(long, value_name = "FEATURE,FEATURE,...", value_parser = parse_wasm_features)]
+    #[arg(long, value_name = "FEATURE,FEATURE,...", value_parser = parse_wasm_features)]
     pub wasm_features: Option<WasmFeatures>,
 
     /// Enable or disable WASI modules
-    #[clap(long, value_name = "MODULE,MODULE,...", value_parser = parse_wasi_modules)]
+    #[arg(long, value_name = "MODULE,MODULE,...", value_parser = parse_wasi_modules)]
     pub wasi_modules: Option<WasiModules>,
 
     /// Generate jitdump file (supported on --features=profiling build)
     /// Run optimization passes on translated functions, on by default
-    #[clap(short = 'O', long)]
+    #[arg(short = 'O', long)]
     pub optimize: bool,
 
     /// Optimization level for generated functions
     /// Supported levels: 0 (none), 1, 2 (most), or s (size); default is "most"
-    #[clap(
+    #[arg(
         long,
         value_name = "LEVEL",
         value_parser = parse_opt_level,
@@ -388,7 +388,7 @@ pub struct CommonOptions {
 
     /// Set a Cranelift setting to a given value.
     /// Use `wasmtime settings` to list Cranelift settings for a target.
-    #[clap(
+    #[arg(
         long = "cranelift-set",
         value_name = "NAME=VALUE",
         number_of_values = 1,
@@ -399,7 +399,7 @@ pub struct CommonOptions {
 
     /// Enable a Cranelift boolean setting or preset.
     /// Use `wasmtime settings` to list Cranelift settings for a target.
-    #[clap(
+    #[arg(
         long,
         value_name = "SETTING",
         number_of_values = 1,
@@ -409,32 +409,32 @@ pub struct CommonOptions {
 
     /// Maximum size in bytes of wasm memory before it becomes dynamically
     /// relocatable instead of up-front-reserved.
-    #[clap(long, value_name = "MAXIMUM")]
+    #[arg(long, value_name = "MAXIMUM")]
     pub static_memory_maximum_size: Option<u64>,
 
     /// Force using a "static" style for all wasm memories
-    #[clap(long)]
+    #[arg(long)]
     pub static_memory_forced: bool,
 
     /// Byte size of the guard region after static memories are allocated
-    #[clap(long, value_name = "SIZE")]
+    #[arg(long, value_name = "SIZE")]
     pub static_memory_guard_size: Option<u64>,
 
     /// Byte size of the guard region after dynamic memories are allocated
-    #[clap(long, value_name = "SIZE")]
+    #[arg(long, value_name = "SIZE")]
     pub dynamic_memory_guard_size: Option<u64>,
 
     /// Bytes to reserve at the end of linear memory for growth for dynamic
     /// memories.
-    #[clap(long, value_name = "SIZE")]
+    #[arg(long, value_name = "SIZE")]
     pub dynamic_memory_reserved_for_growth: Option<u64>,
 
     /// Enable Cranelift's internal debug verifier (expensive)
-    #[clap(long)]
+    #[arg(long)]
     pub enable_cranelift_debug_verifier: bool,
 
     /// Enable Cranelift's internal NaN canonicalization
-    #[clap(long)]
+    #[arg(long)]
     pub enable_cranelift_nan_canonicalization: bool,
 
     /// Enable execution fuel with N units fuel, where execution will trap after
@@ -444,33 +444,33 @@ pub struct CommonOptions {
     /// such as `nop`, `drop`, `block`, and `loop`, consume 0 units, as any
     /// execution cost associated with them involves other instructions which do
     /// consume fuel.
-    #[clap(long, value_name = "N")]
+    #[arg(long, value_name = "N")]
     pub fuel: Option<u64>,
 
     /// Executing wasm code will yield when a global epoch counter
     /// changes, allowing for async operation without blocking the
     /// executor.
-    #[clap(long)]
+    #[arg(long)]
     pub epoch_interruption: bool,
 
     /// Disable the on-by-default address map from native code to wasm code
-    #[clap(long)]
+    #[arg(long)]
     pub disable_address_map: bool,
 
     /// Disable the default of attempting to initialize linear memory via a
     /// copy-on-write mapping
-    #[clap(long)]
+    #[arg(long)]
     pub disable_memory_init_cow: bool,
 
     /// Enable the pooling allocator, in place of the on-demand
     /// allocator.
     #[cfg(feature = "pooling-allocator")]
-    #[clap(long)]
+    #[arg(long)]
     pub pooling_allocator: bool,
 
     /// Maximum stack size, in bytes, that wasm is allowed to consume before a
     /// stack overflow is reported.
-    #[clap(long)]
+    #[arg(long)]
     pub max_wasm_stack: Option<usize>,
 
     /// Whether or not to force deterministic and host-independent behavior of
@@ -481,14 +481,14 @@ pub struct CommonOptions {
     /// of these instructions to match the deterministic behavior classified in
     /// the specification. Note that enabling this option may come at a
     /// performance cost.
-    #[clap(long)]
+    #[arg(long)]
     pub relaxed_simd_deterministic: bool,
 
     /// Explicitly specify the name of the compiler to use for WebAssembly.
     ///
     /// Currently only `cranelift` and `winch` are supported, but not all builds
     /// of Wasmtime have both built in.
-    #[clap(long)]
+    #[arg(long)]
     pub compiler: Option<String>,
 }
 

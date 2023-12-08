@@ -7,22 +7,21 @@ use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.
 #[derive(Parser, PartialEq)]
-#[clap(name = "explore")]
 pub struct ExploreCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     common: CommonOptions,
 
     /// The target triple; default is the host triple
-    #[clap(long, value_name = "TARGET")]
+    #[arg(long, value_name = "TARGET")]
     target: Option<String>,
 
     /// The path of the WebAssembly module to compile
-    #[clap(required = true, value_name = "MODULE")]
+    #[arg(required = true, value_name = "MODULE")]
     module: PathBuf,
 
     /// The path of the explorer output (derived from the MODULE name if none
     /// provided)
-    #[clap(short, long)]
+    #[arg(short, long)]
     output: Option<PathBuf>,
 }
 

@@ -290,39 +290,39 @@ pub struct CommonOptions {
     // now.
     /// Optimization and tuning related options for wasm performance, `-O help` to
     /// see all.
-    #[clap(short = 'O', long = "optimize", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'O', long = "optimize", value_name = "KEY[=VAL[,..]]")]
     opts_raw: Vec<opt::CommaSeparated<Optimize>>,
 
     /// Codegen-related configuration options, `-C help` to see all.
-    #[clap(short = 'C', long = "codegen", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'C', long = "codegen", value_name = "KEY[=VAL[,..]]")]
     codegen_raw: Vec<opt::CommaSeparated<Codegen>>,
 
     /// Debug-related configuration options, `-D help` to see all.
-    #[clap(short = 'D', long = "debug", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'D', long = "debug", value_name = "KEY[=VAL[,..]]")]
     debug_raw: Vec<opt::CommaSeparated<Debug>>,
 
     /// Options for configuring semantic execution of WebAssembly, `-W help` to see
     /// all.
-    #[clap(short = 'W', long = "wasm", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'W', long = "wasm", value_name = "KEY[=VAL[,..]]")]
     wasm_raw: Vec<opt::CommaSeparated<Wasm>>,
 
     /// Options for configuring WASI and its proposals, `-S help` to see all.
-    #[clap(short = 'S', long = "wasi", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'S', long = "wasi", value_name = "KEY[=VAL[,..]]")]
     wasi_raw: Vec<opt::CommaSeparated<Wasi>>,
 
     // These fields are filled in by the `configure` method below via the
     // options parsed from the CLI above. This is what the CLI should use.
-    #[clap(skip)]
+    #[arg(skip)]
     configured: bool,
-    #[clap(skip)]
+    #[arg(skip)]
     pub opts: OptimizeOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub codegen: CodegenOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub debug: DebugOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub wasm: WasmOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub wasi: WasiOptions,
 }
 

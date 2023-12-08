@@ -37,12 +37,12 @@ fn call_de(file: &File) -> Result<(), String> {
 
 /// Cranelift JSON serializer/deserializer utility
 #[derive(Parser, Debug)]
-#[clap(about)]
+#[command(about)]
 enum Args {
     /// Serializes Cranelift IR into JSON
     Serialize {
         /// Generate pretty json
-        #[clap(long, short)]
+        #[arg(long, short)]
         pretty: bool,
 
         /// Input file for serialization

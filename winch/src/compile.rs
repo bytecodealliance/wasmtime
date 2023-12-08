@@ -17,7 +17,7 @@ pub struct Options {
     input: PathBuf,
 
     /// The target architecture.
-    #[clap(long = "target")]
+    #[arg(long = "target")]
     target: String,
 }
 

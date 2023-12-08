@@ -9,13 +9,12 @@ use wasmtime_wast::WastContext;
 
 /// Runs a WebAssembly test script file
 #[derive(Parser, PartialEq)]
-#[clap(name = "wast", version)]
 pub struct WastCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     common: CommonOptions,
 
     /// The path of the WebAssembly test script to run
-    #[clap(required = true, value_name = "SCRIPT_FILE")]
+    #[arg(required = true, value_name = "SCRIPT_FILE")]
     scripts: Vec<PathBuf>,
 }
 
