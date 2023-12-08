@@ -17,7 +17,7 @@ use std::ops::{Deref, DerefMut};
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 use wiggle::tracing::instrument;
 use wiggle::{GuestError, GuestPtr, GuestSlice, GuestSliceMut, GuestStrCow, GuestType};
 
@@ -511,7 +511,7 @@ pub fn add_to_linker_sync<T: WasiPreview1View + Sync>(
 /// Convenient implementation of an analog to `wasi-common::WasiCtx`: a context struct that
 /// works for users who only care about consuming wasmtime-wasi's support for WASI Preview 1.
 pub struct WasiPreview1Ctx {
-    table: crate::Table,
+    table: ResourceTable,
     wasi: crate::WasiCtx,
     adapter: WasiPreview1Adapter,
 }
@@ -519,7 +519,7 @@ pub struct WasiPreview1Ctx {
 impl From<crate::WasiCtx> for WasiPreview1Ctx {
     fn from(wasi: crate::WasiCtx) -> WasiPreview1Ctx {
         Self {
-            table: crate::Table::new(),
+            table: ResourceTable::new(),
             wasi,
             adapter: WasiPreview1Adapter::new(),
         }
@@ -527,10 +527,10 @@ impl From<crate::WasiCtx> for WasiPreview1Ctx {
 }
 
 impl WasiView for WasiPreview1Ctx {
-    fn table(&self) -> &crate::Table {
+    fn table(&self) -> &ResourceTable {
         &self.table
     }
-    fn table_mut(&mut self) -> &mut crate::Table {
+    fn table_mut(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
     fn ctx(&self) -> &crate::WasiCtx {
