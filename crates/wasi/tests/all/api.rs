@@ -6,27 +6,11 @@ use std::sync::Mutex;
 use std::time::Duration;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-<<<<<<< HEAD
-use wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock;
-use wasmtime_wasi::preview2::bindings::wasi::filesystem::types as filesystem;
-use wasmtime_wasi::preview2::command::{add_to_linker, Command};
-use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
-||||||| constructed merge base
-use wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock;
-use wasmtime_wasi::preview2::bindings::wasi::filesystem::types as filesystem;
-use wasmtime_wasi::preview2::command::{add_to_linker, Command};
-use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, Table, WasiCtx, WasiCtxBuilder,
-    WasiView,
-=======
 use wasmtime_wasi::bindings::wasi::clocks::wall_clock;
 use wasmtime_wasi::bindings::wasi::filesystem::types as filesystem;
 use wasmtime_wasi::command::{add_to_linker, Command};
 use wasmtime_wasi::{
-    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, Table, WasiCtx, WasiCtxBuilder,
-    WasiView,
->>>>>>> move preview2 to root of wasmtime_wasi crate
+    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct CommandCtx {
