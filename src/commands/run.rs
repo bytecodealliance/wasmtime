@@ -13,7 +13,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
-use wasi_cap_std_sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
+use wasi_cap_std_sync::{ambient_authority, Dir, TcpListener};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 
 #[cfg(feature = "wasi-nn")]
@@ -221,8 +221,10 @@ impl RunCommand {
                 // Exit the process if Wasmtime understands the error;
                 // otherwise, fall back on Rust's default error printing/return
                 // code.
-                todo!("FIXME dispatch to wasmtime-wasi equivelant when runtarget::Component");
-                return Err(wasi_common::maybe_exit_on_error(e));
+                if store.data().preview1_ctx.is_some() {
+                    return Err(wasi_common::maybe_exit_on_error(e));
+                }
+                return Err(wasmtime_wasi::maybe_exit_on_error(e));
             }
         }
 
@@ -713,7 +715,7 @@ impl RunCommand {
     }
 
     fn set_preview1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = WasiCtxBuilder::new();
+        let mut builder = wasi_cap_std_sync::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?)?;
 
         for (key, value) in self.vars.iter() {
@@ -858,12 +860,18 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
 }
 
 #[cfg(not(unix))]
-fn ctx_set_listenfd(num_fd: usize, _builder: &mut WasiCtxBuilder) -> Result<usize> {
+fn ctx_set_listenfd(
+    num_fd: usize,
+    _builder: &mut wasi_cap_std_sync::WasiCtxBuilder,
+) -> Result<usize> {
     Ok(num_fd)
 }
 
 #[cfg(unix)]
-fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
+fn ctx_set_listenfd(
+    mut num_fd: usize,
+    builder: &mut wasi_cap_std_sync::WasiCtxBuilder,
+) -> Result<usize> {
     use listenfd::ListenFd;
 
     for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {

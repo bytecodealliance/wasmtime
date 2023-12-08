@@ -313,11 +313,11 @@
 //! [rustdocs]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
 //! [examples]: https://bytecodealliance.github.io/wasmtime/examples-rust-embed.html
 //!
-//! An example of using WASI looks like:
+//! An example of using WASI Preview 1 looks like:
 //!
 //! ```no_run
 //! # use wasmtime::*;
-//! use wasmtime_wasi::sync::WasiCtxBuilder;
+//! use wasmtime_wasi::{WasiCtxBuilder, preview1::{add_to_linker, WasiPreview1Ctx}};
 //!
 //! # fn main() -> wasmtime::Result<()> {
 //! // Compile our module and create a `Linker` which has WASI functions defined
@@ -325,12 +325,12 @@
 //! let engine = Engine::default();
 //! let module = Module::from_file(&engine, "foo.wasm")?;
 //! let mut linker = Linker::new(&engine);
-//! wasmtime_wasi::add_to_linker(&mut linker, |cx| cx)?;
+//! add_to_linker(&mut linker)?;
 //!
-//! // Configure and create a `WasiCtx`, which WASI functions need access to
+//! // Configure and create a `WasiPreview1Ctx`, which WASI functions need access to
 //! // through the host state of the store (which in this case is the host state
 //! // of the store)
-//! let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build();
+//! let wasi_ctx = WasiPreview1Ctx::from(WasiCtxBuilder::new().inherit_stdio().build());
 //! let mut store = Store::new(&engine, wasi_ctx);
 //!
 //! // Instantiate our module with the imports we've created, and run it.

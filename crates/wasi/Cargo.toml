@@ -59,8 +59,9 @@ windows-sys = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"] }
 
 [features]
-default = ["preview1-on-preview2"]
-preview1-on-preview2 = ["dep:wiggle"]
+default = ["preview1"]
+preview1 = ["dep:wiggle"]
+exit = []
 
 [[test]]
 name = "process_stdin"

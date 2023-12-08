@@ -4,16 +4,6 @@
 //! of this implementation is to support WASI Preview 2 via the Component
 //! Model, as well as to provide legacy Preview 1 host support with an adapter
 //! that is implemented in terms of the Preview 2 interfaces.
-//!
-//! Presently, this crate is experimental. We don't yet recommend you use it
-//! in production. Specifically:
-//! * the wit files in tree describing preview 2 are not faithful to the
-//! standards repos
-//!
-//! Once these issues are resolved, we expect to move this namespace up to the
-//! root of the wasmtime-wasi crate, and move its other exports underneath a
-//! `pub mod legacy` with an off-by-default feature flag, and after 2
-//! releases, retire and remove that code from our tree.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -29,9 +19,9 @@ mod ip_name_lookup;
 mod network;
 pub mod pipe;
 mod poll;
-#[cfg(feature = "preview1-on-preview2")]
+#[cfg(feature = "preview1")]
 pub mod preview0;
-#[cfg(feature = "preview1-on-preview2")]
+#[cfg(feature = "preview1")]
 pub mod preview1;
 mod random;
 mod stdio;
@@ -325,4 +315,49 @@ where
         Poll::Ready(result) => Some(result),
         Poll::Pending => None,
     }
+}
+
+/// Exit the process with a conventional OS error code as long as Wasmtime
+/// understands the error. If the error is not an `I32Exit` or `Trap`, return
+/// the error back to the caller for it to decide what to do.
+///
+/// Note: this function is designed for usage where it is acceptable for
+/// Wasmtime failures to terminate the parent process, such as in the Wasmtime
+/// CLI; this would not be suitable for use in multi-tenant embeddings.
+#[cfg(feature = "exit")]
+pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
+    use std::process;
+    use wasmtime::Trap;
+
+    // If a specific WASI error code was requested then that's
+    // forwarded through to the process here without printing any
+    // extra error information.
+    let code = e.downcast_ref::<I32Exit>().map(|e| e.0);
+    if let Some(exit) = code {
+        // Print the error message in the usual way.
+        // On Windows, exit status 3 indicates an abort (see below),
+        // so return 1 indicating a non-zero status to avoid ambiguity.
+        if cfg!(windows) && exit >= 3 {
+            process::exit(1);
+        }
+        process::exit(exit);
+    }
+
+    // If the program exited because of a trap, return an error code
+    // to the outside environment indicating a more severe problem
+    // than a simple failure.
+    if e.is::<Trap>() {
+        eprintln!("Error: {:?}", e);
+
+        if cfg!(unix) {
+            // On Unix, return the error code of an abort.
+            process::exit(128 + libc::SIGABRT);
+        } else if cfg!(windows) {
+            // On Windows, return 3.
+            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+            process::exit(3);
+        }
+    }
+
+    e
 }
