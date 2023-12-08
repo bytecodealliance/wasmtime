@@ -8,7 +8,7 @@ use crate::preview2::bindings::{
     filesystem::{preopens, types as filesystem},
     io::{poll, streams},
 };
-use crate::preview2::{FsError, IsATTY, StreamError, StreamResult, TableError, WasiView};
+use crate::preview2::{FsError, IsATTY, StreamError, StreamResult, WasiView};
 use anyhow::{bail, Context};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashSet};
@@ -325,7 +325,7 @@ pub trait WasiPreview1View: WasiView {
 // `&mut self` receivers and so this struct lets us extend the lifetime of the `&mut self` borrow
 // of the [`WasiPreview1View`] to provide means to return mutably and immutably borrowed [`Descriptors`]
 // without having to rely on something like `Arc<Mutex<Descriptors>>`, while also being able to
-// call methods like [`TableFsExt::is_file`] and hiding complexity from preview1 method implementations.
+// call methods like [`Descriptor::is_file`] and hiding complexity from preview1 method implementations.
 struct Transaction<'a, T: WasiPreview1View + ?Sized> {
     view: &'a mut T,
     descriptors: Descriptors,
@@ -772,8 +772,8 @@ impl From<filesystem::ErrorCode> for types::Error {
     }
 }
 
-impl From<TableError> for types::Error {
-    fn from(err: TableError) -> Self {
+impl From<wasmtime::component::ResourceTableError> for types::Error {
+    fn from(err: wasmtime::component::ResourceTableError) -> Self {
         types::Error::trap(err.into())
     }
 }

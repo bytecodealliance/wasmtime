@@ -1,6 +1,6 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
-use crate::preview2::{TableError, TrappableError};
+use crate::preview2::TrappableError;
 use cap_std::net::Pool;
 
 pub struct Network {
@@ -12,8 +12,8 @@ pub type SocketResult<T> = Result<T, SocketError>;
 
 pub type SocketError = TrappableError<ErrorCode>;
 
-impl From<TableError> for SocketError {
-    fn from(error: TableError) -> Self {
+impl From<wasmtime::component::ResourceTableError> for SocketError {
+    fn from(error: wasmtime::component::ResourceTableError) -> Self {
         Self::trap(error)
     }
 }

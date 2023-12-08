@@ -797,7 +797,7 @@ struct Host {
 
     // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
     // "just" an empty table.
-    preview2_table: Arc<preview2::Table>,
+    preview2_table: Arc<wasmtime::component::ResourceTable>,
 
     // State necessary for the preview1 implementation of WASI backed by the
     // preview2 host implementation. Only used with the `--preview2` flag right
@@ -816,11 +816,11 @@ struct Host {
 }
 
 impl preview2::WasiView for Host {
-    fn table(&self) -> &preview2::Table {
+    fn table(&self) -> &wasmtime::component::ResourceTable {
         &self.preview2_table
     }
 
-    fn table_mut(&mut self) -> &mut preview2::Table {
+    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
         Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
     }
 
@@ -851,7 +851,7 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
         Arc::get_mut(ctx).expect("preview2 is not compatible with threads")
     }
 
-    fn table(&mut self) -> &mut preview2::Table {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
     }
 }

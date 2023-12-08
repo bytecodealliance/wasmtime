@@ -1,6 +1,5 @@
 use crate::preview2::filesystem::FileInputStream;
 use crate::preview2::poll::Subscribe;
-use crate::preview2::TableError;
 use anyhow::Result;
 use bytes::Bytes;
 
@@ -73,8 +72,8 @@ impl std::error::Error for StreamError {
     }
 }
 
-impl From<TableError> for StreamError {
-    fn from(error: TableError) -> Self {
+impl From<wasmtime::component::ResourceTableError> for StreamError {
+    fn from(error: wasmtime::component::ResourceTableError) -> Self {
         Self::Trap(error.into())
     }
 }

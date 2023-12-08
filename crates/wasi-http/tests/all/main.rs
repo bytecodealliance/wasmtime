@@ -8,12 +8,10 @@ use sha2::{Digest, Sha256};
 use std::{collections::HashMap, iter, net::Ipv4Addr, str, sync::Arc};
 use tokio::task;
 use wasmtime::{
-    component::{Component, Linker, Resource},
+    component::{Component, Linker, Resource, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::{
-    self, pipe::MemoryOutputPipe, Table, WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::preview2::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
     body::HyperIncomingBody,
@@ -31,7 +29,7 @@ type RequestSender = Arc<
 >;
 
 struct Ctx {
-    table: Table,
+    table: ResourceTable,
     wasi: WasiCtx,
     http: WasiHttpCtx,
     stdout: MemoryOutputPipe,
@@ -40,10 +38,10 @@ struct Ctx {
 }
 
 impl WasiView for Ctx {
-    fn table(&self) -> &Table {
+    fn table(&self) -> &ResourceTable {
         &self.table
     }
-    fn table_mut(&mut self) -> &mut Table {
+    fn table_mut(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
     fn ctx(&self) -> &WasiCtx {
@@ -59,7 +57,7 @@ impl WasiHttpView for Ctx {
         &mut self.http
     }
 
-    fn table(&mut self) -> &mut Table {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 
@@ -89,7 +87,7 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     builder.stderr(stderr.clone());
     builder.env("HTTP_SERVER", server.addr().to_string());
     let ctx = Ctx {
-        table: Table::new(),
+        table: ResourceTable::new(),
         wasi: builder.build(),
         http: WasiHttpCtx {},
         stderr,
@@ -132,7 +130,7 @@ async fn run_wasi_http(
 ) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
-    let table = Table::new();
+    let table = ResourceTable::new();
 
     let mut config = Config::new();
     config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
