@@ -43,7 +43,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         }
 
         // Set the pool on the socket so later functions have access to it through the socket handle
-        table.get_mut(&this)?.pool = table.get(&network)?.pool.clone();
+        let pool = table.get(&network)?.pool.clone();
+        table.get_mut(&this)?.pool.replace(pool.clone());
 
         let socket = table.get(&this)?;
         let local_address: SocketAddr = local_address.into();
@@ -51,7 +52,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            let binder = socket.pool.udp_binder(local_address)?;
+            let binder = pool.udp_binder(local_address)?;
             let udp_socket = &*socket
                 .udp_socket()
                 .as_socketlike_view::<cap_std::net::UdpSocket>();
@@ -131,10 +132,13 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
+            let Some(pool) = socket.pool.as_ref() else {
+                return Err(ErrorCode::InvalidState.into());
+            };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
             // We don't actually use the connecter, we just use it to verify that `connect_addr` is allowed
-            let _ = socket.pool.udp_connecter(connect_addr)?;
+            let _ = pool.udp_connecter(connect_addr)?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -454,10 +458,13 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (stream.remote_address, provided_addr) {
                 (None, Some(addr)) => {
+                    let Some(pool) = stream.pool.as_ref() else {
+                        return Err(ErrorCode::InvalidState.into());
+                    };
                     // We don't actually use the connecter, we just use it to verify that `addr`
                     // is allowed. We only need to check the provided addr as the stream's remote
                     // address was checked when the stream was created.
-                    let _ = stream.pool.udp_connecter(addr)?;
+                    let _ = pool.udp_connecter(addr)?;
                     addr
                 }
                 (Some(addr), None) => addr,

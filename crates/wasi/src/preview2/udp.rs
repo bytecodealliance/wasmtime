@@ -44,8 +44,8 @@ pub struct UdpSocket {
     /// Socket address family.
     pub(crate) family: SocketAddressFamily,
 
-    /// The pool of allowed address
-    pub(crate) pool: Arc<Pool>,
+    /// The pool of allowed addresses
+    pub(crate) pool: Option<Arc<Pool>>,
 }
 
 #[async_trait]
@@ -71,7 +71,7 @@ impl UdpSocket {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
             family: socket_address_family,
-            pool: Arc::new(Pool::new()),
+            pool: None,
         })
     }
 
@@ -111,7 +111,7 @@ pub struct OutgoingDatagramStream {
     pub(crate) send_state: SendState,
 
     /// The pool of allowed addresses
-    pub(crate) pool: Arc<Pool>,
+    pub(crate) pool: Option<Arc<Pool>>,
 }
 
 pub(crate) enum SendState {
