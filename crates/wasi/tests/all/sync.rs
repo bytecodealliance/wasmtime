@@ -293,3 +293,7 @@ fn preview2_stream_pollable_traps() {
         "entry still has children"
     )
 }
+#[test_log::test]
+fn preview2_adapter_badfd() {
+    run(PREVIEW2_ADAPTER_BADFD_COMPONENT, false).unwrap()
+}
