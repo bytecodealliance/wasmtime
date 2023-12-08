@@ -1530,4 +1530,20 @@ mod test_programs {
         assert!(output.status.success());
         Ok(())
     }
+
+    #[test]
+    fn cli_no_ip_name_lookup() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but ensure name lookup is disabled
+                "-Sinherit-network,allow-ip-name-lookup=no",
+                CLI_NO_IP_NAME_LOOKUP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
 }
