@@ -55,9 +55,8 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 
 /// Runs a WebAssembly module
 #[derive(Parser, PartialEq)]
-#[structopt(name = "run")]
 pub struct RunCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     #[allow(missing_docs)]
     pub run: RunCommon,
 
@@ -67,7 +66,7 @@ pub struct RunCommand {
     /// host is made available within the guest. If specified as `HOST::GUEST`
     /// then the `HOST` directory is opened and made available as the name
     /// `GUEST` in the guest.
-    #[clap(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
+    #[arg(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
     pub dirs: Vec<(String, String)>,
 
     /// Pass an environment variable to the program.
@@ -77,15 +76,15 @@ pub struct RunCommand {
     /// form will set the environment variable named `FOO` to the same value it
     /// has in the calling process for the guest, or in other words it will
     /// cause the environment variable `FOO` to be inherited.
-    #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
     pub vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
-    #[clap(long, value_name = "FUNCTION")]
+    #[arg(long, value_name = "FUNCTION")]
     pub invoke: Option<String>,
 
     /// Load the given WebAssembly module before the main module
-    #[clap(
+    #[arg(
         long = "preload",
         number_of_values = 1,
         value_name = "NAME=MODULE_PATH",
@@ -98,7 +97,7 @@ pub struct RunCommand {
     /// Arguments passed to the wasm module will be configured as WASI CLI
     /// arguments unless the `--invoke` CLI argument is passed in which case
     /// arguments will be interpreted as arguments to the function specified.
-    #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
+    #[arg(value_name = "WASM", trailing_var_arg = true, required = true)]
     pub module_and_args: Vec<OsString>,
 }
 

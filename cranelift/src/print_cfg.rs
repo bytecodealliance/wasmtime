@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 #[derive(Parser)]
 pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.
-    #[clap(required = true)]
+    #[arg(required = true)]
     files: Vec<PathBuf>,
 }
 

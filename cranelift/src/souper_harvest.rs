@@ -22,21 +22,21 @@ pub struct Options {
 
     /// Specify the directory where harvested left-hand side files should be
     /// written to.
-    #[clap(short, long)]
+    #[arg(short, long)]
     output_dir: PathBuf,
 
     /// Configure Cranelift settings
-    #[clap(long = "set")]
+    #[arg(long = "set")]
     settings: Vec<String>,
 
     /// Specify the Cranelift target
-    #[clap(long = "target")]
+    #[arg(long = "target")]
     target: String,
 
     /// Add a comment from which CLIF variable and function each left-hand side
     /// was harvested from. This prevents deduplicating harvested left-hand
     /// sides.
-    #[clap(long)]
+    #[arg(long)]
     add_harvest_source: bool,
 }
 
@@ -56,7 +56,7 @@ pub fn run(options: &Options) -> Result<()> {
         ))
     };
 
-    match std::fs::create_dir_all(&options.output_dir) {
+    match fs::create_dir_all(&options.output_dir) {
         Ok(_) => {}
         Err(e)
             if e.kind() == io::ErrorKind::AlreadyExists
