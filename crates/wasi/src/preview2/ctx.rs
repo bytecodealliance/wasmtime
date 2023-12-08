@@ -12,6 +12,7 @@ use cap_std::net::Pool;
 use cap_std::{ambient_authority, AmbientAuthority};
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::Arc;
 use wasmtime::component::ResourceTable;
 
 pub struct WasiCtxBuilder {
@@ -303,7 +304,7 @@ impl WasiCtxBuilder {
             env,
             args,
             preopens,
-            pool,
+            pool: Arc::new(pool),
             random,
             insecure_random,
             insecure_random_seed,
@@ -333,7 +334,7 @@ pub struct WasiCtx {
     pub(crate) stdin: Box<dyn StdinStream>,
     pub(crate) stdout: Box<dyn StdoutStream>,
     pub(crate) stderr: Box<dyn StdoutStream>,
-    pub(crate) pool: Pool,
+    pub(crate) pool: Arc<Pool>,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
 }
 

@@ -2,9 +2,10 @@ use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
 use crate::preview2::TrappableError;
 use cap_std::net::Pool;
+use std::sync::Arc;
 
 pub struct Network {
-    pub pool: Pool,
+    pub pool: Arc<Pool>,
     pub allow_ip_name_lookup: bool,
 }
 

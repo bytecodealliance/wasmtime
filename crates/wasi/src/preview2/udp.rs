@@ -2,6 +2,7 @@ use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
+use cap_std::net::Pool;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
@@ -42,6 +43,9 @@ pub struct UdpSocket {
 
     /// Socket address family.
     pub(crate) family: SocketAddressFamily,
+
+    /// The pool of allowed addresses
+    pub(crate) pool: Option<Arc<Pool>>,
 }
 
 #[async_trait]
@@ -67,6 +71,7 @@ impl UdpSocket {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
             family: socket_address_family,
+            pool: None,
         })
     }
 
@@ -104,6 +109,9 @@ pub struct OutgoingDatagramStream {
     pub(crate) family: SocketAddressFamily,
 
     pub(crate) send_state: SendState,
+
+    /// The pool of allowed addresses
+    pub(crate) pool: Option<Arc<Pool>>,
 }
 
 pub(crate) enum SendState {

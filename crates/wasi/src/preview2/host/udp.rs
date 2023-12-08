@@ -35,20 +35,24 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     ) -> SocketResult<()> {
         self.ctx().allowed_network_uses.check_allowed_udp()?;
         let table = self.table_mut();
-        let socket = table.get(&this)?;
-        let network = table.get(&network)?;
-        let local_address: SocketAddr = local_address.into();
 
-        match socket.udp_state {
+        match table.get(&this)?.udp_state {
             UdpState::Default => {}
             UdpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             UdpState::Bound | UdpState::Connected => return Err(ErrorCode::InvalidState.into()),
         }
 
+        // Set the pool on the socket so later functions have access to it through the socket handle
+        let pool = table.get(&network)?.pool.clone();
+        table.get_mut(&this)?.pool.replace(pool.clone());
+
+        let socket = table.get(&this)?;
+        let local_address: SocketAddr = local_address.into();
+
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            let binder = network.pool.udp_binder(local_address)?;
+            let binder = pool.udp_binder(local_address)?;
             let udp_socket = &*socket
                 .udp_socket()
                 .as_socketlike_view::<cap_std::net::UdpSocket>();
@@ -128,8 +132,13 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
+            let Some(pool) = socket.pool.as_ref() else {
+                return Err(ErrorCode::InvalidState.into());
+            };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
+            // We don't actually use the connecter, we just use it to verify that `connect_addr` is allowed
+            let _ = pool.udp_connecter(connect_addr)?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -153,6 +162,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             remote_address,
             family: socket.family,
             send_state: SendState::Idle,
+            pool: socket.pool.clone(),
         };
 
         Ok((
@@ -345,7 +355,6 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
                 _ => {}
             }
 
-            // FIXME: check permission to receive from `received_addr`.
             Ok(Some(udp::IncomingDatagram {
                 data: buf[..size].into(),
                 remote_address: received_addr.into(),
@@ -448,7 +457,16 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
 
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (stream.remote_address, provided_addr) {
-                (None, Some(addr)) => addr,
+                (None, Some(addr)) => {
+                    let Some(pool) = stream.pool.as_ref() else {
+                        return Err(ErrorCode::InvalidState.into());
+                    };
+                    // We don't actually use the connecter, we just use it to verify that `addr`
+                    // is allowed. We only need to check the provided addr as the stream's remote
+                    // address was checked when the stream was created.
+                    let _ = pool.udp_connecter(addr)?;
+                    addr
+                }
                 (Some(addr), None) => addr,
                 (Some(connected_addr), Some(provided_addr)) if connected_addr == provided_addr => {
                     connected_addr
@@ -459,7 +477,6 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             util::validate_remote_address(&addr)?;
             util::validate_address_family(&addr, &stream.family)?;
 
-            // FIXME: check permission to send to `addr`.
             if stream.remote_address == Some(addr) {
                 stream.inner.try_send(&datagram.data)?;
             } else {
