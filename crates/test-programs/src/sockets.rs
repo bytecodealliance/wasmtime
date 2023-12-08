@@ -80,6 +80,21 @@ impl Network {
             }
         }
     }
+
+    /// Same as `Network::blocking_resolve_addresses` but ignores post validation errors
+    ///
+    /// The ignored error codes signal that the input passed validation
+    /// and a lookup was actually attempted, but failed. These are ignored to
+    /// make the CI tests less flaky.
+    pub fn permissive_blocking_resolve_addresses(
+        &self,
+        name: &str,
+    ) -> Result<Vec<IpAddress>, ErrorCode> {
+        match self.blocking_resolve_addresses(name) {
+            Err(ErrorCode::NameUnresolvable | ErrorCode::TemporaryResolverFailure) => Ok(vec![]),
+            r => r,
+        }
+    }
 }
 
 impl TcpSocket {
