@@ -149,6 +149,27 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         self.ctx.func.dfg.value_type(val)
     }
 
+    fn iconst_sextend_etor(&mut self, value: Value) -> Option<(Type, i64)> {
+        let ty = self.value_type(value);
+        if !ty.is_int() {
+            return None;
+        }
+
+        let value = self.ctx.func.dfg.resolve_aliases(value);
+        let ValueDef::Result(inst, 0) = self.ctx.func.dfg.value_def(value) else {
+            return None;
+        };
+        let inst_def = &self.ctx.func.dfg.insts[inst];
+        let InstructionData::UnaryImm {
+            opcode: Opcode::Iconst,
+            imm,
+        } = inst_def
+        else {
+            return None;
+        };
+        Some((ty, self.i64_sextend_imm64(ty, *imm)))
+    }
+
     fn remat(&mut self, value: Value) -> Value {
         trace!("remat: {}", value);
         self.ctx.remat_values.insert(value);

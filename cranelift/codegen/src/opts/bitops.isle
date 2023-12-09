@@ -3,7 +3,7 @@
 ;; x | 0 == x | x == x.
 (rule (simplify (bor ty
                      x
-                     (iconst ty (u64_from_imm64 0))))
+                     (iconst_u ty 0)))
       (subsume x))
 (rule (simplify (bor ty x x))
       (subsume x))
@@ -11,12 +11,12 @@
 ;; x ^ 0 == x.
 (rule (simplify (bxor ty
                      x
-                     (iconst ty (u64_from_imm64 0))))
+                     (iconst_u ty 0)))
       (subsume x))
 
 ;; x ^ x == 0.
 (rule (simplify (bxor (fits_in_64 (ty_int ty)) x x))
-      (subsume (iconst ty (imm64 0))))
+      (subsume (iconst_u ty 0)))
 
 ;; x ^ not(x) == not(x) ^ x == x | not(x) == not(x) | x == -1.
 ;; This identity also holds for non-integer types, vectors, and wider types.
@@ -28,14 +28,13 @@
 
 ;; x & x == x & -1 == x.
 (rule (simplify (band ty x x)) (subsume x))
-(rule (simplify (band ty x (iconst ty k)))
-      (if-let -1 (i64_sextend_imm64 ty k))
+(rule (simplify (band ty x (iconst_s ty -1)))
       (subsume x))
 
 ;; x & 0 == x & not(x) == not(x) & x == 0.
-(rule (simplify (band ty _ zero @ (iconst ty (u64_from_imm64 0)))) (subsume zero))
-(rule (simplify (band (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 0))))
-(rule (simplify (band (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 0))))
+(rule (simplify (band ty _ zero @ (iconst_u ty 0))) (subsume zero))
+(rule (simplify (band (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst_u ty 0)))
+(rule (simplify (band (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst_u ty 0)))
 
 ;; not(not(x)) == x.
 (rule (simplify (bnot ty (bnot ty x))) (subsume x))
@@ -77,8 +76,7 @@
       (bor ty x z))
 
 ;; (x ^ -1) can be replaced with the `bnot` instruction
-(rule (simplify (bxor ty x (iconst ty k)))
-  (if-let -1 (i64_sextend_imm64 ty k))
+(rule (simplify (bxor ty x (iconst_s ty -1)))
   (bnot ty x))
 
 ;; sshr((x | -x), N) == bmask(x) where N = ty_bits(ty) - 1.
@@ -108,17 +106,17 @@
 (rule (truthy (rotr _ x _)) x)
 (rule (truthy (select _ x (iconst _ (u64_from_imm64 (u64_nonzero _))) (iconst _ (u64_from_imm64 0)))) x)
 ;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
-(rule (truthy (ne _ x (iconst _ (u64_from_imm64 0)))) x)
+(rule (truthy (ne _ x (iconst_u _ 0))) x)
 
 ;; All of these expressions don't care about their input as long as it is truthy.
 ;; so we can remove expressions that preserve that property from the input.
 (rule (simplify (bmask ty v)) (if-let x (truthy v)) (bmask ty x))
 (rule (simplify (select ty v t f)) (if-let c (truthy v)) (select ty c t f))
 ;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
-(rule (simplify (ne cty v (iconst _ (u64_from_imm64 0))))
+(rule (simplify (ne cty v (iconst_u _ 0)))
       (if-let c (truthy v))
       (if-let (value_type (ty_int_ref_scalar_64 ty)) c)
-      (ne cty c (iconst ty (imm64 0))))
+      (ne cty c (iconst_u ty 0)))
 
 
 
@@ -145,42 +143,42 @@
 ;; easy way to match all of them, so only one is matched here.
 (rule (simplify (bor ty @ $I32
     (bor ty
-      (ishl ty x (iconst ty (u64_from_imm64 24)))
+      (ishl ty x (iconst_u ty 24))
       (ishl ty
-        (band ty x (iconst ty (u64_from_imm64 0xff00)))
-        (iconst ty (u64_from_imm64 8))))
+        (band ty x (iconst_u ty 0xff00))
+        (iconst_u ty 8)))
     (bor ty
       (band ty
-        (ushr ty x (iconst ty (u64_from_imm64 8)))
-        (iconst ty (u64_from_imm64 0xff00)))
-      (ushr ty x (iconst ty (u64_from_imm64 24))))))
+        (ushr ty x (iconst_u ty 8))
+        (iconst_u ty 0xff00))
+      (ushr ty x (iconst_u ty 24)))))
   (bswap ty x))
 
 (rule (simplify (bor ty @ $I64
     (bor ty
       (bor ty
-        (ishl ty x (iconst ty (u64_from_imm64 56)))
+        (ishl ty x (iconst_u ty 56))
         (ishl ty
-          (band ty x (iconst ty (u64_from_imm64 0xff00)))
-          (iconst ty (u64_from_imm64 40))))
+          (band ty x (iconst_u ty 0xff00))
+          (iconst_u ty 40)))
       (bor ty
         (ishl ty
-          (band ty x (iconst ty (u64_from_imm64 0xff_0000)))
-          (iconst ty (u64_from_imm64 24)))
+          (band ty x (iconst_u ty 0xff_0000))
+          (iconst_u ty 24))
         (ishl ty
-          (band ty x (iconst ty (u64_from_imm64 0xff00_0000)))
-          (iconst ty (u64_from_imm64 8)))))
+          (band ty x (iconst_u ty 0xff00_0000))
+          (iconst_u ty 8))))
     (bor ty
       (bor ty
         (band ty
-          (ushr ty x (iconst ty (u64_from_imm64 8)))
-          (iconst ty (u64_from_imm64 0xff00_0000)))
+          (ushr ty x (iconst_u ty 8))
+          (iconst_u ty 0xff00_0000))
         (band ty
-          (ushr ty x (iconst ty (u64_from_imm64 24)))
-          (iconst ty (u64_from_imm64 0xff_0000))))
+          (ushr ty x (iconst_u ty 24))
+          (iconst_u ty 0xff_0000)))
       (bor ty
         (band ty
-          (ushr ty x (iconst ty (u64_from_imm64 40)))
-          (iconst ty (u64_from_imm64 0xff00)))
-        (ushr ty x (iconst ty (u64_from_imm64 56)))))))
+          (ushr ty x (iconst_u ty 40))
+          (iconst_u ty 0xff00))
+        (ushr ty x (iconst_u ty 56))))))
   (bswap ty x))

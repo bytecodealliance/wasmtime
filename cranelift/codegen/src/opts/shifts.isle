@@ -3,23 +3,23 @@
 ;; x>>0 == x<<0 == x rotr 0 == x rotl 0 == x.
 (rule (simplify (ishl ty
                       x
-                      (iconst ty (u64_from_imm64 0))))
+                      (iconst_u ty 0)))
       (subsume x))
 (rule (simplify (ushr ty
                       x
-                      (iconst ty (u64_from_imm64 0))))
+                      (iconst_u ty 0)))
       (subsume x))
 (rule (simplify (sshr ty
                       x
-                      (iconst ty (u64_from_imm64 0))))
+                      (iconst_u ty 0)))
       (subsume x))
 (rule (simplify (rotr ty
                       x
-                      (iconst ty (u64_from_imm64 0))))
+                      (iconst_u ty 0)))
       (subsume x))
 (rule (simplify (rotl ty
                       x
-                      (iconst ty (u64_from_imm64 0))))
+                      (iconst_u ty 0)))
       (subsume x))
 
 ;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
@@ -159,7 +159,7 @@
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let $true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
-      (ishl ty x (iconst_u64 kty shift_amt)))
+      (ishl ty x (iconst_u kty shift_amt)))
 
 (rule (simplify (ushr ty
                       (ushr ty x (iconst kty (u64_from_imm64 k1)))
@@ -168,7 +168,7 @@
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let $true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
-      (ushr ty x (iconst_u64 kty shift_amt)))
+      (ushr ty x (iconst_u kty shift_amt)))
 
 (rule (simplify (sshr ty
                       (sshr ty x (iconst kty (u64_from_imm64 k1)))
@@ -177,7 +177,7 @@
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let $true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
-      (sshr ty x (iconst_u64 kty shift_amt)))
+      (sshr ty x (iconst_u kty shift_amt)))
 
 ;; Simliarly, if the shift amount overflows the type, then we can turn
 ;; it into a 0
@@ -191,7 +191,7 @@
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let $true (u64_le (ty_bits_u64 ty) shift_amt))
-      (subsume (iconst_u64 ty 0)))
+      (subsume (iconst_u ty 0)))
 
 (rule (simplify (ushr ty
                       (ushr ty x (iconst _ (u64_from_imm64 k1)))
@@ -200,7 +200,7 @@
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let $true (u64_le (ty_bits_u64 ty) shift_amt))
-      (subsume (iconst_u64 ty 0)))
+      (subsume (iconst_u ty 0)))
 
 ;; (rotl (rotr x y) y) == x
 ;; (rotr (rotl x y) y) == x
