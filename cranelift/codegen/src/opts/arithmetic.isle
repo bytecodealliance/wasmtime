@@ -91,7 +91,7 @@
 ;; TODO: div/rem by constants -> magic multiplications
 
 ;; x*2 == x+x.
-(rule (simplify (imul ty x (iconst _ (simm32 2))))
+(rule (simplify (imul ty x (iconst _ (u64_from_imm64 2))))
       (iadd ty x x))
 
 ;; x*c == x<<log2(c) when c is a power of two.
