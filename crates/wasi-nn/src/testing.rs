@@ -13,7 +13,7 @@ use windows::AI::MachineLearning::{LearningModelDevice, LearningModelDeviceKind}
 
 /// Return the directory in which the test artifacts are stored.
 pub fn artifacts_dir() -> PathBuf {
-    PathBuf::from(env!("OUT_DIR")).join("mobilenet")
+    PathBuf::from(env!("OUT_DIR")).join("fixtures")
 }
 
 /// Early-return from a test if the test environment is not met. If the `CI`
@@ -102,6 +102,15 @@ fn check_openvino_artifacts_are_available() -> Result<()> {
         } else {
             println!("> using cached artifact: {}", local_path.display())
         }
+    }
+
+    // Download the ONNX mobilenet model
+    let remote_url = "https://github.com/onnx/models/raw/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/mobilenet/model/mobilenetv2-7.onnx?download=";
+    let local_path = artifacts_dir.join("model.onnx");
+    if !local_path.is_file() {
+        download(&remote_url, &local_path).with_context(|| "unable to retrieve test artifact")?;
+    } else {
+        println!("> using cached artifact: {}", local_path.display())
     }
     Ok(())
 }

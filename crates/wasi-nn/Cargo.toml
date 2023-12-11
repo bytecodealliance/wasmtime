@@ -29,6 +29,8 @@ openvino = { version = "0.6.0", features = [
     "runtime-linking",
 ], optional = true }
 
+ort = { version = "2.0.0-rc.0", default-features = false, features = ["copy-dylibs", "download-binaries"], optional = true }
+
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.52"
 features = [
@@ -45,11 +47,15 @@ walkdir = { workspace = true }
 cap-std = { workspace = true }
 test-programs-artifacts = { workspace = true }
 wasi-common = { workspace = true, features = ["sync"] }
+wasmtime-wasi = { workspace = true }
 wasmtime = { workspace = true, features = ["cranelift"] }
 
 [features]
 default = ["openvino"]
 # openvino is available on all platforms, it requires openvino installed.
 openvino = ["dep:openvino"]
+# onnx is available on all platforms.
+onnx = ["dep:ort"]
 # winml is only available on Windows 10 1809 and later.
 winml = ["dep:windows"]
+

@@ -16,8 +16,7 @@ const PREOPENED_DIR_NAME: &str = "fixture";
 fn run(path: &str, preload_model: bool) -> Result<()> {
     wasmtime_wasi_nn::check_test!();
     let path = Path::new(path);
-    let config = Config::new();
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&Config::new())?;
     let mut linker = Linker::new(&engine);
     wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi_nn)?;
     wasi_common::sync::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi)?;
@@ -31,6 +30,10 @@ fn run(path: &str, preload_model: bool) -> Result<()> {
     {
         backends.push(Backend::from(backend::winml::WinMLBackend::default()));
     }
+    #[cfg(feature = "onnx")]
+    {
+        backends.push(Backend::from(backend::onnxruntime::OnnxBackend::default()));
+    }
     for backend in backends {
         let mut store = Store::new(
             &engine,
@@ -43,11 +46,12 @@ fn run(path: &str, preload_model: bool) -> Result<()> {
     Ok(())
 }
 
-/// The host state for running wasi-nn tests.
+/// The host state for running wasi-nn  tests.
 struct Ctx {
     wasi: WasiCtx,
     wasi_nn: WasiNnCtx,
 }
+
 impl Ctx {
     fn new(preopen_dir: &Path, preload_model: bool, mut backend: Backend) -> Result<Self> {
         // Create the WASI context.
@@ -107,4 +111,17 @@ fn nn_image_classification_named() {
 #[test]
 fn nn_image_classification_winml() {
     run(NN_IMAGE_CLASSIFICATION_WINML, true).unwrap()
+}
+
+#[cfg_attr(
+    not(all(
+        not(feature = "onnx"),
+        target_arch = "x86_64",
+        any(target_os = "linux", target_os = "windows")
+    )),
+    ignore
+)]
+#[test]
+fn nn_image_classification_onnx() {
+    run(NN_IMAGE_CLASSIFICATION_ONNX, false).unwrap()
 }
