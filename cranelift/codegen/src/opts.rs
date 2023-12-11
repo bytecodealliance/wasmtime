@@ -158,15 +158,17 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         self.ctx.func.dfg.value_type(val)
     }
 
-    fn iconst_sextend_etor(&mut self, (ty, inst_data): (Type, InstructionData)) -> Option<(Type, i64)> {
+    fn iconst_sextend_etor(
+        &mut self,
+        (ty, inst_data): (Type, InstructionData),
+    ) -> Option<(Type, i64)> {
         if let InstructionData::UnaryImm {
             opcode: Opcode::Iconst,
             imm,
         } = inst_data
         {
             Some((ty, self.i64_sextend_imm64(ty, imm)))
-        }
-        else {
+        } else {
             None
         }
     }
