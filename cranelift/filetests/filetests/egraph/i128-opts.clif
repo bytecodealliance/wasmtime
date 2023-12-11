@@ -2,11 +2,136 @@ test optimize
 set opt_level=speed
 target x86_64
 
-; This it a regression test to ensure that we don't insert a iconst.i128 when optimizing bxor.
-function %bxor_i128(i128) -> i128 system_v {
+;; There's no `iconst.i128`, so these tests check that the various patterns
+;; that might apply to `i128` introduce extended 64-bit constants instead,
+;; or they're sufficiently conditioned to not apply.
+
+function %bxor_self_i128(i128) -> i128 {
 block0(v0: i128):
     v1 = bxor v0, v0
     return v1
-    ; check: v1 = bxor v0, v0
-    ; nextln: return v1
+    ; check: v2 = iconst.i64 0
+    ; check: v3 = uextend.i128 v2
+    ; check: return v3
+}
+
+function %isub_self_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = isub v0, v0
+    return v1
+    ; check: v2 = iconst.i64 0
+    ; check: v3 = uextend.i128 v2  ; v2 = 0
+    ; check: return v3
+}
+
+function %band_bnot_self_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot v0
+    v2 = band v0, v1
+    return v2
+    ; check: v3 = iconst.i64 0
+    ; check: v4 = uextend.i128 v3  ; v3 = 0
+    ; check: return v4
+}
+
+function %bxor_bnot_self_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot v0
+    v2 = bxor v0, v1
+    return v2
+    ; check: v3 = iconst.i64 -1
+    ; check: v4 = sextend.i128 v3  ; v3 = -1
+    ; check: return v4
+}
+
+function %bor_bnot_self_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot v0
+    v2 = bor v0, v1
+    return v2
+    ; check: v3 = iconst.i64 -1
+    ; check: v4 = sextend.i128 v3  ; v3 = -1
+    ; check: return v4
+}
+
+function %eq_self_i128(i128) -> i8 {
+block0(v0: i128):
+    v1 = icmp eq v0, v0
+    return v1
+    ; check: v2 = iconst.i8 1
+    ; check: return v2  ; v2 = 1
+}
+
+function %ne_self_i128(i128) -> i8 {
+block0(v0: i128):
+    v1 = icmp ne v0, v0
+    return v1
+    ; check: v2 = iconst.i8 0
+    ; check: return v2  ; v2 = 0
+}
+
+function %eq_self_v128(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = icmp eq v0, v0
+    return v1
+    ; check: v1 = icmp eq v0, v0
+    ; check: return v1
+}
+
+function %ne_self_v128(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = icmp ne v0, v0
+    return v1
+    ; check: v1 = icmp ne v0, v0
+    ; check: return v1
+}
+
+function %bor_extended_constants_i128() -> i128 {
+block0:
+    v0 = iconst.i32 9
+    v1 = uextend.i128 v0
+    v2 = iconst.i32 12
+    v3 = uextend.i128 v2
+    v4 = bor v1, v3
+    return v4
+    ; check: v6 = iconst.i32 13
+    ; check: v12 = uextend.i128 v6  ; v6 = 13
+    ; check: return v12
+}
+
+;; These are big enough that they overflow u64, so should not be collapsed
+
+function %bnot_extended_constant_i128() -> i128 {
+block0:
+    v0 = iconst.i32 0
+    v1 = uextend.i128 v0
+    v2 = bnot v1
+    return v2
+    ; check: v0 = iconst.i32 0
+    ; check: v1 = uextend.i128 v0
+    ; check: return v2
+}
+
+function %imul_extended_constants_i128() -> i128 {
+block0:
+    v0 = iconst.i64 5_000_000_000
+    v1 = uextend.i128 v0
+    v2 = iconst.i64 7_000_000_000
+    v3 = uextend.i128 v2
+    v4 = imul v1, v3
+    return v4
+    ; check: v4 = imul v1, v3
+    ; check: return v4
+}
+
+function %iadd_extended_constants_i128() -> i128 {
+block0:
+    v0 = iconst.i64 0x8888_8888_8888_8888
+    v1 = uextend.i128 v0
+    v2 = iconst.i64 0x9999_9999_9999_9999
+    v3 = uextend.i128 v2
+    v4 = iadd v1, v3
+    return v4
+    ; check: v4 = iadd v1, v3
+    ; check: return v4
 }

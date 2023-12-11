@@ -2,16 +2,16 @@
 
 ;; `x == x` is always true for integers; `x != x` is false. Strict
 ;; inequalities are false, and loose inequalities are true.
-(rule (simplify (eq  (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 1))
-(rule (simplify (ne  (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 0))
-(rule (simplify (ugt (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 0))
-(rule (simplify (uge (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 1))
-(rule (simplify (sgt (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 0))
-(rule (simplify (sge (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 1))
-(rule (simplify (ult (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 0))
-(rule (simplify (ule (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 1))
-(rule (simplify (slt (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 0))
-(rule (simplify (sle (fits_in_64 (ty_int ty)) x x)) (iconst_u ty 1))
+(rule (simplify (eq  (ty_int ty) x x)) (iconst_u ty 1))
+(rule (simplify (ne  (ty_int ty) x x)) (iconst_u ty 0))
+(rule (simplify (ugt (ty_int ty) x x)) (iconst_u ty 0))
+(rule (simplify (uge (ty_int ty) x x)) (iconst_u ty 1))
+(rule (simplify (sgt (ty_int ty) x x)) (iconst_u ty 0))
+(rule (simplify (sge (ty_int ty) x x)) (iconst_u ty 1))
+(rule (simplify (ult (ty_int ty) x x)) (iconst_u ty 0))
+(rule (simplify (ule (ty_int ty) x x)) (iconst_u ty 1))
+(rule (simplify (slt (ty_int ty) x x)) (iconst_u ty 0))
+(rule (simplify (sle (ty_int ty) x x)) (iconst_u ty 1))
 
 ;; Optimize icmp-of-icmp.
 (rule (simplify (ne ty
@@ -65,62 +65,62 @@
       (subsume (iconst_u bty 1)))
 
 ;; ult(x, UMAX) == ne(x, UMAX).
-(rule (simplify (ult (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (ult (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_umax cty)))
        (ne bty x umax))
 
 ;; ule(x, UMAX) == true.
-(rule (simplify (ule (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (ule (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_umax cty)))
        (subsume (iconst_u bty 1)))
 
 ;; ugt(x, UMAX) == false.
-(rule (simplify (ugt (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (ugt (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_umax cty)))
        (subsume (iconst_u bty 0)))
 
 ;; uge(x, UMAX) == eq(x, UMAX).
-(rule (simplify (uge (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (uge (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_umax cty)))
        (eq bty x umax))
 
 ;; slt(x, SMIN) == false.
-(rule (simplify (slt (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (slt (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smin cty)))
        (subsume (iconst_u bty 0)))
 
 ;; sle(x, SMIN) == eq(x, SMIN).
-(rule (simplify (sle (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (sle (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smin cty)))
        (eq bty x smin))
 
 ;; sgt(x, SMIN) == ne(x, SMIN).
-(rule (simplify (sgt (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (sgt (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smin cty)))
        (ne bty x smin))
 
 ;; sge(x, SMIN) == true.
-(rule (simplify (sge (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (sge (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smin cty)))
        (subsume (iconst_u bty 1)))
 
 ;; slt(x, SMAX) == ne(x, SMAX).
-(rule (simplify (slt (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (slt (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smax cty)))
        (ne bty x smax))
 
 ;; sle(x, SMAX) == true.
-(rule (simplify (sle (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (sle (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smax cty)))
        (subsume (iconst_u bty 1)))
 
 ;; sgt(x, SMAX) == false.
-(rule (simplify (sgt (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (sgt (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smax cty)))
        (subsume (iconst_u bty 0)))
 
 ;; sge(x, SMAX) == eq(x, SMAX).
-(rule (simplify (sge (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+(rule (simplify (sge (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
        (if-let $true (u64_eq y (ty_smax cty)))
        (eq bty x smax))
 

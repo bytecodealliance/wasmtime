@@ -50,9 +50,8 @@
 (rule (simplify (sshr wide
                  (ishl wide
                   (uextend wide x @ (value_type narrow))
-                  (iconst _ shift))
-                 (iconst _ shift)))
-      (if-let (u64_from_imm64 shift_u64) shift)
+                  (iconst_u _ shift_u64))
+                 (iconst_u _ shift_u64)))
       (if-let $true (u64_eq shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       (sextend wide x))
 
@@ -62,9 +61,8 @@
 (rule (simplify (sshr wide
                  (ishl wide
                   x @ (uextend wide (value_type narrow))
-                  (iconst _ shift))
-                 (iconst _ shift)))
-      (if-let (u64_from_imm64 shift_u64) shift)
+                  (iconst_u _ shift_u64))
+                 (iconst_u _ shift_u64)))
       (if-let $true (u64_lt shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       x)
 
@@ -73,9 +71,8 @@
 (rule (simplify (sshr wide
                  (ishl wide
                   x @ (sextend wide (value_type narrow))
-                  (iconst _ shift))
-                 (iconst _ shift)))
-      (if-let (u64_from_imm64 shift_u64) shift)
+                  (iconst_u _ shift_u64))
+                 (iconst_u _ shift_u64)))
       (if-let $true (u64_le shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       x)
 
@@ -99,7 +96,7 @@
 (rule (shift_amt_to_type 32) $I32)
 
 ;; ineg(ushr(x, k)) == sshr(x, k) when k == ty_bits - 1.
-(rule (simplify (ineg ty (ushr ty x sconst @ (iconst ty (u64_from_imm64 shift_amt)))))
+(rule (simplify (ineg ty (ushr ty x sconst @ (iconst_u ty shift_amt))))
       (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
       (sshr ty x sconst))
 
@@ -153,8 +150,8 @@
 ;; (ushr (ushr x k1) k2) == (ushr x (add k1 k2)) if shift_mask(k1) + shift_mask(k2) < ty_bits
 ;; (sshr (sshr x k1) k2) == (sshr x (add k1 k2)) if shift_mask(k1) + shift_mask(k2) < ty_bits
 (rule (simplify (ishl ty
-                      (ishl ty x (iconst kty (u64_from_imm64 k1)))
-                      (iconst _ (u64_from_imm64 k2))))
+                      (ishl ty x (iconst_u kty k1))
+                      (iconst_u _ k2)))
       (if-let shift_amt (u64_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
@@ -162,8 +159,8 @@
       (ishl ty x (iconst_u kty shift_amt)))
 
 (rule (simplify (ushr ty
-                      (ushr ty x (iconst kty (u64_from_imm64 k1)))
-                      (iconst _ (u64_from_imm64 k2))))
+                      (ushr ty x (iconst_u kty k1))
+                      (iconst_u _ k2)))
       (if-let shift_amt (u64_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
@@ -171,8 +168,8 @@
       (ushr ty x (iconst_u kty shift_amt)))
 
 (rule (simplify (sshr ty
-                      (sshr ty x (iconst kty (u64_from_imm64 k1)))
-                      (iconst _ (u64_from_imm64 k2))))
+                      (sshr ty x (iconst_u kty k1))
+                      (iconst_u _ k2)))
       (if-let shift_amt (u64_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
@@ -185,8 +182,8 @@
 ;; (ishl (ishl x k1) k2) == 0 if shift_mask(k1) + shift_mask(k2) >= ty_bits
 ;; (ushr (ushr x k1) k2) == 0 if shift_mask(k1) + shift_mask(k2) >= ty_bits
 (rule (simplify (ishl ty
-                      (ishl ty x (iconst _ (u64_from_imm64 k1)))
-                      (iconst _ (u64_from_imm64 k2))))
+                      (ishl ty x (iconst_u _ k1))
+                      (iconst_u _ k2)))
       (if-let shift_amt (u64_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
@@ -194,8 +191,8 @@
       (subsume (iconst_u ty 0)))
 
 (rule (simplify (ushr ty
-                      (ushr ty x (iconst _ (u64_from_imm64 k1)))
-                      (iconst _ (u64_from_imm64 k2))))
+                      (ushr ty x (iconst_u _ k1))
+                      (iconst_u _ k2)))
       (if-let shift_amt (u64_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
@@ -293,18 +290,18 @@
 ;; (op x k) == (op x (and k (ty_shift_mask ty)))
 ;;
 ;; where `op` is one of ishl, ushr, sshr, rotl, rotr
-(rule (simplify (ishl ty x (iconst kty (u64_from_imm64 k))))
+(rule (simplify (ishl ty x (iconst_u kty k)))
       (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
-      (ishl ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
-(rule (simplify (ushr ty x (iconst kty (u64_from_imm64 k))))
+      (ishl ty x (iconst_u kty (u64_and k (ty_shift_mask ty)))))
+(rule (simplify (ushr ty x (iconst_u kty k)))
       (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
-      (ushr ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
-(rule (simplify (sshr ty x (iconst kty (u64_from_imm64 k))))
+      (ushr ty x (iconst_u kty (u64_and k (ty_shift_mask ty)))))
+(rule (simplify (sshr ty x (iconst_u kty k)))
       (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
-      (sshr ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
-(rule (simplify (rotr ty x (iconst kty (u64_from_imm64 k))))
+      (sshr ty x (iconst_u kty (u64_and k (ty_shift_mask ty)))))
+(rule (simplify (rotr ty x (iconst_u kty k)))
       (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
-      (rotr ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
-(rule (simplify (rotl ty x (iconst kty (u64_from_imm64 k))))
+      (rotr ty x (iconst_u kty (u64_and k (ty_shift_mask ty)))))
+(rule (simplify (rotl ty x (iconst_u kty k)))
       (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
-      (rotl ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
+      (rotl ty x (iconst_u kty (u64_and k (ty_shift_mask ty)))))

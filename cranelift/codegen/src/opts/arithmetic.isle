@@ -47,7 +47,7 @@
       (subsume inner))
 
 ;; x-x == 0.
-(rule (simplify (isub (fits_in_64 (ty_int ty)) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (isub (ty_int ty) x x)) (subsume (iconst_u ty 0)))
 
 ;; x*1 == x.
 (rule (simplify (imul ty
