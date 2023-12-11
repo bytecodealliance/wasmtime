@@ -152,17 +152,17 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
 /// from WASI Preview 1 to Preview 2.  It will use this function to reserve
 /// descriptors for its own use, valid only for use with libc functions.
 #[no_mangle]
-pub unsafe extern "C" fn adapter_open_badfd(fd: *mut u32) -> bool {
+pub unsafe extern "C" fn adapter_open_badfd(fd: *mut u32) -> Errno {
     State::with(|state| {
         *fd = state.descriptors_mut().open(Descriptor::Bad)?;
         Ok(())
-    }) == wasi::ERRNO_SUCCESS
+    })
 }
 
 /// Close a descriptor previously opened using `adapter_open_badfd`.
 #[no_mangle]
-pub unsafe extern "C" fn adapter_close_badfd(fd: u32) -> bool {
-    State::with(|state| state.descriptors_mut().close(fd)) == wasi::ERRNO_SUCCESS
+pub unsafe extern "C" fn adapter_close_badfd(fd: u32) -> Errno {
+    State::with(|state| state.descriptors_mut().close(fd))
 }
 
 #[no_mangle]
