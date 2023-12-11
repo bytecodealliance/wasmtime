@@ -2,15 +2,15 @@ fn main() {
     #[link(wasm_import_module = "wasi_snapshot_preview1")]
     extern "C" {
         #[cfg_attr(target_arch = "wasm32", link_name = "adapter_open_badfd")]
-        fn adapter_open_badfd(fd: *mut u32) -> bool;
+        fn adapter_open_badfd(fd: *mut u32) -> wasi::Errno;
 
         #[cfg_attr(target_arch = "wasm32", link_name = "adapter_close_badfd")]
-        fn adapter_close_badfd(fd: u32) -> bool;
+        fn adapter_close_badfd(fd: u32) -> wasi::Errno;
     }
 
     unsafe {
         let mut fd = 0;
-        assert!(adapter_open_badfd(&mut fd));
+        assert_eq!(adapter_open_badfd(&mut fd), wasi::ERRNO_SUCCESS);
 
         assert_eq!(wasi::fd_close(fd), Err(wasi::ERRNO_BADF));
 
@@ -41,6 +41,6 @@ fn main() {
             Err(wasi::ERRNO_BADF)
         );
 
-        assert!(adapter_close_badfd(fd));
+        assert_eq!(adapter_close_badfd(fd), wasi::ERRNO_SUCCESS);
     }
 }
