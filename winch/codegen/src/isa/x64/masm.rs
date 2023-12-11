@@ -6,8 +6,8 @@ use super::{
 };
 
 use crate::masm::{
-    DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize, RegImm,
-    RemKind, RoundingMode, ShiftKind, TrapCode,
+    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize,
+    RegImm, RemKind, RoundingMode, ShiftKind, TrapCode,
 };
 use crate::{
     abi::ABI,
@@ -901,6 +901,18 @@ impl Masm for MacroAssembler {
 
             context.stack.push(dst.into());
             context.free_reg(tmp);
+        }
+    }
+
+    fn wrap(&mut self, src: Reg, dst: Reg) {
+        self.asm.mov_rr(src.into(), dst.into(), OperandSize::S32);
+    }
+
+    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
+        if let ExtendKind::I64ExtendI32U = kind {
+            self.asm.movzx_rr(src, dst, kind);
+        } else {
+            self.asm.movsx_rr(src, dst, kind);
         }
     }
 

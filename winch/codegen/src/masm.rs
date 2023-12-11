@@ -114,6 +114,26 @@ pub(crate) enum ShiftKind {
     Rotr,
 }
 
+/// Kinds of extends in WebAssembly. The [`masm`] implementation for each ISA
+/// is responsible for emitting the correct sequence of instructions when
+/// lowering to machine code.
+pub(crate) enum ExtendKind {
+    /// Sign extends i32 to i64.
+    I64ExtendI32S,
+    /// Zero extends i32 to i64.
+    I64ExtendI32U,
+    // Sign extends the 8 least significant bits to 32 bits.
+    I32Extend8S,
+    // Sign extends the 16 least significant bits to 32 bits.
+    I32Extend16S,
+    /// Sign extends the 8 least significant bits to 64 bits.
+    I64Extend8S,
+    /// Sign extends the 16 least significant bits to 64 bits.
+    I64Extend16S,
+    /// Sign extends the 32 least significant bits to 64 bits.
+    I64Extend32S,
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -579,6 +599,12 @@ pub(crate) trait MacroAssembler {
     /// Count the number of 1 bits in src and put the result in dst. In x64,
     /// this will emit multiple instructions if the `has_popcnt` flag is false.
     fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize);
+
+    /// Converts an i64 to an i32 by discarding the high 32 bits.
+    fn wrap(&mut self, src: Reg, dst: Reg);
+
+    /// Extends an integer of a given size to a larger size.
+    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind);
 
     /// Zero a given memory range.
     ///
