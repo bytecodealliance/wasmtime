@@ -20,6 +20,8 @@ pub enum Descriptor {
 
     /// Input and/or output wasi-streams, along with stream metadata.
     Streams(Streams),
+
+    Bad,
 }
 
 /// Input and/or output wasi-streams, along with a stream type that
@@ -358,7 +360,7 @@ impl Descriptors {
     ) -> Result<&mut Streams, Errno> {
         match self.get_mut(fd)? {
             Descriptor::Streams(streams) => Ok(streams),
-            Descriptor::Closed(_) => Err(error),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(error),
         }
     }
 
@@ -420,14 +422,14 @@ impl Descriptors {
     pub fn get_read_stream(&self, fd: Fd) -> Result<&InputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_read_stream(),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     }
 
     pub fn get_write_stream(&self, fd: Fd) -> Result<&OutputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_write_stream(),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     }
 }
