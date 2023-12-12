@@ -19,7 +19,7 @@
 ;;   20:	 4839c1               	cmp	rcx, rax
 ;;   23:	 b900000000           	mov	ecx, 0
 ;;   28:	 400f95c1             	setne	cl
-;;   2c:	 4889c8               	mov	rax, rcx
-;;   2f:	 4883c418             	add	rsp, 0x18
-;;   33:	 5d                   	pop	rbp
-;;   34:	 c3                   	ret	
+;;   2c:	 89c8                 	mov	eax, ecx
+;;   2e:	 4883c418             	add	rsp, 0x18
+;;   32:	 5d                   	pop	rbp
+;;   33:	 c3                   	ret	
