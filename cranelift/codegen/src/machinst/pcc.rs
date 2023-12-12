@@ -6,8 +6,7 @@ use crate::trace;
 
 pub(crate) fn get_fact_or_default<I: VCodeInst>(vcode: &VCode<I>, reg: Reg, width: u16) -> Fact {
     trace!(
-        "get_fact_or_default: reg v{} -> {:?}",
-        reg.to_virtual_reg().unwrap().index(),
+        "get_fact_or_default: reg {reg:?} -> {:?}",
         vcode.vreg_fact(reg.into())
     );
     vcode
