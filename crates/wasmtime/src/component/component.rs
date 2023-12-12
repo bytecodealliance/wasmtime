@@ -127,14 +127,54 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
+        use crate::module::HashedEngineCompileEnv;
+
         engine
             .check_compatible_with_native_host()
             .context("compilation settings are not compatible with the native host")?;
 
-        let (mmap, artifacts) = Component::build_artifacts(engine, binary)?;
-        let mut code_memory = CodeMemory::new(mmap)?;
-        code_memory.publish()?;
-        Component::from_parts(engine, Arc::new(code_memory), Some(artifacts))
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "cache")] {
+                let state = (HashedEngineCompileEnv(engine), binary);
+                let (code, artifacts) = wasmtime_cache::ModuleCacheEntry::new(
+                    "wasmtime",
+                    engine.cache_config(),
+                )
+                .get_data_raw(
+                    &state,
+
+                    // Cache miss, compute the actual artifacts
+                    |(engine, wasm)| -> Result<_> {
+                        let (mmap, artifacts) = Component::build_artifacts(engine.0, wasm)?;
+                        let code = publish_mmap(mmap)?;
+                        Ok((code, Some(artifacts)))
+                    },
+
+                    // Implementation of how to serialize artifacts
+                    |(_engine, _wasm), (code, _info_and_types)| {
+                        Some(code.mmap().to_vec())
+                    },
+
+                    // Cache hit, deserialize the provided artifacts
+                    |(engine, _wasm), serialized_bytes| {
+                        let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Component).ok()?;
+                        Some((code, None))
+                    },
+                )?;
+            } else {
+                let (mmap, artifacts) = Component::build_artifacts(engine, binary)?;
+                let artifacts = Some(artifacts);
+                let code = publish_mmap(mmap)?;
+            }
+        };
+
+        return Component::from_parts(engine, code, artifacts);
+
+        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+            let mut code = CodeMemory::new(mmap)?;
+            code.publish()?;
+            Ok(Arc::new(code))
+        }
     }
 
     /// Same as [`Module::deserialize`], but for components.
