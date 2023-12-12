@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use wasmtime::*;
-use wasmtime_wasi::{preview1::WasiPreview1Ctx, WasiCtxBuilder};
+use wasmtime_wasi::{WasiCtxBuilder, WasiPreview1Ctx};
 
 fn main() -> Result<()> {
     let engine = Engine::default();

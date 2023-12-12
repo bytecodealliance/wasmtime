@@ -757,7 +757,7 @@ fn parse_dwarf_info() -> Result<()> {
     wasmtime_wasi::preview1::add_to_linker_sync(&mut linker)?;
     let mut store = Store::new(
         &engine,
-        wasmtime_wasi::preview1::WasiPreview1Ctx::from(
+        wasmtime_wasi::WasiPreview1Ctx::from(
             wasmtime_wasi::WasiCtxBuilder::new().inherit_stdio().build(),
         ),
     );

@@ -5,7 +5,7 @@ use wasmtime::{Config, Engine, Linker, Module, Store};
 // For this example we want to use the async version of wasmtime_wasi.
 // Notably, this version of wasi uses a scheduler that will async yield
 // when sleeping in `poll_oneoff`.
-use wasmtime_wasi::{preview1::WasiPreview1Ctx, WasiCtxBuilder};
+use wasmtime_wasi::{WasiCtxBuilder, WasiPreview1Ctx};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {

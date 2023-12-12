@@ -8,7 +8,7 @@ You can execute this example with:
 
 use anyhow::Result;
 use wasmtime::*;
-use wasmtime_wasi::{preview1::WasiPreview1Ctx, WasiCtxBuilder};
+use wasmtime_wasi::{WasiCtxBuilder, WasiPreview1Ctx};
 
 fn main() -> Result<()> {
     // Define the WASI functions globally on the `Config`.
