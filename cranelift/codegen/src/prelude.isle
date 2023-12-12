@@ -67,14 +67,6 @@
 (decl pure partial u8_lt (u8 u8) Unit)
 (extern constructor u8_lt u8_lt)
 
-;; Get a signed 32-bit immediate in an u32 from an Imm64, if possible.
-(decl simm32 (i32) Imm64)
-(extern extractor simm32 simm32)
-
-;; Get an unsigned 8-bit immediate in a u8 from an Imm64, if possible.
-(decl uimm8 (u8) Imm64)
-(extern extractor uimm8 uimm8)
-
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure u8_as_i8 (u8) i8)

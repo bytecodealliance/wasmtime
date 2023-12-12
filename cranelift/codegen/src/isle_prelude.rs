@@ -735,18 +735,6 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn simm32(&mut self, x: Imm64) -> Option<i32> {
-            i64::from(x).try_into().ok()
-        }
-
-        #[inline]
-        fn uimm8(&mut self, x: Imm64) -> Option<u8> {
-            let x64: i64 = x.into();
-            let x8: u8 = x64.try_into().ok()?;
-            Some(x8)
-        }
-
-        #[inline]
         fn offset32(&mut self, x: Offset32) -> i32 {
             x.into()
         }

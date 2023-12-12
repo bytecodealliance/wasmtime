@@ -6,6 +6,14 @@
 (decl multi inst_data (Type InstructionData) Value)
 (extern extractor inst_data inst_data_etor)
 
+;; Identical to `inst_data`, just with a different ISLE type.
+;; This is basically a manual version of `curry`/`uncurry` in Haskell:
+;; to compose extractors the outer one needs to be single-parameter,
+;; so this combines the two parameters of `inst_data` into one.
+(type TypeAndInstructionData (primitive TypeAndInstructionData))
+(decl multi inst_data_tupled (TypeAndInstructionData) Value)
+(extern extractor inst_data_tupled inst_data_tupled_etor)
+
 ;; Construct a pure node, returning a new (or deduplicated
 ;; already-existing) eclass ID.
 (decl make_inst (Type InstructionData) Value)
@@ -54,13 +62,33 @@
 
 ;;;;; constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl iconst_u64 (Type u64) Value)
+(decl iconst_sextend_etor (Type i64) TypeAndInstructionData)
+(extern extractor iconst_sextend_etor iconst_sextend_etor)
 
-;; Use a single iconst for types that fit in 64 bits.
-(rule 0 (iconst_u64 (ty_int_ref_scalar_64 ty) val)
-    (if-let $true (u64_le val (ty_umax ty)))
-    (iconst ty (imm64_masked ty val)))
+;; Construct an `iconst` from an `i64` or Extract an `i64` from an `iconst`
+;; by treating the constant as signed.
+;; When extracting, smaller types get their value sign-extended to 64-bits,
+;; so that `iconst.i8 255` will give you a `-1_i64`.
+;; When constructing, the rule will fail if the value cannot be represented in
+;; the target type.  If it fits, it'll be masked accordingly in the constant.
+(decl iconst_s (Type i64) Value)
+(extractor (iconst_s ty c) (inst_data_tupled (iconst_sextend_etor ty c)))
+(rule 0 (iconst_s ty c)
+	(if-let c_masked (u64_and (i64_as_u64 c) (ty_umax ty)))
+	(if-let c_reextended (i64_sextend_u64 ty c_masked))
+	(if-let $true (u64_eq (i64_as_u64 c) (i64_as_u64 c_reextended)))
+	(iconst ty (imm64 c_masked)))
+(rule 1 (iconst_s $I128 c) (sextend $I128 (iconst_s $I64 c)))
 
-;; For i128 types use a iconst, but zero extend it to i128.
-(rule 1 (iconst_u64 $I128 val)
-    (uextend $I128 (iconst $I64 (imm64_masked $I64 val))))
+;; Construct an `iconst` from a `u64` or Extract a `u64` from an `iconst`
+;; by treating the constant as unsigned.
+;; When extracting, smaller types get their value zero-extended to 64-bits,
+;; so that `iconst.i8 255` will give you a `255_u64`.
+;; When constructing, the rule will fail if the value cannot be represented in
+;; the target type.
+(decl iconst_u (Type u64) Value)
+(extractor (iconst_u ty c) (iconst ty (u64_from_imm64 c)))
+(rule 0 (iconst_u ty c)
+	(if-let $true (u64_le c (ty_umax ty)))
+    (iconst ty (imm64 c)))
+(rule 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))

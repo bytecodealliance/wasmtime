@@ -7,16 +7,16 @@
 ;; x+0 == x.
 (rule (simplify (iadd ty
                       x
-                      (iconst ty (u64_from_imm64 0))))
+                      (iconst_u ty 0)))
       (subsume x))
 ;; x-0 == x.
 (rule (simplify (isub ty
                       x
-                      (iconst ty (u64_from_imm64 0))))
+                      (iconst_u ty 0)))
       (subsume x))
 ;; 0-x == (ineg x).
 (rule (simplify (isub ty
-                      (iconst ty (u64_from_imm64 0))
+                      (iconst_u ty 0)
                       x))
       (ineg ty x))
 
@@ -47,51 +47,49 @@
       (subsume inner))
 
 ;; x-x == 0.
-(rule (simplify (isub (fits_in_64 (ty_int ty)) x x)) (subsume (iconst ty (imm64 0))))
+(rule (simplify (isub (fits_in_64 (ty_int ty)) x x)) (subsume (iconst_u ty 0)))
 
 ;; x*1 == x.
 (rule (simplify (imul ty
                       x
-                      (iconst ty (u64_from_imm64 1))))
+                      (iconst_u ty 1)))
       (subsume x))
 
 ;; x*0 == 0.
 (rule (simplify (imul ty
                       _
-                      zero @ (iconst ty (u64_from_imm64 0))))
+                      zero @ (iconst_u ty 0)))
       (subsume zero))
 
 ;; x*-1 == ineg(x).
-(rule (simplify (imul ty x (iconst ty c)))
-      (if-let -1 (i64_sextend_imm64 ty c))
+(rule (simplify (imul ty x (iconst_s ty -1)))
       (ineg ty x))
 
 ;; (!x) + 1 == ineg(x)
-(rule (simplify (iadd ty (bnot ty x) (iconst ty (u64_from_imm64 1))))
+(rule (simplify (iadd ty (bnot ty x) (iconst_u ty 1)))
       (ineg ty x))
 
 ;; !(x - 1) == !(x + (-1)) == ineg(x)
-(rule (simplify (bnot ty (isub ty x (iconst ty (u64_from_imm64 1)))))
+(rule (simplify (bnot ty (isub ty x (iconst_s ty 1))))
       (ineg ty x))
-(rule (simplify (bnot ty (iadd ty x (iconst ty c))))
-      (if-let -1 (i64_sextend_imm64 ty c))
+(rule (simplify (bnot ty (iadd ty x (iconst_s ty -1))))
       (ineg ty x))
 
 ;; x/1 == x.
 (rule (simplify (sdiv ty
                       x
-                      (iconst ty (u64_from_imm64 1))))
+                      (iconst_u ty 1)))
       (subsume x))
 (rule (simplify (udiv ty
                       x
-                      (iconst ty (u64_from_imm64 1))))
+                      (iconst_u ty 1)))
       (subsume x))
 
 ;; TODO: strength reduction: div to shifts
 ;; TODO: div/rem by constants -> magic multiplications
 
 ;; x*2 == x+x.
-(rule (simplify (imul ty x (iconst _ (simm32 2))))
+(rule (simplify (imul ty x (iconst_u _ 2)))
       (iadd ty x x))
 
 ;; x*c == x<<log2(c) when c is a power of two.

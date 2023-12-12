@@ -27,6 +27,8 @@ const MAX_ISLE_RETURNS: usize = 8;
 
 pub type ConstructorVec<T> = SmallVec<[T; MAX_ISLE_RETURNS]>;
 
+type TypeAndInstructionData = (Type, InstructionData);
+
 impl<T: smallvec::Array> generated_code::Length for SmallVec<T> {
     #[inline]
     fn len(&self) -> usize {
@@ -128,6 +130,13 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         *returns = InstDataEtorIter::new(eclass);
     }
 
+    type inst_data_tupled_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
+
+    fn inst_data_tupled_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
+        // Literally identical to `inst_data_etor`, just a different nominal type in ISLE
+        self.inst_data_etor(eclass, returns);
+    }
+
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {
         let value = self
             .ctx
@@ -147,6 +156,21 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     #[inline]
     fn value_type(&mut self, val: Value) -> Type {
         self.ctx.func.dfg.value_type(val)
+    }
+
+    fn iconst_sextend_etor(
+        &mut self,
+        (ty, inst_data): (Type, InstructionData),
+    ) -> Option<(Type, i64)> {
+        if let InstructionData::UnaryImm {
+            opcode: Opcode::Iconst,
+            imm,
+        } = inst_data
+        {
+            Some((ty, self.i64_sextend_imm64(ty, imm)))
+        } else {
+            None
+        }
     }
 
     fn remat(&mut self, value: Value) -> Value {

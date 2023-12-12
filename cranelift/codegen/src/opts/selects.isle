@@ -6,13 +6,13 @@
 
 ;; if icmp(x, y) { 1 } else { 0 } => uextend(icmp(x, y))
 (rule (simplify (select ty cmp@(icmp _ cc x y)
-                        (iconst _ (u64_from_imm64 1))
-                        (iconst _ (u64_from_imm64 0))))
+                        (iconst_u _ 1)
+                        (iconst_u _ 0)))
     (uextend_from_i8 ty cmp))
 ;; if icmp(x, y) { 0 } else { 1 } => uextend(!icmp(x, y))
 (rule (simplify (select sty (icmp cty cc x y)
-                        (iconst _ (u64_from_imm64 0))
-                        (iconst _ (u64_from_imm64 1))))
+                        (iconst_u _ 0)
+                        (iconst_u _ 1)))
     (uextend_from_i8 sty (icmp cty (intcc_complement cc) x y)))
 
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
