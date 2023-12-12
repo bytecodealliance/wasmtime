@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::SocketAddressFamily;
+use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
 use crate::preview2::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -54,7 +54,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            check.check(&local_address)?;
+            check.check(&local_address, SocketAddrUse::UdpBind)?;
             let udp_socket = &*socket
                 .udp_socket()
                 .as_socketlike_view::<cap_std::net::UdpSocket>();
@@ -139,7 +139,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
-            check.check(&connect_addr)?;
+            check.check(&connect_addr, SocketAddrUse::UdpConnect)?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -462,7 +462,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
                     let Some(check) = stream.socket_addr_check.as_ref() else {
                         return Err(ErrorCode::InvalidState.into());
                     };
-                    check.check(&addr)?;
+                    check.check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
                     addr
                 }
                 (Some(addr), None) => addr,

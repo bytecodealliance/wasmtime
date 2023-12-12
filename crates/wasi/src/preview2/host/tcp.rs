@@ -1,4 +1,5 @@
 use crate::preview2::host::network::util;
+use crate::preview2::network::SocketAddrUse;
 use crate::preview2::tcp::{TcpSocket, TcpState};
 use crate::preview2::{
     bindings::{
@@ -45,7 +46,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         {
             // Ensure that we're allowed to connect to this address.
-            network.check_socket_addr(&local_address)?;
+            network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
             let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
             // Perform the OS bind call.
@@ -114,7 +115,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             util::validate_address_family(&remote_address, &socket.family)?;
 
             // Ensure that we're allowed to connect to this address.
-            network.check_socket_addr(&remote_address)?;
+            network.check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)?;
             let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
             // Do an OS `connect`. Our socket is non-blocking, so it'll either...

@@ -4,7 +4,7 @@ use crate::preview2::{
         HostMonotonicClock, HostWallClock,
     },
     filesystem::Dir,
-    network::SocketAddrCheck,
+    network::{SocketAddrCheck, SocketAddrUse},
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
     DirPerms, FilePerms,
@@ -21,7 +21,6 @@ pub struct WasiCtxBuilder {
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
-
     socket_addr_check: SocketAddrCheck,
     random: Box<dyn RngCore + Send + Sync>,
     insecure_random: Box<dyn RngCore + Send + Sync>,
@@ -190,7 +189,7 @@ impl WasiCtxBuilder {
 
     /// Allow all network addresses accessible to the host
     pub fn inherit_network(&mut self) -> &mut Self {
-        self.socket_addr_check(|_| true)
+        self.socket_addr_check(|_, _| true)
     }
 
     /// A check that will be called for each socket address that is used.
@@ -199,7 +198,7 @@ impl WasiCtxBuilder {
     /// while returning `false` will reject the connection.
     pub fn socket_addr_check<F>(&mut self, check: F) -> &mut Self
     where
-        F: Fn(&SocketAddr) -> bool + Send + Sync + 'static,
+        F: Fn(&SocketAddr, SocketAddrUse) -> bool + Send + Sync + 'static,
     {
         self.socket_addr_check = SocketAddrCheck(Arc::new(check));
         self

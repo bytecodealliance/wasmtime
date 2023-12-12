@@ -318,7 +318,7 @@ pub(crate) mod util {
                 // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
                 // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
                 #[cfg(windows)]
-                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(),
+                Errno::NOBUFS => Errno::ADDRINUSE.into(),
                 _ => error.into(),
             }
         })
@@ -331,7 +331,7 @@ pub(crate) mod util {
             //
             // This normalized error code is depended upon by: tcp.rs
             #[cfg(windows)]
-            Some(Errno::WOULDBLOCK) => Errno::INPROGRESS.into(),
+            Errno::WOULDBLOCK => Errno::INPROGRESS.into(),
             _ => error.into(),
         })
     }

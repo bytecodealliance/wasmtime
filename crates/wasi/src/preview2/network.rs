@@ -10,18 +10,24 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn check_socket_addr(&self, addr: &SocketAddr) -> std::io::Result<()> {
-        self.socket_addr_check.check(addr)
+    pub fn check_socket_addr(
+        &self,
+        addr: &SocketAddr,
+        reason: SocketAddrUse,
+    ) -> std::io::Result<()> {
+        self.socket_addr_check.check(addr, reason)
     }
 }
 
-/// A check that will be called for each socket address that is used.
+/// A check that will be called for each socket address that is used of whether the address is permitted.
 #[derive(Clone)]
-pub struct SocketAddrCheck(pub(crate) Arc<dyn Fn(&SocketAddr) -> bool + Send + Sync>);
+pub struct SocketAddrCheck(
+    pub(crate) Arc<dyn Fn(&SocketAddr, SocketAddrUse) -> bool + Send + Sync>,
+);
 
 impl SocketAddrCheck {
-    pub fn check(&self, addr: &SocketAddr) -> std::io::Result<()> {
-        if (self.0)(addr) {
+    pub fn check(&self, addr: &SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
+        if (self.0)(addr, reason) {
             Ok(())
         } else {
             Err(std::io::Error::new(
@@ -34,8 +40,23 @@ impl SocketAddrCheck {
 
 impl Default for SocketAddrCheck {
     fn default() -> Self {
-        Self(Arc::new(|_| false))
+        Self(Arc::new(|_, _| false))
     }
+}
+
+/// The reason what a socket address is being used for.
+#[derive(Clone, Copy, Debug)]
+pub enum SocketAddrUse {
+    /// Binding TCP socket
+    TcpBind,
+    /// Connecting TCP socket
+    TcpConnect,
+    /// Binding UDP socket
+    UdpBind,
+    /// Connecting UDP socket
+    UdpConnect,
+    /// Sending datagram on non-connected UDP socket
+    UdpOutgoingDatagram,
 }
 
 pub type SocketResult<T> = Result<T, SocketError>;
