@@ -7,7 +7,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use super::network::{Pool, SocketAddressFamily};
+use super::network::{SocketAddrCheck, SocketAddressFamily};
 
 /// The state of a UDP socket.
 ///
@@ -43,8 +43,8 @@ pub struct UdpSocket {
     /// Socket address family.
     pub(crate) family: SocketAddressFamily,
 
-    /// The pool of allowed addresses
-    pub(crate) pool: Option<Arc<Pool>>,
+    /// The check of allowed addresses
+    pub(crate) socket_addr_check: Option<SocketAddrCheck>,
 }
 
 #[async_trait]
@@ -70,7 +70,7 @@ impl UdpSocket {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
             family: socket_address_family,
-            pool: None,
+            socket_addr_check: None,
         })
     }
 
@@ -109,8 +109,8 @@ pub struct OutgoingDatagramStream {
 
     pub(crate) send_state: SendState,
 
-    /// The pool of allowed addresses
-    pub(crate) pool: Option<Arc<Pool>>,
+    /// The check of allowed addresses
+    pub(crate) socket_addr_check: Option<SocketAddrCheck>,
 }
 
 pub(crate) enum SendState {

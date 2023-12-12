@@ -1,16 +1,15 @@
-use super::{
-    clocks::host::{monotonic_clock, wall_clock},
-    network::Pool,
-};
 use crate::preview2::{
-    clocks::{self, HostMonotonicClock, HostWallClock},
+    clocks::{
+        host::{monotonic_clock, wall_clock},
+        HostMonotonicClock, HostWallClock,
+    },
     filesystem::Dir,
+    network::SocketAddrCheck,
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
     DirPerms, FilePerms,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
-use cap_std::ipnet;
 use std::sync::Arc;
 use std::{mem, net::SocketAddr};
 use wasmtime::component::ResourceTable;
@@ -23,7 +22,7 @@ pub struct WasiCtxBuilder {
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
 
-    pool: Pool,
+    socket_addr_check: SocketAddrCheck,
     random: Box<dyn RngCore + Send + Sync>,
     insecure_random: Box<dyn RngCore + Send + Sync>,
     insecure_random_seed: u128,
@@ -73,7 +72,7 @@ impl WasiCtxBuilder {
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
-            pool: Pool::new(),
+            socket_addr_check: SocketAddrCheck::default(),
             random: random::thread_rng(),
             insecure_random,
             insecure_random_seed,
@@ -173,85 +172,36 @@ impl WasiCtxBuilder {
         self.insecure_random = Box::new(insecure_random);
         self
     }
+
     pub fn insecure_random_seed(&mut self, insecure_random_seed: u128) -> &mut Self {
         self.insecure_random_seed = insecure_random_seed;
         self
     }
 
-    pub fn wall_clock(&mut self, clock: impl clocks::HostWallClock + 'static) -> &mut Self {
+    pub fn wall_clock(&mut self, clock: impl HostWallClock + 'static) -> &mut Self {
         self.wall_clock = Box::new(clock);
         self
     }
 
-    pub fn monotonic_clock(
-        &mut self,
-        clock: impl clocks::HostMonotonicClock + 'static,
-    ) -> &mut Self {
+    pub fn monotonic_clock(&mut self, clock: impl HostMonotonicClock + 'static) -> &mut Self {
         self.monotonic_clock = Box::new(clock);
         self
     }
 
-    /// Add all network addresses accessible to the host to the pool.
+    /// Allow all network addresses accessible to the host
     pub fn inherit_network(&mut self) -> &mut Self {
-        self.pool.inherit_network();
-        self
+        self.socket_addr_check(|_| true)
     }
 
-    /// Add a dynamic check of whether a socket addr is allowed
+    /// A check that will be called for each socket address that is used.
     ///
     /// Returning `true` will permit socket connections to the `SocketAddr`,
-    /// while returning `false` will lead to the other non-dynamic checks
-    /// being performed.
-    pub fn dynamic_socket_addr_check<F>(&mut self, check: F) -> &mut Self
+    /// while returning `false` will reject the connection.
+    pub fn socket_addr_check<F>(&mut self, check: F) -> &mut Self
     where
-        F: Fn(SocketAddr) -> bool + Send + Sync + 'static,
+        F: Fn(&SocketAddr) -> bool + Send + Sync + 'static,
     {
-        self.pool.add_dynamic_check(Box::new(check));
-        self
-    }
-
-    /// Add network addresses to the pool.
-    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(
-        &mut self,
-        addrs: A,
-    ) -> std::io::Result<&mut Self> {
-        self.pool.insert(addrs)?;
-        Ok(self)
-    }
-
-    /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
-    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) -> &mut Self {
-        let _ = self.insert_addr(addr);
-        self
-    }
-
-    /// Add a range of network addresses, accepting any port, to the pool.
-    ///
-    /// Unlike `insert_ip_net`, this function grants access to any requested port.
-    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) -> &mut Self {
-        self.pool.insert_ip_net_port_any(ip_net);
-        self
-    }
-
-    /// Add a range of network addresses, accepting a range of ports, to
-    /// per-instance networks.
-    ///
-    /// This grants access to the port range starting at `ports_start` and, if
-    /// `ports_end` is provided, ending before `ports_end`.
-    pub fn insert_ip_net_port_range(
-        &mut self,
-        ip_net: ipnet::IpNet,
-        ports_start: u16,
-        ports_end: Option<u16>,
-    ) -> &mut Self {
-        self.pool
-            .insert_ip_net_port_range(ip_net, ports_start, ports_end);
-        self
-    }
-
-    /// Add a range of network addresses with a specific port to the pool.
-    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) -> &mut Self {
-        self.pool.insert_ip_net(ip_net, port);
+        self.socket_addr_check = SocketAddrCheck(Arc::new(check));
         self
     }
 
@@ -291,7 +241,7 @@ impl WasiCtxBuilder {
             env,
             args,
             preopens,
-            pool,
+            socket_addr_check,
             random,
             insecure_random,
             insecure_random_seed,
@@ -309,7 +259,7 @@ impl WasiCtxBuilder {
             env,
             args,
             preopens,
-            pool: Arc::new(pool),
+            socket_addr_check,
             random,
             insecure_random,
             insecure_random_seed,
@@ -339,7 +289,7 @@ pub struct WasiCtx {
     pub(crate) stdin: Box<dyn StdinStream>,
     pub(crate) stdout: Box<dyn StdoutStream>,
     pub(crate) stderr: Box<dyn StdoutStream>,
-    pub(crate) pool: Arc<Pool>,
+    pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
 }
 
@@ -365,8 +315,7 @@ impl AllowedNetworkUses {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::PermissionDenied,
                 "UDP is not allowed",
-            )
-            .into());
+            ));
         }
 
         Ok(())
@@ -377,8 +326,7 @@ impl AllowedNetworkUses {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::PermissionDenied,
                 "TCP is not allowed",
-            )
-            .into());
+            ));
         }
 
         Ok(())
