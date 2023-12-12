@@ -3,7 +3,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::{fs::File, path::Path, time::Instant};
 use wasmtime::{Engine, Linker, Module, Store, TypedFunc};
-use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
+use wasmtime_wasi::{WasiCtxBuilder, WasiPreview1Ctx};
 
 criterion_group!(benches, bench_wasi);
 criterion_main!(benches);
@@ -47,27 +47,26 @@ fn bench_wasi(c: &mut Criterion) {
 /// - execute the body of the function for that number of loop iterations
 /// - return a single `u64` indicating how many loop iterations were executed
 ///   (to double-check)
-fn instantiate(wat: &[u8]) -> (Store<WasiCtx>, TypedFunc<u64, u64>) {
+fn instantiate(wat: &[u8]) -> (Store<WasiPreview1Ctx>, TypedFunc<u64, u64>) {
     let engine = Engine::default();
     let wasi = wasi_context();
     let mut store = Store::new(&engine, wasi);
     let module = Module::new(&engine, wat).unwrap();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
+    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker).unwrap();
     let instance = linker.instantiate(&mut store, &module).unwrap();
     let run = instance.get_typed_func(&mut store, "run").unwrap();
     (store, run)
 }
 
 /// Build a WASI context with some actual data to retrieve.
-fn wasi_context() -> WasiCtx {
+fn wasi_context() -> WasiPreview1Ctx {
     WasiCtxBuilder::new()
         .envs(&[
             ("a".to_string(), "b".to_string()),
             ("b".to_string(), "c".to_string()),
             ("c".to_string(), "d".to_string()),
         ])
-        .unwrap()
         .args(&[
             "exe".to_string(),
             "--flag1".to_string(),
@@ -75,15 +74,13 @@ fn wasi_context() -> WasiCtx {
             "--flag3".to_string(),
             "--flag4".to_string(),
         ])
-        .unwrap()
         .preopened_dir(
-            wasmtime_wasi::Dir::open_ambient_dir(
-                "benches/wasi",
-                wasmtime_wasi::ambient_authority(),
-            )
-            .unwrap(),
+            cap_std::fs::Dir::open_ambient_dir("benches/wasi", cap_std::ambient_authority())
+                .unwrap(),
+            wasmtime_wasi::DirPerms::all(),
+            wasmtime_wasi::FilePerms::all(),
             "/",
         )
-        .unwrap()
         .build()
+        .into()
 }

@@ -7,14 +7,14 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use std::thread;
 use wasmtime::*;
-use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
+use wasmtime_wasi::{WasiCtxBuilder, WasiPreview1Ctx};
 
-fn store(engine: &Engine) -> Store<WasiCtx> {
-    let wasi = WasiCtxBuilder::new().build();
+fn store(engine: &Engine) -> Store<WasiPreview1Ctx> {
+    let wasi = WasiPreview1Ctx::from(WasiCtxBuilder::new().build());
     Store::new(engine, wasi)
 }
 
-fn instantiate(pre: &InstancePre<WasiCtx>, engine: &Engine) -> Result<()> {
+fn instantiate(pre: &InstancePre<WasiPreview1Ctx>, engine: &Engine) -> Result<()> {
     let mut store = store(engine);
     let _instance = pre.instantiate(&mut store)?;
     Ok(())
@@ -48,7 +48,7 @@ fn bench_sequential(c: &mut Criterion, path: &Path) {
             // benchmark programs.
             linker.func_wrap("bench", "start", || {}).unwrap();
             linker.func_wrap("bench", "end", || {}).unwrap();
-            wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
+            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker).unwrap();
             let pre = linker
                 .instantiate_pre(&module)
                 .expect("failed to pre-instantiate");
@@ -82,7 +82,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
             // benchmark programs.
             linker.func_wrap("bench", "start", || {}).unwrap();
             linker.func_wrap("bench", "end", || {}).unwrap();
-            wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
+            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker).unwrap();
             let pre = Arc::new(
                 linker
                     .instantiate_pre(&module)

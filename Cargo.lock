@@ -3321,6 +3321,7 @@ dependencies = [
  "bstr",
  "bytes",
  "bytesize",
+ "cap-std",
  "clap",
  "component-macro-test",
  "component-test-util",

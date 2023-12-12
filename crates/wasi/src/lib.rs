@@ -43,6 +43,10 @@ pub use self::stdio::{
 pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
+
+#[cfg(feature = "preview1")]
+pub use self::preview1::WasiPreview1Ctx;
+
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 
