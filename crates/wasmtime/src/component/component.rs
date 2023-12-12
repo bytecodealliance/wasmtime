@@ -163,6 +163,7 @@ impl Component {
                 )?;
             } else {
                 let (mmap, artifacts) = Component::build_artifacts(engine, binary)?;
+                let artifacts = Some(artifacts);
                 let code = publish_mmap(mmap)?;
             }
         };
