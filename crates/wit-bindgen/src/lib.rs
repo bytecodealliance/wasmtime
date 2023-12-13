@@ -807,8 +807,9 @@ impl Wasmtime {
             let camel = name.to_upper_camel_case();
             uwriteln!(
                 self.src,
-                "linker.resource::<{camel}>(
+                "linker.resource(
                     \"{name}\",
+                    wasmtime::component::ResourceType::host::<{camel}>(),
                     move |mut store, rep| -> wasmtime::Result<()> {{
                         Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
                     }},
@@ -1604,8 +1605,9 @@ impl<'a> InterfaceGenerator<'a> {
             let camel = name.to_upper_camel_case();
             uwriteln!(
                 self.src,
-                "inst.resource::<{camel}>(
+                "inst.resource(
                     \"{name}\",
+                    wasmtime::component::ResourceType::host::<{camel}>(),
                     move |mut store, rep| -> wasmtime::Result<()> {{
                         Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
                     }},

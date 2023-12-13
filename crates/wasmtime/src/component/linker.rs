@@ -417,12 +417,9 @@ impl<T> LinkerInstance<'_, T> {
         self.insert(name, Definition::Module(module.clone()))
     }
 
-    /// Defines a new host [`ResourceType`] in this linker.
+    /// Defines a new resource of a given [`ResourceType`] in this linker.
     ///
-    /// This function is used to specify resources defined in the host. The `U`
-    /// type parameter here is the type parameter to [`Resource<U>`]. This means
-    /// that component types using this resource type will be visible in
-    /// Wasmtime as [`Resource<U>`].
+    /// This function is used to specify resources defined in the host.
     ///
     /// The `name` argument is the name to define the resource within this
     /// linker.
@@ -442,9 +439,10 @@ impl<T> LinkerInstance<'_, T> {
     /// The provided `dtor` closure returns an error if something goes wrong
     /// when a guest calls the `dtor` to drop a `Resource<T>` such as
     /// a runtime trap or a runtime limit being exceeded.
-    pub fn resource<U: 'static>(
+    pub fn resource(
         &mut self,
         name: &str,
+        ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
         let name = self.strings.intern(name);
@@ -452,7 +450,7 @@ impl<T> LinkerInstance<'_, T> {
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
         ));
-        self.insert(name, Definition::Resource(ResourceType::host::<U>(), dtor))
+        self.insert(name, Definition::Resource(ty, dtor))
     }
 
     /// Defines a nested instance within this instance.

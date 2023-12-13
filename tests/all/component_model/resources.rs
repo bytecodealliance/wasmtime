@@ -37,8 +37,12 @@ fn host_resource_types() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<T>("t", |_, _| Ok(()))?;
-    linker.root().resource::<U>("u", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<T>(), |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("u", ResourceType::host::<U>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
     let t1 = i.get_resource(&mut store, "t1").unwrap();
     let t2 = i.get_resource(&mut store, "t2").unwrap();
@@ -367,7 +371,9 @@ fn drop_host_twice() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
     let dtor = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "dtor")?;
 
@@ -431,12 +437,14 @@ fn manually_destroy() -> Result<()> {
 
     let mut store = Store::new(&engine, Data::default());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t1", |mut cx, rep| {
-        let data: &mut Data = cx.data_mut();
-        data.drops += 1;
-        data.last_drop = Some(rep);
-        Ok(())
-    })?;
+    linker
+        .root()
+        .resource("t1", ResourceType::host::<MyType>(), |mut cx, rep| {
+            let data: &mut Data = cx.data_mut();
+            data.drops += 1;
+            data.last_drop = Some(rep);
+            Ok(())
+        })?;
     let i = linker.instantiate(&mut store, &c)?;
     let t2_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]t2")?;
     let t2_drops = i.get_typed_func::<(), (u32,)>(&mut store, "[static]t2.drops")?;
@@ -497,7 +505,9 @@ fn dynamic_type() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t1", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t1", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
 
     let a = i.get_func(&mut store, "a").unwrap();
@@ -548,7 +558,9 @@ fn dynamic_val() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t1", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t1", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
 
     let a = i.get_func(&mut store, "a").unwrap();
@@ -665,7 +677,9 @@ fn active_borrows_at_end_of_call() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
 
     let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f")?;
@@ -720,7 +734,9 @@ fn thread_through_borrow() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     linker
         .root()
         .func_wrap("f", |_cx, (r,): (Resource<MyType>,)| {
@@ -764,7 +780,9 @@ fn cannot_use_borrow_for_own() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
 
     let f = i.get_typed_func::<(&Resource<MyType>,), (Resource<MyType>,)>(&mut store, "f")?;
@@ -809,7 +827,9 @@ fn passthrough_wrong_type() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     linker
         .root()
         .func_wrap("f", |_cx, (r,): (Resource<MyType>,)| Ok((r,)))?;
@@ -849,7 +869,9 @@ fn pass_moved_resource() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
 
     let f = i.get_typed_func::<(&Resource<MyType>, &Resource<MyType>), ()>(&mut store, "f")?;
@@ -980,7 +1002,9 @@ fn host_borrow_as_resource_any() -> Result<()> {
     // First test the above component where the host properly drops the argument
     {
         let mut linker = Linker::new(&engine);
-        linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+        linker
+            .root()
+            .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
         linker
             .root()
             .func_wrap("f", |mut cx, (r,): (ResourceAny,)| {
@@ -998,7 +1022,9 @@ fn host_borrow_as_resource_any() -> Result<()> {
     // Then also test the case where the host forgets a drop
     {
         let mut linker = Linker::new(&engine);
-        linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+        linker
+            .root()
+            .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
         linker.root().func_wrap("f", |_cx, (_r,): (ResourceAny,)| {
             // ... no drop here
             Ok(())
@@ -1107,7 +1133,9 @@ fn pass_host_borrow_to_guest() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i = linker.instantiate(&mut store, &c)?;
     let take = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "take")?;
 
@@ -1180,7 +1208,9 @@ fn drop_on_owned_resource() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     linker.root().func_wrap("[constructor]t", |_cx, ()| {
         Ok((Resource::<MyType>::new_own(300),))
     })?;
@@ -1257,8 +1287,12 @@ fn guest_different_host_same() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().resource::<MyType>("t1", |_, _| Ok(()))?;
-    linker.root().resource::<MyType>("t2", |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t1", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
+    linker
+        .root()
+        .resource("t2", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     linker.root().func_wrap(
         "f",
         |_cx, (r1, r2): (Resource<MyType>, Resource<MyType>)| {
