@@ -1,6 +1,5 @@
 //! Memory management for executable code.
 
-use crate::subslice_range;
 use crate::unwind::UnwindRegistration;
 use anyhow::{anyhow, bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
@@ -318,4 +317,21 @@ impl CodeMemory {
         *self.unwind_registration = Some(registration);
         Ok(())
     }
+}
+
+/// Returns the range of `inner` within `outer`, such that `outer[range]` is the
+/// same as `inner`.
+///
+/// This method requires that `inner` is a sub-slice of `outer`, and if that
+/// isn't true then this method will panic.
+fn subslice_range(inner: &[u8], outer: &[u8]) -> Range<usize> {
+    if inner.len() == 0 {
+        return 0..0;
+    }
+
+    assert!(outer.as_ptr() <= inner.as_ptr());
+    assert!((&inner[inner.len() - 1] as *const _) <= (&outer[outer.len() - 1] as *const _));
+
+    let start = inner.as_ptr() as usize - outer.as_ptr() as usize;
+    start..start + inner.len()
 }

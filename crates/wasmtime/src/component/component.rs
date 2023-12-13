@@ -12,8 +12,10 @@ use wasmtime_environ::component::{
     AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
     TrampolineIndex, Translator, VMComponentOffsets,
 };
-use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec};
-use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
+use wasmtime_environ::{
+    CompiledModuleInfo, FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec,
+};
+use wasmtime_jit::{finish_object, CodeMemory};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
     MmapVec, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction,
@@ -224,7 +226,7 @@ impl Component {
         };
         object.serialize_info(&artifacts);
 
-        let mmap = object.finish()?;
+        let mmap = finish_object(object)?;
         Ok((mmap, artifacts))
     }
 

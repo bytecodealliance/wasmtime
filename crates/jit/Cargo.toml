@@ -21,12 +21,7 @@ anyhow = { workspace = true }
 cfg-if = { workspace = true }
 gimli = { workspace = true }
 object = { workspace = true }
-serde = "1.0.188"
-serde_derive = "1.0.188"
 addr2line = { version = "0.21.0", default-features = false, optional = true }
-bincode = "1.2.1"
-rustc-demangle = { version = "0.1.16", optional = true }
-cpp_demangle = { version = "0.3.2", optional = true }
 log = { workspace = true }
 wasmtime-jit-icache-coherence = { workspace = true }
 
@@ -42,4 +37,3 @@ ittapi = { version = "0.4.0", optional = true }
 
 [features]
 profiling = ['dep:wasmtime-jit-debug', 'dep:ittapi']
-demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
