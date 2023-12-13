@@ -225,25 +225,29 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     }
 
     /// Prepares arguments for emitting a unary operation.
+    ///
+    /// The `emit` function returns the `TypedReg` to put on the value stack.
     pub fn unop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: &mut F)
     where
-        F: FnMut(&mut M, Reg, OperandSize),
+        F: FnMut(&mut M, Reg, OperandSize) -> TypedReg,
         M: MacroAssembler,
     {
         let typed_reg = self.pop_to_reg(masm, None);
-        emit(masm, typed_reg.reg, size);
-        self.stack.push(typed_reg.into());
+        let dst = emit(masm, typed_reg.reg, size);
+        self.stack.push(dst.into());
     }
 
     /// Prepares arguments for emitting a binary operation.
+    ///
+    /// The `emit` function returns the `TypedReg` to put on the value stack.
     pub fn binop<F, M>(&mut self, masm: &mut M, size: OperandSize, mut emit: F)
     where
-        F: FnMut(&mut M, Reg, Reg, OperandSize),
+        F: FnMut(&mut M, Reg, Reg, OperandSize) -> TypedReg,
         M: MacroAssembler,
     {
         let src = self.pop_to_reg(masm, None);
         let dst = self.pop_to_reg(masm, None);
-        emit(masm, dst.reg, src.reg.into(), size);
+        let dst = emit(masm, dst.reg, src.reg.into(), size);
         self.free_reg(src);
         self.stack.push(dst.into());
     }
@@ -270,9 +274,11 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     }
 
     /// Prepares arguments for emitting an i32 binary operation.
+    ///
+    /// The `emit` function returns the `TypedReg` to put on the value stack.
     pub fn i32_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
-        F: FnMut(&mut M, Reg, RegImm, OperandSize),
+        F: FnMut(&mut M, Reg, RegImm, OperandSize) -> TypedReg,
         M: MacroAssembler,
     {
         let top = self.stack.peek().expect("value at stack top");
@@ -283,8 +289,8 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
             let typed_reg = self.pop_to_reg(masm, None);
-            emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32);
-            self.stack.push(typed_reg.into());
+            let dst = emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32);
+            self.stack.push(dst.into());
         } else {
             self.binop(masm, OperandSize::S32, |masm, dst, src, size| {
                 emit(masm, dst, src.into(), size)
@@ -293,9 +299,11 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     }
 
     /// Prepares arguments for emitting an i64 binary operation.
+    ///
+    /// The `emit` function returns the `TypedReg` to put on the value stack.
     pub fn i64_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
-        F: FnMut(&mut M, Reg, RegImm, OperandSize),
+        F: FnMut(&mut M, Reg, RegImm, OperandSize) -> TypedReg,
         M: MacroAssembler,
     {
         let top = self.stack.peek().expect("value at stack top");
@@ -305,13 +313,13 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
             let typed_reg = self.pop_to_reg(masm, None);
-            emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64);
-            self.stack.push(typed_reg.into());
+            let dst = emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64);
+            self.stack.push(dst.into());
         } else {
             self.binop(masm, OperandSize::S64, |masm, dst, src, size| {
                 emit(masm, dst, src.into(), size)
             });
-        }
+        };
     }
 
     /// Drops the last `n` elements of the stack, calling the provided

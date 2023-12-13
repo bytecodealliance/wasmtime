@@ -34,6 +34,22 @@ impl TypedReg {
             reg,
         }
     }
+
+    /// Create an f64 [`TypedReg`].
+    pub fn f64(reg: Reg) -> Self {
+        Self {
+            ty: WasmType::F64,
+            reg,
+        }
+    }
+
+    /// Create an f32 [`TypedReg`].
+    pub fn f32(reg: Reg) -> Self {
+        Self {
+            ty: WasmType::F32,
+            reg,
+        }
+    }
 }
 
 impl From<TypedReg> for Reg {
