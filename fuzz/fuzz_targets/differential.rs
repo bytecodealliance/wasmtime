@@ -377,6 +377,16 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | I64Extend8S { .. }
                         | I64Extend16S { .. }
                         | I64Extend32S { .. }
+                        | I32TruncF32S { .. }
+                        | I32TruncF32U { .. }
+                        | I32TruncF64S { .. }
+                        | I32TruncF64U { .. }
+                        | I64TruncF32S { .. }
+                        | I64TruncF32U { .. }
+                        | I64TruncF64S { .. }
+                        | I64TruncF64U { .. }
+                        | I32ReinterpretF32 { .. }
+                        | I64ReinterpretF64 { .. }
                         | LocalGet { .. }
                         | LocalSet { .. }
                         | LocalTee { .. }
@@ -428,6 +438,18 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | F64Le { .. }
                         | F32Ge { .. }
                         | F64Ge { .. }
+                        | F32ConvertI32S { .. }
+                        | F32ConvertI32U { .. }
+                        | F32ConvertI64S { .. }
+                        | F32ConvertI64U { .. }
+                        | F64ConvertI32S { .. }
+                        | F64ConvertI32U { .. }
+                        | F64ConvertI64S { .. }
+                        | F64ConvertI64U { .. }
+                        | F32ReinterpretI32 { .. }
+                        | F64ReinterpretI64 { .. }
+                        | F32DemoteF64 { .. }
+                        | F64PromoteF32 { .. }
                         | CallIndirect { .. }
                         | ElemDrop { .. }
                         | TableCopy { .. }

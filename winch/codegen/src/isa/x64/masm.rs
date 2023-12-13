@@ -916,6 +916,81 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn signed_truncate(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        self.asm.cvt_float_to_sint_seq(
+            src,
+            dst,
+            regs::scratch(),
+            regs::scratch_xmm(),
+            src_size,
+            dst_size,
+        );
+    }
+
+    fn unsigned_truncate(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_fpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        self.asm.cvt_float_to_uint_seq(
+            src,
+            dst,
+            regs::scratch(),
+            regs::scratch_xmm(),
+            tmp_fpr,
+            src_size,
+            dst_size,
+        );
+    }
+
+    fn signed_convert(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize) {
+        self.asm.cvt_sint_to_float(src, dst, src_size, dst_size);
+    }
+
+    fn unsigned_convert(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_gpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        // Need to convert unsigned uint32 to uint64 for conversion instruction sequence.
+        if let OperandSize::S32 = src_size {
+            self.extend(src, src, ExtendKind::I64ExtendI32U);
+        }
+
+        self.asm
+            .cvt_uint64_to_float_seq(src, dst, regs::scratch(), tmp_gpr, dst_size);
+    }
+
+    fn reinterpret_float_as_int(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.asm.xmm_to_gpr(src, dst, size);
+    }
+
+    fn reinterpret_int_as_float(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.asm.gpr_to_xmm(src.into(), dst, size);
+    }
+
+    fn demote(&mut self, src: Reg, dst: Reg) {
+        self.asm
+            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S64, OperandSize::S32);
+    }
+
+    fn promote(&mut self, src: Reg, dst: Reg) {
+        self.asm
+            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S32, OperandSize::S64);
+    }
+
     fn unreachable(&mut self) {
         self.asm.trap(TrapCode::UnreachableCodeReached)
     }

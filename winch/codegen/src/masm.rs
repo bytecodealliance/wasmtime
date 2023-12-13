@@ -606,6 +606,48 @@ pub(crate) trait MacroAssembler {
     /// Extends an integer of a given size to a larger size.
     fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind);
 
+    /// Emits one or more instructions to perform a signed truncation of a
+    /// float into an integer.
+    fn signed_truncate(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize);
+
+    /// Emits one or more instructions to perform an unsigned truncation of a
+    /// float into an integer.
+    fn unsigned_truncate(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_fpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    );
+
+    /// Emits one or more instructions to perform a signed convert of an
+    /// integer into a float.
+    fn signed_convert(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize);
+
+    /// Emits one or more instructions to perform an unsigned convert of an
+    /// integer into a float.
+    fn unsigned_convert(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_gpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    );
+
+    /// Reinterpret a float as an integer.
+    fn reinterpret_float_as_int(&mut self, src: Reg, dst: Reg, size: OperandSize);
+
+    /// Reinterpret an integer as a float.
+    fn reinterpret_int_as_float(&mut self, src: Reg, dst: Reg, size: OperandSize);
+
+    /// Demote an f64 to an f32.
+    fn demote(&mut self, src: Reg, dst: Reg);
+
+    /// Promote an f32 to an f64.
+    fn promote(&mut self, src: Reg, dst: Reg);
+
     /// Zero a given memory range.
     ///
     /// The default implementation divides the given memory range

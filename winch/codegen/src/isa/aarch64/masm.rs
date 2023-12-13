@@ -340,6 +340,64 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn signed_truncate(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn unsigned_truncate(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _tmp_fpr: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn signed_convert(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn unsigned_convert(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _tmp_gpr: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn reinterpret_float_as_int(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn reinterpret_int_as_float(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn demote(&mut self, _src: Reg, _dst: Reg) {
+        todo!()
+    }
+
+    fn promote(&mut self, _src: Reg, _dst: Reg) {
+        todo!()
+    }
+
     fn push(&mut self, reg: Reg, _size: OperandSize) -> StackSlot {
         let size = <Self::ABI as abi::ABI>::word_bytes();
         self.reserve_stack(size);

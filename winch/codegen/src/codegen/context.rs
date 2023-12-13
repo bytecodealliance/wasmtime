@@ -322,6 +322,48 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         };
     }
 
+    /// Prepares arguments for emitting a convert operation.
+    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmType, mut emit: F)
+    where
+        F: FnMut(&mut M, Reg, Reg, OperandSize),
+        M: MacroAssembler,
+    {
+        let src = self.pop_to_reg(masm, None);
+        let dst = self.reg_for_type(dst_ty, masm);
+        let dst_size = match dst_ty {
+            WasmType::I32 => OperandSize::S32,
+            WasmType::I64 => OperandSize::S64,
+            WasmType::F32 => OperandSize::S32,
+            WasmType::F64 => OperandSize::S64,
+            WasmType::V128 => unreachable!(),
+            WasmType::Ref(_) => unreachable!(),
+        };
+
+        emit(masm, dst, src.into(), dst_size);
+
+        self.free_reg(src);
+        self.stack.push(TypedReg::new(dst_ty, dst).into());
+    }
+
+    /// Prepares arguments for emitting a convert operation with a temporary
+    /// register.
+    pub fn convert_op_with_tmp_reg<F, M>(
+        &mut self,
+        masm: &mut M,
+        dst_ty: WasmType,
+        tmp_reg_class: RegClass,
+        mut emit: F,
+    ) where
+        F: FnMut(&mut M, Reg, Reg, Reg, OperandSize),
+        M: MacroAssembler,
+    {
+        let tmp_gpr = self.reg_for_class(tmp_reg_class, masm);
+        self.convert_op(masm, dst_ty, |masm, dst, src, dst_size| {
+            emit(masm, dst, src, tmp_gpr, dst_size);
+        });
+        self.free_reg(tmp_gpr);
+    }
+
     /// Drops the last `n` elements of the stack, calling the provided
     /// function for each `n` stack value.
     /// The values are dropped in top-to-bottom order.
