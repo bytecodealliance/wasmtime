@@ -7,8 +7,8 @@
 use crate::abi::ABI;
 use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
-    DivKind, FloatCmpKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, RemKind, RoundingMode,
-    ShiftKind,
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, RemKind,
+    RoundingMode, ShiftKind,
 };
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
@@ -143,6 +143,14 @@ macro_rules! def_unsupported {
     (emit I64Ctz $($rest:tt)*) => {};
     (emit I32Popcnt $($rest:tt)*) => {};
     (emit I64Popcnt $($rest:tt)*) => {};
+    (emit I32WrapI64 $($rest:tt)*) => {};
+    (emit I64ExtendI32S $($rest:tt)*) => {};
+    (emit I64ExtendI32U $($rest:tt)*) => {};
+    (emit I32Extend8S $($rest:tt)*) => {};
+    (emit I32Extend16S $($rest:tt)*) => {};
+    (emit I64Extend8S $($rest:tt)*) => {};
+    (emit I64Extend16S $($rest:tt)*) => {};
+    (emit I64Extend32S $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -933,6 +941,78 @@ where
         use OperandSize::*;
 
         self.masm.popcnt(&mut self.context, S64);
+    }
+
+    fn visit_i32_wrap_i64(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.wrap(reg, reg);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i64_extend_i32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64ExtendI32S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend_i32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64ExtendI32U);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i32_extend8_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I32Extend8S);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i32_extend16_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I32Extend16S);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i64_extend8_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend8S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend16_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend16S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend32S);
+            TypedReg::i64(reg)
+        });
     }
 
     fn visit_local_get(&mut self, index: u32) {

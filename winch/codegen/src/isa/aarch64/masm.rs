@@ -4,8 +4,9 @@ use crate::{
     codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
     isa::reg::Reg,
     masm::{
-        CalleeKind, DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm,
-        OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, StackSlot, TrapCode,
+        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
+        MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
+        StackSlot, TrapCode,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -379,6 +380,14 @@ impl Masm for MacroAssembler {
     }
 
     fn ctz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn wrap(&mut self, _src: Reg, _dst: Reg) {
+        todo!()
+    }
+
+    fn extend(&mut self, _src: Reg, _dst: Reg, _kind: ExtendKind) {
         todo!()
     }
 
