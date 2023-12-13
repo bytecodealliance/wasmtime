@@ -59,7 +59,7 @@ pub fn link_spectest<T>(
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
     use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
     use std::sync::Arc;
-    use wasmtime::component::Resource;
+    use wasmtime::component::{Resource, ResourceType};
 
     let engine = linker.engine().clone();
     linker
@@ -92,7 +92,7 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
 
     let state = Arc::new(ResourceState::default());
 
-    i.resource::<Resource1>("resource1", {
+    i.resource("resource1", ResourceType::host::<Resource1>(), {
         let state = state.clone();
         move |_, rep| {
             state.drops.fetch_add(1, SeqCst);
@@ -101,13 +101,21 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
             Ok(())
         }
     })?;
-    i.resource::<Resource2>("resource2", |_, _| Ok(()))?;
+    i.resource(
+        "resource2",
+        ResourceType::host::<Resource2>(),
+        |_, _| Ok(()),
+    )?;
     // Currently the embedder API requires redefining the resource destructor
     // here despite this being the same type as before, and fixing that is left
     // for a future refactoring.
-    i.resource::<Resource1>("resource1-again", |_, _| {
-        panic!("shouldn't be destroyed");
-    })?;
+    i.resource(
+        "resource1-again",
+        ResourceType::host::<Resource1>(),
+        |_, _| {
+            panic!("shouldn't be destroyed");
+        },
+    )?;
 
     i.func_wrap("[constructor]resource1", |_cx, (rep,): (u32,)| {
         Ok((Resource::<Resource1>::new_own(rep),))
