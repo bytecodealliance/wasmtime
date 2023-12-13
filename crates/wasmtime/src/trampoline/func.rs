@@ -83,6 +83,8 @@ where
 {
     use std::ptr;
 
+    use wasmtime_jit::finish_object;
+
     let mut obj = engine
         .compiler()
         .object(wasmtime_environ::ObjectKind::Module)?;
@@ -94,7 +96,10 @@ where
             &mut obj,
         )?;
     engine.append_bti(&mut obj);
-    let obj = wasmtime_jit::ObjectBuilder::new(obj, &engine.config().tunables).finish()?;
+    let obj = finish_object(wasmtime_environ::ObjectBuilder::new(
+        obj,
+        &engine.config().tunables,
+    ))?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.

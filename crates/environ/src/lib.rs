@@ -9,6 +9,8 @@
 mod address_map;
 mod builtin;
 mod compilation;
+mod demangling;
+mod instantiate;
 mod module;
 mod module_environ;
 mod module_types;
@@ -23,6 +25,7 @@ mod vmoffsets;
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::compilation::*;
+pub use crate::demangling::*;
 pub use crate::module::*;
 pub use crate::module_environ::*;
 pub use crate::module_types::*;
@@ -33,6 +36,10 @@ pub use crate::trap_encoding::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
 pub use object;
+
+pub use crate::instantiate::{
+    CompiledFunctionInfo, CompiledModuleInfo, FinishedObject, FunctionName, Metadata, ObjectBuilder,
+};
 
 #[cfg(feature = "component-model")]
 pub mod component;

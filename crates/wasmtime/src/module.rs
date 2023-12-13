@@ -15,10 +15,10 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment, ModuleTypes, ObjectKind,
-    VMOffsets,
+    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment,
+    ModuleTypes, ObjectKind, VMOffsets,
 };
-use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
+use wasmtime_jit::{CodeMemory, CompiledModule};
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
     VMNativeCallFunction, VMSharedSignatureIndex, VMWasmCallFunction,
@@ -399,6 +399,8 @@ impl Module {
         engine: &Engine,
         wasm: &[u8],
     ) -> Result<(MmapVec, Option<(CompiledModuleInfo, ModuleTypes)>)> {
+        use wasmtime_jit::finish_object;
+
         use crate::compiler::CompileInputs;
 
         let tunables = &engine.config().tunables;
@@ -445,7 +447,7 @@ impl Module {
 
         let info = compilation_artifacts.unwrap_as_module_info();
         object.serialize_info(&(&info, &types));
-        let mmap = object.finish()?;
+        let mmap = finish_object(object)?;
 
         Ok((mmap, Some((info, types))))
     }

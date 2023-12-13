@@ -147,7 +147,7 @@ wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
 
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
-demangle = ["wasmtime-jit/demangle"]
+demangle = ["wasmtime-environ/demangle"]
 
 # Enable support for generating core dumps on traps.
 coredump = ["dep:wasm-encoder"]

@@ -12,6 +12,8 @@ edition.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+bincode = "1.2.1"
+cpp_demangle = { version = "0.3.2", optional = true }
 cranelift-entity = { workspace = true }
 wasmtime-types = { workspace = true }
 wasmparser = { workspace = true }
@@ -22,6 +24,7 @@ serde_derive = "1.0.188"
 log = { workspace = true }
 gimli = { workspace = true, features = ["write"] }
 object = { workspace = true, features = ['write_core'] }
+rustc-demangle = { version = "0.1.16", optional = true }
 target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
@@ -42,3 +45,4 @@ component-model = [
   "dep:wasmprinter",
   "dep:wasmtime-component-util",
 ]
+demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
