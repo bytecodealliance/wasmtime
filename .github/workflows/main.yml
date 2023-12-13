@@ -422,6 +422,10 @@ jobs:
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
       if: matrix.target != ''
 
+    # Install OpenVINO for testing wasmtime-wasi-nn.
+    - uses: abrown/install-openvino-action@v8
+      if: runner.arch == 'X64'
+
     # Fix an ICE for now in gcc when compiling zstd with debuginfo (??)
     - run: echo CFLAGS=-g0 >> $GITHUB_ENV
       if: matrix.target == 'x86_64-pc-windows-gnu'
