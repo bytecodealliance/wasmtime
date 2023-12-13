@@ -1,5 +1,4 @@
 use anyhow::Result;
-use cap_std::ambient_authority;
 use tempfile::TempDir;
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
@@ -64,7 +63,7 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
 
     builder
         .args(&[name, "."])
-        .inherit_network(ambient_authority())
+        .inherit_network()
         .allow_ip_name_lookup(true);
     println!("preopen: {:?}", workspace);
     let preopen_dir =

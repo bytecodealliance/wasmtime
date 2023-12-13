@@ -772,7 +772,7 @@ impl RunCommand {
         }
 
         if self.run.common.wasi.inherit_network == Some(true) {
-            builder.inherit_network(ambient_authority());
+            builder.inherit_network();
         }
         if let Some(enable) = self.run.common.wasi.allow_ip_name_lookup {
             builder.allow_ip_name_lookup(enable);

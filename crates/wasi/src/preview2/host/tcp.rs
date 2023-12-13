@@ -1,4 +1,5 @@
 use crate::preview2::host::network::util;
+use crate::preview2::network::SocketAddrUse;
 use crate::preview2::tcp::{TcpSocket, TcpState};
 use crate::preview2::{
     bindings::{
@@ -9,7 +10,7 @@ use crate::preview2::{
     network::SocketAddressFamily,
 };
 use crate::preview2::{Pollable, SocketResult, WasiView};
-use cap_net_ext::{Blocking, PoolExt};
+use cap_net_ext::Blocking;
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
@@ -44,11 +45,12 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            let binder = network.pool.tcp_binder(local_address)?;
+            // Ensure that we're allowed to connect to this address.
+            network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
             let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
             // Perform the OS bind call.
-            util::tcp_bind(listener, &binder).map_err(|error| {
+            util::tcp_bind(listener, &local_address).map_err(|error| {
                 match Errno::from_io_error(&error) {
                     // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
                     // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
@@ -112,11 +114,12 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             util::validate_remote_address(&remote_address)?;
             util::validate_address_family(&remote_address, &socket.family)?;
 
-            let connecter = network.pool.tcp_connecter(remote_address)?;
+            // Ensure that we're allowed to connect to this address.
+            network.check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)?;
             let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
             // Do an OS `connect`. Our socket is non-blocking, so it'll either...
-            util::tcp_connect(listener, &connecter)
+            util::tcp_connect(listener, &remote_address)
         };
 
         match r {

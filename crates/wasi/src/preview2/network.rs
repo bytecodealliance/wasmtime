@@ -1,12 +1,62 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
 use crate::preview2::TrappableError;
-use cap_std::net::Pool;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 pub struct Network {
-    pub pool: Arc<Pool>,
+    pub socket_addr_check: SocketAddrCheck,
     pub allow_ip_name_lookup: bool,
+}
+
+impl Network {
+    pub fn check_socket_addr(
+        &self,
+        addr: &SocketAddr,
+        reason: SocketAddrUse,
+    ) -> std::io::Result<()> {
+        self.socket_addr_check.check(addr, reason)
+    }
+}
+
+/// A check that will be called for each socket address that is used of whether the address is permitted.
+#[derive(Clone)]
+pub struct SocketAddrCheck(
+    pub(crate) Arc<dyn Fn(&SocketAddr, SocketAddrUse) -> bool + Send + Sync>,
+);
+
+impl SocketAddrCheck {
+    pub fn check(&self, addr: &SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
+        if (self.0)(addr, reason) {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "An address was not permitted by the socket address check.",
+            ))
+        }
+    }
+}
+
+impl Default for SocketAddrCheck {
+    fn default() -> Self {
+        Self(Arc::new(|_, _| false))
+    }
+}
+
+/// The reason what a socket address is being used for.
+#[derive(Clone, Copy, Debug)]
+pub enum SocketAddrUse {
+    /// Binding TCP socket
+    TcpBind,
+    /// Connecting TCP socket
+    TcpConnect,
+    /// Binding UDP socket
+    UdpBind,
+    /// Connecting UDP socket
+    UdpConnect,
+    /// Sending datagram on non-connected UDP socket
+    UdpOutgoingDatagram,
 }
 
 pub type SocketResult<T> = Result<T, SocketError>;

@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::SocketAddressFamily;
+use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
 use crate::preview2::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -11,7 +11,6 @@ use crate::preview2::{
 use crate::preview2::{Pollable, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
-use cap_net_ext::PoolExt;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -42,9 +41,12 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             UdpState::Bound | UdpState::Connected => return Err(ErrorCode::InvalidState.into()),
         }
 
-        // Set the pool on the socket so later functions have access to it through the socket handle
-        let pool = table.get(&network)?.pool.clone();
-        table.get_mut(&this)?.pool.replace(pool.clone());
+        // Set the socket addr check on the socket so later functions have access to it through the socket handle
+        let check = table.get(&network)?.socket_addr_check.clone();
+        table
+            .get_mut(&this)?
+            .socket_addr_check
+            .replace(check.clone());
 
         let socket = table.get(&this)?;
         let local_address: SocketAddr = local_address.into();
@@ -52,13 +54,13 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            let binder = pool.udp_binder(local_address)?;
+            check.check(&local_address, SocketAddrUse::UdpBind)?;
             let udp_socket = &*socket
                 .udp_socket()
                 .as_socketlike_view::<cap_std::net::UdpSocket>();
 
             // Perform the OS bind call.
-            util::udp_bind(udp_socket, &binder).map_err(|error| {
+            util::udp_bind(udp_socket, &local_address).map_err(|error| {
                 match Errno::from_io_error(&error) {
                     // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
                     // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
@@ -132,13 +134,12 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
-            let Some(pool) = socket.pool.as_ref() else {
+            let Some(check) = socket.socket_addr_check.as_ref() else {
                 return Err(ErrorCode::InvalidState.into());
             };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
-            // We don't actually use the connecter, we just use it to verify that `connect_addr` is allowed
-            let _ = pool.udp_connecter(connect_addr)?;
+            check.check(&connect_addr, SocketAddrUse::UdpConnect)?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -162,7 +163,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             remote_address,
             family: socket.family,
             send_state: SendState::Idle,
-            pool: socket.pool.clone(),
+            socket_addr_check: socket.socket_addr_check.clone(),
         };
 
         Ok((
@@ -458,13 +459,10 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (stream.remote_address, provided_addr) {
                 (None, Some(addr)) => {
-                    let Some(pool) = stream.pool.as_ref() else {
+                    let Some(check) = stream.socket_addr_check.as_ref() else {
                         return Err(ErrorCode::InvalidState.into());
                     };
-                    // We don't actually use the connecter, we just use it to verify that `addr`
-                    // is allowed. We only need to check the provided addr as the stream's remote
-                    // address was checked when the stream was created.
-                    let _ = pool.udp_connecter(addr)?;
+                    check.check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
                     addr
                 }
                 (Some(addr), None) => addr,
