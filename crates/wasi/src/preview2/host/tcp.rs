@@ -47,21 +47,18 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         {
             // Ensure that we're allowed to connect to this address.
             network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
-            let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
             // Perform the OS bind call.
-            util::tcp_bind(listener, &local_address).map_err(|error| {
-                match Errno::from_io_error(&error) {
-                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-                    //
-                    // The most common reasons for this error should have already
-                    // been handled by our own validation slightly higher up in this
-                    // function. This error mapping is here just in case there is
-                    // an edge case we didn't catch.
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
-                    _ => ErrorCode::from(error),
-                }
+            util::tcp_bind(socket.tcp_socket(), &local_address).map_err(|error| match error {
+                // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+                // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+                //
+                // The most common reasons for this error should have already
+                // been handled by our own validation slightly higher up in this
+                // function. This error mapping is here just in case there is
+                // an edge case we didn't catch.
+                Errno::AFNOSUPPORT => ErrorCode::InvalidArgument,
+                _ => ErrorCode::from(error),
             })?;
         }
 
@@ -116,10 +113,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
             // Ensure that we're allowed to connect to this address.
             network.check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)?;
-            let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
             // Do an OS `connect`. Our socket is non-blocking, so it'll either...
-            util::tcp_connect(listener, &remote_address)
+            util::tcp_connect(socket.tcp_socket(), &remote_address)
         };
 
         match r {
@@ -130,11 +126,11 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                 return Ok(());
             }
             // continue in progress,
-            Err(err) if Errno::from_io_error(&err) == Some(Errno::INPROGRESS) => {}
+            Err(err) if err == Errno::INPROGRESS => {}
             // or fail immediately.
             Err(err) => {
-                return Err(match Errno::from_io_error(&err) {
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(), // See `bind` implementation.
+                return Err(match err {
+                    Errno::AFNOSUPPORT => ErrorCode::InvalidArgument.into(), // See `bind` implementation.
                     _ => err.into(),
                 });
             }

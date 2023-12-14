@@ -219,7 +219,7 @@ pub(crate) mod util {
     use crate::preview2::network::SocketAddressFamily;
     use crate::preview2::SocketResult;
     use cap_net_ext::{Blocking, TcpListenerExt};
-    use cap_std::net::{TcpListener, TcpStream, UdpSocket};
+    use cap_std::net::{TcpListener, TcpStream};
     use rustix::fd::AsFd;
     use rustix::io::Errno;
     use rustix::net::sockopt;
@@ -302,37 +302,35 @@ pub(crate) mod util {
      * Syscalls wrappers with (opinionated) portability fixes.
      */
 
-    pub fn tcp_bind(listener: &TcpListener, addr: &SocketAddr) -> std::io::Result<()> {
-        rustix::net::bind(listener, addr).map_err(|error| match error {
+    pub fn tcp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
+        rustix::net::bind(sockfd, addr).map_err(|error| match error {
             // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
             // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
             #[cfg(windows)]
-            Errno::NOBUFS => Errno::ADDRINUSE.into(),
-            _ => error.into(),
+            Errno::NOBUFS => Errno::ADDRINUSE,
+            _ => error,
         })
     }
 
-    pub fn udp_bind(socket: &UdpSocket, addr: &SocketAddr) -> std::io::Result<()> {
-        rustix::net::bind(socket, addr).map_err(|error| {
-            match error {
-                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-                // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-                #[cfg(windows)]
-                Errno::NOBUFS => Errno::ADDRINUSE.into(),
-                _ => error.into(),
-            }
+    pub fn udp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
+        rustix::net::bind(sockfd, addr).map_err(|error| match error {
+            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+            #[cfg(windows)]
+            Errno::NOBUFS => Errno::ADDRINUSE,
+            _ => error,
         })
     }
 
-    pub fn tcp_connect(listener: &TcpListener, addr: &SocketAddr) -> std::io::Result<()> {
-        rustix::net::connect(listener, addr).map_err(|error| match error {
+    pub fn tcp_connect<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
+        rustix::net::connect(sockfd, addr).map_err(|error| match error {
             // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
             // Windows returns `WSAEWOULDBLOCK`.
             //
             // This normalized error code is depended upon by: tcp.rs
             #[cfg(windows)]
-            Errno::WOULDBLOCK => Errno::INPROGRESS.into(),
-            _ => error.into(),
+            Errno::WOULDBLOCK => Errno::INPROGRESS,
+            _ => error,
         })
     }
 
