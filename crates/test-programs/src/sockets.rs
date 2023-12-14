@@ -1,6 +1,7 @@
 use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::io::poll::{self, Pollable};
 use crate::wasi::io::streams::{InputStream, OutputStream, StreamError};
+use crate::wasi::random;
 use crate::wasi::sockets::instance_network;
 use crate::wasi::sockets::ip_name_lookup;
 use crate::wasi::sockets::network::{
@@ -356,4 +357,9 @@ impl PartialEq for IpSocketAddress {
             _ => false,
         }
     }
+}
+
+pub fn generate_random_port() -> u16 {
+    let port = 15_000 + (random::random::get_random_u64() % 50_000);
+    port as u16
 }

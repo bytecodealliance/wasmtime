@@ -1,3 +1,4 @@
+use test_programs::sockets::generate_random_port;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -18,23 +19,17 @@ fn test_tcp_bind_ephemeral_port(net: &Network, ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_tcp_bind_specific_port(net: &Network, ip: IpAddress) {
-    const PORT: u16 = 54321;
+    let port: u16 = generate_random_port();
 
-    let bind_addr = IpSocketAddress::new(ip, PORT);
+    let bind_addr = IpSocketAddress::new(ip, port);
 
     let sock = TcpSocket::new(ip.family()).unwrap();
-    match sock.blocking_bind(net, bind_addr) {
-        Ok(()) => {
-            let bound_addr = sock.local_address().unwrap();
+    sock.blocking_bind(net, bind_addr).unwrap();
 
-            assert_eq!(bind_addr.ip(), bound_addr.ip());
-            assert_eq!(bind_addr.port(), bound_addr.port());
-        }
-        // Concurrent invocations of this test can yield `AddressInUse` and that
-        // same error can show up on Windows as `AccessDenied`.
-        Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => {}
-        Err(e) => panic!("error: {e}"),
-    }
+    let bound_addr = sock.local_address().unwrap();
+
+    assert_eq!(bind_addr.ip(), bound_addr.ip());
+    assert_eq!(bind_addr.port(), bound_addr.port());
 }
 
 /// Two sockets may not be actively bound to the same address at the same time.
@@ -56,10 +51,10 @@ fn test_tcp_bind_addrinuse(net: &Network, ip: IpAddress) {
 
 // The WASI runtime should set SO_REUSEADDR for us
 fn test_tcp_bind_reuseaddr(net: &Network, ip: IpAddress) {
-    const PORT: u16 = 54321;
+    let port: u16 = generate_random_port();
 
-    let bind_addr = IpSocketAddress::new(IpAddress::new_unspecified(ip.family()), PORT);
-    let connect_addr = IpSocketAddress::new(IpAddress::new_loopback(ip.family()), PORT);
+    let bind_addr = IpSocketAddress::new(IpAddress::new_unspecified(ip.family()), port);
+    let connect_addr = IpSocketAddress::new(IpAddress::new_loopback(ip.family()), port);
 
     let client = TcpSocket::new(ip.family()).unwrap();
 

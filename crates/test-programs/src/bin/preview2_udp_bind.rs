@@ -1,3 +1,4 @@
+use test_programs::sockets::generate_random_port;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -18,19 +19,12 @@ fn test_udp_bind_ephemeral_port(net: &Network, ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_udp_bind_specific_port(net: &Network, ip: IpAddress) {
-    const PORT: u16 = 54321;
+    let port: u16 = generate_random_port();
 
-    let bind_addr = IpSocketAddress::new(ip, PORT);
+    let bind_addr = IpSocketAddress::new(ip, port);
 
     let sock = UdpSocket::new(ip.family()).unwrap();
-    match sock.blocking_bind(net, bind_addr) {
-        Ok(()) => {}
-
-        // Concurrent invocations of this test can yield `AddressInUse` and that
-        // same error can show up on Windows as `AccessDenied`.
-        Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => return,
-        r => r.unwrap(),
-    }
+    sock.blocking_bind(net, bind_addr).unwrap();
 
     let bound_addr = sock.local_address().unwrap();
 
