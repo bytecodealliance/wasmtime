@@ -1,10 +1,9 @@
 //! Support for a calling of an imported function.
 
-use crate::{Engine, FuncType, ValRaw};
+use crate::{code_memory::CodeMemory, Engine, FuncType, ValRaw};
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
-use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{
     StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
 };
@@ -83,7 +82,7 @@ where
 {
     use std::ptr;
 
-    use wasmtime_jit::finish_object;
+    use crate::instantiate::finish_object;
 
     let mut obj = engine
         .compiler()

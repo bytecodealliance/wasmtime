@@ -3189,6 +3189,7 @@ dependencies = [
 name = "wasmtime"
 version = "16.0.0"
 dependencies = [
+ "addr2line",
  "anyhow",
  "async-trait",
  "bincode",
@@ -3196,7 +3197,9 @@ dependencies = [
  "cfg-if",
  "encoding_rs",
  "fxprof-processed-profile",
+ "gimli",
  "indexmap 2.0.0",
+ "ittapi",
  "libc",
  "log",
  "object",
@@ -3204,6 +3207,7 @@ dependencies = [
  "paste",
  "psm",
  "rayon",
+ "rustix",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3218,7 +3222,8 @@ dependencies = [
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-fiber",
- "wasmtime-jit",
+ "wasmtime-jit-debug",
+ "wasmtime-jit-icache-coherence",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-winch",
@@ -3552,26 +3557,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-wast",
  "wat",
-]
-
-[[package]]
-name = "wasmtime-jit"
-version = "16.0.0"
-dependencies = [
- "addr2line",
- "anyhow",
- "cfg-if",
- "gimli",
- "ittapi",
- "log",
- "object",
- "rustix",
- "target-lexicon",
- "wasmtime-environ",
- "wasmtime-jit-debug",
- "wasmtime-jit-icache-coherence",
- "wasmtime-runtime",
- "windows-sys",
 ]
 
 [[package]]

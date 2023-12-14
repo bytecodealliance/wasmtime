@@ -411,10 +411,13 @@ mod func;
 mod compiler;
 
 mod code;
+mod code_memory;
 mod config;
+mod debug;
 mod engine;
 mod externals;
 mod instance;
+mod instantiate;
 mod limits;
 mod linker;
 mod memory;
@@ -428,17 +431,20 @@ mod store;
 mod trampoline;
 mod trap;
 mod types;
+mod unwind;
 mod v128;
 mod values;
 
 #[cfg(feature = "async")]
 mod stack;
 
+pub use crate::code_memory::CodeMemory;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;
 pub use crate::instance::{Instance, InstancePre};
+pub use crate::instantiate::CompiledModule;
 pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;

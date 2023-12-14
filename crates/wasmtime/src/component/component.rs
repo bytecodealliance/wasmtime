@@ -1,6 +1,7 @@
-use crate::code::CodeObject;
-use crate::signatures::SignatureCollection;
-use crate::{Engine, Module, ResourcesRequired};
+use crate::{
+    code::CodeObject, code_memory::CodeMemory, instantiate::finish_object,
+    signatures::SignatureCollection, Engine, Module, ResourcesRequired,
+};
 use anyhow::{bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 use std::fs;
@@ -15,7 +16,6 @@ use wasmtime_environ::component::{
 use wasmtime_environ::{
     CompiledModuleInfo, FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec,
 };
-use wasmtime_jit::{finish_object, CodeMemory};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
     MmapVec, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction,

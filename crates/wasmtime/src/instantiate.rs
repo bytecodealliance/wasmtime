@@ -3,9 +3,7 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
-use crate::code_memory::CodeMemory;
-use crate::debug::create_gdbjit_image;
-use crate::profiling::ProfilingAgent;
+use crate::{code_memory::CodeMemory, debug::create_gdbjit_image, profiling::ProfilingAgent};
 use anyhow::{Context, Error, Result};
 use object::write::WritableBuffer;
 use std::convert::TryFrom;

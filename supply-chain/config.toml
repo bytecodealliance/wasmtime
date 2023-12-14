@@ -130,9 +130,6 @@ criteria = "safe-to-run"
 [policy.wasmtime-fuzzing]
 criteria = "safe-to-run"
 
-[policy.wasmtime-jit]
-audit-as-crates-io = true
-
 [policy.wasmtime-jit-debug]
 audit-as-crates-io = true
 

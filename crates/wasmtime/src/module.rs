@@ -1,5 +1,7 @@
 use crate::{
     code::CodeObject,
+    code_memory::CodeMemory,
+    instantiate::CompiledModule,
     resources::ResourcesRequired,
     signatures::SignatureCollection,
     types::{ExportType, ExternType, ImportType},
@@ -18,7 +20,6 @@ use wasmtime_environ::{
     CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment,
     ModuleTypes, ObjectKind, VMOffsets,
 };
-use wasmtime_jit::{CodeMemory, CompiledModule};
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
     VMNativeCallFunction, VMSharedSignatureIndex, VMWasmCallFunction,
@@ -399,7 +400,7 @@ impl Module {
         engine: &Engine,
         wasm: &[u8],
     ) -> Result<(MmapVec, Option<(CompiledModuleInfo, ModuleTypes)>)> {
-        use wasmtime_jit::finish_object;
+        use crate::instantiate::finish_object;
 
         use crate::compiler::CompileInputs;
 
