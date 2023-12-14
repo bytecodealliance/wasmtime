@@ -55,23 +55,18 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         {
             check.check(&local_address, SocketAddrUse::UdpBind)?;
-            let udp_socket = &*socket
-                .udp_socket()
-                .as_socketlike_view::<cap_std::net::UdpSocket>();
 
             // Perform the OS bind call.
-            util::udp_bind(udp_socket, &local_address).map_err(|error| {
-                match Errno::from_io_error(&error) {
-                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-                    //
-                    // The most common reasons for this error should have already
-                    // been handled by our own validation slightly higher up in this
-                    // function. This error mapping is here just in case there is
-                    // an edge case we didn't catch.
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
-                    _ => ErrorCode::from(error),
-                }
+            util::udp_bind(socket.udp_socket(), &local_address).map_err(|error| match error {
+                // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+                // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+                //
+                // The most common reasons for this error should have already
+                // been handled by our own validation slightly higher up in this
+                // function. This error mapping is here just in case there is
+                // an edge case we didn't catch.
+                Errno::AFNOSUPPORT => ErrorCode::InvalidArgument,
+                _ => ErrorCode::from(error),
             })?;
         }
 
