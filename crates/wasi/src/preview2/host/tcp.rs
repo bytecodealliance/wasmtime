@@ -11,7 +11,6 @@ use crate::preview2::{
 };
 use crate::preview2::{Pollable, SocketResult, WasiView};
 use cap_net_ext::Blocking;
-use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -203,10 +202,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             | TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
         }
 
-        {
-            let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
-            util::tcp_listen(listener, socket.listen_backlog_size)?;
-        }
+        util::tcp_listen(socket.tcp_socket(), socket.listen_backlog_size)?;
 
         socket.tcp_state = TcpState::ListenStarted;
 
@@ -246,9 +242,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         // Do the OS accept call.
         let tcp_socket = socket.tcp_socket();
-        let (connection, _addr) = tcp_socket.try_io(Interest::READABLE, || {
-            let listener = &*tcp_socket.as_socketlike_view::<TcpListener>();
-            util::tcp_accept(listener, Blocking::No)
+        let (client_fd, _addr) = tcp_socket.try_io(Interest::READABLE, || {
+            util::tcp_accept(tcp_socket, Blocking::No)
         })?;
 
         #[cfg(target_os = "macos")]
@@ -258,25 +253,25 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             // and only if a specific value was explicitly set on the listener.
 
             if let Some(size) = socket.receive_buffer_size {
-                _ = util::set_socket_recv_buffer_size(&connection, size); // Ignore potential error.
+                _ = util::set_socket_recv_buffer_size(&client_fd, size); // Ignore potential error.
             }
 
             if let Some(size) = socket.send_buffer_size {
-                _ = util::set_socket_send_buffer_size(&connection, size); // Ignore potential error.
+                _ = util::set_socket_send_buffer_size(&client_fd, size); // Ignore potential error.
             }
 
             // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
             if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) = (socket.family, socket.hop_limit)
             {
-                _ = util::set_ipv6_unicast_hops(&connection, ttl); // Ignore potential error.
+                _ = util::set_ipv6_unicast_hops(&client_fd, ttl); // Ignore potential error.
             }
 
             if let Some(value) = socket.keep_alive_idle_time {
-                _ = util::set_tcp_keepidle(&connection, value); // Ignore potential error.
+                _ = util::set_tcp_keepidle(&client_fd, value); // Ignore potential error.
             }
         }
 
-        let mut tcp_socket = TcpSocket::from_tcp_stream(connection, socket.family)?;
+        let mut tcp_socket = TcpSocket::from_fd(client_fd, socket.family)?;
 
         // Mark the socket as connected so that we can exit early from methods like `start-bind`.
         tcp_socket.tcp_state = TcpState::Connected;

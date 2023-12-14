@@ -218,9 +218,9 @@ pub(crate) mod util {
     use crate::preview2::bindings::sockets::network::ErrorCode;
     use crate::preview2::network::SocketAddressFamily;
     use crate::preview2::SocketResult;
-    use cap_net_ext::{Blocking, TcpListenerExt};
-    use cap_std::net::{TcpListener, TcpStream};
-    use rustix::fd::AsFd;
+    use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt, UdpSocketExt};
+    use io_lifetimes::AsSocketlike;
+    use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;
     use rustix::net::sockopt;
 
@@ -302,6 +302,26 @@ pub(crate) mod util {
      * Syscalls wrappers with (opinionated) portability fixes.
      */
 
+    pub fn tcp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
+        // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
+        // - On Windows: call WSAStartup if not done before.
+        // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
+        //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
+
+        let listener = cap_std::net::TcpListener::new(family, blocking)?;
+        Ok(OwnedFd::from(listener))
+    }
+
+    pub fn udp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
+        // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
+        // - On Windows: call WSAStartup if not done before.
+        // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
+        //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
+
+        let socket = cap_std::net::UdpSocket::new(family, blocking)?;
+        Ok(OwnedFd::from(socket))
+    }
+
     pub fn tcp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
         rustix::net::bind(sockfd, addr).map_err(|error| match error {
             // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
@@ -334,8 +354,12 @@ pub(crate) mod util {
         })
     }
 
-    pub fn tcp_listen(listener: &TcpListener, backlog: Option<i32>) -> std::io::Result<()> {
-        listener
+    pub fn tcp_listen<Fd: AsFd>(sockfd: Fd, backlog: Option<i32>) -> std::io::Result<()> {
+        // Delegate `listen` to cap_net_ext. That is a thin wrapper around rustix::net::listen,
+        // with a platform-dependent default value for the backlog size.
+        sockfd
+            .as_fd()
+            .as_socketlike_view::<cap_std::net::TcpListener>()
             .listen(backlog)
             .map_err(|error| match Errno::from_io_error(&error) {
                 // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
@@ -349,15 +373,22 @@ pub(crate) mod util {
                 // on Microsoft's documentation here.
                 #[cfg(windows)]
                 Some(Errno::MFILE) => Errno::NOBUFS.into(),
+
                 _ => error,
             })
     }
 
-    pub fn tcp_accept(
-        listener: &TcpListener,
+    pub fn tcp_accept<Fd: AsFd>(
+        sockfd: Fd,
         blocking: Blocking,
-    ) -> std::io::Result<(TcpStream, SocketAddr)> {
-        listener
+    ) -> std::io::Result<(OwnedFd, SocketAddr)> {
+        // Delegate `accept` to cap_net_ext. They set the NONBLOCK and CLOEXEC flags
+        // for us. Either immediately as a flag to `accept`, or afterwards using
+        // ioctl or fcntl. Exact method depends on the platform.
+
+        let (client, addr) = sockfd
+            .as_fd()
+            .as_socketlike_view::<cap_std::net::TcpListener>()
             .accept_with(blocking)
             .map_err(|error| match Errno::from_io_error(&error) {
                 // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
@@ -391,7 +422,9 @@ pub(crate) mod util {
                 ) => Errno::CONNABORTED.into(),
 
                 _ => error,
-            })
+            })?;
+
+        Ok((client.into(), addr))
     }
 
     pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
