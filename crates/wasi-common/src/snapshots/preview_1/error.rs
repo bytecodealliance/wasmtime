@@ -216,6 +216,7 @@ impl From<std::io::Error> for Error {
                 std::io::ErrorKind::PermissionDenied => Errno::Perm.into(),
                 std::io::ErrorKind::AlreadyExists => Errno::Exist.into(),
                 std::io::ErrorKind::InvalidInput => Errno::Inval.into(),
+                std::io::ErrorKind::WouldBlock => Errno::Again.into(),
                 _ => Error::trap(anyhow::anyhow!(err).context("Unknown OS error")),
             },
         }
