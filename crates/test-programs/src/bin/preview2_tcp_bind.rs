@@ -54,6 +54,43 @@ fn test_tcp_bind_addrinuse(net: &Network, ip: IpAddress) {
     );
 }
 
+// The WASI runtime should set SO_REUSEADDR for us
+fn test_tcp_bind_reuseaddr(net: &Network, ip: IpAddress) {
+    const PORT: u16 = 54321;
+
+    let bind_addr = IpSocketAddress::new(IpAddress::new_unspecified(ip.family()), PORT);
+    let connect_addr = IpSocketAddress::new(IpAddress::new_loopback(ip.family()), PORT);
+
+    let client = TcpSocket::new(ip.family()).unwrap();
+
+    {
+        let listener1 = TcpSocket::new(ip.family()).unwrap();
+        listener1.blocking_bind(net, bind_addr).unwrap();
+        listener1.blocking_listen().unwrap();
+
+        client.blocking_connect(net, connect_addr).unwrap();
+
+        let (accepted_connection, accepted_input, accepted_output) =
+        listener1.blocking_accept().unwrap();
+        accepted_output.blocking_write_zeroes_and_flush(10).unwrap();
+        drop(accepted_input);
+        drop(accepted_output);
+        drop(accepted_connection);
+        drop(listener1);
+    }
+
+    {
+        let listener2 = TcpSocket::new(ip.family()).unwrap();
+
+        // If SO_REUSEADDR was configured correctly, the following lines shouldn't be
+        // affected by the TIME_WAIT state of the just closed `listener1` socket:
+        listener2.blocking_bind(net, bind_addr).unwrap();
+        listener2.blocking_listen().unwrap();
+    }
+
+    drop(client);
+}
+
 // Try binding to an address that is not configured on the system.
 fn test_tcp_bind_addrnotavail(net: &Network, ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, 0);
@@ -140,6 +177,9 @@ fn main() {
     test_tcp_bind_specific_port(&net, IpAddress::IPV6_LOOPBACK);
     test_tcp_bind_specific_port(&net, IpAddress::IPV4_UNSPECIFIED);
     test_tcp_bind_specific_port(&net, IpAddress::IPV6_UNSPECIFIED);
+
+    test_tcp_bind_reuseaddr(&net, IpAddress::IPV4_LOOPBACK);
+    test_tcp_bind_reuseaddr(&net, IpAddress::IPV6_LOOPBACK);
 
     test_tcp_bind_addrinuse(&net, IpAddress::IPV4_LOOPBACK);
     test_tcp_bind_addrinuse(&net, IpAddress::IPV6_LOOPBACK);
