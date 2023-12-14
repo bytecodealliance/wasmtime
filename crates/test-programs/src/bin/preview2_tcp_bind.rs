@@ -66,7 +66,7 @@ fn test_tcp_bind_reuseaddr(net: &Network, ip: IpAddress) {
         client.blocking_connect(net, connect_addr).unwrap();
 
         let (accepted_connection, accepted_input, accepted_output) =
-        listener1.blocking_accept().unwrap();
+            listener1.blocking_accept().unwrap();
         accepted_output.blocking_write_zeroes_and_flush(10).unwrap();
         drop(accepted_input);
         drop(accepted_output);
