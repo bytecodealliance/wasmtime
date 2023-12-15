@@ -2291,6 +2291,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.0"
 
+[[audits.wasi-nn]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.6.0"
+notes = "This crate contains `unsafe` code due to its purpose: it wraps up `witx-bindgen`-generated code that calls the raw wasi-nn API."
+
 [[audits.wasm-bindgen-shared]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
