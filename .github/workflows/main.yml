@@ -426,6 +426,17 @@ jobs:
     - run: echo CFLAGS=-g0 >> $GITHUB_ENV
       if: matrix.target == 'x86_64-pc-windows-gnu'
 
+    # Update binutils if MinGW due to https://github.com/rust-lang/rust/issues/112368
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: mingw64
+        update: true
+        pacboy: binutils
+      if: matrix.target == 'x86_64-pc-windows-gnu'
+    - shell: p2sh
+      run: "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
+      if: matrix.target == 'x86_64-pc-windows-gnu'
+
     - run: cargo fetch --locked
 
     - uses: actions/cache@v3
