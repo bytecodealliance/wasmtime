@@ -152,7 +152,8 @@ impl TypeChecker<'_> {
             let actual = self
                 .strings
                 .lookup(name)
-                .and_then(|name| actual?.get(&name));
+                .and_then(|name| actual?.get(&name))
+                .map(|(_, actual)| actual);
             self.definition(expected, actual)
                 .with_context(|| format!("instance export `{name}` has the wrong type"))?;
         }

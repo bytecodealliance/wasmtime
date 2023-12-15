@@ -1,6 +1,8 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
-use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc};
+use crate::component::{
+    Component, ComponentNamedList, Func, Lift, Lower, PathIndex, ResourceType, TypedFunc,
+};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::store::{StoreOpaque, Stored};
@@ -38,7 +40,7 @@ pub(crate) struct InstanceData {
     // Otherwise the full guts of this component should only ever be used during
     // the instantiation of this instance, meaning that after instantiation much
     // of the component can be thrown away (theoretically).
-    pub(crate) component: Component,
+    component: Component,
 
     state: OwnedComponentInstance,
 
@@ -520,6 +522,7 @@ impl<'a> Instantiator<'a> {
 pub struct InstancePre<T> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
+    paths: Arc<Vec<Option<RuntimeImportIndex>>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -529,6 +532,7 @@ impl<T> Clone for InstancePre<T> {
         Self {
             component: self.component.clone(),
             imports: self.imports.clone(),
+            paths: self.paths.clone(),
             _marker: self._marker,
         }
     }
@@ -544,12 +548,23 @@ impl<T> InstancePre<T> {
     pub(crate) unsafe fn new_unchecked(
         component: Component,
         imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+        paths: Vec<Option<RuntimeImportIndex>>,
     ) -> InstancePre<T> {
         InstancePre {
             component,
             imports: Arc::new(imports),
+            paths: Arc::new(paths),
             _marker: marker::PhantomData,
         }
+    }
+
+    pub(crate) fn runtime_import_index(&self, path: PathIndex) -> Option<RuntimeImportIndex> {
+        *self.paths.get(*path)?
+    }
+
+    pub(crate) fn import_by_path(&self, path: PathIndex) -> Option<&RuntimeImport> {
+        let idx = self.runtime_import_index(path)?;
+        self.imports.get(idx)
     }
 
     /// Returns the underlying component that will be instantiated.

@@ -1,18 +1,17 @@
 use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
+use crate::component::instance::RuntimeImport;
+use crate::component::linker::PathIndex;
 use crate::component::matching::InstanceType;
-use crate::component::{ComponentType, Instance, Lift, Lower};
+use crate::component::{ComponentType, InstancePre, Lift, Lower};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{AsContextMut, StoreContextMut, Trap};
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use std::any::TypeId;
 use std::fmt;
 use std::marker;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
-use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType, TypeDef,
-    TypeResourceTableIndex,
-};
+use wasmtime_environ::component::{CanonicalAbiInfo, DefinedResourceIndex, InterfaceType};
 use wasmtime_runtime::component::{ComponentInstance, InstanceFlags, ResourceTables};
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
 
@@ -399,14 +398,13 @@ where
     }
 
     /// See [`ResourceAny::try_from_resource`]
-    pub fn try_into_resource_any(
+    pub fn try_into_resource_any<U>(
         self,
         store: impl AsContextMut,
-        instance: &Instance,
-        root: &str,
-        path: &[&str],
+        instance: &InstancePre<U>,
+        name: PathIndex,
     ) -> Result<ResourceAny> {
-        ResourceAny::try_from_resource(self, store, instance, root, path)
+        ResourceAny::try_from_resource(self, store, instance, name)
     }
 }
 
@@ -514,55 +512,25 @@ struct OwnState {
     dtor: Option<SendSyncPtr<VMFuncRef>>,
 }
 
-fn resource_import_type_index(
-    types: &ComponentTypes,
-    mut ty: TypeDef,
-    path: &[&str],
-) -> Option<TypeResourceTableIndex> {
-    'outer: while let Some((head, path)) = path.split_first() {
-        match ty {
-            TypeDef::ComponentInstance(cty) => {
-                for (name, cty) in &types[cty].exports {
-                    if name == head {
-                        ty = *cty;
-                        continue 'outer;
-                    }
-                }
-                return None;
-            }
-            TypeDef::Resource(cty) if path.is_empty() => return Some(cty),
-            _ => return None,
-        }
-    }
-    None
-}
-
 impl ResourceAny {
     /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
     /// `root` is the import root name and `path` is the import path within `root`.
-    pub fn try_from_resource<T: 'static>(
+    pub fn try_from_resource<T: 'static, U>(
         Resource { rep, state, .. }: Resource<T>,
         mut store: impl AsContextMut,
-        instance: &Instance,
-        root: &str,
-        path: &[&str],
+        instance: &InstancePre<U>,
+        name: PathIndex,
     ) -> Result<Self> {
         let store = store.as_context_mut();
-        let instance = store[instance.0]
-            .as_ref()
-            .context("instance data missing")?;
-        let env_component = instance.component.env_component();
-        let ty = env_component
-            .imports
-            .iter()
-            .find_map(|(_, (import, import_path))| {
-                let (root_name, ty) = env_component.import_types.get(*import)?;
-                (root_name == root && import_path == path).then_some(ty)
-            })
-            .context("component import not found")?;
-        let ty = resource_import_type_index(instance.component_types(), *ty, path)
-            .context("component import is not a resource")?;
-        let (dtor, flags) = instance.instance().dtor_and_flags(ty);
+        let import = instance.import_by_path(name).context("import not found")?;
+        let RuntimeImport::Resource {
+            ty, dtor_funcref, ..
+        } = import
+        else {
+            bail!("import is not a resource")
+        };
+        ensure!(*ty == ResourceType::host::<T>(), "resource type mismatch");
+
         let mut tables = host_resource_tables(store.0);
         let (idx, own_state) = match state.load(Relaxed) {
             BORROW => (tables.resource_lower_borrow(None, rep), None),
@@ -571,18 +539,25 @@ impl ResourceAny {
                 (
                     idx,
                     Some(OwnState {
-                        dtor: dtor.map(SendSyncPtr::new),
-                        flags,
+                        dtor: Some(dtor_funcref.into()),
+                        flags: None,
                         store: store.0.id(),
                     }),
                 )
             }
             TAKEN => bail!("host resource already consumed"),
-            idx => (idx, None),
+            idx => (
+                idx,
+                Some(OwnState {
+                    dtor: Some(dtor_funcref.into()),
+                    flags: None,
+                    store: store.0.id(),
+                }),
+            ),
         };
         Ok(Self {
             idx,
-            ty: ResourceType::host::<T>(),
+            ty: *ty,
             own_state,
         })
     }

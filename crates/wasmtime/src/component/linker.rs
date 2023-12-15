@@ -27,6 +27,7 @@ pub struct Linker<T> {
     strings: Strings,
     map: NameMap,
     path: Vec<usize>,
+    paths: Vec<Vec<usize>>, // all paths defined in this linker
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -38,6 +39,7 @@ impl<T> Clone for Linker<T> {
             strings: self.strings.clone(),
             map: self.map.clone(),
             path: self.path.clone(),
+            paths: self.paths.clone(),
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -61,11 +63,36 @@ pub struct LinkerInstance<'a, T> {
     path_len: usize,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
+    paths: &'a mut Vec<Vec<usize>>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-pub(crate) type NameMap = HashMap<usize, Definition>;
+/// Index correlating a linker item definition to the import path
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct PathIndex(usize);
+
+impl Deref for PathIndex {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl PathIndex {
+    fn key(paths: &mut Vec<Vec<usize>>, path: &[usize], key: usize) -> Self {
+        let idx = Self(paths.len());
+        let len = path.len();
+        let mut key_path = vec![key; len + 1];
+        let (head, _) = key_path.split_at_mut(len);
+        head.copy_from_slice(path);
+        paths.push(key_path);
+        idx
+    }
+}
+
+pub(crate) type NameMap = HashMap<usize, (PathIndex, Definition)>;
 
 #[derive(Clone)]
 pub(crate) enum Definition {
@@ -85,6 +112,7 @@ impl<T> Linker<T> {
             map: NameMap::default(),
             allow_shadowing: false,
             path: Vec::new(),
+            paths: Vec::new(),
             _marker: marker::PhantomData,
         }
     }
@@ -112,6 +140,7 @@ impl<T> Linker<T> {
             path_len: 0,
             strings: &mut self.strings,
             map: &mut self.map,
+            paths: &mut self.paths,
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -160,7 +189,8 @@ impl<T> Linker<T> {
             let import = self
                 .strings
                 .lookup(name)
-                .and_then(|name| self.map.get(&name));
+                .and_then(|name| self.map.get(&name))
+                .map(|(_, import)| import);
             cx.definition(ty, import)
                 .with_context(|| format!("import `{name}` has the wrong type"))?;
         }
@@ -170,22 +200,27 @@ impl<T> Linker<T> {
         // using the import map within the component created at
         // component-compile-time.
         let mut imports = PrimaryMap::with_capacity(env_component.imports.len());
-        for (idx, (import, names)) in env_component.imports.iter() {
+        let mut paths = vec![None; self.paths.len()];
+        for (idx, (import, path)) in env_component.imports.iter() {
             let (root, _) = &env_component.import_types[*import];
             let root = self.strings.lookup(root).unwrap();
 
             // This is the flattening process where we go from a definition
             // optionally through a list of exported names to get to the final
             // item.
-            let mut cur = &self.map[&root];
-            for name in names {
+            let (path_idx, def) = &self.map[&root];
+            let mut path_idx = path_idx;
+            let mut def = def;
+            for name in path {
                 let name = self.strings.lookup(name).unwrap();
-                cur = match cur {
+                let (cur_path_idx, cur_def) = match def {
                     Definition::Instance(map) => &map[&name],
                     _ => unreachable!(),
                 };
+                path_idx = cur_path_idx;
+                def = cur_def;
             }
-            let import = match cur {
+            let import = match def {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
                 Definition::Resource(t, dtor) => RuntimeImport::Resource {
@@ -196,12 +231,13 @@ impl<T> Linker<T> {
 
                 // This is guaranteed by the compilation process that "leaf"
                 // runtime imports are never instances.
-                Definition::Instance(_) => unreachable!(),
+                Definition::Instance(..) => unreachable!(),
             };
             let i = imports.push(import);
+            paths[*path_idx.deref()] = Some(i);
             assert_eq!(i, idx);
         }
-        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports) })
+        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports, paths) })
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.
@@ -266,6 +302,7 @@ impl<T> LinkerInstance<'_, T> {
             path_len: self.path_len,
             strings: self.strings,
             map: self.map,
+            paths: self.paths,
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -289,7 +326,7 @@ impl<T> LinkerInstance<'_, T> {
     /// argument which can be provided to the `func` given here.
     //
     // TODO: needs more words and examples
-    pub fn func_wrap<F, Params, Return>(&mut self, name: &str, func: F) -> Result<()>
+    pub fn func_wrap<F, Params, Return>(&mut self, name: &str, func: F) -> Result<PathIndex>
     where
         F: Fn(StoreContextMut<T>, Params) -> Result<Return> + Send + Sync + 'static,
         Params: ComponentNamedList + Lift + 'static,
@@ -305,7 +342,7 @@ impl<T> LinkerInstance<'_, T> {
     /// host function.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
+    pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<PathIndex>
     where
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
@@ -342,7 +379,7 @@ impl<T> LinkerInstance<'_, T> {
         component: &Component,
         name: &str,
         func: F,
-    ) -> Result<()> {
+    ) -> Result<PathIndex> {
         let mut map = &component
             .env_component()
             .import_types
@@ -384,7 +421,12 @@ impl<T> LinkerInstance<'_, T> {
     /// host function.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn func_new_async<F>(&mut self, component: &Component, name: &str, f: F) -> Result<()>
+    pub fn func_new_async<F>(
+        &mut self,
+        component: &Component,
+        name: &str,
+        f: F,
+    ) -> Result<PathIndex>
     where
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
@@ -412,7 +454,7 @@ impl<T> LinkerInstance<'_, T> {
     /// This can be used to provide a core wasm [`Module`] as an import to a
     /// component. The [`Module`] provided is saved within the linker for the
     /// specified `name` in this instance.
-    pub fn module(&mut self, name: &str, module: &Module) -> Result<()> {
+    pub fn module(&mut self, name: &str, module: &Module) -> Result<PathIndex> {
         let name = self.strings.intern(name);
         self.insert(name, Definition::Module(module.clone()))
     }
@@ -444,7 +486,7 @@ impl<T> LinkerInstance<'_, T> {
         name: &str,
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
-    ) -> Result<()> {
+    ) -> Result<PathIndex> {
         let name = self.strings.intern(name);
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
@@ -471,11 +513,15 @@ impl<T> LinkerInstance<'_, T> {
                 bail!("import of `{}` defined twice", self.strings.strings[name])
             }
             Entry::Occupied(o) => {
-                let slot = o.into_mut();
+                let (_, slot) = o.into_mut();
                 *slot = item;
                 slot
             }
-            Entry::Vacant(v) => v.insert(item),
+            Entry::Vacant(v) => {
+                let idx = PathIndex::key(&mut self.paths, &self.path, name);
+                let (_, slot) = v.insert((idx, item));
+                slot
+            }
         };
         self.map = match slot {
             Definition::Instance(map) => map,
@@ -487,19 +533,23 @@ impl<T> LinkerInstance<'_, T> {
         Ok(self)
     }
 
-    fn insert(&mut self, key: usize, item: Definition) -> Result<()> {
-        match self.map.entry(key) {
+    fn insert(&mut self, key: usize, item: Definition) -> Result<PathIndex> {
+        let idx = match self.map.entry(key) {
             Entry::Occupied(_) if !self.allow_shadowing => {
                 bail!("import of `{}` defined twice", self.strings.strings[key])
             }
-            Entry::Occupied(mut e) => {
-                e.insert(item);
+            Entry::Occupied(e) => {
+                let (idx, slot) = e.into_mut();
+                *slot = item;
+                *idx
             }
             Entry::Vacant(v) => {
-                v.insert(item);
+                let idx = PathIndex::key(&mut self.paths, &self.path, key);
+                v.insert((idx, item));
+                idx
             }
-        }
-        Ok(())
+        };
+        Ok(idx)
     }
 }
 
