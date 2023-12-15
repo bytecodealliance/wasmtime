@@ -38,7 +38,7 @@ pub(crate) struct InstanceData {
     // Otherwise the full guts of this component should only ever be used during
     // the instantiation of this instance, meaning that after instantiation much
     // of the component can be thrown away (theoretically).
-    component: Component,
+    pub(crate) component: Component,
 
     state: OwnedComponentInstance,
 
