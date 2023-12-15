@@ -433,7 +433,7 @@ jobs:
         update: true
         pacboy: binutils
       if: matrix.target == 'x86_64-pc-windows-gnu'
-    - shell: p2sh
+    - shell: pwsh
       run: "C:\\msys64\\mingw64\\bin" >> $env:GITHUB_PATH
       if: matrix.target == 'x86_64-pc-windows-gnu'
 
