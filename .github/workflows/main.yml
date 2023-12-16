@@ -431,11 +431,13 @@ jobs:
       with:
         msystem: mingw64
         update: true
-        pacboy: binutils
+      if: matrix.target == 'x86_64-pc-windows-gnu'
+    - shell: msys2 {0}
+      run: pacman -Syu --needed base-devel mingw-w64-x86_64-gcc --noconfirm
       if: matrix.target == 'x86_64-pc-windows-gnu'
     - shell: pwsh
       run: |
-        "C:\\msys64\\mingw64\\bin" >> $env:GITHUB_PATH
+        echo "RUSTFLAGS=-C linker=C:\mingw64\bin\x86_64-w64-mingw32-gcc.exe" >> $Env:GITHUB_ENV
       if: matrix.target == 'x86_64-pc-windows-gnu'
 
     - run: cargo fetch --locked
