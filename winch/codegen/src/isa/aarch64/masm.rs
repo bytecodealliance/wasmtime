@@ -1,7 +1,7 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData},
     isa::reg::Reg,
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
@@ -113,6 +113,10 @@ impl Masm for MacroAssembler {
     }
 
     fn table_size(&mut self, _table_data: &TableData, _context: &mut CodeGenContext) {
+        todo!()
+    }
+
+    fn memory_size(&mut self, _heap_data: &HeapData, _context: &mut CodeGenContext) {
         todo!()
     }
 

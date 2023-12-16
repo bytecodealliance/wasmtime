@@ -9,8 +9,8 @@ use std::collections::{
 };
 use wasmparser::BlockType;
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, TableIndex, TablePlan,
-    TypeConvert, TypeIndex, VMOffsets, WasmFuncType, WasmHeapType, WasmType,
+    FuncIndex, GlobalIndex, MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize,
+    TableIndex, TablePlan, TypeConvert, TypeIndex, VMOffsets, WasmFuncType, WasmHeapType, WasmType,
 };
 
 /// Table metadata.
@@ -20,13 +20,27 @@ pub struct TableData {
     pub offset: u32,
     /// The offset to the current elements field.
     pub current_elems_offset: u32,
-    /// If the table is imported, return the base
-    /// offset of the `from` field in `VMTableImport`.
-    pub base: Option<u32>,
+    /// If the table is imported, this field contains the offset to locate the
+    /// base of the table data.
+    pub import_from: Option<u32>,
     /// The size of the table elements.
     pub(crate) element_size: OperandSize,
     /// The size of the current elements field.
     pub(crate) current_elements_size: OperandSize,
+}
+
+/// Heap metadata.
+#[derive(Debug, Copy, Clone)]
+pub struct HeapData {
+    /// The offset to the base of the heap.
+    pub offset: u32,
+    /// The offset to the current length field.
+    pub current_length_offset: u32,
+    /// If the heap is imported, this field contains the offset to locate the
+    /// base of the heap.
+    pub import_from: Option<u32>,
+    /// The memory type (32 or 64).
+    pub ty: WasmType,
 }
 
 /// A function callee.
@@ -95,6 +109,7 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     pub types: &'translation ModuleTypesBuilder,
     /// Track resolved table information.
     resolved_tables: HashMap<TableIndex, TableData>,
+    resolved_heaps: HashMap<MemoryIndex, HeapData>,
 }
 
 pub fn ptr_type_from_ptr_size(size: u8) -> WasmType {
@@ -115,6 +130,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             translation,
             types,
             resolved_tables: HashMap::new(),
+            resolved_heaps: HashMap::new(),
         }
     }
 
@@ -222,13 +238,55 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     };
 
                 *entry.insert(TableData {
-                    base: from_offset,
+                    import_from: from_offset,
                     offset: base_offset,
                     current_elems_offset,
                     element_size: OperandSize::from_bytes(self.vmoffsets.ptr.size()),
                     current_elements_size: OperandSize::from_bytes(
                         self.vmoffsets.size_of_vmtable_definition_current_elements(),
                     ),
+                })
+            }
+        }
+    }
+
+    /// Resolved a [HeapData] from a [MemoryIndex].
+    // TODO: (@saulecabrera)
+    // Handle shared memories when implementing support for Wasm Threads.
+    pub fn resolve_heap(&mut self, index: MemoryIndex) -> HeapData {
+        match self.resolved_heaps.entry(index) {
+            Occupied(entry) => *entry.get(),
+            Vacant(entry) => {
+                let (import_from, base_offset, current_length_offset) =
+                    match self.translation.module.defined_memory_index(index) {
+                        Some(defined) => {
+                            let owned = self.translation.module.owned_memory_index(defined);
+                            (
+                                None,
+                                self.vmoffsets.vmctx_vmmemory_definition_base(owned),
+                                self.vmoffsets
+                                    .vmctx_vmmemory_definition_current_length(owned),
+                            )
+                        }
+                        None => (
+                            Some(self.vmoffsets.vmctx_vmmemory_import_from(index)),
+                            self.vmoffsets.ptr.vmmemory_definition_base().into(),
+                            self.vmoffsets
+                                .ptr
+                                .vmmemory_definition_current_length()
+                                .into(),
+                        ),
+                    };
+
+                *entry.insert(HeapData {
+                    offset: base_offset,
+                    import_from,
+                    current_length_offset,
+                    ty: if self.translation.module.memory_plans[index].memory.memory64 {
+                        WasmType::I64
+                    } else {
+                        WasmType::I32
+                    },
                 })
             }
         }

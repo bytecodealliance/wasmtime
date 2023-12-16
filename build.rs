@@ -216,6 +216,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             "table_copy",
             "table_set",
             "table_get",
+            "memory_grow",
+            "memory_init",
+            "memory_fill",
         ]
         .contains(&testname);
 
@@ -230,7 +233,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             }
         }
         if testsuite == "spec_testsuite" {
-            // The official table init and table copy tests are now supported.
+            // The official following tests are supported.
             return !["table_init", "table_copy"].contains(&testname);
         }
 

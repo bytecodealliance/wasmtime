@@ -436,7 +436,13 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | TableFill { .. }
                         | TableGrow { .. }
                         | TableSize { .. }
-                        | TableInit { .. } => {}
+                        | TableInit { .. }
+                        | MemoryCopy { .. }
+                        | MemoryGrow { .. }
+                        | MemoryFill { .. }
+                        | MemoryInit { .. }
+                        | DataDrop { .. }
+                        | MemorySize { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

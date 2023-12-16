@@ -16,7 +16,7 @@ use smallvec::SmallVec;
 use wasmparser::BrTable;
 use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType, WasmType,
+    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType, WasmType,
     FUNCREF_INIT_BIT,
 };
 
@@ -179,6 +179,12 @@ macro_rules! def_unsupported {
     (emit TableSize $($rest:tt)*) => {};
     (emit TableFill $($rest:tt)*) => {};
     (emit ElemDrop $($rest:tt)*) => {};
+    (emit MemoryInit $($rest:tt)*) => {};
+    (emit MemoryCopy $($rest:tt)*) => {};
+    (emit DataDrop $($rest:tt)*) => {};
+    (emit MemoryFill $($rest:tt)*) => {};
+    (emit MemorySize $($rest:tt)*) => {};
+    (emit MemoryGrow $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -1236,6 +1242,97 @@ where
             .extend([vmctx.into(), index.try_into().unwrap()]);
         FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
             Callee::Builtin(elem_drop.clone())
+        });
+    }
+
+    fn visit_memory_init(&mut self, data_index: u32, mem: u32) {
+        debug_assert!(self.context.stack.len() >= 3);
+        let ptr_type = self.env.ptr_type();
+        let at = self.context.stack.len() - 3;
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        self.context.stack.insert_many(
+            at,
+            [
+                vmctx.into(),
+                mem.try_into().unwrap(),
+                data_index.try_into().unwrap(),
+            ],
+        );
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory_init::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) {
+        // At this point, the stack is expected to contain:
+        //     [ dst_offset, src_offset, len ]
+        // The following code inserts the missing params, so that stack contains:
+        //     [ vmctx, dst_mem, dst_offset, src_mem, src_offset, len ]
+        // Which is the order expected by the builtin function.
+        debug_assert!(self.context.stack.len() >= 3);
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let at = self.context.stack.len() - 2;
+        self.context
+            .stack
+            .insert_many(at, [src_mem.try_into().unwrap()]);
+
+        // One element was inserted above, so instead of 3, we use 4.
+        let at = self.context.stack.len() - 4;
+        self.context
+            .stack
+            .insert_many(at, [vmctx.into(), dst_mem.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory_copy::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_memory_fill(&mut self, mem: u32) {
+        debug_assert!(self.context.stack.len() >= 3);
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let at = self.context.stack.len() - 3;
+
+        self.context
+            .stack
+            .insert_many(at, [vmctx.into(), mem.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory_fill::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_memory_size(&mut self, mem: u32, _: u8) {
+        let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
+        self.masm.memory_size(&heap, &mut self.context);
+    }
+
+    fn visit_memory_grow(&mut self, mem: u32, _: u8) {
+        debug_assert!(self.context.stack.len() >= 1);
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let at = self.context.stack.len() - 1;
+        // The stack at this point contains: [ delta ]
+        // The desired state is
+        //   [ vmctx, delta, index ]
+        self.context.stack.insert_many(at, [vmctx.into()]);
+        self.context.stack.extend([mem.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory32_grow::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_data_drop(&mut self, data_index: u32) {
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        self.context
+            .stack
+            .extend([vmctx.into(), data_index.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.data_drop::<M::ABI, M::Ptr>())
         });
     }
 
