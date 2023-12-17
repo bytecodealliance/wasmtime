@@ -1,4 +1,4 @@
-use test_programs::sockets::generate_random_port;
+use test_programs::sockets::attempt_random_port;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -19,12 +19,10 @@ fn test_tcp_bind_ephemeral_port(net: &Network, ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_tcp_bind_specific_port(net: &Network, ip: IpAddress) {
-    let port: u16 = generate_random_port();
-
-    let bind_addr = IpSocketAddress::new(ip, port);
-
     let sock = TcpSocket::new(ip.family()).unwrap();
-    sock.blocking_bind(net, bind_addr).unwrap();
+
+    let bind_addr =
+        attempt_random_port(ip, |bind_addr| sock.blocking_bind(net, bind_addr)).unwrap();
 
     let bound_addr = sock.local_address().unwrap();
 
@@ -51,18 +49,18 @@ fn test_tcp_bind_addrinuse(net: &Network, ip: IpAddress) {
 
 // The WASI runtime should set SO_REUSEADDR for us
 fn test_tcp_bind_reuseaddr(net: &Network, ip: IpAddress) {
-    let port: u16 = generate_random_port();
-
-    let bind_addr = IpSocketAddress::new(IpAddress::new_unspecified(ip.family()), port);
-    let connect_addr = IpSocketAddress::new(IpAddress::new_loopback(ip.family()), port);
-
     let client = TcpSocket::new(ip.family()).unwrap();
 
-    {
+    let bind_addr = {
         let listener1 = TcpSocket::new(ip.family()).unwrap();
-        listener1.blocking_bind(net, bind_addr).unwrap();
+
+        let bind_addr =
+            attempt_random_port(ip, |bind_addr| listener1.blocking_bind(net, bind_addr)).unwrap();
+
         listener1.blocking_listen().unwrap();
 
+        let connect_addr =
+            IpSocketAddress::new(IpAddress::new_loopback(ip.family()), bind_addr.port());
         client.blocking_connect(net, connect_addr).unwrap();
 
         let (accepted_connection, accepted_input, accepted_output) =
@@ -72,7 +70,9 @@ fn test_tcp_bind_reuseaddr(net: &Network, ip: IpAddress) {
         drop(accepted_output);
         drop(accepted_connection);
         drop(listener1);
-    }
+
+        bind_addr
+    };
 
     {
         let listener2 = TcpSocket::new(ip.family()).unwrap();

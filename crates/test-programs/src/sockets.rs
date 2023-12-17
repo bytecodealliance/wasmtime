@@ -359,7 +359,36 @@ impl PartialEq for IpSocketAddress {
     }
 }
 
-pub fn generate_random_port() -> u16 {
-    let port = 15_000 + (random::random::get_random_u64() % 50_000);
+fn generate_random_u16(range: Range<u16>) -> u16 {
+    let start = range.start as u64;
+    let end = range.end as u64;
+    let port = start + (random::random::get_random_u64() % (end - start));
     port as u16
+}
+
+/// Execute the inner function with a randomly generated port.
+/// To prevent random failures, we make a few attempts before giving up.
+pub fn attempt_random_port<F>(
+    local_address: IpAddress,
+    mut f: F,
+) -> Result<IpSocketAddress, ErrorCode>
+where
+    F: FnMut(IpSocketAddress) -> Result<(), ErrorCode>,
+{
+    const MAX_ATTEMPTS: u32 = 10;
+    let mut i = 0;
+    loop {
+        i += 1;
+
+        let port: u16 = generate_random_u16(1024..u16::MAX);
+        let sock_addr = IpSocketAddress::new(local_address, port);
+
+        match f(sock_addr) {
+            Ok(_) => return Ok(sock_addr),
+            Err(e) if i >= MAX_ATTEMPTS => return Err(e),
+            // Try again if the port is already taken. This can sometimes show up as `AccessDenied` on Windows.
+            Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => {}
+            Err(e) => return Err(e),
+        }
+    }
 }

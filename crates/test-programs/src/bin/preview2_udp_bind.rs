@@ -1,4 +1,4 @@
-use test_programs::sockets::generate_random_port;
+use test_programs::sockets::attempt_random_port;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -19,12 +19,10 @@ fn test_udp_bind_ephemeral_port(net: &Network, ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_udp_bind_specific_port(net: &Network, ip: IpAddress) {
-    let port: u16 = generate_random_port();
-
-    let bind_addr = IpSocketAddress::new(ip, port);
-
     let sock = UdpSocket::new(ip.family()).unwrap();
-    sock.blocking_bind(net, bind_addr).unwrap();
+
+    let bind_addr =
+        attempt_random_port(ip, |bind_addr| sock.blocking_bind(net, bind_addr)).unwrap();
 
     let bound_addr = sock.local_address().unwrap();
 
