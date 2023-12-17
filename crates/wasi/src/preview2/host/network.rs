@@ -417,6 +417,7 @@ pub(crate) mod util {
 
     // Even though SO_REUSEADDR is a SOL_* level option, this function contain a
     // compatibility fix specific to TCP. That's why it contains the `_tcp_` infix instead of `_socket_`.
+    #[allow(unused_variables)] // Parameters are not used on Windows
     pub fn set_tcp_reuseaddr<Fd: AsFd>(sockfd: Fd, value: bool) -> rustix::io::Result<()> {
         // When a TCP socket is closed, the system may
         // temporarily reserve that specific address+port pair in a so called
