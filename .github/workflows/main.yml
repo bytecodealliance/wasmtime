@@ -430,6 +430,13 @@ jobs:
     - run: echo CFLAGS=-g0 >> $GITHUB_ENV
       if: matrix.target == 'x86_64-pc-windows-gnu'
 
+    # Update binutils if MinGW due to https://github.com/rust-lang/rust/issues/112368
+    - run: C:/msys64/usr/bin/pacman.exe -Syu --needed mingw-w64-x86_64-gcc --noconfirm
+      if: matrix.target == 'x86_64-pc-windows-gnu'
+    - shell: pwsh
+      run: echo "C:\msys64\mingw64\bin" >> $Env:GITHUB_PATH
+      if: matrix.target == 'x86_64-pc-windows-gnu'
+
     - run: cargo fetch --locked
 
     - uses: actions/cache@v3

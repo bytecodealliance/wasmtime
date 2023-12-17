@@ -246,7 +246,7 @@ wit-component = "0.19.0"
 object = { version = "0.32", default-features = false, features = ['read_core', 'elf', 'std'] }
 gimli = { version = "0.28.0", default-features = false, features = ['read', 'std'] }
 anyhow = "1.0.22"
-windows-sys = "0.48.0"
+windows-sys = "0.52.0"
 env_logger = "0.10"
 log = { version = "0.4.8", default-features = false }
 clap = { version = "4.3.12", default-features = false, features = ["std", "derive"] }
