@@ -47,6 +47,15 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             // Ensure that we're allowed to connect to this address.
             network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
 
+            // Automatically bypass the TIME_WAIT state when the user is trying
+            // to bind to a specific port:
+            let reuse_addr = local_address.port() > 0;
+
+            // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
+            // This ensures we're not accidentally affected by any socket option
+            // state left behind by a previous failed call to this method (start_bind).
+            util::set_tcp_reuseaddr(socket.tcp_socket(), reuse_addr)?;
+
             // Perform the OS bind call.
             util::tcp_bind(socket.tcp_socket(), &local_address).map_err(|error| match error {
                 // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
