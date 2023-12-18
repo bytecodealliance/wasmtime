@@ -50,7 +50,7 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-unknown-linux-gnu`| Continuous fuzzing          |
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
-| WebAssembly Proposal | [`memory64`]]              | Unstable wasm proposal      |
+| WebAssembly Proposal | [`memory64`]               | Unstable wasm proposal      |
 | WebAssembly Proposal | [`multi-memory`]           | Unstable wasm proposal      |
 | WebAssembly Proposal | [`threads`]                | Unstable wasm proposal      |
 | WebAssembly Proposal | [`component-model`]        | Unstable wasm proposal      |
