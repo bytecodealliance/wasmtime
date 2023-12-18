@@ -73,9 +73,10 @@
 (rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
       (subsume (iconst narrow (imm64_masked narrow imm))))
 
+;; iconst_[su] support $I128, but do so by extending, so restricting to
+;; 64-bit or smaller keeps it from just remaking essentially the same thing.
 (rule (simplify (uextend (fits_in_64 wide) (iconst_u narrow k)))
       (subsume (iconst_u wide k)))
-
 (rule (simplify (sextend (fits_in_64 wide) (iconst_s narrow k)))
       (subsume (iconst_s wide k)))
 
