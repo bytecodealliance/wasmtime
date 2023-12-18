@@ -14,13 +14,13 @@
 
 ;; Masking out any of the top bits of the result of `uextend` is a no-op. (This
 ;; is like a cheap version of known-bits analysis.)
-(rule (simplify (band wide x @ (uextend _ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
+(rule (simplify (band wide x @ (uextend _ (value_type narrow)) (iconst_u _ mask)))
       ; Check that `narrow_mask` has a subset of the bits that `mask` does.
       (if-let $true (let ((narrow_mask u64 (ty_mask narrow))) (u64_eq narrow_mask (u64_and mask narrow_mask))))
       x)
 
 ;; Masking out the sign-extended bits of an `sextend` turns it into a `uextend`.
-(rule (simplify (band wide (sextend _ x @ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
+(rule (simplify (band wide (sextend _ x @ (value_type narrow)) (iconst_u _ mask)))
       (if-let $true (u64_eq mask (ty_mask narrow)))
       (uextend wide x))
 
@@ -49,3 +49,12 @@
 ;; actually doing the extend in the first place.
 (rule (simplify (ireduce ty (sextend _ x @ (value_type ty)))) x)
 (rule (simplify (ireduce ty (uextend _ x @ (value_type ty)))) x)
+
+;; `band`, `bor`, and `bxor` can't affect any bits that aren't set in the one of
+;; the inputs, so they can be pushed down inside `uextend`s
+(rule (simplify (band bigty (uextend _ x@(value_type smallty)) (uextend _ y@(value_type smallty))))
+      (uextend bigty (band smallty x y)))
+(rule (simplify (bor bigty (uextend _ x@(value_type smallty)) (uextend _ y@(value_type smallty))))
+      (uextend bigty (bor smallty x y)))
+(rule (simplify (bxor bigty (uextend _ x@(value_type smallty)) (uextend _ y@(value_type smallty))))
+      (uextend bigty (bxor smallty x y)))

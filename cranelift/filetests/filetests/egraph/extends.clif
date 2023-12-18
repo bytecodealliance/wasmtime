@@ -117,3 +117,4 @@ block0(v0: i8):
 ; check: v4 = iconst.i8 0
 ; check: v5 = icmp ne v0, v4
 ; check: return v5
+

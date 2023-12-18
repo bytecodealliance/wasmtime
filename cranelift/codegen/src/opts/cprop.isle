@@ -73,11 +73,12 @@
 (rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
       (subsume (iconst narrow (imm64_masked narrow imm))))
 
-(rule (simplify (uextend (fits_in_64 wide) (iconst narrow imm)))
-      (subsume (iconst wide (imm64 (u64_uextend_imm64 narrow imm)))))
-
-(rule (simplify (sextend (fits_in_64 wide) (iconst narrow imm)))
-      (subsume (iconst wide (imm64_masked wide (i64_as_u64 (i64_sextend_imm64 narrow imm))))))
+;; iconst_[su] support $I128, but do so by extending, so restricting to
+;; 64-bit or smaller keeps it from just remaking essentially the same thing.
+(rule (simplify (uextend (fits_in_64 wide) (iconst_u narrow k)))
+      (subsume (iconst_u wide k)))
+(rule (simplify (sextend (fits_in_64 wide) (iconst_s narrow k)))
+      (subsume (iconst_s wide k)))
 
 (rule (simplify
        (icmp result_ty
@@ -167,10 +168,10 @@
       (bxor ty x (bxor ty k1 k2)))
 
 (rule (simplify
-       (select ty (iconst _ (u64_from_imm64 (u64_nonzero _))) x y))
+       (select ty (iconst_u _ (u64_nonzero _)) x y))
       x)
 (rule (simplify
-       (select ty (iconst _ (u64_from_imm64 0)) x y))
+       (select ty (iconst_u _ 0) x y))
       y)
 
 ;; Replace subtraction by a "negative" constant with addition.
@@ -179,10 +180,9 @@
 ;; TODO: it would be nice to do this for `x + (-1) == x - 1` as well, but
 ;; that needs work in lowering first to avoid regressing addressing modes.
 
-(rule (simplify (isub ty x (iconst ty k1)))
-      (if-let k2 (i64_sextend_imm64 ty k1))
-      (if-let $true (u64_lt (i64_as_u64 (i64_neg k2)) (i64_as_u64 k2)))
-      (iadd ty x (iconst ty (imm64_masked ty (i64_as_u64 (i64_neg k2))))))
+(rule (simplify (isub ty x (iconst_s ty k)))
+      (if-let $true (u64_lt (i64_as_u64 (i64_neg k)) (i64_as_u64 k)))
+      (iadd ty x (iconst ty (imm64_masked ty (i64_as_u64 (i64_neg k))))))
 
 ;; TODO: fadd, fsub, fmul, fdiv, fneg, fabs
 
