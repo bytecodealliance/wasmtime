@@ -58,7 +58,7 @@ impl WasiIpNameLookupView for Ctx {
     type IpNameLookup = wasmtime_wasi::preview2::SystemIpNameLookup;
 
     fn ip_name_lookup(&self) -> Self::IpNameLookup {
-        wasmtime_wasi::preview2::SystemIpNameLookup::new()
+        wasmtime_wasi::preview2::SystemIpNameLookup::new(self.ctx())
     }
 }
 

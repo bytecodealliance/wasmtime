@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 pub struct Network {
     pub socket_addr_check: SocketAddrCheck,
-    pub allow_ip_name_lookup: bool,
 }
 
 impl Network {

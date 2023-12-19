@@ -66,7 +66,7 @@ impl WasiIpNameLookupView for Host {
     type IpNameLookup = preview2::SystemIpNameLookup;
 
     fn ip_name_lookup(&self) -> Self::IpNameLookup {
-        preview2::SystemIpNameLookup::new()
+        preview2::SystemIpNameLookup::new(self.ctx())
     }
 }
 

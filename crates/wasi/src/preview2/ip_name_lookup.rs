@@ -11,6 +11,8 @@ use std::str::FromStr;
 use std::vec;
 use wasmtime::component::Resource;
 
+use super::WasiCtx;
+
 pub enum ResolveAddressStream {
     Waiting(AbortOnDropJoinHandle<std::io::Result<Vec<IpAddr>>>),
     Done(std::io::Result<vec::IntoIter<IpAddr>>),
@@ -34,19 +36,27 @@ pub trait IpNameLookup {
 
 /// The default implementation for `WasiIpNameLookupView`.
 pub struct SystemIpNameLookup {
-    _priv: (),
+    allowed: bool,
 }
 
 impl SystemIpNameLookup {
     /// Create a new `SystemIpNameLookup`
-    pub fn new() -> Self {
-        Self { _priv: () }
+    pub fn new(ctx: &WasiCtx) -> Self {
+        Self {
+            allowed: ctx.allowed_network_uses.ip_name_lookup,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl IpNameLookup for SystemIpNameLookup {
     async fn resolve_addresses(&mut self, name: String) -> std::io::Result<Vec<IpAddr>> {
+        if !self.allowed {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "IP name lookup is not allowed",
+            ));
+        }
         let host = parse(&name)?;
 
         spawn_blocking(move || blocking_resolve(&host)).await
@@ -60,11 +70,9 @@ impl<T: WasiIpNameLookupView + Sized> Host for T {
         network: Resource<Network>,
         name: String,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
-        let network = self.table().get(&network)?;
+        // Check that the network resource is valid
+        let _network = self.table().get(&network)?;
 
-        if !network.allow_ip_name_lookup {
-            return Err(ErrorCode::PermanentResolverFailure.into());
-        }
         let mut lookup = self.ip_name_lookup();
         let task = spawn(async move { lookup.resolve_addresses(name).await });
 

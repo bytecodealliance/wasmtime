@@ -7,7 +7,7 @@ use test_programs::wasi::sockets::{
 fn main() {
     let res = resolve("example.com");
     eprintln!("Result of resolve: {res:?}");
-    assert!(matches!(res, Err(ErrorCode::PermanentResolverFailure)));
+    assert!(matches!(res, Err(ErrorCode::AccessDenied)));
 }
 
 fn resolve(name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
