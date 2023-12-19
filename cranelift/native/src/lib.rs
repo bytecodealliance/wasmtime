@@ -144,6 +144,7 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
         // the cpuinfo interface, so we can't rely on it being present for now.
         let _ = riscv::cpuinfo_detect(isa_builder);
     }
+    let _ = isa_builder;
     Ok(())
 }
 

@@ -84,7 +84,7 @@ impl CompiledModule {
             let reg = wasmtime_runtime::GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
         }
-        profiler.register_module(&self.code_memory, &|addr| {
+        profiler.register_module(&self.code_memory.mmap()[..], &|addr| {
             let (idx, _) = self.func_by_text_offset(addr)?;
             let idx = self.module.func_index(idx);
             let name = self.func_name(idx)?;
@@ -364,7 +364,7 @@ pub fn finish_object(obj: ObjectBuilder<'_>) -> Result<MmapVec> {
     Ok(<MmapVecWrapper as FinishedObject>::finish_object(obj)?.0)
 }
 
-struct MmapVecWrapper(pub MmapVec);
+pub(crate) struct MmapVecWrapper(pub MmapVec);
 
 impl FinishedObject for MmapVecWrapper {
     fn finish_object(obj: ObjectBuilder<'_>) -> Result<Self> {
