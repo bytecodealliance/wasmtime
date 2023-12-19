@@ -1,4 +1,4 @@
-use crate::preview2::WasiView;
+use crate::preview2::{WasiIpNameLookupView, WasiView};
 
 wasmtime::component::bindgen!({
     world: "wasi:cli/command",
@@ -26,7 +26,9 @@ wasmtime::component::bindgen!({
     },
 });
 
-pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()> {
+pub fn add_to_linker<T: WasiView + WasiIpNameLookupView>(
+    l: &mut wasmtime::component::Linker<T>,
+) -> anyhow::Result<()> {
     crate::preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::filesystem::types::add_to_linker(l, |t| t)?;
@@ -58,7 +60,7 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
 }
 
 pub mod sync {
-    use crate::preview2::WasiView;
+    use crate::preview2::{WasiIpNameLookupView, WasiView};
 
     wasmtime::component::bindgen!({
         world: "wasi:cli/command",
@@ -87,7 +89,7 @@ pub mod sync {
         },
     });
 
-    pub fn add_to_linker<T: WasiView>(
+    pub fn add_to_linker<T: WasiView + WasiIpNameLookupView>(
         l: &mut wasmtime::component::Linker<T>,
     ) -> anyhow::Result<()> {
         crate::preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;

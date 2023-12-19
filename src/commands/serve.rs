@@ -11,7 +11,9 @@ use std::{
 };
 use wasmtime::component::{InstancePre, Linker};
 use wasmtime::{Engine, Store, StoreLimits};
-use wasmtime_wasi::preview2::{self, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::preview2::{
+    self, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiIpNameLookupView, WasiView,
+};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
@@ -57,6 +59,14 @@ impl WasiHttpView for Host {
 
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
+    }
+}
+
+impl WasiIpNameLookupView for Host {
+    type IpNameLookup = preview2::SystemIpNameLookup;
+
+    fn ip_name_lookup(&self) -> Self::IpNameLookup {
+        preview2::SystemIpNameLookup::new()
     }
 }
 

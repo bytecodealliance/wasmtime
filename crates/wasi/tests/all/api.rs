@@ -10,7 +10,8 @@ use wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock;
 use wasmtime_wasi::preview2::bindings::wasi::filesystem::types as filesystem;
 use wasmtime_wasi::preview2::command::{add_to_linker, Command};
 use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
+    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder,
+    WasiIpNameLookupView, WasiView,
 };
 
 struct CommandCtx {
@@ -30,6 +31,14 @@ impl WasiView for CommandCtx {
     }
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.wasi
+    }
+}
+
+impl WasiIpNameLookupView for CommandCtx {
+    type IpNameLookup = wasmtime_wasi::preview2::SystemIpNameLookup;
+
+    fn ip_name_lookup(&self) -> Self::IpNameLookup {
+        wasmtime_wasi::preview2::SystemIpNameLookup::new()
     }
 }
 

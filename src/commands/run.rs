@@ -833,6 +833,14 @@ impl preview2::WasiView for Host {
     }
 }
 
+impl preview2::WasiIpNameLookupView for Host {
+    type IpNameLookup = preview2::SystemIpNameLookup;
+
+    fn ip_name_lookup(&self) -> Self::IpNameLookup {
+        preview2::SystemIpNameLookup::new()
+    }
+}
+
 impl preview2::preview1::WasiPreview1View for Host {
     fn adapter(&self) -> &preview2::preview1::WasiPreview1Adapter {
         &self.preview2_adapter

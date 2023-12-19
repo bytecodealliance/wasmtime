@@ -11,7 +11,9 @@ use wasmtime::{
     component::{Component, Linker, Resource, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::preview2::{
+    self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiIpNameLookupView, WasiView,
+};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
     body::HyperIncomingBody,
@@ -49,6 +51,14 @@ impl WasiView for Ctx {
     }
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.wasi
+    }
+}
+
+impl WasiIpNameLookupView for Ctx {
+    type IpNameLookup = wasmtime_wasi::preview2::SystemIpNameLookup;
+
+    fn ip_name_lookup(&self) -> Self::IpNameLookup {
+        wasmtime_wasi::preview2::SystemIpNameLookup::new()
     }
 }
 

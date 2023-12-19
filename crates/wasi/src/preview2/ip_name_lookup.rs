@@ -2,24 +2,59 @@ use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddres
 use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::preview2::host::network::util;
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
-use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
+use crate::preview2::{spawn, spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
-use std::net::{Ipv6Addr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv6Addr, ToSocketAddrs};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::vec;
 use wasmtime::component::Resource;
 
-use super::network::{from_ipv4_addr, from_ipv6_addr};
-
 pub enum ResolveAddressStream {
-    Waiting(AbortOnDropJoinHandle<Result<Vec<IpAddress>, SocketError>>),
-    Done(Result<vec::IntoIter<IpAddress>, SocketError>),
+    Waiting(AbortOnDropJoinHandle<std::io::Result<Vec<IpAddr>>>),
+    Done(std::io::Result<vec::IntoIter<IpAddr>>),
+}
+
+/// A trait for providing a `IpNameLookup` implementation.
+pub trait WasiIpNameLookupView: WasiView {
+    /// The type that implements `IpNameLookup`.
+    type IpNameLookup: IpNameLookup + Send + 'static;
+
+    /// Get a new instance of the name lookup.
+    fn ip_name_lookup(&self) -> Self::IpNameLookup;
+}
+
+/// A trait for resolving IP addresses from a name.
+#[async_trait::async_trait]
+pub trait IpNameLookup {
+    /// Given a name, resolve to a list of IP addresses
+    async fn resolve_addresses(&mut self, name: String) -> std::io::Result<Vec<IpAddr>>;
+}
+
+/// The default implementation for `WasiIpNameLookupView`.
+pub struct SystemIpNameLookup {
+    _priv: (),
+}
+
+impl SystemIpNameLookup {
+    /// Create a new `SystemIpNameLookup`
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> Host for T {
+impl IpNameLookup for SystemIpNameLookup {
+    async fn resolve_addresses(&mut self, name: String) -> std::io::Result<Vec<IpAddr>> {
+        let host = parse(&name)?;
+
+        spawn_blocking(move || blocking_resolve(&host)).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: WasiIpNameLookupView + Sized> Host for T {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
@@ -27,13 +62,12 @@ impl<T: WasiView> Host for T {
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
         let network = self.table().get(&network)?;
 
-        let host = parse(&name)?;
-
         if !network.allow_ip_name_lookup {
             return Err(ErrorCode::PermanentResolverFailure.into());
         }
+        let mut lookup = self.ip_name_lookup();
+        let task = spawn(async move { lookup.resolve_addresses(name).await });
 
-        let task = spawn_blocking(move || blocking_resolve(&host));
         let resource = self.table_mut().push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
@@ -49,18 +83,19 @@ impl<T: WasiView> HostResolveAddressStream for T {
         loop {
             match stream {
                 ResolveAddressStream::Waiting(future) => {
-                    match crate::preview2::poll_noop(Pin::new(future)) {
+                    let result = crate::preview2::poll_noop(Pin::new(future));
+                    match result {
                         Some(result) => {
                             *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
                         }
                         None => return Err(ErrorCode::WouldBlock.into()),
-                    }
+                    };
                 }
                 ResolveAddressStream::Done(slot @ Err(_)) => {
                     mem::replace(slot, Ok(Vec::new().into_iter()))?;
                     unreachable!();
                 }
-                ResolveAddressStream::Done(Ok(iter)) => return Ok(iter.next()),
+                ResolveAddressStream::Done(Ok(iter)) => return Ok(iter.next().map(|v| v.into())),
             }
         }
     }
@@ -82,12 +117,13 @@ impl<T: WasiView> HostResolveAddressStream for T {
 impl Subscribe for ResolveAddressStream {
     async fn ready(&mut self) {
         if let ResolveAddressStream::Waiting(future) = self {
-            *self = ResolveAddressStream::Done(future.await.map(|v| v.into_iter()));
+            let result = future.await.map(|v| v.into_iter());
+            *self = ResolveAddressStream::Done(result);
         }
     }
 }
 
-fn parse(name: &str) -> Result<url::Host, SocketError> {
+fn parse(name: &str) -> std::io::Result<url::Host> {
     // `url::Host::parse` serves us two functions:
     // 1. validate the input is a valid domain name or IP,
     // 2. convert unicode domains to punycode.
@@ -99,23 +135,25 @@ fn parse(name: &str) -> Result<url::Host, SocketError> {
             if let Ok(addr) = Ipv6Addr::from_str(name) {
                 Ok(url::Host::Ipv6(addr))
             } else {
-                Err(ErrorCode::InvalidArgument.into())
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "invalid domain name",
+                ))
             }
         }
     }
 }
 
-fn blocking_resolve(host: &url::Host) -> Result<Vec<IpAddress>, SocketError> {
+fn blocking_resolve(host: &url::Host) -> std::io::Result<Vec<IpAddr>> {
     match host {
-        url::Host::Ipv4(v4addr) => Ok(vec![IpAddress::Ipv4(from_ipv4_addr(*v4addr))]),
-        url::Host::Ipv6(v6addr) => Ok(vec![IpAddress::Ipv6(from_ipv6_addr(*v6addr))]),
+        url::Host::Ipv4(v4addr) => Ok(vec![IpAddr::V4(*v4addr)]),
+        url::Host::Ipv6(v6addr) => Ok(vec![IpAddr::V6(*v6addr)]),
         url::Host::Domain(domain) => {
             // For now use the standard library to perform actual resolution through
             // the usage of the `ToSocketAddrs` trait. This is only
             // resolving names, not ports, so force the port to be 0.
             let addresses = (domain.as_str(), 0)
-                .to_socket_addrs()
-                .map_err(|_| ErrorCode::NameUnresolvable)? // If/when we use `getaddrinfo` directly, map the error properly.
+                .to_socket_addrs()?
                 .map(|addr| util::to_canonical(&addr.ip()).into())
                 .collect();
 

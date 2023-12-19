@@ -7,7 +7,7 @@ use wasmtime::{
 use wasmtime_wasi::preview2::{
     pipe::MemoryOutputPipe,
     preview1::{WasiPreview1Adapter, WasiPreview1View},
-    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiIpNameLookupView, WasiView,
 };
 
 struct Ctx {
@@ -30,6 +30,14 @@ impl WasiView for Ctx {
     }
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.wasi
+    }
+}
+
+impl WasiIpNameLookupView for Ctx {
+    type IpNameLookup = wasmtime_wasi::preview2::SystemIpNameLookup;
+
+    fn ip_name_lookup(&self) -> Self::IpNameLookup {
+        wasmtime_wasi::preview2::SystemIpNameLookup::new()
     }
 }
 
