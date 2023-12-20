@@ -180,7 +180,9 @@ impl HostOutputStream for OutputStream {
 
 #[async_trait::async_trait]
 impl Subscribe for OutputStream {
-    async fn ready(&mut self) {}
+    async fn ready(&mut self) -> wasmtime::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

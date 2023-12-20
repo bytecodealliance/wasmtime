@@ -150,14 +150,14 @@ pub trait HostOutputStream: Subscribe {
     /// Simultaneously waits for this stream to be writable and then returns how
     /// much may be written or the last error that happened.
     async fn write_ready(&mut self) -> StreamResult<usize> {
-        self.ready().await;
+        self.ready().await.map_err(StreamError::Trap)?;
         self.check_write()
     }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for Box<dyn HostOutputStream> {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> Result<()> {
         (**self).ready().await
     }
 }
@@ -169,11 +169,11 @@ pub enum InputStream {
 
 #[async_trait::async_trait]
 impl Subscribe for InputStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> Result<()> {
         match self {
             InputStream::Host(stream) => stream.ready().await,
             // Files are always ready
-            InputStream::File(_) => {}
+            InputStream::File(_) => Ok(()),
         }
     }
 }

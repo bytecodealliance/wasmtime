@@ -93,11 +93,12 @@ enum Deadline {
 
 #[async_trait::async_trait]
 impl Subscribe for Deadline {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         match self {
             Deadline::Past => {}
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
             Deadline::Never => std::future::pending().await,
         }
+        Ok(())
     }
 }

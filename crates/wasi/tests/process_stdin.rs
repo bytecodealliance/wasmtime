@@ -55,7 +55,7 @@ fn main() {
                         let mut buffer = String::new();
                         loop {
                             println!("child: waiting for stdin to be ready");
-                            stdin.ready().await;
+                            stdin.ready().await.expect("`ready` should not fail");
 
                             println!("child: reading input");
                             // We can't effectively test for the case where stdin was closed, so panic if it is...

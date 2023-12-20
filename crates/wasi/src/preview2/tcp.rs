@@ -127,11 +127,12 @@ impl HostInputStream for TcpReadStream {
 
 #[async_trait::async_trait]
 impl Subscribe for TcpReadStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> Result<()> {
         if self.closed {
-            return;
+            return Ok(());
         }
         self.stream.readable().await.unwrap();
+        Ok(())
     }
 }
 
@@ -243,7 +244,7 @@ impl HostOutputStream for TcpWriteStream {
 
 #[async_trait::async_trait]
 impl Subscribe for TcpWriteStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> Result<()> {
         if let LastWrite::Waiting(task) = &mut self.last_write {
             self.last_write = match task.await {
                 Ok(()) => LastWrite::Done,
@@ -253,6 +254,7 @@ impl Subscribe for TcpWriteStream {
         if let LastWrite::Done = self.last_write {
             self.stream.writable().await.unwrap();
         }
+        Ok(())
     }
 }
 
@@ -318,10 +320,12 @@ impl TcpSocket {
 
 #[async_trait::async_trait]
 impl Subscribe for TcpSocket {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> Result<()> {
         // Some states are ready immediately.
         match self.tcp_state {
-            TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => return,
+            TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => {
+                return Ok(())
+            }
             _ => {}
         }
 
@@ -330,5 +334,6 @@ impl Subscribe for TcpSocket {
             .ready(Interest::READABLE | Interest::WRITABLE)
             .await
             .unwrap();
+        Ok(())
     }
 }

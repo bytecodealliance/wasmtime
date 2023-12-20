@@ -165,9 +165,17 @@ impl<T: WasiView> streams::HostOutputStream for T {
     ) -> StreamResult<u64> {
         use crate::preview2::Subscribe;
 
-        self.table_mut().get_mut(&dest)?.ready().await;
+        self.table_mut()
+            .get_mut(&dest)?
+            .ready()
+            .await
+            .map_err(StreamError::Trap)?;
 
-        self.table_mut().get_mut(&src)?.ready().await;
+        self.table_mut()
+            .get_mut(&src)?
+            .ready()
+            .await
+            .map_err(StreamError::Trap)?;
 
         self.splice(dest, src, len).await
     }
@@ -196,7 +204,7 @@ impl<T: WasiView> streams::HostInputStream for T {
         len: u64,
     ) -> StreamResult<Vec<u8>> {
         if let InputStream::Host(s) = self.table_mut().get_mut(&stream)? {
-            s.ready().await;
+            s.ready().await.map_err(StreamError::Trap)?;
         }
         self.read(stream, len).await
     }
@@ -216,7 +224,7 @@ impl<T: WasiView> streams::HostInputStream for T {
         len: u64,
     ) -> StreamResult<u64> {
         if let InputStream::Host(s) = self.table_mut().get_mut(&stream)? {
-            s.ready().await;
+            s.ready().await.map_err(StreamError::Trap)?;
         }
         self.skip(stream, len).await
     }

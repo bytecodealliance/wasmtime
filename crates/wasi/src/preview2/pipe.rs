@@ -49,7 +49,9 @@ impl HostInputStream for MemoryInputPipe {
 
 #[async_trait::async_trait]
 impl Subscribe for MemoryInputPipe {
-    async fn ready(&mut self) {}
+    async fn ready(&mut self) -> wasmtime::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +106,9 @@ impl HostOutputStream for MemoryOutputPipe {
 
 #[async_trait::async_trait]
 impl Subscribe for MemoryOutputPipe {
-    async fn ready(&mut self) {}
+    async fn ready(&mut self) -> wasmtime::Result<()> {
+        Ok(())
+    }
 }
 
 /// Provides a [`HostInputStream`] impl from a [`tokio::io::AsyncRead`] impl
@@ -193,9 +197,9 @@ impl HostInputStream for AsyncReadStream {
 }
 #[async_trait::async_trait]
 impl Subscribe for AsyncReadStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         if self.buffer.is_some() || self.closed {
-            return;
+            return Ok(());
         }
         match self.receiver.recv().await {
             Some(res) => self.buffer = Some(res),
@@ -203,6 +207,7 @@ impl Subscribe for AsyncReadStream {
                 panic!("no more sender for an open AsyncReadStream - should be impossible")
             }
         }
+        Ok(())
     }
 }
 
@@ -227,7 +232,9 @@ impl HostOutputStream for SinkOutputStream {
 
 #[async_trait::async_trait]
 impl Subscribe for SinkOutputStream {
-    async fn ready(&mut self) {}
+    async fn ready(&mut self) -> wasmtime::Result<()> {
+        Ok(())
+    }
 }
 
 /// A stream that is ready immediately, but will always report that it's closed.
@@ -243,7 +250,9 @@ impl HostInputStream for ClosedInputStream {
 
 #[async_trait::async_trait]
 impl Subscribe for ClosedInputStream {
-    async fn ready(&mut self) {}
+    async fn ready(&mut self) -> wasmtime::Result<()> {
+        Ok(())
+    }
 }
 
 /// An output stream that is always closed.
@@ -265,7 +274,9 @@ impl HostOutputStream for ClosedOutputStream {
 
 #[async_trait::async_trait]
 impl Subscribe for ClosedOutputStream {
-    async fn ready(&mut self) {}
+    async fn ready(&mut self) -> wasmtime::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -323,7 +334,9 @@ mod test {
             // The reader task hasn't run yet. Call `ready` to await and fill the buffer.
             Ok(bs) => {
                 assert!(bs.is_empty());
-                resolves_immediately(reader.ready()).await;
+                resolves_immediately(reader.ready())
+                    .await
+                    .expect("`ready` should not fail");
                 assert!(matches!(reader.read(0), Err(StreamError::Closed)));
             }
             res => panic!("unexpected: {res:?}"),
@@ -337,7 +350,9 @@ mod test {
         let bs = reader.read(10).unwrap();
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            resolves_immediately(reader.ready()).await;
+            resolves_immediately(reader.ready())
+                .await
+                .expect("`ready` should not fail");
             // Now a read should succeed
             let bs = reader.read(10).unwrap();
             assert_eq!(bs.len(), 10);
@@ -367,7 +382,9 @@ mod test {
         let bs = reader.read(123).unwrap();
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            resolves_immediately(reader.ready()).await;
+            resolves_immediately(reader.ready())
+                .await
+                .expect("`ready` should not fail");
             // Now a read should succeed
             let bs = reader.read(123).unwrap();
             assert_eq!(bs.len(), 123);
@@ -382,7 +399,9 @@ mod test {
             Ok(bs) => {
                 assert!(bs.is_empty());
                 // Need to await to give this side time to catch up
-                resolves_immediately(reader.ready()).await;
+                resolves_immediately(reader.ready())
+                    .await
+                    .expect("`ready` should not fail");
                 // Now a read should show closed
                 assert!(matches!(reader.read(0), Err(StreamError::Closed)));
             }
@@ -402,7 +421,9 @@ mod test {
         let bs = reader.read(1).unwrap();
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            resolves_immediately(reader.ready()).await;
+            resolves_immediately(reader.ready())
+                .await
+                .expect("`ready` should not fail");
             // Now a read should succeed
             let bs = reader.read(1).unwrap();
             assert_eq!(*bs, [123u8]);
@@ -426,7 +447,9 @@ mod test {
 
         // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
         // out of the test for simplicity)
-        resolves_immediately(reader.ready()).await;
+        resolves_immediately(reader.ready())
+            .await
+            .expect("`ready` should not fail");
 
         // read the something else back out:
         let bs = reader.read(1).unwrap();
@@ -448,7 +471,9 @@ mod test {
 
         // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
         // out of the test for simplicity)
-        resolves_immediately(reader.ready()).await;
+        resolves_immediately(reader.ready())
+            .await
+            .expect("`ready` should not fail");
 
         // empty and now closed:
         assert!(matches!(reader.read(1), Err(StreamError::Closed)));
@@ -468,7 +493,9 @@ mod test {
             w
         });
 
-        resolves_immediately(reader.ready()).await;
+        resolves_immediately(reader.ready())
+            .await
+            .expect("`ready` should not fail");
 
         // Now we expect the reader task has sent 4k from the stream to the reader.
         // Try to read out one bigger than the buffer available:
@@ -476,7 +503,9 @@ mod test {
         assert_eq!(bs.len(), 4096);
 
         // Allow the crank to turn more:
-        resolves_immediately(reader.ready()).await;
+        resolves_immediately(reader.ready())
+            .await
+            .expect("`ready` should not fail");
 
         // Again we expect the reader task has sent 4k from the stream to the reader.
         // Try to read out one bigger than the buffer available:
@@ -490,7 +519,9 @@ mod test {
         drop(w);
 
         // Allow the crank to turn more:
-        resolves_immediately(reader.ready()).await;
+        resolves_immediately(reader.ready())
+            .await
+            .expect("`ready` should not fail");
 
         // Now we expect the reader to be empty, and the stream closed:
         assert!(matches!(reader.read(4097), Err(StreamError::Closed)));

@@ -285,7 +285,7 @@ impl HostOutputStream for FileOutputStream {
 
 #[async_trait::async_trait]
 impl Subscribe for FileOutputStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         if let OutputState::Waiting(task) = &mut self.state {
             self.state = match task.await {
                 Ok(nwritten) => {
@@ -297,6 +297,7 @@ impl Subscribe for FileOutputStream {
                 Err(e) => OutputState::Error(e),
             };
         }
+        Ok(())
     }
 }
 

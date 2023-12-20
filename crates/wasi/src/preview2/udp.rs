@@ -50,8 +50,9 @@ pub struct UdpSocket {
 
 #[async_trait]
 impl Subscribe for UdpSocket {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         // None of the socket-level operations block natively
+        Ok(())
     }
 }
 

@@ -197,7 +197,8 @@ impl HostOutputStream for AsyncWriteStream {
 }
 #[async_trait::async_trait]
 impl Subscribe for AsyncWriteStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         self.worker.ready().await;
+        Ok(())
     }
 }

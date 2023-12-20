@@ -430,9 +430,10 @@ impl HostFutureIncomingResponse {
 
 #[async_trait::async_trait]
 impl Subscribe for HostFutureIncomingResponse {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         if let Self::Pending(handle) = self {
             *self = Self::Ready(handle.await);
         }
+        Ok(())
     }
 }

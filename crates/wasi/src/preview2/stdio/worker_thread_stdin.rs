@@ -149,7 +149,7 @@ impl HostInputStream for Stdin {
 
 #[async_trait::async_trait]
 impl Subscribe for Stdin {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         let g = GlobalStdin::get();
 
         // Scope the synchronous `state.lock()` to this block which does not
@@ -164,10 +164,11 @@ impl Subscribe for Stdin {
                     g.read_completed.notified()
                 }
                 StdinState::ReadRequested => g.read_completed.notified(),
-                StdinState::Data(_) | StdinState::Closed | StdinState::Error(_) => return,
+                StdinState::Data(_) | StdinState::Closed | StdinState::Error(_) => return Ok(()),
             }
         };
 
         notified.await;
+        Ok(())
     }
 }

@@ -207,15 +207,16 @@ impl HostInputStream for HostIncomingBodyStream {
 
 #[async_trait::async_trait]
 impl Subscribe for HostIncomingBodyStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         if !self.buffer.is_empty() || self.error.is_some() {
-            return;
+            return Ok(());
         }
 
         if let IncomingBodyStreamState::Open { body, .. } = &mut self.state {
             let frame = body.frame().await;
             self.record_frame(frame);
         }
+        Ok(())
     }
 }
 
@@ -306,11 +307,11 @@ pub enum HostFutureTrailers {
 
 #[async_trait::async_trait]
 impl Subscribe for HostFutureTrailers {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
-            HostFutureTrailers::Done(_) => return,
-            HostFutureTrailers::Consumed => return,
+            HostFutureTrailers::Done(_) => return Ok(()),
+            HostFutureTrailers::Consumed => return Ok(()),
         };
 
         // If the body is itself being read by a body stream then we need to
@@ -339,8 +340,8 @@ impl Subscribe for HostFutureTrailers {
         // we have the body ourselves then read frames until trailers are found.
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
-            HostFutureTrailers::Done(_) => return,
-            HostFutureTrailers::Consumed => return,
+            HostFutureTrailers::Done(_) => return Ok(()),
+            HostFutureTrailers::Consumed => return Ok(()),
         };
         let hyper_body = match &mut body.body {
             IncomingBodyState::Start(body) => body,
@@ -360,6 +361,7 @@ impl Subscribe for HostFutureTrailers {
             }
         };
         *self = HostFutureTrailers::Done(result);
+        Ok(())
     }
 }
 
@@ -627,10 +629,11 @@ impl HostOutputStream for BodyWriteStream {
 
 #[async_trait::async_trait]
 impl Subscribe for BodyWriteStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> wasmtime::Result<()> {
         // Attempt to perform a reservation for a send. If there's capacity in
         // the channel or it's already closed then this will return immediately.
         // If the channel is full this will block until capacity opens up.
         let _ = self.writer.reserve().await;
+        Ok(())
     }
 }

@@ -80,10 +80,11 @@ impl<T: WasiView> HostResolveAddressStream for T {
 
 #[async_trait::async_trait]
 impl Subscribe for ResolveAddressStream {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> Result<()> {
         if let ResolveAddressStream::Waiting(future) = self {
             *self = ResolveAddressStream::Done(future.await.map(|v| v.into_iter()));
         }
+        Ok(())
     }
 }
 
