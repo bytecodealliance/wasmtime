@@ -397,6 +397,32 @@ where
         })
     }
 
+    /// Attempts to convert a [`ResourceAny`] into [`Resource`].
+    pub fn try_from_resource_any(
+        ResourceAny { idx, ty, own_state }: ResourceAny,
+        mut store: impl AsContextMut,
+    ) -> Result<Self> {
+        let store = store.as_context_mut();
+        let store_id = store.0.id();
+        let mut tables = host_resource_tables(store.0);
+        assert_eq!(ty, ResourceType::host::<T>(), "resource type mismatch");
+        let (state, rep) = if let Some(OwnState { store, dtor, flags }) = own_state {
+            assert_eq!(store_id, store, "wrong store used to convert resource");
+            assert!(dtor.is_some(), "destructor must be set");
+            assert!(flags.is_none(), "flags must not be set");
+            let rep = tables.resource_lift_own(None, idx)?;
+            (AtomicU32::new(NOT_IN_TABLE), rep)
+        } else {
+            let rep = tables.resource_lift_borrow(None, idx)?;
+            (AtomicU32::new(BORROW), rep)
+        };
+        Ok(Resource {
+            state,
+            rep,
+            _marker: marker::PhantomData,
+        })
+    }
+
     /// See [`ResourceAny::try_from_resource`]
     pub fn try_into_resource_any<U>(
         self,
@@ -566,6 +592,11 @@ impl ResourceAny {
             ty: *ty,
             own_state,
         })
+    }
+
+    /// See [`Resource::try_from_resource_any`]
+    pub fn try_into_resource<T: 'static>(self, store: impl AsContextMut) -> Result<Resource<T>> {
+        Resource::try_from_resource_any(self, store)
     }
 
     /// Returns the corresponding type associated with this resource, either a

@@ -582,6 +582,15 @@ fn dynamic_val() -> Result<()> {
     match &results[0] {
         Val::Resource(resource) => {
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+            assert!(resource.owned());
+
+            let resource = resource.try_into_resource::<MyType>(&mut store)?;
+            assert_eq!(resource.rep(), 100);
+            assert!(resource.owned());
+
+            let resource = resource.try_into_resource_any(&mut store, &i_pre, idx)?;
+            assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+            assert!(resource.owned());
         }
         _ => unreachable!(),
     }
@@ -593,21 +602,46 @@ fn dynamic_val() -> Result<()> {
     match &results[0] {
         Val::Resource(resource) => {
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+            assert!(resource.owned());
+
+            let resource = resource.try_into_resource::<MyType>(&mut store)?;
+            assert_eq!(resource.rep(), 100);
+            assert!(resource.owned());
+
+            let resource = resource.try_into_resource_any(&mut store, &i_pre, idx)?;
+            assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+            assert!(resource.owned());
         }
         _ => unreachable!(),
     }
 
-    let t1 = Resource::new_own(100);
+    let t1 = Resource::<MyType>::new_own(100)
+        .try_into_resource_any(&mut store, &i_pre, idx)?
+        .try_into_resource(&mut store)?;
     let (t1,) = a_typed_result.call(&mut store, (t1,))?;
     a_typed_result.post_return(&mut store)?;
+    assert_eq!(t1.rep(), 100);
+    assert!(t1.owned());
 
-    let t1_any = t1.try_into_resource_any(&mut store, &i_pre, idx)?;
+    let t1_any = t1
+        .try_into_resource_any(&mut store, &i_pre, idx)?
+        .try_into_resource::<MyType>(&mut store)?
+        .try_into_resource_any(&mut store, &i_pre, idx)?;
     let mut results = [Val::Bool(false)];
     a.call(&mut store, &[Val::Resource(t1_any)], &mut results)?;
     a.post_return(&mut store)?;
     match &results[0] {
         Val::Resource(resource) => {
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+            assert!(resource.owned());
+
+            let resource = resource.try_into_resource::<MyType>(&mut store)?;
+            assert_eq!(resource.rep(), 100);
+            assert!(resource.owned());
+
+            let resource = resource.try_into_resource_any(&mut store, &i_pre, idx)?;
+            assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+            assert!(resource.owned());
         }
         _ => unreachable!(),
     }
