@@ -307,8 +307,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     self.lower_ctx.add_range_fact(
                         rd.to_reg(),
                         64,
-                        u64::from(lower_halfword),
-                        u64::from(lower_halfword),
+                        u64::from(value),
+                        u64::from(value),
                     );
                 }
             } else {
