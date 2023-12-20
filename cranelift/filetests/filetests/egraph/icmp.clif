@@ -109,3 +109,19 @@ block0(v0: i8):
 ;     v4 = icmp eq v0, v3  ; v3 = 0
 ;     return v4
 ; }
+
+function %byte_icmp_ucmp(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp sge v0, v1
+    v3 = icmp eq v2, v1
+    return v3
+}
+
+; function %byte_icmp_ucmp(i8) -> i8 fast {
+; block0(v0: i8):
+;     v1 = iconst.i8 0
+;     v4 = icmp slt v0, v1  ; v1 = 0
+;     return v4
+; }
+

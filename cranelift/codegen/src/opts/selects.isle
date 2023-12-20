@@ -15,7 +15,7 @@
 (rule (simplify (select ty cmp@(icmp _ cc x y)
                         (iconst_u _ 1)
                         (iconst_u _ 0)))
-    (uextend_from_i8 ty cmp))
+    (uextend_maybe ty cmp))
 ;; if icmp(x, y) { -1 } else { 0 } => uextend(icmp(x, y))
 (rule (simplify (select ty cmp@(icmp _ cc x y)
                         (iconst_s _ -1)
@@ -75,9 +75,3 @@
 (rule (simplify (bor (ty_vec128 ty) (band ty (bnot ty c) y) (band ty x c))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty c x))) (bitselect ty c x y))
 (rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty x c))) (bitselect ty c x y))
-
-;; extend from i8 to i8 is invalid CLIF, so this allows fixing that in the output
-;; rather than needing to duplicate rules for the different width categories
-(decl uextend_from_i8 (Type Value) Value)
-(rule 0 (uextend_from_i8 ty val) (uextend ty val))
-(rule 1 (uextend_from_i8 $I8 val) val)

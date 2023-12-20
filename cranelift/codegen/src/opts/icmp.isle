@@ -15,12 +15,12 @@
 
 ;; Optimize icmp-of-icmp.
 (rule (simplify (ne ty
-                      (uextend _ inner @ (icmp ty _ _ _))
+                      (uextend_maybe _ inner @ (icmp ty _ _ _))
                       (iconst_u _ 0)))
       (subsume inner))
 
 (rule (simplify (eq ty
-                      (uextend _ (icmp ty cc x y))
+                      (uextend_maybe _ (icmp ty cc x y))
                       (iconst_u _ 0)))
       (subsume (icmp ty (intcc_complement cc) x y)))
 
