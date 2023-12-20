@@ -1,6 +1,6 @@
 use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
 use crate::component::instance::RuntimeImport;
-use crate::component::linker::PathIndex;
+use crate::component::linker::ResourceImportIndex;
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, InstancePre, Lift, Lower};
 use crate::store::{StoreId, StoreOpaque};
@@ -402,9 +402,9 @@ where
         self,
         store: impl AsContextMut,
         instance: &InstancePre<U>,
-        name: PathIndex,
+        idx: ResourceImportIndex,
     ) -> Result<ResourceAny> {
-        ResourceAny::try_from_resource(self, store, instance, name)
+        ResourceAny::try_from_resource(self, store, instance, idx)
     }
 }
 
@@ -482,9 +482,11 @@ impl<T> fmt::Debug for Resource<T> {
 /// This type is similar to [`Resource`] except that it can be used to represent
 /// any resource, either host or guest. This type cannot be directly constructed
 /// and is only available if the guest returns it to the host (e.g. a function
-/// returning a guest-defined resource). This type also does not carry a static
-/// type parameter `T` for example and does not have as much information about
-/// its type. This means that it's possible to get runtime type-errors when
+/// returning a guest-defined resource) or by a conversion from [`Resource`] via
+/// [`ResourceAny::try_from_resource`].
+/// This type also does not carry a static type parameter `T` for example and
+/// does not have as much information about its type.
+/// This means that it's possible to get runtime type-errors when
 /// using this type because it cannot statically prevent mismatching resource
 /// types.
 ///
@@ -514,15 +516,17 @@ struct OwnState {
 
 impl ResourceAny {
     /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
-    /// `root` is the import root name and `path` is the import path within `root`.
+    /// `idx` is the [`ResourceImportIndex`] returned by [`Linker::resource`].
     pub fn try_from_resource<T: 'static, U>(
         Resource { rep, state, .. }: Resource<T>,
         mut store: impl AsContextMut,
-        instance: &InstancePre<U>,
-        name: PathIndex,
+        instance_pre: &InstancePre<U>,
+        idx: ResourceImportIndex,
     ) -> Result<Self> {
         let store = store.as_context_mut();
-        let import = instance.import_by_path(name).context("import not found")?;
+        let import = instance_pre
+            .resource_import(idx)
+            .context("import not found")?;
         let RuntimeImport::Resource {
             ty, dtor_funcref, ..
         } = import

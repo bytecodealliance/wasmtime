@@ -53,7 +53,7 @@ impl TypeChecker<'_> {
             TypeDef::Resource(i) => {
                 let i = self.types[i].ty;
                 let actual = match actual {
-                    Some(Definition::Resource(actual, _dtor)) => actual,
+                    Some(Definition::Resource(_idx, actual, _dtor)) => actual,
 
                     // If a resource is imported yet nothing was supplied then
                     // that's only successful if the resource has itself
@@ -152,8 +152,7 @@ impl TypeChecker<'_> {
             let actual = self
                 .strings
                 .lookup(name)
-                .and_then(|name| actual?.get(&name))
-                .map(|(_, actual)| actual);
+                .and_then(|name| actual?.get(&name));
             self.definition(expected, actual)
                 .with_context(|| format!("instance export `{name}` has the wrong type"))?;
         }
