@@ -94,6 +94,46 @@ block0(v1: i32):
 
 ; check: return v1
 
+function %sextend_then_reduce_smaller(i32) -> i16 {
+block0(v1: i32):
+    v2 = sextend.i64 v1
+    v3 = ireduce.i16 v2
+    return v3
+}
+
+; check: v4 = ireduce.i16 v1
+; check: return v4
+
+function %uextend_then_reduce_smaller(i32) -> i16 {
+block0(v1: i32):
+    v2 = uextend.i64 v1
+    v3 = ireduce.i16 v2
+    return v3
+}
+
+; check: v4 = ireduce.i16 v1
+; check: return v4
+
+function %sextend_then_reduce_partially(i16) -> i32 {
+block0(v1: i16):
+    v2 = sextend.i64 v1
+    v3 = ireduce.i32 v2
+    return v3
+}
+
+; check: v4 = sextend.i32 v1
+; check: return v4
+
+function %uextend_then_reduce_partially(i16) -> i32 {
+block0(v1: i16):
+    v2 = uextend.i64 v1
+    v3 = ireduce.i32 v2
+    return v3
+}
+
+; check: v4 = uextend.i32 v1
+; check: return v4
+
 function %sextend_then_slt_zero(i8) -> i8 {
 block0(v0: i8):
     v1 = sextend.i16 v0
