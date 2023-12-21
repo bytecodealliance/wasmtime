@@ -562,6 +562,8 @@ fn dynamic_val() -> Result<()> {
         .root()
         .resource("t1", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i_pre = linker.instantiate_pre(&c)?;
+    let idx = i_pre.resource_import_index(idx).unwrap();
+    assert_eq!(i_pre.path_import_index("t1", &[]), Some(idx));
     let i = i_pre.instantiate(&mut store)?;
 
     let a = i.get_func(&mut store, "a").unwrap();

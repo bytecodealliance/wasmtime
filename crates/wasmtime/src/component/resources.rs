@@ -1,6 +1,5 @@
 use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
 use crate::component::instance::RuntimeImport;
-use crate::component::linker::ResourceImportIndex;
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, InstancePre, Lift, Lower};
 use crate::store::{StoreId, StoreOpaque};
@@ -11,7 +10,9 @@ use std::fmt;
 use std::marker;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
-use wasmtime_environ::component::{CanonicalAbiInfo, DefinedResourceIndex, InterfaceType};
+use wasmtime_environ::component::{
+    CanonicalAbiInfo, DefinedResourceIndex, InterfaceType, RuntimeImportIndex,
+};
 use wasmtime_runtime::component::{ComponentInstance, InstanceFlags, ResourceTables};
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
 
@@ -428,7 +429,7 @@ where
         self,
         store: impl AsContextMut,
         instance: &InstancePre<U>,
-        idx: ResourceImportIndex,
+        idx: RuntimeImportIndex,
     ) -> Result<ResourceAny> {
         ResourceAny::try_from_resource(self, store, instance, idx)
     }
@@ -542,18 +543,16 @@ struct OwnState {
 
 impl ResourceAny {
     /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
-    /// `idx` is the [`ResourceImportIndex`] returned by [`Linker::resource`].
-    ///
-    /// [`Linker::resource`]: crate::component::LinkerInstance::resource
+    /// `idx` is the [`RuntimeImportIndex`] associated with this resource.
     pub fn try_from_resource<T: 'static, U>(
         Resource { rep, state, .. }: Resource<T>,
         mut store: impl AsContextMut,
         instance_pre: &InstancePre<U>,
-        idx: ResourceImportIndex,
+        idx: RuntimeImportIndex,
     ) -> Result<Self> {
         let store = store.as_context_mut();
         let import = instance_pre
-            .resource_import(idx)
+            .runtime_import(idx)
             .context("import not found")?;
         let RuntimeImport::Resource {
             ty, dtor_funcref, ..

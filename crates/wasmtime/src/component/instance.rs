@@ -558,15 +558,27 @@ impl<T> InstancePre<T> {
         }
     }
 
-    pub(crate) fn resource_import_index(
-        &self,
-        path: ResourceImportIndex,
-    ) -> Option<RuntimeImportIndex> {
-        *self.resource_imports.get(path)?
+    /// Returns [`RuntimeImportIndex`] associated with this resource.
+    /// `idx` is the [`ResourceImportIndex`] returned by [`Linker::resource`].
+    ///
+    /// [`Linker::resource`]: crate::component::LinkerInstance::resource
+    pub fn resource_import_index(&self, idx: ResourceImportIndex) -> Option<RuntimeImportIndex> {
+        *self.resource_imports.get(idx)?
     }
 
-    pub(crate) fn resource_import(&self, path: ResourceImportIndex) -> Option<&RuntimeImport> {
-        let idx = self.resource_import_index(path)?;
+    /// Returns [`RuntimeImportIndex`] associated with this `path` within a `root`.
+    pub fn path_import_index(&self, root: &str, path: &[&str]) -> Option<RuntimeImportIndex> {
+        let env_component = self.component().env_component();
+        env_component
+            .imports
+            .iter()
+            .find_map(|(idx, (import, import_path))| {
+                let (root_name, _) = env_component.import_types.get(*import)?;
+                (root_name == root && import_path == path).then_some(idx)
+            })
+    }
+
+    pub(crate) fn runtime_import(&self, idx: RuntimeImportIndex) -> Option<&RuntimeImport> {
         self.imports.get(idx)
     }
 
