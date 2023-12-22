@@ -8,7 +8,7 @@ use cranelift_filetests::TestFileCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
 use std::path::{Path, PathBuf};
-use target_lexicon::{HOST, Triple};
+use target_lexicon::{Triple, HOST};
 
 /// Execute clif code and verify with test expressions
 #[derive(Parser)]
