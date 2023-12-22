@@ -68,7 +68,12 @@ pub struct LinkerInstance<'a, T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-/// Index correlating a resource definition to the import path
+/// Index correlating a resource definition to the import path.
+/// This is assigned by [`Linker::resource`] and may be used to associate it to
+/// [`RuntimeImportIndex`](wasmtime_environ::component::RuntimeImportIndex)
+/// at a later stage
+///
+/// [`Linker::resource`]: crate::component::LinkerInstance::resource
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ResourceImportIndex(usize);
 

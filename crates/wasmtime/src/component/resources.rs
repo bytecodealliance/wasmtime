@@ -517,6 +517,8 @@ struct OwnState {
 impl ResourceAny {
     /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
     /// `idx` is the [`ResourceImportIndex`] returned by [`Linker::resource`].
+    ///
+    /// [`Linker::resource`]: crate::component::LinkerInstance::resource
     pub fn try_from_resource<T: 'static, U>(
         Resource { rep, state, .. }: Resource<T>,
         mut store: impl AsContextMut,
