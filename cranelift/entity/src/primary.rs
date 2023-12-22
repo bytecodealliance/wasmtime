@@ -306,6 +306,18 @@ where
     }
 }
 
+impl<K, V> From<Vec<V>> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn from(elems: Vec<V>) -> Self {
+        Self {
+            elems,
+            unused: PhantomData,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -490,6 +502,19 @@ mod tests {
         m.push(33);
 
         let n = m.values().collect::<PrimaryMap<E, _>>();
+        assert!(m.len() == n.len());
+        for (me, ne) in m.values().zip(n.values()) {
+            assert!(*me == **ne);
+        }
+    }
+
+    #[test]
+    fn from_vec() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+
+        let n = PrimaryMap::<E, &usize>::from(m.values().collect::<Vec<_>>());
         assert!(m.len() == n.len());
         for (me, ne) in m.values().zip(n.values()) {
             assert!(*me == **ne);
