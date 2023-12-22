@@ -503,24 +503,12 @@ impl<T> LinkerInstance<'_, T> {
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
         ));
-        let entry = self.map.entry(name);
-        if !self.allow_shadowing && matches!(entry, Entry::Occupied(_)) {
-            bail!("import of `{}` defined twice", self.strings.strings[name])
-        }
         let idx = ResourceImportIndex::new(*self.resource_imports);
         *self.resource_imports = self
             .resource_imports
             .checked_add(1)
             .context("resource import count would overflow")?;
-        let def = Definition::Resource(idx, ty, dtor);
-        match entry {
-            Entry::Occupied(mut o) => {
-                o.insert(def);
-            }
-            Entry::Vacant(v) => {
-                v.insert(def);
-            }
-        }
+        self.insert(name, Definition::Resource(idx, ty, dtor))?;
         Ok(idx)
     }
 
