@@ -522,7 +522,7 @@ impl<'a> Instantiator<'a> {
 pub struct InstancePre<T> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-    resource_imports: Arc<Vec<Option<RuntimeImportIndex>>>,
+    resource_imports: Arc<PrimaryMap<ResourceImportIndex, Option<RuntimeImportIndex>>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -548,7 +548,7 @@ impl<T> InstancePre<T> {
     pub(crate) unsafe fn new_unchecked(
         component: Component,
         imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
-        resource_imports: Vec<Option<RuntimeImportIndex>>,
+        resource_imports: PrimaryMap<ResourceImportIndex, Option<RuntimeImportIndex>>,
     ) -> InstancePre<T> {
         InstancePre {
             component,
@@ -562,7 +562,7 @@ impl<T> InstancePre<T> {
         &self,
         path: ResourceImportIndex,
     ) -> Option<RuntimeImportIndex> {
-        *self.resource_imports.get(*path)?
+        *self.resource_imports.get(path)?
     }
 
     pub(crate) fn resource_import(&self, path: ResourceImportIndex) -> Option<&RuntimeImport> {

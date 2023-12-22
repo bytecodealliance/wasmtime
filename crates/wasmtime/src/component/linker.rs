@@ -14,7 +14,7 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime_environ::component::TypeDef;
-use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::{EntityRef, PrimaryMap};
 
 /// A type used to instantiate [`Component`]s.
 ///
@@ -72,11 +72,33 @@ pub struct LinkerInstance<'a, T> {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ResourceImportIndex(usize);
 
+impl EntityRef for ResourceImportIndex {
+    fn new(idx: usize) -> Self {
+        Self(idx)
+    }
+
+    fn index(self) -> usize {
+        self.0
+    }
+}
+
 impl Deref for ResourceImportIndex {
     type Target = usize;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl From<usize> for ResourceImportIndex {
+    fn from(idx: usize) -> Self {
+        Self(idx)
+    }
+}
+
+impl From<ResourceImportIndex> for usize {
+    fn from(idx: ResourceImportIndex) -> Self {
+        idx.0
     }
 }
 
@@ -191,7 +213,7 @@ impl<T> Linker<T> {
         // using the import map within the component created at
         // component-compile-time.
         let mut imports = PrimaryMap::with_capacity(env_component.imports.len());
-        let mut resource_imports = vec![None; self.resource_imports];
+        let mut resource_imports = PrimaryMap::from(vec![None; self.resource_imports]);
         for (idx, (import, names)) in env_component.imports.iter() {
             let (root, _) = &env_component.import_types[*import];
             let root = self.strings.lookup(root).unwrap();
@@ -211,7 +233,7 @@ impl<T> Linker<T> {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
                 Definition::Resource(res_idx, t, dtor) => {
-                    resource_imports[*res_idx.deref()] = Some(idx);
+                    resource_imports[*res_idx] = Some(idx);
                     RuntimeImport::Resource {
                         ty: t.clone(),
                         _dtor: dtor.clone(),
@@ -480,7 +502,7 @@ impl<T> LinkerInstance<'_, T> {
         if !self.allow_shadowing && matches!(entry, Entry::Occupied(_)) {
             bail!("import of `{}` defined twice", self.strings.strings[name])
         }
-        let idx = ResourceImportIndex(*self.resource_imports);
+        let idx = ResourceImportIndex::new(*self.resource_imports);
         *self.resource_imports = self
             .resource_imports
             .checked_add(1)
