@@ -13,7 +13,7 @@ import urllib.request
 import os
 import shutil
 
-MODEL_URL = 'https://github.com/onnx/models/raw/main/vision/classification/mobilenet/model/mobilenetv2-12.onnx'
+MODEL_URL = 'https://github.com/onnx/models/raw/5faef4c33eba0395177850e1e31c4a6a9e634c82/vision/classification/mobilenet/model/mobilenetv2-12.onnx'
 IMG_URL = 'https://github.com/microsoft/Windows-Machine-Learning/blob/master/SharedContent/media/kitten_224.png?raw=true'
 
 WASMTIME_DIR = Path(__file__).resolve().parent.parent

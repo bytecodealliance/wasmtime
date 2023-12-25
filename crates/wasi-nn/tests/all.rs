@@ -45,13 +45,17 @@ impl Ctx {
         let wasi = builder.build();
 
         // Create the wasi-nn context.
-        let mut openvino = backend::openvino::OpenvinoBackend::default();
+        #[cfg(feature = "openvino")]
+        let mut backend = backend::openvino::OpenvinoBackend::default();
+        #[cfg(feature = "winml")]
+        let mut backend = backend::winml::WinMLBackend::default();
+
         let mut registry = InMemoryRegistry::new();
         let mobilenet_dir = testing::artifacts_dir();
         if preload_model {
-            registry.load(&mut openvino, &mobilenet_dir)?;
+            registry.load(&mut backend, &mobilenet_dir)?;
         }
-        let wasi_nn = WasiNnCtx::new([openvino.into()], registry.into());
+        let wasi_nn = WasiNnCtx::new([backend.into()], registry.into());
 
         Ok(Self { wasi, wasi_nn })
     }
@@ -89,4 +93,16 @@ fn nn_image_classification() {
 #[test]
 fn nn_image_classification_named() {
     run(NN_IMAGE_CLASSIFICATION_NAMED, true).unwrap()
+}
+
+#[cfg_attr(
+    not(all(
+        target_arch = "x86_64",
+        target_os = "windows"
+    )),
+    ignore
+)]
+#[test]
+fn nn_image_classification_winml() {
+    run(NN_IMAGE_CLASSIFICATION_WINML, true).unwrap()
 }

@@ -34,12 +34,20 @@ macro_rules! check_test {
 
 /// Return `Ok` if all checks pass.
 pub fn check() -> Result<()> {
-    check_openvino_is_installed()?;
-    check_openvino_artifacts_are_available()?;
+    #[cfg(feature = "openvino")]
+    {
+        check_openvino_is_installed()?;
+        check_openvino_artifacts_are_available()?;
+    }
+    #[cfg(feature = "winml")]
+    {
+        check_winml_artifacts_are_available()?;
+    }
     Ok(())
 }
 
 /// Return `Ok` if we find a working OpenVINO installation.
+#[cfg(feature = "openvino")]
 fn check_openvino_is_installed() -> Result<()> {
     match std::panic::catch_unwind(|| println!("> found openvino version: {}", openvino::version()))
     {
@@ -55,6 +63,7 @@ static ARTIFACTS: Mutex<()> = Mutex::new(());
 
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
+#[cfg(feature = "openvino")]
 fn check_openvino_artifacts_are_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
     const BASE_URL: &str =
@@ -73,6 +82,26 @@ fn check_openvino_artifacts_are_available() -> Result<()> {
         if !local_path.is_file() {
             download(&remote_url, &local_path)
                 .with_context(|| "unable to retrieve test artifact")?;
+        } else {
+            println!("> using cached artifact: {}", local_path.display())
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "winml")]
+fn check_winml_artifacts_are_available() -> Result<()> {
+    let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
+    let artifacts_dir = artifacts_dir();
+    if !artifacts_dir.is_dir() {
+        fs::create_dir(&artifacts_dir)?;
+    }
+    const MODEL_URL: &str="https://github.com/onnx/models/raw/5faef4c33eba0395177850e1e31c4a6a9e634c82/vision/classification/mobilenet/model/mobilenetv2-12.onnx";
+    const IMG_URL: &str="https://github.com/microsoft/Windows-Machine-Learning/blob/master/SharedContent/media/kitten_224.png?raw=true";
+    for (from, to) in [(MODEL_URL, "mobilenet.onnx"), (IMG_URL, "kitten.png")] {
+        let local_path = artifacts_dir.join(to);
+        if !local_path.is_file() {
+            download(&from, &local_path).with_context(|| "unable to retrieve test artifact")?;
         } else {
             println!("> using cached artifact: {}", local_path.display())
         }

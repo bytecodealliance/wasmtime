@@ -2,12 +2,14 @@
 //! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
+#[cfg(feature = "openvino")]
 pub mod openvino;
-#[cfg(target_os = "windows")]
+#[cfg(feature = "winml")]
 pub mod winml;
 
+#[cfg(feature = "openvino")]
 use self::openvino::OpenvinoBackend;
-#[cfg(target_os = "windows")]
+#[cfg(feature = "winml")]
 use self::winml::WinMLBackend;
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph};
@@ -17,9 +19,12 @@ use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<crate::Backend> {
-    let mut backends=vec![Backend::from(OpenvinoBackend::default())];
-    // WinML is only available on Windows 1809 and later.
-    #[cfg(target_os = "windows")]
+    let mut backends = vec![];
+    #[cfg(feature = "openvino")]
+    {
+        backends.push(Backend::from(OpenvinoBackend::default()));
+    }
+    #[cfg(feature = "winml")]
     {
         backends.push(Backend::from(WinMLBackend::default()));
     }
