@@ -6,12 +6,16 @@ wasmtime::component::bindgen!({
     tracing: true,
     async: true,
     with: {
+        "wasi:cli/environment": preview2::bindings::cli::environment,
+        "wasi:cli/exit": preview2::bindings::cli::exit,
         "wasi:cli/stderr": preview2::bindings::cli::stderr,
         "wasi:cli/stdin": preview2::bindings::cli::stdin,
         "wasi:cli/stdout": preview2::bindings::cli::stdout,
         "wasi:clocks/monotonic-clock": preview2::bindings::clocks::monotonic_clock,
         "wasi:clocks/timezone": preview2::bindings::clocks::timezone,
         "wasi:clocks/wall-clock": preview2::bindings::clocks::wall_clock,
+        "wasi:filesystem/preopens": preview2::bindings::filesystem::preopens,
+        "wasi:filesystem/types": preview2::bindings::filesystem::types,
         "wasi:http/incoming-handler": bindings::http::incoming_handler,
         "wasi:http/outgoing-handler": bindings::http::outgoing_handler,
         "wasi:http/types": bindings::http::types,
@@ -27,9 +31,13 @@ where
 {
     preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
     preview2::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
+    preview2::bindings::filesystem::preopens::add_to_linker(l, |t| t)?;
+    preview2::bindings::filesystem::types::add_to_linker(l, |t| t)?;
     preview2::bindings::io::poll::add_to_linker(l, |t| t)?;
     preview2::bindings::io::error::add_to_linker(l, |t| t)?;
     preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
+    preview2::bindings::cli::environment::add_to_linker(l, |t| t)?;
+    preview2::bindings::cli::exit::add_to_linker(l, |t| t)?;
     preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
     preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
     preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
