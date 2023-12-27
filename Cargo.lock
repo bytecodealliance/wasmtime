@@ -125,17 +125,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atty"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
-dependencies = [
- "hermit-abi 0.1.19",
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -524,7 +513,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
- "env_logger 0.10.0",
+ "env_logger",
  "wasmtime",
 ]
 
@@ -809,7 +798,7 @@ dependencies = [
  "fxhash",
  "indicatif",
  "log",
- "pretty_env_logger 0.5.0",
+ "pretty_env_logger",
  "rayon",
  "regalloc2",
  "serde",
@@ -1040,24 +1029,11 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
-dependencies = [
- "atty",
- "humantime 1.3.0",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
 dependencies = [
- "humantime 2.1.0",
+ "humantime",
  "is-terminal",
  "log",
  "regex",
@@ -1121,7 +1097,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a3cc21c33af89af0930c8cae4ade5e6fdc17b5d2c97b3d2e2edb67a1cf683f3"
 dependencies = [
- "env_logger 0.10.0",
+ "env_logger",
  "log",
 ]
 
@@ -1370,15 +1346,6 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "hermit-abi"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "856b5cb0902c2b6d65d5fd97dfa30f9b70c7538e770b98eab5ed52d8db923e01"
@@ -1428,15 +1395,6 @@ name = "httpdate"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4a1e36c821dbe04574f602848a19f742f4fb3c98d40449f11bcad18d6b17421"
-
-[[package]]
-name = "humantime"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
-dependencies = [
- "quick-error 1.2.3",
-]
 
 [[package]]
 name = "humantime"
@@ -1556,7 +1514,7 @@ version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb0889898416213fab133e1d33a0e5858a48177452750691bde3666d0fdbaf8b"
 dependencies = [
- "hermit-abi 0.3.0",
+ "hermit-abi",
  "rustix",
  "windows-sys 0.48.0",
 ]
@@ -1566,7 +1524,7 @@ name = "isle-fuzz"
 version = "0.0.0"
 dependencies = [
  "cranelift-isle",
- "env_logger 0.10.0",
+ "env_logger",
  "libfuzzer-sys",
  "log",
 ]
@@ -1577,7 +1535,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "cranelift-isle",
- "env_logger 0.10.0",
+ "env_logger",
 ]
 
 [[package]]
@@ -1664,12 +1622,12 @@ dependencies = [
 
 [[package]]
 name = "libloading"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efbc0f03f9a775e9f6aed295c6a1ba2253c5757a9e03d55c6caa46a681abcddd"
+checksum = "c571b676ddfc9a8c12f1f3d3085a7b163966a8fd8098a90640953ce5f6170161"
 dependencies = [
  "cfg-if",
- "winapi",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -1806,7 +1764,7 @@ version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
- "hermit-abi 0.3.0",
+ "hermit-abi",
  "libc",
 ]
 
@@ -1871,9 +1829,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "openvino"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc731d9a7805dd533b69de3ee33062d5ea1dfa9fca1c19f8fd165b62e2cdde7"
+checksum = "24bd3a7ef39968e6a4f1b1206c1c876f9bd50cf739ccbcd69f8539bbac5dcc7a"
 dependencies = [
  "openvino-finder",
  "openvino-sys",
@@ -1882,9 +1840,9 @@ dependencies = [
 
 [[package]]
 name = "openvino-finder"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8bbd80eea06c2b9ec3dce85900ff3ae596c01105b759b38a005af69bbeb4d07"
+checksum = "05d234d1394a413ea8adaf0c40806b9ad1946be6310b441f688840654a331973"
 dependencies = [
  "cfg-if",
  "log",
@@ -1892,14 +1850,14 @@ dependencies = [
 
 [[package]]
 name = "openvino-sys"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "318ed662bdf05a3f86486408159e806d53363171621a8000b81366fab5158713"
+checksum = "44c98acf37fc84ad9d7da4dc6c18f0f60ad209b43a6f555be01f9003d0a2a43d"
 dependencies = [
+ "env_logger",
  "libloading",
  "once_cell",
  "openvino-finder",
- "pretty_env_logger 0.4.0",
 ]
 
 [[package]]
@@ -1968,21 +1926,11 @@ checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
 
 [[package]]
 name = "pretty_env_logger"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "926d36b9553851b8b0005f1275891b392ee4d2d833852c417ed025477350fb9d"
-dependencies = [
- "env_logger 0.7.1",
- "log",
-]
-
-[[package]]
-name = "pretty_env_logger"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
 dependencies = [
- "env_logger 0.10.0",
+ "env_logger",
  "log",
 ]
 
@@ -3277,7 +3225,7 @@ version = "17.0.0"
 dependencies = [
  "anyhow",
  "cap-std",
- "env_logger 0.10.0",
+ "env_logger",
  "futures",
  "log",
  "once_cell",
@@ -3309,7 +3257,7 @@ dependencies = [
  "filetime",
  "log",
  "once_cell",
- "pretty_env_logger 0.5.0",
+ "pretty_env_logger",
  "rustix",
  "serde",
  "serde_derive",
@@ -3333,11 +3281,11 @@ dependencies = [
  "component-macro-test",
  "component-test-util",
  "criterion",
- "env_logger 0.10.0",
+ "env_logger",
  "filecheck",
  "http",
  "http-body-util",
- "humantime 2.1.0",
+ "humantime",
  "hyper",
  "libc",
  "listenfd",
@@ -3382,7 +3330,7 @@ dependencies = [
  "anyhow",
  "clap",
  "file-per-thread-logger",
- "humantime 2.1.0",
+ "humantime",
  "rayon",
  "tracing-subscriber",
  "wasmtime",
@@ -3452,7 +3400,7 @@ dependencies = [
  "anyhow",
  "clap",
  "cranelift-entity",
- "env_logger 0.10.0",
+ "env_logger",
  "gimli",
  "indexmap 2.0.0",
  "log",
@@ -3475,7 +3423,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "component-fuzz-util",
- "env_logger 0.10.0",
+ "env_logger",
  "libfuzzer-sys",
  "wasmparser",
  "wasmprinter",
@@ -3547,7 +3495,7 @@ dependencies = [
  "arbitrary",
  "component-fuzz-util",
  "component-test-util",
- "env_logger 0.10.0",
+ "env_logger",
  "log",
  "rand",
  "rayon",
@@ -3895,7 +3843,7 @@ name = "wiggle-test"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "env_logger 0.10.0",
+ "env_logger",
  "proptest",
  "thiserror",
  "tracing",
