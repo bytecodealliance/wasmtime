@@ -13,22 +13,16 @@ pub fn main() -> Result<()> {
     println!("Created an execution context.");
 
     // Convert image to tensor data.
-    let tensor_data = image2tensor::convert_image_to_planar_tensor_bytes(
+    let mut tensor_data = image2tensor::convert_image_to_planar_tensor_bytes(
         "fixture/kitten.png",
         224,
         224,
         image2tensor::TensorType::F32,
         image2tensor::ColorOrder::RGB,
-        true,
-        false,
     )
     .unwrap();
-
-    // Load a tensor that precisely matches the graph input tensor (see
-    // `fixture/frozen_inference_graph.xml`).
-    // let tensor_data = fs::read("fixture/kitten-tensor").unwrap();
-    println!("Read input tensor, size in bytes: {}", tensor_data.len());
-
+    // The model requires values in the range of [0, 1].
+    scale(&mut tensor_data);
     context
         .set_input(0, TensorType::F32, &[1, 3, 224, 224], &tensor_data)
         .unwrap();
@@ -66,6 +60,17 @@ fn sort_results(buffer: &[f32]) -> Vec<InferenceResult> {
         .collect();
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     results
+}
+
+// Convert values from [0, 255] to [0, 1].
+fn scale(buffer: &mut Vec<u8>) {
+    const F32_LEN: usize = 4;
+    for i in (0..buffer.len()).step_by(F32_LEN) {
+        let mut num = f32::from_ne_bytes(buffer[i..i + F32_LEN].try_into().unwrap());
+        num /= 225.0;
+        let num_vec = num.to_ne_bytes().to_vec();
+        buffer.splice(i..i + F32_LEN, num_vec);
+    }
 }
 
 // A wrapper for class ID and match probabilities.
