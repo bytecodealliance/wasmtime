@@ -22,7 +22,9 @@ function(CREATE_TARGET TARGET TARGET_PATH)
 
 	target_include_directories(wasmtime-${TARGET} PUBLIC wasmtime)
 	target_link_libraries(wasmtime-${TARGET} PUBLIC wasmtime)
-	target_link_libraries(wasmtime-${TARGET} "-framework CoreFoundation")
+	if(APPLE)
+		target_link_libraries(wasmtime-${TARGET} "-framework CoreFoundation")
+	endif()
 	add_test(NAME ${TARGET}-c COMMAND $<TARGET_FILE:wasmtime-${TARGET}> WORKING_DIRECTORY ../..)
 endfunction()
 
