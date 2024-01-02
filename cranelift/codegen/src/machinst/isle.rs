@@ -7,8 +7,8 @@ use std::cell::Cell;
 pub use super::MachLabel;
 use super::RetPair;
 pub use crate::ir::{
-    condcodes, condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName,
-    FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName, FuncRef,
+    GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::{unwind::UnwindInst, TargetIsa};
 pub use crate::machinst::{

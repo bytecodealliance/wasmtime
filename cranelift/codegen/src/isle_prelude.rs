@@ -819,7 +819,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
+        fn signed_cond_code(&mut self, cc: &IntCC) -> Option<IntCC> {
             match cc {
                 IntCC::Equal
                 | IntCC::UnsignedGreaterThanOrEqual
