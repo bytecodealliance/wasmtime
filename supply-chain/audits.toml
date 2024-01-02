@@ -1037,6 +1037,15 @@ criteria = "safe-to-deploy"
 version = "0.2.4"
 notes = "A few tiny blocks of `unsafe` but each of them is very obviously correct."
 
+[[audits.core-foundation-sys]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.8.4 -> 0.8.6"
+notes = """
+The changes here are all typical bindings updates: new functions, types, and
+constants. I have not audited all the bindings for ABI conformance.
+"""
+
 [[audits.cpufeatures]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1404,6 +1413,20 @@ refactorings and such. No new fundamental addition of functionality or
 substantially new unsafe code.
 """
 
+[[audits.iana-time-zone]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.1.59"
+notes = """
+I also manually ran windows-bindgen and confirmed that the output matches
+the bindings checked into the repo.
+"""
+
+[[audits.iana-time-zone-haiku]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.1.2"
+
 [[audits.id-arena]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -1559,6 +1582,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.148 -> 0.2.149"
 notes = "Lots of new functions and constants for new platforms and nothing out of the ordinary for what one would expect of the `libc` crate."
+
+[[audits.libc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.2.149 -> 0.2.151"
+notes = "More new functions, types, and constants, as is usual for the `libc` crate, as well as various minor code cleanups."
 
 [[audits.libfuzzer-sys]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -3434,6 +3463,12 @@ criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2020-01-11"
 end = "2024-07-15"
+
+[[trusted.windows-core]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-11-15"
+end = "2025-01-02"
 
 [[trusted.windows-sys]]
 criteria = "safe-to-deploy"
