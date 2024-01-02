@@ -58,3 +58,43 @@
       (uextend bigty (bor smallty x y)))
 (rule (simplify (bxor bigty (uextend _ x@(value_type smallty)) (uextend _ y@(value_type smallty))))
       (uextend bigty (bxor smallty x y)))
+
+;; Matches values where `ireducing` them will not actually introduce another
+;; instruction, since other rules will collapse them with the reduction.
+(decl pure multi will_simplify_with_ireduce (Value) Value)
+(rule (will_simplify_with_ireduce x@(uextend _ _)) x)
+(rule (will_simplify_with_ireduce x@(sextend _ _)) x)
+(rule (will_simplify_with_ireduce x@(iconst _ _)) x)
+(rule (will_simplify_with_ireduce x@(unary_op _ _ a))
+      (if-let _ (will_simplify_with_ireduce a))
+      x)
+(rule (will_simplify_with_ireduce x@(binary_op _ _ a b))
+      (if-let _ (will_simplify_with_ireduce a))
+      (if-let _ (will_simplify_with_ireduce b))
+      x)
+
+;; Matches values where the high bits of the input don't affect lower bits of
+;; the output, and thus the inputs can be reduced before the operation rather
+;; than doing the wide operation then reducing afterwards.
+(decl pure multi reducible_modular_op (Value) Value)
+(rule (reducible_modular_op x@(ineg _ _)) x)
+(rule (reducible_modular_op x@(bnot _ _)) x)
+(rule (reducible_modular_op x@(iadd _ _ _)) x)
+(rule (reducible_modular_op x@(isub _ _ _)) x)
+(rule (reducible_modular_op x@(imul _ _ _)) x)
+(rule (reducible_modular_op x@(bor  _ _ _)) x)
+(rule (reducible_modular_op x@(bxor _ _ _)) x)
+(rule (reducible_modular_op x@(band _ _ _)) x)
+
+;; Replace `(small)(x OP y)` with `(small)x OP (small)y` in cases where that's
+;; legal and it reduces the total number of instructions since the reductions
+;; to the arguments simplify further.
+(rule (simplify (ireduce smallty val@(unary_op _ op x)))
+      (if-let _ (reducible_modular_op val))
+      (if-let _ (will_simplify_with_ireduce x))
+      (unary_op smallty op (ireduce smallty x)))
+(rule (simplify (ireduce smallty val@(binary_op _ op x y)))
+      (if-let _ (reducible_modular_op val))
+      (if-let _ (will_simplify_with_ireduce x))
+      (if-let _ (will_simplify_with_ireduce y))
+      (binary_op smallty op (ireduce smallty x) (ireduce smallty y)))
