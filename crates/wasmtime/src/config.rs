@@ -370,6 +370,10 @@ impl Config {
     /// Configures whether DWARF debug information will be emitted during
     /// compilation.
     ///
+    /// Note that the `debug-builtins` compile-time Cargo feature must also be
+    /// enabled for native debuggers such as GDB or LLDB to be able to debug
+    /// guest WebAssembly programs.
+    ///
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
         self.tunables.generate_native_debuginfo = enable;
