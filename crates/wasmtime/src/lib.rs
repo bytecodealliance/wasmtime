@@ -300,6 +300,12 @@
 //!   will attempt to parse DWARF debug information and convert WebAssembly
 //!   addresses to source filenames and line numbers.
 //!
+//! * `debug-builtins` - Enabled by default, this feature includes some built-in
+//!   debugging utilities and symbols for native debuggers such as GDB and LLDB
+//!   to attach to the process Wasmtime is used within. The intrinsics provided
+//!   will enable debugging guest code compiled to WebAssembly. This must also
+//!   be enabled via [`Config::debug_info`] as well for guests.
+//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!
