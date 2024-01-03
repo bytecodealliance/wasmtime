@@ -1,5 +1,5 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData};
+use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
@@ -374,6 +374,9 @@ pub(crate) trait MacroAssembler {
 
     /// Retrieves the size of the table, pushing the result to the value stack.
     fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
+
+    /// Retrieves the size of the memory, pushing the result to the value stack.
+    fn memory_size(&mut self, heap_data: &HeapData, context: &mut CodeGenContext);
 
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -

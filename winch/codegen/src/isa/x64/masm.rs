@@ -27,7 +27,7 @@ use cranelift_codegen::{
     isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized, MachLabel,
 };
 
-use wasmtime_environ::PtrSize;
+use wasmtime_environ::{PtrSize, WasmType, WASM_PAGE_SIZE};
 
 /// x64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -137,7 +137,7 @@ impl Masm for MacroAssembler {
         let bound = context.any_gpr(self);
         let tmp = context.any_gpr(self);
 
-        if let Some(offset) = table_data.base {
+        if let Some(offset) = table_data.import_from {
             // If the table data declares a particular offset base,
             // load the address into a register to further use it as
             // the table address.
@@ -192,7 +192,7 @@ impl Masm for MacroAssembler {
         let scratch = regs::scratch();
         let size = context.any_gpr(self);
 
-        if let Some(offset) = table_data.base {
+        if let Some(offset) = table_data.import_from {
             self.asm
                 .mov_mr(&self.address_at_vmctx(offset), scratch, self.ptr_size);
         } else {
@@ -204,6 +204,44 @@ impl Masm for MacroAssembler {
             .mov_mr(&size_addr, size, table_data.current_elements_size);
 
         context.stack.push(TypedReg::i32(size).into());
+    }
+
+    fn memory_size(&mut self, heap_data: &crate::codegen::HeapData, context: &mut CodeGenContext) {
+        let size_reg = context.any_gpr(self);
+        let scratch = regs::scratch();
+        let vmctx = <Self::ABI as ABI>::vmctx_reg();
+
+        let base = if let Some(offset) = heap_data.import_from {
+            self.asm
+                .mov_mr(&self.address_at_vmctx(offset), scratch, self.ptr_size);
+            scratch
+        } else {
+            vmctx
+        };
+
+        let size_addr = Address::offset(base, heap_data.current_length_offset);
+        self.asm.mov_mr(&size_addr, size_reg, self.ptr_size);
+        // Prepare the stack to emit a shift to get the size in pages rather
+        // than in bytes.
+        context
+            .stack
+            .push(TypedReg::new(heap_data.ty, size_reg).into());
+
+        // Since the page size is a power-of-two, verify that 2^16, equals the
+        // defined constant. This is mostly a safeguard in case the constant
+        // value ever changes.
+        let pow = 16;
+        debug_assert_eq!(2u32.pow(pow), WASM_PAGE_SIZE);
+
+        // Ensure that the constant is correctly typed according to the heap
+        // type to reduce register pressure when emitting the shift operation.
+        match heap_data.ty {
+            WasmType::I32 => context.stack.push(Val::i32(pow as i32)),
+            WasmType::I64 => context.stack.push(Val::i64(pow as i64)),
+            _ => unreachable!(),
+        }
+
+        self.shift(context, ShiftKind::ShrU, heap_data.ty.into());
     }
 
     fn address_from_sp(&self, offset: SPOffset) -> Self::Address {
