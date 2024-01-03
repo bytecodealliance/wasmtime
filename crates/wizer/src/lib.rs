@@ -766,10 +766,10 @@ impl Wizer {
 
         let mut ctx = wasi_cap_std_sync::WasiCtxBuilder::new();
         if self.inherit_stdio.unwrap_or(DEFAULT_INHERIT_STDIO) {
-            ctx = ctx.inherit_stdio();
+            ctx.inherit_stdio();
         }
         if self.inherit_env.unwrap_or(DEFAULT_INHERIT_ENV) {
-            ctx = ctx.inherit_env()?;
+            ctx.inherit_env()?;
         }
         for dir in &self.dirs {
             log::debug!("Preopening directory: {}", dir.display());
@@ -778,7 +778,7 @@ impl Wizer {
                 wasmtime_wasi::sync::ambient_authority(),
             )
             .with_context(|| format!("failed to open directory: {}", dir.display()))?;
-            ctx = ctx.preopened_dir(preopened, dir)?;
+            ctx.preopened_dir(preopened, dir)?;
         }
         for (guest_dir, host_dir) in &self.map_dirs {
             log::debug!(
@@ -791,7 +791,7 @@ impl Wizer {
                 wasmtime_wasi::sync::ambient_authority(),
             )
             .with_context(|| format!("failed to open directory: {}", host_dir.display()))?;
-            ctx = ctx.preopened_dir(preopened, guest_dir)?;
+            ctx.preopened_dir(preopened, guest_dir)?;
         }
         Ok(Some(ctx.build()))
     }

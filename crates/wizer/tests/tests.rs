@@ -276,7 +276,7 @@ fn reject_table_init() -> Result<()> {
   (func $g (result i32) (i32.const 0))
   (func $h (result i32) (i32.const 0))
 
-  (elem $elem $f $g $h)
+  (elem $elem func $f $g $h)
 
   (func (export "main")
     i32.const 0
@@ -309,7 +309,7 @@ fn reject_elem_drop() -> Result<()> {
   (func $g (result i32) (i32.const 0))
   (func $h (result i32) (i32.const 0))
 
-  (elem $elem $f $g $h)
+  (elem $elem func $f $g $h)
 
   (func (export "main")
     elem.drop $elem)
