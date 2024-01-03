@@ -2685,7 +2685,7 @@ where
     // `addr32 + offset` to `addr32 + offset + width` (not inclusive). In this
     // scenario our adjusted offset that we're checking is `memarg.offset +
     // access_size`. Note that we do saturating arithmetic here to avoid
-    // overflow. THe addition here is in the 64-bit space, which means that
+    // overflow. The addition here is in the 64-bit space, which means that
     // we'll never overflow for 32-bit wasm but for 64-bit this is an issue. If
     // our effective offset is u64::MAX though then it's impossible for for
     // that to actually be a valid offset because otherwise the wasm linear
