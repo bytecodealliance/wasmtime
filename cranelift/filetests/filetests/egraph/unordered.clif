@@ -1,0 +1,24 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+; https://github.com/bytecodealliance/wasmtime/issues/6126
+;
+; In this example, iconst defines v2, and later an identical iconst defines v1. 
+; In between, v2 is used in an iadd instruction that's added to the GVN map.
+; Finally, v1 is used in another iadd which should unify with the first one.
+function %unordered(i32) -> i32, i32 {
+block0(v0: i32):
+    v2 = iconst.i32 42
+    v3 = iadd v0, v2
+    v1 = iconst.i32 42
+    v4 = iadd v0, v1
+    return v3, v4
+}
+
+; function %unordered(i32) -> i32, i32 fast {
+; block0(v0: i32):
+;     v2 = iconst.i32 42
+;     v3 = iadd v0, v2  ; v2 = 42
+;     return v3, v3
+; }

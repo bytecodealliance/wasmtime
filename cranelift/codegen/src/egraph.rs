@@ -109,7 +109,7 @@ impl NewOrExistingInst {
             NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
                 let ty = dfg.ctrl_typevar(*inst);
-                (ty, dfg.insts[*inst].clone())
+                (ty, dfg.insts[*inst])
             }
         }
     }
@@ -195,15 +195,17 @@ where
             };
 
             let opt_value = self.optimize_pure_enode(inst);
+
+            for &argument in self.func.dfg.inst_args(inst) {
+                self.eclasses.pin_index(argument);
+            }
+
             let gvn_context = GVNContext {
                 union_find: self.eclasses,
                 value_lists: &self.func.dfg.value_lists,
             };
-            self.gvn_map.insert(
-                (ty, self.func.dfg.insts[inst].clone()),
-                opt_value,
-                &gvn_context,
-            );
+            self.gvn_map
+                .insert((ty, self.func.dfg.insts[inst]), opt_value, &gvn_context);
             self.value_to_opt_value[result] = opt_value;
             opt_value
         }

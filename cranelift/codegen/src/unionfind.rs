@@ -3,12 +3,41 @@
 use crate::trace;
 use cranelift_entity::{packed_option::ReservedValue, EntityRef, SecondaryMap};
 use std::hash::Hash;
+use std::mem::swap;
 
 /// A union-find data structure. The data structure can allocate
-/// `Id`s, indicating eclasses, and can merge eclasses together.
+/// `Idx`s, indicating eclasses, and can merge eclasses together.
+///
+/// Running `union(a, b)` will change the canonical `Idx` of `a` or `b`.
+/// Usually, this is chosen based on what will minimize path lengths,
+/// but it is also possible to _pin_ an eclass, such that its canonical `Idx`
+/// won't change unless it gets unioned with another pinned eclass.
+///
+/// In the context of the egraph pass, merging two pinned eclasses
+/// is very unlikely to happen – we do not know a single concrete test case
+/// where it does. The only situation where it might happen looks as follows:
+///
+/// 1. We encounter terms `A` and `B`, and the optimizer does not find any
+///    reason to union them together.
+/// 2. We encounter a term `C`, and we rewrite `C -> A`, and separately, `C -> B`.
+///
+/// Unless `C` somehow includes some crucial hint without which it is hard to
+/// notice that `A = B`, there's probably a rewrite rule that we should add.
+///
+/// Worst case, if we do merge two pinned eclasses, some nodes will essentially
+/// disappear from the GVN map, which only affects the quality of the generated
+/// code.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnionFind<Idx: EntityRef> {
     parent: SecondaryMap<Idx, Val<Idx>>,
+    /// The `rank` table is used to perform the union operations optimally,
+    /// without creating unnecessarily long paths. Pins are represented by
+    /// eclasses with a rank of `u8::MAX`.
+    ///
+    /// `rank[x]` is the upper bound on the height of the subtree rooted at `x`.
+    /// The subtree is guaranteed to have at least `2**rank[x]` elements,
+    /// unless `rank` has been artificially inflated by pinning.
+    rank: SecondaryMap<Idx, u8>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,6 +54,7 @@ impl<Idx: EntityRef + Hash + std::fmt::Display + Ord + ReservedValue> UnionFind<
     pub fn with_capacity(cap: usize) -> Self {
         UnionFind {
             parent: SecondaryMap::with_capacity(cap),
+            rank: SecondaryMap::with_capacity(cap),
         }
     }
 
@@ -61,15 +91,42 @@ impl<Idx: EntityRef + Hash + std::fmt::Display + Ord + ReservedValue> UnionFind<
         node
     }
 
+    /// Request a stable identifier for `node`.
+    ///
+    /// After an `union` operation, the canonical representative of one
+    /// of the eclasses being merged together necessarily changes. If a pinned
+    /// eclass is merged with a non-pinned eclass, it'll be the other eclass
+    /// whose representative will change.
+    ///
+    /// If two pinned eclasses are unioned, one of the pins gets broken and
+    /// a warning is emitted.
+    pub fn pin_index(&mut self, mut node: Idx) -> Idx {
+        node = self.find_and_update(node);
+        self.rank[node] = u8::MAX;
+        node
+    }
+
     /// Merge the equivalence classes of the two `Idx`s.
     pub fn union(&mut self, a: Idx, b: Idx) {
-        let a = self.find_and_update(a);
-        let b = self.find_and_update(b);
-        let (a, b) = (std::cmp::min(a, b), std::cmp::max(a, b));
-        if a != b {
-            // Always canonicalize toward lower IDs.
-            self.parent[b] = Val(a);
-            trace!("union: {}, {}", a, b);
+        let mut a = self.find_and_update(a);
+        let mut b = self.find_and_update(b);
+
+        if a == b {
+            return;
         }
+
+        if self.rank[a] < self.rank[b] {
+            swap(&mut a, &mut b);
+        } else if self.rank[a] == self.rank[b] {
+            if self.rank[a] == u8::MAX {
+                log::warn!("union of {a} and {b}, when both have been pinned");
+            } else {
+                self.rank[a] += 1;
+            }
+        }
+
+        // Always canonicalize toward lower IDs.
+        self.parent[b] = Val(a);
+        trace!("union: {}, {}", a, b);
     }
 }
