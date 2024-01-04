@@ -274,8 +274,12 @@ pub trait WasiView: Send {
     fn table_mut(&mut self) -> &mut ResourceTable;
     fn ctx(&self) -> &WasiCtx;
     fn ctx_mut(&mut self) -> &mut WasiCtx;
-    fn network_view(&self) -> &dyn WasiNetworkView;
-    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView;
+    fn network_view(&self) -> &dyn WasiNetworkView {
+        self.ctx()
+    }
+    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
+        self.ctx_mut()
+    }
 }
 
 pub struct WasiCtx {
@@ -292,6 +296,15 @@ pub struct WasiCtx {
     pub(crate) stderr: Box<dyn StdoutStream>,
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
+}
+
+impl WasiNetworkView for WasiCtx {
+    fn resolve_addresses(
+        &mut self,
+        name: String,
+    ) -> super::AbortOnDropJoinHandle<std::io::Result<Vec<std::net::IpAddr>>> {
+        super::SystemNetwork::new(self).resolve_addresses(name)
+    }
 }
 
 pub struct AllowedNetworkUses {

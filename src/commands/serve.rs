@@ -11,10 +11,7 @@ use std::{
 };
 use wasmtime::component::{InstancePre, Linker};
 use wasmtime::{Engine, Store, StoreLimits};
-use wasmtime_wasi::preview2::{
-    self, StreamError, StreamResult, SystemNetwork, WasiCtx, WasiCtxBuilder, WasiNetworkView,
-    WasiView,
-};
+use wasmtime_wasi::preview2::{self, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
@@ -30,7 +27,6 @@ struct Host {
     http: WasiHttpCtx,
 
     limits: StoreLimits,
-    network: SystemNetwork,
 
     #[cfg(feature = "wasi-nn")]
     nn: Option<WasiNnCtx>,
@@ -51,14 +47,6 @@ impl WasiView for Host {
 
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.ctx
-    }
-
-    fn network_view(&self) -> &dyn WasiNetworkView {
-        &self.network
-    }
-
-    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
-        &mut self.network
     }
 }
 
@@ -165,14 +153,12 @@ impl ServeCommand {
             output: Output::Stderr,
         });
         let ctx = builder.build();
-        let network = SystemNetwork::new(&ctx);
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
             ctx,
             http: WasiHttpCtx,
 
             limits: StoreLimits::default(),
-            network,
 
             #[cfg(feature = "wasi-nn")]
             nn: None,

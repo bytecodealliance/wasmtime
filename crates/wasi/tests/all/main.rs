@@ -7,7 +7,7 @@ use wasmtime::{
 use wasmtime_wasi::preview2::{
     pipe::MemoryOutputPipe,
     preview1::{WasiPreview1Adapter, WasiPreview1View},
-    DirPerms, FilePerms, SystemNetwork, WasiCtx, WasiCtxBuilder, WasiNetworkView, WasiView,
+    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct Ctx {
@@ -16,7 +16,6 @@ struct Ctx {
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
     adapter: WasiPreview1Adapter,
-    network: SystemNetwork,
 }
 
 impl WasiView for Ctx {
@@ -31,12 +30,6 @@ impl WasiView for Ctx {
     }
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.wasi
-    }
-    fn network_view(&self) -> &dyn WasiNetworkView {
-        &self.network
-    }
-    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
-        &mut self.network
     }
 }
 
@@ -80,7 +73,6 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
         builder.env(var, val);
     }
     let wasi = builder.build();
-    let network = SystemNetwork::new(&wasi);
 
     let ctx = Ctx {
         table: ResourceTable::new(),
@@ -88,7 +80,6 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
         stderr,
         stdout,
         adapter: WasiPreview1Adapter::new(),
-        network,
     };
 
     Ok((Store::new(&engine, ctx), workspace))

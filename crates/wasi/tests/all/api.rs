@@ -10,14 +10,12 @@ use wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock;
 use wasmtime_wasi::preview2::bindings::wasi::filesystem::types as filesystem;
 use wasmtime_wasi::preview2::command::{add_to_linker, Command};
 use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, SystemNetwork, WasiCtx,
-    WasiCtxBuilder, WasiNetworkView, WasiView,
+    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct CommandCtx {
     table: ResourceTable,
     wasi: WasiCtx,
-    network: SystemNetwork,
 }
 
 impl WasiView for CommandCtx {
@@ -32,12 +30,6 @@ impl WasiView for CommandCtx {
     }
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.wasi
-    }
-    fn network_view(&self) -> &dyn WasiNetworkView {
-        &self.network
-    }
-    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
-        &mut self.network
     }
 }
 
@@ -94,17 +86,8 @@ async fn api_time() -> Result<()> {
         .monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
         .wall_clock(FakeWallClock)
         .build();
-    let network = SystemNetwork::new(&wasi);
 
-    let (mut store, command) = instantiate(
-        API_TIME_COMPONENT,
-        CommandCtx {
-            table,
-            wasi,
-            network,
-        },
-    )
-    .await?;
+    let (mut store, command) = instantiate(API_TIME_COMPONENT, CommandCtx { table, wasi }).await?;
 
     command
         .wasi_cli_run()
@@ -125,17 +108,9 @@ async fn api_read_only() -> Result<()> {
     let wasi = WasiCtxBuilder::new()
         .preopened_dir(open_dir, DirPerms::READ, FilePerms::READ, "/")
         .build();
-    let network = SystemNetwork::new(&wasi);
 
-    let (mut store, command) = instantiate(
-        API_READ_ONLY_COMPONENT,
-        CommandCtx {
-            table,
-            wasi,
-            network,
-        },
-    )
-    .await?;
+    let (mut store, command) =
+        instantiate(API_READ_ONLY_COMPONENT, CommandCtx { table, wasi }).await?;
 
     command
         .wasi_cli_run()
@@ -187,16 +162,8 @@ async fn api_reactor() -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
     add_to_linker(&mut linker)?;
-    let network = SystemNetwork::new(&wasi);
 
-    let mut store = Store::new(
-        &engine,
-        CommandCtx {
-            table,
-            wasi,
-            network,
-        },
-    );
+    let mut store = Store::new(&engine, CommandCtx { table, wasi });
     let component = Component::from_file(&engine, API_REACTOR_COMPONENT)?;
     let (reactor, _instance) =
         TestReactor::instantiate_async(&mut store, &component, &linker).await?;
