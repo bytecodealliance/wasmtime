@@ -75,10 +75,7 @@ pub mod sync {
 
     pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
     where
-        T: WasiHttpView
-            + preview2::WasiView
-            + preview2::WasiIpNameLookupView
-            + bindings::http::types::Host,
+        T: WasiHttpView + preview2::WasiView + bindings::http::types::Host,
     {
         // TODO: this shouldn't be required, but the adapter unconditionally pulls in all of these
         // dependencies.

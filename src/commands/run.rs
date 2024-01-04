@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::thread;
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::maybe_exit_on_error;
-use wasmtime_wasi::preview2::{self, WasiView};
+use wasmtime_wasi::preview2::{self, SystemNetwork};
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
@@ -812,6 +812,7 @@ struct Host {
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
+    network_view: SystemNetwork,
 }
 
 impl preview2::WasiView for Host {
@@ -831,13 +832,13 @@ impl preview2::WasiView for Host {
         let ctx = self.preview2_ctx.as_mut().unwrap();
         Arc::get_mut(ctx).expect("preview2 is not compatible with threads")
     }
-}
 
-impl preview2::WasiIpNameLookupView for Host {
-    type IpNameLookup = preview2::SystemIpNameLookup;
+    fn network_view(&self) -> &dyn preview2::WasiNetworkView {
+        &self.network_view
+    }
 
-    fn ip_name_lookup(&self) -> Self::IpNameLookup {
-        preview2::SystemIpNameLookup::new(self.ctx())
+    fn network_view_mut(&mut self) -> &mut dyn preview2::WasiNetworkView {
+        &mut self.network_view
     }
 }
 

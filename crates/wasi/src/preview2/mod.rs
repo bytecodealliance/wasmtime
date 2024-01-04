@@ -55,7 +55,7 @@ pub use self::stream::{
 };
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
-pub use ip_name_lookup::{IpNameLookup, SystemIpNameLookup, WasiIpNameLookupView};
+pub use ip_name_lookup::{SystemNetwork, WasiNetworkView};
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
 
 pub mod bindings {

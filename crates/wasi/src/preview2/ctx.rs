@@ -7,7 +7,7 @@ use crate::preview2::{
     network::{SocketAddrCheck, SocketAddrUse},
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
-    DirPerms, FilePerms,
+    DirPerms, FilePerms, WasiNetworkView,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 use std::sync::Arc;
@@ -274,6 +274,8 @@ pub trait WasiView: Send {
     fn table_mut(&mut self) -> &mut ResourceTable;
     fn ctx(&self) -> &WasiCtx;
     fn ctx_mut(&mut self) -> &mut WasiCtx;
+    fn network_view(&self) -> &dyn WasiNetworkView;
+    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView;
 }
 
 pub struct WasiCtx {

@@ -12,7 +12,7 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
-    self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiIpNameLookupView, WasiView,
+    self, pipe::MemoryOutputPipe, SystemNetwork, WasiCtx, WasiCtxBuilder, WasiNetworkView, WasiView,
 };
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
@@ -37,6 +37,7 @@ struct Ctx {
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
     send_request: Option<RequestSender>,
+    network: SystemNetwork,
 }
 
 impl WasiView for Ctx {
@@ -52,13 +53,11 @@ impl WasiView for Ctx {
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }
-}
-
-impl WasiIpNameLookupView for Ctx {
-    type IpNameLookup = wasmtime_wasi::preview2::SystemIpNameLookup;
-
-    fn ip_name_lookup(&self) -> Self::IpNameLookup {
-        wasmtime_wasi::preview2::SystemIpNameLookup::new(self.ctx())
+    fn network_view(&self) -> &dyn WasiNetworkView {
+        &self.network
+    }
+    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
+        &mut self.network
     }
 }
 
@@ -96,13 +95,16 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     builder.env("HTTP_SERVER", server.addr().to_string());
+    let wasi = builder.build();
+    let network = SystemNetwork::new(&wasi);
     let ctx = Ctx {
         table: ResourceTable::new(),
-        wasi: builder.build(),
+        wasi,
         http: WasiHttpCtx {},
         stderr,
         stdout,
         send_request: None,
+        network,
     };
 
     Store::new(&engine, ctx)
@@ -154,6 +156,7 @@ async fn run_wasi_http(
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     let wasi = builder.build();
+    let network = SystemNetwork::new(&wasi);
     let http = WasiHttpCtx;
     let ctx = Ctx {
         table,
@@ -162,6 +165,7 @@ async fn run_wasi_http(
         stderr,
         stdout,
         send_request,
+        network,
     };
     let mut store = Store::new(&engine, ctx);
 

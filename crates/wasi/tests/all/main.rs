@@ -7,7 +7,7 @@ use wasmtime::{
 use wasmtime_wasi::preview2::{
     pipe::MemoryOutputPipe,
     preview1::{WasiPreview1Adapter, WasiPreview1View},
-    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiIpNameLookupView, WasiView,
+    DirPerms, FilePerms, SystemNetwork, WasiCtx, WasiCtxBuilder, WasiNetworkView, WasiView,
 };
 
 struct Ctx {
@@ -16,6 +16,7 @@ struct Ctx {
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
     adapter: WasiPreview1Adapter,
+    network: SystemNetwork,
 }
 
 impl WasiView for Ctx {
@@ -31,13 +32,11 @@ impl WasiView for Ctx {
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }
-}
-
-impl WasiIpNameLookupView for Ctx {
-    type IpNameLookup = wasmtime_wasi::preview2::SystemIpNameLookup;
-
-    fn ip_name_lookup(&self) -> Self::IpNameLookup {
-        wasmtime_wasi::preview2::SystemIpNameLookup::new(self.ctx())
+    fn network_view(&self) -> &dyn WasiNetworkView {
+        &self.network
+    }
+    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
+        &mut self.network
     }
 }
 
@@ -80,13 +79,16 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
         builder.env(var, val);
     }
+    let wasi = builder.build();
+    let network = SystemNetwork::new(&wasi);
 
     let ctx = Ctx {
         table: ResourceTable::new(),
-        wasi: builder.build(),
+        wasi,
         stderr,
         stdout,
         adapter: WasiPreview1Adapter::new(),
+        network,
     };
 
     Ok((Store::new(&engine, ctx), workspace))

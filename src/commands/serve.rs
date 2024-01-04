@@ -12,7 +12,8 @@ use std::{
 use wasmtime::component::{InstancePre, Linker};
 use wasmtime::{Engine, Store, StoreLimits};
 use wasmtime_wasi::preview2::{
-    self, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiIpNameLookupView, WasiView,
+    self, StreamError, StreamResult, SystemNetwork, WasiCtx, WasiCtxBuilder, WasiNetworkView,
+    WasiView,
 };
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
@@ -29,6 +30,7 @@ struct Host {
     http: WasiHttpCtx,
 
     limits: StoreLimits,
+    network: SystemNetwork,
 
     #[cfg(feature = "wasi-nn")]
     nn: Option<WasiNnCtx>,
@@ -50,6 +52,14 @@ impl WasiView for Host {
     fn ctx_mut(&mut self) -> &mut WasiCtx {
         &mut self.ctx
     }
+
+    fn network_view(&self) -> &dyn WasiNetworkView {
+        &self.network
+    }
+
+    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
+        &mut self.network
+    }
 }
 
 impl WasiHttpView for Host {
@@ -59,14 +69,6 @@ impl WasiHttpView for Host {
 
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
-    }
-}
-
-impl WasiIpNameLookupView for Host {
-    type IpNameLookup = preview2::SystemIpNameLookup;
-
-    fn ip_name_lookup(&self) -> Self::IpNameLookup {
-        preview2::SystemIpNameLookup::new(self.ctx())
     }
 }
 
@@ -162,13 +164,15 @@ impl ServeCommand {
             prefix: format!("stderr [{req_id}] :: "),
             output: Output::Stderr,
         });
-
+        let ctx = builder.build();
+        let network = SystemNetwork::new(&ctx);
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
-            ctx: builder.build(),
+            ctx,
             http: WasiHttpCtx,
 
             limits: StoreLimits::default(),
+            network,
 
             #[cfg(feature = "wasi-nn")]
             nn: None,

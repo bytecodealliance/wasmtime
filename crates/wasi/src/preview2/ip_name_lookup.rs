@@ -2,7 +2,7 @@ use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddres
 use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::preview2::host::network::util;
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
-use crate::preview2::{spawn, spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
+use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
 use std::net::{IpAddr, Ipv6Addr, ToSocketAddrs};
@@ -19,27 +19,21 @@ pub enum ResolveAddressStream {
 }
 
 /// A trait for providing a `IpNameLookup` implementation.
-pub trait WasiIpNameLookupView: WasiView {
-    /// The type that implements `IpNameLookup`.
-    type IpNameLookup: IpNameLookup + Send + 'static;
-
-    /// Get a new instance of the name lookup.
-    fn ip_name_lookup(&self) -> Self::IpNameLookup;
-}
-
-/// A trait for resolving IP addresses from a name.
-#[async_trait::async_trait]
-pub trait IpNameLookup {
+pub trait WasiNetworkView: Send {
     /// Given a name, resolve to a list of IP addresses
-    async fn resolve_addresses(&mut self, name: String) -> std::io::Result<Vec<IpAddr>>;
+    fn resolve_addresses(
+        &mut self,
+        name: String,
+    ) -> AbortOnDropJoinHandle<std::io::Result<Vec<IpAddr>>>;
 }
 
 /// The default implementation for `WasiIpNameLookupView`.
-pub struct SystemIpNameLookup {
+#[derive(Debug, Clone, Default)]
+pub struct SystemNetwork {
     allowed: bool,
 }
 
-impl SystemIpNameLookup {
+impl SystemNetwork {
     /// Create a new `SystemIpNameLookup`
     pub fn new(ctx: &WasiCtx) -> Self {
         Self {
@@ -48,23 +42,28 @@ impl SystemIpNameLookup {
     }
 }
 
-#[async_trait::async_trait]
-impl IpNameLookup for SystemIpNameLookup {
-    async fn resolve_addresses(&mut self, name: String) -> std::io::Result<Vec<IpAddr>> {
-        if !self.allowed {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "IP name lookup is not allowed",
-            ));
-        }
-        let host = parse(&name)?;
+impl WasiNetworkView for SystemNetwork {
+    fn resolve_addresses(
+        &mut self,
+        name: String,
+    ) -> AbortOnDropJoinHandle<std::io::Result<Vec<IpAddr>>> {
+        let allowed = self.allowed;
 
-        spawn_blocking(move || blocking_resolve(&host)).await
+        spawn_blocking(move || {
+            if !allowed {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "IP name lookup is not allowed",
+                ));
+            }
+            let host = parse(&name)?;
+            blocking_resolve(&host)
+        })
     }
 }
 
 #[async_trait::async_trait]
-impl<T: WasiIpNameLookupView + Sized> Host for T {
+impl<T: WasiView + Sized> Host for T {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
@@ -72,10 +71,7 @@ impl<T: WasiIpNameLookupView + Sized> Host for T {
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
         // Check that the network resource is valid
         let _network = self.table().get(&network)?;
-
-        let mut lookup = self.ip_name_lookup();
-        let task = spawn(async move { lookup.resolve_addresses(name).await });
-
+        let task = self.network_view_mut().resolve_addresses(name);
         let resource = self.table_mut().push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
