@@ -613,16 +613,14 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let how = match shutdown_type {
-            ShutdownType::Receive => std::net::Shutdown::Read,
-            ShutdownType::Send => std::net::Shutdown::Write,
-            ShutdownType::Both => std::net::Shutdown::Both,
-        };
+        if let ShutdownType::Receive | ShutdownType::Both = shutdown_type {
+            socket.inner.shutdown_recv()?;
+        }
 
-        socket
-            .tcp_socket()
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(how)?;
+        if let ShutdownType::Send | ShutdownType::Both = shutdown_type {
+            socket.inner.shutdown_send()?;
+        }
+
         Ok(())
     }
 

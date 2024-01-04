@@ -262,6 +262,10 @@ fn preview2_tcp_connect() {
     run(PREVIEW2_TCP_CONNECT_COMPONENT, false).unwrap()
 }
 #[test_log::test]
+fn preview2_tcp_shutdown() {
+    run(PREVIEW2_TCP_SHUTDOWN_COMPONENT, false).unwrap()
+}
+#[test_log::test]
 fn preview2_udp_sockopts() {
     run(PREVIEW2_UDP_SOCKOPTS_COMPONENT, false).unwrap()
 }

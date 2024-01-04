@@ -304,12 +304,13 @@ interface tcp {
 
         /// Initiate a graceful shutdown.
         ///
-        /// - receive: the socket is not expecting to receive any more data from the peer. All subsequent read
-        ///   operations on the `input-stream` associated with this socket will return an End Of Stream indication.
-        ///   Any data still in the receive queue at time of calling `shutdown` will be discarded.
-        /// - send: the socket is not expecting to send any more data to the peer. All subsequent write
-        ///   operations on the `output-stream` associated with this socket will return an error.
-        /// - both: same effect as receive & send combined.
+        /// - `receive`: The socket is not expecting to receive any data from
+        ///   the peer. The `input-stream` associated with this socket will be
+        ///   closed. Any data still in the receive queue at time of calling
+        ///   this method will be discarded.
+        /// - `send`: The socket has no more data to send to the peer. The `output-stream`
+        ///   associated with this socket will be closed and a FIN packet will be sent.
+        /// - `both`: Same effect as `receive` & `send` combined.
         ///
         /// The shutdown function does not close (drop) the socket.
         ///

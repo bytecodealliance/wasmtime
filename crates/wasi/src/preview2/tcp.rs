@@ -7,9 +7,11 @@ use crate::preview2::{
 use anyhow::{Error, Result};
 use cap_net_ext::{AddressFamily, Blocking};
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
+use io_lifetimes::AsSocketlike;
 use rustix::net::sockopt;
 use std::io;
 use std::mem;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::Interest;
 
@@ -54,7 +56,7 @@ pub(crate) enum TcpState {
 pub struct TcpSocket {
     /// The part of a `TcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
-    pub(crate) inner: Arc<tokio::net::TcpStream>,
+    pub(crate) inner: Arc<TcpSocketInner>,
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: TcpState,
@@ -77,15 +79,72 @@ pub struct TcpSocket {
     pub(crate) keep_alive_idle_time: Option<std::time::Duration>,
 }
 
+pub(crate) struct TcpSocketInner {
+    stream: tokio::net::TcpStream,
+
+    /// True if `shutdown(Receive | Both)` has been called on the socket.
+    recv_shut_down: AtomicBool,
+
+    // True if `shutdown(Send | Both)` has been called on the socket.
+    send_shut_down: AtomicBool,
+}
+
+impl TcpSocketInner {
+    fn is_shut_down_for_receiving(&self) -> bool {
+        self.recv_shut_down.load(Ordering::SeqCst)
+    }
+
+    fn is_shut_down_for_sending(&self) -> bool {
+        self.send_shut_down.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn shutdown_recv(&self) -> io::Result<()> {
+        // No need to call `shutdown(SHUT_RD)` because this has no effect on TCP
+        // sockets other than making sure that future `recv` calls return 0.
+        // But we handle this ourselves:
+        self.recv_shut_down.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    pub(crate) fn shutdown_send(&self) -> io::Result<()> {
+        // Call `shutdown(SHUT_WR)`. If the socket wasn't already shut down for
+        // writing this will cause a FIN packet to be sent.
+        self.stream
+            .as_socketlike_view::<std::net::TcpStream>()
+            .shutdown(std::net::Shutdown::Write)?;
+        self.send_shut_down.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn try_read_buf<B: bytes::BufMut>(&self, buf: &mut B) -> io::Result<usize> {
+        if self.is_shut_down_for_receiving() {
+            return Ok(0);
+        }
+
+        self.stream.try_read_buf(buf)
+    }
+
+    fn try_write(&self, buf: &[u8]) -> io::Result<usize> {
+        if self.is_shut_down_for_sending() {
+            return Err(io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "Socket has been shut down for sending.",
+            ));
+        }
+
+        self.stream.try_write(buf)
+    }
+}
+
 pub(crate) struct TcpReadStream {
-    stream: Arc<tokio::net::TcpStream>,
+    inner: Arc<TcpSocketInner>,
     closed: bool,
 }
 
 impl TcpReadStream {
-    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+    fn new(inner: Arc<TcpSocketInner>) -> Self {
         Self {
-            stream,
+            inner,
             closed: false,
         }
     }
@@ -102,11 +161,11 @@ impl HostInputStream for TcpReadStream {
         }
 
         let mut buf = bytes::BytesMut::with_capacity(size);
-        let n = match self.stream.try_read_buf(&mut buf) {
+        let n = match self.inner.try_read_buf(&mut buf) {
             // A 0-byte read indicates that the stream has closed.
             Ok(0) => {
                 self.closed = true;
-                0
+                return Err(StreamError::Closed);
             }
             Ok(n) => n,
 
@@ -131,14 +190,14 @@ impl Subscribe for TcpReadStream {
         if self.closed {
             return;
         }
-        self.stream.readable().await.unwrap();
+        self.inner.stream.readable().await.unwrap();
     }
 }
 
 const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
 pub(crate) struct TcpWriteStream {
-    stream: Arc<tokio::net::TcpStream>,
+    inner: Arc<TcpSocketInner>,
     last_write: LastWrite,
 }
 
@@ -149,9 +208,9 @@ enum LastWrite {
 }
 
 impl TcpWriteStream {
-    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+    pub(crate) fn new(inner: Arc<TcpSocketInner>) -> Self {
         Self {
-            stream,
+            inner,
             last_write: LastWrite::Done,
         }
     }
@@ -161,7 +220,7 @@ impl TcpWriteStream {
     fn background_write(&mut self, mut bytes: bytes::Bytes) {
         assert!(matches!(self.last_write, LastWrite::Done));
 
-        let stream = self.stream.clone();
+        let inner = self.inner.clone();
         self.last_write = LastWrite::Waiting(crate::preview2::spawn(async move {
             // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
             // primitive try_write, which goes directly to attempt a write with mio. This has
@@ -169,8 +228,8 @@ impl TcpWriteStream {
             // required to AsyncWrite, and 2. it eliminates any buffering in tokio we may need
             // to flush.
             while !bytes.is_empty() {
-                stream.writable().await?;
-                match stream.try_write(&bytes) {
+                inner.stream.writable().await?;
+                match inner.try_write(&bytes) {
                     Ok(n) => {
                         let _ = bytes.split_to(n);
                     }
@@ -195,7 +254,7 @@ impl HostOutputStream for TcpWriteStream {
             }
         }
         while !bytes.is_empty() {
-            match self.stream.try_write(&bytes) {
+            match self.inner.try_write(&bytes) {
                 Ok(n) => {
                     let _ = bytes.split_to(n);
                 }
@@ -208,7 +267,13 @@ impl HostOutputStream for TcpWriteStream {
                     return Ok(());
                 }
 
-                Err(e) => return Err(StreamError::LastOperationFailed(e.into())),
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                    return Err(StreamError::Closed);
+                }
+
+                Err(e) => {
+                    return Err(StreamError::LastOperationFailed(e.into()));
+                }
             }
         }
 
@@ -216,6 +281,10 @@ impl HostOutputStream for TcpWriteStream {
     }
 
     fn flush(&mut self) -> Result<(), StreamError> {
+        if self.inner.is_shut_down_for_sending() {
+            return Err(StreamError::Closed);
+        }
+
         // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
         // `write_ready` will join the background write task if it's active, so following `flush`
         // with `write_ready` will have the desired effect.
@@ -223,6 +292,11 @@ impl HostOutputStream for TcpWriteStream {
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
+        if self.inner.is_shut_down_for_sending() {
+            self.last_write = LastWrite::Done;
+            return Err(StreamError::Closed);
+        }
+
         match mem::replace(&mut self.last_write, LastWrite::Done) {
             LastWrite::Waiting(task) => {
                 self.last_write = LastWrite::Waiting(task);
@@ -232,7 +306,7 @@ impl HostOutputStream for TcpWriteStream {
             LastWrite::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
         }
 
-        let writable = self.stream.writable();
+        let writable = self.inner.stream.writable();
         futures::pin_mut!(writable);
         if super::poll_noop(writable).is_none() {
             return Ok(0);
@@ -251,7 +325,7 @@ impl Subscribe for TcpWriteStream {
             };
         }
         if let LastWrite::Done = self.last_write {
-            self.stream.writable().await.unwrap();
+            self.inner.stream.writable().await.unwrap();
         }
     }
 }
@@ -283,7 +357,11 @@ impl TcpSocket {
         let stream = Self::setup_tokio_tcp_stream(fd)?;
 
         Ok(Self {
-            inner: Arc::new(stream),
+            inner: Arc::new(TcpSocketInner {
+                stream,
+                recv_shut_down: AtomicBool::new(false),
+                send_shut_down: AtomicBool::new(false),
+            }),
             tcp_state: TcpState::Default,
             listen_backlog_size: None,
             family,
@@ -305,7 +383,7 @@ impl TcpSocket {
     }
 
     pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        &self.inner
+        &self.inner.stream
     }
 
     /// Create the input/output stream pair for a tcp socket.
@@ -327,6 +405,7 @@ impl Subscribe for TcpSocket {
 
         // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
         self.inner
+            .stream
             .ready(Interest::READABLE | Interest::WRITABLE)
             .await
             .unwrap();
