@@ -333,10 +333,10 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             let len = self.stack.len();
             assert!(last <= len);
             let truncate = self.stack.len() - last;
-            let stack_mut = &mut self.stack.inner_mut();
+            let stack_mut = self.stack.inner_mut();
 
             // Invoke the callback in top-to-bottom order.
-            for v in stack_mut.range(truncate..).rev() {
+            for v in stack_mut[truncate..].into_iter().rev() {
                 f(&mut self.regalloc, v)
             }
             stack_mut.truncate(truncate);
