@@ -90,6 +90,7 @@ serde_json = { workspace = true }
 walkdir = { workspace = true }
 test-programs-artifacts = { workspace = true }
 bytesize = "1.3.0"
+wit-component = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
@@ -117,6 +118,7 @@ members = [
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
+  "examples/component/wasm",
   "fuzz",
   "winch",
   "winch/codegen",

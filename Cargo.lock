@@ -1075,6 +1075,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "example-component-wasm"
+version = "0.0.0"
+dependencies = [
+ "wit-bindgen",
+]
+
+[[package]]
 name = "example-fib-debug-wasm"
 version = "0.0.0"
 
@@ -3362,6 +3369,7 @@ dependencies = [
  "wast 69.0.1",
  "wat",
  "windows-sys 0.52.0",
+ "wit-component 0.19.0",
 ]
 
 [[package]]
