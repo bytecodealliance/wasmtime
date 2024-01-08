@@ -82,10 +82,8 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // When fuzzing Winch, explicitly override the compiler strategy, which by
     // default its arbitrary implementation unconditionally returns
     // `Cranelift`.
-    // We also explicitly disable multi-value support.
     if fuzz_winch {
         config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
-        config.module_config.config.multi_value_enabled = false;
     }
 
     // Choose an engine that Wasmtime will be differentially executed against.

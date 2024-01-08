@@ -331,23 +331,6 @@ impl Stack {
         self.inner[partition..].into_iter()
     }
 
-    /// Duplicates the top `n` elements of the stack.
-    // Will be needed for control flow, it's just not integrated yet.
-    #[allow(dead_code)]
-    pub fn dup(&mut self, n: usize) {
-        let len = self.len();
-        assert!(n <= len);
-        let partition = len - n;
-
-        if n > 0 {
-            for e in partition..len {
-                if let Some(v) = self.inner.get(e) {
-                    self.push(*v)
-                }
-            }
-        }
-    }
-
     /// Pops the top element of the stack, if any.
     pub fn pop(&mut self) -> Option<Val> {
         self.inner.pop()
@@ -394,6 +377,11 @@ impl Stack {
     /// Get a mutable reference to the inner stack representation.
     pub fn inner_mut(&mut self) -> &mut Vec<Val> {
         &mut self.inner
+    }
+
+    /// Get a reference to the inner stack representation.
+    pub fn inner(&self) -> &Vec<Val> {
+        &self.inner
     }
 
     /// Calculates the size of, in bytes, of the top n [Memory] entries

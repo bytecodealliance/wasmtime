@@ -118,7 +118,7 @@ impl ABI for X64ABI {
         let params = ABIParams::from::<_, Self>(
             params,
             params_stack_offset,
-            results.has_stack_results(),
+            results.on_stack(),
             |ty, stack_offset| {
                 Self::to_abi_operand(
                     ty,
@@ -235,7 +235,14 @@ impl X64ABI {
             let next_stack = if params_or_returns == ParamsOrReturns::Params {
                 align_to(stack_offset, slot_size) + slot_size
             } else {
-                align_to(stack_offset, ty_size) + ty_size
+                // For the default calling convention, we don't type-size align,
+                // given that results on the stack must match spills generated
+                // from within the compiler, which are not type-size aligned.
+                if call_conv.is_default() {
+                    stack_offset + ty_size
+                } else {
+                    align_to(stack_offset, ty_size) + ty_size
+                }
             };
             (arg, next_stack)
         };
