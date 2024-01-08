@@ -1,14 +1,73 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
+use crate::preview2::ip_name_lookup::ResolveAddressStream;
 use crate::preview2::TrappableError;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-pub struct Network {
+/// A network implementation
+pub trait Network: Sync + Send {
+    /// Given a name, resolve to a list of IP addresses
+    fn resolve_addresses(&mut self, name: String) -> ResolveAddressStream;
+}
+
+/// The default network implementation
+#[derive(Debug, Clone, Default)]
+pub struct DefaultNetwork {
+    system: SystemNetwork,
+    allowed: bool,
+}
+
+impl DefaultNetwork {
+    /// Create a new `DefaultNetwork`
+    pub fn new(allowed: bool) -> Self {
+        Self {
+            system: SystemNetwork::new(),
+            allowed,
+        }
+    }
+}
+
+impl Network for DefaultNetwork {
+    fn resolve_addresses(&mut self, name: String) -> ResolveAddressStream {
+        let allowed = self.allowed;
+
+        if !allowed {
+            return ResolveAddressStream::done(Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "IP name lookup is not allowed",
+            )
+            .into()));
+        }
+
+        self.system.resolve_addresses(name)
+    }
+}
+
+/// An implementation of `Networked` that uses the underlying system
+#[derive(Debug, Clone, Default)]
+pub struct SystemNetwork {}
+
+impl SystemNetwork {
+    /// Create a new `SystemNetwork`
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Network for SystemNetwork {
+    fn resolve_addresses(&mut self, name: String) -> ResolveAddressStream {
+        ResolveAddressStream::wait(super::spawn_blocking(move || {
+            super::ip_name_lookup::parse_and_resolve(&name)
+        }))
+    }
+}
+
+pub struct NetworkHandle {
     pub socket_addr_check: SocketAddrCheck,
 }
 
-impl Network {
+impl NetworkHandle {
     pub fn check_socket_addr(
         &self,
         addr: &SocketAddr,

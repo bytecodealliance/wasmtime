@@ -44,7 +44,7 @@ pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
-pub use self::network::{Network, SocketError, SocketResult};
+pub use self::network::{NetworkHandle, SocketError, SocketResult};
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
@@ -55,7 +55,6 @@ pub use self::stream::{
 };
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
-pub use ip_name_lookup::{SystemNetwork, WasiNetworkView};
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
 
 pub mod bindings {
@@ -161,7 +160,7 @@ pub mod bindings {
             "wasi:sockets/network/error-code" => crate::preview2::SocketError,
         },
         with: {
-            "wasi:sockets/network/network": super::network::Network,
+            "wasi:sockets/network/network": super::network::NetworkHandle,
             "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
             "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
             "wasi:sockets/udp/incoming-datagram-stream": super::udp::IncomingDatagramStream,

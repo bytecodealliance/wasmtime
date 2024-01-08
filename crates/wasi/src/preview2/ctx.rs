@@ -4,10 +4,10 @@ use crate::preview2::{
         HostMonotonicClock, HostWallClock,
     },
     filesystem::Dir,
-    network::{SocketAddrCheck, SocketAddrUse},
+    network::{DefaultNetwork, Network, SocketAddrCheck, SocketAddrUse},
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
-    DirPerms, FilePerms, WasiNetworkView,
+    DirPerms, FilePerms,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 use std::sync::Arc;
@@ -250,6 +250,7 @@ impl WasiCtxBuilder {
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
+        let network = Box::new(DefaultNetwork::new(allowed_network_uses.ip_name_lookup));
 
         WasiCtx {
             stdin,
@@ -265,6 +266,7 @@ impl WasiCtxBuilder {
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
+            network,
         }
     }
 }
@@ -274,12 +276,6 @@ pub trait WasiView: Send {
     fn table_mut(&mut self) -> &mut ResourceTable;
     fn ctx(&self) -> &WasiCtx;
     fn ctx_mut(&mut self) -> &mut WasiCtx;
-    fn network_view(&self) -> &dyn WasiNetworkView {
-        self.ctx()
-    }
-    fn network_view_mut(&mut self) -> &mut dyn WasiNetworkView {
-        self.ctx_mut()
-    }
 }
 
 pub struct WasiCtx {
@@ -296,15 +292,7 @@ pub struct WasiCtx {
     pub(crate) stderr: Box<dyn StdoutStream>,
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
-}
-
-impl WasiNetworkView for WasiCtx {
-    fn resolve_addresses(
-        &mut self,
-        name: String,
-    ) -> super::AbortOnDropJoinHandle<std::io::Result<Vec<std::net::IpAddr>>> {
-        super::SystemNetwork::new(self).resolve_addresses(name)
-    }
+    pub(crate) network: Box<dyn Network>,
 }
 
 pub struct AllowedNetworkUses {
