@@ -380,7 +380,7 @@ impl Stack {
     }
 
     /// Get a reference to the inner stack representation.
-    pub fn inner(&self) -> &VecDeque<Val> {
+    pub fn inner(&self) -> &Vec<Val> {
         &self.inner
     }
 

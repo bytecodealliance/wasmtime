@@ -341,6 +341,7 @@ impl FnCall {
         masm.free_stack(stack_consumed);
 
         if let Some(area) = ret_area {
+            debug_assert!(!area.is_uninit());
             if stack_consumed > 0 {
                 sig.to_mut()
                     .results
