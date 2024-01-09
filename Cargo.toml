@@ -233,15 +233,15 @@ is-terminal = "0.4.0"
 wit-bindgen = { version = "0.15.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.118.1"
-wat = "1.0.82"
-wast = "69.0.1"
-wasmprinter = "0.2.75"
-wasm-encoder = "0.38.1"
-wasm-smith = "0.13.1"
-wasm-mutate = "0.2.42"
-wit-parser = "0.13.0"
-wit-component = "0.19.0"
+wasmparser = "0.119.0"
+wat = "1.0.83"
+wast = "70.0.0"
+wasmprinter = "0.2.76"
+wasm-encoder = "0.39.0"
+wasm-smith = "0.14.0"
+wasm-mutate = "0.2.44"
+wit-parser = "0.13.1"
+wit-component = "0.19.1"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
