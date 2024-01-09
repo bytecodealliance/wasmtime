@@ -67,7 +67,7 @@ pub struct EgraphPass<'a> {
     pub(crate) stats: Stats,
     /// Union-find that maps all members of a Union tree (eclass) back
     /// to the *oldest* (lowest-numbered) `Value`.
-    eclasses: UnionFind<Value>,
+    pub(crate) eclasses: UnionFind<Value>,
 }
 
 // The maximum number of rewrites we will take from a single call into ISLE.
@@ -436,6 +436,7 @@ impl<'a> EgraphPass<'a> {
             }
         }
         trace!("stats: {:#?}", self.stats);
+        trace!("pinned_union_count: {}", self.eclasses.pinned_union_count);
         self.elaborate();
     }
 

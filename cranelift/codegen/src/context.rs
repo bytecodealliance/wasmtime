@@ -367,6 +367,7 @@ impl Context {
         );
         pass.run();
         log::debug!("egraph stats: {:?}", pass.stats);
+        trace!("pinned_union_count: {}", pass.eclasses.pinned_union_count);
         trace!("After egraph optimization:\n{}", self.func.display());
 
         self.verify_if(fisa)

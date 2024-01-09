@@ -38,6 +38,8 @@ pub struct UnionFind<Idx: EntityRef> {
     /// The subtree is guaranteed to have at least `2**rank[x]` elements,
     /// unless `rank` has been artificially inflated by pinning.
     rank: SecondaryMap<Idx, u8>,
+
+    pub(crate) pinned_union_count: u64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -55,6 +57,7 @@ impl<Idx: EntityRef + Hash + std::fmt::Display + Ord + ReservedValue> UnionFind<
         UnionFind {
             parent: SecondaryMap::with_capacity(cap),
             rank: SecondaryMap::with_capacity(cap),
+            pinned_union_count: 0,
         }
     }
 
@@ -98,8 +101,9 @@ impl<Idx: EntityRef + Hash + std::fmt::Display + Ord + ReservedValue> UnionFind<
     /// eclass is merged with a non-pinned eclass, it'll be the other eclass
     /// whose representative will change.
     ///
-    /// If two pinned eclasses are unioned, one of the pins gets broken and
-    /// a warning is emitted.
+    /// If two pinned eclasses are unioned, one of the pins gets broken,
+    /// which is reported in the statistics for the pass. No concrete test case
+    /// which triggers this is known.
     pub fn pin_index(&mut self, mut node: Idx) -> Idx {
         node = self.find_and_update(node);
         self.rank[node] = u8::MAX;
@@ -118,14 +122,21 @@ impl<Idx: EntityRef + Hash + std::fmt::Display + Ord + ReservedValue> UnionFind<
         if self.rank[a] < self.rank[b] {
             swap(&mut a, &mut b);
         } else if self.rank[a] == self.rank[b] {
-            if self.rank[a] == u8::MAX {
-                log::warn!("union of {a} and {b}, when both have been pinned");
-            } else {
-                self.rank[a] += 1;
-            }
+            self.rank[a] = self.rank[a].checked_add(1).unwrap_or_else(
+                #[cold]
+                || {
+                    // Both `a` and `b` are pinned.
+                    //
+                    // This should only occur if we rewrite X -> Y and X -> Z,
+                    // yet neither Y -> Z nor Z -> Y can be established without
+                    // the "hint" provided by X. This probably means we're
+                    // missing an optimization rule.
+                    self.pinned_union_count += 1;
+                    u8::MAX
+                },
+            );
         }
 
-        // Always canonicalize toward lower IDs.
         self.parent[b] = Val(a);
         trace!("union: {}, {}", a, b);
     }
