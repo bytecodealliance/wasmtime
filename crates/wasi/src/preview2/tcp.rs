@@ -18,7 +18,8 @@ pub struct SystemTcpSocket {
     pub(crate) stream: Arc<tokio::net::TcpStream>,
 
     /// The desired listen queue size. Set to None to use the system's default.
-    pub(crate) listen_backlog_size: Option<i32>,
+    listen_backlog_size: i32,
+    is_listening: bool,
 
     pub(crate) family: SocketAddressFamily,
 
@@ -36,6 +37,8 @@ pub struct SystemTcpSocket {
 }
 
 impl SystemTcpSocket {
+    const DEFAULT_BACKLOG_SIZE: i32 = 128;
+
     /// Create a new socket in the given family.
     pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
@@ -57,7 +60,8 @@ impl SystemTcpSocket {
 
         Ok(Self {
             stream: Arc::new(stream),
-            listen_backlog_size: None,
+            listen_backlog_size: Self::DEFAULT_BACKLOG_SIZE,
+            is_listening: false,
             family,
             #[cfg(target_os = "macos")]
             receive_buffer_size: None,
@@ -87,6 +91,36 @@ impl SystemTcpSocket {
                 inner: self.stream.clone(),
             },
         )
+    }
+
+    pub fn listen(&mut self) -> io::Result<()> {
+        if self.is_listening {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Socket already listening.",
+            ));
+        }
+
+        rustix::net::listen(&self.stream, self.listen_backlog_size).map_err(
+            |error| match error {
+                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
+                // According to the docs, `listen` can return EMFILE on Windows.
+                // This is odd, because we're not trying to create a new socket
+                // or file descriptor of any kind. So we rewrite it to less
+                // surprising error code.
+                //
+                // At the time of writing, this behavior has never been experimentally
+                // observed by any of the wasmtime authors, so we're relying fully
+                // on Microsoft's documentation here.
+                #[cfg(windows)]
+                Some(Errno::MFILE) => Errno::NOBUFS.into(),
+
+                _ => error,
+            },
+        )?;
+
+        self.is_listening = true;
+        Ok(())
     }
 
     pub(crate) fn try_accept(&mut self) -> io::Result<SystemTcpSocket> {
@@ -163,6 +197,36 @@ impl SystemTcpSocket {
                 Ok(())
             }
         }
+    }
+
+    pub fn listen_backlog_size(&self) -> io::Result<usize> {
+        Ok(self.listen_backlog_size.try_into().unwrap())
+    }
+
+    pub fn set_listen_backlog_size(&mut self, value: usize) -> io::Result<()> {
+        if value == 0 {
+            return Err(Errno::INVAL.into());
+        }
+
+        const MIN_BACKLOG: i32 = 1;
+        const MAX_BACKLOG: i32 = i32::MAX; // OS'es will most likely limit it down even further.
+
+        // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
+        let value = value
+            .try_into()
+            .unwrap_or(i32::MAX)
+            .clamp(MIN_BACKLOG, MAX_BACKLOG);
+
+        if self.is_listening {
+            // Try to update the backlog by calling `listen` again.
+            // Not all platforms support this. We'll only update our own value
+            // if the OS supports changing the backlog size after the fact.
+            rustix::net::listen(&self.stream, value).map_err(|_| Errno::OPNOTSUPP)?;
+        }
+
+        self.listen_backlog_size = value;
+
+        Ok(())
     }
 
     pub fn keep_alive_enabled(&self) -> io::Result<bool> {

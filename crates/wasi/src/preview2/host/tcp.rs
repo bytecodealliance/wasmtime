@@ -292,8 +292,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             | TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
         }
 
-        util::tcp_listen(socket.tcp_socket(), socket.inner.listen_backlog_size)?;
-
+        socket.inner.listen()?;
         socket.tcp_state = TcpState::ListenStarted;
 
         Ok(())
@@ -423,45 +422,10 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         this: Resource<TcpSocketWrapper>,
         value: u64,
     ) -> SocketResult<()> {
-        const MIN_BACKLOG: i32 = 1;
-        const MAX_BACKLOG: i32 = i32::MAX; // OS'es will most likely limit it down even further.
-
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
-
-        if value == 0 {
-            return Err(ErrorCode::InvalidArgument.into());
-        }
-
-        // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
-        let value = value
-            .try_into()
-            .unwrap_or(i32::MAX)
-            .clamp(MIN_BACKLOG, MAX_BACKLOG);
-
-        match socket.tcp_state {
-            TcpState::Default | TcpState::BindStarted | TcpState::Bound => {
-                // Socket not listening yet. Stash value for first invocation to `listen`.
-                socket.inner.listen_backlog_size = Some(value);
-
-                Ok(())
-            }
-            TcpState::Listening => {
-                // Try to update the backlog by calling `listen` again.
-                // Not all platforms support this. We'll only update our own value if the OS supports changing the backlog size after the fact.
-
-                rustix::net::listen(socket.tcp_socket(), value)
-                    .map_err(|_| ErrorCode::NotSupported)?;
-
-                socket.inner.listen_backlog_size = Some(value);
-
-                Ok(())
-            }
-            TcpState::Connected | TcpState::ConnectFailed => Err(ErrorCode::InvalidState.into()),
-            TcpState::Connecting | TcpState::ConnectReady | TcpState::ListenStarted => {
-                Err(ErrorCode::ConcurrencyConflict.into())
-            }
-        }
+        let value = value.try_into().unwrap_or(usize::MAX);
+        Ok(socket.inner.set_listen_backlog_size(value)?)
     }
 
     fn keep_alive_enabled(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<bool> {

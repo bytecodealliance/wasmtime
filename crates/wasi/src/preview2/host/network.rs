@@ -393,30 +393,6 @@ pub(crate) mod util {
         })
     }
 
-    pub fn tcp_listen<Fd: AsFd>(sockfd: Fd, backlog: Option<i32>) -> std::io::Result<()> {
-        // Delegate `listen` to cap_net_ext. That is a thin wrapper around rustix::net::listen,
-        // with a platform-dependent default value for the backlog size.
-        sockfd
-            .as_fd()
-            .as_socketlike_view::<cap_std::net::TcpListener>()
-            .listen(backlog)
-            .map_err(|error| match Errno::from_io_error(&error) {
-                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
-                // According to the docs, `listen` can return EMFILE on Windows.
-                // This is odd, because we're not trying to create a new socket
-                // or file descriptor of any kind. So we rewrite it to less
-                // surprising error code.
-                //
-                // At the time of writing, this behavior has never been experimentally
-                // observed by any of the wasmtime authors, so we're relying fully
-                // on Microsoft's documentation here.
-                #[cfg(windows)]
-                Some(Errno::MFILE) => Errno::NOBUFS.into(),
-
-                _ => error,
-            })
-    }
-
     pub fn tcp_accept<Fd: AsFd>(
         sockfd: Fd,
         blocking: Blocking,
