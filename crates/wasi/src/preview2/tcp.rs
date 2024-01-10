@@ -2,11 +2,15 @@ use crate::preview2::host::network::util;
 use crate::preview2::network::SocketAddressFamily;
 use crate::preview2::SocketAddrFamily;
 use cap_net_ext::Blocking;
+use io_lifetimes::AsSocketlike;
+use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
+use std::net::{Shutdown, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use tokio::io::Interest;
 
 /// A cross-platform WASI-compliant `TcpSocket` implementation.
@@ -22,13 +26,13 @@ pub struct SystemTcpSocket {
     // on all platforms. So we keep track of which options have been explicitly
     // set and manually apply those values to newly accepted clients.
     #[cfg(target_os = "macos")]
-    pub(crate) receive_buffer_size: Option<usize>,
+    receive_buffer_size: Option<usize>,
     #[cfg(target_os = "macos")]
-    pub(crate) send_buffer_size: Option<usize>,
+    send_buffer_size: Option<usize>,
     #[cfg(target_os = "macos")]
-    pub(crate) hop_limit: Option<u8>,
+    hop_limit: Option<u8>,
     #[cfg(target_os = "macos")]
-    pub(crate) keep_alive_idle_time: Option<std::time::Duration>,
+    keep_alive_idle_time: Option<std::time::Duration>,
 }
 
 impl SystemTcpSocket {
@@ -91,7 +95,166 @@ impl SystemTcpSocket {
             util::tcp_accept(stream, Blocking::No)
         })?;
 
+        #[cfg(target_os = "macos")]
+        {
+            // Manually inherit socket options from listener. We only have to
+            // do this on platforms that don't already do this automatically
+            // and only if a specific value was explicitly set on the listener.
+
+            if let Some(size) = self.receive_buffer_size {
+                _ = util::set_socket_recv_buffer_size(&self.stream, size); // Ignore potential error.
+            }
+
+            if let Some(size) = self.send_buffer_size {
+                _ = util::set_socket_send_buffer_size(&self.stream, size); // Ignore potential error.
+            }
+
+            // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
+            if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) = (self.family, self.hop_limit) {
+                _ = util::set_ipv6_unicast_hops(&self.stream, ttl); // Ignore potential error.
+            }
+
+            if let Some(value) = self.keep_alive_idle_time {
+                _ = util::set_tcp_keepidle(&self.stream, value); // Ignore potential error.
+            }
+        }
+
         Self::from_fd(client_fd, self.family)
+    }
+
+    pub fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
+        self.stream
+            .as_socketlike_view::<std::net::TcpStream>()
+            .shutdown(how)?;
+        Ok(())
+    }
+
+    pub fn local_address(&self) -> io::Result<SocketAddr> {
+        self.stream.local_addr()
+    }
+
+    pub fn remote_address(&self) -> io::Result<SocketAddr> {
+        self.stream.peer_addr()
+    }
+
+    pub fn address_family(&self) -> SocketAddrFamily {
+        match self.family {
+            SocketAddressFamily::Ipv4 => SocketAddrFamily::V4,
+            SocketAddressFamily::Ipv6 { .. } => SocketAddrFamily::V6,
+        }
+    }
+
+    pub fn ipv6_only(&self) -> io::Result<bool> {
+        // Instead of just calling the OS we return our own internal state, because
+        // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
+
+        match self.family {
+            SocketAddressFamily::Ipv4 => Err(Errno::AFNOSUPPORT.into()),
+            SocketAddressFamily::Ipv6 { v6only } => Ok(v6only),
+        }
+    }
+
+    pub fn set_ipv6_only(&mut self, value: bool) -> io::Result<()> {
+        match self.family {
+            SocketAddressFamily::Ipv4 => Err(Errno::AFNOSUPPORT.into()),
+            SocketAddressFamily::Ipv6 { .. } => {
+                sockopt::set_ipv6_v6only(&self.stream, value)?;
+                self.family = SocketAddressFamily::Ipv6 { v6only: value };
+                Ok(())
+            }
+        }
+    }
+
+    pub fn keep_alive_enabled(&self) -> io::Result<bool> {
+        Ok(sockopt::get_socket_keepalive(&self.stream)?)
+    }
+
+    pub fn set_keep_alive_enabled(&mut self, value: bool) -> io::Result<()> {
+        Ok(sockopt::set_socket_keepalive(&self.stream, value)?)
+    }
+
+    pub fn keep_alive_idle_time(&self) -> io::Result<Duration> {
+        Ok(sockopt::get_tcp_keepidle(&self.stream)?)
+    }
+
+    pub fn set_keep_alive_idle_time(&mut self, value: Duration) -> io::Result<()> {
+        util::set_tcp_keepidle(&self.stream, value)?;
+
+        #[cfg(target_os = "macos")]
+        {
+            self.keep_alive_idle_time = Some(value);
+        }
+
+        Ok(())
+    }
+
+    pub fn keep_alive_interval(&self) -> io::Result<Duration> {
+        Ok(sockopt::get_tcp_keepintvl(&self.stream)?)
+    }
+
+    pub fn set_keep_alive_interval(&mut self, value: Duration) -> io::Result<()> {
+        Ok(util::set_tcp_keepintvl(&self.stream, value)?)
+    }
+
+    pub fn keep_alive_count(&self) -> io::Result<u32> {
+        Ok(sockopt::get_tcp_keepcnt(&self.stream)?)
+    }
+
+    pub fn set_keep_alive_count(&mut self, value: u32) -> io::Result<()> {
+        Ok(util::set_tcp_keepcnt(&self.stream, value)?)
+    }
+
+    pub fn hop_limit(&self) -> io::Result<u8> {
+        let ttl = match self.family {
+            SocketAddressFamily::Ipv4 => util::get_ip_ttl(&self.stream)?,
+            SocketAddressFamily::Ipv6 { .. } => util::get_ipv6_unicast_hops(&self.stream)?,
+        };
+
+        Ok(ttl)
+    }
+
+    pub fn set_hop_limit(&mut self, value: u8) -> io::Result<()> {
+        match self.family {
+            SocketAddressFamily::Ipv4 => util::set_ip_ttl(&self.stream, value)?,
+            SocketAddressFamily::Ipv6 { .. } => util::set_ipv6_unicast_hops(&self.stream, value)?,
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            self.hop_limit = Some(value);
+        }
+
+        Ok(())
+    }
+
+    pub fn receive_buffer_size(&self) -> io::Result<usize> {
+        Ok(util::get_socket_recv_buffer_size(&self.stream)?)
+    }
+
+    pub fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()> {
+        util::set_socket_recv_buffer_size(&self.stream, value)?;
+
+        #[cfg(target_os = "macos")]
+        {
+            self.receive_buffer_size = Some(value);
+        }
+
+        Ok(())
+    }
+
+    pub fn send_buffer_size(&self) -> io::Result<usize> {
+        Ok(util::get_socket_send_buffer_size(&self.stream)?)
+    }
+
+    pub fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()> {
+        util::set_socket_send_buffer_size(&self.stream, value)?;
+
+        #[cfg(target_os = "macos")]
+        {
+            self.send_buffer_size = Some(value);
+        }
+
+        Ok(())
     }
 }
 

@@ -3,13 +3,12 @@ use crate::preview2::bindings::sockets::{
     tcp::ShutdownType,
 };
 use crate::preview2::host::network::util;
-use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
+use crate::preview2::network::SocketAddrUse;
 use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
 use crate::preview2::tcp::SystemTcpSocket;
 use crate::preview2::{
     InputStream, OutputStream, Pollable, SocketAddrFamily, SocketResult, Subscribe, WasiView,
 };
-use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
@@ -334,32 +333,6 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         // Do the OS accept call.
         let client = socket.inner.try_accept()?;
 
-        #[cfg(target_os = "macos")]
-        {
-            // Manually inherit socket options from listener. We only have to
-            // do this on platforms that don't already do this automatically
-            // and only if a specific value was explicitly set on the listener.
-
-            if let Some(size) = socket.inner.receive_buffer_size {
-                _ = util::set_socket_recv_buffer_size(&client.stream, size); // Ignore potential error.
-            }
-
-            if let Some(size) = socket.inner.send_buffer_size {
-                _ = util::set_socket_send_buffer_size(&client.stream, size); // Ignore potential error.
-            }
-
-            // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
-            if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) =
-                (socket.inner.family, socket.inner.hop_limit)
-            {
-                _ = util::set_ipv6_unicast_hops(&client.stream, ttl); // Ignore potential error.
-            }
-
-            if let Some(value) = socket.inner.keep_alive_idle_time {
-                _ = util::set_tcp_keepidle(&client.stream, value); // Ignore potential error.
-            }
-        }
-
         let tcp_socket = TcpSocketWrapper {
             inner: client,
             tcp_state: TcpState::Connected,
@@ -385,11 +358,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => {}
         }
 
-        let addr = socket
-            .tcp_socket()
-            .as_socketlike_view::<std::net::TcpStream>()
-            .local_addr()?;
-        Ok(addr.into())
+        Ok(socket.inner.local_address()?.into())
     }
 
     fn remote_address(
@@ -407,11 +376,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let addr = socket
-            .tcp_socket()
-            .as_socketlike_view::<std::net::TcpStream>()
-            .peer_addr()?;
-        Ok(addr.into())
+        Ok(socket.inner.remote_address()?.into())
     }
 
     fn is_listening(&mut self, this: Resource<TcpSocketWrapper>) -> Result<bool, anyhow::Error> {
@@ -430,42 +395,27 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
     ) -> Result<IpAddressFamily, anyhow::Error> {
         let table = self.table();
         let socket = table.get(&this)?;
-
-        match socket.inner.family {
-            SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketAddressFamily::Ipv6 { .. } => Ok(IpAddressFamily::Ipv6),
-        }
+        Ok(socket.inner.address_family().into())
     }
 
     fn ipv6_only(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<bool> {
         let table = self.table();
         let socket = table.get(&this)?;
-
-        // Instead of just calling the OS we return our own internal state, because
-        // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
-
-        match socket.inner.family {
-            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketAddressFamily::Ipv6 { v6only } => Ok(v6only),
-        }
+        Ok(socket.inner.ipv6_only()?)
     }
 
     fn set_ipv6_only(&mut self, this: Resource<TcpSocketWrapper>, value: bool) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
-        match socket.inner.family {
-            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketAddressFamily::Ipv6 { .. } => match socket.tcp_state {
-                TcpState::Default => {
-                    sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?;
-                    socket.inner.family = SocketAddressFamily::Ipv6 { v6only: value };
-                    Ok(())
-                }
-                TcpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
-                _ => Err(ErrorCode::InvalidState.into()),
-            },
+        match socket.tcp_state {
+            TcpState::Default => {}
+            TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            _ => return Err(ErrorCode::InvalidState.into()),
         }
+
+        socket.inner.set_ipv6_only(value)?;
+        Ok(())
     }
 
     fn set_listen_backlog_size(
@@ -517,7 +467,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
     fn keep_alive_enabled(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<bool> {
         let table = self.table();
         let socket = table.get(&this)?;
-        Ok(sockopt::get_socket_keepalive(socket.tcp_socket())?)
+        Ok(socket.inner.keep_alive_enabled()?)
     }
 
     fn set_keep_alive_enabled(
@@ -525,15 +475,16 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         this: Resource<TcpSocketWrapper>,
         value: bool,
     ) -> SocketResult<()> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-        Ok(sockopt::set_socket_keepalive(socket.tcp_socket(), value)?)
+        let table = self.table_mut();
+        let socket = table.get_mut(&this)?;
+        Ok(socket.inner.set_keep_alive_enabled(value)?)
     }
 
     fn keep_alive_idle_time(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<u64> {
         let table = self.table();
         let socket = table.get(&this)?;
-        Ok(sockopt::get_tcp_keepidle(socket.tcp_socket())?.as_nanos() as u64)
+        let duration = socket.inner.keep_alive_idle_time()?;
+        Ok(duration.as_nanos() as u64)
     }
 
     fn set_keep_alive_idle_time(
@@ -543,23 +494,15 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
-
         let duration = Duration::from_nanos(value);
-
-        util::set_tcp_keepidle(socket.tcp_socket(), duration)?;
-
-        #[cfg(target_os = "macos")]
-        {
-            socket.inner.keep_alive_idle_time = Some(duration);
-        }
-
-        Ok(())
+        Ok(socket.inner.set_keep_alive_idle_time(duration)?)
     }
 
     fn keep_alive_interval(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<u64> {
         let table = self.table();
         let socket = table.get(&this)?;
-        Ok(sockopt::get_tcp_keepintvl(socket.tcp_socket())?.as_nanos() as u64)
+        let duration = socket.inner.keep_alive_interval()?;
+        Ok(duration.as_nanos() as u64)
     }
 
     fn set_keep_alive_interval(
@@ -567,18 +510,16 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         this: Resource<TcpSocketWrapper>,
         value: u64,
     ) -> SocketResult<()> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-        Ok(util::set_tcp_keepintvl(
-            socket.tcp_socket(),
-            Duration::from_nanos(value),
-        )?)
+        let table = self.table_mut();
+        let socket = table.get_mut(&this)?;
+        let duration = Duration::from_nanos(value);
+        Ok(socket.inner.set_keep_alive_interval(duration)?)
     }
 
     fn keep_alive_count(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<u32> {
         let table = self.table();
         let socket = table.get(&this)?;
-        Ok(sockopt::get_tcp_keepcnt(socket.tcp_socket())?)
+        Ok(socket.inner.keep_alive_count()?)
     }
 
     fn set_keep_alive_count(
@@ -586,48 +527,27 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         this: Resource<TcpSocketWrapper>,
         value: u32,
     ) -> SocketResult<()> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-        Ok(util::set_tcp_keepcnt(socket.tcp_socket(), value)?)
+        let table = self.table_mut();
+        let socket = table.get_mut(&this)?;
+        Ok(socket.inner.set_keep_alive_count(value)?)
     }
 
     fn hop_limit(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<u8> {
         let table = self.table();
         let socket = table.get(&this)?;
-
-        let ttl = match socket.inner.family {
-            SocketAddressFamily::Ipv4 => util::get_ip_ttl(socket.tcp_socket())?,
-            SocketAddressFamily::Ipv6 { .. } => util::get_ipv6_unicast_hops(socket.tcp_socket())?,
-        };
-
-        Ok(ttl)
+        Ok(socket.inner.hop_limit()?)
     }
 
     fn set_hop_limit(&mut self, this: Resource<TcpSocketWrapper>, value: u8) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
-
-        match socket.inner.family {
-            SocketAddressFamily::Ipv4 => util::set_ip_ttl(socket.tcp_socket(), value)?,
-            SocketAddressFamily::Ipv6 { .. } => {
-                util::set_ipv6_unicast_hops(socket.tcp_socket(), value)?
-            }
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            socket.inner.hop_limit = Some(value);
-        }
-
-        Ok(())
+        Ok(socket.inner.set_hop_limit(value)?)
     }
 
     fn receive_buffer_size(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<u64> {
         let table = self.table();
         let socket = table.get(&this)?;
-
-        let value = util::get_socket_recv_buffer_size(socket.tcp_socket())?;
-        Ok(value as u64)
+        Ok(socket.inner.receive_buffer_size()?.try_into().unwrap())
     }
 
     fn set_receive_buffer_size(
@@ -638,23 +558,13 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
         let value = value.try_into().unwrap_or(usize::MAX);
-
-        util::set_socket_recv_buffer_size(socket.tcp_socket(), value)?;
-
-        #[cfg(target_os = "macos")]
-        {
-            socket.inner.receive_buffer_size = Some(value);
-        }
-
-        Ok(())
+        Ok(socket.inner.set_receive_buffer_size(value)?)
     }
 
     fn send_buffer_size(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<u64> {
         let table = self.table();
         let socket = table.get(&this)?;
-
-        let value = util::get_socket_send_buffer_size(socket.tcp_socket())?;
-        Ok(value as u64)
+        Ok(socket.inner.send_buffer_size()?.try_into().unwrap())
     }
 
     fn set_send_buffer_size(
@@ -665,15 +575,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
         let value = value.try_into().unwrap_or(usize::MAX);
-
-        util::set_socket_send_buffer_size(socket.tcp_socket(), value)?;
-
-        #[cfg(target_os = "macos")]
-        {
-            socket.inner.send_buffer_size = Some(value);
-        }
-
-        Ok(())
+        Ok(socket.inner.set_send_buffer_size(value)?)
     }
 
     fn subscribe(
@@ -688,8 +590,8 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         this: Resource<TcpSocketWrapper>,
         shutdown_type: ShutdownType,
     ) -> SocketResult<()> {
-        let table = self.table();
-        let socket = table.get(&this)?;
+        let table = self.table_mut();
+        let socket = table.get_mut(&this)?;
 
         match socket.tcp_state {
             TcpState::Connected => {}
@@ -699,16 +601,11 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let how = match shutdown_type {
+        socket.inner.shutdown(match shutdown_type {
             ShutdownType::Receive => std::net::Shutdown::Read,
             ShutdownType::Send => std::net::Shutdown::Write,
             ShutdownType::Both => std::net::Shutdown::Both,
-        };
-
-        socket
-            .tcp_socket()
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(how)?;
+        })?;
         Ok(())
     }
 
