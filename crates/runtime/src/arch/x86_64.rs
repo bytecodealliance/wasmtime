@@ -48,12 +48,10 @@ cfg_if::cfg_if! {
         macro_rules! callee_vmctx { () => ("rcx") }
         macro_rules! scratch0 { () => ("r10") }
         macro_rules! scratch1 { () => ("r11") }
-    } else if #[cfg(unix)] {
+    } else {
         macro_rules! callee_vmctx { () => ("rdi") }
         macro_rules! scratch0 { () => ("r10") }
         macro_rules! scratch1 { () => ("r11") }
-    } else {
-        compile_error!("default calling convention for this platform is not known");
     }
 }
 pub(crate) use {callee_vmctx, scratch0, scratch1};
