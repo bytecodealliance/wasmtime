@@ -4,19 +4,18 @@ use crate::preview2::bindings::sockets::{
 };
 use crate::preview2::host::network::util;
 use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
+use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
+use crate::preview2::tcp::{SystemTcpReader, SystemTcpWriter};
 use crate::preview2::{
-    poll_noop, with_ambient_tokio_runtime, AbortOnDropJoinHandle, HostInputStream,
-    HostOutputStream, InputStream, OutputStream, Pollable, SocketResult, StreamError, Subscribe,
+    with_ambient_tokio_runtime, InputStream, OutputStream, Pollable, SocketResult, Subscribe,
     WasiView,
 };
-use anyhow::{Error, Result};
 use cap_net_ext::{AddressFamily, Blocking};
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
-use std::mem;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -143,8 +142,13 @@ impl TcpSocketWrapper {
 
     /// Create the input/output stream pair for a tcp socket.
     pub fn as_split(&self) -> (InputStream, OutputStream) {
-        let input = Box::new(TcpReadWrapper::new(self.inner.clone()));
-        let output = Box::new(TcpWriteWrapper::new(self.inner.clone()));
+        const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
+
+        let reader = SystemTcpReader::new(self.inner.clone());
+        let writer = SystemTcpWriter::new(self.inner.clone());
+
+        let input = Box::new(AsyncReadStream::new(reader));
+        let output = Box::new(AsyncWriteStream::new(SOCKET_READY_SIZE, writer));
         (InputStream::Host(input), output)
     }
 }
@@ -771,7 +775,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         Ok(())
     }
 
-    fn drop(&mut self, this: Resource<TcpSocketWrapper>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<TcpSocketWrapper>) -> anyhow::Result<()> {
         let table = self.table_mut();
 
         // As in the filesystem implementation, we assume closing a socket
@@ -797,184 +801,5 @@ impl Subscribe for TcpSocketWrapper {
             .ready(Interest::READABLE | Interest::WRITABLE)
             .await
             .unwrap();
-    }
-}
-
-pub(crate) struct TcpReadWrapper {
-    stream: Arc<tokio::net::TcpStream>,
-    closed: bool,
-}
-
-impl TcpReadWrapper {
-    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
-        Self {
-            stream,
-            closed: false,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl HostInputStream for TcpReadWrapper {
-    fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
-        if self.closed {
-            return Err(StreamError::Closed);
-        }
-        if size == 0 {
-            return Ok(bytes::Bytes::new());
-        }
-
-        let mut buf = bytes::BytesMut::with_capacity(size);
-        let n = match self.stream.try_read_buf(&mut buf) {
-            // A 0-byte read indicates that the stream has closed.
-            Ok(0) => {
-                self.closed = true;
-                0
-            }
-            Ok(n) => n,
-
-            // Failing with `EWOULDBLOCK` is how we differentiate between a closed channel and no
-            // data to read right now.
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => 0,
-
-            Err(e) => {
-                self.closed = true;
-                return Err(StreamError::LastOperationFailed(e.into()));
-            }
-        };
-
-        buf.truncate(n);
-        Ok(buf.freeze())
-    }
-}
-
-#[async_trait::async_trait]
-impl Subscribe for TcpReadWrapper {
-    async fn ready(&mut self) {
-        if self.closed {
-            return;
-        }
-        self.stream.readable().await.unwrap();
-    }
-}
-
-const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
-
-pub(crate) struct TcpWriteWrapper {
-    stream: Arc<tokio::net::TcpStream>,
-    last_write: LastWrite,
-}
-
-enum LastWrite {
-    Waiting(AbortOnDropJoinHandle<Result<()>>),
-    Error(Error),
-    Done,
-}
-
-impl TcpWriteWrapper {
-    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
-        Self {
-            stream,
-            last_write: LastWrite::Done,
-        }
-    }
-
-    /// Write `bytes` in a background task, remembering the task handle for use in a future call to
-    /// `write_ready`
-    fn background_write(&mut self, mut bytes: bytes::Bytes) {
-        assert!(matches!(self.last_write, LastWrite::Done));
-
-        let stream = self.stream.clone();
-        self.last_write = LastWrite::Waiting(crate::preview2::spawn(async move {
-            // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
-            // primitive try_write, which goes directly to attempt a write with mio. This has
-            // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream
-            // required to AsyncWrite, and 2. it eliminates any buffering in tokio we may need
-            // to flush.
-            while !bytes.is_empty() {
-                stream.writable().await?;
-                match stream.try_write(&bytes) {
-                    Ok(n) => {
-                        let _ = bytes.split_to(n);
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
-                    Err(e) => return Err(e.into()),
-                }
-            }
-
-            Ok(())
-        }));
-    }
-}
-
-impl HostOutputStream for TcpWriteWrapper {
-    fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
-        match self.last_write {
-            LastWrite::Done => {}
-            LastWrite::Waiting(_) | LastWrite::Error(_) => {
-                return Err(StreamError::Trap(anyhow::anyhow!(
-                    "unpermitted: must call check_write first"
-                )));
-            }
-        }
-        while !bytes.is_empty() {
-            match self.stream.try_write(&bytes) {
-                Ok(n) => {
-                    let _ = bytes.split_to(n);
-                }
-
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // As `try_write` indicated that it would have blocked, we'll perform the write
-                    // in the background to allow us to return immediately.
-                    self.background_write(bytes);
-
-                    return Ok(());
-                }
-
-                Err(e) => return Err(StreamError::LastOperationFailed(e.into())),
-            }
-        }
-
-        Ok(())
-    }
-
-    fn flush(&mut self) -> Result<(), StreamError> {
-        // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
-        // `write_ready` will join the background write task if it's active, so following `flush`
-        // with `write_ready` will have the desired effect.
-        Ok(())
-    }
-
-    fn check_write(&mut self) -> Result<usize, StreamError> {
-        match mem::replace(&mut self.last_write, LastWrite::Done) {
-            LastWrite::Waiting(task) => {
-                self.last_write = LastWrite::Waiting(task);
-                return Ok(0);
-            }
-            LastWrite::Done => {}
-            LastWrite::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
-        }
-
-        let writable = self.stream.writable();
-        futures::pin_mut!(writable);
-        if poll_noop(writable).is_none() {
-            return Ok(0);
-        }
-        Ok(SOCKET_READY_SIZE)
-    }
-}
-
-#[async_trait::async_trait]
-impl Subscribe for TcpWriteWrapper {
-    async fn ready(&mut self) {
-        if let LastWrite::Waiting(task) = &mut self.last_write {
-            self.last_write = match task.await {
-                Ok(()) => LastWrite::Done,
-                Err(e) => LastWrite::Error(e),
-            };
-        }
-        if let LastWrite::Done = self.last_write {
-            self.stream.writable().await.unwrap();
-        }
     }
 }
