@@ -6,6 +6,6 @@ mod instance_network;
 mod io;
 pub(crate) mod network;
 mod random;
-mod tcp;
+pub(crate) mod tcp;
 mod udp;
 mod udp_create_socket;
