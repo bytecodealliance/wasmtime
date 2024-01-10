@@ -2,13 +2,16 @@ use crate::preview2::host::network::util;
 use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
-use cap_net_ext::{AddressFamily, Blocking};
+use cap_net_ext::Blocking;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use super::network::{SocketAddrCheck, SocketAddressFamily};
+use super::{
+    network::{SocketAddrCheck, SocketAddressFamily},
+    SocketAddrFamily,
+};
 
 /// The state of a UDP socket.
 ///
@@ -57,14 +60,14 @@ impl Subscribe for UdpSocket {
 
 impl UdpSocket {
     /// Create a new socket in the given family.
-    pub fn new(family: AddressFamily) -> io::Result<Self> {
+    pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
         let fd = util::udp_socket(family, Blocking::No)?;
 
         let socket_address_family = match family {
-            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
-            AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
+            SocketAddrFamily::V4 => SocketAddressFamily::Ipv4,
+            SocketAddrFamily::V6 => SocketAddressFamily::Ipv6 {
                 v6only: rustix::net::sockopt::get_ipv6_v6only(&fd)?,
             },
         };

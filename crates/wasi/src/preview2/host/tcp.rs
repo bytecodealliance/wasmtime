@@ -7,10 +7,10 @@ use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
 use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
 use crate::preview2::tcp::{SystemTcpReader, SystemTcpWriter};
 use crate::preview2::{
-    with_ambient_tokio_runtime, InputStream, OutputStream, Pollable, SocketResult, Subscribe,
-    WasiView,
+    with_ambient_tokio_runtime, InputStream, OutputStream, Pollable, SocketAddrFamily,
+    SocketResult, Subscribe, WasiView,
 };
-use cap_net_ext::{AddressFamily, Blocking};
+use cap_net_ext::Blocking;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
@@ -90,14 +90,14 @@ pub struct TcpSocketWrapper {
 
 impl TcpSocketWrapper {
     /// Create a new socket in the given family.
-    pub fn new(family: AddressFamily) -> io::Result<Self> {
+    pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
         let fd = util::tcp_socket(family, Blocking::No)?;
 
         let socket_address_family = match family {
-            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
-            AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
+            SocketAddrFamily::V4 => SocketAddressFamily::Ipv4,
+            SocketAddrFamily::V6 => SocketAddressFamily::Ipv6 {
                 v6only: sockopt::get_ipv6_v6only(&fd)?,
             },
         };

@@ -3,7 +3,7 @@ use crate::preview2::bindings::sockets::network::{
     Ipv6SocketAddress,
 };
 use crate::preview2::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
-use crate::preview2::{SocketError, WasiView};
+use crate::preview2::{SocketAddrFamily, SocketError, WasiView};
 use rustix::io::Errno;
 use std::io;
 use wasmtime::component::Resource;
@@ -193,20 +193,38 @@ impl std::net::ToSocketAddrs for Ipv6SocketAddress {
     }
 }
 
-impl From<IpAddressFamily> for cap_net_ext::AddressFamily {
-    fn from(family: IpAddressFamily) -> Self {
-        match family {
-            IpAddressFamily::Ipv4 => cap_net_ext::AddressFamily::Ipv4,
-            IpAddressFamily::Ipv6 => cap_net_ext::AddressFamily::Ipv6,
+impl From<IpAddressFamily> for SocketAddrFamily {
+    fn from(addr: IpAddressFamily) -> Self {
+        match addr {
+            IpAddressFamily::Ipv4 => SocketAddrFamily::V4,
+            IpAddressFamily::Ipv6 => SocketAddrFamily::V6,
         }
     }
 }
 
-impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
-    fn from(family: cap_net_ext::AddressFamily) -> Self {
-        match family {
-            cap_net_ext::AddressFamily::Ipv4 => IpAddressFamily::Ipv4,
-            cap_net_ext::AddressFamily::Ipv6 => IpAddressFamily::Ipv6,
+impl From<SocketAddrFamily> for IpAddressFamily {
+    fn from(addr: SocketAddrFamily) -> Self {
+        match addr {
+            SocketAddrFamily::V4 => IpAddressFamily::Ipv4,
+            SocketAddrFamily::V6 => IpAddressFamily::Ipv6,
+        }
+    }
+}
+
+impl From<cap_net_ext::AddressFamily> for SocketAddrFamily {
+    fn from(addr: cap_net_ext::AddressFamily) -> Self {
+        match addr {
+            cap_net_ext::AddressFamily::Ipv4 => SocketAddrFamily::V4,
+            cap_net_ext::AddressFamily::Ipv6 => SocketAddrFamily::V6,
+        }
+    }
+}
+
+impl From<SocketAddrFamily> for cap_net_ext::AddressFamily {
+    fn from(addr: SocketAddrFamily) -> Self {
+        match addr {
+            SocketAddrFamily::V4 => cap_net_ext::AddressFamily::Ipv4,
+            SocketAddrFamily::V6 => cap_net_ext::AddressFamily::Ipv6,
         }
     }
 }
@@ -217,8 +235,8 @@ pub(crate) mod util {
 
     use crate::preview2::bindings::sockets::network::ErrorCode;
     use crate::preview2::network::SocketAddressFamily;
-    use crate::preview2::SocketResult;
-    use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt, UdpSocketExt};
+    use crate::preview2::{SocketAddrFamily, SocketResult};
+    use cap_net_ext::{Blocking, TcpListenerExt, UdpSocketExt};
     use io_lifetimes::AsSocketlike;
     use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;
@@ -302,23 +320,23 @@ pub(crate) mod util {
      * Syscalls wrappers with (opinionated) portability fixes.
      */
 
-    pub fn tcp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
+    pub fn tcp_socket(family: SocketAddrFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
         // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
         //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
 
-        let listener = cap_std::net::TcpListener::new(family, blocking)?;
+        let listener = cap_std::net::TcpListener::new(family.into(), blocking)?;
         Ok(OwnedFd::from(listener))
     }
 
-    pub fn udp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
+    pub fn udp_socket(family: SocketAddrFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
         // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
         //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
 
-        let socket = cap_std::net::UdpSocket::new(family, blocking)?;
+        let socket = cap_std::net::UdpSocket::new(family.into(), blocking)?;
         Ok(OwnedFd::from(socket))
     }
 

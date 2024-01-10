@@ -140,9 +140,29 @@ impl From<rustix::io::Errno> for SocketError {
 }
 
 #[derive(Copy, Clone)]
-pub enum SocketAddressFamily {
+pub(crate) enum SocketAddressFamily {
     Ipv4,
     Ipv6 { v6only: bool },
+}
+
+/// IP version. Effectively the discriminant of `SocketAddr`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum SocketAddrFamily {
+    V4,
+    V6,
+}
+
+pub trait SocketAddrExt {
+    fn family(&self) -> SocketAddrFamily;
+}
+
+impl SocketAddrExt for SocketAddr {
+    fn family(&self) -> SocketAddrFamily {
+        match self {
+            SocketAddr::V4(_) => SocketAddrFamily::V4,
+            SocketAddr::V6(_) => SocketAddrFamily::V6,
+        }
+    }
 }
 
 pub(crate) fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {
