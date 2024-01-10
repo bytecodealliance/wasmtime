@@ -230,30 +230,36 @@ impl From<SocketAddrFamily> for cap_net_ext::AddressFamily {
 }
 
 pub(crate) mod util {
+    use std::io::{Error, ErrorKind};
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::time::Duration;
 
-    use crate::preview2::bindings::sockets::network::ErrorCode;
     use crate::preview2::network::SocketAddressFamily;
-    use crate::preview2::{SocketAddrFamily, SocketResult};
+    use crate::preview2::SocketAddrFamily;
     use cap_net_ext::{Blocking, TcpListenerExt, UdpSocketExt};
     use io_lifetimes::AsSocketlike;
     use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;
     use rustix::net::sockopt;
 
-    pub fn validate_unicast(addr: &SocketAddr) -> SocketResult<()> {
+    pub fn validate_unicast(addr: &SocketAddr) -> std::io::Result<()> {
         match to_canonical(&addr.ip()) {
             IpAddr::V4(ipv4) => {
                 if ipv4.is_multicast() || ipv4.is_broadcast() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "IPv4 broadcast or multicast address detected.",
+                    ))
                 } else {
                     Ok(())
                 }
             }
             IpAddr::V6(ipv6) => {
                 if ipv6.is_multicast() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "IPv6 multicast address detected.",
+                    ))
                 } else {
                     Ok(())
                 }
@@ -261,13 +267,19 @@ pub(crate) mod util {
         }
     }
 
-    pub fn validate_remote_address(addr: &SocketAddr) -> SocketResult<()> {
+    pub fn validate_remote_address(addr: &SocketAddr) -> std::io::Result<()> {
         if to_canonical(&addr.ip()).is_unspecified() {
-            return Err(ErrorCode::InvalidArgument.into());
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Remote address may not be `0.0.0.0` or `::`",
+            ));
         }
 
         if addr.port() == 0 {
-            return Err(ErrorCode::InvalidArgument.into());
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Remote port may not be 0",
+            ));
         }
 
         Ok(())
@@ -276,7 +288,7 @@ pub(crate) mod util {
     pub fn validate_address_family(
         addr: &SocketAddr,
         socket_family: &SocketAddressFamily,
-    ) -> SocketResult<()> {
+    ) -> std::io::Result<()> {
         match (socket_family, addr.ip()) {
             (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
             (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
@@ -285,14 +297,23 @@ pub(crate) mod util {
                     // since 2006, OS handling of them is inconsistent and our own
                     // validations don't take them into account either.
                     // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "IPv4-compatible IPv6 addresses are not supported",
+                    ))
                 } else if *v6only && ipv6.to_ipv4_mapped().is_some() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "IPv4-mapped IPv6 address passed to an IPv6-only socket",
+                    ))
                 } else {
                     Ok(())
                 }
             }
-            _ => Err(ErrorCode::InvalidArgument.into()),
+            _ => Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Address family mismatch",
+            )),
         }
     }
 
