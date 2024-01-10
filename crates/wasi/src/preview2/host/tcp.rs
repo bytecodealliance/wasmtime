@@ -6,6 +6,7 @@ use crate::preview2::{
         io::streams::{InputStream, OutputStream},
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
         sockets::tcp::{self, ShutdownType},
+        sockets::tcp_create_socket,
     },
     network::SocketAddressFamily,
 };
@@ -20,6 +21,17 @@ use tokio::io::Interest;
 use wasmtime::component::Resource;
 
 impl<T: WasiView> tcp::Host for T {}
+
+impl<T: WasiView> tcp_create_socket::Host for T {
+    fn create_tcp_socket(
+        &mut self,
+        address_family: IpAddressFamily,
+    ) -> SocketResult<Resource<TcpSocket>> {
+        let socket = TcpSocket::new(address_family.into())?;
+        let socket = self.table_mut().push(socket)?;
+        Ok(socket)
+    }
+}
 
 impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     fn start_bind(
