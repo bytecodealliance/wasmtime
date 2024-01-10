@@ -5,19 +5,15 @@ use crate::preview2::bindings::sockets::{
 use crate::preview2::host::network::util;
 use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
 use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
-use crate::preview2::tcp::{SystemTcpReader, SystemTcpWriter};
+use crate::preview2::tcp::SystemTcpSocket;
 use crate::preview2::{
-    with_ambient_tokio_runtime, InputStream, OutputStream, Pollable, SocketAddrFamily,
-    SocketResult, Subscribe, WasiView,
+    InputStream, OutputStream, Pollable, SocketAddrFamily, SocketResult, Subscribe, WasiView,
 };
-use cap_net_ext::Blocking;
-use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
@@ -65,87 +61,30 @@ enum TcpState {
 pub struct TcpSocketWrapper {
     /// The part of a `TcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
-    inner: Arc<tokio::net::TcpStream>,
+    inner: SystemTcpSocket,
 
     /// The current state in the bind/listen/accept/connect progression.
     tcp_state: TcpState,
-
-    /// The desired listen queue size. Set to None to use the system's default.
-    listen_backlog_size: Option<i32>,
-
-    family: SocketAddressFamily,
-
-    // The socket options below are not automatically inherited from the listener
-    // on all platforms. So we keep track of which options have been explicitly
-    // set and manually apply those values to newly accepted clients.
-    #[cfg(target_os = "macos")]
-    receive_buffer_size: Option<usize>,
-    #[cfg(target_os = "macos")]
-    send_buffer_size: Option<usize>,
-    #[cfg(target_os = "macos")]
-    hop_limit: Option<u8>,
-    #[cfg(target_os = "macos")]
-    keep_alive_idle_time: Option<std::time::Duration>,
 }
 
 impl TcpSocketWrapper {
     /// Create a new socket in the given family.
     pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
-        // Create a new host socket and set it to non-blocking, which is needed
-        // by our async implementation.
-        let fd = util::tcp_socket(family, Blocking::No)?;
-
-        let socket_address_family = match family {
-            SocketAddrFamily::V4 => SocketAddressFamily::Ipv4,
-            SocketAddrFamily::V6 => SocketAddressFamily::Ipv6 {
-                v6only: sockopt::get_ipv6_v6only(&fd)?,
-            },
-        };
-
-        Self::from_fd(fd, socket_address_family)
-    }
-
-    /// Create a `TcpSocket` from an existing socket.
-    ///
-    /// The socket must be in non-blocking mode.
-    pub(crate) fn from_fd(
-        fd: rustix::fd::OwnedFd,
-        family: SocketAddressFamily,
-    ) -> io::Result<Self> {
-        let stream = Self::setup_tokio_tcp_stream(fd)?;
-
         Ok(Self {
-            inner: Arc::new(stream),
+            inner: SystemTcpSocket::new(family)?,
             tcp_state: TcpState::Default,
-            listen_backlog_size: None,
-            family,
-            #[cfg(target_os = "macos")]
-            receive_buffer_size: None,
-            #[cfg(target_os = "macos")]
-            send_buffer_size: None,
-            #[cfg(target_os = "macos")]
-            hop_limit: None,
-            #[cfg(target_os = "macos")]
-            keep_alive_idle_time: None,
         })
     }
 
-    fn setup_tokio_tcp_stream(fd: rustix::fd::OwnedFd) -> io::Result<tokio::net::TcpStream> {
-        let std_stream =
-            unsafe { std::net::TcpStream::from_raw_socketlike(fd.into_raw_socketlike()) };
-        with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))
-    }
-
     pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        &self.inner
+        &self.inner.stream
     }
 
     /// Create the input/output stream pair for a tcp socket.
     pub fn as_split(&self) -> (InputStream, OutputStream) {
         const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
-        let reader = SystemTcpReader::new(self.inner.clone());
-        let writer = SystemTcpWriter::new(self.inner.clone());
+        let (reader, writer) = self.inner.split();
 
         let input = Box::new(AsyncReadStream::new(reader));
         let output = Box::new(AsyncWriteStream::new(SOCKET_READY_SIZE, writer));
@@ -184,7 +123,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         }
 
         util::validate_unicast(&local_address)?;
-        util::validate_address_family(&local_address, &socket.family)?;
+        util::validate_address_family(&local_address, &socket.inner.family)?;
 
         {
             // Ensure that we're allowed to connect to this address.
@@ -260,7 +199,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
 
             util::validate_unicast(&remote_address)?;
             util::validate_remote_address(&remote_address)?;
-            util::validate_address_family(&remote_address, &socket.family)?;
+            util::validate_address_family(&remote_address, &socket.inner.family)?;
 
             // Ensure that we're allowed to connect to this address.
             network.check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)?;
@@ -354,7 +293,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             | TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
         }
 
-        util::tcp_listen(socket.tcp_socket(), socket.listen_backlog_size)?;
+        util::tcp_listen(socket.tcp_socket(), socket.inner.listen_backlog_size)?;
 
         socket.tcp_state = TcpState::ListenStarted;
 
@@ -384,8 +323,8 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         Resource<OutputStream>,
     )> {
         self.ctx().allowed_network_uses.check_allowed_tcp()?;
-        let table = self.table();
-        let socket = table.get(&this)?;
+        let table = self.table_mut();
+        let socket = table.get_mut(&this)?;
 
         match socket.tcp_state {
             TcpState::Listening => {}
@@ -393,10 +332,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         }
 
         // Do the OS accept call.
-        let tcp_socket = socket.tcp_socket();
-        let (client_fd, _addr) = tcp_socket.try_io(Interest::READABLE, || {
-            util::tcp_accept(tcp_socket, Blocking::No)
-        })?;
+        let client = socket.inner.try_accept()?;
 
         #[cfg(target_os = "macos")]
         {
@@ -404,29 +340,30 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             // do this on platforms that don't already do this automatically
             // and only if a specific value was explicitly set on the listener.
 
-            if let Some(size) = socket.receive_buffer_size {
-                _ = util::set_socket_recv_buffer_size(&client_fd, size); // Ignore potential error.
+            if let Some(size) = socket.inner.receive_buffer_size {
+                _ = util::set_socket_recv_buffer_size(&client.stream, size); // Ignore potential error.
             }
 
-            if let Some(size) = socket.send_buffer_size {
-                _ = util::set_socket_send_buffer_size(&client_fd, size); // Ignore potential error.
+            if let Some(size) = socket.inner.send_buffer_size {
+                _ = util::set_socket_send_buffer_size(&client.stream, size); // Ignore potential error.
             }
 
             // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
-            if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) = (socket.family, socket.hop_limit)
+            if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) =
+                (socket.inner.family, socket.inner.hop_limit)
             {
-                _ = util::set_ipv6_unicast_hops(&client_fd, ttl); // Ignore potential error.
+                _ = util::set_ipv6_unicast_hops(&client.stream, ttl); // Ignore potential error.
             }
 
-            if let Some(value) = socket.keep_alive_idle_time {
-                _ = util::set_tcp_keepidle(&client_fd, value); // Ignore potential error.
+            if let Some(value) = socket.inner.keep_alive_idle_time {
+                _ = util::set_tcp_keepidle(&client.stream, value); // Ignore potential error.
             }
         }
 
-        let mut tcp_socket = TcpSocketWrapper::from_fd(client_fd, socket.family)?;
-
-        // Mark the socket as connected so that we can exit early from methods like `start-bind`.
-        tcp_socket.tcp_state = TcpState::Connected;
+        let tcp_socket = TcpSocketWrapper {
+            inner: client,
+            tcp_state: TcpState::Connected,
+        };
 
         let (input, output) = tcp_socket.as_split();
         let output: OutputStream = output;
@@ -494,7 +431,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        match socket.family {
+        match socket.inner.family {
             SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
             SocketAddressFamily::Ipv6 { .. } => Ok(IpAddressFamily::Ipv6),
         }
@@ -507,7 +444,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         // Instead of just calling the OS we return our own internal state, because
         // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
 
-        match socket.family {
+        match socket.inner.family {
             SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
             SocketAddressFamily::Ipv6 { v6only } => Ok(v6only),
         }
@@ -517,12 +454,12 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
-        match socket.family {
+        match socket.inner.family {
             SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
             SocketAddressFamily::Ipv6 { .. } => match socket.tcp_state {
                 TcpState::Default => {
                     sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?;
-                    socket.family = SocketAddressFamily::Ipv6 { v6only: value };
+                    socket.inner.family = SocketAddressFamily::Ipv6 { v6only: value };
                     Ok(())
                 }
                 TcpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
@@ -555,7 +492,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         match socket.tcp_state {
             TcpState::Default | TcpState::BindStarted | TcpState::Bound => {
                 // Socket not listening yet. Stash value for first invocation to `listen`.
-                socket.listen_backlog_size = Some(value);
+                socket.inner.listen_backlog_size = Some(value);
 
                 Ok(())
             }
@@ -566,7 +503,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
                 rustix::net::listen(socket.tcp_socket(), value)
                     .map_err(|_| ErrorCode::NotSupported)?;
 
-                socket.listen_backlog_size = Some(value);
+                socket.inner.listen_backlog_size = Some(value);
 
                 Ok(())
             }
@@ -613,7 +550,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
 
         #[cfg(target_os = "macos")]
         {
-            socket.keep_alive_idle_time = Some(duration);
+            socket.inner.keep_alive_idle_time = Some(duration);
         }
 
         Ok(())
@@ -658,7 +595,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let ttl = match socket.family {
+        let ttl = match socket.inner.family {
             SocketAddressFamily::Ipv4 => util::get_ip_ttl(socket.tcp_socket())?,
             SocketAddressFamily::Ipv6 { .. } => util::get_ipv6_unicast_hops(socket.tcp_socket())?,
         };
@@ -670,7 +607,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
-        match socket.family {
+        match socket.inner.family {
             SocketAddressFamily::Ipv4 => util::set_ip_ttl(socket.tcp_socket(), value)?,
             SocketAddressFamily::Ipv6 { .. } => {
                 util::set_ipv6_unicast_hops(socket.tcp_socket(), value)?
@@ -679,7 +616,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
 
         #[cfg(target_os = "macos")]
         {
-            socket.hop_limit = Some(value);
+            socket.inner.hop_limit = Some(value);
         }
 
         Ok(())
@@ -706,7 +643,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
 
         #[cfg(target_os = "macos")]
         {
-            socket.receive_buffer_size = Some(value);
+            socket.inner.receive_buffer_size = Some(value);
         }
 
         Ok(())
@@ -733,7 +670,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
 
         #[cfg(target_os = "macos")]
         {
-            socket.send_buffer_size = Some(value);
+            socket.inner.send_buffer_size = Some(value);
         }
 
         Ok(())
@@ -798,6 +735,7 @@ impl Subscribe for TcpSocketWrapper {
 
         // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
         self.inner
+            .stream
             .ready(Interest::READABLE | Interest::WRITABLE)
             .await
             .unwrap();
