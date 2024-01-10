@@ -77,6 +77,83 @@ pub struct TcpSocket {
     pub(crate) keep_alive_idle_time: Option<std::time::Duration>,
 }
 
+impl TcpSocket {
+    /// Create a new socket in the given family.
+    pub fn new(family: AddressFamily) -> io::Result<Self> {
+        // Create a new host socket and set it to non-blocking, which is needed
+        // by our async implementation.
+        let fd = util::tcp_socket(family, Blocking::No)?;
+
+        let socket_address_family = match family {
+            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
+            AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
+                v6only: sockopt::get_ipv6_v6only(&fd)?,
+            },
+        };
+
+        Self::from_fd(fd, socket_address_family)
+    }
+
+    /// Create a `TcpSocket` from an existing socket.
+    ///
+    /// The socket must be in non-blocking mode.
+    pub(crate) fn from_fd(
+        fd: rustix::fd::OwnedFd,
+        family: SocketAddressFamily,
+    ) -> io::Result<Self> {
+        let stream = Self::setup_tokio_tcp_stream(fd)?;
+
+        Ok(Self {
+            inner: Arc::new(stream),
+            tcp_state: TcpState::Default,
+            listen_backlog_size: None,
+            family,
+            #[cfg(target_os = "macos")]
+            receive_buffer_size: None,
+            #[cfg(target_os = "macos")]
+            send_buffer_size: None,
+            #[cfg(target_os = "macos")]
+            hop_limit: None,
+            #[cfg(target_os = "macos")]
+            keep_alive_idle_time: None,
+        })
+    }
+
+    fn setup_tokio_tcp_stream(fd: rustix::fd::OwnedFd) -> io::Result<tokio::net::TcpStream> {
+        let std_stream =
+            unsafe { std::net::TcpStream::from_raw_socketlike(fd.into_raw_socketlike()) };
+        with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))
+    }
+
+    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
+        &self.inner
+    }
+
+    /// Create the input/output stream pair for a tcp socket.
+    pub fn as_split(&self) -> (InputStream, OutputStream) {
+        let input = Box::new(TcpReadStream::new(self.inner.clone()));
+        let output = Box::new(TcpWriteStream::new(self.inner.clone()));
+        (InputStream::Host(input), output)
+    }
+}
+
+#[async_trait::async_trait]
+impl Subscribe for TcpSocket {
+    async fn ready(&mut self) {
+        // Some states are ready immediately.
+        match self.tcp_state {
+            TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => return,
+            _ => {}
+        }
+
+        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+        self.inner
+            .ready(Interest::READABLE | Interest::WRITABLE)
+            .await
+            .unwrap();
+    }
+}
+
 pub(crate) struct TcpReadStream {
     stream: Arc<tokio::net::TcpStream>,
     closed: bool,
@@ -253,82 +330,5 @@ impl Subscribe for TcpWriteStream {
         if let LastWrite::Done = self.last_write {
             self.stream.writable().await.unwrap();
         }
-    }
-}
-
-impl TcpSocket {
-    /// Create a new socket in the given family.
-    pub fn new(family: AddressFamily) -> io::Result<Self> {
-        // Create a new host socket and set it to non-blocking, which is needed
-        // by our async implementation.
-        let fd = util::tcp_socket(family, Blocking::No)?;
-
-        let socket_address_family = match family {
-            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
-            AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
-                v6only: sockopt::get_ipv6_v6only(&fd)?,
-            },
-        };
-
-        Self::from_fd(fd, socket_address_family)
-    }
-
-    /// Create a `TcpSocket` from an existing socket.
-    ///
-    /// The socket must be in non-blocking mode.
-    pub(crate) fn from_fd(
-        fd: rustix::fd::OwnedFd,
-        family: SocketAddressFamily,
-    ) -> io::Result<Self> {
-        let stream = Self::setup_tokio_tcp_stream(fd)?;
-
-        Ok(Self {
-            inner: Arc::new(stream),
-            tcp_state: TcpState::Default,
-            listen_backlog_size: None,
-            family,
-            #[cfg(target_os = "macos")]
-            receive_buffer_size: None,
-            #[cfg(target_os = "macos")]
-            send_buffer_size: None,
-            #[cfg(target_os = "macos")]
-            hop_limit: None,
-            #[cfg(target_os = "macos")]
-            keep_alive_idle_time: None,
-        })
-    }
-
-    fn setup_tokio_tcp_stream(fd: rustix::fd::OwnedFd) -> io::Result<tokio::net::TcpStream> {
-        let std_stream =
-            unsafe { std::net::TcpStream::from_raw_socketlike(fd.into_raw_socketlike()) };
-        with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))
-    }
-
-    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        &self.inner
-    }
-
-    /// Create the input/output stream pair for a tcp socket.
-    pub fn as_split(&self) -> (InputStream, OutputStream) {
-        let input = Box::new(TcpReadStream::new(self.inner.clone()));
-        let output = Box::new(TcpWriteStream::new(self.inner.clone()));
-        (InputStream::Host(input), output)
-    }
-}
-
-#[async_trait::async_trait]
-impl Subscribe for TcpSocket {
-    async fn ready(&mut self) {
-        // Some states are ready immediately.
-        match self.tcp_state {
-            TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => return,
-            _ => {}
-        }
-
-        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-        self.inner
-            .ready(Interest::READABLE | Interest::WRITABLE)
-            .await
-            .unwrap();
     }
 }
