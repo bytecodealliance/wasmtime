@@ -161,7 +161,7 @@ pub mod bindings {
         },
         with: {
             "wasi:sockets/network/network": super::network::NetworkHandle,
-            "wasi:sockets/tcp/tcp-socket": super::host::tcp::TcpSocket,
+            "wasi:sockets/tcp/tcp-socket": super::host::tcp::TcpSocketWrapper,
             "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
             "wasi:sockets/udp/incoming-datagram-stream": super::udp::IncomingDatagramStream,
             "wasi:sockets/udp/outgoing-datagram-stream": super::udp::OutgoingDatagramStream,
