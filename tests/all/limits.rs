@@ -12,7 +12,7 @@ fn test_limits() -> Result<()> {
         &engine,
         r#"(module
             (memory $m (export "m") 0)
-            (table (export "t") 0 anyfunc)
+            (table (export "t") 0 funcref)
             (func (export "grow") (param i32) (result i32)
               (memory.grow $m (local.get 0)))
            )"#,
@@ -100,7 +100,7 @@ async fn test_limits_async() -> Result<()> {
     let engine = Engine::new(&config).unwrap();
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     struct LimitsAsync {
@@ -190,7 +190,7 @@ fn test_limits_memory_only() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let mut store = Store::new(
@@ -276,7 +276,7 @@ fn test_limits_table_only() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let mut store = Store::new(&engine, StoreLimitsBuilder::new().table_elements(5).build());
@@ -323,7 +323,7 @@ fn test_limits_table_only() -> Result<()> {
 #[test]
 fn test_initial_table_limits_exceeded() -> Result<()> {
     let engine = Engine::default();
-    let module = Module::new(&engine, r#"(module (table (export "t") 23 anyfunc))"#)?;
+    let module = Module::new(&engine, r#"(module (table (export "t") 23 funcref))"#)?;
 
     let mut store = Store::new(&engine, StoreLimitsBuilder::new().table_elements(4).build());
     store.limiter(|s| s as &mut dyn ResourceLimiter);
@@ -661,7 +661,7 @@ fn test_custom_table_limiter() -> Result<()> {
     let engine = Engine::default();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#)?;
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#)?;
 
     let context = TableContext {
         elements_used: 0,
@@ -752,7 +752,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
 
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let context = FailureDetector::default();
@@ -864,7 +864,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
 
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let context = FailureDetector::default();
@@ -1023,7 +1023,7 @@ fn panic_in_table_limiter() {
     let engine = Engine::default();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#).unwrap();
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#).unwrap();
 
     let mut store = Store::new(&engine, Panic);
     store.limiter(|s| s as &mut dyn ResourceLimiter);
@@ -1095,7 +1095,7 @@ async fn panic_in_async_table_limiter() {
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#).unwrap();
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#).unwrap();
 
     let mut store = Store::new(&engine, Panic);
     store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
@@ -1117,7 +1117,7 @@ fn growth_trap() -> Result<()> {
         &engine,
         r#"(module
             (memory $m (export "m") 0)
-            (table (export "t") 0 anyfunc)
+            (table (export "t") 0 funcref)
             (func (export "grow") (param i32) (result i32)
               (memory.grow $m (local.get 0)))
            )"#,

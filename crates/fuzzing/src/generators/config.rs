@@ -47,7 +47,8 @@ impl Config {
         // Allow a memory to be generated, but don't let it get too large.
         // Additionally require the maximum size to guarantee that the growth
         // behavior is consistent across engines.
-        config.max_memory_pages = 10;
+        config.max_memory32_pages = 10;
+        config.max_memory64_pages = 10;
         config.memory_max_size_required = true;
 
         // If tables are generated make sure they don't get too large to avoid
@@ -339,11 +340,13 @@ impl<'a> Arbitrary<'a> for Config {
 
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
-            if cfg.max_memory_pages < pooling.memory_pages {
-                pooling.memory_pages = cfg.max_memory_pages;
-            } else {
-                cfg.max_memory_pages = pooling.memory_pages;
-            }
+            let min = cfg
+                .max_memory32_pages
+                .min(cfg.max_memory64_pages)
+                .min(pooling.memory_pages);
+            pooling.memory_pages = min;
+            cfg.max_memory32_pages = min;
+            cfg.max_memory64_pages = min;
 
             // If traps are disallowed then memories must have at least one page
             // of memory so if we still are only allowing 0 pages of memory then
@@ -351,7 +354,8 @@ impl<'a> Arbitrary<'a> for Config {
             if cfg.disallow_traps {
                 if pooling.memory_pages == 0 {
                     pooling.memory_pages = 1;
-                    cfg.max_memory_pages = 1;
+                    cfg.max_memory32_pages = 1;
+                    cfg.max_memory64_pages = 1;
                 }
                 // .. additionally update tables
                 if pooling.table_elements == 0 {

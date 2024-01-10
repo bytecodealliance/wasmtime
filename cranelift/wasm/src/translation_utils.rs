@@ -4,7 +4,7 @@ use crate::WasmResult;
 use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use wasmparser::{FuncValidator, WasmFuncType, WasmModuleResources};
+use wasmparser::{FuncValidator, WasmModuleResources};
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
@@ -29,11 +29,13 @@ where
         wasmparser::BlockType::FuncType(ty_index) => {
             let ty = validator
                 .resources()
-                .func_type_at(ty_index)
-                .expect("should be valid");
+                .sub_type_at(ty_index)
+                .expect("should be valid")
+                .unwrap_func();
+
             (
-                itertools::Either::Right(ty.inputs()),
-                itertools::Either::Right(ty.outputs()),
+                itertools::Either::Right(ty.params().iter().copied()),
+                itertools::Either::Right(ty.results().iter().copied()),
             )
         }
     });
