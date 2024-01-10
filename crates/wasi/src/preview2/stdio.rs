@@ -36,16 +36,6 @@ pub trait StdinStream: Send + Sync {
     fn isatty(&self) -> bool;
 }
 
-impl<T: StdinStream + ?Sized> StdinStream for Box<T> {
-    fn stream(&self) -> Box<dyn HostInputStream> {
-        self.as_ref().stream()
-    }
-
-    fn isatty(&self) -> bool {
-        self.as_ref().isatty()
-    }
-}
-
 impl StdinStream for pipe::MemoryInputPipe {
     fn stream(&self) -> Box<dyn HostInputStream> {
         Box::new(self.clone())
@@ -87,16 +77,6 @@ pub trait StdoutStream: Send + Sync {
 
     /// Returns whether this stream is backed by a TTY.
     fn isatty(&self) -> bool;
-}
-
-impl<T: StdoutStream + ?Sized> StdoutStream for Box<T> {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
-        self.as_ref().stream()
-    }
-
-    fn isatty(&self) -> bool {
-        self.as_ref().isatty()
-    }
 }
 
 impl StdoutStream for pipe::MemoryOutputPipe {
