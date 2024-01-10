@@ -3390,7 +3390,7 @@ dependencies = [
  "wast 70.0.0",
  "wat",
  "windows-sys 0.52.0",
- "wit-component 0.19.0",
+ "wit-component 0.19.1",
 ]
 
 [[package]]
