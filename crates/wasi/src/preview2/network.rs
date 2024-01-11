@@ -1,6 +1,6 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
-use crate::preview2::ip_name_lookup::ResolveAddressStream;
+use crate::preview2::host::ip_name_lookup::ResolveAddressStream;
 use crate::preview2::TrappableError;
 use std::net::SocketAddr;
 use std::sync::Arc;

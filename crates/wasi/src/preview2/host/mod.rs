@@ -4,6 +4,7 @@ mod exit;
 pub(crate) mod filesystem;
 mod instance_network;
 mod io;
+pub(crate) mod ip_name_lookup;
 pub(crate) mod network;
 mod random;
 pub(crate) mod tcp;
