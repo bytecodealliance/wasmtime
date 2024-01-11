@@ -222,7 +222,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Args => {
                             get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
                         }
-                        ArgsOrRets::Rets => get_intreg_for_retval(&call_conv, next_gpr),
+                        ArgsOrRets::Rets => get_intreg_for_retval(&call_conv, flags, next_gpr),
                     }
                 } else {
                     match args_or_rets {
@@ -1035,7 +1035,11 @@ fn get_fltreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
     }
 }
 
-fn get_intreg_for_retval(call_conv: &CallConv, intreg_idx: usize) -> Option<Reg> {
+fn get_intreg_for_retval(
+    call_conv: &CallConv,
+    flags: &settings::Flags,
+    intreg_idx: usize,
+) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match intreg_idx {
             0 => Some(regs::rax()),
@@ -1057,6 +1061,7 @@ fn get_intreg_for_retval(call_conv: &CallConv, intreg_idx: usize) -> Option<Reg>
         CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
+            2 if flags.enable_llvm_abi_extensions() => Some(regs::rcx()),
             _ => None,
         },
         CallConv::WindowsFastcall => match intreg_idx {
