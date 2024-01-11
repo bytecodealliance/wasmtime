@@ -232,12 +232,10 @@ impl From<SocketAddrFamily> for cap_net_ext::AddressFamily {
 pub(crate) mod util {
     use std::io::{Error, ErrorKind};
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
-    use std::time::Duration;
 
     use crate::preview2::network::SocketAddressFamily;
     use crate::preview2::SocketAddrFamily;
-    use cap_net_ext::{Blocking, TcpListenerExt, UdpSocketExt};
-    use io_lifetimes::AsSocketlike;
+    use cap_net_ext::{Blocking, UdpSocketExt};
     use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;
     use rustix::net::sockopt;
@@ -341,16 +339,6 @@ pub(crate) mod util {
      * Syscalls wrappers with (opinionated) portability fixes.
      */
 
-    pub fn tcp_socket(family: SocketAddrFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
-        // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
-        // - On Windows: call WSAStartup if not done before.
-        // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
-        //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
-
-        let listener = cap_std::net::TcpListener::new(family.into(), blocking)?;
-        Ok(OwnedFd::from(listener))
-    }
-
     pub fn udp_socket(family: SocketAddrFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
@@ -371,55 +359,6 @@ pub(crate) mod util {
         })
     }
 
-    pub fn tcp_accept<Fd: AsFd>(
-        sockfd: Fd,
-        blocking: Blocking,
-    ) -> std::io::Result<(OwnedFd, SocketAddr)> {
-        // Delegate `accept` to cap_net_ext. They set the NONBLOCK and CLOEXEC flags
-        // for us. Either immediately as a flag to `accept`, or afterwards using
-        // ioctl or fcntl. Exact method depends on the platform.
-
-        let (client, addr) = sockfd
-            .as_fd()
-            .as_socketlike_view::<cap_std::net::TcpListener>()
-            .accept_with(blocking)
-            .map_err(|error| match Errno::from_io_error(&error) {
-                // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
-                // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
-                // > or the service provider is still processing a callback function.
-                //
-                // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
-                // because in POSIX this error is only returned by a non-blocking
-                // `connect` and wasi-sockets has a different solution for that.
-                #[cfg(windows)]
-                Some(Errno::INPROGRESS) => Errno::INTR.into(),
-
-                // Normalize Linux' non-standard behavior.
-                //
-                // From https://man7.org/linux/man-pages/man2/accept.2.html:
-                // > Linux accept() passes already-pending network errors on the
-                // > new socket as an error code from accept(). This behavior
-                // > differs from other BSD socket implementations. (...)
-                #[cfg(target_os = "linux")]
-                Some(
-                    Errno::CONNRESET
-                    | Errno::NETRESET
-                    | Errno::HOSTUNREACH
-                    | Errno::HOSTDOWN
-                    | Errno::NETDOWN
-                    | Errno::NETUNREACH
-                    | Errno::PROTO
-                    | Errno::NOPROTOOPT
-                    | Errno::NONET
-                    | Errno::OPNOTSUPP,
-                ) => Errno::CONNABORTED.into(),
-
-                _ => error,
-            })?;
-
-        Ok((client.into(), addr))
-    }
-
     pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
         match rustix::net::connect_unspec(sockfd) {
             // BSD platforms return an error even if the UDP socket was disconnected successfully.
@@ -437,55 +376,6 @@ pub(crate) mod util {
             Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
             r => r,
         }
-    }
-
-    pub fn set_tcp_keepidle<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
-        if value <= Duration::ZERO {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(Errno::INVAL);
-        }
-
-        // Ensure that the value passed to the actual syscall never gets rounded down to 0.
-        const MIN_SECS: u64 = 1;
-
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_SECS: u64 = i16::MAX as u64;
-
-        sockopt::set_tcp_keepidle(
-            sockfd,
-            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
-        )
-    }
-
-    pub fn set_tcp_keepintvl<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
-        if value <= Duration::ZERO {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(Errno::INVAL);
-        }
-
-        // Ensure that any fractional value passed to the actual syscall never gets rounded down to 0.
-        const MIN_SECS: u64 = 1;
-
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_SECS: u64 = i16::MAX as u64;
-
-        sockopt::set_tcp_keepintvl(
-            sockfd,
-            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
-        )
-    }
-
-    pub fn set_tcp_keepcnt<Fd: AsFd>(sockfd: Fd, value: u32) -> rustix::io::Result<()> {
-        if value == 0 {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(Errno::INVAL);
-        }
-
-        const MIN_CNT: u32 = 1;
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_CNT: u32 = i8::MAX as u32;
-
-        sockopt::set_tcp_keepcnt(sockfd, value.clamp(MIN_CNT, MAX_CNT))
     }
 
     pub fn get_ip_ttl<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<u8> {

@@ -1,7 +1,7 @@
 use crate::preview2::host::network::util;
 use crate::preview2::network::SocketAddressFamily;
 use crate::preview2::{DynFuture, SocketAddrFamily};
-use cap_net_ext::Blocking;
+use cap_net_ext::{Blocking, TcpListenerExt};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -41,9 +41,14 @@ impl SystemTcpSocket {
 
     /// Create a new socket in the given family.
     pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
-        // Create a new host socket and set it to non-blocking, which is needed
-        // by our async implementation.
-        let fd = util::tcp_socket(family, cap_net_ext::Blocking::No)?;
+        // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
+        // - On Windows: call WSAStartup if not done before.
+        // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
+        //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
+        let fd = rustix::fd::OwnedFd::from(cap_std::net::TcpListener::new(
+            family.into(),
+            cap_net_ext::Blocking::No,
+        )?);
 
         let socket_address_family = match family {
             SocketAddrFamily::V4 => SocketAddressFamily::Ipv4,
@@ -211,8 +216,49 @@ impl SystemTcpSocket {
 
     fn try_accept(&mut self) -> io::Result<SystemTcpSocket> {
         let stream = self.stream.as_ref();
-        let (client_fd, _addr) = stream.try_io(Interest::READABLE, || {
-            util::tcp_accept(stream, Blocking::No)
+        let client_fd = stream.try_io(Interest::READABLE, || {
+            // Delegate `accept` to cap_net_ext. They set the NONBLOCK and CLOEXEC flags
+            // for us. Either immediately as a flag to `accept`, or afterwards using
+            // ioctl or fcntl. Exact method depends on the platform.
+
+            let (client, _addr) = stream
+                .as_socketlike_view::<cap_std::net::TcpListener>()
+                .accept_with(Blocking::No)
+                .map_err(|error| match Errno::from_io_error(&error) {
+                    // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
+                    // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
+                    // > or the service provider is still processing a callback function.
+                    //
+                    // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
+                    // because in POSIX this error is only returned by a non-blocking
+                    // `connect` and wasi-sockets has a different solution for that.
+                    #[cfg(windows)]
+                    Some(Errno::INPROGRESS) => Errno::INTR.into(),
+
+                    // Normalize Linux' non-standard behavior.
+                    //
+                    // From https://man7.org/linux/man-pages/man2/accept.2.html:
+                    // > Linux accept() passes already-pending network errors on the
+                    // > new socket as an error code from accept(). This behavior
+                    // > differs from other BSD socket implementations. (...)
+                    #[cfg(target_os = "linux")]
+                    Some(
+                        Errno::CONNRESET
+                        | Errno::NETRESET
+                        | Errno::HOSTUNREACH
+                        | Errno::HOSTDOWN
+                        | Errno::NETDOWN
+                        | Errno::NETUNREACH
+                        | Errno::PROTO
+                        | Errno::NOPROTOOPT
+                        | Errno::NONET
+                        | Errno::OPNOTSUPP,
+                    ) => Errno::CONNABORTED.into(),
+
+                    _ => error,
+                })?;
+
+            Ok(client.into())
         })?;
 
         #[cfg(target_os = "macos")]
@@ -222,20 +268,20 @@ impl SystemTcpSocket {
             // and only if a specific value was explicitly set on the listener.
 
             if let Some(size) = self.receive_buffer_size {
-                _ = util::set_socket_recv_buffer_size(&self.stream, size); // Ignore potential error.
+                _ = util::set_socket_recv_buffer_size(&client_fd, size); // Ignore potential error.
             }
 
             if let Some(size) = self.send_buffer_size {
-                _ = util::set_socket_send_buffer_size(&self.stream, size); // Ignore potential error.
+                _ = util::set_socket_send_buffer_size(&client_fd, size); // Ignore potential error.
             }
 
             // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
             if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) = (self.family, self.hop_limit) {
-                _ = util::set_ipv6_unicast_hops(&self.stream, ttl); // Ignore potential error.
+                _ = util::set_ipv6_unicast_hops(&client_fd, ttl); // Ignore potential error.
             }
 
             if let Some(value) = self.keep_alive_idle_time {
-                _ = util::set_tcp_keepidle(&self.stream, value); // Ignore potential error.
+                _ = util::set_tcp_keepidle(&client_fd, value); // Ignore potential error.
             }
         }
 
@@ -344,7 +390,21 @@ impl SystemTcpSocket {
     }
 
     pub fn set_keep_alive_idle_time(&mut self, value: Duration) -> io::Result<()> {
-        util::set_tcp_keepidle(&self.stream, value)?;
+        if value <= Duration::ZERO {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            return Err(Errno::INVAL.into());
+        }
+
+        // Ensure that the value passed to the actual syscall never gets rounded down to 0.
+        const MIN_SECS: u64 = 1;
+
+        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+        const MAX_SECS: u64 = i16::MAX as u64;
+
+        sockopt::set_tcp_keepidle(
+            &self.stream,
+            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
+        )?;
 
         #[cfg(target_os = "macos")]
         {
@@ -359,7 +419,23 @@ impl SystemTcpSocket {
     }
 
     pub fn set_keep_alive_interval(&mut self, value: Duration) -> io::Result<()> {
-        Ok(util::set_tcp_keepintvl(&self.stream, value)?)
+        if value <= Duration::ZERO {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            return Err(Errno::INVAL.into());
+        }
+
+        // Ensure that any fractional value passed to the actual syscall never gets rounded down to 0.
+        const MIN_SECS: u64 = 1;
+
+        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+        const MAX_SECS: u64 = i16::MAX as u64;
+
+        sockopt::set_tcp_keepintvl(
+            &self.stream,
+            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
+        )?;
+
+        Ok(())
     }
 
     pub fn keep_alive_count(&self) -> io::Result<u32> {
@@ -367,7 +443,17 @@ impl SystemTcpSocket {
     }
 
     pub fn set_keep_alive_count(&mut self, value: u32) -> io::Result<()> {
-        Ok(util::set_tcp_keepcnt(&self.stream, value)?)
+        if value == 0 {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            return Err(Errno::INVAL.into());
+        }
+
+        const MIN_CNT: u32 = 1;
+        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+        const MAX_CNT: u32 = i8::MAX as u32;
+
+        sockopt::set_tcp_keepcnt(&self.stream, value.clamp(MIN_CNT, MAX_CNT))?;
+        Ok(())
     }
 
     pub fn hop_limit(&self) -> io::Result<u8> {
@@ -452,7 +538,7 @@ impl tokio::io::AsyncRead for SystemTcpReader {
 /// access to the original TcpStream. Also, `OwnedWriteHalf` calls `shutdown` on
 /// the underlying socket, which is not what we want.
 pub(crate) struct SystemTcpWriter {
-    pub(crate) inner: Arc<tokio::net::TcpStream>,
+    inner: Arc<tokio::net::TcpStream>,
 }
 
 impl tokio::io::AsyncWrite for SystemTcpWriter {
