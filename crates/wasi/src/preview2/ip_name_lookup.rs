@@ -1,11 +1,18 @@
 use crate::preview2::host::network::util;
+use crate::preview2::DynFuture;
 use std::net::{IpAddr, Ipv6Addr, ToSocketAddrs};
 use std::str::FromStr;
-use std::vec;
+use std::{io, vec};
 
-pub(crate) fn parse_and_resolve(name: &str) -> std::io::Result<Vec<IpAddr>> {
-    let host = parse(name)?;
-    blocking_resolve(&host)
+pub(crate) fn resolve_addresses(name: &str) -> DynFuture<io::Result<Vec<IpAddr>>> {
+    match parse(name) {
+        Err(e) => DynFuture::ready(Err(e)),
+        Ok(url::Host::Ipv4(v4addr)) => DynFuture::ready(Ok(vec![IpAddr::V4(v4addr)])),
+        Ok(url::Host::Ipv6(v6addr)) => DynFuture::ready(Ok(vec![IpAddr::V6(v6addr)])),
+        Ok(url::Host::Domain(domain)) => {
+            DynFuture::boxed(super::spawn_blocking(move || blocking_resolve(&domain)))
+        }
+    }
 }
 
 fn parse(name: &str) -> std::io::Result<url::Host> {
@@ -29,20 +36,14 @@ fn parse(name: &str) -> std::io::Result<url::Host> {
     }
 }
 
-fn blocking_resolve(host: &url::Host) -> std::io::Result<Vec<IpAddr>> {
-    match host {
-        url::Host::Ipv4(v4addr) => Ok(vec![IpAddr::V4(*v4addr)]),
-        url::Host::Ipv6(v6addr) => Ok(vec![IpAddr::V6(*v6addr)]),
-        url::Host::Domain(domain) => {
-            // For now use the standard library to perform actual resolution through
-            // the usage of the `ToSocketAddrs` trait. This is only
-            // resolving names, not ports, so force the port to be 0.
-            let addresses = (domain.as_str(), 0)
-                .to_socket_addrs()?
-                .map(|addr| util::to_canonical(&addr.ip()).into())
-                .collect();
+fn blocking_resolve(domain: &str) -> std::io::Result<Vec<IpAddr>> {
+    // For now use the standard library to perform actual resolution through
+    // the usage of the `ToSocketAddrs` trait. This is only
+    // resolving names, not ports, so force the port to be 0.
+    let addresses = (domain, 0)
+        .to_socket_addrs()?
+        .map(|addr| util::to_canonical(&addr.ip()).into())
+        .collect();
 
-            Ok(addresses)
-        }
-    }
+    Ok(addresses)
 }
