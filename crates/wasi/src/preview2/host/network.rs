@@ -381,18 +381,6 @@ pub(crate) mod util {
         })
     }
 
-    pub fn tcp_connect<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
-        rustix::net::connect(sockfd, addr).map_err(|error| match error {
-            // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
-            // Windows returns `WSAEWOULDBLOCK`.
-            //
-            // This normalized error code is depended upon by: tcp.rs
-            #[cfg(windows)]
-            Errno::WOULDBLOCK => Errno::INPROGRESS,
-            _ => error,
-        })
-    }
-
     pub fn tcp_accept<Fd: AsFd>(
         sockfd: Fd,
         blocking: Blocking,
