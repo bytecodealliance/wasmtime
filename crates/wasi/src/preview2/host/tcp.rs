@@ -2,15 +2,12 @@ use crate::preview2::bindings::sockets::{
     network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
     tcp::ShutdownType,
 };
-use crate::preview2::host::network::util;
-use crate::preview2::network::SocketAddrUse;
 use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
 use crate::preview2::tcp::SystemTcpSocket;
 use crate::preview2::{
     DynFuture, InputStream, OutputStream, Pollable, SocketAddrFamily, SocketResult, Subscribe,
     WasiView,
 };
-use rustix::io::Errno;
 use std::io;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
@@ -71,10 +68,6 @@ impl TcpSocketWrapper {
         })
     }
 
-    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        &self.inner.stream
-    }
-
     /// Create the input/output stream pair for a tcp socket.
     pub fn as_split(&self) -> (InputStream, OutputStream) {
         const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
@@ -107,8 +100,12 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table_mut();
-        let socket = table.get(&this)?;
-        let network = table.get(&network)?;
+
+        // At the moment, there's only one network handle (`instance-network`)
+        // in existence. All we have to do here is validate that the caller indeed
+        // has possesion of a valid handle and then we're good to go:
+        let _network = table.get(&network)?;
+        let socket = table.get_mut(&this)?;
         let local_address: SocketAddr = local_address.into();
 
         match socket.tcp_state {
@@ -117,37 +114,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        util::validate_unicast(&local_address)?;
-        util::validate_address_family(&local_address, &socket.inner.family)?;
-
-        {
-            // Ensure that we're allowed to connect to this address.
-            network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
-
-            // Automatically bypass the TIME_WAIT state when the user is trying
-            // to bind to a specific port:
-            let reuse_addr = local_address.port() > 0;
-
-            // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
-            // This ensures we're not accidentally affected by any socket option
-            // state left behind by a previous failed call to this method (start_bind).
-            util::set_tcp_reuseaddr(socket.tcp_socket(), reuse_addr)?;
-
-            // Perform the OS bind call.
-            util::tcp_bind(socket.tcp_socket(), &local_address).map_err(|error| match error {
-                // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-                // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-                //
-                // The most common reasons for this error should have already
-                // been handled by our own validation slightly higher up in this
-                // function. This error mapping is here just in case there is
-                // an edge case we didn't catch.
-                Errno::AFNOSUPPORT => ErrorCode::InvalidArgument,
-                _ => ErrorCode::from(error),
-            })?;
-        }
-
-        let socket = table.get_mut(&this)?;
+        socket.inner.bind(&local_address)?;
         socket.tcp_state = TcpState::BindStarted;
 
         Ok(())

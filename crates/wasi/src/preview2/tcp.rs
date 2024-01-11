@@ -15,13 +15,13 @@ use tokio::io::Interest;
 
 /// A cross-platform WASI-compliant `TcpSocket` implementation.
 pub struct SystemTcpSocket {
-    pub(crate) stream: Arc<tokio::net::TcpStream>,
+    stream: Arc<tokio::net::TcpStream>,
 
     /// The desired listen queue size. Set to None to use the system's default.
     listen_backlog_size: i32,
     is_listening: bool,
 
-    pub(crate) family: SocketAddressFamily,
+    family: SocketAddressFamily,
 
     // The socket options below are not automatically inherited from the listener
     // on all platforms. So we keep track of which options have been explicitly
@@ -91,6 +91,57 @@ impl SystemTcpSocket {
                 inner: self.stream.clone(),
             },
         )
+    }
+
+    #[allow(unused_variables)] // Parameters are not used on Windows
+    fn set_reuseaddr(&mut self, value: bool) -> rustix::io::Result<()> {
+        // When a TCP socket is closed, the system may
+        // temporarily reserve that specific address+port pair in a so called
+        // TIME_WAIT state. During that period, any attempt to rebind to that pair
+        // will fail. Setting SO_REUSEADDR to true bypasses that behaviour. Unlike
+        // the name "SO_REUSEADDR" might suggest, it does not allow multiple
+        // active sockets to share the same local address.
+
+        // On Windows that behavior is the default, so there is no need to manually
+        // configure such an option. But (!), Windows _does_ have an identically
+        // named socket option which allows users to "hijack" active sockets.
+        // This is definitely not what we want to do here.
+
+        // Microsoft's own documentation[1] states that we should set SO_EXCLUSIVEADDRUSE
+        // instead (to the inverse value), however the github issue below[2] seems
+        // to indicate that that may no longer be correct.
+        // [1]: https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
+        // [2]: https://github.com/python-trio/trio/issues/928
+
+        #[cfg(not(windows))]
+        sockopt::set_socket_reuseaddr(&self.stream, value)?;
+
+        Ok(())
+    }
+
+    pub fn bind(&mut self, local_address: &SocketAddr) -> io::Result<()> {
+        util::validate_unicast(&local_address)?;
+        util::validate_address_family(&local_address, &self.family)?;
+
+        // Automatically bypass the TIME_WAIT state when the user is trying
+        // to bind to a specific port:
+        let reuse_addr = local_address.port() > 0;
+
+        // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
+        // This ensures we're not accidentally affected by any socket option
+        // state left behind by a previous failed call to this method (start_bind).
+        self.set_reuseaddr(reuse_addr)?;
+
+        // Perform the OS bind call.
+        rustix::net::bind(&self.stream, &local_address).map_err(|error| match error {
+            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+            #[cfg(windows)]
+            Errno::NOBUFS => Errno::ADDRINUSE,
+            _ => error,
+        })?;
+
+        Ok(())
     }
 
     pub fn connect(&mut self, remote_address: &SocketAddr) -> DynFuture<io::Result<()>> {

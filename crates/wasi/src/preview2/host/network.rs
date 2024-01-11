@@ -361,16 +361,6 @@ pub(crate) mod util {
         Ok(OwnedFd::from(socket))
     }
 
-    pub fn tcp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
-        rustix::net::bind(sockfd, addr).map_err(|error| match error {
-            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-            #[cfg(windows)]
-            Errno::NOBUFS => Errno::ADDRINUSE,
-            _ => error,
-        })
-    }
-
     pub fn udp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
         rustix::net::bind(sockfd, addr).map_err(|error| match error {
             // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
@@ -447,34 +437,6 @@ pub(crate) mod util {
             Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
             r => r,
         }
-    }
-
-    // Even though SO_REUSEADDR is a SOL_* level option, this function contain a
-    // compatibility fix specific to TCP. That's why it contains the `_tcp_` infix instead of `_socket_`.
-    #[allow(unused_variables)] // Parameters are not used on Windows
-    pub fn set_tcp_reuseaddr<Fd: AsFd>(sockfd: Fd, value: bool) -> rustix::io::Result<()> {
-        // When a TCP socket is closed, the system may
-        // temporarily reserve that specific address+port pair in a so called
-        // TIME_WAIT state. During that period, any attempt to rebind to that pair
-        // will fail. Setting SO_REUSEADDR to true bypasses that behaviour. Unlike
-        // the name "SO_REUSEADDR" might suggest, it does not allow multiple
-        // active sockets to share the same local address.
-
-        // On Windows that behavior is the default, so there is no need to manually
-        // configure such an option. But (!), Windows _does_ have an identically
-        // named socket option which allows users to "hijack" active sockets.
-        // This is definitely not what we want to do here.
-
-        // Microsoft's own documentation[1] states that we should set SO_EXCLUSIVEADDRUSE
-        // instead (to the inverse value), however the github issue below[2] seems
-        // to indicate that that may no longer be correct.
-        // [1]: https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
-        // [2]: https://github.com/python-trio/trio/issues/928
-
-        #[cfg(not(windows))]
-        sockopt::set_socket_reuseaddr(sockfd, value)?;
-
-        Ok(())
     }
 
     pub fn set_tcp_keepidle<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
