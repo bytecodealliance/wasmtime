@@ -1,0 +1,36 @@
+test compile precise-output
+set enable_llvm_abi_extensions=1
+target x86_64
+
+function u0:0(i64) -> i64, i128 system_v {
+block0(v0: i64):
+    v1 = iconst.i64 0x1000_0000_0000_0000
+    v2 = iconst.i64 0x2000_0000_0000_0000
+    v3 = iconcat v1, v2
+    v6 = iconst.i64 1
+    return v6, v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $1152921504606846976, %rdx
+;   movabsq $2305843009213693952, %rcx
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0x1000000000000000, %rdx
+;   movabsq $0x2000000000000000, %rcx
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
