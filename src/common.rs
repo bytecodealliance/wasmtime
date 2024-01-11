@@ -37,7 +37,7 @@ impl RunTarget {
 /// Common command line arguments for run commands.
 #[derive(Parser, PartialEq)]
 pub struct RunCommon {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub common: CommonOptions,
 
     /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
@@ -46,7 +46,7 @@ pub struct RunCommon {
     /// is arbitrary user input. Only `wasmtime`-precompiled modules generated
     /// via the `wasmtime compile` command or equivalent should be passed as an
     /// argument with this option specified.
-    #[clap(long = "allow-precompiled")]
+    #[arg(long = "allow-precompiled")]
     pub allow_precompiled: bool,
 
     /// Profiling strategy (valid options are: perfmap, jitdump, vtune, guest)
@@ -64,7 +64,7 @@ pub struct RunCommon {
     /// where `path` is where to write the profile and `interval` is the
     /// duration between samples. When used with `--wasm-timeout` the timeout
     /// will be rounded up to the nearest multiple of this interval.
-    #[clap(
+    #[arg(
         long,
         value_name = "STRATEGY",
         value_parser = Profile::parse,

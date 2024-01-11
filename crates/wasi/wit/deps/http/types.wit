@@ -169,8 +169,15 @@ interface types {
       entries: list<tuple<field-key,field-value>>
     ) -> result<fields, header-error>;
 
-    /// Get all of the values corresponding to a key.
+    /// Get all of the values corresponding to a key. If the key is not present
+    /// in this `fields`, an empty list is returned. However, if the key is
+    /// present but empty, this is represented by a list with one or more
+    /// empty field-values present.
     get: func(name: field-key) -> list<field-value>;
+
+    /// Returns `true` when the key is present in this `fields`. If the key is
+    /// syntactically invalid, `false` is returned.
+    has: func(name: field-key) -> bool;
 
     /// Set all of the values for a key. Clears any existing values for that
     /// key, if they have been set.
@@ -191,7 +198,7 @@ interface types {
     append: func(name: field-key, value: field-value) -> result<_, header-error>;
 
     /// Retrieve the full set of keys and values in the Fields. Like the
-    /// constructor, the list represents each key-value pair. 
+    /// constructor, the list represents each key-value pair.
     ///
     /// The outer list represents each key-value pair in the Fields. Keys
     /// which have multiple values are represented by multiple entries in this
@@ -308,9 +315,9 @@ interface types {
     headers: func() -> headers;
   }
 
-  /// Parameters for making an HTTP Request. Each of these parameters is an
-  /// optional timeout, with the unit in milliseconds, applicable to the
-  /// transport layer of the HTTP protocol.
+  /// Parameters for making an HTTP Request. Each of these parameters is
+  /// currently an optional timeout applicable to the transport layer of the
+  /// HTTP protocol.
   ///
   /// These timeouts are separate from any the user may use to bound a
   /// blocking call to `wasi:io/poll.poll`.
@@ -319,27 +326,27 @@ interface types {
     constructor();
 
     /// The timeout for the initial connect to the HTTP Server.
-    connect-timeout-ms: func() -> option<duration>;
+    connect-timeout: func() -> option<duration>;
 
     /// Set the timeout for the initial connect to the HTTP Server. An error
     /// return value indicates that this timeout is not supported.
-    set-connect-timeout-ms: func(ms: option<duration>) -> result;
+    set-connect-timeout: func(duration: option<duration>) -> result;
 
     /// The timeout for receiving the first byte of the Response body.
-    first-byte-timeout-ms: func() -> option<duration>;
+    first-byte-timeout: func() -> option<duration>;
 
     /// Set the timeout for receiving the first byte of the Response body. An
     /// error return value indicates that this timeout is not supported.
-    set-first-byte-timeout-ms: func(ms: option<duration>) -> result;
+    set-first-byte-timeout: func(duration: option<duration>) -> result;
 
     /// The timeout for receiving subsequent chunks of bytes in the Response
     /// body stream.
-    between-bytes-timeout-ms: func() -> option<duration>;
+    between-bytes-timeout: func() -> option<duration>;
 
     /// Set the timeout for receiving subsequent chunks of bytes in the Response
     /// body stream. An error return value indicates that this timeout is not
     /// supported.
-    set-between-bytes-timeout-ms: func(ms: option<duration>) -> result;
+    set-between-bytes-timeout: func(duration: option<duration>) -> result;
   }
 
   /// Represents the ability to send an HTTP Response.
@@ -437,16 +444,20 @@ interface types {
     /// The outer `option` represents future readiness. Users can wait on this
     /// `option` to become `some` using the `subscribe` method.
     ///
-    /// The `result` represents that either the HTTP Request or Response body,
-    /// as well as any trailers, were received successfully, or that an error
-    /// occured receiving them. The optional `trailers` indicates whether or not
-    /// trailers were present in the body.
+    /// The outer `result` is used to retrieve the trailers or error at most
+    /// once. It will be success on the first call in which the outer option
+    /// is `some`, and error on subsequent calls.
+    ///
+    /// The inner `result` represents that either the HTTP Request or Response
+    /// body, as well as any trailers, were received successfully, or that an
+    /// error occured receiving them. The optional `trailers` indicates whether
+    /// or not trailers were present in the body.
     ///
     /// When some `trailers` are returned by this method, the `trailers`
     /// resource is immutable, and a child. Use of the `set`, `append`, or
     /// `delete` methods will return an error, and the resource must be
     /// dropped before the parent `future-trailers` is dropped.
-    get: func() -> option<result<option<trailers>, error-code>>;
+    get: func() -> option<result<result<option<trailers>, error-code>>>;
   }
 
   /// Represents an outgoing HTTP Response.

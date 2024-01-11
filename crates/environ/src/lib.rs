@@ -3,8 +3,8 @@
 //! the translation the base addresses of regions of memory that will hold the globals, tables and
 //! linear memories.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
+#![warn(clippy::cast_sign_loss)]
 
 mod address_map;
 mod builtin;

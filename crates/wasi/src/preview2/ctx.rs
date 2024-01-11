@@ -1,17 +1,18 @@
-use super::clocks::host::{monotonic_clock, wall_clock};
 use crate::preview2::{
-    clocks::{self, HostMonotonicClock, HostWallClock},
+    clocks::{
+        host::{monotonic_clock, wall_clock},
+        HostMonotonicClock, HostWallClock,
+    },
     filesystem::Dir,
+    network::{SocketAddrCheck, SocketAddrUse},
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
-    DirPerms, FilePerms, Table,
+    DirPerms, FilePerms,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
-use cap_std::ipnet::{self, IpNet};
-use cap_std::net::Pool;
-use cap_std::{ambient_authority, AmbientAuthority};
-use std::mem;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::Arc;
+use std::{mem, net::SocketAddr};
+use wasmtime::component::ResourceTable;
 
 pub struct WasiCtxBuilder {
     stdin: Box<dyn StdinStream>,
@@ -20,14 +21,13 @@ pub struct WasiCtxBuilder {
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
-
-    pool: Pool,
+    socket_addr_check: SocketAddrCheck,
     random: Box<dyn RngCore + Send + Sync>,
     insecure_random: Box<dyn RngCore + Send + Sync>,
     insecure_random_seed: u128,
     wall_clock: Box<dyn HostWallClock + Send + Sync>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
-    allow_ip_name_lookup: bool,
+    allowed_network_uses: AllowedNetworkUses,
     built: bool,
 }
 
@@ -71,13 +71,13 @@ impl WasiCtxBuilder {
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
-            pool: Pool::new(),
+            socket_addr_check: SocketAddrCheck::default(),
             random: random::thread_rng(),
             insecure_random,
             insecure_random_seed,
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
-            allow_ip_name_lookup: false,
+            allowed_network_uses: AllowedNetworkUses::default(),
             built: false,
         }
     }
@@ -171,86 +171,54 @@ impl WasiCtxBuilder {
         self.insecure_random = Box::new(insecure_random);
         self
     }
+
     pub fn insecure_random_seed(&mut self, insecure_random_seed: u128) -> &mut Self {
         self.insecure_random_seed = insecure_random_seed;
         self
     }
 
-    pub fn wall_clock(&mut self, clock: impl clocks::HostWallClock + 'static) -> &mut Self {
+    pub fn wall_clock(&mut self, clock: impl HostWallClock + 'static) -> &mut Self {
         self.wall_clock = Box::new(clock);
         self
     }
 
-    pub fn monotonic_clock(
-        &mut self,
-        clock: impl clocks::HostMonotonicClock + 'static,
-    ) -> &mut Self {
+    pub fn monotonic_clock(&mut self, clock: impl HostMonotonicClock + 'static) -> &mut Self {
         self.monotonic_clock = Box::new(clock);
         self
     }
 
-    /// Add all network addresses accessable to the host to the pool.
-    pub fn inherit_network(&mut self, ambient_authority: AmbientAuthority) -> &mut Self {
-        self.pool.insert_ip_net_port_any(
-            IpNet::new(Ipv4Addr::UNSPECIFIED.into(), 0).unwrap(),
-            ambient_authority,
-        );
-        self.pool.insert_ip_net_port_any(
-            IpNet::new(Ipv6Addr::UNSPECIFIED.into(), 0).unwrap(),
-            ambient_authority,
-        );
-        self
+    /// Allow all network addresses accessible to the host
+    pub fn inherit_network(&mut self) -> &mut Self {
+        self.socket_addr_check(|_, _| true)
     }
 
-    /// Add network addresses to the pool.
-    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(
-        &mut self,
-        addrs: A,
-    ) -> std::io::Result<&mut Self> {
-        self.pool.insert(addrs, ambient_authority())?;
-        Ok(self)
-    }
-
-    /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
-    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) -> &mut Self {
-        self.pool.insert_socket_addr(addr, ambient_authority());
-        self
-    }
-
-    /// Add a range of network addresses, accepting any port, to the pool.
+    /// A check that will be called for each socket address that is used.
     ///
-    /// Unlike `insert_ip_net`, this function grants access to any requested port.
-    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) -> &mut Self {
-        self.pool
-            .insert_ip_net_port_any(ip_net, ambient_authority());
-        self
-    }
-
-    /// Add a range of network addresses, accepting a range of ports, to
-    /// per-instance networks.
-    ///
-    /// This grants access to the port range starting at `ports_start` and, if
-    /// `ports_end` is provided, ending before `ports_end`.
-    pub fn insert_ip_net_port_range(
-        &mut self,
-        ip_net: ipnet::IpNet,
-        ports_start: u16,
-        ports_end: Option<u16>,
-    ) -> &mut Self {
-        self.pool
-            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority());
-        self
-    }
-
-    /// Add a range of network addresses with a specific port to the pool.
-    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) -> &mut Self {
-        self.pool.insert_ip_net(ip_net, port, ambient_authority());
+    /// Returning `true` will permit socket connections to the `SocketAddr`,
+    /// while returning `false` will reject the connection.
+    pub fn socket_addr_check<F>(&mut self, check: F) -> &mut Self
+    where
+        F: Fn(&SocketAddr, SocketAddrUse) -> bool + Send + Sync + 'static,
+    {
+        self.socket_addr_check = SocketAddrCheck(Arc::new(check));
         self
     }
 
     /// Allow usage of `wasi:sockets/ip-name-lookup`
     pub fn allow_ip_name_lookup(&mut self, enable: bool) -> &mut Self {
-        self.allow_ip_name_lookup = enable;
+        self.allowed_network_uses.ip_name_lookup = enable;
+        self
+    }
+
+    /// Allow usage of UDP
+    pub fn allow_udp(&mut self, enable: bool) -> &mut Self {
+        self.allowed_network_uses.udp = enable;
+        self
+    }
+
+    /// Allow usage of TCP
+    pub fn allow_tcp(&mut self, enable: bool) -> &mut Self {
+        self.allowed_network_uses.tcp = enable;
         self
     }
 
@@ -272,13 +240,13 @@ impl WasiCtxBuilder {
             env,
             args,
             preopens,
-            pool,
+            socket_addr_check,
             random,
             insecure_random,
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-            allow_ip_name_lookup,
+            allowed_network_uses,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -290,20 +258,20 @@ impl WasiCtxBuilder {
             env,
             args,
             preopens,
-            pool,
+            socket_addr_check,
             random,
             insecure_random,
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-            allow_ip_name_lookup,
+            allowed_network_uses,
         }
     }
 }
 
 pub trait WasiView: Send {
-    fn table(&self) -> &Table;
-    fn table_mut(&mut self) -> &mut Table;
+    fn table(&self) -> &ResourceTable;
+    fn table_mut(&mut self) -> &mut ResourceTable;
     fn ctx(&self) -> &WasiCtx;
     fn ctx_mut(&mut self) -> &mut WasiCtx;
 }
@@ -320,6 +288,46 @@ pub struct WasiCtx {
     pub(crate) stdin: Box<dyn StdinStream>,
     pub(crate) stdout: Box<dyn StdoutStream>,
     pub(crate) stderr: Box<dyn StdoutStream>,
-    pub(crate) pool: Pool,
-    pub(crate) allow_ip_name_lookup: bool,
+    pub(crate) socket_addr_check: SocketAddrCheck,
+    pub(crate) allowed_network_uses: AllowedNetworkUses,
+}
+
+pub struct AllowedNetworkUses {
+    pub ip_name_lookup: bool,
+    pub udp: bool,
+    pub tcp: bool,
+}
+
+impl Default for AllowedNetworkUses {
+    fn default() -> Self {
+        Self {
+            ip_name_lookup: false,
+            udp: true,
+            tcp: true,
+        }
+    }
+}
+
+impl AllowedNetworkUses {
+    pub(crate) fn check_allowed_udp(&self) -> std::io::Result<()> {
+        if !self.udp {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "UDP is not allowed",
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn check_allowed_tcp(&self) -> std::io::Result<()> {
+        if !self.tcp {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "TCP is not allowed",
+            ));
+        }
+
+        Ok(())
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-wasm"
-version = "0.103.0"
+version = "0.105.0"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 documentation = "https://docs.rs/cranelift-wasm"
@@ -10,6 +10,9 @@ categories = ["no-std", "wasm"]
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 wasmparser = { workspace = true }

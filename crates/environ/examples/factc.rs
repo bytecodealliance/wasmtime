@@ -24,53 +24,53 @@ use wasmtime_environ::fact::Module;
 #[derive(Parser)]
 struct Factc {
     /// Whether or not debug code is inserted into the generated adapter.
-    #[clap(long)]
+    #[arg(long)]
     debug: bool,
 
     /// Whether or not the lifting options (the callee of the exported adapter)
     /// uses a 64-bit memory as opposed to a 32-bit memory.
-    #[clap(long)]
+    #[arg(long)]
     lift64: bool,
 
     /// Whether or not the lowering options (the caller of the exported adapter)
     /// uses a 64-bit memory as opposed to a 32-bit memory.
-    #[clap(long)]
+    #[arg(long)]
     lower64: bool,
 
     /// Whether or not a call to a `post-return` configured function is enabled
     /// or not.
-    #[clap(long)]
+    #[arg(long)]
     post_return: bool,
 
     /// Whether or not to skip validation of the generated adapter module.
-    #[clap(long)]
+    #[arg(long)]
     skip_validate: bool,
 
     /// Where to place the generated adapter module. Standard output is used if
     /// this is not specified.
-    #[clap(short, long)]
+    #[arg(short, long)]
     output: Option<PathBuf>,
 
     /// Output the text format for WebAssembly instead of the binary format.
-    #[clap(short, long)]
+    #[arg(short, long)]
     text: bool,
 
-    #[clap(long, value_parser = parse_string_encoding, default_value = "utf8")]
+    #[arg(long, value_parser = parse_string_encoding, default_value = "utf8")]
     lift_str: StringEncoding,
 
-    #[clap(long, value_parser = parse_string_encoding, default_value = "utf8")]
+    #[arg(long, value_parser = parse_string_encoding, default_value = "utf8")]
     lower_str: StringEncoding,
 
     /// TODO
     input: PathBuf,
 }
 
-fn parse_string_encoding(name: &str) -> anyhow::Result<StringEncoding> {
+fn parse_string_encoding(name: &str) -> Result<StringEncoding> {
     Ok(match name {
         "utf8" => StringEncoding::Utf8,
         "utf16" => StringEncoding::Utf16,
         "compact-utf16" => StringEncoding::CompactUtf16,
-        other => anyhow::bail!("invalid string encoding: `{other}`"),
+        other => bail!("invalid string encoding: `{other}`"),
     })
 }
 

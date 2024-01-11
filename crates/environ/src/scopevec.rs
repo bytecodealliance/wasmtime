@@ -28,10 +28,12 @@ impl<T> ScopeVec<T> {
     ///
     /// The original data will be deallocated when `self` is dropped.
     pub fn push(&self, data: Vec<T>) -> &mut [T] {
-        let mut data: Box<[T]> = data.into();
-        let ptr = data.as_mut_ptr();
+        let data: Box<[T]> = data.into();
         let len = data.len();
-        self.data.borrow_mut().push(data);
+
+        let mut storage = self.data.borrow_mut();
+        storage.push(data);
+        let ptr = storage.last_mut().unwrap().as_mut_ptr();
 
         // This should be safe for a few reasons:
         //
@@ -53,5 +55,24 @@ impl<T> ScopeVec<T> {
         // This all means that it should be safe to return a mutable slice of
         // all of `data` after the data has been pushed onto our internal list.
         unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScopeVec;
+
+    #[test]
+    fn smoke() {
+        let scope = ScopeVec::new();
+        let a = scope.push(Vec::new());
+        let b = scope.push(vec![1, 2, 3]);
+        let c = scope.push(vec![4, 5, 6]);
+        assert_eq!(a.len(), 0);
+        b[0] = 4;
+        c[2] = 5;
+        assert_eq!(a, []);
+        assert_eq!(b, [4, 2, 3]);
+        assert_eq!(c, [4, 5, 5]);
     }
 }

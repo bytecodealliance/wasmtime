@@ -33,22 +33,18 @@ extern "C" {
  * This function does not take ownership of any of its arguments but error is
  * owned by the caller.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_global_new(
-    wasmtime_context_t *store,
-    const wasm_globaltype_t *type,
-    const wasmtime_val_t *val,
-    wasmtime_global_t *ret
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_global_new(wasmtime_context_t *store, const wasm_globaltype_t *type,
+                    const wasmtime_val_t *val, wasmtime_global_t *ret);
 
 /**
  * \brief Returns the wasm type of the specified global.
  *
  * The returned #wasm_globaltype_t is owned by the caller.
  */
-WASM_API_EXTERN wasm_globaltype_t* wasmtime_global_type(
-    const wasmtime_context_t *store,
-    const wasmtime_global_t *global
-);
+WASM_API_EXTERN wasm_globaltype_t *
+wasmtime_global_type(const wasmtime_context_t *store,
+                     const wasmtime_global_t *global);
 
 /**
  * \brief Get the value of the specified global.
@@ -60,11 +56,9 @@ WASM_API_EXTERN wasm_globaltype_t* wasmtime_global_type(
  * This function returns ownership of the contents of `out`, so
  * #wasmtime_val_delete may need to be called on the value.
  */
-WASM_API_EXTERN void wasmtime_global_get(
-    wasmtime_context_t *store,
-    const wasmtime_global_t *global,
-    wasmtime_val_t *out
-);
+WASM_API_EXTERN void wasmtime_global_get(wasmtime_context_t *store,
+                                         const wasmtime_global_t *global,
+                                         wasmtime_val_t *out);
 
 /**
  * \brief Sets a global to a new value.
@@ -76,16 +70,15 @@ WASM_API_EXTERN void wasmtime_global_get(
  * This function may return an error if `global` is not mutable or if `val` has
  * the wrong type for `global`.
  *
- * THis does not take ownership of any argument but returns ownership of the error.
+ * THis does not take ownership of any argument but returns ownership of the
+ * error.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_global_set(
-    wasmtime_context_t *store,
-    const wasmtime_global_t *global,
-    const wasmtime_val_t *val
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_global_set(wasmtime_context_t *store, const wasmtime_global_t *global,
+                    const wasmtime_val_t *val);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_GLOBAL_H

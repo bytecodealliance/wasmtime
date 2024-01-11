@@ -1,6 +1,7 @@
 use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::io::poll::{self, Pollable};
 use crate::wasi::io::streams::{InputStream, OutputStream, StreamError};
+use crate::wasi::random;
 use crate::wasi::sockets::instance_network;
 use crate::wasi::sockets::ip_name_lookup;
 use crate::wasi::sockets::network::{
@@ -17,7 +18,7 @@ use std::ops::Range;
 const TIMEOUT_NS: u64 = 1_000_000_000;
 
 impl Pollable {
-    pub fn wait_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
+    pub fn block_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
         let ready = poll::poll(&[self, timeout]);
         assert!(ready.len() > 0);
         match ready[0] {
@@ -30,10 +31,11 @@ impl Pollable {
 
 impl OutputStream {
     pub fn blocking_write_util(&self, mut bytes: &[u8]) -> Result<(), StreamError> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let pollable = self.subscribe();
 
         while !bytes.is_empty() {
-            pollable.block();
+            pollable.block_until(&timeout).expect("write timed out");
 
             let permit = self.check_write()?;
 
@@ -73,10 +75,25 @@ impl Network {
                     _ => return Ok(addresses),
                 },
                 Err(ErrorCode::WouldBlock) => {
-                    pollable.wait_until(&timeout)?;
+                    pollable.block_until(&timeout)?;
                 }
                 Err(err) => return Err(err),
             }
+        }
+    }
+
+    /// Same as `Network::blocking_resolve_addresses` but ignores post validation errors
+    ///
+    /// The ignored error codes signal that the input passed validation
+    /// and a lookup was actually attempted, but failed. These are ignored to
+    /// make the CI tests less flaky.
+    pub fn permissive_blocking_resolve_addresses(
+        &self,
+        name: &str,
+    ) -> Result<Vec<IpAddress>, ErrorCode> {
+        match self.blocking_resolve_addresses(name) {
+            Err(ErrorCode::NameUnresolvable | ErrorCode::TemporaryResolverFailure) => Ok(vec![]),
+            r => r,
         }
     }
 }
@@ -91,26 +108,28 @@ impl TcpSocket {
         network: &Network,
         local_address: IpSocketAddress,
     ) -> Result<(), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_bind(&network, local_address)?;
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
     }
 
     pub fn blocking_listen(&self) -> Result<(), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_listen()?;
 
         loop {
             match self.finish_listen() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
@@ -121,24 +140,26 @@ impl TcpSocket {
         network: &Network,
         remote_address: IpSocketAddress,
     ) -> Result<(InputStream, OutputStream), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_connect(&network, remote_address)?;
 
         loop {
             match self.finish_connect() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
     }
 
     pub fn blocking_accept(&self) -> Result<(TcpSocket, InputStream, OutputStream), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         loop {
             match self.accept() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
@@ -155,13 +176,14 @@ impl UdpSocket {
         network: &Network,
         local_address: IpSocketAddress,
     ) -> Result<(), ErrorCode> {
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let sub = self.subscribe();
 
         self.start_bind(&network, local_address)?;
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.block(),
+                Err(ErrorCode::WouldBlock) => sub.block_until(&timeout)?,
                 result => return result,
             }
         }
@@ -181,7 +203,7 @@ impl OutgoingDatagramStream {
 
         loop {
             match self.check_send() {
-                Ok(0) => sub.wait_until(timeout)?,
+                Ok(0) => sub.block_until(timeout)?,
                 result => return result,
             }
         }
@@ -221,7 +243,7 @@ impl IncomingDatagramStream {
                     if datagrams.len() >= count.start as usize {
                         return Ok(datagrams);
                     } else {
-                        pollable.wait_until(&timeout)?;
+                        pollable.block_until(&timeout)?;
                     }
                 }
                 Err(err) => return Err(err),
@@ -333,6 +355,40 @@ impl PartialEq for IpSocketAddress {
             (Self::Ipv4(l0), Self::Ipv4(r0)) => l0 == r0,
             (Self::Ipv6(l0), Self::Ipv6(r0)) => l0 == r0,
             _ => false,
+        }
+    }
+}
+
+fn generate_random_u16(range: Range<u16>) -> u16 {
+    let start = range.start as u64;
+    let end = range.end as u64;
+    let port = start + (random::random::get_random_u64() % (end - start));
+    port as u16
+}
+
+/// Execute the inner function with a randomly generated port.
+/// To prevent random failures, we make a few attempts before giving up.
+pub fn attempt_random_port<F>(
+    local_address: IpAddress,
+    mut f: F,
+) -> Result<IpSocketAddress, ErrorCode>
+where
+    F: FnMut(IpSocketAddress) -> Result<(), ErrorCode>,
+{
+    const MAX_ATTEMPTS: u32 = 10;
+    let mut i = 0;
+    loop {
+        i += 1;
+
+        let port: u16 = generate_random_u16(1024..u16::MAX);
+        let sock_addr = IpSocketAddress::new(local_address, port);
+
+        match f(sock_addr) {
+            Ok(_) => return Ok(sock_addr),
+            Err(e) if i >= MAX_ATTEMPTS => return Err(e),
+            // Try again if the port is already taken. This can sometimes show up as `AccessDenied` on Windows.
+            Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => {}
+            Err(e) => return Err(e),
         }
     }
 }

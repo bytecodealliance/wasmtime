@@ -3,11 +3,12 @@
 //! `RuntimeLinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
 use crate::mmap::Mmap;
-use crate::parking_spot::ParkingSpot;
+use crate::parking_spot::{ParkingSpot, Waiter};
 use crate::vmcontext::VMMemoryDefinition;
 use crate::{MemoryImage, MemoryImageSlot, SendSyncPtr, Store, WaitResult};
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
+use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::ops::Range;
 use std::ptr::NonNull;
@@ -564,9 +565,10 @@ impl SharedMemory {
 
     /// Implementation of `memory.atomic.notify` for this shared memory.
     pub fn atomic_notify(&self, addr_index: u64, count: u32) -> Result<u32, Trap> {
-        validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
+        let ptr = validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
         log::trace!("memory.atomic.notify(addr={addr_index:#x}, count={count})");
-        Ok(self.0.spot.unpark(addr_index, count))
+        let ptr = unsafe { &*ptr };
+        Ok(self.0.spot.notify(ptr, count))
     }
 
     /// Implementation of `memory.atomic.wait32` for this shared memory.
@@ -586,12 +588,10 @@ impl SharedMemory {
         assert!(std::mem::align_of::<AtomicU32>() <= 4);
         let atomic = unsafe { &*(addr as *const AtomicU32) };
 
-        // We want the sequential consistency of `SeqCst` to ensure that the
-        // `load` sees the value that the `notify` will/would see. All WASM
-        // atomic operations are also `SeqCst`.
-        let validate = || atomic.load(Ordering::SeqCst) == expected;
-
-        Ok(self.0.spot.park(addr_index, validate, timeout))
+        WAITER.with(|waiter| {
+            let mut waiter = waiter.borrow_mut();
+            Ok(self.0.spot.wait32(atomic, expected, timeout, &mut waiter))
+        })
     }
 
     /// Implementation of `memory.atomic.wait64` for this shared memory.
@@ -611,12 +611,17 @@ impl SharedMemory {
         assert!(std::mem::align_of::<AtomicU64>() <= 8);
         let atomic = unsafe { &*(addr as *const AtomicU64) };
 
-        // We want the sequential consistency of `SeqCst` to ensure that the `load` sees the value that the `notify` will/would see.
-        // All WASM atomic operations are also `SeqCst`.
-        let validate = || atomic.load(Ordering::SeqCst) == expected;
-
-        Ok(self.0.spot.park(addr_index, validate, timeout))
+        WAITER.with(|waiter| {
+            let mut waiter = waiter.borrow_mut();
+            Ok(self.0.spot.wait64(atomic, expected, timeout, &mut waiter))
+        })
     }
+}
+
+thread_local! {
+    /// Structure used in conjunction with `ParkingSpot` to block the current
+    /// thread if necessary. Note that this is lazily initialized.
+    static WAITER: RefCell<Waiter> = const { RefCell::new(Waiter::new()) };
 }
 
 /// Shared memory needs some representation of a `VMMemoryDefinition` for

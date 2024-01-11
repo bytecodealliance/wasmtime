@@ -715,6 +715,7 @@ macro_rules! integers {
 
         unsafe impl Lower for $primitive {
             #[inline]
+            #[allow(trivial_numeric_casts)]
             fn lower<T>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
@@ -779,6 +780,7 @@ macro_rules! integers {
 
         unsafe impl Lift for $primitive {
             #[inline]
+            #[allow(trivial_numeric_casts)]
             fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 Ok(src.$get() as $primitive)

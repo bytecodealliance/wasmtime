@@ -7,6 +7,9 @@ publish = false
 version = "0.0.0"
 license = "Apache-2.0 WITH LLVM-exception"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }

@@ -4,26 +4,25 @@ use cap_std::fs::Dir;
 use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock;
 use wasmtime_wasi::preview2::bindings::wasi::filesystem::types as filesystem;
 use wasmtime_wasi::preview2::command::{add_to_linker, Command};
 use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, Table, WasiCtx, WasiCtxBuilder,
-    WasiView,
+    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct CommandCtx {
-    table: Table,
+    table: ResourceTable,
     wasi: WasiCtx,
 }
 
 impl WasiView for CommandCtx {
-    fn table(&self) -> &Table {
+    fn table(&self) -> &ResourceTable {
         &self.table
     }
-    fn table_mut(&mut self) -> &mut Table {
+    fn table_mut(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
     fn ctx(&self) -> &WasiCtx {
@@ -82,7 +81,7 @@ async fn api_time() -> Result<()> {
         }
     }
 
-    let table = Table::new();
+    let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new()
         .monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
         .wall_clock(FakeWallClock)
@@ -104,7 +103,7 @@ async fn api_read_only() -> Result<()> {
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
     std::fs::create_dir(dir.path().join("sub"))?;
 
-    let table = Table::new();
+    let table = ResourceTable::new();
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let wasi = WasiCtxBuilder::new()
         .preopened_dir(open_dir, DirPerms::READ, FilePerms::READ, "/")
@@ -155,7 +154,7 @@ wasmtime::component::bindgen!({
 
 #[test_log::test(tokio::test)]
 async fn api_reactor() -> Result<()> {
-    let table = Table::new();
+    let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new().env("GOOD_DOG", "gussie").build();
 
     let mut config = Config::new();

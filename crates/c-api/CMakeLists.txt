@@ -11,23 +11,6 @@ else()
 	set(WASMTIME_BUILD_TYPE "debug")
 endif()
 
-if(BUILD_SHARED_LIBS)
-	# Copy shared library into build directory
-	if(WIN32)
-		set(WASMTIME_INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.dll
-			${CMAKE_BINARY_DIR})
-	elseif(APPLE)
-		set(WASMTIME_INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.dylib
-			${CMAKE_BINARY_DIR})
-	else()
-		set(WASMTIME_INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.so
-			${CMAKE_BINARY_DIR})
-	endif()
-endif()
-
 if(ANDROID)
 	# TODO wasmtime only supports arm64-v8a right now
 	if(ANDROID_ABI STREQUAL "armeabi-v7a")

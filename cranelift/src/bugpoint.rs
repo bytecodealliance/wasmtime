@@ -26,14 +26,14 @@ pub struct Options {
     file: PathBuf,
 
     /// Configure Cranelift settings
-    #[clap(long = "set")]
+    #[arg(long = "set")]
     settings: Vec<String>,
 
     /// Specify the target architecture.
     target: String,
 
     /// Be more verbose
-    #[clap(short, long)]
+    #[arg(short, long)]
     verbose: bool,
 }
 

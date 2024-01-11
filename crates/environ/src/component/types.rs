@@ -294,25 +294,6 @@ impl ComponentTypes {
             InterfaceType::Result(i) => &self[*i].abi,
         }
     }
-
-    /// Smaller helper method to find a `SignatureIndex` which corresponds to
-    /// the `resource.drop` intrinsic in components, namely a core wasm function
-    /// type which takes one `i32` argument and has no results.
-    ///
-    /// This is a bit of a hack right now as ideally this find operation
-    /// wouldn't be needed and instead the `SignatureIndex` itself would be
-    /// threaded through appropriately, but that's left for a future
-    /// refactoring. Try not to lean too hard on this method though.
-    pub fn find_resource_drop_signature(&self) -> Option<SignatureIndex> {
-        self.module_types
-            .wasm_signatures()
-            .find(|(_, sig)| {
-                sig.params().len() == 1
-                    && sig.returns().len() == 0
-                    && sig.params()[0] == WasmType::I32
-            })
-            .map(|(i, _)| i)
-    }
 }
 
 macro_rules! impl_index {
@@ -322,6 +303,14 @@ macro_rules! impl_index {
             #[inline]
             fn index(&self, idx: $ty) -> &$output {
                 &self.$field[idx]
+            }
+        }
+
+        impl std::ops::Index<$ty> for ComponentTypesBuilder {
+            type Output = $output;
+            #[inline]
+            fn index(&self, idx: $ty) -> &$output {
+                &self.component_types[idx]
             }
         }
     )*)
@@ -346,6 +335,16 @@ impl_index! {
 // Additionally forward anything that can index `ModuleTypes` to `ModuleTypes`
 // (aka `SignatureIndex`)
 impl<T> Index<T> for ComponentTypes
+where
+    ModuleTypes: Index<T>,
+{
+    type Output = <ModuleTypes as Index<T>>::Output;
+    fn index(&self, idx: T) -> &Self::Output {
+        self.module_types.index(idx)
+    }
+}
+
+impl<T> Index<T> for ComponentTypesBuilder
 where
     ModuleTypes: Index<T>,
 {
@@ -405,16 +404,35 @@ impl ComponentTypesBuilder {
         self.component_types
     }
 
-    /// Returns the `ComponentTypes`-in-progress.
-    pub fn component_types(&self) -> &ComponentTypes {
-        &self.component_types
+    /// Smaller helper method to find a `SignatureIndex` which corresponds to
+    /// the `resource.drop` intrinsic in components, namely a core wasm function
+    /// type which takes one `i32` argument and has no results.
+    ///
+    /// This is a bit of a hack right now as ideally this find operation
+    /// wouldn't be needed and instead the `SignatureIndex` itself would be
+    /// threaded through appropriately, but that's left for a future
+    /// refactoring. Try not to lean too hard on this method though.
+    pub fn find_resource_drop_signature(&self) -> Option<SignatureIndex> {
+        self.module_types
+            .wasm_signatures()
+            .find(|(_, sig)| {
+                sig.params().len() == 1
+                    && sig.returns().len() == 0
+                    && sig.params()[0] == WasmType::I32
+            })
+            .map(|(i, _)| i)
     }
 
     /// Returns the underlying builder used to build up core wasm module types.
     ///
     /// Note that this is shared across all modules found within a component to
     /// improve the wins from deduplicating function signatures.
-    pub fn module_types_builder(&mut self) -> &mut ModuleTypesBuilder {
+    pub fn module_types_builder(&self) -> &ModuleTypesBuilder {
+        &self.module_types
+    }
+
+    /// Same as `module_types_builder`, but `mut`.
+    pub fn module_types_builder_mut(&mut self) -> &mut ModuleTypesBuilder {
         &mut self.module_types
     }
 
@@ -586,7 +604,7 @@ impl ComponentTypesBuilder {
             types::EntityType::Func(idx) => {
                 let ty = types[*idx].unwrap_func();
                 let ty = self.convert_func_type(ty);
-                EntityType::Function(self.module_types_builder().wasm_func_type(ty))
+                EntityType::Function(self.module_types_builder_mut().wasm_func_type(*idx, ty))
             }
             types::EntityType::Table(ty) => EntityType::Table(self.convert_table_type(ty)),
             types::EntityType::Memory(ty) => EntityType::Memory(ty.clone().into()),
@@ -897,20 +915,8 @@ impl ComponentTypesBuilder {
 }
 
 impl TypeConvert for ComponentTypesBuilder {
-    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+    fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
         panic!("heap types are not supported yet")
-    }
-}
-
-// Forward the indexing impl to the internal `TypeTables`
-impl<T> Index<T> for ComponentTypesBuilder
-where
-    ComponentTypes: Index<T>,
-{
-    type Output = <ComponentTypes as Index<T>>::Output;
-
-    fn index(&self, sig: T) -> &Self::Output {
-        &self.component_types[sig]
     }
 }
 

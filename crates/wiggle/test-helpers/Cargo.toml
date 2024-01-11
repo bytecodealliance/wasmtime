@@ -11,6 +11,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "LICENSE"]
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 proptest = "1.0.0"
 wiggle = { path = "..", features = ["tracing_log"] }

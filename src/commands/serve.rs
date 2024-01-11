@@ -11,9 +11,7 @@ use std::{
 };
 use wasmtime::component::{InstancePre, Linker};
 use wasmtime::{Engine, Store, StoreLimits};
-use wasmtime_wasi::preview2::{
-    self, StreamError, StreamResult, Table, WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::preview2::{self, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
@@ -24,7 +22,7 @@ use wasmtime_wasi_http::{
 use wasmtime_wasi_nn::WasiNnCtx;
 
 struct Host {
-    table: Table,
+    table: wasmtime::component::ResourceTable,
     ctx: WasiCtx,
     http: WasiHttpCtx,
 
@@ -35,11 +33,11 @@ struct Host {
 }
 
 impl WasiView for Host {
-    fn table(&self) -> &Table {
+    fn table(&self) -> &wasmtime::component::ResourceTable {
         &self.table
     }
 
-    fn table_mut(&mut self) -> &mut Table {
+    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
 
@@ -53,7 +51,7 @@ impl WasiView for Host {
 }
 
 impl WasiHttpView for Host {
-    fn table(&mut self) -> &mut Table {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
 
@@ -69,17 +67,16 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
 
 /// Runs a WebAssembly module
 #[derive(Parser, PartialEq)]
-#[structopt(name = "serve")]
 pub struct ServeCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     run: RunCommon,
 
     /// Socket address for the web server to bind to.
-    #[clap(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
+    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
     addr: std::net::SocketAddr,
 
     /// The WebAssembly component to run.
-    #[clap(value_name = "WASM", required = true)]
+    #[arg(value_name = "WASM", required = true)]
     component: PathBuf,
 }
 
@@ -157,7 +154,7 @@ impl ServeCommand {
         });
 
         let mut host = Host {
-            table: Table::new(),
+            table: wasmtime::component::ResourceTable::new(),
             ctx: builder.build(),
             http: WasiHttpCtx,
 
@@ -202,17 +199,39 @@ impl ServeCommand {
     }
 
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
-        // wasi-http and the component model are implicitly enabled for `wasmtime serve`, so we
-        // don't test for `self.run.common.wasi.common` or `self.run.common.wasi.http` in this
-        // function.
-
-        wasmtime_wasi_http::proxy::add_to_linker(linker)?;
+        // Repurpose the `-Scommon` flag of `wasmtime run` for `wasmtime serve`
+        // to serve as a signal to enable all WASI interfaces instead of just
+        // those in the `proxy` world. If `-Scommon` is present then add all
+        // `command` APIs which includes all "common" or base WASI APIs and then
+        // additionally add in the required HTTP APIs.
+        //
+        // If `-Scommon` isn't passed then use the `proxy::add_to_linker`
+        // bindings which adds just those interfaces that the proxy interface
+        // uses.
+        if self.run.common.wasi.common == Some(true) {
+            preview2::command::add_to_linker(linker)?;
+            wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
+        } else {
+            wasmtime_wasi_http::proxy::add_to_linker(linker)?;
+        }
 
         if self.run.common.wasi.nn == Some(true) {
+            #[cfg(not(feature = "wasi-nn"))]
+            {
+                bail!("support for wasi-nn was disabled at compile time");
+            }
             #[cfg(feature = "wasi-nn")]
             {
                 wasmtime_wasi_nn::wit::ML::add_to_linker(linker, |host| host.nn.as_mut().unwrap())?;
             }
+        }
+
+        if self.run.common.wasi.threads == Some(true) {
+            bail!("support for wasi-threads is not available with components");
+        }
+
+        if self.run.common.wasi.http == Some(false) {
+            bail!("support for wasi-http must be enabled for `serve` subcommand");
         }
 
         Ok(())

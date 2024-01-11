@@ -11,7 +11,8 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 include = ["src/**/*", "README.md", "LICENSE"]
 
-[lib]
+[lints]
+workspace = true
 
 [dependencies]
 witx = { version = "0.9.1", path = "../../wasi-common/WASI/tools/witx" }

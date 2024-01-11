@@ -39,9 +39,9 @@ block0(v0: i32, v1: i32):
     v6 = iadd v4, v5
     return v6
 ; check:  v7 = iadd v0, v1
-; nextln: iconst.i32 78
-; nextln: v16 = iadd v7, v14  ; v14 = 78
-; check:  return v16
+; nextln: v9 = iconst.i32 78
+; nextln: v15 = iadd v7, v9  ; v9 = 78
+; check:  return v15
 }
 
 function %imul_shallow_and_wide(i32, i32, i32, i32) -> i32 {

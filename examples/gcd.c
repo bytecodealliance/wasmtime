@@ -27,7 +27,8 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-gcd
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
 
 int main() {
   int ret = 0;
@@ -39,7 +40,7 @@ int main() {
   wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Load our input file to parse it next
-  FILE* file = fopen("examples/gcd.wat", "r");
+  FILE *file = fopen("examples/gcd.wat", "r");
   if (!file) {
     printf("> Error loading file!\n");
     return 1;
@@ -64,7 +65,7 @@ int main() {
 
   // Compile and instantiate our module
   wasmtime_module_t *module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
+  error = wasmtime_module_new(engine, (uint8_t *)wasm.data, wasm.size, &module);
   if (module == NULL)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
@@ -90,7 +91,8 @@ int main() {
   params[1].kind = WASMTIME_I32;
   params[1].of.i32 = b;
   wasmtime_val_t results[1];
-  error = wasmtime_func_call(context, &gcd.of.func, params, 2, results, 1, &trap);
+  error =
+      wasmtime_func_call(context, &gcd.of.func, params, 2, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call gcd", error, trap);
   assert(results[0].kind == WASMTIME_I32);
@@ -106,7 +108,8 @@ int main() {
   return ret;
 }
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
@@ -114,7 +117,7 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
   } else {
     wasm_trap_message(trap, &error_message);
   }
-  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }

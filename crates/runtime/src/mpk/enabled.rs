@@ -152,6 +152,9 @@ mod tests {
     #[test]
     fn check_is_supported() {
         println!("is pku supported = {}", is_supported());
+        if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+            assert!(is_supported());
+        }
     }
 
     #[test]

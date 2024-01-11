@@ -43,7 +43,7 @@ impl<T: WasiView> wall_clock::Host for T {
 }
 
 fn subscribe_to_duration(
-    table: &mut crate::preview2::Table,
+    table: &mut wasmtime::component::ResourceTable,
     duration: tokio::time::Duration,
 ) -> anyhow::Result<Resource<Pollable>> {
     let sleep = if duration.is_zero() {

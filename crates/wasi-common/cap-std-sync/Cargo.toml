@@ -11,6 +11,9 @@ readme = "README.md"
 edition.workspace = true
 include = ["src/**/*", "README.md", "LICENSE" ]
 
+[lints]
+workspace = true
+
 [dependencies]
 wasi-common = { workspace = true }
 async-trait = { workspace = true }

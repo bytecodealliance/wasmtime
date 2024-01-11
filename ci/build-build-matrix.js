@@ -55,7 +55,7 @@ const builds = [];
 for (let build of array) {
   // Perform a "deep clone" roundtripping through JSON for a copy of the build
   // that's normal
-  build.rust = 'stable';
+  build.rust = 'default';
   builds.push(JSON.parse(JSON.stringify(build)));
 
   // Next generate a "min" build and add it to the builds list. Min builds

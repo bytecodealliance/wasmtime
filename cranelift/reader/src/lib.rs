@@ -3,13 +3,7 @@
 //! The `cranelift_reader` library supports reading .clif files. This functionality is needed for
 //! testing Cranelift, but is not essential for a JIT compiler.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 pub use crate::error::{Location, ParseError, ParseResult};
 pub use crate::isaspec::{parse_option, parse_options, IsaSpec, ParseOptionError};

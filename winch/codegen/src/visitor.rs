@@ -4,11 +4,11 @@
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
 
-use crate::abi::ABI;
+use crate::abi::{RetArea, ABI};
 use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
-    DivKind, FloatCmpKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, RemKind, RoundingMode,
-    ShiftKind,
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
+    RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
 };
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
@@ -16,7 +16,7 @@ use smallvec::SmallVec;
 use wasmparser::BrTable;
 use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType, WasmType,
+    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType, WasmType,
     FUNCREF_INIT_BIT,
 };
 
@@ -143,6 +143,14 @@ macro_rules! def_unsupported {
     (emit I64Ctz $($rest:tt)*) => {};
     (emit I32Popcnt $($rest:tt)*) => {};
     (emit I64Popcnt $($rest:tt)*) => {};
+    (emit I32WrapI64 $($rest:tt)*) => {};
+    (emit I64ExtendI32S $($rest:tt)*) => {};
+    (emit I64ExtendI32U $($rest:tt)*) => {};
+    (emit I32Extend8S $($rest:tt)*) => {};
+    (emit I32Extend16S $($rest:tt)*) => {};
+    (emit I64Extend8S $($rest:tt)*) => {};
+    (emit I64Extend16S $($rest:tt)*) => {};
+    (emit I64Extend32S $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -171,6 +179,12 @@ macro_rules! def_unsupported {
     (emit TableSize $($rest:tt)*) => {};
     (emit TableFill $($rest:tt)*) => {};
     (emit ElemDrop $($rest:tt)*) => {};
+    (emit MemoryInit $($rest:tt)*) => {};
+    (emit MemoryCopy $($rest:tt)*) => {};
+    (emit DataDrop $($rest:tt)*) => {};
+    (emit MemoryFill $($rest:tt)*) => {};
+    (emit MemorySize $($rest:tt)*) => {};
+    (emit MemoryGrow $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -203,6 +217,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -213,6 +228,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -223,6 +239,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -233,6 +250,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -243,6 +261,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -253,6 +272,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -263,6 +283,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -273,6 +294,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -283,6 +305,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -293,6 +316,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -303,6 +327,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -313,6 +338,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -323,6 +349,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_copysign(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -333,6 +360,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_copysign(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -341,6 +369,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_abs(reg, size);
+                TypedReg::f32(reg)
             });
     }
 
@@ -348,6 +377,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_abs(reg, size);
+                TypedReg::f64(reg)
             });
     }
 
@@ -355,6 +385,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_neg(reg, size);
+                TypedReg::f32(reg)
             });
     }
 
@@ -362,6 +393,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_neg(reg, size);
+                TypedReg::f64(reg)
             });
     }
 
@@ -409,6 +441,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_sqrt(reg, reg, size);
+                TypedReg::f32(reg)
             });
     }
 
@@ -416,6 +449,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_sqrt(reg, reg, size);
+                TypedReg::f64(reg)
             });
     }
 
@@ -542,36 +576,42 @@ where
     fn visit_i32_add(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.add(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_add(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.add(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_sub(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.sub(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_sub(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.sub(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_mul(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.mul(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_mul(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.mul(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
@@ -716,6 +756,7 @@ where
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.cmp_with_set(RegImm::i32(0), reg.into(), IntCmpKind::Eq, size);
+            TypedReg::i32(reg)
         });
     }
 
@@ -724,6 +765,7 @@ where
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.cmp_with_set(RegImm::i64(0), reg.into(), IntCmpKind::Eq, size);
+            TypedReg::i32(reg) // Return value for `i64.eqz` is an `i32`.
         });
     }
 
@@ -732,6 +774,7 @@ where
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.clz(reg, reg, size);
+            TypedReg::i32(reg)
         });
     }
 
@@ -740,6 +783,7 @@ where
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.clz(reg, reg, size);
+            TypedReg::i64(reg)
         });
     }
 
@@ -748,6 +792,7 @@ where
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.ctz(reg, reg, size);
+            TypedReg::i32(reg)
         });
     }
 
@@ -756,42 +801,49 @@ where
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.ctz(reg, reg, size);
+            TypedReg::i64(reg)
         });
     }
 
     fn visit_i32_and(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.and(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_and(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.and(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_or(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.or(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_or(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.or(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_xor(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.xor(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_xor(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.xor(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
@@ -870,19 +922,7 @@ where
             self.handle_unreachable_end();
         } else {
             let mut control = self.control_frames.pop().unwrap();
-            let is_outermost = self.control_frames.len() == 0;
-            // If it's not the outermost control stack frame, emit the the full "end" sequence,
-            // which involves, popping results from the value stack, pushing results back to the
-            // value stack and binding the exit label.
-            // Else, pop values from the value stack and bind the exit label.
-            if !is_outermost {
-                control.emit_end(self.masm, &mut self.context);
-            } else {
-                if let Some(data) = control.results() {
-                    self.context.pop_abi_results(data, self.masm);
-                }
-                control.bind_exit_label(self.masm);
-            }
+            control.emit_end(self.masm, &mut self.context);
         }
     }
 
@@ -895,6 +935,78 @@ where
         use OperandSize::*;
 
         self.masm.popcnt(&mut self.context, S64);
+    }
+
+    fn visit_i32_wrap_i64(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.wrap(reg, reg);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i64_extend_i32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64ExtendI32S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend_i32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64ExtendI32U);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i32_extend8_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I32Extend8S);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i32_extend16_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I32Extend16S);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i64_extend8_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend8S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend16_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend16S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend32S);
+            TypedReg::i64(reg)
+        });
     }
 
     fn visit_local_get(&mut self, index: u32) {
@@ -925,6 +1037,14 @@ where
     }
 
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
+        // Spill now because `emit_lazy_init_funcref` and the `FnCall::emit`
+        // invocations will both trigger spills since they both call functions.
+        // However, the machine instructions for the spill emitted by
+        // `emit_lazy_funcref` will be jumped over if the funcref was previously
+        // initialized which may result in the machine stack becoming
+        // unbalanced.
+        self.context.spill(self.masm);
+
         let type_index = TypeIndex::from_u32(type_index);
         let table_index = TableIndex::from_u32(table_index);
 
@@ -1113,12 +1233,102 @@ where
         });
     }
 
+    fn visit_memory_init(&mut self, data_index: u32, mem: u32) {
+        debug_assert!(self.context.stack.len() >= 3);
+        let ptr_type = self.env.ptr_type();
+        let at = self.context.stack.len() - 3;
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        self.context.stack.insert_many(
+            at,
+            [
+                vmctx.into(),
+                mem.try_into().unwrap(),
+                data_index.try_into().unwrap(),
+            ],
+        );
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory_init::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) {
+        // At this point, the stack is expected to contain:
+        //     [ dst_offset, src_offset, len ]
+        // The following code inserts the missing params, so that stack contains:
+        //     [ vmctx, dst_mem, dst_offset, src_mem, src_offset, len ]
+        // Which is the order expected by the builtin function.
+        debug_assert!(self.context.stack.len() >= 3);
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let at = self.context.stack.len() - 2;
+        self.context
+            .stack
+            .insert_many(at, [src_mem.try_into().unwrap()]);
+
+        // One element was inserted above, so instead of 3, we use 4.
+        let at = self.context.stack.len() - 4;
+        self.context
+            .stack
+            .insert_many(at, [vmctx.into(), dst_mem.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory_copy::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_memory_fill(&mut self, mem: u32) {
+        debug_assert!(self.context.stack.len() >= 3);
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let at = self.context.stack.len() - 3;
+
+        self.context
+            .stack
+            .insert_many(at, [vmctx.into(), mem.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory_fill::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_memory_size(&mut self, mem: u32, _: u8) {
+        let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
+        self.masm.memory_size(&heap, &mut self.context);
+    }
+
+    fn visit_memory_grow(&mut self, mem: u32, _: u8) {
+        debug_assert!(self.context.stack.len() >= 1);
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let at = self.context.stack.len() - 1;
+        // The stack at this point contains: [ delta ]
+        // The desired state is
+        //   [ vmctx, delta, index ]
+        self.context.stack.insert_many(at, [vmctx.into()]);
+        self.context.stack.extend([mem.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.memory32_grow::<M::ABI, M::Ptr>())
+        });
+    }
+
+    fn visit_data_drop(&mut self, data_index: u32) {
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        self.context
+            .stack
+            .extend([vmctx.into(), data_index.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.data_drop::<M::ABI, M::Ptr>())
+        });
+    }
+
     fn visit_nop(&mut self) {}
 
     fn visit_if(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::r#if(
-            self.env.resolve_block_results_data::<M::ABI>(blockty),
-            self.env.resolve_block_type_info(blockty),
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1138,8 +1348,7 @@ where
 
     fn visit_block(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::block(
-            self.env.resolve_block_results_data::<M::ABI>(blockty),
-            self.env.resolve_block_type_info(blockty),
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1147,7 +1356,7 @@ where
 
     fn visit_loop(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::r#loop(
-            self.env.resolve_block_type_info(blockty),
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1158,9 +1367,8 @@ where
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                if let Some(r) = frame.as_target_results() {
-                    cx.pop_abi_results(r, masm);
-                }
+                frame
+                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
             });
     }
 
@@ -1169,26 +1377,65 @@ where
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
 
-        let top = if let Some(data) = frame.as_target_results() {
+        let top = {
             let top = self.context.without::<TypedReg, M, _>(
-                data.results.regs(),
+                frame.results::<M>().regs(),
                 self.masm,
                 |ctx, masm| ctx.pop_to_reg(masm, None),
             );
-            self.context.top_abi_results(data, self.masm);
+            frame.top_abi_results::<M, _>(
+                &mut self.context,
+                self.masm,
+                |results, context, masm| {
+                    // In the case of `br_if` theres a possibility that we'll
+                    // exit early from the block or falltrough, for
+                    // a falltrough, we cannot rely on the pre-computed return area;
+                    // it must be recalculated so that any values that are
+                    // generated are correctly placed near the current stack
+                    // pointer.
+                    results.on_stack().then(|| {
+                        let stack_consumed = context.stack.sizeof(results.stack_operands_len());
+                        let base = masm.sp_offset().as_u32() - stack_consumed;
+                        let offs = base + results.size();
+                        RetArea::sp(SPOffset::from_u32(offs))
+                    })
+                },
+            );
             top
-        } else {
-            self.context.pop_to_reg(self.masm, None)
         };
 
-        self.masm.branch(
-            IntCmpKind::Ne,
-            top.reg.into(),
-            top.reg.into(),
-            *frame.label(),
-            OperandSize::S32,
-        );
+        // Emit instructions to balance the machine stack if the frame has
+        // a different offset.
+        let current_sp_offset = self.masm.sp_offset();
+        let results_size = frame.results::<M>().size();
+        let state = frame.stack_state();
+        let (label, cmp, needs_cleanup) = if current_sp_offset > state.target_offset {
+            (self.masm.get_label(), IntCmpKind::Eq, true)
+        } else {
+            (*frame.label(), IntCmpKind::Ne, false)
+        };
+
+        self.masm
+            .branch(cmp, top.reg.into(), top.reg.into(), label, OperandSize::S32);
         self.context.free_reg(top);
+
+        if needs_cleanup {
+            // Emit instructions to balance the stack and jump if not falling
+            // through.
+            self.masm.memmove(
+                current_sp_offset,
+                state.target_offset,
+                results_size,
+                MemMoveDirection::LowToHigh,
+            );
+            self.masm.ensure_sp_for_jump(state.target_offset);
+            self.masm.jmp(*frame.label());
+
+            // Restore sp_offset to what it was for falling through and emit
+            // fallthrough label.
+            self.masm.reset_stack_pointer(current_sp_offset);
+            self.masm.bind(label);
+        }
     }
 
     fn visit_br_table(&mut self, targets: BrTable<'a>) {
@@ -1200,27 +1447,30 @@ where
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
         let default_index = control_index(targets.default(), self.control_frames.len());
-        let default_result = self.control_frames[default_index].as_target_results();
+        let default_frame = &mut self.control_frames[default_index];
+        let default_result = default_frame.results::<M>();
 
-        let (index, tmp) = if let Some(data) = default_result {
+        let (index, tmp) = {
             let index_and_tmp = self.context.without::<(TypedReg, _), M, _>(
-                data.results.regs(),
+                default_result.regs(),
                 self.masm,
                 |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
             );
 
             // Materialize any constants or locals into their result representation,
             // so that when reachability is restored, they are correctly located.
-            self.context.top_abi_results(data, self.masm);
+            default_frame.top_abi_results::<M, _>(&mut self.context, self.masm, |results, _, _| {
+                results.ret_area().copied()
+            });
             index_and_tmp
-        } else {
-            (
-                self.context.pop_to_reg(self.masm, None),
-                self.context.any_gpr(self.masm),
-            )
         };
 
         self.masm.jmp_table(&labels, index.into(), tmp);
+        // Save the original stack pointer offset; we will reset the stack
+        // pointer to this offset after jumping to each of the targets. Each
+        // jump might adjust the stack according to the base offset of the
+        // target.
+        let current_sp = self.masm.sp_offset();
 
         for (t, l) in targets
             .targets()
@@ -1230,14 +1480,26 @@ where
         {
             let control_index = control_index(t.unwrap(), self.control_frames.len());
             let frame = &mut self.control_frames[control_index];
+            // Reset the stack pointer to its original offset. This is needed
+            // because each jump will potentially adjust the stack pointer
+            // according to the base offset of the target.
+            self.masm.reset_stack_pointer(current_sp);
 
             // NB: We don't perform any result handling as it was
             // already taken care of above before jumping to the
             // jump table.
             self.masm.bind(*l);
+            // Ensure that the stack pointer is correctly positioned before
+            // jumping to the jump table code.
+            let state = frame.stack_state();
+            self.masm.ensure_sp_for_jump(state.target_offset);
             self.masm.jmp(*frame.label());
             frame.set_as_target();
         }
+        // Finally reset the stack pointer to the original location.
+        // The reachability analysis, will ensure it's correctly located
+        // once reachability is restored.
+        self.masm.reset_stack_pointer(current_sp);
         self.context.reachable = false;
         self.context.free_reg(index.reg);
         self.context.free_reg(tmp);
@@ -1251,9 +1513,8 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                if let Some(data) = frame.as_target_results() {
-                    cx.pop_abi_results(data, masm);
-                }
+                frame
+                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
             });
     }
 
@@ -1326,6 +1587,7 @@ where
     fn cmp_i32s(&mut self, kind: IntCmpKind) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.cmp_with_set(src, dst, kind, size);
+            TypedReg::i32(dst)
         });
     }
 
@@ -1333,6 +1595,7 @@ where
         self.context
             .i64_binop(self.masm, move |masm, dst, src, size| {
                 masm.cmp_with_set(src, dst, kind, size);
+                TypedReg::i32(dst) // Return value for comparisons is an `i32`.
             });
     }
 }

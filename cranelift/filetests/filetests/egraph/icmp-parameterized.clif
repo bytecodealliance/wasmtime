@@ -567,9 +567,9 @@ block0(v0: i32):
 
 ; function %icmp_sle_umax(i32) -> i8 fast {
 ; block0(v0: i32):
-;     v1 = iconst.i32 0xffff_ffff
-;     v2 = icmp sle v0, v1  ; v1 = 0xffff_ffff
-;     return v2
+;     v3 = iconst.i32 0
+;     v4 = icmp slt v0, v3  ; v3 = 0
+;     return v4
 ; }
 
 function %icmp_sle_smin(i32) -> i8 {
@@ -622,9 +622,9 @@ block0(v0: i32):
 
 ; function %icmp_sgt_umax(i32) -> i8 fast {
 ; block0(v0: i32):
-;     v1 = iconst.i32 0xffff_ffff
-;     v2 = icmp sgt v0, v1  ; v1 = 0xffff_ffff
-;     return v2
+;     v3 = iconst.i32 0
+;     v4 = icmp sge v0, v3  ; v3 = 0
+;     return v4
 ; }
 
 function %icmp_sgt_smin(i32) -> i8 {

@@ -1416,7 +1416,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
         return None;
     }
 
-    let stack_pointer = stack_pointer();
+    let stack_pointer = wasmtime_runtime::get_stack_pointer();
 
     // Determine the stack pointer where, after which, any wasm code will
     // immediately trap. This is checked on the entry to all wasm functions.
@@ -1441,43 +1441,6 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     };
 
     Some(prev_stack)
-}
-
-#[inline]
-fn stack_pointer() -> usize {
-    let stack_pointer: usize;
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "x86_64")] {
-            unsafe {
-                std::arch::asm!(
-                    "mov {}, rsp",
-                    out(reg) stack_pointer,
-                    options(nostack,nomem),
-                );
-            }
-        } else if #[cfg(target_arch = "aarch64")] {
-            unsafe {
-                std::arch::asm!(
-                    "mov {}, sp",
-                    out(reg) stack_pointer,
-                    options(nostack,nomem),
-                );
-            }
-        } else if #[cfg(target_arch = "riscv64")] {
-            unsafe {
-                std::arch::asm!(
-                    "mv {}, sp",
-                    out(reg) stack_pointer,
-                    options(nostack,nomem),
-                );
-            }
-        } else if #[cfg(target_arch = "s390x")] {
-            stack_pointer = psm::stack_pointer() as usize;
-        } else {
-            compile_error!("unsupported platform");
-        }
-    }
-    stack_pointer
 }
 
 fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {

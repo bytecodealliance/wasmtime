@@ -1,5 +1,3 @@
-extern crate proc_macro;
-
 use std::path::Path;
 
 use glob::glob;

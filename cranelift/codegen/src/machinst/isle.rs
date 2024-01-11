@@ -7,8 +7,8 @@ use std::cell::Cell;
 pub use super::MachLabel;
 use super::RetPair;
 pub use crate::ir::{
-    condcodes, condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName,
-    FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName, FuncRef,
+    GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::{unwind::UnwindInst, TargetIsa};
 pub use crate::machinst::{
@@ -560,6 +560,18 @@ macro_rules! isle_lower_prelude_methods {
             }
 
             Some(value)
+        }
+
+        #[inline]
+        fn simm32(&mut self, x: Imm64) -> Option<i32> {
+            i64::from(x).try_into().ok()
+        }
+
+        #[inline]
+        fn uimm8(&mut self, x: Imm64) -> Option<u8> {
+            let x64: i64 = x.into();
+            let x8: u8 = x64.try_into().ok()?;
+            Some(x8)
         }
 
         #[inline]

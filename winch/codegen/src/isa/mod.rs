@@ -10,7 +10,7 @@ use std::{
 };
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, WasmFuncType};
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -158,7 +158,7 @@ pub trait TargetIsa: Send + Sync {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;

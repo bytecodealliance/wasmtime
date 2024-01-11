@@ -1,7 +1,10 @@
-use std::{env, process};
-use test_programs::preview1::{assert_errno, config, open_scratch_directory};
+use std::{env, process, time::Duration};
+use test_programs::preview1::{
+    assert_errno, assert_fs_time_eq, config, open_scratch_directory, TestConfig,
+};
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
+    let cfg = TestConfig::from_env();
     let fdflags = if config().support_fdflags_sync() {
         wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC
     } else {
@@ -60,13 +63,25 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     assert_eq!(file_stat.size, 0, "file size should be 0");
 
     // Check path_filestat_set_times
-    let new_mtim = file_stat.mtim - 100;
-    wasi::path_filestat_set_times(dir_fd, 0, "file", 0, new_mtim, wasi::FSTFLAGS_MTIM)
-        .expect("path_filestat_set_times should succeed");
+    let new_mtim = Duration::from_nanos(file_stat.mtim) - 2 * cfg.fs_time_precision();
+    wasi::path_filestat_set_times(
+        dir_fd,
+        0,
+        "file",
+        0,
+        new_mtim.as_nanos() as u64,
+        wasi::FSTFLAGS_MTIM,
+    )
+    .expect("path_filestat_set_times should succeed");
 
     let modified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after path_filestat_set_times");
-    assert_eq!(modified_file_stat.mtim, new_mtim, "mtim should change");
+
+    assert_fs_time_eq!(
+        Duration::from_nanos(modified_file_stat.mtim),
+        new_mtim,
+        "mtim should change"
+    );
 
     assert_errno!(
         wasi::path_filestat_set_times(
@@ -74,7 +89,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
             0,
             "file",
             0,
-            new_mtim,
+            new_mtim.as_nanos() as u64,
             wasi::FSTFLAGS_MTIM | wasi::FSTFLAGS_MTIM_NOW,
         )
         .expect_err("MTIM and MTIM_NOW can't both be set"),
@@ -84,8 +99,10 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     // check if the times were untouched
     let unmodified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after ERRNO_INVAL fd_filestat_set_times");
-    assert_eq!(
-        unmodified_file_stat.mtim, new_mtim,
+
+    assert_fs_time_eq!(
+        Duration::from_nanos(unmodified_file_stat.mtim),
+        new_mtim,
         "mtim should not change"
     );
 

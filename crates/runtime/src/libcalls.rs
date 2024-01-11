@@ -66,7 +66,7 @@ use std::mem;
 use std::ptr::{self, NonNull};
 use std::time::{Duration, Instant};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap, Unsigned,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -80,6 +80,7 @@ use wasmtime_wmemcheck::AccessError::{
 /// now to ensure that the fp/sp on exit are recorded for backtraces to work
 /// properly.
 pub mod trampolines {
+    use crate::arch::wasm_to_libcall_trampoline;
     use crate::{Instance, TrapReason, VMContext};
 
     macro_rules! libcall {
@@ -233,7 +234,7 @@ unsafe fn table_grow(
     };
     Ok(match instance.table_grow(table_index, delta, element)? {
         Some(r) => r,
-        None => -1_i32 as u32,
+        None => (-1_i32).unsigned(),
     })
 }
 

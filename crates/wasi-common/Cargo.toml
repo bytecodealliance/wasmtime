@@ -17,6 +17,9 @@ build = "build.rs"
 # on this crate, allowing other crates to use the same witx files.
 links = "wasi-common-19"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 thiserror = { workspace = true }

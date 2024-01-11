@@ -153,13 +153,13 @@ fn parse_source(
     };
 
     let path_pkg = if let Some(path) = path {
-        Some(parse(&mut resolve, &root.join(&path))?)
+        Some(parse(&mut resolve, &root.join(path))?)
     } else {
         None
     };
 
     let inline_pkg = if let Some(inline) = inline {
-        Some(resolve.push(UnresolvedPackage::parse("macro-input".as_ref(), &inline)?)?)
+        Some(resolve.push(UnresolvedPackage::parse("macro-input".as_ref(), inline)?)?)
     } else {
         None
     };
@@ -298,7 +298,7 @@ impl Parse for Opt {
             let _lbrace = braced!(contents in input);
             let fields: Punctuated<_, Token![,]> =
                 contents.parse_terminated(trappable_error_field_parse, Token![,])?;
-            Ok(Opt::TrappableErrorType(Vec::from_iter(fields.into_iter())))
+            Ok(Opt::TrappableErrorType(Vec::from_iter(fields)))
         } else if l.peek(kw::interfaces) {
             input.parse::<kw::interfaces>()?;
             input.parse::<Token![:]>()?;
@@ -310,7 +310,7 @@ impl Parse for Opt {
             let _lbrace = braced!(contents in input);
             let fields: Punctuated<(String, String), Token![,]> =
                 contents.parse_terminated(with_field_parse, Token![,])?;
-            Ok(Opt::With(HashMap::from_iter(fields.into_iter())))
+            Ok(Opt::With(HashMap::from_iter(fields)))
         } else {
             Err(l.error())
         }

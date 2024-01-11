@@ -11,6 +11,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 # These dependencies are necessary for the WITX-generation macros to work:
 anyhow = { workspace = true }
@@ -21,8 +24,14 @@ wasmtime = { workspace = true, features = ["component-model"] }
 
 # These dependencies are necessary for the wasi-nn implementation:
 tracing = { workspace = true }
-openvino = { version = "0.5.0", features = ["runtime-linking"] }
+openvino = { version = "0.6.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 
 [build-dependencies]
 walkdir = { workspace = true }
+
+[dev-dependencies]
+cap-std = { workspace = true }
+test-programs-artifacts = { workspace = true }
+wasmtime-wasi = { workspace = true, features = ["sync"] }
+wasmtime = { workspace = true, features = ["cranelift"] }

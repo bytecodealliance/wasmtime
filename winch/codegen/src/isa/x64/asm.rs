@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{DivKind, IntCmpKind, OperandSize, RemKind, RoundingMode, ShiftKind},
+    masm::{DivKind, ExtendKind, IntCmpKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -128,6 +128,20 @@ impl From<ShiftKind> for CraneliftShiftKind {
             ShiftKind::ShrU => CraneliftShiftKind::ShiftRightLogical,
             ShiftKind::Rotl => CraneliftShiftKind::RotateLeft,
             ShiftKind::Rotr => CraneliftShiftKind::RotateRight,
+        }
+    }
+}
+
+impl From<ExtendKind> for ExtMode {
+    fn from(value: ExtendKind) -> Self {
+        match value {
+            ExtendKind::I64ExtendI32S | ExtendKind::I64ExtendI32U | ExtendKind::I64Extend32S => {
+                ExtMode::LQ
+            }
+            ExtendKind::I32Extend8S => ExtMode::BL,
+            ExtendKind::I32Extend16S => ExtMode::WL,
+            ExtendKind::I64Extend8S => ExtMode::BQ,
+            ExtendKind::I64Extend16S => ExtMode::WQ,
         }
     }
 }
@@ -299,6 +313,24 @@ impl Assembler {
                 dst: dst.into(),
             });
         }
+    }
+
+    /// Register-to-register move with zero extension.
+    pub fn movzx_rr(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
+        self.emit(Inst::MovzxRmR {
+            ext_mode: kind.into(),
+            src: src.into(),
+            dst: dst.into(),
+        })
+    }
+
+    /// Register-to-register move with sign extension.
+    pub fn movsx_rr(&mut self, src: Reg, dst: Reg, kind: ExtendKind) {
+        self.emit(Inst::MovsxRmR {
+            ext_mode: kind.into(),
+            src: src.into(),
+            dst: dst.into(),
+        });
     }
 
     /// Integer register conditional move.

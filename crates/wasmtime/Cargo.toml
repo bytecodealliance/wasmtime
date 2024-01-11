@@ -10,6 +10,9 @@ readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "nightlydoc"]
 # Docs.rs will use the `component-model` feature for documentation;
@@ -59,9 +62,6 @@ addr2line = { version = "0.21.0", default-features = false, optional = true }
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
 features = ["Win32_System_Diagnostics_Debug"]
-
-[target.'cfg(target_arch = "s390x")'.dependencies]
-psm = "0.1.11"
 
 [target.'cfg(all(target_arch = "x86_64", not(target_os = "android")))'.dependencies]
 ittapi = { version = "0.4.0", optional = true }

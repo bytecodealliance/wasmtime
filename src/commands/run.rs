@@ -55,9 +55,8 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 
 /// Runs a WebAssembly module
 #[derive(Parser, PartialEq)]
-#[structopt(name = "run")]
 pub struct RunCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     #[allow(missing_docs)]
     pub run: RunCommon,
 
@@ -67,7 +66,7 @@ pub struct RunCommand {
     /// host is made available within the guest. If specified as `HOST::GUEST`
     /// then the `HOST` directory is opened and made available as the name
     /// `GUEST` in the guest.
-    #[clap(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
+    #[arg(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
     pub dirs: Vec<(String, String)>,
 
     /// Pass an environment variable to the program.
@@ -77,15 +76,15 @@ pub struct RunCommand {
     /// form will set the environment variable named `FOO` to the same value it
     /// has in the calling process for the guest, or in other words it will
     /// cause the environment variable `FOO` to be inherited.
-    #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
     pub vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
-    #[clap(long, value_name = "FUNCTION")]
+    #[arg(long, value_name = "FUNCTION")]
     pub invoke: Option<String>,
 
     /// Load the given WebAssembly module before the main module
-    #[clap(
+    #[arg(
         long = "preload",
         number_of_values = 1,
         value_name = "NAME=MODULE_PATH",
@@ -98,7 +97,7 @@ pub struct RunCommand {
     /// Arguments passed to the wasm module will be configured as WASI CLI
     /// arguments unless the `--invoke` CLI argument is passed in which case
     /// arguments will be interpreted as arguments to the function specified.
-    #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
+    #[arg(value_name = "WASM", trailing_var_arg = true, required = true)]
     pub module_and_args: Vec<OsString>,
 }
 
@@ -773,10 +772,16 @@ impl RunCommand {
         }
 
         if self.run.common.wasi.inherit_network == Some(true) {
-            builder.inherit_network(ambient_authority());
+            builder.inherit_network();
         }
         if let Some(enable) = self.run.common.wasi.allow_ip_name_lookup {
             builder.allow_ip_name_lookup(enable);
+        }
+        if let Some(enable) = self.run.common.wasi.tcp {
+            builder.allow_tcp(enable);
+        }
+        if let Some(enable) = self.run.common.wasi.udp {
+            builder.allow_udp(enable);
         }
 
         store.data_mut().preview2_ctx = Some(Arc::new(builder.build()));
@@ -791,7 +796,7 @@ struct Host {
 
     // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
     // "just" an empty table.
-    preview2_table: Arc<preview2::Table>,
+    preview2_table: Arc<wasmtime::component::ResourceTable>,
 
     // State necessary for the preview1 implementation of WASI backed by the
     // preview2 host implementation. Only used with the `--preview2` flag right
@@ -810,11 +815,11 @@ struct Host {
 }
 
 impl preview2::WasiView for Host {
-    fn table(&self) -> &preview2::Table {
+    fn table(&self) -> &wasmtime::component::ResourceTable {
         &self.preview2_table
     }
 
-    fn table_mut(&mut self) -> &mut preview2::Table {
+    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
         Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
     }
 
@@ -845,7 +850,7 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
         Arc::get_mut(ctx).expect("preview2 is not compatible with threads")
     }
 
-    fn table(&mut self) -> &mut preview2::Table {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
     }
 }

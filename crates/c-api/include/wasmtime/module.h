@@ -41,12 +41,10 @@ typedef struct wasmtime_module wasmtime_module_t;
  * This function does not take ownership of any of its arguments, but the
  * returned error and module are owned by the caller.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_module_new(
-    wasm_engine_t *engine,
-    const uint8_t *wasm,
-    size_t wasm_len,
-    wasmtime_module_t **ret
-);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_module_new(wasm_engine_t *engine,
+                                                      const uint8_t *wasm,
+                                                      size_t wasm_len,
+                                                      wasmtime_module_t **ret);
 
 /**
  * \brief Deletes a module.
@@ -62,18 +60,14 @@ WASM_API_EXTERN wasmtime_module_t *wasmtime_module_clone(wasmtime_module_t *m);
 /**
  * \brief Same as #wasm_module_imports, but for #wasmtime_module_t.
  */
-WASM_API_EXTERN void wasmtime_module_imports(
-    const wasmtime_module_t *module,
-    wasm_importtype_vec_t *out
-);
+WASM_API_EXTERN void wasmtime_module_imports(const wasmtime_module_t *module,
+                                             wasm_importtype_vec_t *out);
 
 /**
  * \brief Same as #wasm_module_exports, but for #wasmtime_module_t.
  */
-WASM_API_EXTERN void wasmtime_module_exports(
-    const wasmtime_module_t *module,
-    wasm_exporttype_vec_t *out
-);
+WASM_API_EXTERN void wasmtime_module_exports(const wasmtime_module_t *module,
+                                             wasm_exporttype_vec_t *out);
 
 /**
  * \brief Validate a WebAssembly binary.
@@ -87,18 +81,16 @@ WASM_API_EXTERN void wasmtime_module_exports(
  * If the binary validates then `NULL` is returned, otherwise the error returned
  * describes why the binary did not validate.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_module_validate(
-    wasm_engine_t *engine,
-    const uint8_t *wasm,
-    size_t wasm_len
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_module_validate(wasm_engine_t *engine, const uint8_t *wasm,
+                         size_t wasm_len);
 
 /**
  * \brief This function serializes compiled module artifacts as blob data.
  *
  * \param module the module
- * \param ret if the conversion is successful, this byte vector is filled in with
- *   the serialized compiled module.
+ * \param ret if the conversion is successful, this byte vector is filled in
+ * with the serialized compiled module.
  *
  * \return a non-null error if parsing fails, or returns `NULL`. If parsing
  * fails then `ret` isn't touched.
@@ -106,10 +98,8 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_validate(
  * This function does not take ownership of `module`, and the caller is
  * expected to deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
  */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_module_serialize(
-    wasmtime_module_t* module,
-    wasm_byte_vec_t *ret
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_module_serialize(wasmtime_module_t *module, wasm_byte_vec_t *ret);
 
 /**
  * \brief Build a module from serialized data.
@@ -121,12 +111,9 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_module_serialize(
  * documentation for more information on what inputs are safe to pass in here
  * (e.g. only that of #wasmtime_module_serialize)
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_module_deserialize(
-    wasm_engine_t *engine,
-    const uint8_t *bytes,
-    size_t bytes_len,
-    wasmtime_module_t **ret
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_module_deserialize(wasm_engine_t *engine, const uint8_t *bytes,
+                            size_t bytes_len, wasmtime_module_t **ret);
 
 /**
  * \brief Deserialize a module from an on-disk file.
@@ -142,29 +129,27 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_deserialize(
  * documentation for more information on what inputs are safe to pass in here
  * (e.g. only that of #wasmtime_module_serialize)
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_module_deserialize_file(
-    wasm_engine_t *engine,
-    const char *path,
-    wasmtime_module_t **ret
-);
-
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_module_deserialize_file(wasm_engine_t *engine, const char *path,
+                                 wasmtime_module_t **ret);
 
 /**
- * \brief Returns the range of bytes in memory where this module’s compilation image resides.
+ * \brief Returns the range of bytes in memory where this module’s compilation
+ * image resides.
  *
- * The compilation image for a module contains executable code, data, debug information, etc. 
- * This is roughly the same as the wasmtime_module_serialize but not the exact same.
+ * The compilation image for a module contains executable code, data, debug
+ * information, etc. This is roughly the same as the wasmtime_module_serialize
+ * but not the exact same.
  *
- * For more details see: https://docs.wasmtime.dev/api/wasmtime/struct.Module.html#method.image_range
+ * For more details see:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Module.html#method.image_range
  */
-WASM_API_EXTERN void wasmtime_module_image_range(
-    const wasmtime_module_t *module,
-    size_t *start,
-    size_t *end
-);
+WASM_API_EXTERN void
+wasmtime_module_image_range(const wasmtime_module_t *module, size_t *start,
+                            size_t *end);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_MODULE_H

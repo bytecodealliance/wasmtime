@@ -12,11 +12,11 @@ use std::{
 struct Opts {
     /// The output file to write the generated Rust code to. `stdout` is used if
     /// this is not given.
-    #[clap(short, long)]
+    #[arg(short, long)]
     output: Option<PathBuf>,
 
     /// The input ISLE DSL source files.
-    #[clap(required = true)]
+    #[arg(required = true)]
     inputs: Vec<PathBuf>,
 }
 

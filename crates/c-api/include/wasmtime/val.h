@@ -41,7 +41,8 @@ typedef struct wasmtime_externref wasmtime_externref_t;
  *
  * The returned value must be deleted with #wasmtime_externref_delete
  */
-WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_new(void *data, void (*finalizer)(void*));
+WASM_API_EXTERN wasmtime_externref_t *
+wasmtime_externref_new(void *data, void (*finalizer)(void *));
 
 /**
  * \brief Get an `externref`'s wrapped data
@@ -55,7 +56,8 @@ WASM_API_EXTERN void *wasmtime_externref_data(wasmtime_externref_t *data);
  * \brief Creates a shallow copy of the `externref` argument, returning a
  * separately owned pointer (increases the reference count).
  */
-WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_clone(wasmtime_externref_t *ref);
+WASM_API_EXTERN wasmtime_externref_t *
+wasmtime_externref_clone(wasmtime_externref_t *ref);
 
 /**
  * \brief Decrements the reference count of the `ref`, deleting it if it's the
@@ -70,7 +72,8 @@ WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_externref_t *ref);
  * Note that the returned #wasmtime_externref_t is an owned value that must be
  * deleted via #wasmtime_externref_delete by the caller if it is non-null.
  */
-WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_context_t *context, void *raw);
+WASM_API_EXTERN wasmtime_externref_t *
+wasmtime_externref_from_raw(wasmtime_context_t *context, void *raw);
 
 /**
  * \brief Converts a #wasmtime_externref_t to a raw value suitable for storing
@@ -82,9 +85,9 @@ WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_conte
  * context of the store. Do not perform a GC between calling this function and
  * passing it to WebAssembly.
  */
-WASM_API_EXTERN void *wasmtime_externref_to_raw(
-    wasmtime_context_t *context,
-    const wasmtime_externref_t *ref);
+WASM_API_EXTERN void *
+wasmtime_externref_to_raw(wasmtime_context_t *context,
+                          const wasmtime_externref_t *ref);
 
 /// \brief Discriminant stored in #wasmtime_val::kind
 typedef uint8_t wasmtime_valkind_t;
@@ -98,9 +101,11 @@ typedef uint8_t wasmtime_valkind_t;
 #define WASMTIME_F64 3
 /// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a v128
 #define WASMTIME_V128 4
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a funcref
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a
+/// funcref
 #define WASMTIME_FUNCREF 5
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an externref
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
+/// externref
 #define WASMTIME_EXTERNREF 6
 
 /// \brief A 128-bit value representing the WebAssembly `v128` type. Bytes are
@@ -222,11 +227,11 @@ WASM_API_EXTERN void wasmtime_val_delete(wasmtime_val_t *val);
 /**
  * \brief Copies `src` into `dst`.
  */
-WASM_API_EXTERN void wasmtime_val_copy(wasmtime_val_t *dst, const wasmtime_val_t *src);
+WASM_API_EXTERN void wasmtime_val_copy(wasmtime_val_t *dst,
+                                       const wasmtime_val_t *src);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_VAL_H
-

@@ -239,7 +239,7 @@ pub unsafe trait WasmTy: Send {
 }
 
 macro_rules! integers {
-    ($($primitive:ident/$get_primitive:ident => $ty:ident in $raw:ident)*) => ($(
+    ($($primitive:ident/$get_primitive:ident => $ty:ident)*) => ($(
         unsafe impl WasmTy for $primitive {
             type Abi = $primitive;
             #[inline]
@@ -275,10 +275,10 @@ macro_rules! integers {
 }
 
 integers! {
-    i32/get_i32 => I32 in i32
-    i64/get_i64 => I64 in i64
-    u32/get_u32 => I32 in i32
-    u64/get_u64 => I64 in i64
+    i32/get_i32 => I32
+    i64/get_i64 => I64
+    u32/get_u32 => I32
+    u64/get_u64 => I64
 }
 
 macro_rules! floats {

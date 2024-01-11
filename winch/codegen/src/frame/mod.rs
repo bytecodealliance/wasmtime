@@ -6,7 +6,7 @@ use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;
 use wasmparser::{BinaryReader, FuncValidator, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, TypeConvert, WasmType};
+use wasmtime_environ::{TypeConvert, WasmType};
 
 // TODO:
 // SpiderMonkey's implementation uses 16;
@@ -36,7 +36,7 @@ pub(crate) struct DefinedLocals {
 impl DefinedLocals {
     /// Compute the local slots for a Wasm function.
     pub fn new<A: ABI>(
-        translation: &ModuleTranslation<'_>,
+        types: &impl TypeConvert,
         reader: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<Self> {
@@ -51,7 +51,7 @@ impl DefinedLocals {
             let ty = reader.read()?;
             validator.define_locals(position, count, ty)?;
 
-            let ty = translation.module.convert_valtype(ty);
+            let ty = types.convert_valtype(ty);
             for _ in 0..count {
                 let ty_size = <A as ABI>::sizeof(&ty);
                 next_stack = align_to(next_stack, ty_size) + ty_size;

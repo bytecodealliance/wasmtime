@@ -1,8 +1,8 @@
 use super::{
-    imp::{commit_stack_pages, reset_stack_pages_to_zero},
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
 };
+use crate::sys::vm::{commit_stack_pages, reset_stack_pages_to_zero};
 use crate::{Mmap, PoolingInstanceAllocatorConfig};
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -166,10 +166,10 @@ impl StackPool {
                 0,
                 size_to_memset,
             );
-        }
 
-        // Use the system to reset remaining stack pages to zero.
-        reset_stack_pages_to_zero(bottom as _, size - size_to_memset).unwrap();
+            // Use the system to reset remaining stack pages to zero.
+            reset_stack_pages_to_zero(bottom as _, size - size_to_memset).unwrap();
+        }
     }
 }
 

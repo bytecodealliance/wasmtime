@@ -3,8 +3,6 @@
 //! These are intended to mirror the macros in the `wasm.h` header file and
 //! largely facilitate the `declare_ref` macro.
 
-extern crate proc_macro;
-
 use proc_macro2::{Ident, TokenStream, TokenTree};
 use quote::quote;
 

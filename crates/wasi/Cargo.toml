@@ -9,8 +9,10 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
-include = ["src/**/*", "README.md", "LICENSE", "build.rs", "witx/*", "wit/**/*"]
-build = "build.rs"
+include = ["src/**/*", "README.md", "LICENSE", "build.rs", "witx/*", "wit/**/*", "tests/*"]
+
+[lints]
+workspace = true
 
 [dependencies]
 wasmtime = { workspace = true }
@@ -87,3 +89,8 @@ preview1-on-preview2 = [
     "preview2",
     "wiggle",
 ]
+
+[[test]]
+name = "process_stdin"
+harness = false
+

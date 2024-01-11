@@ -12,14 +12,22 @@ WebAssembly module.
 [`wasmtime-wasi`]: https://crates.io/crates/wasmtime-wasi
 [`Linker`]: https://docs.rs/wasmtime/*/wasmtime/struct.Linker.html
 
-## Wasm Source code
+### WebAssembly module source code
 
+For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASI Preview 1 API. 
+
+`wasi.rs`
 ```rust
 {{#include ../examples/wasi/wasm/wasi.rs}}
 ```
 
-## `wasi.rs`
+Building this program generates `target/wasm32-wasi/debug/wasi.wasm`, used below.
 
+### Invoke the WASM module
+
+This example shows adding and configuring the WASI imports to invoke the above WASM module.
+
+`main.rs`
 ```rust,ignore
 {{#include ../examples/wasi/main.rs}}
 ```
@@ -70,3 +78,24 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+## WASI Preview 2
+
+An experimental implementation of the WASI Preview 2 API is also available, along with an adapter layer for  WASI Preview 1 WebAssembly modules. In future this `preview2` API will become the default. There are some features which are currently only accessible through the `preview2` API such as async support and overriding the clock and random implementations.
+
+### Async example
+
+This [async example code][code2] shows how to use the [wasmtime-wasi::preview2][`preview2`] module to
+execute the same WASI Preview 1 WebAssembly module from the example above. This example requires the `wasmtime` crate `async` feature to be enabled.
+
+This does not require any change to the WebAssembly module, it's just the WASI API host functions which are implemented to be async. See [wasmtime async support](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support).
+
+[code2]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasi-async/main.rs
+[`preview2`]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/preview2/index.html
+
+```rust,ignore
+{{#include ../examples/wasi-async/main.rs}}
+```
+
+You can also [browse this source code online][code2] and clone the wasmtime
+repository to run the example locally.

@@ -8,8 +8,7 @@ use object::{
 };
 use std::mem::size_of;
 
-/// TODOABK: doc
-pub fn create_gdbjit_image(
+pub(crate) fn create_gdbjit_image(
     mut bytes: Vec<u8>,
     code_region: (*const u8, usize),
 ) -> Result<Vec<u8>, Error> {

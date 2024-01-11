@@ -1,13 +1,14 @@
+use crate::preview2::host::network::util;
 use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
-use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
+use cap_net_ext::{AddressFamily, Blocking};
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use super::network::SocketAddressFamily;
+use super::network::{SocketAddrCheck, SocketAddressFamily};
 
 /// The state of a UDP socket.
 ///
@@ -42,6 +43,9 @@ pub struct UdpSocket {
 
     /// Socket address family.
     pub(crate) family: SocketAddressFamily,
+
+    /// The check of allowed addresses
+    pub(crate) socket_addr_check: Option<SocketAddrCheck>,
 }
 
 #[async_trait]
@@ -54,32 +58,31 @@ impl Subscribe for UdpSocket {
 impl UdpSocket {
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
-        let socket = Self::new_tokio_socket(family)?;
+        // Create a new host socket and set it to non-blocking, which is needed
+        // by our async implementation.
+        let fd = util::udp_socket(family, Blocking::No)?;
 
         let socket_address_family = match family {
             AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
             AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
-                v6only: rustix::net::sockopt::get_ipv6_v6only(&socket)?,
+                v6only: rustix::net::sockopt::get_ipv6_v6only(&fd)?,
             },
         };
+
+        let socket = Self::setup_tokio_udp_socket(fd)?;
 
         Ok(UdpSocket {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
             family: socket_address_family,
+            socket_addr_check: None,
         })
     }
 
-    fn new_tokio_socket(family: AddressFamily) -> io::Result<tokio::net::UdpSocket> {
-        // Create a new host socket and set it to non-blocking, which is needed
-        // by our async implementation.
-        let cap_std_socket = cap_std::net::UdpSocket::new(family, Blocking::No)?;
-        let fd = cap_std_socket.into_raw_socketlike();
-        let std_socket = unsafe { std::net::UdpSocket::from_raw_socketlike(fd) };
-        let tokio_socket =
-            with_ambient_tokio_runtime(|| tokio::net::UdpSocket::try_from(std_socket))?;
-
-        Ok(tokio_socket)
+    fn setup_tokio_udp_socket(fd: rustix::fd::OwnedFd) -> io::Result<tokio::net::UdpSocket> {
+        let std_socket =
+            unsafe { std::net::UdpSocket::from_raw_socketlike(fd.into_raw_socketlike()) };
+        with_ambient_tokio_runtime(|| tokio::net::UdpSocket::try_from(std_socket))
     }
 
     pub fn udp_socket(&self) -> &tokio::net::UdpSocket {
@@ -104,6 +107,9 @@ pub struct OutgoingDatagramStream {
     pub(crate) family: SocketAddressFamily,
 
     pub(crate) send_state: SendState,
+
+    /// The check of allowed addresses
+    pub(crate) socket_addr_check: Option<SocketAddrCheck>,
 }
 
 pub(crate) enum SendState {

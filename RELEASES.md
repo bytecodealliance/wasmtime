@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
 
-## 16.0.0
+## 18.0.0
 
 Unreleased.
 
@@ -10,9 +10,109 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
-## 15.0.0
+## 17.0.0
 
 Unreleased.
+
+### Added
+
+### Changed
+
+--------------------------------------------------------------------------------
+
+## 16.0.0
+
+Released 2023-12-20
+
+### Added
+
+* Add yielding support in `wasmtime_store_epoch_deadline_callback` in the C API.
+  [#7476](https://github.com/bytecodealliance/wasmtime/pull/7476)
+
+* Support for the `wasi_unstable` module ("wasi preview0" canonically) has been
+  added to the `-Spreview2` support in the CLI.
+  [#7548](https://github.com/bytecodealliance/wasmtime/pull/7548)
+
+* The original module can now be obtained from an "instance pre" in the C API.
+  [#7572](https://github.com/bytecodealliance/wasmtime/pull/7572)
+
+* Usage of Mach ports on macOS can now be disabled in the C API.
+  [#7595](https://github.com/bytecodealliance/wasmtime/pull/7595)
+
+### Changed
+
+* The preview1-to-preview2 component adapters now import a smaller number of
+  interfaces by default.
+  [#7543](https://github.com/bytecodealliance/wasmtime/pull/7543)
+  [#7544](https://github.com/bytecodealliance/wasmtime/pull/7544)
+
+* Wasmtime and Cranelift now require Rust 1.72.0 to build.
+  [#7554](https://github.com/bytecodealliance/wasmtime/pull/7554)
+
+* The default `world` supported by `wasmtime serve` has been slimmed down to
+  exactly what `wasi:http/proxy` specifies by default. Support for other WASI
+  APIs can be included with the `-S common` command-line flag.
+  [#7597](https://github.com/bytecodealliance/wasmtime/pull/7597)
+
+* The `wasmtime --version` CLI output will now include date/commit information
+  when Wasmtime is built from a git checkout.
+  [#7610](https://github.com/bytecodealliance/wasmtime/pull/7610)
+
+* Debug intrinsic symbols required by LLDB and GDB have been moved behind a
+  `debug-builtins` feature of the `wasmtime` crate which is enabled by default.
+  [#7626](https://github.com/bytecodealliance/wasmtime/pull/7626)
+
+### Fixed
+
+* MPK support is now explicitly disabled on AMD-based CPUs since the
+  implementation does not currently support it.
+  [#7513](https://github.com/bytecodealliance/wasmtime/pull/7513)
+
+* Initialization of a WebAssembly data segment with a negative offset is fixed
+  to zero-extend the offset instead of sign-extend.
+  [#7559](https://github.com/bytecodealliance/wasmtime/pull/7559)
+
+* The reported offset of `O_APPEND` files in preview1 has been fixed.
+  [#7586](https://github.com/bytecodealliance/wasmtime/pull/7586)
+
+* MPK support does a better job of compacting memories to minimize virtual
+  memory used.
+  [#7622](https://github.com/bytecodealliance/wasmtime/pull/7622)
+
+### Cranelift
+
+* Union node bitpacking has been fixed with egraph optimizations to ensure the
+  minimal cost node is selected.
+  [#7465](https://github.com/bytecodealliance/wasmtime/pull/7465)
+
+* Equivalent-cost expressions now have ties broken with expression depth in
+  egraphs to prefer "shallow" expression trees.
+  [#7456](https://github.com/bytecodealliance/wasmtime/pull/7456)
+
+* Long-and-narrow chains of expressions are now optimized into shallow-and-wide
+  trees.
+  [#7466](https://github.com/bytecodealliance/wasmtime/pull/7466)
+
+--------------------------------------------------------------------------------
+
+## 15.0.1
+
+Released 2023-12-01.
+
+### Fixed
+
+* The `wasi:random/insecure{,_seed}` interfaces are now available through the
+  CLI.
+  [#7614](https://github.com/bytecodealliance/wasmtime/pull/7614)
+
+* A stray debugging `println!` was removed.
+  [#7618](https://github.com/bytecodealliance/wasmtime/pull/7618)
+
+--------------------------------------------------------------------------------
+
+## 15.0.0
+
+Released 2023-11-20
 
 ### Added
 
