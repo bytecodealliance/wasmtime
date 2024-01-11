@@ -13,6 +13,7 @@ use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
 use std::net::SocketAddr;
+use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
@@ -38,7 +39,9 @@ enum TcpState {
     ListenStarted,
 
     /// The socket is now listening and waiting for an incoming connection.
-    Listening,
+    Listening {
+        pending_result: Option<io::Result<SystemTcpSocket>>,
+    },
 
     /// An outgoing connection is started via `start_connect`.
     Connecting,
@@ -189,7 +192,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
                 TcpState::Bound
                 | TcpState::Connected
                 | TcpState::ConnectFailed
-                | TcpState::Listening => return Err(ErrorCode::InvalidState.into()),
+                | TcpState::Listening { .. } => return Err(ErrorCode::InvalidState.into()),
                 TcpState::Connecting
                 | TcpState::ConnectReady
                 | TcpState::ListenStarted
@@ -285,7 +288,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             TcpState::Default
             | TcpState::Connected
             | TcpState::ConnectFailed
-            | TcpState::Listening => return Err(ErrorCode::InvalidState.into()),
+            | TcpState::Listening { .. } => return Err(ErrorCode::InvalidState.into()),
             TcpState::ListenStarted
             | TcpState::Connecting
             | TcpState::ConnectReady
@@ -307,7 +310,9 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
 
-        socket.tcp_state = TcpState::Listening;
+        socket.tcp_state = TcpState::Listening {
+            pending_result: None,
+        };
 
         Ok(())
     }
@@ -324,13 +329,22 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
-        match socket.tcp_state {
-            TcpState::Listening => {}
-            _ => return Err(ErrorCode::InvalidState.into()),
-        }
+        let TcpState::Listening { pending_result } = &mut socket.tcp_state else {
+            return Err(ErrorCode::InvalidState.into());
+        };
 
-        // Do the OS accept call.
-        let client = socket.inner.try_accept()?;
+        let client = match pending_result.take() {
+            Some(Ok(client)) => client,
+            Some(Err(e)) => return Err(e.into()),
+            None => {
+                let mut cx = Context::from_waker(futures::task::noop_waker_ref());
+                match socket.inner.poll_accept(&mut cx) {
+                    Poll::Ready(Ok(client)) => client,
+                    Poll::Ready(Err(e)) => return Err(e.into()),
+                    Poll::Pending => return Err(ErrorCode::WouldBlock.into()),
+                }
+            }
+        };
 
         let tcp_socket = TcpSocketWrapper {
             inner: client,
@@ -383,7 +397,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         let socket = table.get(&this)?;
 
         match socket.tcp_state {
-            TcpState::Listening => Ok(true),
+            TcpState::Listening { .. } => Ok(true),
             _ => Ok(false),
         }
     }
@@ -588,7 +602,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
 #[async_trait::async_trait]
 impl Subscribe for TcpSocketWrapper {
     async fn ready(&mut self) {
-        match self.tcp_state {
+        match &mut self.tcp_state {
             TcpState::Default
             | TcpState::BindStarted
             | TcpState::Bound
@@ -598,7 +612,11 @@ impl Subscribe for TcpSocketWrapper {
             | TcpState::ConnectFailed => {
                 // No async operation in progress.
             }
-            TcpState::Listening | TcpState::Connecting => {
+            TcpState::Listening { pending_result } => match pending_result {
+                Some(_) => {}
+                None => *pending_result = Some(self.inner.accept().await),
+            },
+            TcpState::Connecting => {
                 // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
                 self.inner
                     .stream

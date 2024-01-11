@@ -123,7 +123,7 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub(crate) fn try_accept(&mut self) -> io::Result<SystemTcpSocket> {
+    fn try_accept(&mut self) -> io::Result<SystemTcpSocket> {
         let stream = self.stream.as_ref();
         let (client_fd, _addr) = stream.try_io(Interest::READABLE, || {
             util::tcp_accept(stream, Blocking::No)
@@ -154,6 +154,22 @@ impl SystemTcpSocket {
         }
 
         Self::from_fd(client_fd, self.family)
+    }
+
+    pub fn poll_accept(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<SystemTcpSocket>> {
+        while self.stream.poll_read_ready(cx).is_ready() {
+            match self.try_accept() {
+                Ok(s) => return Poll::Ready(Ok(s)),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+                Err(e) => return Poll::Ready(Err(e)),
+            }
+        }
+
+        Poll::Pending
+    }
+
+    pub async fn accept(&mut self) -> io::Result<SystemTcpSocket> {
+        futures::future::poll_fn(|cx| self.poll_accept(cx)).await
     }
 
     pub fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
