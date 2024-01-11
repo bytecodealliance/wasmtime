@@ -2,34 +2,26 @@
 
 use super::cli_tests::get_wasmtime_command;
 use anyhow::Result;
-use std::process::{ChildStdout, Command, Stdio};
+use std::process::Stdio;
 
-fn producer_command(component_path: &str) -> Result<Command> {
-    let mut cmd = get_wasmtime_command()?;
-    cmd.arg("run")
+pub fn run_wasmtime_piped(component_path: &str) -> Result<()> {
+    let mut producer = get_wasmtime_command()?
+        .arg("run")
         .arg("-Wcomponent-model")
         .arg("--env")
         .arg("PIPED_SIDE=PRODUCER")
         .arg(component_path)
-        .stdout(Stdio::piped());
-    Ok(cmd)
-}
+        .stdout(Stdio::piped())
+        .spawn()?;
 
-fn consumer_command(component_path: &str, input: ChildStdout) -> Result<Command> {
-    let mut cmd = get_wasmtime_command()?;
-    cmd.arg("run")
+    let mut consumer = get_wasmtime_command()?
+        .arg("run")
         .arg("-Wcomponent-model")
         .arg("--env")
         .arg("PIPED_SIDE=CONSUMER")
         .arg(component_path)
-        .stdin(input);
-    Ok(cmd)
-}
-
-pub fn run_wasmtime_piped(component_path: &str) -> Result<()> {
-    let mut producer = producer_command(component_path)?.spawn()?;
-    let stdout = producer.stdout.take().unwrap();
-    let mut consumer = consumer_command(component_path, stdout)?.spawn()?;
+        .stdin(producer.stdout.take().unwrap())
+        .spawn()?;
 
     let producer = producer.wait()?;
     if !producer.success() {
@@ -63,6 +55,11 @@ mod test_programs {
     #[test]
     fn piped_simple() {
         run_wasmtime_piped(PIPED_SIMPLE_COMPONENT).unwrap()
+    }
+
+    #[test]
+    fn piped_multiple() {
+        run_wasmtime_piped(PIPED_MULTIPLE_COMPONENT).unwrap()
     }
 
     #[test]
