@@ -351,6 +351,10 @@ async fn preview2_stream_pollable_traps() {
         .unwrap_err();
     assert_eq!(
         format!("{}", e.source().expect("trap source")),
-        "entry still has children"
+        "resource has children"
     )
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_adapter_badfd() {
+    run(PREVIEW2_ADAPTER_BADFD_COMPONENT, false).await.unwrap()
 }

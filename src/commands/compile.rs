@@ -30,30 +30,29 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| {
 
 /// Compiles a WebAssembly module.
 #[derive(Parser, PartialEq)]
-#[structopt(
-    name = "compile",
+#[command(
     version,
     after_help = AFTER_HELP.as_str()
 )]
 pub struct CompileCommand {
-    #[clap(flatten)]
+    #[command(flatten)]
     #[allow(missing_docs)]
     pub common: CommonOptions,
 
     /// The target triple; default is the host triple
-    #[clap(long, value_name = "TARGET")]
+    #[arg(long, value_name = "TARGET")]
     pub target: Option<String>,
 
     /// The path of the output compiled module; defaults to <MODULE>.cwasm
-    #[clap(short = 'o', long, value_name = "OUTPUT")]
+    #[arg(short = 'o', long, value_name = "OUTPUT")]
     pub output: Option<PathBuf>,
 
     /// The directory path to write clif files into, one clif file per wasm function.
-    #[clap(long = "emit-clif", value_name = "PATH")]
+    #[arg(long = "emit-clif", value_name = "PATH")]
     pub emit_clif: Option<PathBuf>,
 
     /// The path of the WebAssembly to compile
-    #[clap(index = 1, value_name = "MODULE")]
+    #[arg(index = 1, value_name = "MODULE")]
     pub module: PathBuf,
 }
 

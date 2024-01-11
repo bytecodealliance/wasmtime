@@ -4,7 +4,7 @@ use crate::WasmResult;
 use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use wasmparser::{FuncValidator, WasmFuncType, WasmModuleResources};
+use wasmparser::{FuncValidator, WasmModuleResources};
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
@@ -18,30 +18,24 @@ where
     T: WasmModuleResources,
 {
     return Ok(match ty {
-        wasmparser::BlockType::Empty => {
-            let params: &'static [wasmparser::ValType] = &[];
-            let results: std::vec::Vec<wasmparser::ValType> = vec![];
-            (
-                itertools::Either::Left(params.iter().copied()),
-                itertools::Either::Left(results.into_iter()),
-            )
-        }
-        wasmparser::BlockType::Type(ty) => {
-            let params: &'static [wasmparser::ValType] = &[];
-            let results: std::vec::Vec<wasmparser::ValType> = vec![ty.clone()];
-            (
-                itertools::Either::Left(params.iter().copied()),
-                itertools::Either::Left(results.into_iter()),
-            )
-        }
+        wasmparser::BlockType::Empty => (
+            itertools::Either::Left(std::iter::empty()),
+            itertools::Either::Left(None.into_iter()),
+        ),
+        wasmparser::BlockType::Type(ty) => (
+            itertools::Either::Left(std::iter::empty()),
+            itertools::Either::Left(Some(ty).into_iter()),
+        ),
         wasmparser::BlockType::FuncType(ty_index) => {
             let ty = validator
                 .resources()
-                .func_type_at(ty_index)
-                .expect("should be valid");
+                .sub_type_at(ty_index)
+                .expect("should be valid")
+                .unwrap_func();
+
             (
-                itertools::Either::Right(ty.inputs()),
-                itertools::Either::Right(ty.outputs()),
+                itertools::Either::Right(ty.params().iter().copied()),
+                itertools::Either::Right(ty.results().iter().copied()),
             )
         }
     });

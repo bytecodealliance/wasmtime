@@ -5,8 +5,8 @@ use crate::module::{
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
     GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialValue, Tunables, TypeConvert, TypeIndex, WasmError, WasmFuncType, WasmHeapType,
-    WasmResult, WasmType,
+    TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType,
+    WasmResult, WasmType, WasmparserTypeConverter,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -14,10 +14,11 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::sync::Arc;
+use wasmparser::types::{CoreTypeId, Types};
 use wasmparser::{
-    types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
-    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeRef,
-    Validator, ValidatorResources,
+    CompositeType, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding,
+    ExternalKind, FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser,
+    Payload, TypeRef, Validator, ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
@@ -237,9 +238,10 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.result.module.types.reserve(num);
                 self.types.reserve_wasm_signatures(num);
 
-                for ty in types.into_iter_err_on_gc_types() {
-                    let ty = self.convert_func_type(&ty?);
-                    self.declare_type_func(ty)?;
+                for i in 0..types.count() {
+                    let types = self.validator.types(0).unwrap();
+                    let ty = types.core_type_at(i);
+                    self.declare_type(ty.unwrap_sub())?;
                 }
             }
 
@@ -487,7 +489,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let table_index = TableIndex::from_u32(table_index.unwrap_or(0));
                             let mut offset_expr_reader = offset_expr.get_binary_reader();
                             let (base, offset) = match offset_expr_reader.read_operator()? {
-                                Operator::I32Const { value } => (None, value as u32),
+                                Operator::I32Const { value } => (None, value.unsigned()),
                                 Operator::GlobalGet { global_index } => {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
                                 }
@@ -607,8 +609,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let memory_index = MemoryIndex::from_u32(memory_index);
                             let mut offset_expr_reader = offset_expr.get_binary_reader();
                             let (base, offset) = match offset_expr_reader.read_operator()? {
-                                Operator::I32Const { value } => (None, value as u64),
-                                Operator::I64Const { value } => (None, value as u64),
+                                Operator::I32Const { value } => (None, value.unsigned().into()),
+                                Operator::I64Const { value } => (None, value.unsigned()),
                                 Operator::GlobalGet { global_index } => {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
                                 }
@@ -791,12 +793,22 @@ and for re-adding support for interface types you can see this issue:
         self.result.module.num_escaped_funcs += 1;
     }
 
-    fn declare_type_func(&mut self, wasm: WasmFuncType) -> WasmResult<()> {
-        let sig_index = self.types.wasm_func_type(wasm);
-        self.result
-            .module
-            .types
-            .push(ModuleType::Function(sig_index));
+    fn declare_type(&mut self, id: CoreTypeId) -> WasmResult<()> {
+        let types = self.validator.types(0).unwrap();
+        let ty = &types[id];
+        assert!(ty.is_final);
+        assert!(ty.supertype_idx.is_none());
+        match &ty.composite_type {
+            CompositeType::Func(ty) => {
+                let wasm = self.convert_func_type(ty);
+                let sig_index = self.types.wasm_func_type(id, wasm);
+                self.result
+                    .module
+                    .types
+                    .push(ModuleType::Function(sig_index));
+            }
+            CompositeType::Array(_) | CompositeType::Struct(_) => unimplemented!(),
+        }
         Ok(())
     }
 
@@ -862,6 +874,7 @@ and for re-adding support for interface types you can see this issue:
                 | wasmparser::Name::Memory(_)
                 | wasmparser::Name::Element(_)
                 | wasmparser::Name::Data(_)
+                | wasmparser::Name::Tag(_)
                 | wasmparser::Name::Unknown { .. } => {}
             }
         }
@@ -870,7 +883,11 @@ and for re-adding support for interface types you can see this issue:
 }
 
 impl TypeConvert for ModuleEnvironment<'_, '_> {
-    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
-        self.result.module.lookup_heap_type(index)
+    fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
+        WasmparserTypeConverter {
+            types: &self.types,
+            module: &self.result.module,
+        }
+        .lookup_heap_type(index)
     }
 }

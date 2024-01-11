@@ -1,12 +1,6 @@
 //! Utility for `cranelift_serde`.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 use clap::Parser;
 use cranelift_codegen::ir::Function;
@@ -43,12 +37,12 @@ fn call_de(file: &File) -> Result<(), String> {
 
 /// Cranelift JSON serializer/deserializer utility
 #[derive(Parser, Debug)]
-#[clap(about)]
+#[command(about)]
 enum Args {
     /// Serializes Cranelift IR into JSON
     Serialize {
         /// Generate pretty json
-        #[clap(long, short)]
+        #[arg(long, short)]
         pretty: bool,
 
         /// Input file for serialization

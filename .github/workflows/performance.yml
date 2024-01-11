@@ -74,7 +74,7 @@ jobs:
           cargo build --release
 
       - name: Checkout patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           path: wasmtime_commit
@@ -89,7 +89,7 @@ jobs:
           cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_commit.so
 
       - name: Checkout main from bytecodealliance/wasmtime
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: 'main'
           repository: 'bytecodealliance/wasmtime'

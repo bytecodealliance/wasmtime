@@ -11,9 +11,9 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
-            import wasi:http/incoming-handler@0.2.0-rc-2023-11-10;
-            import wasi:http/outgoing-handler@0.2.0-rc-2023-11-10;
-            import wasi:http/types@0.2.0-rc-2023-11-10;
+            import wasi:http/incoming-handler@0.2.0-rc-2023-12-05;
+            import wasi:http/outgoing-handler@0.2.0-rc-2023-12-05;
+            import wasi:http/types@0.2.0-rc-2023-12-05;
         ",
         tracing: true,
         async: false,

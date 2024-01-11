@@ -1709,6 +1709,9 @@
 (decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
+(decl pure partial imm_size_from_type (Type) u16)
+(extern constructor imm_size_from_type imm_size_from_type)
+
 (decl pure partial imm_logic_from_imm64 (Type Imm64) ImmLogic)
 (extern constructor imm_logic_from_imm64 imm_logic_from_imm64)
 
@@ -2938,9 +2941,10 @@
 ;; we only match when we are zero-extending the value.
 (rule 1 (imm (integral_ty ty) (ImmExtend.Zero) k)
       (if-let n (imm_logic_from_u64 ty k))
+      (if-let m (imm_size_from_type ty))
       (add_range_fact
        (orr_imm ty (zero_reg) n)
-       64 k k))
+       m k k))
 
 (decl load_constant64_full (Type ImmExtend u64) Reg)
 (extern constructor load_constant64_full load_constant64_full)

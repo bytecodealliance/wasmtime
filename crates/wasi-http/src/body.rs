@@ -1,4 +1,3 @@
-use crate::internal_error;
 use crate::{bindings::http::types, types::FieldMap};
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -300,6 +299,9 @@ pub enum HostFutureTrailers {
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
     Done(Result<Option<FieldMap>, types::ErrorCode>),
+
+    /// Trailers have been consumed by `future-trailers.get`.
+    Consumed,
 }
 
 #[async_trait::async_trait]
@@ -308,6 +310,7 @@ impl Subscribe for HostFutureTrailers {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
             HostFutureTrailers::Done(_) => return,
+            HostFutureTrailers::Consumed => return,
         };
 
         // If the body is itself being read by a body stream then we need to
@@ -337,6 +340,7 @@ impl Subscribe for HostFutureTrailers {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
             HostFutureTrailers::Done(_) => return,
+            HostFutureTrailers::Consumed => return,
         };
         let hyper_body = match &mut body.body {
             IncomingBodyState::Start(body) => body,
@@ -381,6 +385,11 @@ impl WrittenState {
         }
     }
 
+    /// The number of bytes that have been written so far.
+    fn written(&self) -> u64 {
+        self.written.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Add `len` to the total number of bytes written. Returns `false` if the new total exceeds
     /// the number of bytes expected to be written.
     fn update(&self, len: usize) -> bool {
@@ -390,22 +399,17 @@ impl WrittenState {
             .fetch_add(len, std::sync::atomic::Ordering::Relaxed);
         old + len <= self.expected
     }
-
-    /// Return a comparison of total bytes written to the number of bytes expected to be written.
-    fn finish(self) -> std::cmp::Ordering {
-        let written = self.written.load(std::sync::atomic::Ordering::Relaxed);
-        written.cmp(&self.expected)
-    }
 }
 
 pub struct HostOutgoingBody {
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
+    context: StreamContext,
     written: Option<WrittenState>,
     finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
 }
 
 impl HostOutgoingBody {
-    pub fn new(size: Option<u64>) -> (Self, HyperOutgoingBody) {
+    pub fn new(context: StreamContext, size: Option<u64>) -> (Self, HyperOutgoingBody) {
         let written = size.map(WrittenState::new);
 
         use tokio::sync::oneshot::error::RecvError;
@@ -460,11 +464,13 @@ impl HostOutgoingBody {
         .boxed();
 
         // TODO: this capacity constant is arbitrary, and should be configurable
-        let output_stream = BodyWriteStream::new(1024 * 1024, body_sender, written.clone());
+        let output_stream =
+            BodyWriteStream::new(context, 1024 * 1024, body_sender, written.clone());
 
         (
             Self {
                 body_output_stream: Some(Box::new(output_stream)),
+                context,
                 written,
                 finish_sender: Some(finish_sender),
             },
@@ -483,17 +489,10 @@ impl HostOutgoingBody {
             .expect("outgoing-body trailer_sender consumed by a non-owning function");
 
         if let Some(w) = self.written {
-            use std::cmp::Ordering;
-            let res = w.finish();
-            if res != Ordering::Equal {
-                let msg = match res {
-                    Ordering::Less => "not enough",
-                    Ordering::Greater => "too much",
-                    Ordering::Equal => unreachable!(),
-                };
-
+            let written = w.written();
+            if written != w.expected {
                 let _ = sender.send(FinishMessage::Abort);
-                return Err(internal_error(format!("{msg} written to body stream")));
+                return Err(self.context.as_body_error(written));
             }
         }
 
@@ -523,8 +522,25 @@ impl HostOutgoingBody {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StreamContext {
+    Request,
+    Response,
+}
+
+impl StreamContext {
+    /// Construct an http request or response body size error.
+    pub fn as_body_error(&self, size: u64) -> types::ErrorCode {
+        match self {
+            StreamContext::Request => types::ErrorCode::HttpRequestBodySize(Some(size)),
+            StreamContext::Response => types::ErrorCode::HttpResponseBodySize(Some(size)),
+        }
+    }
+}
+
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
 struct BodyWriteStream {
+    context: StreamContext,
     writer: mpsc::Sender<Bytes>,
     write_budget: usize,
     written: Option<WrittenState>,
@@ -533,6 +549,7 @@ struct BodyWriteStream {
 impl BodyWriteStream {
     /// Create a [`BodyWriteStream`].
     fn new(
+        context: StreamContext,
         write_budget: usize,
         writer: mpsc::Sender<Bytes>,
         written: Option<WrittenState>,
@@ -540,6 +557,7 @@ impl BodyWriteStream {
         // at least one capacity is required to send a message
         assert!(writer.max_capacity() >= 1);
         BodyWriteStream {
+            context,
             writer,
             write_budget,
             written,
@@ -557,9 +575,10 @@ impl HostOutputStream for BodyWriteStream {
             Ok(()) => {
                 if let Some(written) = self.written.as_ref() {
                     if !written.update(len) {
-                        return Err(StreamError::LastOperationFailed(anyhow!(internal_error(
-                            "too much written to output stream".to_owned()
-                        ))));
+                        let total = written.written();
+                        return Err(StreamError::LastOperationFailed(anyhow!(self
+                            .context
+                            .as_body_error(total))));
                     }
                 }
 

@@ -1,6 +1,6 @@
 //! Wasmtime's embedding API
 //!
-//! Wasmtime is a WebAssembly engine for JIT-complied or ahead-of-time compiled
+//! Wasmtime is a WebAssembly engine for JIT-compiled or ahead-of-time compiled
 //! WebAssembly modules. More information about the Wasmtime project as a whole
 //! can be found [in the documentation book](https://docs.wasmtime.dev) whereas
 //! this documentation mostly focuses on the API reference of the `wasmtime`
@@ -300,6 +300,12 @@
 //!   will attempt to parse DWARF debug information and convert WebAssembly
 //!   addresses to source filenames and line numbers.
 //!
+//! * `debug-builtins` - Enabled by default, this feature includes some built-in
+//!   debugging utilities and symbols for native debuggers such as GDB and LLDB
+//!   to attach to the process Wasmtime is used within. The intrinsics provided
+//!   will enable debugging guest code compiled to WebAssembly. This must also
+//!   be enabled via [`Config::debug_info`] as well for guests.
+//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!
@@ -476,7 +482,9 @@ pub use anyhow::{Error, Result};
 pub mod component;
 
 cfg_if::cfg_if! {
-    if #[cfg(unix)] {
+    if #[cfg(miri)] {
+        // no extensions on miri
+    } else if #[cfg(unix)] {
         pub mod unix;
     } else if #[cfg(windows)] {
         pub mod windows;

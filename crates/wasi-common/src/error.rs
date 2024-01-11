@@ -7,7 +7,7 @@
 //! can be provided with the [`Error::context`] method. This context is only observable with the
 //! `Display` and `Debug` impls of the error.
 
-pub use crate::snapshots::preview_1::error::{Errno, Error, ErrorExt};
+pub use crate::snapshots::preview_1::error::{Error, ErrorExt};
 use std::fmt;
 
 /// An error returned from the `proc_exit` host syscall.

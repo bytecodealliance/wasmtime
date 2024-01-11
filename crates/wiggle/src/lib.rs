@@ -21,7 +21,7 @@ mod error;
 mod guest_type;
 mod region;
 
-pub extern crate tracing;
+pub use tracing;
 
 pub use error::GuestError;
 pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};

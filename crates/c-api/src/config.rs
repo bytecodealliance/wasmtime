@@ -241,6 +241,11 @@ pub unsafe extern "C" fn wasmtime_config_target_set(
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_macos_use_mach_ports_set(c: &mut wasm_config_t, enabled: bool) {
+    c.config.macos_use_mach_ports(enabled);
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasmtime_config_cranelift_flag_enable(
     c: &mut wasm_config_t,
     flag: *const c_char,

@@ -6,9 +6,13 @@ edition.workspace = true
 publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 wasi = "0.11.0"
+wasi-nn = "0.6.0"
 wit-bindgen = { workspace = true, features = ['default'] }
 libc = { workspace = true }
 getrandom = "0.2.9"

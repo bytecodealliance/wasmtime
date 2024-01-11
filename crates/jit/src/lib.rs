@@ -1,13 +1,12 @@
 //! JIT-style runtime for WebAssembly using Cranelift.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 mod code_memory;
+#[cfg(feature = "debug-builtins")]
 mod debug;
 mod instantiate;
 pub mod profiling;
-mod unwind;
 
 pub use crate::code_memory::CodeMemory;
 pub use crate::instantiate::{finish_object, CompiledModule};

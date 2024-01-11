@@ -13,7 +13,8 @@ async fn run(path: &str, server: &Server) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
     let mut store = store(&engine, server);
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
+    wasmtime_wasi::preview2::command::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::proxy::add_only_http_to_linker(&mut linker)?;
     let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
     let result = command.wasi_cli_run().call_run(&mut store).await?;
     result.map_err(|()| anyhow::anyhow!("run returned an error"))

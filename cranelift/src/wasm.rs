@@ -59,46 +59,46 @@ macro_rules! vcprint {
 #[derive(Parser)]
 pub struct Options {
     /// Be more verbose
-    #[clap(short, long)]
+    #[arg(short, long)]
     verbose: bool,
 
     /// Print the resulting Cranelift IR
-    #[clap(short)]
+    #[arg(short)]
     print: bool,
 
     /// Print pass timing report
-    #[clap(short = 'T')]
+    #[arg(short = 'T')]
     report_times: bool,
 
     /// Print machine code disassembly
-    #[clap(short = 'D', long)]
+    #[arg(short = 'D', long)]
     disasm: bool,
 
     /// Configure Cranelift settings
-    #[clap(long = "set")]
+    #[arg(long = "set")]
     settings: Vec<String>,
 
     /// Specify the Cranelift target
-    #[clap(long = "target")]
+    #[arg(long = "target")]
     target: String,
 
     /// Specify an input file to be used. Use '-' for stdin.
     files: Vec<PathBuf>,
 
     /// Print bytecode size
-    #[clap(short = 'X')]
+    #[arg(short = 'X')]
     print_size: bool,
 
     /// Just decode Wasm into Cranelift IR, don't compile it to native code
-    #[clap(short = 't')]
+    #[arg(short = 't')]
     just_decode: bool,
 
     /// Just checks the correctness of Cranelift IR translated from Wasm
-    #[clap(short = 'c')]
+    #[arg(short = 'c')]
     check_translation: bool,
 
     /// Use colors in output? [options: auto/never/always; default: auto]
-    #[clap(long = "color", default_value("auto"))]
+    #[arg(long = "color", default_value("auto"))]
     color: ColorOpt,
 }
 

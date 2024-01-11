@@ -10,12 +10,15 @@ categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 log = { workspace = true }
 wasmtime-environ = { workspace = true }
 cranelift-wasm = { workspace = true }
-cranelift-codegen = { workspace = true, features = ["default"] }
+cranelift-codegen = { workspace = true, features = ["host-arch"] }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-native = { workspace = true }

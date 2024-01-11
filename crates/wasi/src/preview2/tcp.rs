@@ -1,11 +1,11 @@
 use super::network::SocketAddressFamily;
 use super::{HostInputStream, HostOutputStream, StreamError};
+use crate::preview2::host::network::util;
 use crate::preview2::{
     with_ambient_tokio_runtime, AbortOnDropJoinHandle, InputStream, OutputStream, Subscribe,
 };
 use anyhow::{Error, Result};
-use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
-use cap_std::net::TcpListener;
+use cap_net_ext::{AddressFamily, Blocking};
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use rustix::net::sockopt;
 use std::io;
@@ -261,36 +261,26 @@ impl TcpSocket {
     pub fn new(family: AddressFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
-        let tcp_listener = TcpListener::new(family, Blocking::No)?;
+        let fd = util::tcp_socket(family, Blocking::No)?;
 
         let socket_address_family = match family {
             AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
             AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
-                v6only: sockopt::get_ipv6_v6only(&tcp_listener)?,
+                v6only: sockopt::get_ipv6_v6only(&fd)?,
             },
         };
 
-        Self::from_tcp_listener(tcp_listener, socket_address_family)
+        Self::from_fd(fd, socket_address_family)
     }
 
     /// Create a `TcpSocket` from an existing socket.
     ///
     /// The socket must be in non-blocking mode.
-    pub(crate) fn from_tcp_stream(
-        tcp_socket: cap_std::net::TcpStream,
+    pub(crate) fn from_fd(
+        fd: rustix::fd::OwnedFd,
         family: SocketAddressFamily,
     ) -> io::Result<Self> {
-        let tcp_listener = TcpListener::from(rustix::fd::OwnedFd::from(tcp_socket));
-        Self::from_tcp_listener(tcp_listener, family)
-    }
-
-    pub(crate) fn from_tcp_listener(
-        tcp_listener: cap_std::net::TcpListener,
-        family: SocketAddressFamily,
-    ) -> io::Result<Self> {
-        let fd = tcp_listener.into_raw_socketlike();
-        let std_stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
-        let stream = with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))?;
+        let stream = Self::setup_tokio_tcp_stream(fd)?;
 
         Ok(Self {
             inner: Arc::new(stream),
@@ -306,6 +296,12 @@ impl TcpSocket {
             #[cfg(target_os = "macos")]
             keep_alive_idle_time: None,
         })
+    }
+
+    fn setup_tokio_tcp_stream(fd: rustix::fd::OwnedFd) -> io::Result<tokio::net::TcpStream> {
+        let std_stream =
+            unsafe { std::net::TcpStream::from_raw_socketlike(fd.into_raw_socketlike()) };
+        with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))
     }
 
     pub fn tcp_socket(&self) -> &tokio::net::TcpStream {

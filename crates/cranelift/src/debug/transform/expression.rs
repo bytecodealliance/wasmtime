@@ -1,3 +1,5 @@
+#![allow(trivial_numeric_casts)]
+
 use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
 use anyhow::{Context, Error, Result};

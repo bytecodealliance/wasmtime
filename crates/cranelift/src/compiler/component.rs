@@ -15,7 +15,7 @@ struct TrampolineCompiler<'a> {
     isa: &'a (dyn TargetIsa + 'static),
     builder: FunctionBuilder<'a>,
     component: &'a Component,
-    types: &'a ComponentTypes,
+    types: &'a ComponentTypesBuilder,
     offsets: VMComponentOffsets<u8>,
     abi: Abi,
     block0: ir::Block,
@@ -34,7 +34,7 @@ impl<'a> TrampolineCompiler<'a> {
         compiler: &'a Compiler,
         func_compiler: &'a mut super::FunctionCompiler<'_>,
         component: &'a Component,
-        types: &'a ComponentTypes,
+        types: &'a ComponentTypesBuilder,
         index: TrampolineIndex,
         abi: Abi,
     ) -> TrampolineCompiler<'a> {
@@ -625,7 +625,7 @@ impl ComponentCompiler for Compiler {
     fn compile_trampoline(
         &self,
         component: &ComponentTranslation,
-        types: &ComponentTypes,
+        types: &ComponentTypesBuilder,
         index: TrampolineIndex,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
         let compile = |abi: Abi| -> Result<_> {

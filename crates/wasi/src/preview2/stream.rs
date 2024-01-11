@@ -1,6 +1,5 @@
 use crate::preview2::filesystem::FileInputStream;
 use crate::preview2::poll::Subscribe;
-use crate::preview2::TableError;
 use anyhow::Result;
 use bytes::Bytes;
 
@@ -73,8 +72,8 @@ impl std::error::Error for StreamError {
     }
 }
 
-impl From<TableError> for StreamError {
-    fn from(error: TableError) -> Self {
+impl From<wasmtime::component::ResourceTableError> for StreamError {
+    fn from(error: wasmtime::component::ResourceTableError) -> Self {
         Self::Trap(error.into())
     }
 }
@@ -143,7 +142,7 @@ pub trait HostOutputStream: Subscribe {
     fn write_zeroes(&mut self, nelem: usize) -> StreamResult<()> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
-        let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
+        let bs = Bytes::from_iter(core::iter::repeat(0).take(nelem));
         self.write(bs)?;
         Ok(())
     }

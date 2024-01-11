@@ -25,10 +25,24 @@ pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Resul
 where
     T: WasiHttpView + preview2::WasiView + bindings::http::types::Host,
 {
-    // TODO: this shouldn't be required, but the adapter unconditionally pulls in all of these
-    // dependencies.
-    preview2::command::add_to_linker(l)?;
+    preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
+    preview2::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
+    preview2::bindings::io::poll::add_to_linker(l, |t| t)?;
+    preview2::bindings::io::error::add_to_linker(l, |t| t)?;
+    preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
+    preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
+    preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
+    preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
+    preview2::bindings::random::random::add_to_linker(l, |t| t)?;
 
+    add_only_http_to_linker(l)
+}
+
+#[doc(hidden)]
+pub fn add_only_http_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+where
+    T: WasiHttpView + preview2::WasiView + bindings::http::types::Host,
+{
     bindings::http::outgoing_handler::add_to_linker(l, |t| t)?;
     bindings::http::types::add_to_linker(l, |t| t)?;
 

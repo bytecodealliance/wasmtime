@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::SocketAddressFamily;
+use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
 use crate::preview2::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -11,7 +11,6 @@ use crate::preview2::{
 use crate::preview2::{Pollable, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
-use cap_net_ext::PoolExt;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -33,31 +32,41 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
+        self.ctx().allowed_network_uses.check_allowed_udp()?;
         let table = self.table_mut();
-        let socket = table.get(&this)?;
-        let network = table.get(&network)?;
-        let local_address: SocketAddr = local_address.into();
 
-        match socket.udp_state {
+        match table.get(&this)?.udp_state {
             UdpState::Default => {}
             UdpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             UdpState::Bound | UdpState::Connected => return Err(ErrorCode::InvalidState.into()),
         }
 
+        // Set the socket addr check on the socket so later functions have access to it through the socket handle
+        let check = table.get(&network)?.socket_addr_check.clone();
+        table
+            .get_mut(&this)?
+            .socket_addr_check
+            .replace(check.clone());
+
+        let socket = table.get(&this)?;
+        let local_address: SocketAddr = local_address.into();
+
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            let binder = network.pool.udp_binder(local_address)?;
-            let udp_socket = &*socket
-                .udp_socket()
-                .as_socketlike_view::<cap_std::net::UdpSocket>();
+            check.check(&local_address, SocketAddrUse::UdpBind)?;
 
             // Perform the OS bind call.
-            util::udp_bind(udp_socket, &binder).map_err(|error| {
-                match Errno::from_io_error(&error) {
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
-                    _ => ErrorCode::from(error),
-                }
+            util::udp_bind(socket.udp_socket(), &local_address).map_err(|error| match error {
+                // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+                // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+                //
+                // The most common reasons for this error should have already
+                // been handled by our own validation slightly higher up in this
+                // function. This error mapping is here just in case there is
+                // an edge case we didn't catch.
+                Errno::AFNOSUPPORT => ErrorCode::InvalidArgument,
+                _ => ErrorCode::from(error),
             })?;
         }
 
@@ -120,12 +129,16 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
+            let Some(check) = socket.socket_addr_check.as_ref() else {
+                return Err(ErrorCode::InvalidState.into());
+            };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
+            check.check(&connect_addr, SocketAddrUse::UdpConnect)?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
-                    Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
+                    Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // See `bind` implementation.
                     Errno::INPROGRESS => {
                         log::debug!("UDP connect returned EINPROGRESS, which should never happen");
                         ErrorCode::Unknown
@@ -145,6 +158,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             remote_address,
             family: socket.family,
             send_state: SendState::Idle,
+            socket_addr_check: socket.socket_addr_check.clone(),
         };
 
         Ok((
@@ -337,7 +351,6 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
                 _ => {}
             }
 
-            // FIXME: check permission to receive from `received_addr`.
             Ok(Some(udp::IncomingDatagram {
                 data: buf[..size].into(),
                 remote_address: received_addr.into(),
@@ -440,7 +453,13 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
 
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (stream.remote_address, provided_addr) {
-                (None, Some(addr)) => addr,
+                (None, Some(addr)) => {
+                    let Some(check) = stream.socket_addr_check.as_ref() else {
+                        return Err(ErrorCode::InvalidState.into());
+                    };
+                    check.check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
+                    addr
+                }
                 (Some(addr), None) => addr,
                 (Some(connected_addr), Some(provided_addr)) if connected_addr == provided_addr => {
                     connected_addr
@@ -451,7 +470,6 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             util::validate_remote_address(&addr)?;
             util::validate_address_family(&addr, &stream.family)?;
 
-            // FIXME: check permission to send to `addr`.
             if stream.remote_address == Some(addr) {
                 stream.inner.try_send(&datagram.data)?;
             } else {

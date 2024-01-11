@@ -1,5 +1,5 @@
+use test_programs::wasi::sockets::instance_network::Network;
 use test_programs::wasi::sockets::network::{ErrorCode, IpAddress};
-use test_programs::wasi::sockets::*;
 
 fn main() {
     // Valid domains
@@ -50,19 +50,7 @@ fn main() {
 }
 
 fn resolve(name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
-    let network = instance_network::instance_network();
-
-    match network.blocking_resolve_addresses(name) {
-        // The following error codes signal that the input passed validation
-        // and a lookup was actually attempted, but failed. Ignore these to
-        // make the CI tests less flaky:
-        Err(
-            ErrorCode::NameUnresolvable
-            | ErrorCode::TemporaryResolverFailure
-            | ErrorCode::PermanentResolverFailure,
-        ) => Ok(vec![]),
-        r => r,
-    }
+    Network::default().permissive_blocking_resolve_addresses(name)
 }
 
 fn resolve_one(name: &str) -> Result<IpAddress, ErrorCode> {

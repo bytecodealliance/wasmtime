@@ -10,11 +10,12 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 wasmtime-environ = { workspace = true }
-wasmtime-jit-debug = { workspace = true, features = [
-  "perf_jitdump",
-], optional = true }
+wasmtime-jit-debug = { workspace = true, features = ["perf_jitdump"], optional = true }
 wasmtime-runtime = { workspace = true }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
@@ -37,3 +38,4 @@ ittapi = { version = "0.4.0", optional = true }
 
 [features]
 profiling = ['dep:wasmtime-jit-debug', 'dep:ittapi']
+debug-builtins = ['wasmtime-runtime/debug-builtins']

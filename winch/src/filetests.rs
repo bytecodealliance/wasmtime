@@ -7,7 +7,7 @@ use clap::Parser;
 pub struct Options {
     /// Passes extra arguments to `cargo test --package winch-filetests`. For example, to run a single
     /// test, use `-- --test-threads 1 --test single_test_name`.
-    #[clap(last = true, value_parser)]
+    #[arg(last = true, value_parser)]
     cargo_test_args: Vec<String>,
 }
 

@@ -894,7 +894,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let id = types.core_function_at(idx);
         let ty = types[id].unwrap_func();
         let ty = self.types.convert_func_type(ty);
-        self.types.module_types_builder().wasm_func_type(ty)
+        self.types.module_types_builder().wasm_func_type(id, ty)
     }
 }
 
@@ -928,7 +928,7 @@ mod pre_inlining {
         }
 
         pub fn module_types_builder(&mut self) -> &mut ModuleTypesBuilder {
-            self.types.module_types_builder()
+            self.types.module_types_builder_mut()
         }
 
         pub fn types(&self) -> &ComponentTypesBuilder {
@@ -943,7 +943,7 @@ mod pre_inlining {
     }
 
     impl TypeConvert for PreInliningComponentTypes<'_> {
-        fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+        fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
             self.types.lookup_heap_type(index)
         }
     }

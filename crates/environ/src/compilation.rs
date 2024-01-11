@@ -3,7 +3,7 @@
 
 use crate::{obj, Tunables};
 use crate::{
-    DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleTypes,
+    DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleTypesBuilder,
     PrimaryMap, StackMap, WasmError, WasmFuncType,
 };
 use anyhow::Result;
@@ -179,7 +179,7 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError>;
 
     /// Compile a trampoline for an array-call host function caller calling the
@@ -190,7 +190,7 @@ pub trait Compiler: Send + Sync {
     fn compile_array_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
@@ -202,7 +202,7 @@ pub trait Compiler: Send + Sync {
     fn compile_native_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 

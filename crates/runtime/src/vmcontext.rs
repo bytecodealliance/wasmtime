@@ -12,7 +12,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
 pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
-use wasmtime_environ::{DefinedMemoryIndex, VMCONTEXT_MAGIC};
+use wasmtime_environ::{DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC};
 
 /// A function pointer that exposes the array calling convention.
 ///
@@ -1038,7 +1038,7 @@ impl ValRaw {
         // `wasmtime` crate. Otherwise though all `ValRaw` constructors are
         // otherwise constrained to guarantee that the initial 64-bits are
         // always initialized.
-        ValRaw::u64((i as u32).into())
+        ValRaw::u64(i.unsigned().into())
     }
 
     /// Creates a WebAssembly `i64` value
@@ -1112,13 +1112,13 @@ impl ValRaw {
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_u32(&self) -> u32 {
-        self.get_i32() as u32
+        self.get_i32().unsigned()
     }
 
     /// Gets the WebAssembly `i64` value
     #[inline]
     pub fn get_u64(&self) -> u64 {
-        self.get_i64() as u64
+        self.get_i64().unsigned()
     }
 
     /// Gets the WebAssembly `f32` value

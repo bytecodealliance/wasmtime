@@ -1,12 +1,10 @@
 //! Copy-on-write initialization support: creation of backing images for
 //! modules, and logic to support mapping these backing images into memory.
 
-#![cfg_attr(any(not(unix), miri), allow(unused_imports, unused_variables))]
-
+use crate::sys::vm::{self, MemoryImageSource};
 use crate::{MmapVec, SendSyncPtr};
 use anyhow::Result;
-use libc::c_void;
-use std::fs::File;
+use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
@@ -32,12 +30,12 @@ impl ModuleMemoryImages {
 /// One backing image for one memory.
 #[derive(Debug, PartialEq)]
 pub struct MemoryImage {
-    /// The file descriptor source of this image.
+    /// The platform-specific source of this image.
     ///
-    /// This might be an mmaped `*.cwasm` file or on Linux it could also be a
-    /// `Memfd` as an anonymous file in memory. In either case this is used as
-    /// the backing-source for the CoW image.
-    fd: FdSource,
+    /// This might be a mapped `*.cwasm` file or on Unix it could also be a
+    /// `Memfd` as an anonymous file in memory on Linux. In either case this is
+    /// used as the backing-source for the CoW image.
+    source: MemoryImageSource,
 
     /// Length of image, in bytes.
     ///
@@ -47,51 +45,18 @@ pub struct MemoryImage {
     /// Must be a multiple of the system page size.
     len: usize,
 
-    /// Image starts this many bytes into `fd` source.
+    /// Image starts this many bytes into `source`.
     ///
-    /// This is 0 for anonymous-backed memfd files and is the offset of the data
-    /// section in a `*.cwasm` file for `*.cwasm`-backed images.
+    /// This is 0 for anonymous-backed memfd files and is the offset of the
+    /// data section in a `*.cwasm` file for `*.cwasm`-backed images.
     ///
     /// Must be a multiple of the system page size.
-    fd_offset: u64,
+    source_offset: u64,
 
     /// Image starts this many bytes into heap space.
     ///
     /// Must be a multiple of the system page size.
     linear_memory_offset: usize,
-}
-
-#[derive(Debug)]
-enum FdSource {
-    #[cfg(all(unix, not(miri)))]
-    Mmap(Arc<File>),
-    #[cfg(all(target_os = "linux", not(miri)))]
-    Memfd(memfd::Memfd),
-}
-
-impl FdSource {
-    #[cfg(all(unix, not(miri)))]
-    fn as_file(&self) -> &File {
-        match self {
-            FdSource::Mmap(ref file) => file,
-            #[cfg(target_os = "linux")]
-            FdSource::Memfd(ref memfd) => memfd.as_file(),
-        }
-    }
-}
-
-impl PartialEq for FdSource {
-    fn eq(&self, other: &FdSource) -> bool {
-        cfg_if::cfg_if! {
-            if #[cfg(all(unix, not(miri)))] {
-                use rustix::fd::AsRawFd;
-                self.as_file().as_raw_fd() == other.as_file().as_raw_fd()
-            } else {
-                let _ = other;
-                match *self {}
-            }
-        }
-    }
 }
 
 impl MemoryImage {
@@ -124,7 +89,6 @@ impl MemoryImage {
         // files, but for now this is still a Linux-specific region of Wasmtime.
         // Some work will be needed to get this file compiling for macOS and
         // Windows.
-        #[cfg(not(any(windows, miri)))]
         if let Some(mmap) = mmap {
             let start = mmap.as_ptr() as usize;
             let end = start + mmap.len();
@@ -137,126 +101,45 @@ impl MemoryImage {
             assert_eq!((mmap.original_offset() as u32) % page_size, 0);
 
             if let Some(file) = mmap.original_file() {
-                return Ok(Some(MemoryImage {
-                    fd: FdSource::Mmap(file.clone()),
-                    fd_offset: u64::try_from(mmap.original_offset() + (data_start - start))
-                        .unwrap(),
-                    linear_memory_offset,
-                    len,
-                }));
+                if let Some(source) = MemoryImageSource::from_file(file) {
+                    return Ok(Some(MemoryImage {
+                        source,
+                        source_offset: u64::try_from(mmap.original_offset() + (data_start - start))
+                            .unwrap(),
+                        linear_memory_offset,
+                        len,
+                    }));
+                }
             }
         }
 
         // If `mmap` doesn't come from a file then platform-specific mechanisms
         // may be used to place the data in a form that's amenable to an mmap.
-
-        cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "linux", not(miri)))] {
-                // On Linux `memfd_create` is used to create an anonymous
-                // in-memory file to represent the heap image. This anonymous
-                // file is then used as the basis for further mmaps.
-
-                use std::io::Write;
-
-                let memfd = match create_memfd()? {
-                    Some(memfd) => memfd,
-                    None => return Ok(None),
-                };
-                memfd.as_file().write_all(data)?;
-
-                // Seal the memfd's data and length.
-                //
-                // This is a defense-in-depth security mitigation. The
-                // memfd will serve as the starting point for the heap of
-                // every instance of this module. If anything were to
-                // write to this, it could affect every execution. The
-                // memfd object itself is owned by the machinery here and
-                // not exposed elsewhere, but it is still an ambient open
-                // file descriptor at the syscall level, so some other
-                // vulnerability that allowed writes to arbitrary fds
-                // could modify it. Or we could have some issue with the
-                // way that we map it into each instance. To be
-                // extra-super-sure that it never changes, and because
-                // this costs very little, we use the kernel's "seal" API
-                // to make the memfd image permanently read-only.
-                memfd.add_seals(&[
-                    memfd::FileSeal::SealGrow,
-                    memfd::FileSeal::SealShrink,
-                    memfd::FileSeal::SealWrite,
-                    memfd::FileSeal::SealSeal,
-                ])?;
-
-                Ok(Some(MemoryImage {
-                    fd: FdSource::Memfd(memfd),
-                    fd_offset: 0,
-                    linear_memory_offset,
-                    len,
-                }))
-            } else {
-                // Other platforms don't have an easily available way of
-                // representing the heap image as an mmap-source right now. We
-                // could theoretically create a file and immediately unlink it
-                // but that means that data may likely be preserved to disk
-                // which isn't what we want here.
-                Ok(None)
-            }
+        if let Some(source) = MemoryImageSource::from_data(data)? {
+            return Ok(Some(MemoryImage {
+                source,
+                source_offset: 0,
+                linear_memory_offset,
+                len,
+            }));
         }
+
+        Ok(None)
     }
 
     unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
-        cfg_if::cfg_if! {
-            if #[cfg(all(unix, not(miri)))] {
-                let ptr = rustix::mm::mmap(
-                    base.add(self.linear_memory_offset).cast(),
-                    self.len,
-                    rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                    rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
-                    self.fd.as_file(),
-                    self.fd_offset,
-                )?;
-                assert_eq!(ptr, base.add(self.linear_memory_offset).cast());
-                Ok(())
-            } else {
-                match self.fd {}
-            }
-        }
+        self.source.map_at(
+            base.add(self.linear_memory_offset),
+            self.len,
+            self.source_offset,
+        )?;
+        Ok(())
     }
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
-        cfg_if::cfg_if! {
-            if #[cfg(unix)] {
-                let ptr = rustix::mm::mmap_anonymous(
-                    base.add(self.linear_memory_offset).cast(),
-                    self.len,
-                    rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                    rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
-                )?;
-                assert_eq!(ptr.cast(), base.add(self.linear_memory_offset));
-                Ok(())
-            } else {
-                match self.fd {}
-            }
-        }
-    }
-}
-
-#[cfg(all(target_os = "linux", not(miri)))]
-fn create_memfd() -> Result<Option<memfd::Memfd>> {
-    use std::io::ErrorKind;
-
-    // Create the memfd. It needs a name, but the
-    // documentation for `memfd_create()` says that names can
-    // be duplicated with no issues.
-    match memfd::MemfdOptions::new()
-        .allow_sealing(true)
-        .create("wasm-memory-image")
-    {
-        Ok(memfd) => Ok(Some(memfd)),
-        // If this kernel is old enough to not support memfd then attempt to
-        // gracefully handle that and fall back to skipping the memfd
-        // optimization.
-        Err(memfd::Error::Create(err)) if err.kind() == ErrorKind::Unsupported => Ok(None),
-        Err(e) => Err(e.into()),
+        self.source
+            .remap_as_zeros_at(base.add(self.linear_memory_offset), self.len)?;
+        Ok(())
     }
 }
 
@@ -593,7 +476,7 @@ impl MemoryImageSlot {
 
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     unsafe fn reset_all_memory_contents(&mut self, keep_resident: usize) -> Result<()> {
-        if !cfg!(target_os = "linux") || cfg!(miri) {
+        if !vm::supports_madvise_dontneed() {
             // If we're not on Linux then there's no generic platform way to
             // reset memory back to its original state, so instead reset memory
             // back to entirely zeros with an anonymous backing.
@@ -703,18 +586,8 @@ impl MemoryImageSlot {
         if len == 0 {
             return Ok(());
         }
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "linux")] {
-                rustix::mm::madvise(
-                    self.base.as_ptr().add(base).cast(),
-                    len,
-                    rustix::mm::Advice::LinuxDontNeed,
-                )?;
-                Ok(())
-            } else {
-                unreachable!();
-            }
-        }
+        vm::madvise_dontneed(self.base.as_ptr().add(base), len)?;
+        Ok(())
     }
 
     fn set_protection(&self, range: Range<usize>, readwrite: bool) -> Result<()> {
@@ -726,30 +599,10 @@ impl MemoryImageSlot {
 
         unsafe {
             let start = self.base.as_ptr().add(range.start);
-            cfg_if::cfg_if! {
-                if #[cfg(miri)] {
-                    if readwrite {
-                        std::ptr::write_bytes(start, 0u8, range.len());
-                    }
-                } else if #[cfg(unix)] {
-                    let flags = if readwrite {
-                        rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE
-                    } else {
-                        rustix::mm::MprotectFlags::empty()
-                    };
-                    rustix::mm::mprotect(start.cast(), range.len(), flags)?;
-                } else {
-                    use windows_sys::Win32::System::Memory::*;
-
-                    let failure = if readwrite {
-                        VirtualAlloc(start.cast(), range.len(), MEM_COMMIT, PAGE_READWRITE).is_null()
-                    } else {
-                        VirtualFree(start.cast(), range.len(), MEM_DECOMMIT) == 0
-                    };
-                    if failure {
-                        return Err(std::io::Error::last_os_error().into());
-                    }
-                }
+            if readwrite {
+                vm::expose_existing_mapping(start, range.len())?;
+            } else {
+                vm::hide_existing_mapping(start, range.len())?;
             }
         }
 
@@ -775,24 +628,7 @@ impl MemoryImageSlot {
         }
 
         unsafe {
-            cfg_if::cfg_if! {
-                if #[cfg(miri)] {
-                    std::ptr::write_bytes(self.base.as_ptr(), 0, self.static_size);
-                } else if #[cfg(unix)] {
-                    let ptr = rustix::mm::mmap_anonymous(
-                        self.base.as_ptr().cast(),
-                        self.static_size,
-                        rustix::mm::ProtFlags::empty(),
-                        rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
-                    )?;
-                    assert_eq!(ptr, self.base.as_ptr().cast());
-                } else {
-                    use windows_sys::Win32::System::Memory::*;
-                    if VirtualFree(self.base.as_ptr().cast(), self.static_size, MEM_DECOMMIT) == 0 {
-                        return Err(std::io::Error::last_os_error().into());
-                    }
-                }
-            }
+            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size)?;
         }
 
         self.image = None;
@@ -845,31 +681,23 @@ impl Drop for MemoryImageSlot {
 mod test {
     use std::sync::Arc;
 
-    use super::{FdSource, MemoryImage, MemoryImageSlot, MemoryPlan, MemoryStyle};
+    use super::{MemoryImage, MemoryImageSlot, MemoryImageSource, MemoryPlan, MemoryStyle};
     use crate::mmap::Mmap;
     use anyhow::Result;
-    use std::io::Write;
     use wasmtime_environ::Memory;
-
-    fn create_memfd() -> Result<memfd::Memfd> {
-        Ok(super::create_memfd()?.expect("kernel doesn't support memfd"))
-    }
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
         let page_size = crate::page_size();
         assert_eq!(offset & (page_size - 1), 0);
-        let memfd = create_memfd()?;
-        memfd.as_file().write_all(data)?;
 
         // The image length is rounded up to the nearest page size
         let image_len = (data.len() + page_size - 1) & !(page_size - 1);
-        memfd.as_file().set_len(image_len as u64)?;
 
         Ok(MemoryImage {
-            fd: FdSource::Memfd(memfd),
+            source: MemoryImageSource::from_data(data)?.unwrap(),
             len: image_len,
-            fd_offset: 0,
+            source_offset: 0,
             linear_memory_offset: offset,
         })
     }

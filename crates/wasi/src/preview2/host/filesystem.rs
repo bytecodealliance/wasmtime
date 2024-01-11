@@ -6,9 +6,9 @@ use crate::preview2::bindings::filesystem::types::{
 use crate::preview2::bindings::io::streams::{InputStream, OutputStream};
 use crate::preview2::filesystem::{Descriptor, Dir, File, ReaddirIterator};
 use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
-use crate::preview2::{DirPerms, FilePerms, FsError, FsResult, Table, WasiView};
+use crate::preview2::{DirPerms, FilePerms, FsError, FsResult, WasiView};
 use anyhow::Context;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 
 mod sync;
 
@@ -840,7 +840,7 @@ impl<T: WasiView> HostDirectoryEntryStream for T {
 }
 
 async fn get_descriptor_metadata(
-    table: &Table,
+    table: &ResourceTable,
     fd: Resource<types::Descriptor>,
 ) -> FsResult<cap_std::fs::Metadata> {
     match table.get(&fd)? {
@@ -1059,7 +1059,7 @@ mod test {
     use super::*;
     #[test]
     fn table_readdir_works() {
-        let mut table = Table::new();
+        let mut table = ResourceTable::new();
         let ix = table
             .push(ReaddirIterator::new(std::iter::empty()))
             .unwrap();

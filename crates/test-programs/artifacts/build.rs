@@ -19,6 +19,11 @@ fn build_and_generate_tests() {
         "command",
         &["--no-default-features", "--features=command"],
     );
+    let proxy_adapter = build_adapter(
+        &out_dir,
+        "proxy",
+        &["--no-default-features", "--features=proxy"],
+    );
 
     println!("cargo:rerun-if-changed=../src");
 
@@ -60,13 +65,6 @@ fn build_and_generate_tests() {
 
         generated_code += &format!("pub const {camel}: &'static str = {wasm:?};\n");
 
-        let adapter = match target.as_str() {
-            "reactor" => &reactor_adapter,
-            _ => &command_adapter,
-        };
-        let path = compile_component(&wasm, adapter);
-        generated_code += &format!("pub const {camel}_COMPONENT: &'static str = {path:?};\n");
-
         // Bucket, based on the name of the test, into a "kind" which generates
         // a `foreach_*` macro below.
         let kind = match target.as_str() {
@@ -75,6 +73,8 @@ fn build_and_generate_tests() {
             s if s.starts_with("preview2_") => "preview2",
             s if s.starts_with("cli_") => "cli",
             s if s.starts_with("api_") => "api",
+            s if s.starts_with("nn_") => "nn",
+            s if s.starts_with("piped_") => "piped",
             // If you're reading this because you hit this panic, either add it
             // to a test suite above or add a new "suite". The purpose of the
             // categorization above is to have a static assertion that tests
@@ -87,6 +87,18 @@ fn build_and_generate_tests() {
         if !kind.is_empty() {
             kinds.entry(kind).or_insert(Vec::new()).push(target);
         }
+
+        // Generate a component from each test.
+        if kind == "nn" {
+            continue;
+        }
+        let adapter = match target.as_str() {
+            "reactor" => &reactor_adapter,
+            s if s.starts_with("api_proxy") => &proxy_adapter,
+            _ => &command_adapter,
+        };
+        let path = compile_component(&wasm, adapter);
+        generated_code += &format!("pub const {camel}_COMPONENT: &'static str = {path:?};\n");
     }
 
     for (kind, targets) in kinds {

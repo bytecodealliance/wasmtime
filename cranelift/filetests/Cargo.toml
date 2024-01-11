@@ -9,6 +9,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 publish = false
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-codegen = { workspace = true, features = ["disas"] }
 cranelift-frontend = { workspace = true }

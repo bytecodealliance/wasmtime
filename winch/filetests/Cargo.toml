@@ -8,6 +8,9 @@ version = "0.0.0"
 publish = false
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 winch-test-macros = {workspace = true}
 target-lexicon = { workspace = true }
@@ -21,3 +24,4 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 cranelift-codegen = { workspace = true }
 capstone = { workspace = true }
+wasmparser = { workspace = true }

@@ -4,9 +4,8 @@
 //! steps.
 
 use crate::code_memory::CodeMemory;
-use crate::debug::create_gdbjit_image;
 use crate::profiling::ProfilingAgent;
-use anyhow::{Context, Error, Result};
+use anyhow::{Error, Result};
 use object::write::WritableBuffer;
 use std::convert::TryFrom;
 use std::ops::Range;
@@ -17,9 +16,7 @@ use wasmtime_environ::{
     FunctionLoc, FunctionName, Metadata, Module, ObjectBuilder, PrimaryMap, SignatureIndex,
     StackMapInformation, WasmFunctionInfo,
 };
-use wasmtime_runtime::{
-    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, MmapVec,
-};
+use wasmtime_runtime::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
@@ -28,7 +25,8 @@ pub struct CompiledModule {
     wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)>,
     meta: Metadata,
     code_memory: Arc<CodeMemory>,
-    dbg_jit_registration: Option<GdbJitImageRegistration>,
+    #[cfg(feature = "debug-builtins")]
+    dbg_jit_registration: Option<wasmtime_runtime::GdbJitImageRegistration>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
     func_names: Vec<FunctionName>,
@@ -61,6 +59,7 @@ impl CompiledModule {
             module: Arc::new(info.module),
             funcs: info.funcs,
             wasm_to_native_trampolines: info.wasm_to_native_trampolines,
+            #[cfg(feature = "debug-builtins")]
             dbg_jit_registration: None,
             code_memory,
             meta: info.meta,
@@ -73,11 +72,17 @@ impl CompiledModule {
     }
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
+        #[cfg(feature = "debug-builtins")]
         if self.meta.native_debug_info_present {
+            use anyhow::Context;
+
             let text = self.text();
-            let bytes = create_gdbjit_image(self.mmap().to_vec(), (text.as_ptr(), text.len()))
-                .context("failed to create jit image for gdb")?;
-            let reg = GdbJitImageRegistration::register(bytes);
+            let bytes = crate::debug::create_gdbjit_image(
+                self.mmap().to_vec(),
+                (text.as_ptr(), text.len()),
+            )
+            .context("failed to create jit image for gdb")?;
+            let reg = wasmtime_runtime::GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
         }
         profiler.register_module(&self.code_memory, &|addr| {
@@ -271,6 +276,7 @@ impl CompiledModule {
     /// what filename and line number a wasm pc comes from.
     #[cfg(feature = "addr2line")]
     pub fn symbolize_context(&self) -> Result<Option<SymbolizeContext<'_>>> {
+        use anyhow::Context;
         use gimli::EndianSlice;
         if !self.meta.has_wasm_debuginfo {
             return Ok(None);

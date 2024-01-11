@@ -27,7 +27,8 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-fuel
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
 
 int main() {
   wasmtime_error_t *error = NULL;
@@ -36,7 +37,8 @@ int main() {
   assert(config != NULL);
   wasmtime_config_consume_fuel_set(config, true);
 
-  // Create an *engine*, which is a compilation context, with our configured options.
+  // Create an *engine*, which is a compilation context, with our configured
+  // options.
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   assert(engine != NULL);
   wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
@@ -48,7 +50,7 @@ int main() {
     exit_with_error("failed to set fuel", error, NULL);
 
   // Load our input file to parse it next
-  FILE* file = fopen("examples/fuel.wat", "r");
+  FILE *file = fopen("examples/fuel.wat", "r");
   if (!file) {
     printf("> Error loading file!\n");
     return 1;
@@ -73,7 +75,7 @@ int main() {
 
   // Compile and instantiate our module
   wasmtime_module_t *module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
+  error = wasmtime_module_new(engine, (uint8_t *)wasm.data, wasm.size, &module);
   if (module == NULL)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
@@ -86,19 +88,21 @@ int main() {
 
   // Lookup our `fibonacci` export function
   wasmtime_extern_t fib;
-  bool ok = wasmtime_instance_export_get(context, &instance, "fibonacci", strlen("fibonacci"), &fib);
+  bool ok = wasmtime_instance_export_get(context, &instance, "fibonacci",
+                                         strlen("fibonacci"), &fib);
   assert(ok);
   assert(fib.kind == WASMTIME_EXTERN_FUNC);
 
   // Call it repeatedly until it fails
-  for (int n = 1; ; n++) {
+  for (int n = 1;; n++) {
     uint64_t fuel_before;
     wasmtime_context_get_fuel(context, &fuel_before);
     wasmtime_val_t params[1];
     params[0].kind = WASMTIME_I32;
     params[0].of.i32 = n;
     wasmtime_val_t results[1];
-    error = wasmtime_func_call(context, &fib.of.func, params, 1, results, 1, &trap);
+    error =
+        wasmtime_func_call(context, &fib.of.func, params, 1, results, 1, &trap);
     if (error != NULL || trap != NULL) {
       if (trap != NULL) {
         wasmtime_trap_code_t code;
@@ -112,7 +116,8 @@ int main() {
     uint64_t fuel_after;
     wasmtime_context_get_fuel(context, &fuel_after);
     assert(results[0].kind == WASMTIME_I32);
-    printf("fib(%d) = %d [consumed %lu fuel]\n", n, results[0].of.i32, fuel_after - fuel_before);
+    printf("fib(%d) = %d [consumed %lu fuel]\n", n, results[0].of.i32,
+           fuel_after - fuel_before);
 
     error = wasmtime_context_set_fuel(context, 10000);
     if (error != NULL)
@@ -126,7 +131,8 @@ int main() {
   return 0;
 }
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
@@ -134,7 +140,7 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
   } else {
     wasm_trap_message(trap, &error_message);
   }
-  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }

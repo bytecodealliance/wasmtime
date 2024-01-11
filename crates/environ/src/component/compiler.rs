@@ -1,4 +1,4 @@
-use crate::component::{ComponentTranslation, ComponentTypes, TrampolineIndex};
+use crate::component::{ComponentTranslation, ComponentTypesBuilder, TrampolineIndex};
 use anyhow::Result;
 use serde_derive::{Deserialize, Serialize};
 use std::any::Any;
@@ -41,7 +41,7 @@ pub trait ComponentCompiler: Send + Sync {
     fn compile_trampoline(
         &self,
         component: &ComponentTranslation,
-        types: &ComponentTypes,
+        types: &ComponentTypesBuilder,
         trampoline: TrampolineIndex,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 }

@@ -350,6 +350,10 @@
   (rv_vrsub_vx y x (unmasked) ty))
 
 (rule 8 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
+  (if-let imm5_neg (negated_replicated_imm5 y))
+  (rv_vadd_vi x imm5_neg (unmasked) ty))
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
   (if-let x_imm (replicated_imm5 x))
   (rv_vrsub_vi y x_imm (unmasked) ty))
 
@@ -359,11 +363,11 @@
 (rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (swiden_low y @ (value_type in_ty)))))
   (rv_vwsub_wv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
                                                            (swiden_low y))))
   (rv_vwsub_vv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
                                                            (splat (sextend y @ (value_type sext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwsub_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -374,11 +378,11 @@
 (rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (swiden_high y @ (value_type in_ty)))))
   (rv_vwsub_wv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
                                                            (swiden_high y))))
   (rv_vwsub_vv (gen_slidedown_half in_ty x) (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
                                                            (splat (sextend y @ (value_type sext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwsub_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -388,11 +392,11 @@
 (rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (uwiden_low y @ (value_type in_ty)))))
   (rv_vwsubu_wv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
                                                            (uwiden_low y))))
   (rv_vwsubu_vv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
                                                            (splat (uextend y @ (value_type uext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwsubu_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -403,32 +407,32 @@
 (rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (uwiden_high y @ (value_type in_ty)))))
   (rv_vwsubu_wv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
                                                            (uwiden_high y))))
   (rv_vwsubu_vv (gen_slidedown_half in_ty x) (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
                                                            (splat (uextend y @ (value_type uext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwsubu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
 ;; Signed Widening Mixed High/Low Subtractions
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
                                                            (swiden_high y))))
   (rv_vwsub_vv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
                                                            (swiden_low y))))
   (rv_vwsub_vv (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
 ;; Unsigned Widening Mixed High/Low Subtractions
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
                                                            (uwiden_high y))))
   (rv_vwsubu_vv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
                                                            (uwiden_low y))))
   (rv_vwsubu_vv (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 

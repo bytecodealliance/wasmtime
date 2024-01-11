@@ -8,9 +8,9 @@
 #define WASMTIME_TABLE_H
 
 #include <wasm.h>
+#include <wasmtime/error.h>
 #include <wasmtime/extern.h>
 #include <wasmtime/store.h>
-#include <wasmtime/error.h>
 #include <wasmtime/val.h>
 
 #ifdef __cplusplus
@@ -29,22 +29,19 @@ extern "C" {
  * ownership of returned error. This function may return an error if the `init`
  * value does not match `ty`, for example.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_table_new(
-    wasmtime_context_t *store,
-    const wasm_tabletype_t *ty,
-    const wasmtime_val_t *init,
-    wasmtime_table_t *table
-);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_table_new(wasmtime_context_t *store,
+                                                     const wasm_tabletype_t *ty,
+                                                     const wasmtime_val_t *init,
+                                                     wasmtime_table_t *table);
 
 /**
  * \brief Returns the type of this table.
  *
  * The caller has ownership of the returned #wasm_tabletype_t
  */
-WASM_API_EXTERN wasm_tabletype_t* wasmtime_table_type(
-    const wasmtime_context_t *store,
-    const wasmtime_table_t *table
-);
+WASM_API_EXTERN wasm_tabletype_t *
+wasmtime_table_type(const wasmtime_context_t *store,
+                    const wasmtime_table_t *table);
 
 /**
  * \brief Gets a value in a table.
@@ -58,12 +55,9 @@ WASM_API_EXTERN wasm_tabletype_t* wasmtime_table_type(
  * returned then `val` is filled in and is owned by the caller. Otherwise zero
  * is returned because the `index` is out-of-bounds.
  */
-WASM_API_EXTERN bool wasmtime_table_get(
-    wasmtime_context_t *store,
-    const wasmtime_table_t *table,
-    uint32_t index,
-    wasmtime_val_t *val
-);
+WASM_API_EXTERN bool wasmtime_table_get(wasmtime_context_t *store,
+                                        const wasmtime_table_t *table,
+                                        uint32_t index, wasmtime_val_t *val);
 
 /**
  * \brief Sets a value in a table.
@@ -78,20 +72,15 @@ WASM_API_EXTERN bool wasmtime_table_get(
  * This function can fail if `value` has the wrong type for the table, or if
  * `index` is out of bounds.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_table_set(
-    wasmtime_context_t *store,
-    const wasmtime_table_t *table,
-    uint32_t index,
-    const wasmtime_val_t *value
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_table_set(wasmtime_context_t *store, const wasmtime_table_t *table,
+                   uint32_t index, const wasmtime_val_t *value);
 
 /**
  * \brief Returns the size, in elements, of the specified table
  */
-WASM_API_EXTERN uint32_t wasmtime_table_size(
-    const wasmtime_context_t *store,
-    const wasmtime_table_t *table
-);
+WASM_API_EXTERN uint32_t wasmtime_table_size(const wasmtime_context_t *store,
+                                             const wasmtime_table_t *table);
 
 /**
  * \brief Grows a table.
@@ -110,17 +99,13 @@ WASM_API_EXTERN uint32_t wasmtime_table_size(
  *
  * This function does not take ownership of any of its arguments.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_table_grow(
-    wasmtime_context_t *store,
-    const wasmtime_table_t *table,
-    uint32_t delta,
-    const wasmtime_val_t *init,
-    uint32_t *prev_size
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_table_grow(wasmtime_context_t *store, const wasmtime_table_t *table,
+                    uint32_t delta, const wasmtime_val_t *init,
+                    uint32_t *prev_size);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_TABLE_H
-

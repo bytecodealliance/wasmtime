@@ -9,14 +9,13 @@ use wasmtime_environ::{CompilerBuilder, FlagValue, Setting, SettingKind};
 
 /// Displays available Cranelift settings for a target.
 #[derive(Parser, PartialEq)]
-#[clap(name = "run")]
 pub struct SettingsCommand {
     /// The target triple to get the settings for; defaults to the host triple.
-    #[clap(long, value_name = "TARGET")]
+    #[arg(long, value_name = "TARGET")]
     target: Option<String>,
 
     /// Switch output format to JSON
-    #[clap(long)]
+    #[arg(long)]
     json: bool,
 }
 

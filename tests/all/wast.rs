@@ -7,6 +7,7 @@ use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store, Strategy,
 };
 use wasmtime_environ::WASM_PAGE_SIZE;
+use wasmtime_runtime::MpkEnabled;
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
@@ -133,6 +134,13 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
             .memory_pages(805)
             .max_memories_per_module(if multi_memory { 9 } else { 1 })
             .max_tables_per_module(4);
+
+        // When testing, we may choose to start with MPK force-enabled to ensure
+        // we use that functionality.
+        if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+            pool.memory_protection_keys(MpkEnabled::Enable);
+        }
+
         cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
         Some(lock_pooling())
     } else {

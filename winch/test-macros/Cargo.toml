@@ -8,6 +8,9 @@ version = "0.0.0"
 publish = false
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 test = false

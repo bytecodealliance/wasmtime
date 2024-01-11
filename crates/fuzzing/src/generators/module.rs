@@ -1,21 +1,20 @@
 //! Generate a Wasm module and the configuration for generating it.
 
 use arbitrary::{Arbitrary, Unstructured};
-use wasm_smith::SwarmConfig;
 
 /// Default module-level configuration for fuzzing Wasmtime.
 ///
-/// Internally this uses `wasm-smith`'s own `SwarmConfig` but we further refine
+/// Internally this uses `wasm-smith`'s own `Config` but we further refine
 /// the defaults here as well.
 #[derive(Debug, Clone)]
 pub struct ModuleConfig {
     #[allow(missing_docs)]
-    pub config: SwarmConfig,
+    pub config: wasm_smith::Config,
 }
 
 impl<'a> Arbitrary<'a> for ModuleConfig {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<ModuleConfig> {
-        let mut config = SwarmConfig::arbitrary(u)?;
+        let mut config = wasm_smith::Config::arbitrary(u)?;
 
         // Allow multi-memory but make it unlikely
         if u.ratio(1, 20)? {

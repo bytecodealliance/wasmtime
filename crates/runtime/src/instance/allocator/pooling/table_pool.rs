@@ -1,8 +1,8 @@
 use super::{
-    imp::{commit_table_pages, decommit_table_pages},
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2, TableAllocationIndex,
 };
+use crate::sys::vm::{commit_table_pages, decommit_table_pages};
 use crate::{InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table};
 use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
@@ -129,10 +129,12 @@ impl TablePool {
         match (|| {
             let base = self.get(allocation_index);
 
-            commit_table_pages(
-                base as *mut u8,
-                self.table_elements * mem::size_of::<*mut u8>(),
-            )?;
+            unsafe {
+                commit_table_pages(
+                    base as *mut u8,
+                    self.table_elements * mem::size_of::<*mut u8>(),
+                )?;
+            }
 
             let ptr = NonNull::new(std::ptr::slice_from_raw_parts_mut(
                 base.cast(),

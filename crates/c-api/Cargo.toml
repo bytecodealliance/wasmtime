@@ -9,6 +9,9 @@ readme = "README.md"
 edition.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [lib]
 name = "wamstime_c_api"
 doc = false

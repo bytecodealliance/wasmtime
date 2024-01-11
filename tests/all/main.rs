@@ -27,6 +27,7 @@ mod memory_creator;
 mod module;
 mod module_serialize;
 mod name;
+mod piped_tests;
 mod pooling_allocator;
 mod relocs;
 mod stack_creator;
@@ -91,6 +92,12 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
     config.memory_pages(1);
     config.total_tables(1);
     config.table_elements(10);
+
+    // When testing, we may choose to start with MPK force-enabled to ensure
+    // we use that functionality.
+    if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+        config.memory_protection_keys(wasmtime_runtime::MpkEnabled::Enable);
+    }
 
     #[cfg(feature = "async")]
     config.total_stacks(1);

@@ -8,4 +8,5 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cranelift/"
 edition.workspace = true
 
-[dependencies]
+[lints]
+workspace = true

@@ -8,9 +8,9 @@
 #define WASMTIME_MEMORY_H
 
 #include <wasm.h>
+#include <wasmtime/error.h>
 #include <wasmtime/extern.h>
 #include <wasmtime/store.h>
-#include <wasmtime/error.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,7 +22,10 @@ extern "C" {
  * Note that this function is preferred over #wasm_memorytype_new for
  * compatibility with the memory64 proposal.
  */
-WASM_API_EXTERN wasm_memorytype_t *wasmtime_memorytype_new(uint64_t min, bool max_present, uint64_t max, bool is_64);
+WASM_API_EXTERN wasm_memorytype_t *wasmtime_memorytype_new(uint64_t min,
+                                                           bool max_present,
+                                                           uint64_t max,
+                                                           bool is_64);
 
 /**
  * \brief Returns the minimum size, in pages, of the specified memory type.
@@ -30,7 +33,8 @@ WASM_API_EXTERN wasm_memorytype_t *wasmtime_memorytype_new(uint64_t min, bool ma
  * Note that this function is preferred over #wasm_memorytype_limits for
  * compatibility with the memory64 proposal.
  */
-WASM_API_EXTERN uint64_t wasmtime_memorytype_minimum(const wasm_memorytype_t *ty);
+WASM_API_EXTERN uint64_t
+wasmtime_memorytype_minimum(const wasm_memorytype_t *ty);
 
 /**
  * \brief Returns the maximum size, in pages, of the specified memory type.
@@ -42,7 +46,8 @@ WASM_API_EXTERN uint64_t wasmtime_memorytype_minimum(const wasm_memorytype_t *ty
  * Note that this function is preferred over #wasm_memorytype_limits for
  * compatibility with the memory64 proposal.
  */
-WASM_API_EXTERN bool wasmtime_memorytype_maximum(const wasm_memorytype_t *ty, uint64_t *max);
+WASM_API_EXTERN bool wasmtime_memorytype_maximum(const wasm_memorytype_t *ty,
+                                                 uint64_t *max);
 
 /**
  * \brief Returns whether this type of memory represents a 64-bit memory.
@@ -59,43 +64,34 @@ WASM_API_EXTERN bool wasmtime_memorytype_is64(const wasm_memorytype_t *ty);
  * If an error happens when creating the memory it's returned and owned by the
  * caller. If an error happens then `ret` is not filled in.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_memory_new(
-    wasmtime_context_t *store,
-    const wasm_memorytype_t* ty,
-    wasmtime_memory_t *ret
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_memory_new(wasmtime_context_t *store, const wasm_memorytype_t *ty,
+                    wasmtime_memory_t *ret);
 
 /**
  * \brief Returns the type of the memory specified
  */
-WASM_API_EXTERN wasm_memorytype_t* wasmtime_memory_type(
-    const wasmtime_context_t *store,
-    const wasmtime_memory_t *memory
-);
+WASM_API_EXTERN wasm_memorytype_t *
+wasmtime_memory_type(const wasmtime_context_t *store,
+                     const wasmtime_memory_t *memory);
 
 /**
  * \brief Returns the base pointer in memory where the linear memory starts.
  */
-WASM_API_EXTERN uint8_t *wasmtime_memory_data(
-    const wasmtime_context_t *store,
-    const wasmtime_memory_t *memory
-);
+WASM_API_EXTERN uint8_t *wasmtime_memory_data(const wasmtime_context_t *store,
+                                              const wasmtime_memory_t *memory);
 
 /**
  * \brief Returns the byte length of this linear memory.
  */
 WASM_API_EXTERN size_t wasmtime_memory_data_size(
-    const wasmtime_context_t *store,
-    const wasmtime_memory_t *memory
-);
+    const wasmtime_context_t *store, const wasmtime_memory_t *memory);
 
 /**
  * \brief Returns the length, in WebAssembly pages, of this linear memory
  */
-WASM_API_EXTERN uint64_t wasmtime_memory_size(
-    const wasmtime_context_t *store,
-    const wasmtime_memory_t *memory
-);
+WASM_API_EXTERN uint64_t wasmtime_memory_size(const wasmtime_context_t *store,
+                                              const wasmtime_memory_t *memory);
 
 /**
  * \brief Attempts to grow the specified memory by `delta` pages.
@@ -109,15 +105,12 @@ WASM_API_EXTERN uint64_t wasmtime_memory_size(
  * returned. Otherwise `prev_size` is set to the previous size of the memory, in
  * WebAssembly pages, and `NULL` is returned.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_memory_grow(
-    wasmtime_context_t *store,
-    const wasmtime_memory_t *memory,
-    uint64_t delta,
-    uint64_t *prev_size
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_memory_grow(wasmtime_context_t *store, const wasmtime_memory_t *memory,
+                     uint64_t delta, uint64_t *prev_size);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_MEMORY_H

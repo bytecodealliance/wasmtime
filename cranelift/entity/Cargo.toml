@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-entity"
-version = "0.103.0"
+version = "0.105.0"
 description = "Data structures using entity references as mapping keys"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-entity"
@@ -10,6 +10,9 @@ categories = ["no-std"]
 readme = "README.md"
 keywords = ["entity", "set", "map"]
 edition.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 serde = { version = "1.0.188", optional = true }

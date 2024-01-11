@@ -53,12 +53,13 @@ pub fn write(pkru: u32) {
     }
 }
 
-/// Check the `ECX.PKU` flag (bit 3) of the `07h` `CPUID` leaf; see the Intel
-/// Software Development Manual, vol 3a, section 2.7. This flag is only set on
-/// Intel CPUs, so this function also checks the `CPUID` vendor string.
+/// Check the `ECX.PKU` flag (bit 3, zero-based) of the `07h` `CPUID` leaf; see
+/// the Intel Software Development Manual, vol 3a, section 2.7. This flag is
+/// only set on Intel CPUs, so this function also checks the `CPUID` vendor
+/// string.
 pub fn has_cpuid_bit_set() -> bool {
     let result = unsafe { std::arch::x86_64::__cpuid(0x07) };
-    is_intel_cpu() && (result.ecx & 0b100) != 0
+    is_intel_cpu() && (result.ecx & 0b1000) != 0
 }
 
 /// Check the `CPUID` vendor string for `GenuineIntel`; see the Intel Software

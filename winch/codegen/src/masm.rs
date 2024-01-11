@@ -1,5 +1,5 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData};
+use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
@@ -23,8 +23,21 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+/// The direction to perform the memory move.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum MemMoveDirection {
+    /// From high memory addresses to low memory addresses.
+    /// Invariant: the source location is closer to the FP than the destination
+    /// location, which will be closer to the SP.
+    HighToLow,
+    /// From low memory addresses to high memory addresses.
+    /// Invariant: the source location is closer to the SP than the destination
+    /// location, which will be closer to the FP.
+    LowToHigh,
+}
+
 /// Representation of the stack pointer offset.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Default)]
 pub struct SPOffset(u32);
 
 impl SPOffset {
@@ -112,6 +125,26 @@ pub(crate) enum ShiftKind {
     Rotl,
     /// Right rotate.
     Rotr,
+}
+
+/// Kinds of extends in WebAssembly. The [`masm`] implementation for each ISA
+/// is responsible for emitting the correct sequence of instructions when
+/// lowering to machine code.
+pub(crate) enum ExtendKind {
+    /// Sign extends i32 to i64.
+    I64ExtendI32S,
+    /// Zero extends i32 to i64.
+    I64ExtendI32U,
+    // Sign extends the 8 least significant bits to 32 bits.
+    I32Extend8S,
+    // Sign extends the 16 least significant bits to 32 bits.
+    I32Extend16S,
+    /// Sign extends the 8 least significant bits to 64 bits.
+    I64Extend8S,
+    /// Sign extends the 16 least significant bits to 64 bits.
+    I64Extend16S,
+    /// Sign extends the 32 least significant bits to 64 bits.
+    I64Extend32S,
 }
 
 /// Operand size, in bits.
@@ -355,6 +388,9 @@ pub(crate) trait MacroAssembler {
     /// Retrieves the size of the table, pushing the result to the value stack.
     fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
 
+    /// Retrieves the size of the memory, pushing the result to the value stack.
+    fn memory_size(&mut self, heap_data: &HeapData, context: &mut CodeGenContext);
+
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
     /// offset)].
@@ -407,8 +443,11 @@ pub(crate) trait MacroAssembler {
 
     /// Performs a memory move of bytes from src to dest.
     /// Bytes are moved in blocks of 8 bytes, where possible.
-    fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32) {
-        debug_assert!(dst.as_u32() < src.as_u32());
+    fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32, direction: MemMoveDirection) {
+        match direction {
+            MemMoveDirection::LowToHigh => debug_assert!(dst.as_u32() < src.as_u32()),
+            MemMoveDirection::HighToLow => debug_assert!(dst.as_u32() > src.as_u32()),
+        }
         // At least 4 byte aligned.
         debug_assert!(bytes % 4 == 0);
         let mut remaining = bytes;
@@ -579,6 +618,12 @@ pub(crate) trait MacroAssembler {
     /// Count the number of 1 bits in src and put the result in dst. In x64,
     /// this will emit multiple instructions if the `has_popcnt` flag is false.
     fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize);
+
+    /// Converts an i64 to an i32 by discarding the high 32 bits.
+    fn wrap(&mut self, src: Reg, dst: Reg);
+
+    /// Extends an integer of a given size to a larger size.
+    fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind);
 
     /// Zero a given memory range.
     ///

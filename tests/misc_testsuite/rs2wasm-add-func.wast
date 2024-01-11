@@ -6,7 +6,7 @@
     local.get 0
     i32.add)
   (func $start (type 0))
-  (table (;0;) 1 1 anyfunc)
+  (table (;0;) 1 1 funcref)
   (memory (;0;) 17)
   (global (;0;) i32 (i32.const 1049114))
   (global (;1;) i32 (i32.const 1049114))

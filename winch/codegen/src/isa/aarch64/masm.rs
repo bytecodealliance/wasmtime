@@ -1,11 +1,12 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData},
     isa::reg::Reg,
     masm::{
-        CalleeKind, DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm,
-        OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, StackSlot, TrapCode,
+        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
+        MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
+        StackSlot, TrapCode,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -115,6 +116,10 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn memory_size(&mut self, _heap_data: &HeapData, _context: &mut CodeGenContext) {
+        todo!()
+    }
+
     fn address_from_sp(&self, _offset: SPOffset) -> Self::Address {
         todo!()
     }
@@ -191,7 +196,7 @@ impl Masm for MacroAssembler {
                 };
 
                 let scratch = regs::scratch();
-                self.asm.load_constant(imm as u64, scratch);
+                self.asm.load_constant(imm, scratch);
                 self.asm.mov_rr(scratch, rd, size);
             }
             (RegImm::Reg(rs), rd) => {
@@ -379,6 +384,14 @@ impl Masm for MacroAssembler {
     }
 
     fn ctz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn wrap(&mut self, _src: Reg, _dst: Reg) {
+        todo!()
+    }
+
+    fn extend(&mut self, _src: Reg, _dst: Reg, _kind: ExtendKind) {
         todo!()
     }
 

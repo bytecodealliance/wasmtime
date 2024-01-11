@@ -24,14 +24,16 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-linking
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <wasm.h>
 #include <wasi.h>
+#include <wasm.h>
 #include <wasmtime.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
-static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes, const char *file);
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
+static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes,
+                          const char *file);
 
 int main() {
   // Set up our context
@@ -49,10 +51,12 @@ int main() {
   wasmtime_error_t *error;
   wasmtime_module_t *linking1_module = NULL;
   wasmtime_module_t *linking2_module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t*) linking1_wasm.data, linking1_wasm.size, &linking1_module);
+  error = wasmtime_module_new(engine, (uint8_t *)linking1_wasm.data,
+                              linking1_wasm.size, &linking1_module);
   if (error != NULL)
     exit_with_error("failed to compile linking1", error, NULL);
-  error = wasmtime_module_new(engine, (uint8_t*) linking2_wasm.data, linking2_wasm.size, &linking2_module);
+  error = wasmtime_module_new(engine, (uint8_t *)linking2_wasm.data,
+                              linking2_wasm.size, &linking2_module);
   if (error != NULL)
     exit_with_error("failed to compile linking2", error, NULL);
   wasm_byte_vec_delete(&linking1_wasm);
@@ -80,18 +84,21 @@ int main() {
 
   // Instantiate `linking2` with our linker.
   wasmtime_instance_t linking2;
-  error = wasmtime_linker_instantiate(linker, context, linking2_module, &linking2, &trap);
+  error = wasmtime_linker_instantiate(linker, context, linking2_module,
+                                      &linking2, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate linking2", error, trap);
 
   // Register our new `linking2` instance with the linker
-  error = wasmtime_linker_define_instance(linker, context, "linking2", strlen("linking2"), &linking2);
+  error = wasmtime_linker_define_instance(linker, context, "linking2",
+                                          strlen("linking2"), &linking2);
   if (error != NULL)
     exit_with_error("failed to link linking2", error, NULL);
 
   // Instantiate `linking1` with the linker now that `linking2` is defined
   wasmtime_instance_t linking1;
-  error = wasmtime_linker_instantiate(linker, context, linking1_module, &linking1, &trap);
+  error = wasmtime_linker_instantiate(linker, context, linking1_module,
+                                      &linking1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate linking1", error, trap);
 
@@ -113,14 +120,11 @@ int main() {
   return 0;
 }
 
-static void read_wat_file(
-  wasm_engine_t *engine,
-  wasm_byte_vec_t *bytes,
-  const char *filename
-) {
+static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes,
+                          const char *filename) {
   wasm_byte_vec_t wat;
   // Load our input file to parse it next
-  FILE* file = fopen(filename, "r");
+  FILE *file = fopen(filename, "r");
   if (!file) {
     printf("> Error loading file!\n");
     exit(1);
@@ -142,7 +146,8 @@ static void read_wat_file(
   wasm_byte_vec_delete(&wat);
 }
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
@@ -152,7 +157,7 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
     wasm_trap_message(trap, &error_message);
     wasm_trap_delete(trap);
   }
-  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }

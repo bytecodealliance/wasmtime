@@ -17,7 +17,8 @@ to tweak the `-lpthread` and such annotations.
 
 You can also build using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-multimemory
+mkdir build && cd build && cmake .. && \
+  cmake --build . --target wasmtime-multimemory
 */
 
 #include <inttypes.h>
@@ -27,7 +28,8 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-multime
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
 
 void check(bool success) {
   if (!success) {
@@ -36,16 +38,12 @@ void check(bool success) {
   }
 }
 
-void check_call(wasmtime_context_t *store,
-                wasmtime_func_t *func,
-                const wasmtime_val_t* args,
-                size_t nargs,
-                int32_t expected) {
+void check_call(wasmtime_context_t *store, wasmtime_func_t *func,
+                const wasmtime_val_t *args, size_t nargs, int32_t expected) {
   wasmtime_val_t results[1];
   wasm_trap_t *trap = NULL;
-  wasmtime_error_t *error = wasmtime_func_call(
-      store, func, args, nargs, results, 1, &trap
-  );
+  wasmtime_error_t *error =
+      wasmtime_func_call(store, func, args, nargs, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
   if (results[0].of.i32 != expected) {
@@ -54,18 +52,21 @@ void check_call(wasmtime_context_t *store,
   }
 }
 
-void check_call0(wasmtime_context_t *store, wasmtime_func_t *func, int32_t expected) {
+void check_call0(wasmtime_context_t *store, wasmtime_func_t *func,
+                 int32_t expected) {
   check_call(store, func, NULL, 0, expected);
 }
 
-void check_call1(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg, int32_t expected) {
+void check_call1(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg,
+                 int32_t expected) {
   wasmtime_val_t args[1];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg;
   check_call(store, func, args, 1, expected);
 }
 
-void check_call2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1, int32_t arg2, int32_t expected) {
+void check_call2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1,
+                 int32_t arg2, int32_t expected) {
   wasmtime_val_t args[2];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg1;
@@ -74,14 +75,17 @@ void check_call2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1,
   check_call(store, func, args, 2, expected);
 }
 
-void check_ok(wasmtime_context_t *store, wasmtime_func_t *func, const wasmtime_val_t* args, size_t nargs) {
+void check_ok(wasmtime_context_t *store, wasmtime_func_t *func,
+              const wasmtime_val_t *args, size_t nargs) {
   wasm_trap_t *trap = NULL;
-  wasmtime_error_t *error = wasmtime_func_call(store, func, args, nargs, NULL, 0, &trap);
+  wasmtime_error_t *error =
+      wasmtime_func_call(store, func, args, nargs, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 }
 
-void check_ok2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1, int32_t arg2) {
+void check_ok2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1,
+               int32_t arg2) {
   wasmtime_val_t args[2];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg1;
@@ -90,15 +94,13 @@ void check_ok2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1, i
   check_ok(store, func, args, 2);
 }
 
-void check_trap(wasmtime_context_t *store,
-                wasmtime_func_t *func,
-                const wasmtime_val_t *args,
-                size_t nargs,
-                size_t num_results) {
+void check_trap(wasmtime_context_t *store, wasmtime_func_t *func,
+                const wasmtime_val_t *args, size_t nargs, size_t num_results) {
   assert(num_results <= 1);
   wasmtime_val_t results[1];
   wasm_trap_t *trap = NULL;
-  wasmtime_error_t *error = wasmtime_func_call(store, func, args, nargs, results, num_results, &trap);
+  wasmtime_error_t *error =
+      wasmtime_func_call(store, func, args, nargs, results, num_results, &trap);
   if (error != NULL)
     exit_with_error("failed to call function", error, NULL);
   if (trap == NULL) {
@@ -108,14 +110,16 @@ void check_trap(wasmtime_context_t *store,
   wasm_trap_delete(trap);
 }
 
-void check_trap1(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg) {
+void check_trap1(wasmtime_context_t *store, wasmtime_func_t *func,
+                 int32_t arg) {
   wasmtime_val_t args[1];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg;
   check_trap(store, func, args, 1, 1);
 }
 
-void check_trap2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1, int32_t arg2) {
+void check_trap2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1,
+                 int32_t arg2) {
   wasmtime_val_t args[2];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg1;
@@ -124,7 +128,7 @@ void check_trap2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1,
   check_trap(store, func, args, 2, 0);
 }
 
-int main(int argc, const char* argv[]) {
+int main(int argc, const char *argv[]) {
   // Initialize.
   printf("Initializing...\n");
 
@@ -135,11 +139,11 @@ int main(int argc, const char* argv[]) {
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   assert(engine != NULL);
 
-  wasmtime_store_t* store = wasmtime_store_new(engine, NULL, NULL);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Load our input file to parse it next
-  FILE* file = fopen("examples/multimemory.wat", "r");
+  FILE *file = fopen("examples/multimemory.wat", "r");
   if (!file) {
     printf("> Error loading file!\n");
     return 1;
@@ -164,8 +168,9 @@ int main(int argc, const char* argv[]) {
 
   // Compile.
   printf("Compiling module...\n");
-  wasmtime_module_t* module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t*) binary.data, binary.size, &module);
+  wasmtime_module_t *module = NULL;
+  error =
+      wasmtime_module_new(engine, (uint8_t *)binary.data, binary.size, &module);
   if (error)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
@@ -185,28 +190,36 @@ int main(int argc, const char* argv[]) {
   wasmtime_func_t size0, load0, store0, size1, load1, store1;
   wasmtime_extern_t item;
   bool ok;
-  ok = wasmtime_instance_export_get(context, &instance, "memory0", strlen("memory0"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "memory0",
+                                    strlen("memory0"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_MEMORY);
   memory0 = item.of.memory;
-  ok = wasmtime_instance_export_get(context, &instance, "size0", strlen("size0"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "size0",
+                                    strlen("size0"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   size0 = item.of.func;
-  ok = wasmtime_instance_export_get(context, &instance, "load0", strlen("load0"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "load0",
+                                    strlen("load0"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   load0 = item.of.func;
-  ok = wasmtime_instance_export_get(context, &instance, "store0", strlen("store0"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "store0",
+                                    strlen("store0"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   store0 = item.of.func;
-  ok = wasmtime_instance_export_get(context, &instance, "memory1", strlen("memory1"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "memory1",
+                                    strlen("memory1"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_MEMORY);
   memory1 = item.of.memory;
-  ok = wasmtime_instance_export_get(context, &instance, "size1", strlen("size1"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "size1",
+                                    strlen("size1"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   size1 = item.of.func;
-  ok = wasmtime_instance_export_get(context, &instance, "load1", strlen("load1"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "load1",
+                                    strlen("load1"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   load1 = item.of.func;
-  ok = wasmtime_instance_export_get(context, &instance, "store1", strlen("store1"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "store1",
+                                    strlen("store1"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   store1 = item.of.func;
 
@@ -315,7 +328,8 @@ int main(int argc, const char* argv[]) {
   return 0;
 }
 
-static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
@@ -325,7 +339,7 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
     wasm_trap_message(trap, &error_message);
     wasm_trap_delete(trap);
   }
-  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }
