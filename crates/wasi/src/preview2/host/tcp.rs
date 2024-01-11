@@ -588,17 +588,24 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
 #[async_trait::async_trait]
 impl Subscribe for TcpSocketWrapper {
     async fn ready(&mut self) {
-        // Some states are ready immediately.
         match self.tcp_state {
-            TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => return,
-            _ => {}
+            TcpState::Default
+            | TcpState::BindStarted
+            | TcpState::Bound
+            | TcpState::ListenStarted
+            | TcpState::ConnectReady
+            | TcpState::Connected
+            | TcpState::ConnectFailed => {
+                // No async operation in progress.
+            }
+            TcpState::Listening | TcpState::Connecting => {
+                // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+                self.inner
+                    .stream
+                    .ready(Interest::READABLE | Interest::WRITABLE)
+                    .await
+                    .unwrap();
+            }
         }
-
-        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-        self.inner
-            .stream
-            .ready(Interest::READABLE | Interest::WRITABLE)
-            .await
-            .unwrap();
     }
 }
