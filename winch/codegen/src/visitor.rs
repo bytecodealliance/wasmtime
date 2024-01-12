@@ -12,6 +12,7 @@ use crate::masm::{
 };
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
+use regalloc2::RegClass;
 use smallvec::SmallVec;
 use wasmparser::BrTable;
 use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
@@ -85,6 +86,18 @@ macro_rules! def_unsupported {
     (emit F64Le $($rest:tt)*) => {};
     (emit F32Ge $($rest:tt)*) => {};
     (emit F64Ge $($rest:tt)*) => {};
+    (emit F32ConvertI32S $($rest:tt)*) => {};
+    (emit F32ConvertI32U $($rest:tt)*) => {};
+    (emit F32ConvertI64S $($rest:tt)*) => {};
+    (emit F32ConvertI64U $($rest:tt)*) => {};
+    (emit F64ConvertI32S $($rest:tt)*) => {};
+    (emit F64ConvertI32U $($rest:tt)*) => {};
+    (emit F64ConvertI64S $($rest:tt)*) => {};
+    (emit F64ConvertI64U $($rest:tt)*) => {};
+    (emit F32ReinterpretI32 $($rest:tt)*) => {};
+    (emit F64ReinterpretI64 $($rest:tt)*) => {};
+    (emit F32DemoteF64 $($rest:tt)*) => {};
+    (emit F64PromoteF32 $($rest:tt)*) => {};
     (emit I32Add $($rest:tt)*) => {};
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
@@ -151,6 +164,16 @@ macro_rules! def_unsupported {
     (emit I64Extend8S $($rest:tt)*) => {};
     (emit I64Extend16S $($rest:tt)*) => {};
     (emit I64Extend32S $($rest:tt)*) => {};
+    (emit I32TruncF32S $($rest:tt)*) => {};
+    (emit I32TruncF32U $($rest:tt)*) => {};
+    (emit I32TruncF64S $($rest:tt)*) => {};
+    (emit I32TruncF64U $($rest:tt)*) => {};
+    (emit I64TruncF32S $($rest:tt)*) => {};
+    (emit I64TruncF32U $($rest:tt)*) => {};
+    (emit I64TruncF64S $($rest:tt)*) => {};
+    (emit I64TruncF64U $($rest:tt)*) => {};
+    (emit I32ReinterpretF32 $($rest:tt)*) => {};
+    (emit I64ReinterpretF64 $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -571,6 +594,108 @@ where
                 masm.float_cmp_with_set(src1, src2, dst, FloatCmpKind::Ge, size);
             },
         );
+    }
+
+    fn visit_f32_convert_i32_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::F32, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S32, dst_size);
+            });
+    }
+
+    fn visit_f32_convert_i32_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::F32,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S32, dst_size);
+            },
+        );
+    }
+
+    fn visit_f32_convert_i64_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::F32, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S64, dst_size);
+            });
+    }
+
+    fn visit_f32_convert_i64_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::F32,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S64, dst_size);
+            },
+        );
+    }
+
+    fn visit_f64_convert_i32_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::F64, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S32, dst_size);
+            });
+    }
+
+    fn visit_f64_convert_i32_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::F64,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S32, dst_size);
+            },
+        );
+    }
+
+    fn visit_f64_convert_i64_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::F64, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S64, dst_size);
+            });
+    }
+
+    fn visit_f64_convert_i64_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::F64,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S64, dst_size);
+            },
+        );
+    }
+
+    fn visit_f32_reinterpret_i32(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::F32, |masm, dst, src, size| {
+                masm.reinterpret_int_as_float(src.into(), dst, size);
+            });
+    }
+
+    fn visit_f64_reinterpret_i64(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::F64, |masm, dst, src, size| {
+                masm.reinterpret_int_as_float(src.into(), dst, size);
+            });
+    }
+
+    fn visit_f32_demote_f64(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, _size| {
+                masm.demote(reg, reg);
+                TypedReg::f32(reg)
+            });
+    }
+
+    fn visit_f64_promote_f32(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, _size| {
+                masm.promote(reg, reg);
+                TypedReg::f64(reg)
+            });
     }
 
     fn visit_i32_add(&mut self) {
@@ -1007,6 +1132,108 @@ where
             masm.extend(reg, reg, ExtendKind::I64Extend32S);
             TypedReg::i64(reg)
         });
+    }
+
+    fn visit_i32_trunc_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size);
+            });
+    }
+
+    fn visit_i32_trunc_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size);
+            },
+        );
+    }
+
+    fn visit_i32_trunc_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size);
+            });
+    }
+
+    fn visit_i32_trunc_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size);
+            });
+    }
+
+    fn visit_i64_trunc_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size);
+            });
+    }
+
+    fn visit_i64_trunc_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size);
+            },
+        );
+    }
+
+    fn visit_i32_reinterpret_f32(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::I32, |masm, dst, src, size| {
+                masm.reinterpret_float_as_int(src.into(), dst, size);
+            });
+    }
+
+    fn visit_i64_reinterpret_f64(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmType::I64, |masm, dst, src, size| {
+                masm.reinterpret_float_as_int(src.into(), dst, size);
+            });
     }
 
     fn visit_local_get(&mut self, index: u32) {

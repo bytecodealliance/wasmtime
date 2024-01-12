@@ -514,6 +514,126 @@ impl Assembler {
         })
     }
 
+    pub fn xmm_to_gpr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Movd,
+            OperandSize::S64 => SseOpcode::Movq,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmToGpr {
+            op,
+            src: src.into(),
+            dst: dst.into(),
+            dst_size: size.into(),
+        });
+    }
+
+    /// Convert float to signed int.
+    pub fn cvt_float_to_sint_seq(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_gpr: Reg,
+        tmp_xmm: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        self.emit(Inst::CvtFloatToSintSeq {
+            dst_size: dst_size.into(),
+            src_size: src_size.into(),
+            is_saturating: false,
+            src: src.into(),
+            dst: dst.into(),
+            tmp_gpr: tmp_gpr.into(),
+            tmp_xmm: tmp_xmm.into(),
+        });
+    }
+
+    /// Convert float to unsigned int.
+    pub fn cvt_float_to_uint_seq(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_gpr: Reg,
+        tmp_xmm: Reg,
+        tmp_xmm2: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        self.emit(Inst::CvtFloatToUintSeq {
+            dst_size: dst_size.into(),
+            src_size: src_size.into(),
+            is_saturating: false,
+            src: src.into(),
+            dst: dst.into(),
+            tmp_gpr: tmp_gpr.into(),
+            tmp_xmm: tmp_xmm.into(),
+            tmp_xmm2: tmp_xmm2.into(),
+        });
+    }
+
+    /// Convert signed int to float.
+    pub fn cvt_sint_to_float(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        let op = match dst_size {
+            OperandSize::S32 => SseOpcode::Cvtsi2ss,
+            OperandSize::S64 => SseOpcode::Cvtsi2sd,
+            OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::CvtIntToFloat {
+            op,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+            src2_size: src_size.into(),
+        });
+    }
+
+    /// Convert unsigned 64-bit int to float.
+    pub fn cvt_uint64_to_float_seq(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_gpr1: Reg,
+        tmp_gpr2: Reg,
+        dst_size: OperandSize,
+    ) {
+        self.emit(Inst::CvtUint64ToFloatSeq {
+            dst_size: dst_size.into(),
+            src: src.into(),
+            dst: dst.into(),
+            tmp_gpr1: tmp_gpr1.into(),
+            tmp_gpr2: tmp_gpr2.into(),
+        });
+    }
+
+    /// Change precision of float.
+    pub fn cvt_float_to_float(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        let op = match (src_size, dst_size) {
+            (OperandSize::S32, OperandSize::S64) => SseOpcode::Cvtss2sd,
+            (OperandSize::S64, OperandSize::S32) => SseOpcode::Cvtsd2ss,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmRUnaligned {
+            op,
+            src: Xmm::new(src.into()).expect("valid xmm unaligned").into(),
+            dst: dst.into(),
+        });
+    }
+
     pub fn or_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::AluRmiR {
             size: size.into(),
