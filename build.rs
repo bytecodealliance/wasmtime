@@ -211,6 +211,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             "i32",
             "i64",
             "call_indirect",
+            "conversions",
             "table_fill",
             "table_init",
             "table_copy",
