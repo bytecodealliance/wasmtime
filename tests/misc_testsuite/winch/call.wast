@@ -221,6 +221,10 @@
 (assert_return (invoke "odd" (i64.const 1)) (i32.const 44))
 (assert_return (invoke "odd" (i64.const 200)) (i32.const 99))
 (assert_return (invoke "odd" (i64.const 77)) (i32.const 44))
+
+(assert_exhaustion (invoke "runaway") "call stack exhausted")
+(assert_exhaustion (invoke "mutual-runaway") "call stack exhausted")
+
 (assert_return (invoke "as-if-condition") (i32.const 1))
 (assert_return (invoke "as-br_if-first") (i32.const 0x132))
 (assert_return (invoke "as-br_if-last") (i32.const 2))
