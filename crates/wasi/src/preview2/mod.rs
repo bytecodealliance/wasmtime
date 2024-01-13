@@ -15,9 +15,8 @@
 //! `pub mod legacy` with an off-by-default feature flag, and after 2
 //! releases, retire and remove that code from our tree.
 
-use std::borrow::BorrowMut;
 use std::future::Future;
-use std::pin::{pin, Pin};
+use std::pin::Pin;
 use std::task::{Context, Poll};
 
 mod clocks;
@@ -328,83 +327,62 @@ where
     }
 }
 
-enum DynFutureState<T> {
-    /// Value is immediately available.
+/// Similar to [futures::future::BoxFuture], but with an additional `+ Sync` constraint.
+pub type BoxSyncFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync>>;
+
+/// Convenience wrapper for Futures in preview2 code, where polling for
+/// readiness and consumption of the resolved value are usually two distinct steps.
+pub enum Preview2Future<T> {
+    /// Inner future is still pending.
+    Pending(BoxSyncFuture<T>),
+
+    /// Value is ready to be consumed.
     Ready(T),
 
-    /// Inner future is still pending.
-    Pending(Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>),
-
     /// Future has been polled to completion.
-    Done,
+    Consumed,
 }
 
-/// Wrapper around `Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>`
-/// with an optimization in case the result is immediately available.
-pub struct DynFuture<T> {
-    state: DynFutureState<T>,
-}
-
-impl<T: Unpin> DynFuture<T> {
-    /// Create a new `DynFuture` from an already boxed future object.
-    pub fn new(future: Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>) -> Self {
-        Self {
-            state: DynFutureState::Pending(future),
-        }
+impl<T> Preview2Future<T> {
+    /// Create a new `Preview2Future` from an already boxed future object.
+    pub fn new(future: BoxSyncFuture<T>) -> Self {
+        Self::Pending(future)
     }
 
-    /// Create a new `DynFuture`. This is a shortcut for `DynFuture::new(Box::pin(future))`.
-    pub fn boxed(future: impl Future<Output = T> + Send + Sync + 'static) -> Self {
-        Self::new(Box::pin(future))
-    }
-
-    /// Create a new `DynFuture` that is immediately ready with a value.
-    /// This does not perform any heap allocations.
-    pub fn ready(value: T) -> Self {
-        Self {
-            state: DynFutureState::Ready(value),
-        }
+    /// Create a new `Preview2Future` that is immediately ready with a value.
+    pub fn done(value: T) -> Self {
+        Self::Ready(value)
     }
 
     /// Attempt to resolve the future by polling the future once.
-    /// Unlike `Future::poll`, this can be called outside async contexts.
-    pub(crate) fn try_resolve(&mut self) -> Option<T> {
-        poll_noop(pin!(self))
-    }
-
-    /// Wait for the future to complete. This can be canceled safely.
     ///
-    /// Unlike awaiting the future directly, this does not consume the result.
-    /// The `DynFuture` remains pollable after this method returns.
-    pub(crate) async fn wait(&mut self) {
-        self.state = DynFutureState::Ready(self.borrow_mut().await);
-    }
-}
-
-impl<T: Unpin> Future for DynFuture<T> {
-    type Output = T;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let me = self.get_mut();
-        match std::mem::replace(&mut me.state, DynFutureState::Done) {
-            DynFutureState::Ready(value) => Poll::Ready(value),
-            DynFutureState::Pending(mut fut) => match fut.as_mut().poll(cx) {
-                Poll::Ready(value) => Poll::Ready(value),
-                Poll::Pending => {
-                    me.state = DynFutureState::Pending(fut);
-                    Poll::Pending
+    /// Once this method returns [`Some(value)`], this instance is considered
+    /// "consumed" and should be dropped as soon as possible.
+    pub(crate) fn try_resolve(&mut self) -> Option<T> {
+        match std::mem::replace(self, Self::Consumed) {
+            Self::Pending(mut fut) => match poll_noop(fut.as_mut()) {
+                Some(value) => {
+                    *self = Self::Consumed;
+                    Some(value)
+                }
+                None => {
+                    *self = Self::Pending(fut);
+                    None
                 }
             },
-            DynFutureState::Done => Poll::Pending,
+            Self::Ready(value) => Some(value),
+            Self::Consumed => panic!("Value already consumed"),
         }
     }
-}
 
-impl<T: Unpin> futures::future::FusedFuture for DynFuture<T> {
-    fn is_terminated(&self) -> bool {
-        match self.state {
-            DynFutureState::Ready(_) | DynFutureState::Pending(_) => false,
-            DynFutureState::Done => true,
+    /// Wait for the future to complete without consuming the result.
+    pub(crate) async fn ready(&mut self) {
+        match self {
+            Self::Pending(fut) => {
+                *self = Self::Ready(fut.await);
+            }
+            Self::Ready(_) => {}
+            Self::Consumed => panic!("Value already consumed"),
         }
     }
 }

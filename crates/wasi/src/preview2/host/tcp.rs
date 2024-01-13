@@ -5,7 +5,7 @@ use crate::preview2::bindings::sockets::{
 use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
 use crate::preview2::tcp::{SystemTcpReader, SystemTcpSocket, SystemTcpWriter};
 use crate::preview2::{
-    DynFuture, InputStream, OutputStream, Pollable, SocketAddrFamily, SocketResult, Subscribe,
+    InputStream, OutputStream, Pollable, Preview2Future, SocketAddrFamily, SocketResult, Subscribe,
     WasiView,
 };
 use std::io;
@@ -41,7 +41,7 @@ enum TcpState {
 
     /// An outgoing connection is started via `start_connect`.
     Connecting {
-        future: DynFuture<io::Result<(SystemTcpReader, SystemTcpWriter)>>,
+        future: Preview2Future<io::Result<(SystemTcpReader, SystemTcpWriter)>>,
     },
 
     /// An outgoing connection has been established.
@@ -156,12 +156,12 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let mut future = socket.inner.connect(&remote_address);
+        let mut future = Preview2Future::new(socket.inner.connect(&remote_address));
 
         // Attempt to return (validation) errors immediately:
         let future = match future.try_resolve() {
             Some(Err(e)) => return Err(e.into()),
-            Some(Ok(r)) => DynFuture::ready(Ok(r)),
+            Some(Ok(r)) => Preview2Future::done(Ok(r)),
             None => future,
         };
 
@@ -526,7 +526,7 @@ impl Subscribe for TcpSocketWrapper {
             | TcpState::Connected => {
                 // No async operation in progress.
             }
-            TcpState::Connecting { future } => future.wait().await,
+            TcpState::Connecting { future } => future.ready().await,
             TcpState::Listening { pending_result } => match pending_result {
                 Some(_) => {}
                 None => *pending_result = Some(self.inner.accept().await),

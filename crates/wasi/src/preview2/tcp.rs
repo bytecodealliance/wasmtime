@@ -1,6 +1,6 @@
 use crate::preview2::host::network::util;
 use crate::preview2::network::SocketAddressFamily;
-use crate::preview2::{DynFuture, SocketAddrFamily};
+use crate::preview2::{BoxSyncFuture, SocketAddrFamily};
 use cap_net_ext::{Blocking, TcpListenerExt};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
@@ -141,50 +141,43 @@ impl SystemTcpSocket {
     pub fn connect(
         &mut self,
         remote_address: &SocketAddr,
-    ) -> DynFuture<io::Result<(SystemTcpReader, SystemTcpWriter)>> {
-        fn initiate_connect(
-            me: &SystemTcpSocket,
-            remote_address: &SocketAddr,
-        ) -> io::Result<(SystemTcpReader, SystemTcpWriter)> {
+    ) -> BoxSyncFuture<io::Result<(SystemTcpReader, SystemTcpWriter)>> {
+        let stream = self.stream.clone();
+        let family = self.family.clone();
+        let remote_address = remote_address.clone();
+
+        Box::pin(async move {
+            // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
+            // Windows returns `WSAEWOULDBLOCK`.
+            const INPROGRESS: Errno = if cfg!(windows) {
+                Errno::WOULDBLOCK
+            } else {
+                Errno::INPROGRESS
+            };
+
             util::validate_unicast(&remote_address)?;
             util::validate_remote_address(&remote_address)?;
-            util::validate_address_family(&remote_address, &me.family)?;
+            util::validate_address_family(&remote_address, &family)?;
 
-            rustix::net::connect(&me.stream, remote_address).map_err(|error| match error {
-                // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
-                // Windows returns `WSAEWOULDBLOCK`.
-                #[cfg(windows)]
-                Errno::WOULDBLOCK => Errno::INPROGRESS,
-                _ => error,
-            })?;
+            match rustix::net::connect(&stream, &remote_address) {
+                Err(INPROGRESS) => {
+                    stream.writable().await.unwrap();
+
+                    // Check whether the connect succeeded.
+                    match sockopt::get_socket_error(&stream) {
+                        Ok(Ok(())) => {}
+                        Err(err) | Ok(Err(err)) => return Err(err.into()),
+                    }
+                }
+                Err(e) => return Err(e.into()),
+                Ok(()) => {}
+            }
 
             Ok((
-                SystemTcpReader::new(me.stream.clone()),
-                SystemTcpWriter::new(me.stream.clone()),
+                SystemTcpReader::new(stream.clone()),
+                SystemTcpWriter::new(stream.clone()),
             ))
-        }
-
-        async fn await_connection(
-            stream: Arc<tokio::net::TcpStream>,
-        ) -> io::Result<(SystemTcpReader, SystemTcpWriter)> {
-            stream.writable().await.unwrap();
-
-            // Check whether the connect succeeded.
-            match sockopt::get_socket_error(&stream) {
-                Ok(Ok(())) => Ok((
-                    SystemTcpReader::new(stream.clone()),
-                    SystemTcpWriter::new(stream.clone()),
-                )),
-                Err(err) | Ok(Err(err)) => return Err(err.into()),
-            }
-        }
-
-        match initiate_connect(self, remote_address) {
-            Err(e) if Errno::from_io_error(&e) == Some(Errno::INPROGRESS) => {
-                DynFuture::boxed(await_connection(self.stream.clone()))
-            }
-            r => DynFuture::ready(r),
-        }
+        })
     }
 
     pub fn listen(&mut self) -> io::Result<()> {

@@ -1,7 +1,7 @@
 use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
-use crate::preview2::{DynFuture, SocketError, WasiView};
+use crate::preview2::{Preview2Future, SocketError, WasiView};
 use anyhow::Result;
 use std::io;
 use std::net::IpAddr;
@@ -9,7 +9,7 @@ use std::vec;
 use wasmtime::component::Resource;
 
 pub enum ResolveAddressStream {
-    Waiting(DynFuture<io::Result<Vec<IpAddr>>>),
+    Waiting(Preview2Future<io::Result<Vec<IpAddr>>>),
     Iterating(vec::IntoIter<IpAddr>),
     Done,
 }
@@ -26,7 +26,7 @@ impl<T: WasiView + Sized> Host for T {
         // has possesion of a valid handle and then we're good to go:
         let _network = self.table().get(&network)?;
 
-        let mut future = self.ctx_mut().network.resolve_addresses(name);
+        let mut future = Preview2Future::new(self.ctx_mut().network.resolve_addresses(name));
         let stream = match future.try_resolve() {
             None => ResolveAddressStream::Waiting(future),
             Some(Ok(addresses)) => ResolveAddressStream::Iterating(addresses.into_iter()),
@@ -94,7 +94,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
 impl Subscribe for ResolveAddressStream {
     async fn ready(&mut self) {
         match self {
-            Self::Waiting(future) => future.wait().await,
+            Self::Waiting(future) => future.ready().await,
             Self::Iterating(_) | Self::Done => {}
         }
     }

@@ -1,16 +1,15 @@
 use crate::preview2::host::network::util;
-use crate::preview2::DynFuture;
 use std::net::{IpAddr, Ipv6Addr, ToSocketAddrs};
 use std::str::FromStr;
 use std::{io, vec};
 
-pub(crate) fn resolve_addresses(name: &str) -> DynFuture<io::Result<Vec<IpAddr>>> {
+pub(crate) async fn resolve_addresses(name: &str) -> io::Result<Vec<IpAddr>> {
     match parse(name) {
-        Err(e) => DynFuture::ready(Err(e)),
-        Ok(url::Host::Ipv4(v4addr)) => DynFuture::ready(Ok(vec![IpAddr::V4(v4addr)])),
-        Ok(url::Host::Ipv6(v6addr)) => DynFuture::ready(Ok(vec![IpAddr::V6(v6addr)])),
+        Err(e) => Err(e),
+        Ok(url::Host::Ipv4(v4addr)) => Ok(vec![IpAddr::V4(v4addr)]),
+        Ok(url::Host::Ipv6(v6addr)) => Ok(vec![IpAddr::V6(v6addr)]),
         Ok(url::Host::Domain(domain)) => {
-            DynFuture::boxed(super::spawn_blocking(move || blocking_resolve(&domain)))
+            super::spawn_blocking(move || blocking_resolve(&domain)).await
         }
     }
 }

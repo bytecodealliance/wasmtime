@@ -1,7 +1,7 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
 use crate::preview2::ip_name_lookup::resolve_addresses;
-use crate::preview2::{DynFuture, TrappableError};
+use crate::preview2::{BoxSyncFuture, TrappableError};
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// A network implementation
 pub trait Network: Sync + Send {
     /// Given a name, resolve to a list of IP addresses
-    fn resolve_addresses(&mut self, name: String) -> DynFuture<io::Result<Vec<IpAddr>>>;
+    fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>>;
 }
 
 /// The default network implementation
@@ -30,14 +30,16 @@ impl DefaultNetwork {
 }
 
 impl Network for DefaultNetwork {
-    fn resolve_addresses(&mut self, name: String) -> DynFuture<io::Result<Vec<IpAddr>>> {
+    fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>> {
         let allowed = self.allowed;
 
         if !allowed {
-            return DynFuture::ready(Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "IP name lookup is not allowed",
-            )));
+            return Box::pin(async {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "IP name lookup is not allowed",
+                ))
+            });
         }
 
         self.system.resolve_addresses(name)
@@ -56,8 +58,8 @@ impl SystemNetwork {
 }
 
 impl Network for SystemNetwork {
-    fn resolve_addresses(&mut self, name: String) -> DynFuture<io::Result<Vec<IpAddr>>> {
-        resolve_addresses(&name)
+    fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>> {
+        Box::pin(async move { resolve_addresses(&name).await })
     }
 }
 
