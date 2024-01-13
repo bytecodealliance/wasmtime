@@ -3,10 +3,9 @@ use crate::preview2::bindings::sockets::{
     tcp::ShutdownType,
 };
 use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
-use crate::preview2::tcp::{SystemTcpReader, SystemTcpSocket, SystemTcpWriter};
+use crate::preview2::tcp::{TcpReader, TcpSocket, TcpWriter};
 use crate::preview2::{
-    InputStream, OutputStream, Pollable, Preview2Future, SocketAddrFamily, SocketResult, Subscribe,
-    WasiView,
+    InputStream, OutputStream, Pollable, Preview2Future, SocketResult, Subscribe, WasiView,
 };
 use std::io;
 use std::net::SocketAddr;
@@ -36,12 +35,12 @@ enum TcpState {
 
     /// The socket is now listening and waiting for an incoming connection.
     Listening {
-        pending_result: Option<io::Result<(SystemTcpSocket, SystemTcpReader, SystemTcpWriter)>>,
+        pending_result: Option<io::Result<(Box<dyn TcpSocket>, TcpReader, TcpWriter)>>,
     },
 
     /// An outgoing connection is started via `start_connect`.
     Connecting {
-        future: Preview2Future<io::Result<(SystemTcpReader, SystemTcpWriter)>>,
+        future: Preview2Future<io::Result<(TcpReader, TcpWriter)>>,
     },
 
     /// An outgoing connection has been established.
@@ -55,26 +54,18 @@ enum TcpState {
 pub struct TcpSocketWrapper {
     /// The part of a `TcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
-    inner: SystemTcpSocket,
+    inner: Box<dyn TcpSocket>,
 
     /// The current state in the bind/listen/accept/connect progression.
     tcp_state: TcpState,
 }
 
 impl TcpSocketWrapper {
-    /// Create a new socket in the given family.
-    pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
-        Ok(Self {
-            inner: SystemTcpSocket::new(family)?,
-            tcp_state: TcpState::Default,
-        })
-    }
-
-    fn new_input_stream(reader: SystemTcpReader) -> InputStream {
+    fn new_input_stream(reader: TcpReader) -> InputStream {
         InputStream::Host(Box::new(AsyncReadStream::new(reader)))
     }
 
-    fn new_output_stream(writer: SystemTcpWriter) -> OutputStream {
+    fn new_output_stream(writer: TcpWriter) -> OutputStream {
         const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
         Box::new(AsyncWriteStream::new(SOCKET_READY_SIZE, writer))
@@ -86,8 +77,15 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp_create_socket::Host fo
         &mut self,
         address_family: IpAddressFamily,
     ) -> SocketResult<Resource<TcpSocketWrapper>> {
-        let socket = TcpSocketWrapper::new(address_family.into())?;
-        let socket = self.table_mut().push(socket)?;
+        let socket = self
+            .ctx_mut()
+            .network
+            .new_tcp_socket(address_family.into())?;
+        let wrapper = TcpSocketWrapper {
+            inner: socket,
+            tcp_state: TcpState::Default,
+        };
+        let socket = self.table_mut().push(wrapper)?;
         Ok(socket)
     }
 }
@@ -115,7 +113,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        socket.inner.bind(&local_address)?;
+        socket.inner.bind(local_address)?;
         socket.tcp_state = TcpState::BindStarted;
 
         Ok(())
@@ -156,7 +154,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let mut future = Preview2Future::new(socket.inner.connect(&remote_address));
+        let mut future = Preview2Future::new(socket.inner.connect(remote_address));
 
         // Attempt to return (validation) errors immediately:
         let future = match future.try_resolve() {
@@ -529,7 +527,10 @@ impl Subscribe for TcpSocketWrapper {
             TcpState::Connecting { future } => future.ready().await,
             TcpState::Listening { pending_result } => match pending_result {
                 Some(_) => {}
-                None => *pending_result = Some(self.inner.accept().await),
+                None => {
+                    let result = futures::future::poll_fn(|cx| self.inner.poll_accept(cx)).await;
+                    *pending_result = Some(result);
+                }
             },
         }
     }

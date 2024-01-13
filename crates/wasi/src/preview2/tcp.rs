@@ -2,6 +2,7 @@ use crate::preview2::host::network::util;
 use crate::preview2::network::SocketAddressFamily;
 use crate::preview2::{BoxSyncFuture, SocketAddrFamily};
 use cap_net_ext::{Blocking, TcpListenerExt};
+use futures::Future;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -11,9 +12,204 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::Interest;
+use tokio::io::{AsyncRead, AsyncWrite, Interest};
 
-/// A cross-platform WASI-compliant `TcpSocket` implementation.
+pub type TcpReader = Box<dyn AsyncRead + Send + Sync + Unpin>;
+pub type TcpWriter = Box<dyn AsyncWrite + Send + Sync + Unpin>;
+
+/// A WASI-compliant TCP socket.
+///
+/// Implementations are encouraged to wrap [SystemTcpSocket] as that provides a
+/// cross-platform and WASI-compliant base implementation.
+pub trait TcpSocket: Send + Sync + 'static {
+    /// Connect to a remote endpoint.
+    ///
+    /// On success a pair of streams is returned that can be used to read & write to the connection.
+    ///
+    /// An [io::ErrorKind::InvalidInput] error is returned when `remote_address`:
+    /// - is not of the same `SocketAddrFamily` as the family the socket was created with,
+    /// - contains an [unspecified](std::net::IpAddr::is_unspecified) IP address.
+    /// - has the port set to 0.
+    fn connect(
+        &mut self,
+        remote_address: SocketAddr,
+    ) -> BoxSyncFuture<io::Result<(TcpReader, TcpWriter)>>;
+
+    /// Bind the socket to a specific network on the provided IP address and port.
+    ///
+    /// If the IP address is zero (`0.0.0.0` in IPv4, `::` in IPv6), it is left to the implementation to decide which
+    /// network interface(s) to bind to.
+    /// If the TCP/UDP port is zero, the socket will be bound to a random free port.
+    ///
+    /// The `local_address` must be of the same `SocketAddrFamily` as the family
+    /// the socket was created with.
+    fn bind(&mut self, local_address: SocketAddr) -> io::Result<()>;
+
+    /// Start listening for new connections.
+    fn listen(&mut self) -> io::Result<()>;
+
+    /// Try to accept a new client socket.
+    ///
+    /// If there is no connection to accept, [Poll::Pending] is returned and the current task will be notified by a waker.
+    ///
+    /// On success, this function returns the newly accepted client socket along with
+    /// a pair of streams that can be used to read & write to the connection.
+    /// The following properties are inherited from the listener socket:
+    /// - [TcpSocket::address_family]
+    /// - [TcpSocket::ipv6_only]
+    /// - [TcpSocket::keep_alive_enabled]
+    /// - [TcpSocket::keep_alive_idle_time]
+    /// - [TcpSocket::keep_alive_interval]
+    /// - [TcpSocket::keep_alive_count]
+    /// - [TcpSocket::hop_limit]
+    /// - [TcpSocket::receive_buffer_size]
+    /// - [TcpSocket::send_buffer_size]
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<io::Result<(Box<dyn TcpSocket>, TcpReader, TcpWriter)>>;
+
+    /// Initiate a graceful shutdown.
+    ///
+    /// - [Shutdown::Read]: the socket is not expecting to receive any more data from the peer. All subsequent read
+    ///   operations on the [TcpReader] associated with this socket will return an End Of Stream indication.
+    ///   Any data still in the receive queue at time of calling `shutdown` will be discarded.
+    /// - [Shutdown::Write]: the socket is not expecting to send any more data to the peer. All subsequent write
+    ///   operations on the [TcpWriter] associated with this socket will return 0.
+    /// - [Shutdown::Both]: same effect as `Read` & `Write` combined.
+    fn shutdown(&mut self, how: Shutdown) -> io::Result<()>;
+
+    /// Get the bound local address.
+    /// The returned value will always be of the same `SocketAddrFamily` as the
+    /// the family the socket was created with.
+    fn local_address(&self) -> io::Result<SocketAddr>;
+
+    /// Get the remote address.
+    /// The returned value will always be of the same `SocketAddrFamily` as the
+    /// the family the socket was created with.
+    fn remote_address(&self) -> io::Result<SocketAddr>;
+
+    /// Whether this is a IPv4 or IPv6 socket.
+    ///
+    /// Equivalent to the SO_DOMAIN socket option.
+    fn address_family(&self) -> SocketAddrFamily;
+
+    /// Whether IPv4 compatibility (dual-stack) mode is disabled or not.
+    /// Equivalent to the IPV6_V6ONLY socket option.
+    fn ipv6_only(&self) -> io::Result<bool>;
+
+    /// Whether IPv4 compatibility (dual-stack) mode is disabled or not.
+    /// Equivalent to the IPV6_V6ONLY socket option.
+    fn set_ipv6_only(&mut self, value: bool) -> io::Result<()>;
+
+    /// The desired listen queue size. Implementations are free to ignore this.
+    /// This function never returns 0.
+    fn listen_backlog_size(&self) -> io::Result<usize>;
+
+    /// Hints the desired listen queue size. Implementations are free to ignore this.
+    ///
+    /// If the provided value is 0, an [io::ErrorKind::InvalidInput] error is returned.
+    /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+    fn set_listen_backlog_size(&mut self, value: usize) -> io::Result<()>;
+
+    /// Whether or not keepalive is enabled.
+    /// Equivalent to the SO_KEEPALIVE socket option.
+    fn keep_alive_enabled(&self) -> io::Result<bool>;
+
+    /// Enables or disables keepalive.
+    ///
+    /// The keepalive behavior can be adjusted using:
+    /// - [TcpSocket::set_keep_alive_idle_time]
+    /// - [TcpSocket::set_keep_alive_interval]
+    /// - [TcpSocket::set_keep_alive_count]
+    ///
+    /// These properties can be configured while `keep_alive_enabled` is false,
+    /// but only come into effect when `keep_alive_enabled` is true.
+    ///
+    /// Equivalent to the SO_KEEPALIVE socket option.
+    fn set_keep_alive_enabled(&mut self, value: bool) -> io::Result<()>;
+
+    /// Amount of time the connection has to be idle before TCP starts sending keepalive packets.
+    /// This function never returns [Duration::ZERO].
+    /// Equivalent to the TCP_KEEPIDLE socket option. (TCP_KEEPALIVE on MacOS)
+    fn keep_alive_idle_time(&self) -> io::Result<Duration>;
+
+    /// Amount of time the connection has to be idle before TCP starts sending keepalive packets.
+    ///
+    /// If the provided value is [Duration::ZERO], an [io::ErrorKind::InvalidInput] error is returned.
+    /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+    /// I.e. after setting a value, reading the same setting back may return a different value.
+    ///
+    /// Equivalent to the TCP_KEEPIDLE socket option. (TCP_KEEPALIVE on MacOS)
+    fn set_keep_alive_idle_time(&mut self, value: Duration) -> io::Result<()>;
+
+    /// The time between keepalive packets.
+    /// This function never returns [Duration::ZERO].
+    /// Equivalent to the TCP_KEEPINTVL socket option.
+    fn keep_alive_interval(&self) -> io::Result<Duration>;
+
+    /// The time between keepalive packets.
+    ///
+    /// If the provided value is [Duration::ZERO], an [io::ErrorKind::InvalidInput] error is returned.
+    /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+    /// I.e. after setting a value, reading the same setting back may return a different value.
+    ///
+    /// Equivalent to the TCP_KEEPINTVL socket option.
+    fn set_keep_alive_interval(&mut self, value: Duration) -> io::Result<()>;
+
+    /// The maximum amount of keepalive packets TCP should send before aborting the connection.
+    /// This function never returns 0.
+    /// Equivalent to the TCP_KEEPCNT socket option.
+    fn keep_alive_count(&self) -> io::Result<u32>;
+
+    /// The maximum amount of keepalive packets TCP should send before aborting the connection.
+    ///
+    /// If the provided value is 0, an [io::ErrorKind::InvalidInput] error is returned.
+    /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+    /// I.e. after setting a value, reading the same setting back may return a different value.
+    ///
+    /// Equivalent to the TCP_KEEPCNT socket option.
+    fn set_keep_alive_count(&mut self, value: u32) -> io::Result<()>;
+
+    /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
+    /// This function never returns 0.
+    fn hop_limit(&self) -> io::Result<u8>;
+
+    /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
+    ///
+    /// If the provided value is 0, an [io::ErrorKind::InvalidInput] error is returned.
+    fn set_hop_limit(&mut self, value: u8) -> io::Result<()>;
+
+    /// The kernel buffer space reserved for receives on this socket.
+    /// This function never returns 0.
+    /// Equivalent to the SO_RCVBUF socket options.
+    fn receive_buffer_size(&self) -> io::Result<usize>;
+
+    /// The kernel buffer space reserved for receives on this socket.
+    ///
+    /// If the provided value is 0, an [io::ErrorKind::InvalidInput] error is returned.
+    /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+    /// I.e. after setting a value, reading the same setting back may return a different value.
+    ///
+    /// Equivalent to the SO_RCVBUF socket options.
+    fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()>;
+
+    /// The kernel buffer space reserved for sends on this socket.
+    /// This function never returns 0.
+    /// Equivalent to the SO_SNDBUF socket options.
+    fn send_buffer_size(&self) -> io::Result<usize>;
+
+    /// The kernel buffer space reserved for sends on this socket.
+    ///
+    /// If the provided value is 0, an [io::ErrorKind::InvalidInput] error is returned.
+    /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+    /// I.e. after setting a value, reading the same setting back may return a different value.
+    ///
+    /// Equivalent to the SO_SNDBUF socket options.
+    fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()>;
+}
+
+/// A cross-platform and WASI-compliant `TcpSocket` implementation.
 pub struct SystemTcpSocket {
     stream: Arc<tokio::net::TcpStream>,
 
@@ -113,40 +309,15 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn bind(&mut self, local_address: &SocketAddr) -> io::Result<()> {
-        util::validate_unicast(&local_address)?;
-        util::validate_address_family(&local_address, &self.family)?;
-
-        // Automatically bypass the TIME_WAIT state when the user is trying
-        // to bind to a specific port:
-        let reuse_addr = local_address.port() > 0;
-
-        // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
-        // This ensures we're not accidentally affected by any socket option
-        // state left behind by a previous failed call to this method (start_bind).
-        self.set_reuseaddr(reuse_addr)?;
-
-        // Perform the OS bind call.
-        rustix::net::bind(&self.stream, &local_address).map_err(|error| match error {
-            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-            #[cfg(windows)]
-            Errno::NOBUFS => Errno::ADDRINUSE,
-            _ => error,
-        })?;
-
-        Ok(())
-    }
-
     pub fn connect(
         &mut self,
-        remote_address: &SocketAddr,
-    ) -> BoxSyncFuture<io::Result<(SystemTcpReader, SystemTcpWriter)>> {
+        remote_address: SocketAddr,
+    ) -> impl Future<Output = io::Result<(SystemTcpReader, SystemTcpWriter)>> + Send + Sync + 'static
+    {
         let stream = self.stream.clone();
         let family = self.family.clone();
-        let remote_address = remote_address.clone();
 
-        Box::pin(async move {
+        async move {
             // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
             // Windows returns `WSAEWOULDBLOCK`.
             const INPROGRESS: Errno = if cfg!(windows) {
@@ -177,37 +348,7 @@ impl SystemTcpSocket {
                 SystemTcpReader::new(stream.clone()),
                 SystemTcpWriter::new(stream.clone()),
             ))
-        })
-    }
-
-    pub fn listen(&mut self) -> io::Result<()> {
-        if self.is_listening {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Socket already listening.",
-            ));
         }
-
-        rustix::net::listen(&self.stream, self.listen_backlog_size).map_err(
-            |error| match error {
-                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
-                // According to the docs, `listen` can return EMFILE on Windows.
-                // This is odd, because we're not trying to create a new socket
-                // or file descriptor of any kind. So we rewrite it to less
-                // surprising error code.
-                //
-                // At the time of writing, this behavior has never been experimentally
-                // observed by any of the wasmtime authors, so we're relying fully
-                // on Microsoft's documentation here.
-                #[cfg(windows)]
-                Some(Errno::MFILE) => Errno::NOBUFS.into(),
-
-                _ => error,
-            },
-        )?;
-
-        self.is_listening = true;
-        Ok(())
     }
 
     fn try_accept(&mut self) -> io::Result<(SystemTcpSocket, SystemTcpReader, SystemTcpWriter)> {
@@ -302,36 +443,114 @@ impl SystemTcpSocket {
 
         Poll::Pending
     }
+}
 
-    pub async fn accept(
+impl TcpSocket for SystemTcpSocket {
+    fn connect(
         &mut self,
-    ) -> io::Result<(SystemTcpSocket, SystemTcpReader, SystemTcpWriter)> {
-        futures::future::poll_fn(|cx| self.poll_accept(cx)).await
+        remote_address: SocketAddr,
+    ) -> BoxSyncFuture<io::Result<(TcpReader, TcpWriter)>> {
+        let fut = self.connect(remote_address);
+
+        Box::pin(async move {
+            let (reader, writer) = fut.await?;
+            let reader: TcpReader = Box::new(reader);
+            let writer: TcpWriter = Box::new(writer);
+            Ok((reader, writer))
+        })
     }
 
-    pub fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
+    fn bind(&mut self, local_address: SocketAddr) -> io::Result<()> {
+        util::validate_unicast(&local_address)?;
+        util::validate_address_family(&local_address, &self.family)?;
+
+        // Automatically bypass the TIME_WAIT state when the user is trying
+        // to bind to a specific port:
+        let reuse_addr = local_address.port() > 0;
+
+        // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
+        // This ensures we're not accidentally affected by any socket option
+        // state left behind by a previous failed call to this method (start_bind).
+        self.set_reuseaddr(reuse_addr)?;
+
+        // Perform the OS bind call.
+        rustix::net::bind(&self.stream, &local_address).map_err(|error| match error {
+            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+            #[cfg(windows)]
+            Errno::NOBUFS => Errno::ADDRINUSE,
+            _ => error,
+        })?;
+
+        Ok(())
+    }
+
+    fn listen(&mut self) -> io::Result<()> {
+        if self.is_listening {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Socket already listening.",
+            ));
+        }
+
+        rustix::net::listen(&self.stream, self.listen_backlog_size).map_err(
+            |error| match error {
+                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
+                // According to the docs, `listen` can return EMFILE on Windows.
+                // This is odd, because we're not trying to create a new socket
+                // or file descriptor of any kind. So we rewrite it to less
+                // surprising error code.
+                //
+                // At the time of writing, this behavior has never been experimentally
+                // observed by any of the wasmtime authors, so we're relying fully
+                // on Microsoft's documentation here.
+                #[cfg(windows)]
+                Some(Errno::MFILE) => Errno::NOBUFS.into(),
+
+                _ => error,
+            },
+        )?;
+
+        self.is_listening = true;
+        Ok(())
+    }
+
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<io::Result<(Box<dyn TcpSocket>, TcpReader, TcpWriter)>> {
+        match self.poll_accept(cx) {
+            Poll::Ready(Ok((client, reader, writer))) => {
+                Poll::Ready(Ok((Box::new(client), Box::new(reader), Box::new(writer))))
+            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
         self.stream
             .as_socketlike_view::<std::net::TcpStream>()
             .shutdown(how)?;
         Ok(())
     }
 
-    pub fn local_address(&self) -> io::Result<SocketAddr> {
+    fn local_address(&self) -> io::Result<SocketAddr> {
         self.stream.local_addr()
     }
 
-    pub fn remote_address(&self) -> io::Result<SocketAddr> {
+    fn remote_address(&self) -> io::Result<SocketAddr> {
         self.stream.peer_addr()
     }
 
-    pub fn address_family(&self) -> SocketAddrFamily {
+    fn address_family(&self) -> SocketAddrFamily {
         match self.family {
             SocketAddressFamily::Ipv4 => SocketAddrFamily::V4,
             SocketAddressFamily::Ipv6 { .. } => SocketAddrFamily::V6,
         }
     }
 
-    pub fn ipv6_only(&self) -> io::Result<bool> {
+    fn ipv6_only(&self) -> io::Result<bool> {
         // Instead of just calling the OS we return our own internal state, because
         // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
 
@@ -341,7 +560,7 @@ impl SystemTcpSocket {
         }
     }
 
-    pub fn set_ipv6_only(&mut self, value: bool) -> io::Result<()> {
+    fn set_ipv6_only(&mut self, value: bool) -> io::Result<()> {
         match self.family {
             SocketAddressFamily::Ipv4 => Err(Errno::AFNOSUPPORT.into()),
             SocketAddressFamily::Ipv6 { .. } => {
@@ -352,11 +571,11 @@ impl SystemTcpSocket {
         }
     }
 
-    pub fn listen_backlog_size(&self) -> io::Result<usize> {
+    fn listen_backlog_size(&self) -> io::Result<usize> {
         Ok(self.listen_backlog_size.try_into().unwrap())
     }
 
-    pub fn set_listen_backlog_size(&mut self, value: usize) -> io::Result<()> {
+    fn set_listen_backlog_size(&mut self, value: usize) -> io::Result<()> {
         if value == 0 {
             return Err(Errno::INVAL.into());
         }
@@ -382,19 +601,19 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn keep_alive_enabled(&self) -> io::Result<bool> {
+    fn keep_alive_enabled(&self) -> io::Result<bool> {
         Ok(sockopt::get_socket_keepalive(&self.stream)?)
     }
 
-    pub fn set_keep_alive_enabled(&mut self, value: bool) -> io::Result<()> {
+    fn set_keep_alive_enabled(&mut self, value: bool) -> io::Result<()> {
         Ok(sockopt::set_socket_keepalive(&self.stream, value)?)
     }
 
-    pub fn keep_alive_idle_time(&self) -> io::Result<Duration> {
+    fn keep_alive_idle_time(&self) -> io::Result<Duration> {
         Ok(sockopt::get_tcp_keepidle(&self.stream)?)
     }
 
-    pub fn set_keep_alive_idle_time(&mut self, value: Duration) -> io::Result<()> {
+    fn set_keep_alive_idle_time(&mut self, value: Duration) -> io::Result<()> {
         if value <= Duration::ZERO {
             // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL.into());
@@ -419,11 +638,11 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn keep_alive_interval(&self) -> io::Result<Duration> {
+    fn keep_alive_interval(&self) -> io::Result<Duration> {
         Ok(sockopt::get_tcp_keepintvl(&self.stream)?)
     }
 
-    pub fn set_keep_alive_interval(&mut self, value: Duration) -> io::Result<()> {
+    fn set_keep_alive_interval(&mut self, value: Duration) -> io::Result<()> {
         if value <= Duration::ZERO {
             // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL.into());
@@ -443,11 +662,11 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn keep_alive_count(&self) -> io::Result<u32> {
+    fn keep_alive_count(&self) -> io::Result<u32> {
         Ok(sockopt::get_tcp_keepcnt(&self.stream)?)
     }
 
-    pub fn set_keep_alive_count(&mut self, value: u32) -> io::Result<()> {
+    fn set_keep_alive_count(&mut self, value: u32) -> io::Result<()> {
         if value == 0 {
             // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
             return Err(Errno::INVAL.into());
@@ -461,7 +680,7 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn hop_limit(&self) -> io::Result<u8> {
+    fn hop_limit(&self) -> io::Result<u8> {
         let ttl = match self.family {
             SocketAddressFamily::Ipv4 => util::get_ip_ttl(&self.stream)?,
             SocketAddressFamily::Ipv6 { .. } => util::get_ipv6_unicast_hops(&self.stream)?,
@@ -470,7 +689,7 @@ impl SystemTcpSocket {
         Ok(ttl)
     }
 
-    pub fn set_hop_limit(&mut self, value: u8) -> io::Result<()> {
+    fn set_hop_limit(&mut self, value: u8) -> io::Result<()> {
         match self.family {
             SocketAddressFamily::Ipv4 => util::set_ip_ttl(&self.stream, value)?,
             SocketAddressFamily::Ipv6 { .. } => util::set_ipv6_unicast_hops(&self.stream, value)?,
@@ -484,11 +703,11 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn receive_buffer_size(&self) -> io::Result<usize> {
+    fn receive_buffer_size(&self) -> io::Result<usize> {
         Ok(util::get_socket_recv_buffer_size(&self.stream)?)
     }
 
-    pub fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()> {
+    fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()> {
         util::set_socket_recv_buffer_size(&self.stream, value)?;
 
         #[cfg(target_os = "macos")]
@@ -499,11 +718,11 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn send_buffer_size(&self) -> io::Result<usize> {
+    fn send_buffer_size(&self) -> io::Result<usize> {
         Ok(util::get_socket_send_buffer_size(&self.stream)?)
     }
 
-    pub fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()> {
+    fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()> {
         util::set_socket_send_buffer_size(&self.stream, value)?;
 
         #[cfg(target_os = "macos")]
@@ -515,9 +734,9 @@ impl SystemTcpSocket {
     }
 }
 
-/// We can't just use `tokio::net::tcp::OwnedReadHalf` because we need to keep
-/// access to the original TcpStream.
 pub struct SystemTcpReader {
+    /// We can't just use `tokio::net::tcp::OwnedReadHalf` because we need to keep
+    /// access to the original TcpStream.
     inner: Arc<tokio::net::TcpStream>,
 }
 
@@ -527,7 +746,7 @@ impl SystemTcpReader {
     }
 }
 
-impl tokio::io::AsyncRead for SystemTcpReader {
+impl AsyncRead for SystemTcpReader {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -545,10 +764,10 @@ impl tokio::io::AsyncRead for SystemTcpReader {
     }
 }
 
-/// We can't just use `tokio::net::tcp::OwnedWriteHalf` because we need to keep
-/// access to the original TcpStream. Also, `OwnedWriteHalf` calls `shutdown` on
-/// the underlying socket, which is not what we want.
 pub struct SystemTcpWriter {
+    /// We can't just use `tokio::net::tcp::OwnedWriteHalf` because we need to keep
+    /// access to the original TcpStream. Also, `OwnedWriteHalf` calls `shutdown` on
+    /// the underlying socket, which is not what we want.
     inner: Arc<tokio::net::TcpStream>,
 }
 
@@ -558,7 +777,7 @@ impl SystemTcpWriter {
     }
 }
 
-impl tokio::io::AsyncWrite for SystemTcpWriter {
+impl AsyncWrite for SystemTcpWriter {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,

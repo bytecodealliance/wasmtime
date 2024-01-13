@@ -1,6 +1,7 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
 use crate::preview2::ip_name_lookup::resolve_addresses;
+use crate::preview2::tcp::{SystemTcpSocket, TcpSocket};
 use crate::preview2::{BoxSyncFuture, TrappableError};
 use std::io;
 use std::net::{IpAddr, SocketAddr};
@@ -10,6 +11,9 @@ use std::sync::Arc;
 pub trait Network: Sync + Send {
     /// Given a name, resolve to a list of IP addresses
     fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>>;
+
+    /// Create a new TCP socket.
+    fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>>;
 }
 
 /// The default network implementation
@@ -44,6 +48,10 @@ impl Network for DefaultNetwork {
 
         self.system.resolve_addresses(name)
     }
+
+    fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>> {
+        self.system.new_tcp_socket(family)
+    }
 }
 
 /// An implementation of `Networked` that uses the underlying system
@@ -60,6 +68,10 @@ impl SystemNetwork {
 impl Network for SystemNetwork {
     fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>> {
         Box::pin(async move { resolve_addresses(&name).await })
+    }
+
+    fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>> {
+        Ok(Box::new(SystemTcpSocket::new(family)?))
     }
 }
 
