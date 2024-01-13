@@ -54,7 +54,7 @@ pub use self::stdio::{
 pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
-pub use self::tcp::SystemTcpSocket;
+pub use self::tcp::{SystemTcpReader, SystemTcpSocket, SystemTcpWriter};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 pub use wasmtime::component::{ResourceTable, ResourceTableError};

@@ -87,17 +87,6 @@ impl SystemTcpSocket {
         super::with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))
     }
 
-    pub(crate) fn split(&self) -> (SystemTcpReader, SystemTcpWriter) {
-        (
-            SystemTcpReader {
-                inner: self.stream.clone(),
-            },
-            SystemTcpWriter {
-                inner: self.stream.clone(),
-            },
-        )
-    }
-
     #[allow(unused_variables)] // Parameters are not used on Windows
     fn set_reuseaddr(&mut self, value: bool) -> rustix::io::Result<()> {
         // When a TCP socket is closed, the system may
@@ -149,8 +138,14 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    pub fn connect(&mut self, remote_address: &SocketAddr) -> DynFuture<io::Result<()>> {
-        fn initiate_connect(me: &SystemTcpSocket, remote_address: &SocketAddr) -> io::Result<()> {
+    pub fn connect(
+        &mut self,
+        remote_address: &SocketAddr,
+    ) -> DynFuture<io::Result<(SystemTcpReader, SystemTcpWriter)>> {
+        fn initiate_connect(
+            me: &SystemTcpSocket,
+            remote_address: &SocketAddr,
+        ) -> io::Result<(SystemTcpReader, SystemTcpWriter)> {
             util::validate_unicast(&remote_address)?;
             util::validate_remote_address(&remote_address)?;
             util::validate_address_family(&remote_address, &me.family)?;
@@ -163,15 +158,23 @@ impl SystemTcpSocket {
                 _ => error,
             })?;
 
-            Ok(())
+            Ok((
+                SystemTcpReader::new(me.stream.clone()),
+                SystemTcpWriter::new(me.stream.clone()),
+            ))
         }
 
-        async fn await_connection(stream: Arc<tokio::net::TcpStream>) -> io::Result<()> {
+        async fn await_connection(
+            stream: Arc<tokio::net::TcpStream>,
+        ) -> io::Result<(SystemTcpReader, SystemTcpWriter)> {
             stream.writable().await.unwrap();
 
             // Check whether the connect succeeded.
             match sockopt::get_socket_error(&stream) {
-                Ok(Ok(())) => Ok(()),
+                Ok(Ok(())) => Ok((
+                    SystemTcpReader::new(stream.clone()),
+                    SystemTcpWriter::new(stream.clone()),
+                )),
                 Err(err) | Ok(Err(err)) => return Err(err.into()),
             }
         }
@@ -214,7 +217,7 @@ impl SystemTcpSocket {
         Ok(())
     }
 
-    fn try_accept(&mut self) -> io::Result<SystemTcpSocket> {
+    fn try_accept(&mut self) -> io::Result<(SystemTcpSocket, SystemTcpReader, SystemTcpWriter)> {
         let stream = self.stream.as_ref();
         let client_fd = stream.try_io(Interest::READABLE, || {
             // Delegate `accept` to cap_net_ext. They set the NONBLOCK and CLOEXEC flags
@@ -285,10 +288,17 @@ impl SystemTcpSocket {
             }
         }
 
-        Self::from_fd(client_fd, self.family)
+        let client = Self::from_fd(client_fd, self.family)?;
+        let reader = SystemTcpReader::new(client.stream.clone());
+        let writer = SystemTcpWriter::new(client.stream.clone());
+
+        Ok((client, reader, writer))
     }
 
-    pub fn poll_accept(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<SystemTcpSocket>> {
+    pub fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<io::Result<(SystemTcpSocket, SystemTcpReader, SystemTcpWriter)>> {
         while self.stream.poll_read_ready(cx).is_ready() {
             match self.try_accept() {
                 Ok(s) => return Poll::Ready(Ok(s)),
@@ -300,7 +310,9 @@ impl SystemTcpSocket {
         Poll::Pending
     }
 
-    pub async fn accept(&mut self) -> io::Result<SystemTcpSocket> {
+    pub async fn accept(
+        &mut self,
+    ) -> io::Result<(SystemTcpSocket, SystemTcpReader, SystemTcpWriter)> {
         futures::future::poll_fn(|cx| self.poll_accept(cx)).await
     }
 
@@ -512,8 +524,14 @@ impl SystemTcpSocket {
 
 /// We can't just use `tokio::net::tcp::OwnedReadHalf` because we need to keep
 /// access to the original TcpStream.
-pub(crate) struct SystemTcpReader {
+pub struct SystemTcpReader {
     inner: Arc<tokio::net::TcpStream>,
+}
+
+impl SystemTcpReader {
+    fn new(inner: Arc<tokio::net::TcpStream>) -> Self {
+        Self { inner }
+    }
 }
 
 impl tokio::io::AsyncRead for SystemTcpReader {
@@ -537,8 +555,14 @@ impl tokio::io::AsyncRead for SystemTcpReader {
 /// We can't just use `tokio::net::tcp::OwnedWriteHalf` because we need to keep
 /// access to the original TcpStream. Also, `OwnedWriteHalf` calls `shutdown` on
 /// the underlying socket, which is not what we want.
-pub(crate) struct SystemTcpWriter {
+pub struct SystemTcpWriter {
     inner: Arc<tokio::net::TcpStream>,
+}
+
+impl SystemTcpWriter {
+    fn new(inner: Arc<tokio::net::TcpStream>) -> Self {
+        Self { inner }
+    }
 }
 
 impl tokio::io::AsyncWrite for SystemTcpWriter {

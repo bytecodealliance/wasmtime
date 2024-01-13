@@ -3,7 +3,7 @@ use crate::preview2::bindings::sockets::{
     tcp::ShutdownType,
 };
 use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
-use crate::preview2::tcp::SystemTcpSocket;
+use crate::preview2::tcp::{SystemTcpReader, SystemTcpSocket, SystemTcpWriter};
 use crate::preview2::{
     DynFuture, InputStream, OutputStream, Pollable, SocketAddrFamily, SocketResult, Subscribe,
     WasiView,
@@ -36,11 +36,13 @@ enum TcpState {
 
     /// The socket is now listening and waiting for an incoming connection.
     Listening {
-        pending_result: Option<io::Result<SystemTcpSocket>>,
+        pending_result: Option<io::Result<(SystemTcpSocket, SystemTcpReader, SystemTcpWriter)>>,
     },
 
     /// An outgoing connection is started via `start_connect`.
-    Connecting { future: DynFuture<io::Result<()>> },
+    Connecting {
+        future: DynFuture<io::Result<(SystemTcpReader, SystemTcpWriter)>>,
+    },
 
     /// An outgoing connection has been established.
     Connected,
@@ -68,15 +70,14 @@ impl TcpSocketWrapper {
         })
     }
 
-    /// Create the input/output stream pair for a tcp socket.
-    pub fn as_split(&self) -> (InputStream, OutputStream) {
+    fn new_input_stream(reader: SystemTcpReader) -> InputStream {
+        InputStream::Host(Box::new(AsyncReadStream::new(reader)))
+    }
+
+    fn new_output_stream(writer: SystemTcpWriter) -> OutputStream {
         const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
-        let (reader, writer) = self.inner.split();
-
-        let input = Box::new(AsyncReadStream::new(reader));
-        let output = Box::new(AsyncWriteStream::new(SOCKET_READY_SIZE, writer));
-        (InputStream::Host(input), output)
+        Box::new(AsyncWriteStream::new(SOCKET_READY_SIZE, writer))
     }
 }
 
@@ -160,7 +161,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         // Attempt to return (validation) errors immediately:
         let future = match future.try_resolve() {
             Some(Err(e)) => return Err(e.into()),
-            Some(Ok(())) => DynFuture::ready(Ok(())),
+            Some(Ok(r)) => DynFuture::ready(Ok(r)),
             None => future,
         };
 
@@ -180,10 +181,12 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         };
 
         match future.try_resolve() {
-            Some(Ok(())) => {
+            Some(Ok((reader, writer))) => {
                 socket.tcp_state = TcpState::Connected;
 
-                let (input, output) = socket.as_split();
+                let input = TcpSocketWrapper::new_input_stream(reader);
+                let output = TcpSocketWrapper::new_output_stream(writer);
+
                 let input_stream = self.table_mut().push_child(input, &this)?;
                 let output_stream = self.table_mut().push_child(output, &this)?;
 
@@ -250,7 +253,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             return Err(ErrorCode::InvalidState.into());
         };
 
-        let client = match pending_result.take() {
+        let (client, reader, writer) = match pending_result.take() {
             Some(Ok(client)) => client,
             Some(Err(e)) => return Err(e.into()),
             None => {
@@ -268,8 +271,8 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
             tcp_state: TcpState::Connected,
         };
 
-        let (input, output) = tcp_socket.as_split();
-        let output: OutputStream = output;
+        let input = TcpSocketWrapper::new_input_stream(reader);
+        let output = TcpSocketWrapper::new_output_stream(writer);
 
         let tcp_socket = self.table_mut().push(tcp_socket)?;
         let input_stream = self.table_mut().push_child(input, &tcp_socket)?;
