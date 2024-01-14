@@ -24,6 +24,7 @@ impl<T: WasiView + Sized> Host for T {
         self.table().get(&network)?.check_access()?;
 
         let mut future = Preview2Future::new(self.ctx_mut().network.resolve_addresses(name));
+        // Attempt to eagerly return errors:
         let stream = match future.try_resolve() {
             None => ResolveAddressStream::Waiting(future),
             Some(Ok(addresses)) => ResolveAddressStream::Iterating(addresses.into_iter()),

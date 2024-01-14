@@ -15,7 +15,7 @@ use wasmtime::component::Resource;
 
 impl<T: WasiView> crate::preview2::bindings::sockets::tcp::Host for T {}
 
-/// The state of a TCP socket.
+/// The state of the TCP socket wrapper.
 ///
 /// This represents the various states a socket can be in during the
 /// activities of binding, listening, accepting, and connecting.
@@ -47,16 +47,11 @@ enum TcpState {
     Connected,
 }
 
-/// A host TCP socket, plus associated bookkeeping.
-///
-/// The inner state is wrapped in an Arc because the same underlying socket is
-/// used for implementing the stream types.
+/// A `wasi:sockets/tcp::tcp-socket` instance.
+/// This is mostly glue code translating between WASI types and concepts (Tables,
+/// Resources, Pollables, ...) to their idiomatic Rust equivalents.
 pub struct TcpSocketWrapper {
-    /// The part of a `TcpSocket` which is reference-counted so that we
-    /// can pass it to async tasks.
     inner: Box<dyn TcpSocket>,
-
-    /// The current state in the bind/listen/accept/connect progression.
     tcp_state: TcpState,
 }
 

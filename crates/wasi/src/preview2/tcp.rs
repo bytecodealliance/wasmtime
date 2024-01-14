@@ -356,11 +356,8 @@ impl TcpSocket for DefaultTcpSocket {
 /// A cross-platform and WASI-compliant `TcpSocket` implementation using ambient authority.
 pub struct SystemTcpSocket {
     stream: Arc<tokio::net::TcpStream>,
-
-    /// The desired listen queue size. Set to None to use the system's default.
     listen_backlog_size: i32,
     is_listening: bool,
-
     family: SocketProtocolMode,
 
     // The socket options below are not automatically inherited from the listener
@@ -634,7 +631,7 @@ impl TcpSocket for SystemTcpSocket {
 
         // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
         // This ensures we're not accidentally affected by any socket option
-        // state left behind by a previous failed call to this method (start_bind).
+        // state left behind by a previous failed call to this method.
         self.set_reuseaddr(reuse_addr)?;
 
         // Perform the OS bind call.

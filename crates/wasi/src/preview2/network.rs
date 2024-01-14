@@ -11,6 +11,11 @@ use std::sync::Arc;
 /// A network implementation
 pub trait Network: Sync + Send {
     /// Given a name, resolve to a list of IP addresses
+    ///
+    /// Unicode domain names are automatically converted to ASCII using IDNA encoding.
+    /// If the input is an IP address string, the address is parsed and returned
+    /// as-is without making any external requests. The results are returned in
+    /// connection order preference. This function never returns IPv4-mapped IPv6 addresses.
     fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>>;
 
     /// Create a new TCP socket.
@@ -18,7 +23,7 @@ pub trait Network: Sync + Send {
 }
 
 /// The default network implementation
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct DefaultNetwork {
     system: SystemNetwork,
     allow_ip_name_lookup: bool,
