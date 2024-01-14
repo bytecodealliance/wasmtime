@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
+use crate::preview2::network::{SocketAddrUse, SocketProtocolMode};
 use crate::preview2::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -202,8 +202,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         match socket.family {
-            SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketAddressFamily::Ipv6 { .. } => Ok(IpAddressFamily::Ipv6),
+            SocketProtocolMode::Ipv4 => Ok(IpAddressFamily::Ipv4),
+            SocketProtocolMode::Ipv6 { .. } => Ok(IpAddressFamily::Ipv6),
         }
     }
 
@@ -212,8 +212,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         match socket.family {
-            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketAddressFamily::Ipv6 { v6only } => Ok(v6only),
+            SocketProtocolMode::Ipv4 => Err(ErrorCode::NotSupported.into()),
+            SocketProtocolMode::Ipv6 { v6only } => Ok(v6only),
         }
     }
 
@@ -222,11 +222,11 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get_mut(&this)?;
 
         match socket.family {
-            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketAddressFamily::Ipv6 { .. } => match socket.udp_state {
+            SocketProtocolMode::Ipv4 => Err(ErrorCode::NotSupported.into()),
+            SocketProtocolMode::Ipv6 { .. } => match socket.udp_state {
                 UdpState::Default => {
                     sockopt::set_ipv6_v6only(socket.udp_socket(), value)?;
-                    socket.family = SocketAddressFamily::Ipv6 { v6only: value };
+                    socket.family = SocketProtocolMode::Ipv6 { v6only: value };
                     Ok(())
                 }
                 UdpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
@@ -240,8 +240,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         let ttl = match socket.family {
-            SocketAddressFamily::Ipv4 => util::get_ip_ttl(socket.udp_socket())?,
-            SocketAddressFamily::Ipv6 { .. } => util::get_ipv6_unicast_hops(socket.udp_socket())?,
+            SocketProtocolMode::Ipv4 => util::get_ip_ttl(socket.udp_socket())?,
+            SocketProtocolMode::Ipv6 { .. } => util::get_ipv6_unicast_hops(socket.udp_socket())?,
         };
 
         Ok(ttl)
@@ -256,8 +256,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         match socket.family {
-            SocketAddressFamily::Ipv4 => util::set_ip_ttl(socket.udp_socket(), value)?,
-            SocketAddressFamily::Ipv6 { .. } => {
+            SocketProtocolMode::Ipv4 => util::set_ip_ttl(socket.udp_socket(), value)?,
+            SocketProtocolMode::Ipv6 { .. } => {
                 util::set_ipv6_unicast_hops(socket.udp_socket(), value)?
             }
         }

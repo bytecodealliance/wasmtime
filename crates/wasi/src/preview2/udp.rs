@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use super::{
-    network::{SocketAddrCheck, SocketAddressFamily},
+    network::{SocketAddrCheck, SocketProtocolMode},
     SocketAddrFamily,
 };
 
@@ -45,7 +45,7 @@ pub struct UdpSocket {
     pub(crate) udp_state: UdpState,
 
     /// Socket address family.
-    pub(crate) family: SocketAddressFamily,
+    pub(crate) family: SocketProtocolMode,
 
     /// The check of allowed addresses
     pub(crate) addr_check: SocketAddrCheck,
@@ -66,8 +66,8 @@ impl UdpSocket {
         let fd = util::udp_socket(family, Blocking::No)?;
 
         let socket_address_family = match family {
-            SocketAddrFamily::V4 => SocketAddressFamily::Ipv4,
-            SocketAddrFamily::V6 => SocketAddressFamily::Ipv6 {
+            SocketAddrFamily::V4 => SocketProtocolMode::Ipv4,
+            SocketAddrFamily::V6 => SocketProtocolMode::Ipv6 {
                 v6only: rustix::net::sockopt::get_ipv6_v6only(&fd)?,
             },
         };
@@ -107,7 +107,7 @@ pub struct OutgoingDatagramStream {
     pub(crate) remote_address: Option<SocketAddr>,
 
     /// Socket address family.
-    pub(crate) family: SocketAddressFamily,
+    pub(crate) family: SocketProtocolMode,
 
     pub(crate) send_state: SendState,
 

@@ -233,7 +233,7 @@ pub(crate) mod util {
     use std::io::{Error, ErrorKind};
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 
-    use crate::preview2::network::SocketAddressFamily;
+    use crate::preview2::network::SocketProtocolMode;
     use crate::preview2::SocketAddrFamily;
     use cap_net_ext::{Blocking, UdpSocketExt};
     use rustix::fd::{AsFd, OwnedFd};
@@ -285,11 +285,11 @@ pub(crate) mod util {
 
     pub fn validate_address_family(
         addr: &SocketAddr,
-        socket_family: &SocketAddressFamily,
+        socket_mode: &SocketProtocolMode,
     ) -> std::io::Result<()> {
-        match (socket_family, addr.ip()) {
-            (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
-            (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
+        match (socket_mode, addr.ip()) {
+            (SocketProtocolMode::Ipv4, IpAddr::V4(_)) => Ok(()),
+            (SocketProtocolMode::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
                 if is_deprecated_ipv4_compatible(&ipv6) {
                     // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
                     // since 2006, OS handling of them is inconsistent and our own
