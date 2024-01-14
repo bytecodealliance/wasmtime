@@ -470,6 +470,7 @@ impl SystemTcpSocket {
         Ok(())
     }
 
+    /// Non-boxing variant of [TcpSocket::connect]
     pub fn connect(
         &mut self,
         remote_address: SocketAddr,
@@ -590,6 +591,7 @@ impl SystemTcpSocket {
         Ok((client, reader, writer))
     }
 
+    /// Non-boxing variant of [TcpSocket::poll_accept]
     pub fn poll_accept(
         &mut self,
         cx: &mut Context<'_>,

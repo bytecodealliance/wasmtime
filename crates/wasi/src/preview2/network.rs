@@ -83,6 +83,7 @@ impl SystemNetwork {
         Self {}
     }
 
+    /// Non-boxing variant of [Network::resolve_addresses]
     pub fn resolve_addresses(
         &mut self,
         name: String,
@@ -90,6 +91,7 @@ impl SystemNetwork {
         async move { resolve_addresses(&name).await }
     }
 
+    /// Non-boxing variant of [Network::new_tcp_socket]
     pub fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<SystemTcpSocket> {
         SystemTcpSocket::new(family)
     }
