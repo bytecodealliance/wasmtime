@@ -1,8 +1,9 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
 use crate::preview2::ip_name_lookup::resolve_addresses;
-use crate::preview2::tcp::{SystemTcpSocket, TcpSocket};
+use crate::preview2::tcp::{DefaultTcpSocket, SystemTcpSocket, TcpSocket};
 use crate::preview2::{BoxSyncFuture, TrappableError};
+use futures::Future;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -17,25 +18,35 @@ pub trait Network: Sync + Send {
 }
 
 /// The default network implementation
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct DefaultNetwork {
     system: SystemNetwork,
-    allowed: bool,
+    allow_ip_name_lookup: bool,
+    tcp_addr_check: SocketAddrCheck,
 }
 
 impl DefaultNetwork {
     /// Create a new `DefaultNetwork`
-    pub fn new(allowed: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             system: SystemNetwork::new(),
-            allowed,
+            allow_ip_name_lookup: false,
+            tcp_addr_check: SocketAddrCheck::default(),
         }
+    }
+
+    pub fn allow_ip_name_lookup(&mut self, allowed: bool) {
+        self.allow_ip_name_lookup = allowed;
+    }
+
+    pub fn allow_tcp(&mut self, check: SocketAddrCheck) {
+        self.tcp_addr_check = check;
     }
 }
 
 impl Network for DefaultNetwork {
     fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>> {
-        let allowed = self.allowed;
+        let allowed = self.allow_ip_name_lookup;
 
         if !allowed {
             return Box::pin(async {
@@ -46,11 +57,14 @@ impl Network for DefaultNetwork {
             });
         }
 
-        self.system.resolve_addresses(name)
+        Network::resolve_addresses(&mut self.system, name)
     }
 
     fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>> {
-        self.system.new_tcp_socket(family)
+        Ok(Box::new(DefaultTcpSocket::new(
+            self.system.new_tcp_socket(family)?,
+            self.tcp_addr_check.clone(),
+        )))
     }
 }
 
@@ -63,15 +77,26 @@ impl SystemNetwork {
     pub fn new() -> Self {
         Self {}
     }
+
+    pub fn resolve_addresses(
+        &mut self,
+        name: String,
+    ) -> impl Future<Output = io::Result<Vec<IpAddr>>> + Send + Sync + 'static {
+        async move { resolve_addresses(&name).await }
+    }
+
+    pub fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<SystemTcpSocket> {
+        SystemTcpSocket::new(family)
+    }
 }
 
 impl Network for SystemNetwork {
     fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>> {
-        Box::pin(async move { resolve_addresses(&name).await })
+        Box::pin(self.resolve_addresses(name))
     }
 
     fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>> {
-        Ok(Box::new(SystemTcpSocket::new(family)?))
+        Ok(Box::new(self.new_tcp_socket(family)?))
     }
 }
 

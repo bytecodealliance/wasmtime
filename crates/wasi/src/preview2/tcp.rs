@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::SocketAddressFamily;
+use crate::preview2::network::{SocketAddrCheck, SocketAddrUse, SocketAddressFamily};
 use crate::preview2::{BoxSyncFuture, SocketAddrFamily};
 use cap_net_ext::{Blocking, TcpListenerExt};
 use futures::Future;
@@ -209,7 +209,151 @@ pub trait TcpSocket: Send + Sync + 'static {
     fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()>;
 }
 
-/// A cross-platform and WASI-compliant `TcpSocket` implementation.
+/// The default TCP socket implementation used by WasiCtx.
+/// This is a wrapper around SystemTcpSocket but with additional permission checks.
+pub struct DefaultTcpSocket {
+    system: SystemTcpSocket,
+    addr_check: SocketAddrCheck,
+}
+
+impl DefaultTcpSocket {
+    pub(crate) fn new(system: SystemTcpSocket, addr_check: SocketAddrCheck) -> Self {
+        Self { system, addr_check }
+    }
+}
+
+impl TcpSocket for DefaultTcpSocket {
+    fn connect(
+        &mut self,
+        remote_address: SocketAddr,
+    ) -> BoxSyncFuture<io::Result<(TcpReader, TcpWriter)>> {
+        match self
+            .addr_check
+            .check(&remote_address, SocketAddrUse::TcpConnect)
+        {
+            Ok(_) => TcpSocket::connect(&mut self.system, remote_address),
+            Err(e) => Box::pin(async { Err(e) }),
+        }
+    }
+
+    fn bind(&mut self, local_address: SocketAddr) -> io::Result<()> {
+        self.addr_check
+            .check(&local_address, SocketAddrUse::TcpBind)?;
+        self.system.bind(local_address)
+    }
+
+    fn listen(&mut self) -> io::Result<()> {
+        self.system.listen()
+    }
+
+    fn poll_accept(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<io::Result<(Box<dyn TcpSocket>, TcpReader, TcpWriter)>> {
+        match self.system.poll_accept(cx) {
+            Poll::Ready(Ok((client, reader, writer))) => Poll::Ready(Ok((
+                Box::new(DefaultTcpSocket {
+                    system: client,
+                    addr_check: self.addr_check.clone(),
+                }),
+                Box::new(reader),
+                Box::new(writer),
+            ))),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn shutdown(&mut self, how: std::net::Shutdown) -> io::Result<()> {
+        self.system.shutdown(how)
+    }
+
+    fn local_address(&self) -> io::Result<SocketAddr> {
+        self.system.local_address()
+    }
+
+    fn remote_address(&self) -> io::Result<SocketAddr> {
+        self.system.remote_address()
+    }
+
+    fn address_family(&self) -> SocketAddrFamily {
+        self.system.address_family()
+    }
+
+    fn ipv6_only(&self) -> io::Result<bool> {
+        self.system.ipv6_only()
+    }
+
+    fn set_ipv6_only(&mut self, value: bool) -> io::Result<()> {
+        self.system.set_ipv6_only(value)
+    }
+
+    fn listen_backlog_size(&self) -> io::Result<usize> {
+        self.system.listen_backlog_size()
+    }
+
+    fn set_listen_backlog_size(&mut self, value: usize) -> io::Result<()> {
+        self.system.set_listen_backlog_size(value)
+    }
+
+    fn keep_alive_enabled(&self) -> io::Result<bool> {
+        self.system.keep_alive_enabled()
+    }
+
+    fn set_keep_alive_enabled(&mut self, value: bool) -> io::Result<()> {
+        self.system.set_keep_alive_enabled(value)
+    }
+
+    fn keep_alive_idle_time(&self) -> io::Result<std::time::Duration> {
+        self.system.keep_alive_idle_time()
+    }
+
+    fn set_keep_alive_idle_time(&mut self, value: std::time::Duration) -> io::Result<()> {
+        self.system.set_keep_alive_idle_time(value)
+    }
+
+    fn keep_alive_interval(&self) -> io::Result<std::time::Duration> {
+        self.system.keep_alive_interval()
+    }
+
+    fn set_keep_alive_interval(&mut self, value: std::time::Duration) -> io::Result<()> {
+        self.system.set_keep_alive_interval(value)
+    }
+
+    fn keep_alive_count(&self) -> io::Result<u32> {
+        self.system.keep_alive_count()
+    }
+
+    fn set_keep_alive_count(&mut self, value: u32) -> io::Result<()> {
+        self.system.set_keep_alive_count(value)
+    }
+
+    fn hop_limit(&self) -> io::Result<u8> {
+        self.system.hop_limit()
+    }
+
+    fn set_hop_limit(&mut self, value: u8) -> io::Result<()> {
+        self.system.set_hop_limit(value)
+    }
+
+    fn receive_buffer_size(&self) -> io::Result<usize> {
+        self.system.receive_buffer_size()
+    }
+
+    fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()> {
+        self.system.set_receive_buffer_size(value)
+    }
+
+    fn send_buffer_size(&self) -> io::Result<usize> {
+        self.system.send_buffer_size()
+    }
+
+    fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()> {
+        self.system.set_send_buffer_size(value)
+    }
+}
+
+/// A cross-platform and WASI-compliant `TcpSocket` implementation using ambient authority.
 pub struct SystemTcpSocket {
     stream: Arc<tokio::net::TcpStream>,
 
@@ -236,7 +380,7 @@ impl SystemTcpSocket {
     const DEFAULT_BACKLOG_SIZE: i32 = 128;
 
     /// Create a new socket in the given family.
-    pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
+    pub(crate) fn new(family: SocketAddrFamily) -> io::Result<Self> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
         // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
