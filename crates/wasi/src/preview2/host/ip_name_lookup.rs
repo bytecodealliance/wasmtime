@@ -21,10 +21,7 @@ impl<T: WasiView + Sized> Host for T {
         network: Resource<Network>,
         name: String,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
-        // At the moment, there's only one network handle (`instance-network`)
-        // in existence. All we have to do here is validate that the caller indeed
-        // has possesion of a valid handle and then we're good to go:
-        let _network = self.table().get(&network)?;
+        self.table().get(&network)?.check_access()?;
 
         let mut future = Preview2Future::new(self.ctx_mut().network.resolve_addresses(name));
         let stream = match future.try_resolve() {

@@ -76,16 +76,20 @@ impl Network for SystemNetwork {
 }
 
 pub struct NetworkHandle {
-    pub socket_addr_check: SocketAddrCheck,
+    _priv: (),
 }
 
 impl NetworkHandle {
-    pub fn check_socket_addr(
-        &self,
-        addr: &SocketAddr,
-        reason: SocketAddrUse,
-    ) -> std::io::Result<()> {
-        self.socket_addr_check.check(addr, reason)
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
+
+    pub(crate) fn check_access(&self) -> io::Result<()> {
+        // At the moment, there's only one network handle (`instance-network`)
+        // in existence. The fact that we ended up in this method indicates that
+        // the Wasm program had access to a valid network handle.
+        // That's good enough for now:
+        Ok(())
     }
 }
 

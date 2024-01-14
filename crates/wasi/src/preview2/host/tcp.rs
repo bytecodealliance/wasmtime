@@ -97,13 +97,8 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table_mut();
-
-        // At the moment, there's only one network handle (`instance-network`)
-        // in existence. All we have to do here is validate that the caller indeed
-        // has possesion of a valid handle and then we're good to go:
-        let _network = table.get(&network)?;
+        table.get(&network)?.check_access()?;
         let socket = table.get_mut(&this)?;
         let local_address: SocketAddr = local_address.into();
 
@@ -140,11 +135,7 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let table = self.table_mut();
-
-        // At the moment, there's only one network handle (`instance-network`)
-        // in existence. All we have to do here is validate that the caller indeed
-        // has possesion of a valid handle and then we're good to go:
-        let _network = table.get(&network)?;
+        table.get(&network)?.check_access()?;
         let socket = table.get_mut(&this)?;
         let remote_address: SocketAddr = remote_address.into();
 
@@ -199,7 +190,6 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
     }
 
     fn start_listen(&mut self, this: Resource<TcpSocketWrapper>) -> SocketResult<()> {
-        self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
@@ -243,7 +233,6 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         Resource<InputStream>,
         Resource<OutputStream>,
     )> {
-        self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 

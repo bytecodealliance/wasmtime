@@ -48,7 +48,7 @@ pub struct UdpSocket {
     pub(crate) family: SocketAddressFamily,
 
     /// The check of allowed addresses
-    pub(crate) socket_addr_check: Option<SocketAddrCheck>,
+    pub(crate) addr_check: SocketAddrCheck,
 }
 
 #[async_trait]
@@ -60,7 +60,7 @@ impl Subscribe for UdpSocket {
 
 impl UdpSocket {
     /// Create a new socket in the given family.
-    pub fn new(family: SocketAddrFamily) -> io::Result<Self> {
+    pub fn new(family: SocketAddrFamily, socket_addr_check: SocketAddrCheck) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
         let fd = util::udp_socket(family, Blocking::No)?;
@@ -78,7 +78,7 @@ impl UdpSocket {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
             family: socket_address_family,
-            socket_addr_check: None,
+            addr_check: socket_addr_check,
         })
     }
 
@@ -112,7 +112,7 @@ pub struct OutgoingDatagramStream {
     pub(crate) send_state: SendState,
 
     /// The check of allowed addresses
-    pub(crate) socket_addr_check: Option<SocketAddrCheck>,
+    pub(crate) addr_check: SocketAddrCheck,
 }
 
 pub(crate) enum SendState {
