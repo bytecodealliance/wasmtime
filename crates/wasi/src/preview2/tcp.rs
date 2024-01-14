@@ -453,6 +453,26 @@ impl SystemTcpSocket {
         Ok(())
     }
 
+    fn set_keepidle<Fd: rustix::fd::AsFd>(fd: Fd, value: Duration) -> io::Result<()> {
+        if value <= Duration::ZERO {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            return Err(Errno::INVAL.into());
+        }
+
+        // Ensure that the value passed to the actual syscall never gets rounded down to 0.
+        const MIN_SECS: u64 = 1;
+
+        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+        const MAX_SECS: u64 = i16::MAX as u64;
+
+        sockopt::set_tcp_keepidle(
+            fd,
+            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
+        )?;
+
+        Ok(())
+    }
+
     pub fn connect(
         &mut self,
         remote_address: SocketAddr,
@@ -562,7 +582,7 @@ impl SystemTcpSocket {
             }
 
             if let Some(value) = self.keep_alive_idle_time {
-                _ = util::set_tcp_keepidle(&client_fd, value); // Ignore potential error.
+                _ = Self::set_keepidle(&client_fd, value); // Ignore potential error.
             }
         }
 
@@ -758,21 +778,7 @@ impl TcpSocket for SystemTcpSocket {
     }
 
     fn set_keep_alive_idle_time(&mut self, value: Duration) -> io::Result<()> {
-        if value <= Duration::ZERO {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(Errno::INVAL.into());
-        }
-
-        // Ensure that the value passed to the actual syscall never gets rounded down to 0.
-        const MIN_SECS: u64 = 1;
-
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_SECS: u64 = i16::MAX as u64;
-
-        sockopt::set_tcp_keepidle(
-            &self.stream,
-            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
-        )?;
+        Self::set_keepidle(&self.stream, value)?;
 
         #[cfg(target_os = "macos")]
         {
