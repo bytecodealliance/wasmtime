@@ -249,3 +249,5 @@ declare_vecs! {
         delete: wasm_extern_vec_delete,
     )
 }
+
+pub(crate) use declare_vecs;
