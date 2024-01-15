@@ -246,7 +246,7 @@ pub(crate) mod util {
                 if ipv4.is_multicast() || ipv4.is_broadcast() {
                     Err(Error::new(
                         ErrorKind::InvalidInput,
-                        "IPv4 broadcast or multicast address detected.",
+                        "Both IPv4 broadcast and multicast addresses are not supported",
                     ))
                 } else {
                     Ok(())
