@@ -430,6 +430,7 @@ mod memory;
 mod module;
 #[cfg(feature = "profiling")]
 mod profiling;
+mod profiling_agent;
 mod r#ref;
 mod resources;
 mod signatures;

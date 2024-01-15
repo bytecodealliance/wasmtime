@@ -1,5 +1,5 @@
 use crate::memory::MemoryCreator;
-use crate::profiling::{self, ProfilingAgent};
+use crate::profiling_agent::{self, ProfilingAgent};
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, ensure, Result};
 use serde_derive::{Deserialize, Serialize};
@@ -1639,10 +1639,10 @@ impl Config {
 
     pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
         Ok(match self.profiling_strategy {
-            ProfilingStrategy::PerfMap => profiling::new_perfmap()?,
-            ProfilingStrategy::JitDump => profiling::new_jitdump()?,
-            ProfilingStrategy::VTune => profiling::new_vtune()?,
-            ProfilingStrategy::None => profiling::new_null(),
+            ProfilingStrategy::PerfMap => profiling_agent::new_perfmap()?,
+            ProfilingStrategy::JitDump => profiling_agent::new_jitdump()?,
+            ProfilingStrategy::VTune => profiling_agent::new_vtune()?,
+            ProfilingStrategy::None => profiling_agent::new_null(),
         })
     }
 

@@ -1,4 +1,4 @@
-use crate::{profiling::ProfilingAgent, signatures::SignatureRegistry, CodeMemory, Config};
+use crate::{profiling_agent::ProfilingAgent, signatures::SignatureRegistry, CodeMemory, Config};
 use anyhow::{Context, Result};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
