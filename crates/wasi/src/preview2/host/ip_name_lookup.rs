@@ -14,6 +14,48 @@ pub enum ResolveAddressStreamResource {
     Done,
 }
 
+impl ResolveAddressStreamResource {
+    fn poll(&mut self) -> Result<Option<IpAddress>, SocketError> {
+        match self {
+            Self::Waiting(_) => self.poll_future(),
+            Self::Iterating(_) => self.poll_iterator(),
+            Self::Done => Ok(None),
+        }
+    }
+
+    fn poll_future(&mut self) -> Result<Option<IpAddress>, SocketError> {
+        let Self::Waiting(future) = self else {
+            unreachable!()
+        };
+
+        match future.try_resolve() {
+            None => Err(ErrorCode::WouldBlock.into()),
+            Some(Ok(addresses)) => {
+                *self = Self::Iterating(addresses.into_iter());
+                self.poll_iterator()
+            }
+            Some(Err(e)) => {
+                *self = Self::Done;
+                Err(e.into())
+            }
+        }
+    }
+
+    fn poll_iterator(&mut self) -> Result<Option<IpAddress>, SocketError> {
+        let Self::Iterating(iter) = self else {
+            unreachable!()
+        };
+
+        match iter.next() {
+            Some(address) => Ok(Some(address.into())),
+            None => {
+                *self = Self::Done;
+                Ok(None)
+            }
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl<T: WasiView + Sized> Host for T {
     fn resolve_addresses(
@@ -43,36 +85,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
         resource: Resource<ResolveAddressStreamResource>,
     ) -> Result<Option<IpAddress>, SocketError> {
         let stream: &mut ResolveAddressStreamResource = self.table_mut().get_mut(&resource)?;
-
-        if let ResolveAddressStreamResource::Waiting(future) = stream {
-            match future.try_resolve() {
-                None => return Err(ErrorCode::WouldBlock.into()),
-                Some(Ok(addresses)) => {
-                    *stream = ResolveAddressStreamResource::Iterating(addresses.into_iter());
-                    // Fall through to if-statements below.
-                }
-                Some(Err(e)) => {
-                    *stream = ResolveAddressStreamResource::Done;
-                    return Err(e.into());
-                }
-            }
-        }
-
-        if let ResolveAddressStreamResource::Iterating(iter) = stream {
-            match iter.next() {
-                Some(address) => return Ok(Some(address.into())),
-                None => {
-                    *stream = ResolveAddressStreamResource::Done;
-                    // Fall through to if-statement below.
-                }
-            }
-        }
-
-        if let ResolveAddressStreamResource::Done = stream {
-            return Ok(None);
-        }
-
-        unreachable!()
+        stream.poll()
     }
 
     fn subscribe(
