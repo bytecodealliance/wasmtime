@@ -52,12 +52,14 @@ pub struct CompiledModuleInfo {
     pub meta: Metadata,
 }
 
-/// The name of a function stored in the [`ELF_NAME_DATA`] section.
+/// The name of a function stored in the
+/// [`ELF_NAME_DATA`](crate::obj::ELF_NAME_DATA) section.
 #[derive(Serialize, Deserialize)]
 pub struct FunctionName {
     /// The Wasm function index of this function.
     pub idx: FuncIndex,
-    /// The offset of the name in the [`ELF_NAME_DATA`] section.
+    /// The offset of the name in the
+    /// [`ELF_NAME_DATA`](crate::obj::ELF_NAME_DATA) section.
     pub offset: u32,
     /// The length of the name in bytes.
     pub len: u32,
