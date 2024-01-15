@@ -73,7 +73,7 @@ impl WasiCtxBuilder {
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
-            socket_addr_check: SocketAddrCheck::default(),
+            socket_addr_check: SocketAddrCheck::deny(),
             random: random::thread_rng(),
             insecure_random,
             insecure_random_seed,
@@ -264,12 +264,12 @@ impl WasiCtxBuilder {
         let tcp_addr_check = if allow_tcp {
             socket_addr_check.clone()
         } else {
-            SocketAddrCheck::default()
+            SocketAddrCheck::deny()
         };
         let udp_addr_check = if allow_udp {
             socket_addr_check.clone()
         } else {
-            SocketAddrCheck::default()
+            SocketAddrCheck::deny()
         };
 
         let mut network = DefaultNetwork::new();

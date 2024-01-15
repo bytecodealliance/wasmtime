@@ -36,7 +36,7 @@ impl DefaultNetwork {
         Self {
             system: SystemNetwork::new(),
             allow_ip_name_lookup: false,
-            tcp_addr_check: SocketAddrCheck::default(),
+            tcp_addr_check: SocketAddrCheck::deny(),
         }
     }
 
@@ -132,6 +132,14 @@ pub struct SocketAddrCheck(
 );
 
 impl SocketAddrCheck {
+    pub fn deny() -> Self {
+        Self(Arc::new(|_, _| false))
+    }
+
+    pub fn allow() -> Self {
+        Self(Arc::new(|_, _| true))
+    }
+
     pub fn check(&self, addr: &SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
         if (self.0)(addr, reason) {
             Ok(())
@@ -146,7 +154,7 @@ impl SocketAddrCheck {
 
 impl Default for SocketAddrCheck {
     fn default() -> Self {
-        Self(Arc::new(|_, _| false))
+        Self::deny()
     }
 }
 
