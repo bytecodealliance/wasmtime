@@ -107,11 +107,11 @@ impl Network for SystemNetwork {
     }
 }
 
-pub struct NetworkHandle {
+pub struct NetworkResource {
     _priv: (),
 }
 
-impl NetworkHandle {
+impl NetworkResource {
     pub fn new() -> Self {
         Self { _priv: () }
     }

@@ -8,7 +8,7 @@ use std::net::IpAddr;
 use std::vec;
 use wasmtime::component::Resource;
 
-pub enum ResolveAddressStream {
+pub enum ResolveAddressStreamResource {
     Waiting(Preview2Future<io::Result<Vec<IpAddr>>>),
     Iterating(vec::IntoIter<IpAddr>),
     Done,
@@ -20,14 +20,14 @@ impl<T: WasiView + Sized> Host for T {
         &mut self,
         network: Resource<Network>,
         name: String,
-    ) -> Result<Resource<ResolveAddressStream>, SocketError> {
+    ) -> Result<Resource<ResolveAddressStreamResource>, SocketError> {
         self.table().get(&network)?.check_access()?;
 
         let mut future = Preview2Future::new(self.ctx_mut().network.resolve_addresses(name));
         // Attempt to eagerly return errors:
         let stream = match future.try_resolve() {
-            None => ResolveAddressStream::Waiting(future),
-            Some(Ok(addresses)) => ResolveAddressStream::Iterating(addresses.into_iter()),
+            None => ResolveAddressStreamResource::Waiting(future),
+            Some(Ok(addresses)) => ResolveAddressStreamResource::Iterating(addresses.into_iter()),
             Some(Err(e)) => return Err(e.into()),
         };
 
@@ -40,35 +40,35 @@ impl<T: WasiView + Sized> Host for T {
 impl<T: WasiView> HostResolveAddressStream for T {
     fn resolve_next_address(
         &mut self,
-        resource: Resource<ResolveAddressStream>,
+        resource: Resource<ResolveAddressStreamResource>,
     ) -> Result<Option<IpAddress>, SocketError> {
-        let stream: &mut ResolveAddressStream = self.table_mut().get_mut(&resource)?;
+        let stream: &mut ResolveAddressStreamResource = self.table_mut().get_mut(&resource)?;
 
-        if let ResolveAddressStream::Waiting(future) = stream {
+        if let ResolveAddressStreamResource::Waiting(future) = stream {
             match future.try_resolve() {
                 None => return Err(ErrorCode::WouldBlock.into()),
                 Some(Ok(addresses)) => {
-                    *stream = ResolveAddressStream::Iterating(addresses.into_iter());
+                    *stream = ResolveAddressStreamResource::Iterating(addresses.into_iter());
                     // Fall through to if-statements below.
                 }
                 Some(Err(e)) => {
-                    *stream = ResolveAddressStream::Done;
+                    *stream = ResolveAddressStreamResource::Done;
                     return Err(e.into());
                 }
             }
         }
 
-        if let ResolveAddressStream::Iterating(iter) = stream {
+        if let ResolveAddressStreamResource::Iterating(iter) = stream {
             match iter.next() {
                 Some(address) => return Ok(Some(address.into())),
                 None => {
-                    *stream = ResolveAddressStream::Done;
+                    *stream = ResolveAddressStreamResource::Done;
                     // Fall through to if-statement below.
                 }
             }
         }
 
-        if let ResolveAddressStream::Done = stream {
+        if let ResolveAddressStreamResource::Done = stream {
             return Ok(None);
         }
 
@@ -77,19 +77,19 @@ impl<T: WasiView> HostResolveAddressStream for T {
 
     fn subscribe(
         &mut self,
-        resource: Resource<ResolveAddressStream>,
+        resource: Resource<ResolveAddressStreamResource>,
     ) -> Result<Resource<Pollable>> {
         subscribe(self.table_mut(), resource)
     }
 
-    fn drop(&mut self, resource: Resource<ResolveAddressStream>) -> Result<()> {
+    fn drop(&mut self, resource: Resource<ResolveAddressStreamResource>) -> Result<()> {
         self.table_mut().delete(resource)?;
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl Subscribe for ResolveAddressStream {
+impl Subscribe for ResolveAddressStreamResource {
     async fn ready(&mut self) {
         match self {
             Self::Waiting(future) => future.ready().await,

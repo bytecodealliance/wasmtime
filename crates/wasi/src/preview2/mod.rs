@@ -44,7 +44,7 @@ pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
-pub use self::network::{NetworkHandle, SocketAddrFamily, SocketError, SocketResult};
+pub use self::network::{NetworkResource, SocketAddrFamily, SocketError, SocketResult};
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
@@ -161,12 +161,12 @@ pub mod bindings {
             "wasi:sockets/network/error-code" => crate::preview2::SocketError,
         },
         with: {
-            "wasi:sockets/network/network": super::network::NetworkHandle,
-            "wasi:sockets/tcp/tcp-socket": super::host::tcp::TcpSocketWrapper,
+            "wasi:sockets/network/network": super::network::NetworkResource,
+            "wasi:sockets/tcp/tcp-socket": super::host::tcp::TcpSocketResource,
             "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
             "wasi:sockets/udp/incoming-datagram-stream": super::udp::IncomingDatagramStream,
             "wasi:sockets/udp/outgoing-datagram-stream": super::udp::OutgoingDatagramStream,
-            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::host::ip_name_lookup::ResolveAddressStream,
+            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::host::ip_name_lookup::ResolveAddressStreamResource,
             "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
             "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
             "wasi:io/streams/input-stream": super::stream::InputStream,
