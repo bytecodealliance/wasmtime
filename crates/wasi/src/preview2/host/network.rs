@@ -256,7 +256,7 @@ pub(crate) mod util {
                 if ipv6.is_multicast() {
                     Err(Error::new(
                         ErrorKind::InvalidInput,
-                        "IPv6 multicast address detected.",
+                        "IPv6 multicast addresses are not supported",
                     ))
                 } else {
                     Ok(())
