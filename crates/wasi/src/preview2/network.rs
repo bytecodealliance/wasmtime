@@ -84,7 +84,7 @@ impl From<rustix::io::Errno> for SocketError {
 #[derive(Copy, Clone)]
 pub enum SocketAddressFamily {
     Ipv4,
-    Ipv6 { v6only: bool },
+    Ipv6,
 }
 
 pub(crate) fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {

@@ -72,52 +72,6 @@ fn test_udp_sample_application(family: IpAddressFamily, bind_address: IpSocketAd
     }
 }
 
-fn test_udp_dual_stack_conversation() {
-    let net = Network::default();
-
-    let v4_server = UdpSocket::new(IpAddressFamily::Ipv4).unwrap();
-    v4_server
-        .blocking_bind(&net, IpSocketAddress::new(IpAddress::IPV4_LOOPBACK, 0))
-        .unwrap();
-    let (server_incoming, server_outgoing) = v4_server.stream(None).unwrap();
-
-    let v4_server_addr = v4_server.local_address().unwrap();
-    let v6_server_addr =
-        IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, v4_server_addr.port());
-
-    let v6_client = UdpSocket::new(IpAddressFamily::Ipv6).unwrap();
-
-    v6_client.set_ipv6_only(false).unwrap();
-    v6_client.blocking_bind_unspecified(&net).unwrap();
-    let (client_incoming, client_outgoing) = v6_client.stream(None).unwrap();
-
-    // Send from v6 client to v4 server:
-    client_outgoing
-        .blocking_send(&[OutgoingDatagram {
-            data: "Hi!".into(),
-            remote_address: Some(v6_server_addr),
-        }])
-        .unwrap();
-
-    // Receive from v6 client on v4 server:
-    let results = server_incoming.blocking_receive(1..1).unwrap();
-    let msg = results.first().unwrap();
-    assert_eq!(msg.remote_address.family(), IpAddressFamily::Ipv4);
-
-    // Send from v4 server to v6 client:
-    server_outgoing
-        .blocking_send(&[OutgoingDatagram {
-            data: msg.data.clone(),
-            remote_address: Some(msg.remote_address),
-        }])
-        .unwrap();
-
-    // Receive from v4 server on v6 client:
-    let results = client_incoming.blocking_receive(1..1).unwrap();
-    let msg = results.first().unwrap();
-    assert_eq!(msg.remote_address.family(), IpAddressFamily::Ipv6);
-}
-
 fn main() {
     test_udp_sample_application(
         IpAddressFamily::Ipv4,
@@ -135,6 +89,4 @@ fn main() {
             scope_id: 0,
         }),
     );
-
-    test_udp_dual_stack_conversation();
 }

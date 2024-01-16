@@ -270,8 +270,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             }
 
             // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
-            if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) = (socket.family, socket.hop_limit)
-            {
+            if let (SocketAddressFamily::Ipv6, Some(ttl)) = (socket.family, socket.hop_limit) {
                 _ = util::set_ipv6_unicast_hops(&client_fd, ttl); // Ignore potential error.
             }
 
@@ -350,38 +349,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         match socket.family {
             SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketAddressFamily::Ipv6 { .. } => Ok(IpAddressFamily::Ipv6),
-        }
-    }
-
-    fn ipv6_only(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-
-        // Instead of just calling the OS we return our own internal state, because
-        // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
-
-        match socket.family {
-            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketAddressFamily::Ipv6 { v6only } => Ok(v6only),
-        }
-    }
-
-    fn set_ipv6_only(&mut self, this: Resource<tcp::TcpSocket>, value: bool) -> SocketResult<()> {
-        let table = self.table_mut();
-        let socket = table.get_mut(&this)?;
-
-        match socket.family {
-            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketAddressFamily::Ipv6 { .. } => match socket.tcp_state {
-                TcpState::Default => {
-                    sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?;
-                    socket.family = SocketAddressFamily::Ipv6 { v6only: value };
-                    Ok(())
-                }
-                TcpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
-                _ => Err(ErrorCode::InvalidState.into()),
-            },
+            SocketAddressFamily::Ipv6 => Ok(IpAddressFamily::Ipv6),
         }
     }
 
@@ -514,7 +482,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         let ttl = match socket.family {
             SocketAddressFamily::Ipv4 => util::get_ip_ttl(socket.tcp_socket())?,
-            SocketAddressFamily::Ipv6 { .. } => util::get_ipv6_unicast_hops(socket.tcp_socket())?,
+            SocketAddressFamily::Ipv6 => util::get_ipv6_unicast_hops(socket.tcp_socket())?,
         };
 
         Ok(ttl)
@@ -526,9 +494,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         match socket.family {
             SocketAddressFamily::Ipv4 => util::set_ip_ttl(socket.tcp_socket(), value)?,
-            SocketAddressFamily::Ipv6 { .. } => {
-                util::set_ipv6_unicast_hops(socket.tcp_socket(), value)?
-            }
+            SocketAddressFamily::Ipv6 => util::set_ipv6_unicast_hops(socket.tcp_socket(), value)?,
         }
 
         #[cfg(target_os = "macos")]

@@ -6,10 +6,6 @@ fn test_udp_sockopt_defaults(family: IpAddressFamily) {
 
     assert_eq!(sock.address_family(), family);
 
-    if family == IpAddressFamily::Ipv6 {
-        sock.ipv6_only().unwrap(); // Only verify that it has a default value at all, but either value is valid.
-    }
-
     assert!(sock.unicast_hop_limit().unwrap() > 0);
     assert!(sock.receive_buffer_size().unwrap() > 0);
     assert!(sock.send_buffer_size().unwrap() > 0);
@@ -17,11 +13,6 @@ fn test_udp_sockopt_defaults(family: IpAddressFamily) {
 
 fn test_udp_sockopt_input_ranges(family: IpAddressFamily) {
     let sock = UdpSocket::new(family).unwrap();
-
-    if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(sock.set_ipv6_only(true), Ok(_)));
-        assert!(matches!(sock.set_ipv6_only(false), Ok(_)));
-    }
 
     assert!(matches!(
         sock.set_unicast_hop_limit(0),
@@ -46,13 +37,6 @@ fn test_udp_sockopt_input_ranges(family: IpAddressFamily) {
 
 fn test_udp_sockopt_readback(family: IpAddressFamily) {
     let sock = UdpSocket::new(family).unwrap();
-
-    if family == IpAddressFamily::Ipv6 {
-        sock.set_ipv6_only(true).unwrap();
-        assert_eq!(sock.ipv6_only().unwrap(), true);
-        sock.set_ipv6_only(false).unwrap();
-        assert_eq!(sock.ipv6_only().unwrap(), false);
-    }
 
     sock.set_unicast_hop_limit(42).unwrap();
     assert_eq!(sock.unicast_hop_limit().unwrap(), 42);
