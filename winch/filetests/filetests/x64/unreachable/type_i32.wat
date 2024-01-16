@@ -3,11 +3,11 @@
 (module
   (func (export "type-i32") (result i32) (unreachable))
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 0f0b                 	ud2	
-;;    e:	 4883c408             	add	rsp, 8
-;;   12:	 5d                   	pop	rbp
-;;   13:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 0f0b                 	ud2	
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	

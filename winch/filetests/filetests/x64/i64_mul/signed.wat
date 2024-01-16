@@ -7,12 +7,12 @@
 	(i64.mul)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 48c7c0ffffffff       	mov	rax, 0xffffffffffffffff
-;;   13:	 486bc0ff             	imul	rax, rax, -1
-;;   17:	 4883c408             	add	rsp, 8
-;;   1b:	 5d                   	pop	rbp
-;;   1c:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 48c7c0ffffffff       	mov	rax, 0xffffffffffffffff
+;;      	 486bc0ff             	imul	rax, rax, -1
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
