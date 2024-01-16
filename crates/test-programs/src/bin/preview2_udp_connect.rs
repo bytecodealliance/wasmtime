@@ -84,15 +84,17 @@ fn test_udp_connect_dual_stack(net: &Network) {
         .unwrap();
 
     let v4_server_addr = v4_server.local_address().unwrap();
+    let v6_server_addr =
+        IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, v4_server_addr.port());
 
     // Tests:
     let v6_client = UdpSocket::new(IpAddressFamily::Ipv6).unwrap();
 
     v6_client.blocking_bind_unspecified(&net).unwrap();
 
-    // Connecting to an IPv4 address on an IPv6 socket should fail:
+    // Connecting to an IPv4-mapped-IPv6 address on an IPv6 socket should fail:
     assert!(matches!(
-        v6_client.stream(Some(v4_server_addr)),
+        v6_client.stream(Some(v6_server_addr)),
         Err(ErrorCode::InvalidArgument)
     ));
 }

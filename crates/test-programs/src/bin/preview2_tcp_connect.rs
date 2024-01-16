@@ -76,14 +76,16 @@ fn test_tcp_connect_dual_stack(net: &Network) {
     v4_listener.blocking_listen().unwrap();
 
     let v4_listener_addr = v4_listener.local_address().unwrap();
+    let v6_listener_addr =
+        IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, v4_listener_addr.port());
 
     let v6_client = TcpSocket::new(IpAddressFamily::Ipv6).unwrap();
 
     // Tests:
 
-    // Connecting to an IPv4 address on an IPv6 socket should fail:
+    // Connecting to an IPv4-mapped-IPv6 address on an IPv6 socket should fail:
     assert!(matches!(
-        v6_client.blocking_connect(net, v4_listener_addr),
+        v6_client.blocking_connect(net, v6_listener_addr),
         Err(ErrorCode::InvalidArgument)
     ));
 }
