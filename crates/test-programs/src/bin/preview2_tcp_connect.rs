@@ -83,6 +83,11 @@ fn test_tcp_connect_dual_stack(net: &Network) {
 
     // Tests:
 
+    // Connecting to an IPv4 address on an IPv6 socket should fail:
+    assert!(matches!(
+        v6_client.blocking_connect(net, v4_listener_addr),
+        Err(ErrorCode::InvalidArgument)
+    ));
     // Connecting to an IPv4-mapped-IPv6 address on an IPv6 socket should fail:
     assert!(matches!(
         v6_client.blocking_connect(net, v6_listener_addr),

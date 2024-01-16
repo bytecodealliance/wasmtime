@@ -92,6 +92,12 @@ fn test_udp_connect_dual_stack(net: &Network) {
 
     v6_client.blocking_bind_unspecified(&net).unwrap();
 
+    // Connecting to an IPv4 address on an IPv6 socket should fail:
+    assert!(matches!(
+        v6_client.stream(Some(v4_server_addr)),
+        Err(ErrorCode::InvalidArgument)
+    ));
+
     // Connecting to an IPv4-mapped-IPv6 address on an IPv6 socket should fail:
     assert!(matches!(
         v6_client.stream(Some(v6_server_addr)),
