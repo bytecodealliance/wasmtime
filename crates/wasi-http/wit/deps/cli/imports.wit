@@ -1,9 +1,9 @@
-package wasi:cli@0.2.0-rc-2023-12-05;
+package wasi:cli@0.2.0-rc-2024-01-16;
 
 world imports {
   include wasi:clocks/imports@0.2.0-rc-2023-11-10;
   include wasi:filesystem/imports@0.2.0-rc-2023-11-10;
-  include wasi:sockets/imports@0.2.0-rc-2023-11-10;
+  include wasi:sockets/imports@0.2.0-rc-2024-01-16;
   include wasi:random/imports@0.2.0-rc-2023-11-10;
   include wasi:io/imports@0.2.0-rc-2023-11-10;
 

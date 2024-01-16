@@ -261,14 +261,14 @@ pub(crate) mod util {
     ) -> SocketResult<()> {
         match (socket_family, addr.ip()) {
             (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
-            (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
+            (SocketAddressFamily::Ipv6, IpAddr::V6(ipv6)) => {
                 if is_deprecated_ipv4_compatible(&ipv6) {
                     // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
                     // since 2006, OS handling of them is inconsistent and our own
                     // validations don't take them into account either.
                     // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
                     Err(ErrorCode::InvalidArgument.into())
-                } else if *v6only && ipv6.to_ipv4_mapped().is_some() {
+                } else if ipv6.to_ipv4_mapped().is_some() {
                     Err(ErrorCode::InvalidArgument.into())
                 } else {
                     Ok(())

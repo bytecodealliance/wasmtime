@@ -18,20 +18,6 @@ fn test_udp_unbound_state_invariants(family: IpAddressFamily) {
     ));
     assert_eq!(sock.address_family(), family);
 
-    if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(sock.ipv6_only(), Ok(_)));
-
-        // Even on platforms that don't support dualstack sockets,
-        // setting ipv6_only to true (disabling dualstack mode) should work.
-        assert!(matches!(sock.set_ipv6_only(true), Ok(_)));
-    } else {
-        assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
-        assert!(matches!(
-            sock.set_ipv6_only(true),
-            Err(ErrorCode::NotSupported)
-        ));
-    }
-
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
@@ -59,20 +45,6 @@ fn test_udp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
     ));
     assert_eq!(sock.address_family(), family);
 
-    if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(sock.ipv6_only(), Ok(_)));
-        assert!(matches!(
-            sock.set_ipv6_only(true),
-            Err(ErrorCode::InvalidState)
-        ));
-    } else {
-        assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
-        assert!(matches!(
-            sock.set_ipv6_only(true),
-            Err(ErrorCode::NotSupported)
-        ));
-    }
-
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
@@ -98,20 +70,6 @@ fn test_udp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
     assert!(matches!(sock.local_address(), Ok(_)));
     assert!(matches!(sock.remote_address(), Ok(_)));
     assert_eq!(sock.address_family(), family);
-
-    if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(sock.ipv6_only(), Ok(_)));
-        assert!(matches!(
-            sock.set_ipv6_only(true),
-            Err(ErrorCode::InvalidState)
-        ));
-    } else {
-        assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
-        assert!(matches!(
-            sock.set_ipv6_only(true),
-            Err(ErrorCode::NotSupported)
-        ));
-    }
 
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
