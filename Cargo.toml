@@ -163,7 +163,6 @@ wasmtime-environ = { path = "crates/environ", version = "=18.0.0" }
 wasmtime-explorer = { path = "crates/explorer", version = "=18.0.0" }
 wasmtime-fiber = { path = "crates/fiber", version = "=18.0.0" }
 wasmtime-types = { path = "crates/types", version = "18.0.0" }
-wasmtime-jit = { path = "crates/jit", version = "=18.0.0" }
 wasmtime-jit-debug = { path = "crates/jit-debug", version = "=18.0.0" }
 wasmtime-runtime = { path = "crates/runtime", version = "=18.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=18.0.0" }

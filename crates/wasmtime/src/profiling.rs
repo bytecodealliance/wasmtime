@@ -1,4 +1,6 @@
-use crate::{AsContext, Module};
+use crate::{instantiate::CompiledModule, AsContext, Module};
+#[allow(unused_imports)]
+use anyhow::bail;
 use anyhow::Result;
 use fxprof_processed_profile::debugid::DebugId;
 use fxprof_processed_profile::{
@@ -8,7 +10,6 @@ use fxprof_processed_profile::{
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::Backtrace;
 
 // TODO: collect more data

@@ -1,9 +1,8 @@
-use crate::signatures::SignatureCollection;
+use crate::{code_memory::CodeMemory, signatures::SignatureCollection};
 use std::sync::Arc;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
 use wasmtime_environ::ModuleTypes;
-use wasmtime_jit::CodeMemory;
 
 /// Metadata in Wasmtime about a loaded compiled artifact in memory which is
 /// ready to execute.

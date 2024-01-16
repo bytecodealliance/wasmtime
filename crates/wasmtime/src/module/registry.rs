@@ -3,7 +3,7 @@
 use crate::code::CodeObject;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
-use crate::{FrameInfo, Module, Trap};
+use crate::{code_memory::CodeMemory, FrameInfo, Module, Trap};
 use once_cell::sync::Lazy;
 use std::collections::btree_map::Entry;
 use std::{
@@ -11,7 +11,6 @@ use std::{
     ptr::NonNull,
     sync::{Arc, RwLock},
 };
-use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{ModuleInfo, VMSharedSignatureIndex, VMWasmCallFunction};
 
 /// Used for registering modules with a store.

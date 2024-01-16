@@ -1,8 +1,7 @@
-#![allow(missing_docs)]
+#[allow(unused)]
+use anyhow::{bail, Result};
 
 use crate::CodeMemory;
-#[allow(unused_imports)]
-use anyhow::{bail, Result};
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "profiling", target_os = "linux"))] {

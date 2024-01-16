@@ -3221,6 +3221,7 @@ dependencies = [
 name = "wasmtime"
 version = "18.0.0"
 dependencies = [
+ "addr2line",
  "anyhow",
  "async-trait",
  "bincode",
@@ -3228,13 +3229,16 @@ dependencies = [
  "cfg-if",
  "encoding_rs",
  "fxprof-processed-profile",
+ "gimli",
  "indexmap 2.0.0",
+ "ittapi",
  "libc",
  "log",
  "object",
  "once_cell",
  "paste",
  "rayon",
+ "rustix",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3249,7 +3253,8 @@ dependencies = [
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-fiber",
- "wasmtime-jit",
+ "wasmtime-jit-debug",
+ "wasmtime-jit-icache-coherence",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-winch",
@@ -3468,13 +3473,16 @@ name = "wasmtime-environ"
 version = "18.0.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "clap",
+ "cpp_demangle",
  "cranelift-entity",
  "env_logger",
  "gimli",
  "indexmap 2.0.0",
  "log",
  "object",
+ "rustc-demangle",
  "serde",
  "serde_derive",
  "target-lexicon",
@@ -3582,31 +3590,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-wast",
  "wat",
-]
-
-[[package]]
-name = "wasmtime-jit"
-version = "18.0.0"
-dependencies = [
- "addr2line",
- "anyhow",
- "bincode",
- "cfg-if",
- "cpp_demangle",
- "gimli",
- "ittapi",
- "log",
- "object",
- "rustc-demangle",
- "rustix",
- "serde",
- "serde_derive",
- "target-lexicon",
- "wasmtime-environ",
- "wasmtime-jit-debug",
- "wasmtime-jit-icache-coherence",
- "wasmtime-runtime",
- "windows-sys 0.52.0",
 ]
 
 [[package]]

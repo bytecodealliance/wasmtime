@@ -457,10 +457,6 @@ values that are actively in use on the stack.
 The main Wasmtime internal crates are:
 
 * `wasmtime` - the safe public API of `wasmtime`.
-* `wasmtime-jit` - JIT-specific support for Wasmtime. This is the concrete
-  implementation that manages executable memory generated at Runtime. Currently
-  all modules are compiled this way, but one day Wasmtime may be able to be
-  compiled without JIT support where only precompiled modules can be loaded.
 * `wasmtime-runtime` - low-level runtime implementation of Wasmtime. This
   is where `VMContext` and `InstanceHandle` live. This crate is theoretically
   agnostic to how JIT code was compiled and the runtime that it's running

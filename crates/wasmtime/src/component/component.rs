@@ -1,6 +1,7 @@
-use crate::code::CodeObject;
-use crate::signatures::SignatureCollection;
-use crate::{Engine, Module, ResourcesRequired};
+use crate::{
+    code::CodeObject, code_memory::CodeMemory, instantiate::finish_object,
+    signatures::SignatureCollection, Engine, Module, ResourcesRequired,
+};
 use anyhow::{bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 use std::fs;
@@ -12,8 +13,9 @@ use wasmtime_environ::component::{
     AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
     TrampolineIndex, Translator, VMComponentOffsets,
 };
-use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec};
-use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
+use wasmtime_environ::{
+    CompiledModuleInfo, FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec,
+};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
     MmapVec, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction,
@@ -264,7 +266,7 @@ impl Component {
         };
         object.serialize_info(&artifacts);
 
-        let mmap = object.finish()?;
+        let mmap = finish_object(object)?;
         Ok((mmap, artifacts))
     }
 
