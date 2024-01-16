@@ -44,7 +44,7 @@ pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
-pub use self::network::{NetworkHandle, SocketError, SocketResult};
+pub use self::network::{NetworkResource, SocketAddrFamily, SocketError, SocketResult};
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
@@ -53,6 +53,7 @@ pub use self::stdio::{
 pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
+pub use self::tcp::{SystemTcpReader, SystemTcpSocket, SystemTcpWriter};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
@@ -160,12 +161,12 @@ pub mod bindings {
             "wasi:sockets/network/error-code" => crate::preview2::SocketError,
         },
         with: {
-            "wasi:sockets/network/network": super::network::NetworkHandle,
-            "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
+            "wasi:sockets/network/network": super::network::NetworkResource,
+            "wasi:sockets/tcp/tcp-socket": super::host::tcp::TcpSocketResource,
             "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
             "wasi:sockets/udp/incoming-datagram-stream": super::udp::IncomingDatagramStream,
             "wasi:sockets/udp/outgoing-datagram-stream": super::udp::OutgoingDatagramStream,
-            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::ip_name_lookup::ResolveAddressStream,
+            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::host::ip_name_lookup::ResolveAddressStreamResource,
             "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
             "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
             "wasi:io/streams/input-stream": super::stream::InputStream,
@@ -323,5 +324,65 @@ where
     match future.poll(&mut task) {
         Poll::Ready(result) => Some(result),
         Poll::Pending => None,
+    }
+}
+
+/// Similar to [futures::future::BoxFuture], but with an additional `+ Sync` constraint.
+pub type BoxSyncFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync>>;
+
+/// Convenience wrapper for Futures in preview2 code, where polling for
+/// readiness and consumption of the resolved value are usually two distinct steps.
+pub enum Preview2Future<T> {
+    /// Inner future is still pending.
+    Pending(BoxSyncFuture<T>),
+
+    /// Value is ready to be consumed.
+    Ready(T),
+
+    /// Future has been polled to completion.
+    Consumed,
+}
+
+impl<T> Preview2Future<T> {
+    /// Create a new `Preview2Future` from an already boxed future object.
+    pub fn new(future: BoxSyncFuture<T>) -> Self {
+        Self::Pending(future)
+    }
+
+    /// Create a new `Preview2Future` that is immediately ready with a value.
+    pub fn done(value: T) -> Self {
+        Self::Ready(value)
+    }
+
+    /// Attempt to resolve the future by polling the future once.
+    ///
+    /// Once this method returns [`Some(value)`], this instance is considered
+    /// "consumed" and should be dropped as soon as possible.
+    pub(crate) fn try_resolve(&mut self) -> Option<T> {
+        match std::mem::replace(self, Self::Consumed) {
+            Self::Pending(mut fut) => match poll_noop(fut.as_mut()) {
+                Some(value) => {
+                    *self = Self::Consumed;
+                    Some(value)
+                }
+                None => {
+                    *self = Self::Pending(fut);
+                    None
+                }
+            },
+            Self::Ready(value) => Some(value),
+            Self::Consumed => panic!("Value already consumed"),
+        }
+    }
+
+    /// Wait for the future to complete without consuming the result.
+    pub(crate) async fn ready(&mut self) {
+        match self {
+            Self::Pending(fut) => {
+                *self = Self::Ready(fut.await);
+            }
+            Self::Ready(_) => {}
+            Self::Consumed => panic!("Value already consumed"),
+        }
     }
 }

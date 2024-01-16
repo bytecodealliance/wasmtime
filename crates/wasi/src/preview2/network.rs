@@ -1,46 +1,75 @@
 use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
-use crate::preview2::ip_name_lookup::ResolveAddressStream;
-use crate::preview2::TrappableError;
-use std::net::SocketAddr;
+use crate::preview2::ip_name_lookup::resolve_addresses;
+use crate::preview2::tcp::{DefaultTcpSocket, SystemTcpSocket, TcpSocket};
+use crate::preview2::{BoxSyncFuture, TrappableError};
+use futures::Future;
+use std::io;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 /// A network implementation
 pub trait Network: Sync + Send {
     /// Given a name, resolve to a list of IP addresses
-    fn resolve_addresses(&mut self, name: String) -> ResolveAddressStream;
+    ///
+    /// Unicode domain names are automatically converted to ASCII using IDNA encoding.
+    /// If the input is an IP address string, the address is parsed and returned
+    /// as-is without making any external requests. The results are returned in
+    /// connection order preference. This function never returns IPv4-mapped IPv6 addresses.
+    fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>>;
+
+    /// Create a new TCP socket.
+    fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>>;
 }
 
 /// The default network implementation
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct DefaultNetwork {
     system: SystemNetwork,
-    allowed: bool,
+    allow_ip_name_lookup: bool,
+    tcp_addr_check: SocketAddrCheck,
 }
 
 impl DefaultNetwork {
     /// Create a new `DefaultNetwork`
-    pub fn new(allowed: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             system: SystemNetwork::new(),
-            allowed,
+            allow_ip_name_lookup: false,
+            tcp_addr_check: SocketAddrCheck::deny(),
         }
+    }
+
+    pub fn allow_ip_name_lookup(&mut self, allowed: bool) {
+        self.allow_ip_name_lookup = allowed;
+    }
+
+    pub fn allow_tcp(&mut self, check: SocketAddrCheck) {
+        self.tcp_addr_check = check;
     }
 }
 
 impl Network for DefaultNetwork {
-    fn resolve_addresses(&mut self, name: String) -> ResolveAddressStream {
-        let allowed = self.allowed;
+    fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>> {
+        let allowed = self.allow_ip_name_lookup;
 
         if !allowed {
-            return ResolveAddressStream::done(Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "IP name lookup is not allowed",
-            )
-            .into()));
+            return Box::pin(async {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "IP name lookup is not allowed",
+                ))
+            });
         }
 
-        self.system.resolve_addresses(name)
+        Network::resolve_addresses(&mut self.system, name)
+    }
+
+    fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>> {
+        Ok(Box::new(DefaultTcpSocket::new(
+            self.system.new_tcp_socket(family)?,
+            self.tcp_addr_check.clone(),
+        )))
     }
 }
 
@@ -53,27 +82,46 @@ impl SystemNetwork {
     pub fn new() -> Self {
         Self {}
     }
-}
 
-impl Network for SystemNetwork {
-    fn resolve_addresses(&mut self, name: String) -> ResolveAddressStream {
-        ResolveAddressStream::wait(super::spawn_blocking(move || {
-            super::ip_name_lookup::parse_and_resolve(&name)
-        }))
+    /// Non-boxing variant of [Network::resolve_addresses]
+    pub fn resolve_addresses(
+        &mut self,
+        name: String,
+    ) -> impl Future<Output = io::Result<Vec<IpAddr>>> + Send + Sync + 'static {
+        async move { resolve_addresses(&name).await }
+    }
+
+    /// Non-boxing variant of [Network::new_tcp_socket]
+    pub fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<SystemTcpSocket> {
+        SystemTcpSocket::new(family)
     }
 }
 
-pub struct NetworkHandle {
-    pub socket_addr_check: SocketAddrCheck,
+impl Network for SystemNetwork {
+    fn resolve_addresses(&mut self, name: String) -> BoxSyncFuture<io::Result<Vec<IpAddr>>> {
+        Box::pin(self.resolve_addresses(name))
+    }
+
+    fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>> {
+        Ok(Box::new(self.new_tcp_socket(family)?))
+    }
 }
 
-impl NetworkHandle {
-    pub fn check_socket_addr(
-        &self,
-        addr: &SocketAddr,
-        reason: SocketAddrUse,
-    ) -> std::io::Result<()> {
-        self.socket_addr_check.check(addr, reason)
+pub struct NetworkResource {
+    _priv: (),
+}
+
+impl NetworkResource {
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
+
+    pub(crate) fn check_access(&self) -> io::Result<()> {
+        // At the moment, there's only one network handle (`instance-network`)
+        // in existence. The fact that we ended up in this method indicates that
+        // the Wasm program had access to a valid network handle.
+        // That's good enough for now:
+        Ok(())
     }
 }
 
@@ -84,6 +132,14 @@ pub struct SocketAddrCheck(
 );
 
 impl SocketAddrCheck {
+    pub fn deny() -> Self {
+        Self(Arc::new(|_, _| false))
+    }
+
+    pub fn allow() -> Self {
+        Self(Arc::new(|_, _| true))
+    }
+
     pub fn check(&self, addr: &SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
         if (self.0)(addr, reason) {
             Ok(())
@@ -98,7 +154,7 @@ impl SocketAddrCheck {
 
 impl Default for SocketAddrCheck {
     fn default() -> Self {
-        Self(Arc::new(|_, _| false))
+        Self::deny()
     }
 }
 
@@ -140,9 +196,29 @@ impl From<rustix::io::Errno> for SocketError {
 }
 
 #[derive(Copy, Clone)]
-pub enum SocketAddressFamily {
+pub(crate) enum SocketProtocolMode {
     Ipv4,
     Ipv6 { v6only: bool },
+}
+
+/// IP version. Effectively the discriminant of `SocketAddr`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum SocketAddrFamily {
+    V4,
+    V6,
+}
+
+pub trait SocketAddrExt {
+    fn family(&self) -> SocketAddrFamily;
+}
+
+impl SocketAddrExt for SocketAddr {
+    fn family(&self) -> SocketAddrFamily {
+        match self {
+            SocketAddr::V4(_) => SocketAddrFamily::V4,
+            SocketAddr::V6(_) => SocketAddrFamily::V6,
+        }
+    }
 }
 
 pub(crate) fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {

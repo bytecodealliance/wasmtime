@@ -110,7 +110,7 @@ fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
         assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
         assert!(matches!(
             sock.set_ipv6_only(true),
-            Err(ErrorCode::NotSupported)
+            Err(ErrorCode::InvalidState | ErrorCode::NotSupported)
         ));
     }
 
@@ -179,7 +179,7 @@ fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
         assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
         assert!(matches!(
             sock.set_ipv6_only(true),
-            Err(ErrorCode::NotSupported)
+            Err(ErrorCode::InvalidState | ErrorCode::NotSupported)
         ));
     }
 
@@ -248,7 +248,7 @@ fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
         assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
         assert!(matches!(
             sock.set_ipv6_only(true),
-            Err(ErrorCode::NotSupported)
+            Err(ErrorCode::InvalidState | ErrorCode::NotSupported)
         ));
     }
 

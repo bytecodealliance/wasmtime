@@ -8,7 +8,7 @@ impl<T: WasiView> udp_create_socket::Host for T {
         &mut self,
         address_family: IpAddressFamily,
     ) -> SocketResult<Resource<UdpSocket>> {
-        let socket = UdpSocket::new(address_family.into())?;
+        let socket = UdpSocket::new(address_family.into(), self.ctx().udp_addr_check.clone())?;
         let socket = self.table_mut().push(socket)?;
         Ok(socket)
     }

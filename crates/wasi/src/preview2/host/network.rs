@@ -3,7 +3,7 @@ use crate::preview2::bindings::sockets::network::{
     Ipv6SocketAddress,
 };
 use crate::preview2::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
-use crate::preview2::{SocketError, WasiView};
+use crate::preview2::{SocketAddrFamily, SocketError, WasiView};
 use rustix::io::Errno;
 use std::io;
 use wasmtime::component::Resource;
@@ -193,49 +193,71 @@ impl std::net::ToSocketAddrs for Ipv6SocketAddress {
     }
 }
 
-impl From<IpAddressFamily> for cap_net_ext::AddressFamily {
-    fn from(family: IpAddressFamily) -> Self {
-        match family {
-            IpAddressFamily::Ipv4 => cap_net_ext::AddressFamily::Ipv4,
-            IpAddressFamily::Ipv6 => cap_net_ext::AddressFamily::Ipv6,
+impl From<IpAddressFamily> for SocketAddrFamily {
+    fn from(addr: IpAddressFamily) -> Self {
+        match addr {
+            IpAddressFamily::Ipv4 => SocketAddrFamily::V4,
+            IpAddressFamily::Ipv6 => SocketAddrFamily::V6,
         }
     }
 }
 
-impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
-    fn from(family: cap_net_ext::AddressFamily) -> Self {
-        match family {
-            cap_net_ext::AddressFamily::Ipv4 => IpAddressFamily::Ipv4,
-            cap_net_ext::AddressFamily::Ipv6 => IpAddressFamily::Ipv6,
+impl From<SocketAddrFamily> for IpAddressFamily {
+    fn from(addr: SocketAddrFamily) -> Self {
+        match addr {
+            SocketAddrFamily::V4 => IpAddressFamily::Ipv4,
+            SocketAddrFamily::V6 => IpAddressFamily::Ipv6,
+        }
+    }
+}
+
+impl From<cap_net_ext::AddressFamily> for SocketAddrFamily {
+    fn from(addr: cap_net_ext::AddressFamily) -> Self {
+        match addr {
+            cap_net_ext::AddressFamily::Ipv4 => SocketAddrFamily::V4,
+            cap_net_ext::AddressFamily::Ipv6 => SocketAddrFamily::V6,
+        }
+    }
+}
+
+impl From<SocketAddrFamily> for cap_net_ext::AddressFamily {
+    fn from(addr: SocketAddrFamily) -> Self {
+        match addr {
+            SocketAddrFamily::V4 => cap_net_ext::AddressFamily::Ipv4,
+            SocketAddrFamily::V6 => cap_net_ext::AddressFamily::Ipv6,
         }
     }
 }
 
 pub(crate) mod util {
+    use std::io::{Error, ErrorKind};
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
-    use std::time::Duration;
 
-    use crate::preview2::bindings::sockets::network::ErrorCode;
-    use crate::preview2::network::SocketAddressFamily;
-    use crate::preview2::SocketResult;
-    use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt, UdpSocketExt};
-    use io_lifetimes::AsSocketlike;
+    use crate::preview2::network::SocketProtocolMode;
+    use crate::preview2::SocketAddrFamily;
+    use cap_net_ext::{Blocking, UdpSocketExt};
     use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;
     use rustix::net::sockopt;
 
-    pub fn validate_unicast(addr: &SocketAddr) -> SocketResult<()> {
+    pub fn validate_unicast(addr: &SocketAddr) -> std::io::Result<()> {
         match to_canonical(&addr.ip()) {
             IpAddr::V4(ipv4) => {
                 if ipv4.is_multicast() || ipv4.is_broadcast() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "Both IPv4 broadcast and multicast addresses are not supported",
+                    ))
                 } else {
                     Ok(())
                 }
             }
             IpAddr::V6(ipv6) => {
                 if ipv6.is_multicast() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "IPv6 multicast addresses are not supported",
+                    ))
                 } else {
                     Ok(())
                 }
@@ -243,13 +265,19 @@ pub(crate) mod util {
         }
     }
 
-    pub fn validate_remote_address(addr: &SocketAddr) -> SocketResult<()> {
+    pub fn validate_remote_address(addr: &SocketAddr) -> std::io::Result<()> {
         if to_canonical(&addr.ip()).is_unspecified() {
-            return Err(ErrorCode::InvalidArgument.into());
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Remote address may not be `0.0.0.0` or `::`",
+            ));
         }
 
         if addr.port() == 0 {
-            return Err(ErrorCode::InvalidArgument.into());
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Remote port may not be 0",
+            ));
         }
 
         Ok(())
@@ -257,24 +285,33 @@ pub(crate) mod util {
 
     pub fn validate_address_family(
         addr: &SocketAddr,
-        socket_family: &SocketAddressFamily,
-    ) -> SocketResult<()> {
-        match (socket_family, addr.ip()) {
-            (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
-            (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
+        socket_mode: &SocketProtocolMode,
+    ) -> std::io::Result<()> {
+        match (socket_mode, addr.ip()) {
+            (SocketProtocolMode::Ipv4, IpAddr::V4(_)) => Ok(()),
+            (SocketProtocolMode::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
                 if is_deprecated_ipv4_compatible(&ipv6) {
                     // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
                     // since 2006, OS handling of them is inconsistent and our own
                     // validations don't take them into account either.
                     // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "IPv4-compatible IPv6 addresses are not supported",
+                    ))
                 } else if *v6only && ipv6.to_ipv4_mapped().is_some() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "IPv4-mapped IPv6 address passed to an IPv6-only socket",
+                    ))
                 } else {
                     Ok(())
                 }
             }
-            _ => Err(ErrorCode::InvalidArgument.into()),
+            _ => Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Address family mismatch",
+            )),
         }
     }
 
@@ -302,34 +339,14 @@ pub(crate) mod util {
      * Syscalls wrappers with (opinionated) portability fixes.
      */
 
-    pub fn tcp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
+    pub fn udp_socket(family: SocketAddrFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
         // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
         //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
 
-        let listener = cap_std::net::TcpListener::new(family, blocking)?;
-        Ok(OwnedFd::from(listener))
-    }
-
-    pub fn udp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
-        // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
-        // - On Windows: call WSAStartup if not done before.
-        // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
-        //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
-
-        let socket = cap_std::net::UdpSocket::new(family, blocking)?;
+        let socket = cap_std::net::UdpSocket::new(family.into(), blocking)?;
         Ok(OwnedFd::from(socket))
-    }
-
-    pub fn tcp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
-        rustix::net::bind(sockfd, addr).map_err(|error| match error {
-            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-            #[cfg(windows)]
-            Errno::NOBUFS => Errno::ADDRINUSE,
-            _ => error,
-        })
     }
 
     pub fn udp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
@@ -340,91 +357,6 @@ pub(crate) mod util {
             Errno::NOBUFS => Errno::ADDRINUSE,
             _ => error,
         })
-    }
-
-    pub fn tcp_connect<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
-        rustix::net::connect(sockfd, addr).map_err(|error| match error {
-            // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
-            // Windows returns `WSAEWOULDBLOCK`.
-            //
-            // This normalized error code is depended upon by: tcp.rs
-            #[cfg(windows)]
-            Errno::WOULDBLOCK => Errno::INPROGRESS,
-            _ => error,
-        })
-    }
-
-    pub fn tcp_listen<Fd: AsFd>(sockfd: Fd, backlog: Option<i32>) -> std::io::Result<()> {
-        // Delegate `listen` to cap_net_ext. That is a thin wrapper around rustix::net::listen,
-        // with a platform-dependent default value for the backlog size.
-        sockfd
-            .as_fd()
-            .as_socketlike_view::<cap_std::net::TcpListener>()
-            .listen(backlog)
-            .map_err(|error| match Errno::from_io_error(&error) {
-                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
-                // According to the docs, `listen` can return EMFILE on Windows.
-                // This is odd, because we're not trying to create a new socket
-                // or file descriptor of any kind. So we rewrite it to less
-                // surprising error code.
-                //
-                // At the time of writing, this behavior has never been experimentally
-                // observed by any of the wasmtime authors, so we're relying fully
-                // on Microsoft's documentation here.
-                #[cfg(windows)]
-                Some(Errno::MFILE) => Errno::NOBUFS.into(),
-
-                _ => error,
-            })
-    }
-
-    pub fn tcp_accept<Fd: AsFd>(
-        sockfd: Fd,
-        blocking: Blocking,
-    ) -> std::io::Result<(OwnedFd, SocketAddr)> {
-        // Delegate `accept` to cap_net_ext. They set the NONBLOCK and CLOEXEC flags
-        // for us. Either immediately as a flag to `accept`, or afterwards using
-        // ioctl or fcntl. Exact method depends on the platform.
-
-        let (client, addr) = sockfd
-            .as_fd()
-            .as_socketlike_view::<cap_std::net::TcpListener>()
-            .accept_with(blocking)
-            .map_err(|error| match Errno::from_io_error(&error) {
-                // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
-                // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
-                // > or the service provider is still processing a callback function.
-                //
-                // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
-                // because in POSIX this error is only returned by a non-blocking
-                // `connect` and wasi-sockets has a different solution for that.
-                #[cfg(windows)]
-                Some(Errno::INPROGRESS) => Errno::INTR.into(),
-
-                // Normalize Linux' non-standard behavior.
-                //
-                // From https://man7.org/linux/man-pages/man2/accept.2.html:
-                // > Linux accept() passes already-pending network errors on the
-                // > new socket as an error code from accept(). This behavior
-                // > differs from other BSD socket implementations. (...)
-                #[cfg(target_os = "linux")]
-                Some(
-                    Errno::CONNRESET
-                    | Errno::NETRESET
-                    | Errno::HOSTUNREACH
-                    | Errno::HOSTDOWN
-                    | Errno::NETDOWN
-                    | Errno::NETUNREACH
-                    | Errno::PROTO
-                    | Errno::NOPROTOOPT
-                    | Errno::NONET
-                    | Errno::OPNOTSUPP,
-                ) => Errno::CONNABORTED.into(),
-
-                _ => error,
-            })?;
-
-        Ok((client.into(), addr))
     }
 
     pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
@@ -444,83 +376,6 @@ pub(crate) mod util {
             Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
             r => r,
         }
-    }
-
-    // Even though SO_REUSEADDR is a SOL_* level option, this function contain a
-    // compatibility fix specific to TCP. That's why it contains the `_tcp_` infix instead of `_socket_`.
-    #[allow(unused_variables)] // Parameters are not used on Windows
-    pub fn set_tcp_reuseaddr<Fd: AsFd>(sockfd: Fd, value: bool) -> rustix::io::Result<()> {
-        // When a TCP socket is closed, the system may
-        // temporarily reserve that specific address+port pair in a so called
-        // TIME_WAIT state. During that period, any attempt to rebind to that pair
-        // will fail. Setting SO_REUSEADDR to true bypasses that behaviour. Unlike
-        // the name "SO_REUSEADDR" might suggest, it does not allow multiple
-        // active sockets to share the same local address.
-
-        // On Windows that behavior is the default, so there is no need to manually
-        // configure such an option. But (!), Windows _does_ have an identically
-        // named socket option which allows users to "hijack" active sockets.
-        // This is definitely not what we want to do here.
-
-        // Microsoft's own documentation[1] states that we should set SO_EXCLUSIVEADDRUSE
-        // instead (to the inverse value), however the github issue below[2] seems
-        // to indicate that that may no longer be correct.
-        // [1]: https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
-        // [2]: https://github.com/python-trio/trio/issues/928
-
-        #[cfg(not(windows))]
-        sockopt::set_socket_reuseaddr(sockfd, value)?;
-
-        Ok(())
-    }
-
-    pub fn set_tcp_keepidle<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
-        if value <= Duration::ZERO {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(Errno::INVAL);
-        }
-
-        // Ensure that the value passed to the actual syscall never gets rounded down to 0.
-        const MIN_SECS: u64 = 1;
-
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_SECS: u64 = i16::MAX as u64;
-
-        sockopt::set_tcp_keepidle(
-            sockfd,
-            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
-        )
-    }
-
-    pub fn set_tcp_keepintvl<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
-        if value <= Duration::ZERO {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(Errno::INVAL);
-        }
-
-        // Ensure that any fractional value passed to the actual syscall never gets rounded down to 0.
-        const MIN_SECS: u64 = 1;
-
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_SECS: u64 = i16::MAX as u64;
-
-        sockopt::set_tcp_keepintvl(
-            sockfd,
-            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
-        )
-    }
-
-    pub fn set_tcp_keepcnt<Fd: AsFd>(sockfd: Fd, value: u32) -> rustix::io::Result<()> {
-        if value == 0 {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(Errno::INVAL);
-        }
-
-        const MIN_CNT: u32 = 1;
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_CNT: u32 = i8::MAX as u32;
-
-        sockopt::set_tcp_keepcnt(sockfd, value.clamp(MIN_CNT, MAX_CNT))
     }
 
     pub fn get_ip_ttl<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<u8> {
