@@ -6,13 +6,23 @@ use std::fmt::Write;
 use target_lexicon::Architecture;
 use winch_codegen::TargetIsa;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OffsetStyle {
+    Minimal,
+    Full,
+}
+
 /// Disassemble and print a machine code buffer.
-pub fn disasm(bytes: &[u8], isa: &Box<dyn TargetIsa>) -> Result<Vec<String>> {
+pub fn disasm(
+    bytes: &[u8],
+    isa: &Box<dyn TargetIsa>,
+    offset_style: OffsetStyle,
+) -> Result<Vec<String>> {
     let dis = disassembler_for(isa)?;
     let insts = dis.disasm_all(bytes, 0x0).unwrap();
 
     let mut prev_jump = false;
-    let mut past_ret = false;
+    let mut write_offsets = offset_style == OffsetStyle::Full;
 
     let disassembled_lines = insts
         .iter()
@@ -28,7 +38,7 @@ pub fn disasm(bytes: &[u8], isa: &Box<dyn TargetIsa>) -> Result<Vec<String>> {
 
             let mut line = String::new();
 
-            if past_ret || (prev_jump && !is_jump) {
+            if write_offsets || (prev_jump && !is_jump) {
                 write!(&mut line, "{:4x}:\t ", i.address()).unwrap();
             } else {
                 write!(&mut line, "     \t ").unwrap();
@@ -54,7 +64,11 @@ pub fn disasm(bytes: &[u8], isa: &Box<dyn TargetIsa>) -> Result<Vec<String>> {
             }
 
             prev_jump = is_jump;
-            past_ret = past_ret || detail.groups().find(|g| g.0 as u32 == CS_GRP_RET).is_some();
+
+            // Flip write_offsets to true once we've seen a `ret`, as instructions that follow the
+            // return are often related to trap tables.
+            write_offsets =
+                write_offsets || detail.groups().find(|g| g.0 as u32 == CS_GRP_RET).is_some();
 
             line
         })
