@@ -19,7 +19,11 @@
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
 ;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 4531db               	xor	r11d, r11d
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8759000000         	ja	0x71
+;;   18:	 4531db               	xor	r11d, r11d
 ;;      	 4c895c2410           	mov	qword ptr [rsp + 0x10], r11
 ;;      	 4c895c2408           	mov	qword ptr [rsp + 8], r11
 ;;      	 4c893424             	mov	qword ptr [rsp], r14
@@ -38,9 +42,9 @@
 ;;      	 4883c418             	add	rsp, 0x18
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   61:	 0000                 	add	byte ptr [rax], al
-;;   63:	 0000                 	add	byte ptr [rax], al
-;;   65:	 0000                 	add	byte ptr [rax], al
-;;   67:	 009a99999999         	add	byte ptr [rdx - 0x66666667], bl
-;;   6d:	 99                   	cdq	
-;;   6e:	 f1                   	int1	
+;;   71:	 0f0b                 	ud2	
+;;   73:	 0000                 	add	byte ptr [rax], al
+;;   75:	 0000                 	add	byte ptr [rax], al
+;;   77:	 009a99999999         	add	byte ptr [rdx - 0x66666667], bl
+;;   7d:	 99                   	cdq	
+;;   7e:	 f1                   	int1	

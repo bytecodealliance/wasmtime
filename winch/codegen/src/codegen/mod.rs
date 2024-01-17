@@ -76,10 +76,13 @@ where
         Ok(())
     }
 
-    // TODO stack checks
     fn emit_start(&mut self) -> Result<()> {
         self.masm.prologue();
         self.masm.reserve_stack(self.context.frame.locals_size);
+
+        // Check for stack overflow after reserving space, so that we get the most up-to-date view
+        // of the stack pointer. This assumes that no writes to the stack occur in `reserve_stack`.
+        self.masm.check_stack();
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.

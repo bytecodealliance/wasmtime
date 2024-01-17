@@ -357,6 +357,9 @@ pub(crate) trait MacroAssembler {
     /// Emit the function prologue.
     fn prologue(&mut self);
 
+    /// Emit a stack check.
+    fn check_stack(&mut self);
+
     /// Emit the function epilogue.
     fn epilogue(&mut self, locals_size: u32);
 
