@@ -38,7 +38,11 @@
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
 ;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 897c240c             	mov	dword ptr [rsp + 0xc], edi
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f87fe000000         	ja	0x116
+;;   18:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
 ;;      	 89742408             	mov	dword ptr [rsp + 8], esi
 ;;      	 4c893424             	mov	qword ptr [rsp], r14
 ;;      	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
@@ -60,7 +64,7 @@
 ;;      	 44895c2408           	mov	dword ptr [rsp + 8], r11d
 ;;      	 41bb08000000         	mov	r11d, 8
 ;;      	 44895c2410           	mov	dword ptr [rsp + 0x10], r11d
-;;      	 e800000000           	call	0x6f
+;;      	 e800000000           	call	0x7f
 ;;      	 4883c42c             	add	rsp, 0x2c
 ;;      	 4883c404             	add	rsp, 4
 ;;      	 4883ec04             	sub	rsp, 4
@@ -92,17 +96,22 @@
 ;;      	 44895c2408           	mov	dword ptr [rsp + 8], r11d
 ;;      	 41bb08000000         	mov	r11d, 8
 ;;      	 44895c2410           	mov	dword ptr [rsp + 0x10], r11d
-;;      	 e800000000           	call	0xf8
+;;      	 e800000000           	call	0x108
 ;;      	 4883c428             	add	rsp, 0x28
 ;;      	 4883c408             	add	rsp, 8
 ;;      	 4883c410             	add	rsp, 0x10
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
+;;  116:	 0f0b                 	ud2	
 ;;
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
 ;;      	 4883ec20             	sub	rsp, 0x20
-;;      	 897c241c             	mov	dword ptr [rsp + 0x1c], edi
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8757000000         	ja	0x6f
+;;   18:	 897c241c             	mov	dword ptr [rsp + 0x1c], edi
 ;;      	 89742418             	mov	dword ptr [rsp + 0x18], esi
 ;;      	 89542414             	mov	dword ptr [rsp + 0x14], edx
 ;;      	 894c2410             	mov	dword ptr [rsp + 0x10], ecx
@@ -130,3 +139,4 @@
 ;;      	 4883c420             	add	rsp, 0x20
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
+;;   6f:	 0f0b                 	ud2	
