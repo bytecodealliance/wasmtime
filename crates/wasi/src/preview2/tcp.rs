@@ -265,9 +265,10 @@ impl TcpSocket {
 
         let socket_address_family = match family {
             AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
-            AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
-                v6only: sockopt::get_ipv6_v6only(&fd)?,
-            },
+            AddressFamily::Ipv6 => {
+                sockopt::set_ipv6_v6only(&fd, true)?;
+                SocketAddressFamily::Ipv6
+            }
         };
 
         Self::from_fd(fd, socket_address_family)

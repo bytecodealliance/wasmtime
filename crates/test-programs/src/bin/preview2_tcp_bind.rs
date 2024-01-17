@@ -138,23 +138,11 @@ fn test_tcp_bind_dual_stack(net: &Network) {
     let sock = TcpSocket::new(IpAddressFamily::Ipv6).unwrap();
     let addr = IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, 0);
 
-    // Even on platforms that don't support dualstack sockets,
-    // setting ipv6_only to true (disabling dualstack mode) should work.
-    sock.set_ipv6_only(true).unwrap();
-
     // Binding an IPv4-mapped-IPv6 address on a ipv6-only socket should fail:
     assert!(matches!(
         sock.blocking_bind(net, addr),
         Err(ErrorCode::InvalidArgument)
     ));
-
-    sock.set_ipv6_only(false).unwrap();
-
-    sock.blocking_bind(net, addr).unwrap();
-
-    let bound_addr = sock.local_address().unwrap();
-
-    assert_eq!(bound_addr.family(), IpAddressFamily::Ipv6);
 }
 
 fn main() {

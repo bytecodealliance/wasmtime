@@ -10,10 +10,6 @@ fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
 
     assert_eq!(sock.address_family(), family);
 
-    if family == IpAddressFamily::Ipv6 {
-        sock.ipv6_only().unwrap(); // Only verify that it has a default value at all, but either value is valid.
-    }
-
     sock.keep_alive_enabled().unwrap(); // Only verify that it has a default value at all, but either value is valid.
     assert!(sock.keep_alive_idle_time().unwrap() > 0);
     assert!(sock.keep_alive_interval().unwrap() > 0);
@@ -25,11 +21,6 @@ fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
 
 fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
     let sock = TcpSocket::new(family).unwrap();
-
-    if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(sock.set_ipv6_only(true), Ok(_)));
-        assert!(matches!(sock.set_ipv6_only(false), Ok(_)));
-    }
 
     assert!(matches!(
         sock.set_listen_backlog_size(0),
@@ -90,13 +81,6 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
 fn test_tcp_sockopt_readback(family: IpAddressFamily) {
     let sock = TcpSocket::new(family).unwrap();
 
-    if family == IpAddressFamily::Ipv6 {
-        sock.set_ipv6_only(true).unwrap();
-        assert_eq!(sock.ipv6_only().unwrap(), true);
-        sock.set_ipv6_only(false).unwrap();
-        assert_eq!(sock.ipv6_only().unwrap(), false);
-    }
-
     sock.set_keep_alive_enabled(true).unwrap();
     assert_eq!(sock.keep_alive_enabled().unwrap(), true);
     sock.set_keep_alive_enabled(false).unwrap();
@@ -125,15 +109,10 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
     let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let listener = TcpSocket::new(family).unwrap();
 
-    let default_ipv6_only = listener.ipv6_only().unwrap_or(false);
     let default_keep_alive = listener.keep_alive_enabled().unwrap();
 
     // Configure options on listener:
     {
-        if family == IpAddressFamily::Ipv6 {
-            listener.set_ipv6_only(!default_ipv6_only).unwrap();
-        }
-
         listener
             .set_keep_alive_enabled(!default_keep_alive)
             .unwrap();
@@ -154,10 +133,6 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
 
     // Verify options on accepted socket:
     {
-        if family == IpAddressFamily::Ipv6 {
-            assert_eq!(accepted_client.ipv6_only().unwrap(), !default_ipv6_only);
-        }
-
         assert_eq!(
             accepted_client.keep_alive_enabled().unwrap(),
             !default_keep_alive
