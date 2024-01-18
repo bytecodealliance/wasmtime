@@ -17,7 +17,6 @@ impl WasmiEngine {
         config.relaxed_simd_enabled = false;
         config.memory64_enabled = false;
         config.threads_enabled = false;
-        config.threads_enabled = false;
         config.exceptions_enabled = false;
         config.max_memories = config.max_memories.min(1);
         config.min_memories = config.min_memories.min(1);
