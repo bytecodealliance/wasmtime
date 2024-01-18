@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::{SocketAddrUse, SocketProtocolMode};
+use crate::preview2::network::{SocketAddrFamily, SocketAddrUse};
 use crate::preview2::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -200,10 +200,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        match socket.family {
-            SocketProtocolMode::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketProtocolMode::Ipv6 => Ok(IpAddressFamily::Ipv6),
-        }
+        Ok(socket.family.into())
     }
 
     fn unicast_hop_limit(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u8> {
@@ -211,8 +208,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         let ttl = match socket.family {
-            SocketProtocolMode::Ipv4 => util::get_ip_ttl(socket.udp_socket())?,
-            SocketProtocolMode::Ipv6 => util::get_ipv6_unicast_hops(socket.udp_socket())?,
+            SocketAddrFamily::V4 => util::get_ip_ttl(socket.udp_socket())?,
+            SocketAddrFamily::V6 => util::get_ipv6_unicast_hops(socket.udp_socket())?,
         };
 
         Ok(ttl)
@@ -227,8 +224,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         match socket.family {
-            SocketProtocolMode::Ipv4 => util::set_ip_ttl(socket.udp_socket(), value)?,
-            SocketProtocolMode::Ipv6 => util::set_ipv6_unicast_hops(socket.udp_socket(), value)?,
+            SocketAddrFamily::V4 => util::set_ip_ttl(socket.udp_socket(), value)?,
+            SocketAddrFamily::V6 => util::set_ipv6_unicast_hops(socket.udp_socket(), value)?,
         }
 
         Ok(())

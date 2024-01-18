@@ -1,6 +1,6 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::{SocketAddrCheck, SocketAddrUse, SocketProtocolMode};
-use crate::preview2::{BoxSyncFuture, SocketAddrFamily};
+use crate::preview2::network::{SocketAddrCheck, SocketAddrFamily, SocketAddrUse};
+use crate::preview2::BoxSyncFuture;
 use cap_net_ext::{Blocking, TcpListenerExt};
 use futures::Future;
 use io_lifetimes::AsSocketlike;
@@ -342,7 +342,7 @@ pub struct SystemTcpSocket {
     stream: Arc<tokio::net::TcpStream>,
     listen_backlog_size: i32,
     is_listening: bool,
-    family: SocketProtocolMode,
+    family: SocketAddrFamily,
 
     // The socket options below are not automatically inherited from the listener
     // on all platforms. So we keep track of which options have been explicitly
@@ -371,18 +371,14 @@ impl SystemTcpSocket {
             cap_net_ext::Blocking::No,
         )?);
 
-        let socket_address_family = match family {
-            SocketAddrFamily::V4 => SocketProtocolMode::Ipv4,
-            SocketAddrFamily::V6 => {
-                sockopt::set_ipv6_v6only(&fd, true)?;
-                SocketProtocolMode::Ipv6
-            }
-        };
+        if family == SocketAddrFamily::V6 {
+            sockopt::set_ipv6_v6only(&fd, true)?;
+        }
 
-        Self::from_fd(fd, socket_address_family)
+        Self::from_fd(fd, family)
     }
 
-    fn from_fd(fd: rustix::fd::OwnedFd, family: SocketProtocolMode) -> io::Result<Self> {
+    fn from_fd(fd: rustix::fd::OwnedFd, family: SocketAddrFamily) -> io::Result<Self> {
         let stream = Self::setup_tokio_tcp_stream(fd)?;
 
         Ok(Self {
@@ -560,7 +556,7 @@ impl SystemTcpSocket {
             }
 
             // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
-            if let (SocketProtocolMode::Ipv6 { .. }, Some(ttl)) = (self.family, self.hop_limit) {
+            if let (SocketAddrFamily::V6, Some(ttl)) = (self.family, self.hop_limit) {
                 _ = util::set_ipv6_unicast_hops(&client_fd, ttl); // Ignore potential error.
             }
 
@@ -692,10 +688,7 @@ impl TcpSocket for SystemTcpSocket {
     }
 
     fn address_family(&self) -> SocketAddrFamily {
-        match self.family {
-            SocketProtocolMode::Ipv4 => SocketAddrFamily::V4,
-            SocketProtocolMode::Ipv6 { .. } => SocketAddrFamily::V6,
-        }
+        self.family
     }
 
     fn listen_backlog_size(&self) -> io::Result<usize> {
@@ -795,8 +788,8 @@ impl TcpSocket for SystemTcpSocket {
 
     fn hop_limit(&self) -> io::Result<u8> {
         let ttl = match self.family {
-            SocketProtocolMode::Ipv4 => util::get_ip_ttl(&self.stream)?,
-            SocketProtocolMode::Ipv6 { .. } => util::get_ipv6_unicast_hops(&self.stream)?,
+            SocketAddrFamily::V4 => util::get_ip_ttl(&self.stream)?,
+            SocketAddrFamily::V6 => util::get_ipv6_unicast_hops(&self.stream)?,
         };
 
         Ok(ttl)
@@ -804,8 +797,8 @@ impl TcpSocket for SystemTcpSocket {
 
     fn set_hop_limit(&mut self, value: u8) -> io::Result<()> {
         match self.family {
-            SocketProtocolMode::Ipv4 => util::set_ip_ttl(&self.stream, value)?,
-            SocketProtocolMode::Ipv6 { .. } => util::set_ipv6_unicast_hops(&self.stream, value)?,
+            SocketAddrFamily::V4 => util::set_ip_ttl(&self.stream, value)?,
+            SocketAddrFamily::V6 => util::set_ipv6_unicast_hops(&self.stream, value)?,
         }
 
         #[cfg(target_os = "macos")]
