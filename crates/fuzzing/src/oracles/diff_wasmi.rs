@@ -13,6 +13,7 @@ pub struct WasmiEngine {
 impl WasmiEngine {
     pub(crate) fn new(config: &mut Config) -> Self {
         let config = &mut config.module_config.config;
+        // Force generated Wasm modules to never have features that Wasmi doesn't support.
         config.simd_enabled = false;
         config.relaxed_simd_enabled = false;
         config.memory64_enabled = false;
