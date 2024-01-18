@@ -78,7 +78,10 @@ impl DiffEngine for WasmiEngine {
                 .expect(&format!("not a trap: {:?}", err)),
         };
         assert!(wasmi.trap_code().is_some());
-        assert_eq!(wasmi_to_wasmtime_trap_code(wasmi.trap_code().unwrap()), *trap);
+        assert_eq!(
+            wasmi_to_wasmtime_trap_code(wasmi.trap_code().unwrap()),
+            *trap
+        );
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
