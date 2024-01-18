@@ -513,9 +513,6 @@ impl CommonOptions {
         match_feature! {
             ["pooling-allocator" : self.opts.pooling_allocator]
             enable => {
-                if !enable && self.opts.memory_protection_keys.unwrap_or(false) {
-                    anyhow::bail!("memory protection keys require the pooling allocator");
-                }
                 if enable {
                     let mut cfg = wasmtime::PoolingAllocationConfig::default();
                     if let Some(size) = self.opts.pooling_memory_keep_resident {
@@ -533,6 +530,12 @@ impl CommonOptions {
                 }
             },
             true => err,
+        }
+
+        if self.opts.memory_protection_keys.unwrap_or(false)
+            && !self.opts.pooling_allocator.unwrap_or(false)
+        {
+            anyhow::bail!("memory protection keys require the pooling allocator");
         }
 
         if let Some(max) = self.wasm.max_wasm_stack {
