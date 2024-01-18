@@ -302,7 +302,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        use crate::{compile::build_artifacts, runtime::instantiate::MmapVecWrapper};
+        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
 
         engine
             .check_compatible_with_native_host()
@@ -337,8 +337,8 @@ impl Module {
                     },
                 )?;
             } else {
-                let (mmap, info_and_types) = Module::build_artifacts(engine, binary)?;
-                let code = publish_mmap(mmap)?;
+                let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary)?;
+                let code = publish_mmap(mmap.0)?;
             }
         };
 

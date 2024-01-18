@@ -137,7 +137,7 @@ impl Component {
                     },
                 )?;
             } else {
-                let (mmap, artifacts) = build_component_artifacts(engine, binary)?;
+                let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine, binary)?;
                 let artifacts = Some(artifacts);
                 let code = publish_mmap(mmap.0)?;
             }
