@@ -9,7 +9,7 @@ use wasmtime::component::{Resource, ResourceTable};
 
 pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> PollableFuture<'a>;
-pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync + 'static>;
+pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + 'static>;
 
 /// A host representation of the `wasi:io/poll.pollable` resource.
 ///
@@ -24,7 +24,7 @@ pub struct Pollable {
 }
 
 #[async_trait::async_trait]
-pub trait Subscribe: Send + Sync + 'static {
+pub trait Subscribe: Send + 'static {
     async fn ready(&mut self);
 }
 

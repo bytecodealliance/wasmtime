@@ -18,7 +18,7 @@ use wasmtime::component::Resource;
 ///
 /// Built-in implementations are provided for [`Stdin`],
 /// [`pipe::MemoryInputPipe`], and [`pipe::ClosedInputStream`].
-pub trait StdinStream: Send + Sync {
+pub trait StdinStream: Send {
     /// Creates a fresh stream which is reading stdin.
     ///
     /// Note that the returned stream must share state with all other streams
@@ -60,7 +60,7 @@ mod worker_thread_stdin;
 pub use self::worker_thread_stdin::{stdin, Stdin};
 
 /// Similar to [`StdinStream`], except for output.
-pub trait StdoutStream: Send + Sync {
+pub trait StdoutStream: Send {
     /// Returns a fresh new stream which can write to this output stream.
     ///
     /// Note that all output streams should output to the same logical source.

@@ -8,7 +8,7 @@ use crate::preview2::filesystem::{Descriptor, Dir, File, ReaddirIterator};
 use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
 use crate::preview2::{DirPerms, FilePerms, FsError, FsResult, WasiView};
 use anyhow::Context;
-use wasmtime::component::{Resource, ResourceTable};
+use wasmtime::component::Resource;
 
 mod sync;
 
@@ -773,8 +773,9 @@ impl<T: WasiView> HostDescriptor for T {
     ) -> anyhow::Result<bool> {
         use cap_fs_ext::MetadataExt;
         let table = self.table();
-        let meta_a = get_descriptor_metadata(table, a).await?;
-        let meta_b = get_descriptor_metadata(table, b).await?;
+        let meta_a = get_descriptor_metadata(table.get(&a)?).await?;
+        let table = self.table();
+        let meta_b = get_descriptor_metadata(table.get(&b)?).await?;
         if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
             // MetadataHashValue does not derive eq, so use a pair of
             // comparisons to check equality:
@@ -797,7 +798,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::MetadataHashValue> {
         let table = self.table();
-        let meta = get_descriptor_metadata(table, fd).await?;
+        let meta = get_descriptor_metadata(table.get(&fd)?).await?;
         Ok(calculate_metadata_hash(&meta))
     }
     async fn metadata_hash_at(
@@ -839,11 +840,8 @@ impl<T: WasiView> HostDirectoryEntryStream for T {
     }
 }
 
-async fn get_descriptor_metadata(
-    table: &ResourceTable,
-    fd: Resource<types::Descriptor>,
-) -> FsResult<cap_std::fs::Metadata> {
-    match table.get(&fd)? {
+async fn get_descriptor_metadata(fd: &types::Descriptor) -> FsResult<cap_std::fs::Metadata> {
+    match fd {
         Descriptor::File(f) => {
             // No permissions check on metadata: if opened, allowed to stat it
             Ok(f.spawn_blocking(|f| f.metadata()).await?)
@@ -1057,6 +1055,8 @@ fn mask_file_perms(p: FilePerms, flags: types::DescriptorFlags) -> FilePerms {
 #[cfg(test)]
 mod test {
     use super::*;
+    use wasmtime::component::ResourceTable;
+
     #[test]
     fn table_readdir_works() {
         let mut table = ResourceTable::new();
