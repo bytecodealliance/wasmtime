@@ -362,13 +362,13 @@ impl Wasmtime {
                 gen.gen.name_interface(resolve, *id, name, true);
                 gen.current_interface = Some((*id, name, true));
                 gen.types(*id);
+                let struct_name = "Guest";
                 let iface = &resolve.interfaces[*id];
                 let iface_name = match name {
                     WorldKey::Name(name) => name,
                     WorldKey::Interface(_) => iface.name.as_ref().unwrap(),
                 };
-                let camel = to_rust_upper_camel_case(iface_name);
-                uwriteln!(gen.src, "pub struct {camel} {{");
+                uwriteln!(gen.src, "pub struct {struct_name} {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
                         gen.src,
@@ -378,13 +378,13 @@ impl Wasmtime {
                 }
                 uwriteln!(gen.src, "}}");
 
-                uwriteln!(gen.src, "impl {camel} {{");
+                uwriteln!(gen.src, "impl {struct_name} {{");
                 uwrite!(
                     gen.src,
                     "
                         pub fn new(
                             __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
-                        ) -> wasmtime::Result<{camel}> {{
+                        ) -> wasmtime::Result<{struct_name}> {{
                     "
                 );
                 let mut fields = Vec::new();
@@ -393,7 +393,7 @@ impl Wasmtime {
                     uwriteln!(gen.src, "let {name} = {getter};");
                     fields.push(name);
                 }
-                uwriteln!(gen.src, "Ok({camel} {{");
+                uwriteln!(gen.src, "Ok({struct_name} {{");
                 for name in fields {
                     uwriteln!(gen.src, "{name},");
                 }
@@ -467,7 +467,7 @@ impl Wasmtime {
                 let (path, method_name) = match pkgname {
                     Some(pkgname) => (
                         format!(
-                            "exports::{}::{}::{snake}::{camel}",
+                            "exports::{}::{}::{snake}::{struct_name}",
                             pkgname.namespace.to_snake_case(),
                             self.name_package_module(resolve, iface.package.unwrap()),
                         ),
@@ -477,7 +477,7 @@ impl Wasmtime {
                             self.name_package_module(resolve, iface.package.unwrap())
                         ),
                     ),
-                    None => (format!("exports::{snake}::{camel}"), snake.clone()),
+                    None => (format!("exports::{snake}::{struct_name}"), snake.clone()),
                 };
                 let getter = format!(
                     "\
@@ -519,7 +519,13 @@ impl Wasmtime {
         self.toplevel_import_trait(resolve, world);
 
         uwriteln!(self.src, "const _: () = {{");
-        uwriteln!(self.src, "use wasmtime::component::__internal::anyhow;");
+        uwriteln!(
+            self.src,
+            "
+                #[allow(unused_imports)]
+                use wasmtime::component::__internal::anyhow;
+            "
+        );
 
         uwriteln!(self.src, "impl {camel} {{");
         self.toplevel_add_to_linker(resolve, world);
@@ -1011,14 +1017,6 @@ impl<'a> InterfaceGenerator<'a> {
 
             uwriteln!(self.src, "}}");
         } else {
-            let iface_name = match self.current_interface.unwrap().1 {
-                WorldKey::Name(name) => name.to_upper_camel_case(),
-                WorldKey::Interface(i) => self.resolve.interfaces[*i]
-                    .name
-                    .as_ref()
-                    .unwrap()
-                    .to_upper_camel_case(),
-            };
             self.rustdoc(docs);
             uwriteln!(
                 self.src,
@@ -1026,7 +1024,7 @@ impl<'a> InterfaceGenerator<'a> {
                     pub type {camel} = wasmtime::component::ResourceAny;
 
                     pub struct Guest{camel}<'a> {{
-                        funcs: &'a {iface_name},
+                        funcs: &'a Guest,
                     }}
                 "
             );

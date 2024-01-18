@@ -3,6 +3,7 @@ use quote::ToTokens;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Token};
@@ -24,7 +25,31 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
         ));
     }
 
-    let src = input.opts.generate(&input.resolve, input.world);
+    let mut src = input.opts.generate(&input.resolve, input.world);
+
+    // If a magical `WASMTIME_DEBUG_BINDGEN` environment variable is set then
+    // place a formatted version of the expanded code into a file. This file
+    // will then show up in rustc error messages for any codegen issues and can
+    // be inspected manually.
+    if std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
+        static INVOCATION: AtomicUsize = AtomicUsize::new(0);
+        let root = Path::new(env!("DEBUG_OUTPUT_DIR"));
+        let world_name = &input.resolve.worlds[input.world].name;
+        let n = INVOCATION.fetch_add(1, Relaxed);
+        let path = root.join(format!("{world_name}{n}.rs"));
+
+        std::fs::write(&path, &src).unwrap();
+
+        // optimistically format the code but don't require success
+        drop(
+            std::process::Command::new("rustfmt")
+                .arg(&path)
+                .arg("--edition=2021")
+                .output(),
+        );
+
+        src = format!("include!({path:?});");
+    }
     let mut contents = src.parse::<TokenStream>().unwrap();
 
     // Include a dummy `include_str!` for any files we read so rustc knows that
