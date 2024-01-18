@@ -19,4 +19,4 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 target-lexicon = { workspace = true }
 wasmprinter = { workspace = true }
-wasmtime = { workspace = true, features = ["cranelift"] }
+wasmtime = { workspace = true, features = ["cranelift", "runtime"] }
