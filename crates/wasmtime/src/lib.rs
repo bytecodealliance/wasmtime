@@ -444,7 +444,9 @@ cfg_if::cfg_if! {
         pub use runtime::profiling::GuestProfiler;
 
         cfg_if::cfg_if! {
-            if #[cfg(unix)] {
+            if #[cfg(miri)] {
+                // no extensions on miri
+            } else if #[cfg(unix)] {
                 pub use runtime::unix;
             } else if #[cfg(windows)] {
                 pub use runtime::windows;
