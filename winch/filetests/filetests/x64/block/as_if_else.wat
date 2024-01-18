@@ -4,16 +4,21 @@
       (if (result i32) (i32.const 1) (then (i32.const 2)) (else (block (result i32) (i32.const 1))))
   )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 b801000000           	mov	eax, 1
-;;   11:	 85c0                 	test	eax, eax
-;;   13:	 0f840a000000         	je	0x23
-;;   19:	 b802000000           	mov	eax, 2
-;;   1e:	 e905000000           	jmp	0x28
-;;   23:	 b801000000           	mov	eax, 1
-;;   28:	 4883c408             	add	rsp, 8
-;;   2c:	 5d                   	pop	rbp
-;;   2d:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8726000000         	ja	0x3e
+;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 b801000000           	mov	eax, 1
+;;      	 85c0                 	test	eax, eax
+;;      	 0f840a000000         	je	0x33
+;;   29:	 b802000000           	mov	eax, 2
+;;      	 e905000000           	jmp	0x38
+;;   33:	 b801000000           	mov	eax, 1
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   3e:	 0f0b                 	ud2	

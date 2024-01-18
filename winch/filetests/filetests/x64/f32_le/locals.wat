@@ -16,23 +16,31 @@
         f32.le
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 48c744240800000000   	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8747000000         	ja	0x5f
+;;   18:	 48c744240800000000   	
 ;; 				mov	qword ptr [rsp + 8], 0
-;;   11:	 4c893424             	mov	qword ptr [rsp], r14
-;;   15:	 f30f100533000000     	movss	xmm0, dword ptr [rip + 0x33]
-;;   1d:	 f30f1144240c         	movss	dword ptr [rsp + 0xc], xmm0
-;;   23:	 f30f10052d000000     	movss	xmm0, dword ptr [rip + 0x2d]
-;;   2b:	 f30f11442408         	movss	dword ptr [rsp + 8], xmm0
-;;   31:	 f30f10442408         	movss	xmm0, dword ptr [rsp + 8]
-;;   37:	 f30f104c240c         	movss	xmm1, dword ptr [rsp + 0xc]
-;;   3d:	 0f2ec1               	ucomiss	xmm0, xmm1
-;;   40:	 b800000000           	mov	eax, 0
-;;   45:	 400f93c0             	setae	al
-;;   49:	 4883c410             	add	rsp, 0x10
-;;   4d:	 5d                   	pop	rbp
-;;   4e:	 c3                   	ret	
-;;   4f:	 00cd                 	add	ch, cl
-;;   51:	 cc                   	int3	
+;;      	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 f30f10053b000000     	movss	xmm0, dword ptr [rip + 0x3b]
+;;      	 f30f1144240c         	movss	dword ptr [rsp + 0xc], xmm0
+;;      	 f30f100535000000     	movss	xmm0, dword ptr [rip + 0x35]
+;;      	 f30f11442408         	movss	dword ptr [rsp + 8], xmm0
+;;      	 f30f10442408         	movss	xmm0, dword ptr [rsp + 8]
+;;      	 f30f104c240c         	movss	xmm1, dword ptr [rsp + 0xc]
+;;      	 0f2ec1               	ucomiss	xmm0, xmm1
+;;      	 b800000000           	mov	eax, 0
+;;      	 400f93c0             	setae	al
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   5f:	 0f0b                 	ud2	
+;;   61:	 0000                 	add	byte ptr [rax], al
+;;   63:	 0000                 	add	byte ptr [rax], al
+;;   65:	 0000                 	add	byte ptr [rax], al
+;;   67:	 00cd                 	add	ch, cl
+;;   69:	 cc                   	int3	

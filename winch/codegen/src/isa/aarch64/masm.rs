@@ -49,6 +49,10 @@ impl Masm for MacroAssembler {
         self.move_sp_to_shadow_sp();
     }
 
+    fn check_stack(&mut self) {
+        // TODO: implement when we have more complete assembler support
+    }
+
     fn epilogue(&mut self, locals_size: u32) {
         assert!(self.sp_offset == locals_size);
 

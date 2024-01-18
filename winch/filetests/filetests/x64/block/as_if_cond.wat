@@ -7,24 +7,34 @@
   )
 )
   
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 4883c408             	add	rsp, 8
-;;   10:	 5d                   	pop	rbp
-;;   11:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f870a000000         	ja	0x22
+;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   22:	 0f0b                 	ud2	
 ;;
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 b801000000           	mov	eax, 1
-;;   11:	 85c0                 	test	eax, eax
-;;   13:	 0f840d000000         	je	0x26
-;;   19:	 4883ec08             	sub	rsp, 8
-;;   1d:	 e800000000           	call	0x22
-;;   22:	 4883c408             	add	rsp, 8
-;;   26:	 4883c408             	add	rsp, 8
-;;   2a:	 5d                   	pop	rbp
-;;   2b:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8724000000         	ja	0x3c
+;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 b801000000           	mov	eax, 1
+;;      	 85c0                 	test	eax, eax
+;;      	 0f840d000000         	je	0x36
+;;   29:	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x32
+;;      	 4883c408             	add	rsp, 8
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   3c:	 0f0b                 	ud2	

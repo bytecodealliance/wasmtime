@@ -6,33 +6,37 @@
         (i64.trunc_f64_s)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 f20f100554000000     	movsd	xmm0, qword ptr [rip + 0x54]
-;;   14:	 f2480f2cc0           	cvttsd2si	rax, xmm0
-;;   19:	 4883f801             	cmp	rax, 1
-;;   1d:	 0f8134000000         	jno	0x57
-;;   23:	 660f2ec0             	ucomisd	xmm0, xmm0
-;;   27:	 0f8a30000000         	jp	0x5d
-;;   2d:	 49bb000000000000e0c3 	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8755000000         	ja	0x6d
+;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 f20f100554000000     	movsd	xmm0, qword ptr [rip + 0x54]
+;;      	 f2480f2cc0           	cvttsd2si	rax, xmm0
+;;      	 4883f801             	cmp	rax, 1
+;;      	 0f8134000000         	jno	0x67
+;;   33:	 660f2ec0             	ucomisd	xmm0, xmm0
+;;      	 0f8a32000000         	jp	0x6f
+;;   3d:	 49bb000000000000e0c3 	
 ;; 				movabs	r11, 0xc3e0000000000000
-;;   37:	 664d0f6efb           	movq	xmm15, r11
-;;   3c:	 66410f2ec7           	ucomisd	xmm0, xmm15
-;;   41:	 0f8218000000         	jb	0x5f
-;;   47:	 66450f57ff           	xorpd	xmm15, xmm15
-;;   4c:	 66440f2ef8           	ucomisd	xmm15, xmm0
-;;   51:	 0f820a000000         	jb	0x61
-;;   57:	 4883c408             	add	rsp, 8
-;;   5b:	 5d                   	pop	rbp
-;;   5c:	 c3                   	ret	
-;;   5d:	 0f0b                 	ud2	
-;;   5f:	 0f0b                 	ud2	
-;;   61:	 0f0b                 	ud2	
-;;   63:	 0000                 	add	byte ptr [rax], al
-;;   65:	 0000                 	add	byte ptr [rax], al
-;;   67:	 0000                 	add	byte ptr [rax], al
-;;   69:	 0000                 	add	byte ptr [rax], al
-;;   6b:	 0000                 	add	byte ptr [rax], al
-;;   6d:	 00f0                 	add	al, dh
+;;      	 664d0f6efb           	movq	xmm15, r11
+;;      	 66410f2ec7           	ucomisd	xmm0, xmm15
+;;      	 0f821a000000         	jb	0x71
+;;   57:	 66450f57ff           	xorpd	xmm15, xmm15
+;;      	 66440f2ef8           	ucomisd	xmm15, xmm0
+;;      	 0f820c000000         	jb	0x73
+;;   67:	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   6d:	 0f0b                 	ud2	
+;;   6f:	 0f0b                 	ud2	
+;;   71:	 0f0b                 	ud2	
+;;   73:	 0f0b                 	ud2	
+;;   75:	 0000                 	add	byte ptr [rax], al
+;;   77:	 0000                 	add	byte ptr [rax], al
+;;   79:	 0000                 	add	byte ptr [rax], al
+;;   7b:	 0000                 	add	byte ptr [rax], al
+;;   7d:	 00f0                 	add	al, dh

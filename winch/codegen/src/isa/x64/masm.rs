@@ -57,6 +57,24 @@ impl Masm for MacroAssembler {
             .mov_rr(stack_pointer, frame_pointer, OperandSize::S64);
     }
 
+    fn check_stack(&mut self) {
+        let ptr_size: u8 = self.ptr_size.bytes().try_into().unwrap();
+        let scratch = regs::scratch();
+
+        self.load_ptr(
+            self.address_at_vmctx(ptr_size.vmcontext_runtime_limits().into()),
+            scratch,
+        );
+
+        self.load_ptr(
+            Address::offset(scratch, ptr_size.vmruntime_limits_stack_limit().into()),
+            scratch,
+        );
+
+        self.asm.cmp_rr(regs::rsp(), scratch, self.ptr_size);
+        self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
+    }
+
     fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
         let bytes = match (reg.class(), size) {
             (RegClass::Int, OperandSize::S64) => {

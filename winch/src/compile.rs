@@ -9,7 +9,7 @@ use wasmtime_environ::{
     Tunables, TypeConvert, VMOffsets,
 };
 use winch_codegen::{lookup, BuiltinFunctions, TargetIsa};
-use winch_filetests::disasm::disasm;
+use winch_filetests::disasm::{disasm, OffsetStyle};
 
 #[derive(Parser, Debug)]
 pub struct Options {
@@ -71,7 +71,7 @@ fn compile(
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());
-    disasm(buffer.data(), isa)?
+    disasm(buffer.data(), isa, OffsetStyle::Full)?
         .iter()
         .for_each(|s| println!("{}", s));
 
