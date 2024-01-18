@@ -514,15 +514,15 @@ fn _assert_send_sync() {
     }
     _assert::<Config>();
 
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", feature = "runtime"))]
     fn _call_async(s: &mut Store<()>, f: Func) {
         _assert_send(f.call_async(&mut *s, &[], &mut []))
     }
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", feature = "runtime"))]
     fn _typed_call_async(s: &mut Store<()>, f: TypedFunc<(), ()>) {
         _assert_send(f.call_async(&mut *s, ()))
     }
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", feature = "runtime"))]
     fn _instantiate_async(s: &mut Store<()>, m: &Module) {
         _assert_send(Instance::new_async(s, m, &[]))
     }

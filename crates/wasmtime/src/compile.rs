@@ -179,7 +179,7 @@ impl Engine {
     /// This method may be used to compile a module for use with a different target
     /// host. The output of this method may be used with
     /// [`Module::deserialize`](crate::Module::deserialize) on hosts compatible
-    /// with the [`Config`] associated with this [`Engine`].
+    /// with the [`Config`](crate::Config) associated with this [`Engine`].
     ///
     /// The output of this method is safe to send to another host machine for later
     /// execution. As the output is already a compiled module, translation and code
