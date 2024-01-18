@@ -13,12 +13,18 @@ pub struct WasmiEngine {
 impl WasmiEngine {
     pub(crate) fn new(config: &mut Config) -> Self {
         let config = &mut config.module_config.config;
+        config.multi_value_enabled = true;
+        config.sign_extension_ops_enabled = true;
+        config.saturating_float_to_int_enabled = true;
         config.reference_types_enabled = true;
         config.simd_enabled = false;
+        config.relaxed_simd_enabled = false;
         config.memory64_enabled = false;
+        config.threads_enabled = false;
         config.bulk_memory_enabled = true;
         config.threads_enabled = false;
         config.tail_call_enabled = true;
+        config.exceptions_enabled = false;
         config.max_memories = config.max_memories.min(1);
         config.min_memories = config.min_memories.min(1);
         config.max_tables = config.max_tables.min(1);
