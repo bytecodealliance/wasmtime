@@ -1820,12 +1820,17 @@ impl Config {
     }
 }
 
+/// If building without the runtime feature we can't determine the page size of
+/// the platform where the execution will happen so just keep the original
+/// values.
+#[cfg(not(feature = "runtime"))]
 fn round_up_to_pages(val: u64) -> u64 {
-    #[cfg(feature = "runtime")]
+    val
+}
+
+#[cfg(feature = "runtime")]
+fn round_up_to_pages(val: u64) -> u64 {
     let page_size = wasmtime_runtime::page_size() as u64;
-    // TODOABK: put this in the config?
-    #[cfg(not(feature = "runtime"))]
-    let page_size = 4096 as u64;
     debug_assert!(page_size.is_power_of_two());
     val.checked_add(page_size - 1)
         .map(|val| val & !(page_size - 1))
