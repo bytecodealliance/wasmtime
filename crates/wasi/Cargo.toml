@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true, optional = true }
 wasi-tokio = { workspace = true, optional = true }
-wiggle = { workspace = true, optional = true }
+wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
 libc = { workspace = true }
 once_cell = { workspace = true }
 log = { workspace = true }
