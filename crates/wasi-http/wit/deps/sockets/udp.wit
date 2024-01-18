@@ -92,7 +92,6 @@ interface udp {
         /// 
         /// # Typical errors
         /// - `invalid-argument`:          The `remote-address` has the wrong address family. (EAFNOSUPPORT)
-        /// - `invalid-argument`:          `remote-address` is a non-IPv4-mapped IPv6 address, but the socket was bound to a specific IPv4-mapped IPv6 address. (or vice versa)
         /// - `invalid-argument`:          The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-argument`:          The port in `remote-address` is set to 0. (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-state`:             The socket is not bound.
@@ -141,17 +140,6 @@ interface udp {
         ///
         /// Equivalent to the SO_DOMAIN socket option.
         address-family: func() -> ip-address-family;
-
-        /// Whether IPv4 compatibility (dual-stack) mode is disabled or not.
-        ///
-        /// Equivalent to the IPV6_V6ONLY socket option.
-        ///
-        /// # Typical errors
-        /// - `not-supported`:        (get/set) `this` socket is an IPv4 socket.
-        /// - `invalid-state`:        (set) The socket is already bound.
-        /// - `not-supported`:        (set) Host does not support dual-stack sockets. (Implementations are not required to.)
-        ipv6-only: func() -> result<bool, error-code>;
-        set-ipv6-only: func(value: bool) -> result<_, error-code>;
 
         /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
         ///
@@ -248,7 +236,6 @@ interface udp {
         ///
         /// # Typical errors
         /// - `invalid-argument`:        The `remote-address` has the wrong address family. (EAFNOSUPPORT)
-        /// - `invalid-argument`:        `remote-address` is a non-IPv4-mapped IPv6 address, but the socket was bound to a specific IPv4-mapped IPv6 address. (or vice versa)
         /// - `invalid-argument`:        The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-argument`:        The port in `remote-address` is set to 0. (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-argument`:        The socket is in "connected" mode and `remote-address` is `some` value that does not match the address passed to `stream`. (EISCONN)

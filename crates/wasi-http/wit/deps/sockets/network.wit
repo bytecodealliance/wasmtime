@@ -18,8 +18,6 @@ interface network {
     ///
     /// See each individual API for what the POSIX equivalents are. They sometimes differ per API.
     enum error-code {
-        // ### GENERAL ERRORS ###
-
         /// Unknown error
         unknown,
 
@@ -64,9 +62,6 @@ interface network {
         would-block,
 
 
-
-        // ### TCP & UDP SOCKET ERRORS ###
-
         /// The operation is not valid in the socket's current state.
         invalid-state,
 
@@ -83,23 +78,20 @@ interface network {
         remote-unreachable,
 
 
-        // ### TCP SOCKET ERRORS ###
-
-        /// The connection was forcefully rejected
+        /// The TCP connection was forcefully rejected
         connection-refused,
 
-        /// The connection was reset.
+        /// The TCP connection was reset.
         connection-reset,
 
-        /// A connection was aborted.
+        /// A TCP connection was aborted.
         connection-aborted,
 
 
-        // ### UDP SOCKET ERRORS ###
+        /// The size of a datagram sent to a UDP socket exceeded the maximum
+        /// supported size.
         datagram-too-large,
 
-
-        // ### NAME LOOKUP ERRORS ###
 
         /// Name does not exist or has no suitable associated IP addresses.
         name-unresolvable,
@@ -128,15 +120,21 @@ interface network {
     }
 
     record ipv4-socket-address {
-        port: u16, // sin_port
-        address: ipv4-address, // sin_addr
+        /// sin_port
+        port: u16,
+        /// sin_addr
+        address: ipv4-address,
     }
 
     record ipv6-socket-address {
-        port: u16, // sin6_port
-        flow-info: u32, // sin6_flowinfo
-        address: ipv6-address, // sin6_addr
-        scope-id: u32, // sin6_scope_id
+        /// sin6_port
+        port: u16,
+        /// sin6_flowinfo
+        flow-info: u32,
+        /// sin6_addr
+        address: ipv6-address,
+        /// sin6_scope_id
+        scope-id: u32,
     }
 
     variant ip-socket-address {

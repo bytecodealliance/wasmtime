@@ -314,30 +314,6 @@ impl<T: WasiView> crate::preview2::bindings::sockets::tcp::HostTcpSocket for T {
         Ok(socket.inner.address_family().into())
     }
 
-    fn ipv6_only(&mut self, this: Resource<TcpSocketResource>) -> SocketResult<bool> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-        Ok(socket.inner.ipv6_only()?)
-    }
-
-    fn set_ipv6_only(
-        &mut self,
-        this: Resource<TcpSocketResource>,
-        value: bool,
-    ) -> SocketResult<()> {
-        let table = self.table_mut();
-        let socket = table.get_mut(&this)?;
-
-        match socket.tcp_state {
-            TcpState::Default => {}
-            TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
-            _ => return Err(ErrorCode::InvalidState.into()),
-        }
-
-        socket.inner.set_ipv6_only(value)?;
-        Ok(())
-    }
-
     fn set_listen_backlog_size(
         &mut self,
         this: Resource<TcpSocketResource>,

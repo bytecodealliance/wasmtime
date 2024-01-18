@@ -5,6 +5,8 @@ use crate::ir::{Block, Function};
 use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 
 #[derive(Clone, Debug)]
+/// Like a [`DominatorTree`], but with an explicit list of children,
+/// rather than parent pointers.
 pub(crate) struct DomTreeWithChildren {
     nodes: SecondaryMap<Block, DomTreeNode>,
     root: Block,
@@ -12,7 +14,10 @@ pub(crate) struct DomTreeWithChildren {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct DomTreeNode {
+    /// Points to the first child of the node, and implicitly to an entire
+    /// linked list of the children.
     children: PackedOption<Block>,
+    /// Points to the next sibling, if any.
     next: PackedOption<Block>,
 }
 
@@ -22,15 +27,15 @@ impl DomTreeWithChildren {
             SecondaryMap::with_capacity(func.dfg.num_blocks());
 
         for block in func.layout.blocks() {
-            let idom_inst = match domtree.idom(block) {
-                Some(idom_inst) => idom_inst,
-                None => continue,
+            let Some(idom_inst) = domtree.idom(block) else {
+                continue;
             };
             let idom = func
                 .layout
                 .inst_block(idom_inst)
                 .expect("Dominating instruction should be part of a block");
 
+            // Insert at the front of nodes[idom].children
             nodes[block].next = nodes[idom].children;
             nodes[idom].children = block.into();
         }

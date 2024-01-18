@@ -50,7 +50,11 @@ static KEYS: OnceLock<Vec<ProtectionKey>> = OnceLock::new();
 /// Any accesses to pages marked by another key will result in a `SIGSEGV`
 /// fault.
 pub fn allow(mask: ProtectionMask) {
-    let previous = pkru::read();
+    let previous = if log::log_enabled!(log::Level::Trace) {
+        pkru::read()
+    } else {
+        0
+    };
     pkru::write(mask.0);
     log::trace!("PKRU change: {:#034b} => {:#034b}", previous, pkru::read());
 }

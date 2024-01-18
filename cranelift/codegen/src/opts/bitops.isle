@@ -90,6 +90,11 @@
       (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
       (bmask ty x))
 
+;; Since icmp is always 0 or 1, bmask is just a negation.
+;; TODO: Explore whether this makes sense for things needing extension too.
+(rule (simplify (bmask $I8 cmp@(icmp $I8 _ _ _)))
+      (ineg $I8 cmp))
+
 ;; Matches any expressions that preserve "truthiness".
 ;; i.e. If the input is zero it remains zero, and if it is nonzero it can have
 ;; a different value as long as it is still nonzero.

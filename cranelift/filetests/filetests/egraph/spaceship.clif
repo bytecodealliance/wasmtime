@@ -15,10 +15,10 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v11 = icmp sgt v0, v1
-    ; check: v12 = icmp slt v0, v1
-    ; check: v13 = isub v11, v12
-    ; check: return v13
+    ; check: v13 = icmp sgt v0, v1
+    ; check: v14 = icmp slt v0, v1
+    ; check: v15 = isub v13, v14
+    ; check: return v15
 }
 
 function %cmp_s1b(i32, i32) -> i16 {
@@ -32,10 +32,10 @@ block0(v0: i32, v1: i32):
     v8 = select v2, v4, v7
     return v8
     ; check: v9 = icmp sgt v0, v1
-    ; check: v12 = icmp slt v0, v1
-    ; check: v13 = isub v9, v12
-    ; check: v14 = sextend.i16 v13
-    ; check: return v14
+    ; check: v14 = icmp slt v0, v1
+    ; check: v15 = isub v9, v14
+    ; check: v16 = sextend.i16 v15
+    ; check: return v16
 }
 
 function %cmp_s2a(i32, i32) -> i8 {
@@ -147,10 +147,10 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp sgt v0, v1
-    ; check: v10 = icmp slt v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: return v11
+    ; check: v13 = icmp sgt v0, v1
+    ; check: v14 = icmp slt v0, v1
+    ; check: v15 = isub v13, v14
+    ; check: return v15
 }
 
 function %cmp_s5b(i32, i32) -> i16 {
@@ -163,11 +163,11 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp sgt v0, v1
-    ; check: v10 = icmp slt v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: v12 = sextend.i16 v11
-    ; check: return v12
+    ; check: v11 = icmp sgt v0, v1
+    ; check: v12 = icmp slt v0, v1
+    ; check: v13 = isub v11, v12
+    ; check: v14 = sextend.i16 v13
+    ; check: return v14
 }
 
 function %cmp_s6a(i32, i32) -> i8 {
@@ -180,10 +180,10 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp sgt v0, v1
-    ; check: v10 = icmp slt v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: return v11
+    ; check: v16 = icmp sgt v0, v1
+    ; check: v9 = icmp slt v0, v1
+    ; check: v17 = isub v16, v9
+    ; check: return v17
 }
 
 function %cmp_s6b(i32, i32) -> i16 {
@@ -196,11 +196,11 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp sgt v0, v1
-    ; check: v10 = icmp slt v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: v12 = sextend.i16 v11
-    ; check: return v12
+    ; check: v14 = icmp sgt v0, v1
+    ; check: v15 = icmp slt v0, v1
+    ; check: v16 = isub v14, v15
+    ; check: v17 = sextend.i16 v16
+    ; check: return v17
 }
 
 ;; And again for unsigned...
@@ -215,11 +215,11 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v12 = icmp ugt v0, v1
-    ; check: v13 = icmp ult v0, v1
-    ; check: v14 = isub v12, v13
-    ; check: v15 = sextend.i16 v14
-    ; check: return v15
+    ; check: v14 = icmp ugt v0, v1
+    ; check: v15 = icmp ult v0, v1
+    ; check: v16 = isub v14, v15
+    ; check: v17 = sextend.i16 v16
+    ; check: return v17
 }
 
 function %cmp_u1b(i32, i32) -> i8 {
@@ -233,9 +233,9 @@ block0(v0: i32, v1: i32):
     v8 = select v2, v4, v7
     return v8
     ; check: v9 = icmp ugt v0, v1
-    ; check: v11 = icmp ult v0, v1
-    ; check: v12 = isub v9, v11
-    ; check: return v12
+    ; check: v13 = icmp ult v0, v1
+    ; check: v14 = isub v9, v13
+    ; check: return v14
 }
 
 function %cmp_u2a(i32, i32) -> i16 {
@@ -347,11 +347,11 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp ugt v0, v1
-    ; check: v10 = icmp ult v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: v12 = sextend.i16 v11
-    ; check: return v12
+    ; check: v11 = icmp ugt v0, v1
+    ; check: v12 = icmp ult v0, v1
+    ; check: v13 = isub v11, v12
+    ; check: v14 = sextend.i16 v13
+    ; check: return v14
 }
 
 function %cmp_u5b(i32, i32) -> i8 {
@@ -364,10 +364,10 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp ugt v0, v1
-    ; check: v10 = icmp ult v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: return v11
+    ; check: v13 = icmp ugt v0, v1
+    ; check: v14 = icmp ult v0, v1
+    ; check: v15 = isub v13, v14
+    ; check: return v15
 }
 
 function %cmp_u6a(i32, i32) -> i16 {
@@ -380,11 +380,11 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp ugt v0, v1
-    ; check: v10 = icmp ult v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: v12 = sextend.i16 v11
-    ; check: return v12
+    ; check: v14 = icmp ugt v0, v1
+    ; check: v9 = icmp ult v0, v1
+    ; check: v15 = isub v14, v9
+    ; check: v16 = sextend.i16 v15
+    ; check: return v16
 }
 
 function %cmp_u6b(i32, i32) -> i8 {
@@ -397,10 +397,10 @@ block0(v0: i32, v1: i32):
     v7 = select v3, v5, v6
     v8 = select v2, v4, v7
     return v8
-    ; check: v9 = icmp ugt v0, v1
-    ; check: v10 = icmp ult v0, v1
-    ; check: v11 = isub v9, v10
-    ; check: return v11
+    ; check: v16 = icmp ugt v0, v1
+    ; check: v17 = icmp ult v0, v1
+    ; check: v18 = isub v16, v17
+    ; check: return v18
 }
 
 ;; Then a few of the simplifications
@@ -477,4 +477,52 @@ block0(v0: i16, v1: i16):
     return v7
     ; check: v10 = icmp ne v0, v1
     ; check: return v10
+}
+
+function %ult_via_cmp_eq_less(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp ugt v0, v1
+    v3 = icmp ult v0, v1
+    v4 = isub v2, v3
+    v5 = iconst.i8 -1
+    v6 = icmp eq v4, v5
+    return v6
+    ; check: v3 = icmp ult v0, v1
+    ; check: return v3
+}
+
+function %uge_via_cmp_ne_less(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp ugt v0, v1
+    v3 = icmp ult v0, v1
+    v4 = isub v2, v3
+    v5 = iconst.i8 -1
+    v6 = icmp ne v4, v5
+    return v6
+    ; check: v7 = icmp uge v0, v1
+    ; check: return v7
+}
+
+function %sgt_via_cmp_eq_greater(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp sgt v0, v1
+    v3 = icmp slt v0, v1
+    v4 = isub v2, v3
+    v5 = iconst.i8 1
+    v6 = icmp eq v4, v5
+    return v6
+    ; check: v2 = icmp sgt v0, v1
+    ; check: return v2
+}
+
+function %sle_via_cmp_ne_less(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp sgt v0, v1
+    v3 = icmp slt v0, v1
+    v4 = isub v2, v3
+    v5 = iconst.i8 1
+    v6 = icmp ne v4, v5
+    return v6
+    ; check: v7 = icmp sle v0, v1
+    ; check: return v7
 }

@@ -67,9 +67,10 @@ impl UdpSocket {
 
         let socket_address_family = match family {
             SocketAddrFamily::V4 => SocketProtocolMode::Ipv4,
-            SocketAddrFamily::V6 => SocketProtocolMode::Ipv6 {
-                v6only: rustix::net::sockopt::get_ipv6_v6only(&fd)?,
-            },
+            SocketAddrFamily::V6 => {
+                rustix::net::sockopt::set_ipv6_v6only(&fd, true)?;
+                SocketProtocolMode::Ipv6
+            }
         };
 
         let socket = Self::setup_tokio_udp_socket(fd)?;

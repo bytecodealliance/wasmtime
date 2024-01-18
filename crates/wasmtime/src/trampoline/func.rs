@@ -1,10 +1,9 @@
 //! Support for a calling of an imported function.
 
-use crate::{Engine, FuncType, ValRaw};
+use crate::{code_memory::CodeMemory, Engine, FuncType, ValRaw};
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
-use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{
     StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
 };
@@ -81,6 +80,7 @@ pub fn create_array_call_function<F>(
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
+    use crate::instantiate::finish_object;
     use std::ptr;
 
     let mut obj = engine
@@ -94,7 +94,10 @@ where
             &mut obj,
         )?;
     engine.append_bti(&mut obj);
-    let obj = wasmtime_jit::ObjectBuilder::new(obj, &engine.config().tunables).finish()?;
+    let obj = finish_object(wasmtime_environ::ObjectBuilder::new(
+        obj,
+        &engine.config().tunables,
+    ))?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.

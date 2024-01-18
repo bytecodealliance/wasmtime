@@ -7,18 +7,23 @@
         (i32.gt_u)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
-;;    c:	 89742408             	mov	dword ptr [rsp + 8], esi
-;;   10:	 4c893424             	mov	qword ptr [rsp], r14
-;;   14:	 8b442408             	mov	eax, dword ptr [rsp + 8]
-;;   18:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
-;;   1c:	 39c1                 	cmp	ecx, eax
-;;   1e:	 b900000000           	mov	ecx, 0
-;;   23:	 400f97c1             	seta	cl
-;;   27:	 89c8                 	mov	eax, ecx
-;;   29:	 4883c410             	add	rsp, 0x10
-;;   2d:	 5d                   	pop	rbp
-;;   2e:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8727000000         	ja	0x3f
+;;   18:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
+;;      	 89742408             	mov	dword ptr [rsp + 8], esi
+;;      	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 8b442408             	mov	eax, dword ptr [rsp + 8]
+;;      	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
+;;      	 39c1                 	cmp	ecx, eax
+;;      	 b900000000           	mov	ecx, 0
+;;      	 400f97c1             	seta	cl
+;;      	 89c8                 	mov	eax, ecx
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   3f:	 0f0b                 	ud2	

@@ -72,6 +72,6 @@
     end
     drop
   )
-  (table (;0;) 16 anyfunc)
+  (table (;0;) 16 funcref)
   (elem (i32.const 0))
 )

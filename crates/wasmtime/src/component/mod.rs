@@ -21,7 +21,7 @@ pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
 pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
-pub use self::linker::{Linker, LinkerInstance};
+pub use self::linker::{Linker, LinkerInstance, ResourceImportIndex};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};

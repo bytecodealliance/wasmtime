@@ -289,7 +289,7 @@ pub(crate) mod util {
     ) -> std::io::Result<()> {
         match (socket_mode, addr.ip()) {
             (SocketProtocolMode::Ipv4, IpAddr::V4(_)) => Ok(()),
-            (SocketProtocolMode::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
+            (SocketProtocolMode::Ipv6, IpAddr::V6(ipv6)) => {
                 if is_deprecated_ipv4_compatible(&ipv6) {
                     // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
                     // since 2006, OS handling of them is inconsistent and our own
@@ -299,7 +299,7 @@ pub(crate) mod util {
                         ErrorKind::InvalidInput,
                         "IPv4-compatible IPv6 addresses are not supported",
                     ))
-                } else if *v6only && ipv6.to_ipv4_mapped().is_some() {
+                } else if ipv6.to_ipv4_mapped().is_some() {
                     Err(Error::new(
                         ErrorKind::InvalidInput,
                         "IPv4-mapped IPv6 address passed to an IPv6-only socket",

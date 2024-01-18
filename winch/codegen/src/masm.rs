@@ -1,5 +1,5 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData};
+use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
@@ -23,8 +23,21 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+/// The direction to perform the memory move.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum MemMoveDirection {
+    /// From high memory addresses to low memory addresses.
+    /// Invariant: the source location is closer to the FP than the destination
+    /// location, which will be closer to the SP.
+    HighToLow,
+    /// From low memory addresses to high memory addresses.
+    /// Invariant: the source location is closer to the SP than the destination
+    /// location, which will be closer to the FP.
+    LowToHigh,
+}
+
 /// Representation of the stack pointer offset.
-#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Default)]
 pub struct SPOffset(u32);
 
 impl SPOffset {
@@ -344,6 +357,9 @@ pub(crate) trait MacroAssembler {
     /// Emit the function prologue.
     fn prologue(&mut self);
 
+    /// Emit a stack check.
+    fn check_stack(&mut self);
+
     /// Emit the function epilogue.
     fn epilogue(&mut self, locals_size: u32);
 
@@ -374,6 +390,9 @@ pub(crate) trait MacroAssembler {
 
     /// Retrieves the size of the table, pushing the result to the value stack.
     fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
+
+    /// Retrieves the size of the memory, pushing the result to the value stack.
+    fn memory_size(&mut self, heap_data: &HeapData, context: &mut CodeGenContext);
 
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
@@ -427,8 +446,11 @@ pub(crate) trait MacroAssembler {
 
     /// Performs a memory move of bytes from src to dest.
     /// Bytes are moved in blocks of 8 bytes, where possible.
-    fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32) {
-        debug_assert!(dst.as_u32() < src.as_u32());
+    fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32, direction: MemMoveDirection) {
+        match direction {
+            MemMoveDirection::LowToHigh => debug_assert!(dst.as_u32() < src.as_u32()),
+            MemMoveDirection::HighToLow => debug_assert!(dst.as_u32() > src.as_u32()),
+        }
         // At least 4 byte aligned.
         debug_assert!(bytes % 4 == 0);
         let mut remaining = bytes;
@@ -605,6 +627,48 @@ pub(crate) trait MacroAssembler {
 
     /// Extends an integer of a given size to a larger size.
     fn extend(&mut self, src: Reg, dst: Reg, kind: ExtendKind);
+
+    /// Emits one or more instructions to perform a signed truncation of a
+    /// float into an integer.
+    fn signed_truncate(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize);
+
+    /// Emits one or more instructions to perform an unsigned truncation of a
+    /// float into an integer.
+    fn unsigned_truncate(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_fpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    );
+
+    /// Emits one or more instructions to perform a signed convert of an
+    /// integer into a float.
+    fn signed_convert(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize);
+
+    /// Emits one or more instructions to perform an unsigned convert of an
+    /// integer into a float.
+    fn unsigned_convert(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        tmp_gpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    );
+
+    /// Reinterpret a float as an integer.
+    fn reinterpret_float_as_int(&mut self, src: Reg, dst: Reg, size: OperandSize);
+
+    /// Reinterpret an integer as a float.
+    fn reinterpret_int_as_float(&mut self, src: Reg, dst: Reg, size: OperandSize);
+
+    /// Demote an f64 to an f32.
+    fn demote(&mut self, src: Reg, dst: Reg);
+
+    /// Promote an f32 to an f64.
+    fn promote(&mut self, src: Reg, dst: Reg);
 
     /// Zero a given memory range.
     ///

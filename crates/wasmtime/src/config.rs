@@ -1,4 +1,5 @@
 use crate::memory::MemoryCreator;
+use crate::profiling_agent::{self, ProfilingAgent};
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, ensure, Result};
 use serde_derive::{Deserialize, Serialize};
@@ -13,7 +14,6 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::Tunables;
-use wasmtime_jit::profiling::{self, ProfilingAgent};
 use wasmtime_runtime::{mpk, InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
 #[cfg(feature = "async")]
@@ -369,6 +369,10 @@ impl Config {
 
     /// Configures whether DWARF debug information will be emitted during
     /// compilation.
+    ///
+    /// Note that the `debug-builtins` compile-time Cargo feature must also be
+    /// enabled for native debuggers such as GDB or LLDB to be able to debug
+    /// guest WebAssembly programs.
     ///
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
@@ -1635,10 +1639,10 @@ impl Config {
 
     pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
         Ok(match self.profiling_strategy {
-            ProfilingStrategy::PerfMap => profiling::new_perfmap()?,
-            ProfilingStrategy::JitDump => profiling::new_jitdump()?,
-            ProfilingStrategy::VTune => profiling::new_vtune()?,
-            ProfilingStrategy::None => profiling::new_null(),
+            ProfilingStrategy::PerfMap => profiling_agent::new_perfmap()?,
+            ProfilingStrategy::JitDump => profiling_agent::new_jitdump()?,
+            ProfilingStrategy::VTune => profiling_agent::new_vtune()?,
+            ProfilingStrategy::None => profiling_agent::new_null(),
         })
     }
 

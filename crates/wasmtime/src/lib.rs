@@ -300,6 +300,12 @@
 //!   will attempt to parse DWARF debug information and convert WebAssembly
 //!   addresses to source filenames and line numbers.
 //!
+//! * `debug-builtins` - Enabled by default, this feature includes some built-in
+//!   debugging utilities and symbols for native debuggers such as GDB and LLDB
+//!   to attach to the process Wasmtime is used within. The intrinsics provided
+//!   will enable debugging guest code compiled to WebAssembly. This must also
+//!   be enabled via [`Config::debug_info`] as well for guests.
+//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!
@@ -411,16 +417,20 @@ mod func;
 mod compiler;
 
 mod code;
+mod code_memory;
 mod config;
+mod debug;
 mod engine;
 mod externals;
 mod instance;
+mod instantiate;
 mod limits;
 mod linker;
 mod memory;
 mod module;
 #[cfg(feature = "profiling")]
 mod profiling;
+mod profiling_agent;
 mod r#ref;
 mod resources;
 mod signatures;
@@ -434,11 +444,13 @@ mod values;
 #[cfg(feature = "async")]
 mod stack;
 
+pub use crate::code_memory::CodeMemory;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;
 pub use crate::instance::{Instance, InstancePre};
+pub use crate::instantiate::CompiledModule;
 pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;

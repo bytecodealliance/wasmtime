@@ -558,7 +558,7 @@ fn call_signature_mismatch() -> Result<()> {
                 (func $bar (param i32))
                 (start $foo)
 
-                (table 1 anyfunc)
+                (table 1 funcref)
                 (elem (i32.const 0) 1)
             )
         "#,

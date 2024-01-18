@@ -87,9 +87,9 @@ pub mod bindings {
                 import wasi:clocks/wall-clock@0.2.0-rc-2023-11-10;
                 import wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10;
                 import wasi:random/random@0.2.0-rc-2023-11-10;
-                import wasi:cli/stdout@0.2.0-rc-2023-12-05;
-                import wasi:cli/stderr@0.2.0-rc-2023-12-05;
-                import wasi:cli/stdin@0.2.0-rc-2023-12-05;
+                import wasi:cli/stdout@0.2.0-rc-2024-01-16;
+                import wasi:cli/stderr@0.2.0-rc-2024-01-16;
+                import wasi:cli/stdin@0.2.0-rc-2024-01-16;
             }
         "#,
         std_feature,
@@ -98,7 +98,7 @@ pub mod bindings {
     });
 }
 
-#[export_name = "wasi:cli/run@0.2.0-rc-2023-12-05#run"]
+#[export_name = "wasi:cli/run@0.2.0-rc-2024-01-16#run"]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -2665,7 +2665,7 @@ impl State {
     #[cfg(not(feature = "proxy"))]
     fn get_environment(&self) -> &[StrTuple] {
         if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-12-05")]
+            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2024-01-16")]
             extern "C" {
                 #[link_name = "get-environment"]
                 fn get_environment_import(rval: *mut StrTupleList);
@@ -2690,7 +2690,7 @@ impl State {
     #[cfg(not(feature = "proxy"))]
     fn get_args(&self) -> &[WasmStr] {
         if self.args.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-12-05")]
+            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2024-01-16")]
             extern "C" {
                 #[link_name = "get-arguments"]
                 fn get_args_import(rval: *mut WasmStrList);

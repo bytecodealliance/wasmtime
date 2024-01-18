@@ -2,7 +2,7 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{ABIOperand, ABIResultsData, RetArea, ABI},
+    abi::{ABIOperand, ABIResults, RetArea, ABI},
     codegen::BuiltinFunctions,
     frame::Frame,
     isa::reg::RegClass,
@@ -156,7 +156,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
 
         if val.is_mem() {
             let mem = val.unwrap_mem();
-            debug_assert!(mem.slot.offset.as_u32() == masm.sp_offset().as_u32());
+            debug_assert_eq!(mem.slot.offset.as_u32(), masm.sp_offset().as_u32());
             masm.pop(reg, val.ty().into());
         } else {
             self.move_val_to_reg(&val, reg, masm);
@@ -170,7 +170,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     }
 
     /// Pops the value stack top and stores it at the specified address.
-    fn pop_to_addr<M: MacroAssembler>(&mut self, masm: &mut M, addr: M::Address) {
+    pub fn pop_to_addr<M: MacroAssembler>(&mut self, masm: &mut M, addr: M::Address) {
         let val = self.stack.pop().expect("a value at stack top");
         let size: OperandSize = val.ty().into();
         match val {
@@ -322,6 +322,48 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         };
     }
 
+    /// Prepares arguments for emitting a convert operation.
+    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmType, mut emit: F)
+    where
+        F: FnMut(&mut M, Reg, Reg, OperandSize),
+        M: MacroAssembler,
+    {
+        let src = self.pop_to_reg(masm, None);
+        let dst = self.reg_for_type(dst_ty, masm);
+        let dst_size = match dst_ty {
+            WasmType::I32 => OperandSize::S32,
+            WasmType::I64 => OperandSize::S64,
+            WasmType::F32 => OperandSize::S32,
+            WasmType::F64 => OperandSize::S64,
+            WasmType::V128 => unreachable!(),
+            WasmType::Ref(_) => unreachable!(),
+        };
+
+        emit(masm, dst, src.into(), dst_size);
+
+        self.free_reg(src);
+        self.stack.push(TypedReg::new(dst_ty, dst).into());
+    }
+
+    /// Prepares arguments for emitting a convert operation with a temporary
+    /// register.
+    pub fn convert_op_with_tmp_reg<F, M>(
+        &mut self,
+        masm: &mut M,
+        dst_ty: WasmType,
+        tmp_reg_class: RegClass,
+        mut emit: F,
+    ) where
+        F: FnMut(&mut M, Reg, Reg, Reg, OperandSize),
+        M: MacroAssembler,
+    {
+        let tmp_gpr = self.reg_for_class(tmp_reg_class, masm);
+        self.convert_op(masm, dst_ty, |masm, dst, src, dst_size| {
+            emit(masm, dst, src, tmp_gpr, dst_size);
+        });
+        self.free_reg(tmp_gpr);
+    }
+
     /// Drops the last `n` elements of the stack, calling the provided
     /// function for each `n` stack value.
     /// The values are dropped in top-to-bottom order.
@@ -333,10 +375,10 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             let len = self.stack.len();
             assert!(last <= len);
             let truncate = self.stack.len() - last;
-            let stack_mut = &mut self.stack.inner_mut();
+            let stack_mut = self.stack.inner_mut();
 
             // Invoke the callback in top-to-bottom order.
-            for v in stack_mut.range(truncate..).rev() {
+            for v in stack_mut[truncate..].into_iter().rev() {
                 f(&mut self.regalloc, v)
             }
             stack_mut.truncate(truncate);
@@ -363,14 +405,16 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         M: MacroAssembler,
         F: FnMut(&mut M, &mut Self, &mut ControlStackFrame),
     {
-        let (_, target_sp) = dest.base_stack_len_and_sp();
+        let state = dest.stack_state();
+        let target_offset = state.target_offset;
+        let base_offset = state.base_offset;
         // Invariant: The SP, must be greater or equal to the target
         // SP, given that we haven't popped any results by this point
         // yet. But it may happen in the callback.
-        assert!(masm.sp_offset().as_u32() >= target_sp.as_u32());
+        assert!(masm.sp_offset().as_u32() >= base_offset.as_u32());
         f(masm, self, dest);
 
-        // The following snippet, pops the stack pointer and to ensure that it
+        // The following snippet, pops the stack pointer to ensure that it
         // is correctly placed according to the expectations of the destination
         // branch.
         //
@@ -390,7 +434,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         // return location according to the ABI (a register for single value
         // returns and a memory slot for 1+ returns). This could happen in the
         // callback invocation above if the callback invokes
-        // `CodeGenContext::pop_abi_results` (e.g. `br` instruction).
+        // `ControlStackFrame::pop_abi_results` (e.g. `br` instruction).
         //
         // After an unconditional jump, the compiler will enter in an
         // unreachable state; instead of immediately truncating the value stack
@@ -399,78 +443,34 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         // of the value stack once reachability is actually restored. At that
         // point, the right stack pointer offset will also be restored, which
         // should match the contents of the value stack.
-        masm.ensure_sp_for_jump(target_sp);
+        masm.ensure_sp_for_jump(target_offset);
         dest.set_as_target();
         masm.jmp(*dest.label());
         self.reachable = false;
     }
 
-    /// A combination of [Self::pop_abi_results] and [Self::push_abi_results]
-    /// to be used on conditional branches: br_if and br_table.
-    pub fn top_abi_results<M: MacroAssembler>(&mut self, result: &ABIResultsData, masm: &mut M) {
-        self.pop_abi_results(result, masm);
-        self.push_abi_results(result, masm);
-    }
+    /// Push the ABI representation of the results stack.
+    pub fn push_abi_results<M, F>(
+        &mut self,
+        results: &ABIResults,
+        masm: &mut M,
+        mut calculate_ret_area: F,
+    ) where
+        M: MacroAssembler,
+        F: FnMut(&ABIResults, &mut CodeGenContext, &mut M) -> Option<RetArea>,
+    {
+        let area = results
+            .on_stack()
+            .then(|| calculate_ret_area(&results, self, masm).unwrap());
 
-    /// Handles the emission of the ABI result. This function is used at the end
-    /// of a block or function to pop the results from the value stack into the
-    /// corresponding ABI result location.
-    pub fn pop_abi_results<M: MacroAssembler>(&mut self, data: &ABIResultsData, masm: &mut M) {
-        let retptr = data
-            .results
-            .has_stack_results()
-            .then(|| match data.unwrap_ret_area() {
-                RetArea::Slot(slot) => {
-                    let base = self
-                        .without::<_, M, _>(data.results.regs(), masm, |cx, masm| cx.any_gpr(masm));
-                    let local_addr = masm.local_address(slot);
-                    masm.load_ptr(local_addr, base);
-                    Some(base)
-                }
-                _ => None,
-            })
-            .flatten();
-
-        // Results are popped in reverse order, starting from registers, continuing
-        // to memory values in order to maintain the value stack ordering invariant.
-        // See comments in [ABIResults] for more details.
-        for operand in data.results.operands().iter().rev() {
-            match operand {
-                ABIOperand::Reg { reg, .. } => {
-                    let TypedReg { reg, .. } = self.pop_to_reg(masm, Some(*reg));
-                    self.free_reg(reg);
-                }
-                ABIOperand::Stack { offset, .. } => {
-                    let addr = match data.unwrap_ret_area() {
-                        RetArea::SP(base) => {
-                            let slot_offset = base.as_u32() - *offset;
-                            masm.address_from_sp(SPOffset::from_u32(slot_offset))
-                        }
-                        RetArea::Slot(_) => masm.address_at_reg(retptr.unwrap(), *offset),
-                    };
-
-                    self.pop_to_addr(masm, addr);
-                }
-            }
-        }
-
-        if let Some(reg) = retptr {
-            self.free_reg(reg);
-        }
-    }
-
-    /// Push ABI results into the value stack. This function is used at the end
-    /// of a block or after a function call to push the corresponding ABI
-    /// results into the value stack.
-    pub fn push_abi_results<M: MacroAssembler>(&mut self, data: &ABIResultsData, masm: &mut M) {
-        for operand in data.results.operands().iter() {
+        for operand in results.operands().iter() {
             match operand {
                 ABIOperand::Reg { reg, ty, .. } => {
                     assert!(self.regalloc.reg_available(*reg));
                     let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
                     self.stack.push(typed_reg.into());
                 }
-                ABIOperand::Stack { ty, offset, size } => match data.unwrap_ret_area() {
+                ABIOperand::Stack { ty, offset, size } => match area.unwrap() {
                     RetArea::SP(sp_offset) => {
                         let slot =
                             StackSlot::new(SPOffset::from_u32(sp_offset.as_u32() - offset), *size);
@@ -490,36 +490,13 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     /// This function is intended to only be used when restoring the code
     /// generation's reachability state, when handling an unreachable end or
     /// else.
-    fn truncate_stack_to(&mut self, target: usize) {
+    pub fn truncate_stack_to(&mut self, target: usize) {
         if self.stack.len() > target {
             self.drop_last(self.stack.len() - target, |regalloc, val| match val {
                 Val::Reg(tr) => regalloc.free(tr.reg),
                 _ => {}
             });
         }
-    }
-
-    /// This function ensures that the state of the -- machine and value --
-    /// stack  is the right one when reaching a control frame branch in which
-    /// reachability is restored or when reaching the end of a function in an
-    /// unreachable state. This function is intended to be called when handling
-    /// an unreachable else or end.
-    ///
-    /// This function will truncate the value stack to the length expected by
-    /// the control frame and will also set the stack pointer offset to
-    /// reflect the new length of the value stack.
-    pub fn ensure_stack_state<M: MacroAssembler>(
-        &mut self,
-        masm: &mut M,
-        frame: &ControlStackFrame,
-    ) {
-        let (base_len, base_sp) = frame.base_stack_len_and_sp();
-        masm.reset_stack_pointer(base_sp);
-        self.truncate_stack_to(base_len);
-
-        // The size of the stack sometimes can be less given that locals are
-        // removed last, and not accounted as part of the [SPOffset].
-        debug_assert!(self.stack.sizeof(self.stack.len()) <= base_sp.as_u32());
     }
 
     /// Spill locals and registers to memory.

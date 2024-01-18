@@ -23,7 +23,10 @@ features = ["component-model"]
 [dependencies]
 wasmtime-runtime = { workspace = true }
 wasmtime-environ = { workspace = true }
-wasmtime-jit = { workspace = true }
+wasmtime-jit-debug = { workspace = true, features = [
+  "perf_jitdump",
+], optional = true }
+wasmtime-jit-icache-coherence = { workspace = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-cranelift = { workspace = true, optional = true }
@@ -51,12 +54,20 @@ async-trait = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
 bumpalo = "3.11.0"
 fxprof-processed-profile = { version = "0.6.0", optional = true }
+gimli = { workspace = true }
+# Support address-to-file/line information in traps when wasm files have DWARF
+# debugging information.
+addr2line = { version = "0.21.0", default-features = false, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
-features = [
-  "Win32_System_Diagnostics_Debug",
-]
+features = ["Win32_System_Diagnostics_Debug"]
+
+[target.'cfg(all(target_arch = "x86_64", not(target_os = "android")))'.dependencies]
+ittapi = { version = "0.4.0", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ['thread'] }
 
 [dev-dependencies]
 tempfile = "3.0"
@@ -102,7 +113,11 @@ winch = ["dep:wasmtime-winch"]
 incremental-cache = ["wasmtime-cranelift?/incremental-cache"]
 
 # Enables support for profiling guest modules.
-profiling = ["wasmtime-jit/profiling", "dep:fxprof-processed-profile"]
+profiling = [
+  "dep:fxprof-processed-profile",
+  "dep:wasmtime-jit-debug",
+  "dep:ittapi",
+]
 
 # Enables parallel compilation of WebAssembly code.
 parallel-compilation = ["dep:rayon"]
@@ -147,15 +162,11 @@ wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
 
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
-demangle = ["wasmtime-jit/demangle"]
+demangle = ["wasmtime-environ/demangle"]
 
 # Enable support for generating core dumps on traps.
 coredump = ["dep:wasm-encoder"]
 
-# Support address-to-file/line information in traps when wasm files have DWARF
-# debugging information.
-addr2line = ["wasmtime-jit/addr2line"]
-
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["wasmtime-runtime/debug-builtins", "wasmtime-jit/debug-builtins"]
+debug-builtins = ["wasmtime-runtime/debug-builtins"]

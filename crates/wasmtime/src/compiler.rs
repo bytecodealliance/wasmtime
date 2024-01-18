@@ -27,10 +27,10 @@ use anyhow::Result;
 use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
-    Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleType,
-    ModuleTypesBuilder, PrimaryMap, SignatureIndex, StaticModuleIndex, WasmFunctionInfo,
+    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FuncIndex,
+    FunctionBodyData, ModuleTranslation, ModuleType, ModuleTypesBuilder, PrimaryMap,
+    SignatureIndex, StaticModuleIndex, WasmFunctionInfo,
 };
-use wasmtime_jit::{CompiledFunctionInfo, CompiledModuleInfo};
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
 
@@ -450,7 +450,7 @@ impl FunctionIndices {
         engine: &'a Engine,
         compiled_funcs: Vec<(String, Box<dyn Any + Send>)>,
         translations: PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
-    ) -> Result<(wasmtime_jit::ObjectBuilder<'a>, Artifacts)> {
+    ) -> Result<(wasmtime_environ::ObjectBuilder<'a>, Artifacts)> {
         // Append all the functions to the ELF file.
         //
         // The result is a vector parallel to `compiled_funcs` where
@@ -510,7 +510,7 @@ impl FunctionIndices {
             }
         }
 
-        let mut obj = wasmtime_jit::ObjectBuilder::new(obj, tunables);
+        let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);
         let mut artifacts = Artifacts::default();
 
         // Finally, build our binary artifacts that map things like `FuncIndex`
@@ -597,12 +597,12 @@ impl FunctionIndices {
                                 ))
                                 .map(|x| symbol_ids_and_locs[x.unwrap_function()].1);
 
-                            CompiledFunctionInfo::new(
+                            CompiledFunctionInfo {
                                 wasm_func_info,
                                 wasm_func_loc,
                                 array_to_wasm_trampoline,
                                 native_to_wasm_trampoline,
-                            )
+                            }
                         })
                         .collect();
 

@@ -57,6 +57,7 @@
       $over-f32-duplicate $over-f64-duplicate      ;; 18..19
       $fac-i32 $fib-i32                            ;; 20..21
       $const-f64-i32 $id-i32-f64 $swap-i32-i64     ;; 22..24
+      $runaway $mutual-runaway1 $mutual-runaway2   ;; 25..27
     )
   )
 
@@ -232,6 +233,20 @@
       )
     )
   )
+
+  ;; Stack exhaustion
+
+  ;; Implementations are required to have every call consume some abstract
+  ;; resource towards exhausting some abstract finite limit, such that
+  ;; infinitely recursive test cases reliably trap in finite time. This is
+  ;; because otherwise applications could come to depend on it on those
+  ;; implementations and be incompatible with implementations that don't do
+  ;; it (or don't do it under the same circumstances).
+
+  (func $runaway (export "runaway") (call_indirect (type $proc) (i32.const 25)))
+
+  (func $mutual-runaway1 (export "mutual-runaway") (call_indirect (type $proc) (i32.const 27)))
+  (func $mutual-runaway2 (call_indirect (type $proc) (i32.const 26)))
 
   ;; As parameter of control constructs and instructions
 
@@ -416,6 +431,9 @@
 (assert_return (invoke "odd" (i32.const 1)) (i32.const 44))
 (assert_return (invoke "odd" (i32.const 200)) (i32.const 99))
 (assert_return (invoke "odd" (i32.const 77)) (i32.const 44))
+
+(assert_exhaustion (invoke "runaway") "call stack exhausted")
+(assert_exhaustion (invoke "mutual-runaway") "call stack exhausted")
 
 (assert_return (invoke "as-select-first") (i32.const 0x132))
 (assert_return (invoke "as-select-mid") (i32.const 2))

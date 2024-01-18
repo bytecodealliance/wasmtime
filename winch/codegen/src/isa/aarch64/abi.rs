@@ -96,19 +96,15 @@ impl ABI for Aarch64ABI {
 
         let mut params_index_env = RegIndexEnv::default();
         let results = Self::abi_results(returns, call_conv);
-        let params = ABIParams::from::<_, Self>(
-            params,
-            0,
-            results.has_stack_results(),
-            |ty, stack_offset| {
+        let params =
+            ABIParams::from::<_, Self>(params, 0, results.on_stack(), |ty, stack_offset| {
                 Self::to_abi_operand(
                     ty,
                     stack_offset,
                     &mut params_index_env,
                     ParamsOrReturns::Params,
                 )
-            },
-        );
+            });
 
         ABISig::new(params, results)
     }

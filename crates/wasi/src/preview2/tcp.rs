@@ -94,14 +94,6 @@ pub trait TcpSocket: Send + Sync + 'static {
     /// Equivalent to the SO_DOMAIN socket option.
     fn address_family(&self) -> SocketAddrFamily;
 
-    /// Whether IPv4 compatibility (dual-stack) mode is disabled or not.
-    /// Equivalent to the IPV6_V6ONLY socket option.
-    fn ipv6_only(&self) -> io::Result<bool>;
-
-    /// Whether IPv4 compatibility (dual-stack) mode is disabled or not.
-    /// Equivalent to the IPV6_V6ONLY socket option.
-    fn set_ipv6_only(&mut self, value: bool) -> io::Result<()>;
-
     /// The desired listen queue size. Implementations are free to ignore this.
     /// This function never returns 0.
     fn listen_backlog_size(&self) -> io::Result<usize>;
@@ -280,14 +272,6 @@ impl TcpSocket for DefaultTcpSocket {
         self.system.address_family()
     }
 
-    fn ipv6_only(&self) -> io::Result<bool> {
-        self.system.ipv6_only()
-    }
-
-    fn set_ipv6_only(&mut self, value: bool) -> io::Result<()> {
-        self.system.set_ipv6_only(value)
-    }
-
     fn listen_backlog_size(&self) -> io::Result<usize> {
         self.system.listen_backlog_size()
     }
@@ -389,9 +373,10 @@ impl SystemTcpSocket {
 
         let socket_address_family = match family {
             SocketAddrFamily::V4 => SocketProtocolMode::Ipv4,
-            SocketAddrFamily::V6 => SocketProtocolMode::Ipv6 {
-                v6only: sockopt::get_ipv6_v6only(&fd)?,
-            },
+            SocketAddrFamily::V6 => {
+                sockopt::set_ipv6_v6only(&fd, true)?;
+                SocketProtocolMode::Ipv6
+            }
         };
 
         Self::from_fd(fd, socket_address_family)
@@ -710,27 +695,6 @@ impl TcpSocket for SystemTcpSocket {
         match self.family {
             SocketProtocolMode::Ipv4 => SocketAddrFamily::V4,
             SocketProtocolMode::Ipv6 { .. } => SocketAddrFamily::V6,
-        }
-    }
-
-    fn ipv6_only(&self) -> io::Result<bool> {
-        // Instead of just calling the OS we return our own internal state, because
-        // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
-
-        match self.family {
-            SocketProtocolMode::Ipv4 => Err(Errno::AFNOSUPPORT.into()),
-            SocketProtocolMode::Ipv6 { v6only } => Ok(v6only),
-        }
-    }
-
-    fn set_ipv6_only(&mut self, value: bool) -> io::Result<()> {
-        match self.family {
-            SocketProtocolMode::Ipv4 => Err(Errno::AFNOSUPPORT.into()),
-            SocketProtocolMode::Ipv6 { .. } => {
-                sockopt::set_ipv6_v6only(&self.stream, value)?;
-                self.family = SocketProtocolMode::Ipv6 { v6only: value };
-                Ok(())
-            }
         }
     }
 

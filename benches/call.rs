@@ -23,6 +23,7 @@ enum IsAsync {
     Yes,
     YesPooling,
     No,
+    NoPooling,
 }
 
 impl IsAsync {
@@ -31,12 +32,13 @@ impl IsAsync {
             IsAsync::Yes => "async",
             IsAsync::YesPooling => "async-pool",
             IsAsync::No => "sync",
+            IsAsync::NoPooling => "sync-pool",
         }
     }
     fn use_async(&self) -> bool {
         match self {
             IsAsync::Yes | IsAsync::YesPooling => true,
-            IsAsync::No => false,
+            IsAsync::No | IsAsync::NoPooling => false,
         }
     }
 }
@@ -47,14 +49,29 @@ fn engines() -> Vec<(Engine, IsAsync)> {
     #[cfg(feature = "component-model")]
     config.wasm_component_model(true);
 
+    let mut pool = PoolingAllocationConfig::default();
+    if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+        pool.memory_protection_keys(MpkEnabled::Enable);
+    }
+
     vec![
         (Engine::new(&config).unwrap(), IsAsync::No),
+        (
+            Engine::new(
+                config
+                    .clone()
+                    .allocation_strategy(InstanceAllocationStrategy::Pooling(pool.clone())),
+            )
+            .unwrap(),
+            IsAsync::NoPooling,
+        ),
         (
             Engine::new(config.async_support(true)).unwrap(),
             IsAsync::Yes,
         ),
         (
-            Engine::new(config.allocation_strategy(InstanceAllocationStrategy::pooling())).unwrap(),
+            Engine::new(config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool)))
+                .unwrap(),
             IsAsync::YesPooling,
         ),
     ]

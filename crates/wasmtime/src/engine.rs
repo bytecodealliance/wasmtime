@@ -1,5 +1,4 @@
-use crate::signatures::SignatureRegistry;
-use crate::Config;
+use crate::{profiling_agent::ProfilingAgent, signatures::SignatureRegistry, CodeMemory, Config};
 use anyhow::{Context, Result};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
@@ -13,7 +12,6 @@ use std::sync::Arc;
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind};
-use wasmtime_jit::{profiling::ProfilingAgent, CodeMemory};
 use wasmtime_runtime::{CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
 
 mod serialization;

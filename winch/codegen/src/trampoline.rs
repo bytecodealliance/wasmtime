@@ -9,9 +9,6 @@
 // loading/storing the VM context pointer. The real value of the operand size
 // and VM context type should be derived from the ABI's pointer size. This is
 // going to be relevant once 32-bit architectures are supported.
-//
-// TODO: Are guardrails needed for params/results? Especially when dealing
-// with the array calling convention.
 use crate::{
     abi::{ABIOperand, ABIParams, ABISig, RetArea, ABI},
     codegen::ptr_type_from_ptr_size,
@@ -156,7 +153,7 @@ where
 
         self.store_results_to_array(&wasm_sig, ret_area.as_ref());
 
-        if wasm_sig.results.has_stack_results() {
+        if wasm_sig.has_stack_results() {
             self.masm.free_stack(wasm_sig.results.size());
         }
 
@@ -240,7 +237,7 @@ where
 
         self.masm.free_stack(reserved_stack);
         self.forward_results(&wasm_sig, &native_sig, ret_area.as_ref(), offsets.last());
-        if wasm_sig.results.has_stack_results() {
+        if wasm_sig.has_stack_results() {
             self.masm.free_stack(wasm_sig.results.size());
         }
         self.epilogue_with_callee_saved_restore(spill_size);
@@ -250,7 +247,7 @@ where
 
     /// Creates the return area in the caller's frame.
     fn make_ret_area(&mut self, sig: &ABISig) -> Option<RetArea> {
-        sig.results.has_stack_results().then(|| {
+        sig.has_stack_results().then(|| {
             self.masm.reserve_stack(sig.results.size());
             let offs = self.masm.sp_offset();
             RetArea::sp(offs)
@@ -291,7 +288,7 @@ where
         let results_spill = self.spill(callee_sig.results());
         let mut spill_offsets_iter = results_spill.0.iter();
 
-        let caller_retptr = caller_sig.results.has_stack_results().then(|| {
+        let caller_retptr = caller_sig.has_stack_results().then(|| {
             let fp = <M::ABI as ABI>::fp_reg();
             let arg_base: u32 = <M::ABI as ABI>::arg_base_offset().into();
             match caller_sig.params.unwrap_results_area_operand() {
@@ -426,7 +423,7 @@ where
         self.masm.free_stack(reserved_stack);
         self.forward_results(&native_sig, &wasm_sig, ret_area.as_ref(), offsets.last());
 
-        if native_sig.results.has_stack_results() {
+        if native_sig.has_stack_results() {
             self.masm.free_stack(native_sig.results.size());
         }
 

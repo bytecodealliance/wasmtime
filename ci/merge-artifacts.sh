@@ -9,7 +9,7 @@
 
 set -ex
 
-# Prepare the upload folder and move all aritfacts that aren't being merged into
+# Prepare the upload folder and move all artifacts that aren't being merged into
 # this folder, e.g. the MSI installer and adapter wasm files.
 rm -rf dist
 mkdir dist

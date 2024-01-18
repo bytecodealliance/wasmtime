@@ -8,7 +8,7 @@ use cranelift_filetests::TestFileCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
 use std::path::{Path, PathBuf};
-use target_lexicon::Triple;
+use target_lexicon::{Triple, HOST};
 
 /// Execute clif code and verify with test expressions
 #[derive(Parser)]
@@ -106,15 +106,22 @@ fn run_file_contents(file_contents: String) -> Result<()> {
 
 /// Build an ISA based on the current machine running this code (the host)
 fn create_target_isa(isa_spec: &IsaSpec) -> Result<OwnedTargetIsa> {
-    if let IsaSpec::None(flags) = isa_spec {
-        // build an ISA for the current machine
-        let builder = host_isa_builder().map_err(|s| anyhow::anyhow!("{}", s))?;
-        Ok(builder.finish(flags.clone())?)
-    } else {
-        anyhow::bail!(
-            "A target ISA was specified in the file but should not have been--only \
-             the host ISA can be used for running CLIF files"
-        )
+    let builder = host_isa_builder().map_err(|s| anyhow::anyhow!("{}", s))?;
+    match *isa_spec {
+        IsaSpec::None(ref flags) => {
+            // build an ISA for the current machine
+            Ok(builder.finish(flags.clone())?)
+        }
+        IsaSpec::Some(ref isas) => {
+            for isa in isas {
+                if isa.triple().architecture == HOST.architecture {
+                    return Ok(builder.finish(isa.flags().clone())?);
+                }
+            }
+            anyhow::bail!(
+                "The target ISA specified in the file is not compatible with the host ISA"
+            )
+        }
     }
 }
 

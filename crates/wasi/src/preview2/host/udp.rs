@@ -13,7 +13,6 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
-use rustix::net::sockopt;
 use std::net::SocketAddr;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
@@ -203,35 +202,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         match socket.family {
             SocketProtocolMode::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketProtocolMode::Ipv6 { .. } => Ok(IpAddressFamily::Ipv6),
-        }
-    }
-
-    fn ipv6_only(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<bool> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-
-        match socket.family {
-            SocketProtocolMode::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketProtocolMode::Ipv6 { v6only } => Ok(v6only),
-        }
-    }
-
-    fn set_ipv6_only(&mut self, this: Resource<udp::UdpSocket>, value: bool) -> SocketResult<()> {
-        let table = self.table_mut();
-        let socket = table.get_mut(&this)?;
-
-        match socket.family {
-            SocketProtocolMode::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            SocketProtocolMode::Ipv6 { .. } => match socket.udp_state {
-                UdpState::Default => {
-                    sockopt::set_ipv6_v6only(socket.udp_socket(), value)?;
-                    socket.family = SocketProtocolMode::Ipv6 { v6only: value };
-                    Ok(())
-                }
-                UdpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
-                _ => Err(ErrorCode::InvalidState.into()),
-            },
+            SocketProtocolMode::Ipv6 => Ok(IpAddressFamily::Ipv6),
         }
     }
 
@@ -241,7 +212,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         let ttl = match socket.family {
             SocketProtocolMode::Ipv4 => util::get_ip_ttl(socket.udp_socket())?,
-            SocketProtocolMode::Ipv6 { .. } => util::get_ipv6_unicast_hops(socket.udp_socket())?,
+            SocketProtocolMode::Ipv6 => util::get_ipv6_unicast_hops(socket.udp_socket())?,
         };
 
         Ok(ttl)
@@ -257,9 +228,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         match socket.family {
             SocketProtocolMode::Ipv4 => util::set_ip_ttl(socket.udp_socket(), value)?,
-            SocketProtocolMode::Ipv6 { .. } => {
-                util::set_ipv6_unicast_hops(socket.udp_socket(), value)?
-            }
+            SocketProtocolMode::Ipv6 => util::set_ipv6_unicast_hops(socket.udp_socket(), value)?,
         }
 
         Ok(())

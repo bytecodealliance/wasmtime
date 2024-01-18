@@ -1,10 +1,10 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
 use crate::egraph::{NewOrExistingInst, OptimizeCtx};
-use crate::ir::condcodes;
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
 pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
+use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
     dynamic_to_fixed, AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue,
@@ -121,6 +121,65 @@ where
     }
 }
 
+#[derive(Default)]
+pub(crate) struct MaybeUnaryEtorIter<'a, 'b, 'c> {
+    opcode: Option<Opcode>,
+    inner: InstDataEtorIter<'a, 'b, 'c>,
+    fallback: Option<Value>,
+}
+
+impl MaybeUnaryEtorIter<'_, '_, '_> {
+    fn new(opcode: Opcode, value: Value) -> Self {
+        debug_assert_eq!(opcode.format(), InstructionFormat::Unary);
+        Self {
+            opcode: Some(opcode),
+            inner: InstDataEtorIter::new(value),
+            fallback: Some(value),
+        }
+    }
+}
+
+impl<'a, 'b, 'c> ContextIter for MaybeUnaryEtorIter<'a, 'b, 'c>
+where
+    'b: 'a,
+    'c: 'b,
+{
+    type Context = IsleContext<'a, 'b, 'c>;
+    type Output = (Type, Value);
+
+    fn next(&mut self, ctx: &mut IsleContext<'a, 'b, 'c>) -> Option<Self::Output> {
+        debug_assert_ne!(self.opcode, None);
+        while let Some((ty, inst_def)) = self.inner.next(ctx) {
+            let InstructionData::Unary { opcode, arg } = inst_def else {
+                continue;
+            };
+            if Some(opcode) == self.opcode {
+                self.fallback = None;
+                return Some((ty, arg));
+            }
+        }
+
+        self.fallback.take().map(|value| {
+            let ty = generated_code::Context::value_type(ctx, value);
+            (ty, value)
+        })
+    }
+}
+
+impl<'a, 'b, 'c> IntoContextIter for MaybeUnaryEtorIter<'a, 'b, 'c>
+where
+    'b: 'a,
+    'c: 'b,
+{
+    type Context = IsleContext<'a, 'b, 'c>;
+    type Output = (Type, Value);
+    type IntoIter = Self;
+
+    fn into_context_iter(self) -> Self {
+        self
+    }
+}
+
 impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     isle_common_prelude_methods!();
 
@@ -192,5 +251,15 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         let val = val | (val << 64);
         let imm = V128Imm(val.to_le_bytes());
         self.ctx.func.dfg.constants.insert(imm.into())
+    }
+
+    type sextend_maybe_etor_returns = MaybeUnaryEtorIter<'a, 'b, 'c>;
+    fn sextend_maybe_etor(&mut self, value: Value, returns: &mut Self::sextend_maybe_etor_returns) {
+        *returns = MaybeUnaryEtorIter::new(Opcode::Sextend, value);
+    }
+
+    type uextend_maybe_etor_returns = MaybeUnaryEtorIter<'a, 'b, 'c>;
+    fn uextend_maybe_etor(&mut self, value: Value, returns: &mut Self::uextend_maybe_etor_returns) {
+        *returns = MaybeUnaryEtorIter::new(Opcode::Uextend, value);
     }
 }

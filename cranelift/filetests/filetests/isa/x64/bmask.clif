@@ -798,3 +798,66 @@ block0(v0: i8):
 ;   popq %rbp
 ;   retq
 
+function %bmask_icmp_i32_i8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2 = icmp sgt v0, v1
+  v3 = bmask.i8 v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    %esi, %edi
+;   setnle  %al
+;   movq    %rax, %r8
+;   negb    %r8b, %r8b
+;   sbbl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   setg %al
+;   movq %rax, %r8
+;   negb %r8b
+;   sbbl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %ineg_icmp_i32_i8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2 = icmp sgt v0, v1
+  v3 = ineg v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    %esi, %edi
+;   setnle  %al
+;   negb    %al, %al
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   setg %al
+;   negb %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
