@@ -95,10 +95,11 @@ use std::ptr;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use wasmtime_runtime::mpk::{self, ProtectionKey, ProtectionMask};
 use wasmtime_runtime::{
-    mpk::ProtectionKey, ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    ModuleInfo, OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext,
-    VMExternRef, VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
+    ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
+    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMExternRef,
+    VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
 };
 
 mod context;
@@ -1998,7 +1999,14 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
+            // In order to prevent this fiber's MPK state from being munged by
+            // other fibers while it is suspended, we save and restore it once
+            // once execution resumes. Note that when MPK is not supported,
+            // these are noops.
+            let previous_mask = mpk::current_mask();
+            mpk::allow(ProtectionMask::all());
             (*suspend).suspend(())?;
+            mpk::allow(previous_mask);
         }
     }
 }
