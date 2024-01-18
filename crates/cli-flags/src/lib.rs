@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::Parser;
 use std::time::Duration;
-use wasmtime::Config;
+use wasmtime::{Config, MpkEnabled};
 
 pub mod opt;
 
@@ -69,6 +69,10 @@ wasmtime_option_group! {
         /// How many bytes to keep resident between instantiations for the
         /// pooling allocator in tables.
         pub pooling_table_keep_resident: Option<usize>,
+
+        /// Enable memory protection keys for the pooling allocator; this can
+        /// optimize the size of memory slots.
+        pub memory_protection_keys: Option<bool>,
 
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
@@ -509,6 +513,9 @@ impl CommonOptions {
         match_feature! {
             ["pooling-allocator" : self.opts.pooling_allocator]
             enable => {
+                if !enable && self.opts.memory_protection_keys.unwrap_or(false) {
+                    anyhow::bail!("memory protection keys require the pooling allocator");
+                }
                 if enable {
                     let mut cfg = wasmtime::PoolingAllocationConfig::default();
                     if let Some(size) = self.opts.pooling_memory_keep_resident {
@@ -516,6 +523,11 @@ impl CommonOptions {
                     }
                     if let Some(size) = self.opts.pooling_table_keep_resident {
                         cfg.table_keep_resident(size);
+                    }
+                    if let Some(enable) = self.opts.memory_protection_keys {
+                        if enable {
+                            cfg.memory_protection_keys(MpkEnabled::Enable);
+                        }
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
                 }
