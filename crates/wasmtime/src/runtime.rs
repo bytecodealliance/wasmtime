@@ -9,6 +9,7 @@ pub(crate) mod instantiate;
 pub(crate) mod linker;
 pub(crate) mod memory;
 pub(crate) mod module;
+pub(crate) mod profiling;
 pub(crate) mod r#ref;
 pub(crate) mod runtime_engine;
 pub(crate) mod signatures;

@@ -440,6 +440,9 @@ cfg_if::cfg_if! {
         #[cfg(feature = "component-model")]
         pub use runtime::component;
 
+        #[cfg(feature = "profiling")]
+        pub use runtime::profiling::GuestProfiler;
+
         cfg_if::cfg_if! {
             if #[cfg(unix)] {
                 pub use runtime::unix;
@@ -463,7 +466,6 @@ mod config;
 mod debug;
 mod engine;
 mod limits;
-mod profiling;
 mod profiling_agent;
 mod resources;
 
@@ -473,8 +475,6 @@ mod stack;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::limits::*;
-#[cfg(feature = "profiling")]
-pub use crate::profiling::GuestProfiler;
 pub use crate::resources::*;
 
 #[cfg(feature = "async")]
