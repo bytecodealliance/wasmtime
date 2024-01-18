@@ -69,6 +69,7 @@ exit = []
 preview2 = [
     'wasmtime/component-model',
     'wasmtime/async',
+    'wasmtime/runtime',
     'dep:thiserror',
     'dep:tracing',
     'dep:cap-std',
