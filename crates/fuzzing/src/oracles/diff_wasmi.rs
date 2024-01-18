@@ -13,25 +13,31 @@ pub struct WasmiEngine {
 impl WasmiEngine {
     pub(crate) fn new(config: &mut Config) -> Self {
         let config = &mut config.module_config.config;
-        config.multi_value_enabled = true;
-        config.sign_extension_ops_enabled = true;
-        config.saturating_float_to_int_enabled = true;
-        config.reference_types_enabled = true;
         config.simd_enabled = false;
         config.relaxed_simd_enabled = false;
         config.memory64_enabled = false;
         config.threads_enabled = false;
-        config.bulk_memory_enabled = true;
         config.threads_enabled = false;
-        config.tail_call_enabled = true;
         config.exceptions_enabled = false;
         config.max_memories = config.max_memories.min(1);
         config.min_memories = config.min_memories.min(1);
         config.max_tables = config.max_tables.min(1);
         config.min_tables = config.min_tables.min(1);
 
+        let mut wasmi_config = wasmi::Config::default();
+        wasmi_config
+            .consume_fuel(false)
+            .floats(true)
+            .wasm_mutable_global(true)
+            .wasm_sign_extension(config.sign_extension_ops_enabled)
+            .wasm_saturating_float_to_int(config.saturating_float_to_int_enabled)
+            .wasm_multi_value(config.multi_value_enabled)
+            .wasm_bulk_memory(config.bulk_memory_enabled)
+            .wasm_reference_types(config.reference_types_enabled)
+            .wasm_tail_call(config.tail_call_enabled)
+            .wasm_extended_const(true);
         Self {
-            engine: wasmi::Engine::default(),
+            engine: wasmi::Engine::new(&wasmi_config),
         }
     }
 }
