@@ -20,8 +20,6 @@ impl WasmiEngine {
         config.exceptions_enabled = false;
         config.max_memories = config.max_memories.min(1);
         config.min_memories = config.min_memories.min(1);
-        config.max_tables = config.max_tables.min(1);
-        config.min_tables = config.min_tables.min(1);
 
         let mut wasmi_config = wasmi::Config::default();
         wasmi_config
