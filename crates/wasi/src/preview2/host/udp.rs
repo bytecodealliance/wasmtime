@@ -1,5 +1,3 @@
-use crate::preview2::host::network::util;
-use crate::preview2::network::SocketAddrUse;
 use crate::preview2::udp::UdpSocket;
 use crate::preview2::{
     bindings::{
@@ -14,15 +12,22 @@ use crate::preview2::{Pollable, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use std::net::SocketAddr;
-use tokio::io::Interest;
+use std::sync::Arc;
 use wasmtime::component::Resource;
 
 /// A `wasi:sockets/udp::udp-socket` instance.
 /// This is mostly glue code translating between WASI types and concepts (Tables,
 /// Resources, Pollables, ...) to their idiomatic Rust equivalents.
 pub struct UdpSocketResource {
-    inner: Box<dyn UdpSocket>,
+    inner: Arc<dyn UdpSocket + Send + Sync>,
     udp_state: UdpState,
+}
+
+#[async_trait]
+impl Subscribe for UdpSocketResource {
+    async fn ready(&mut self) {
+        // None of the socket-level operations block natively
+    }
 }
 
 /// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
@@ -42,7 +47,7 @@ impl<T: WasiView> udp_create_socket::Host for T {
             .network
             .new_udp_socket(address_family.into())?;
         let resource = UdpSocketResource {
-            inner: socket,
+            inner: socket.into(),
             udp_state: UdpState::Default,
         };
         let socket = self.table_mut().push(resource)?;
@@ -135,11 +140,11 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         let incoming_stream = IncomingDatagramStream {
             inner: socket.inner.clone(),
-            remote_address,
+            is_connected: remote_address.is_some(),
         };
         let outgoing_stream = OutgoingDatagramStream {
-            inner: socket.inner,
-            remote_address,
+            inner: socket.inner.clone(),
+            is_connected: remote_address.is_some(),
             send_state: SendState::Idle,
         };
 
@@ -256,11 +261,14 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         Ok(())
     }
 
-    fn subscribe(&mut self, this: Resource<udp::UdpSocket>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(
+        &mut self,
+        this: Resource<UdpSocketResource>,
+    ) -> anyhow::Result<Resource<Pollable>> {
         crate::preview2::poll::subscribe(self.table_mut(), this)
     }
 
-    fn drop(&mut self, this: Resource<udp::UdpSocket>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<UdpSocketResource>) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
         // As in the filesystem implementation, we assume closing a socket
@@ -283,15 +291,12 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
             stream: &IncomingDatagramStream,
         ) -> SocketResult<Option<udp::IncomingDatagram>> {
             let mut buf = [0; MAX_UDP_DATAGRAM_SIZE];
-            let (size, received_addr) = stream.inner.try_recv_from(&mut buf)?;
+            let (size, received_addr) = stream.inner.receive_data(&mut buf)?;
             debug_assert!(size <= buf.len());
 
-            match stream.remote_address {
-                Some(connected_addr) if connected_addr != received_addr => {
-                    // Normally, this should have already been checked for us by the OS.
-                    return Ok(None);
-                }
-                _ => {}
+            if stream.is_connected && stream.inner.remote_address()? != received_addr {
+                // Normally, this should have already been checked for us by the OS.
+                return Ok(None);
             }
 
             Ok(Some(udp::IncomingDatagram {
@@ -355,9 +360,8 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
 #[async_trait]
 impl Subscribe for IncomingDatagramStream {
     async fn ready(&mut self) {
-        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
         self.inner
-            .ready(Interest::READABLE)
+            .await_readable()
             .await
             .expect("failed to await UDP socket readiness");
     }
@@ -395,28 +399,18 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             }
 
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
-            let addr = match (stream.remote_address, provided_addr) {
-                (None, Some(addr)) => {
-                    stream
-                        .addr_check
-                        .check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
-                    addr
+            match (stream.is_connected, provided_addr) {
+                (false, Some(addr)) => {
+                    stream.inner.send_data_to(addr, &datagram.data)?;
                 }
-                (Some(addr), None) => addr,
-                (Some(connected_addr), Some(provided_addr)) if connected_addr == provided_addr => {
-                    connected_addr
+                (true, None) => {
+                    stream.inner.send_data(&datagram.data)?;
+                }
+                (true, Some(provided_addr)) if stream.inner.remote_address()? == provided_addr => {
+                    stream.inner.send_data(&datagram.data)?;
                 }
                 _ => return Err(ErrorCode::InvalidArgument.into()),
             };
-
-            util::validate_remote_address(&addr)?;
-            util::validate_address_family(&addr, &stream.family)?;
-
-            if stream.remote_address == Some(addr) {
-                stream.inner.try_send(&datagram.data)?;
-            } else {
-                stream.inner.try_send_to(&datagram.data, addr)?;
-            }
 
             Ok(())
         }
@@ -491,9 +485,8 @@ impl Subscribe for OutgoingDatagramStream {
         match self.send_state {
             SendState::Idle | SendState::Permitted(_) => {}
             SendState::Waiting => {
-                // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
                 self.inner
-                    .ready(Interest::WRITABLE)
+                    .await_writable()
                     .await
                     .expect("failed to await UDP socket readiness");
                 self.send_state = SendState::Idle;

@@ -23,7 +23,10 @@ pub trait Network: Sync + Send {
     fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>>;
 
     /// Create a new UDP socket.
-    fn new_udp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn UdpSocket>>;
+    fn new_udp_socket(
+        &mut self,
+        family: SocketAddrFamily,
+    ) -> io::Result<Box<dyn UdpSocket + Send + Sync>>;
 }
 
 /// The default network implementation
@@ -82,7 +85,10 @@ impl Network for DefaultNetwork {
         )))
     }
 
-    fn new_udp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn UdpSocket>> {
+    fn new_udp_socket(
+        &mut self,
+        family: SocketAddrFamily,
+    ) -> io::Result<Box<dyn UdpSocket + Send + Sync>> {
         Ok(Box::new(DefaultUdpSocket::new(
             self.system.new_udp_socket(family)?,
             self.udp_addr_check.clone(),
@@ -130,7 +136,10 @@ impl Network for SystemNetwork {
         Ok(Box::new(self.new_tcp_socket(family)?))
     }
 
-    fn new_udp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn UdpSocket>> {
+    fn new_udp_socket(
+        &mut self,
+        family: SocketAddrFamily,
+    ) -> io::Result<Box<dyn UdpSocket + Send + Sync>> {
         Ok(Box::new(self.new_udp_socket(family)?))
     }
 }

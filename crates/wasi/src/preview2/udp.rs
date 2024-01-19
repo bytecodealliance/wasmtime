@@ -5,11 +5,12 @@ use async_trait::async_trait;
 use cap_net_ext::Blocking;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use rustix::io::Errno;
-use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::{io, pin::Pin};
+use tokio::io::Interest;
 
-use super::network::{SocketAddrCheck, SocketAddrFamily, SocketAddrUse};
+use super::network::{SocketAddrCheck, SocketAddrExt, SocketAddrFamily, SocketAddrUse};
 
 pub trait UdpSocket {
     /// Bind the socket to a specific network on the provided IP address and port.
@@ -20,7 +21,7 @@ pub trait UdpSocket {
     ///
     /// The `local_address` must be of the same `SocketAddrFamily` as the family
     /// the socket was created with.
-    fn bind(&mut self, local_address: SocketAddr) -> io::Result<()>;
+    fn bind(&self, local_address: SocketAddr) -> io::Result<()>;
 
     /// Connect to a remote endpoint.
     ///
@@ -28,10 +29,25 @@ pub trait UdpSocket {
     /// - is not of the same `SocketAddrFamily` as the family the socket was created with,
     /// - contains an [unspecified](std::net::IpAddr::is_unspecified) IP address.
     /// - has the port set to 0.
-    fn connect(&mut self, remote_address: SocketAddr) -> io::Result<()>;
+    fn connect(&self, remote_address: SocketAddr) -> io::Result<()>;
+
+    fn await_readable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>>;
+
+    fn await_writable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>>;
+
+    /// Send data on the connected socket.
+    fn send_data(&self, data: &[u8]) -> io::Result<()>;
+
+    /// Send data on an unconnected socket to a remote address.
+    fn send_data_to(&self, remote_address: SocketAddr, data: &[u8]) -> io::Result<()>;
+
+    /// Receive data on the socket.
+    ///
+    /// Returns the number of bytes received and the address of the remote peer.
+    fn receive_data(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)>;
 
     /// Disconnect from the remote endpoint.
-    fn disconnect(&mut self) -> io::Result<()>;
+    fn disconnect(&self) -> io::Result<()>;
 
     /// Get the bound local address.
     /// The returned value will always be of the same `SocketAddrFamily` as the
@@ -55,7 +71,7 @@ pub trait UdpSocket {
     /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
     ///
     /// If the provided value is 0, an [io::ErrorKind::InvalidInput] error is returned.
-    fn set_hop_limit(&mut self, value: u8) -> io::Result<()>;
+    fn set_hop_limit(&self, value: u8) -> io::Result<()>;
 
     /// The kernel buffer space reserved for receives on this socket.
     /// This function never returns 0.
@@ -69,7 +85,7 @@ pub trait UdpSocket {
     /// I.e. after setting a value, reading the same setting back may return a different value.
     ///
     /// Equivalent to the SO_RCVBUF socket options.
-    fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()>;
+    fn set_receive_buffer_size(&self, value: usize) -> io::Result<()>;
 
     /// The kernel buffer space reserved for sends on this socket.
     /// This function never returns 0.
@@ -83,7 +99,7 @@ pub trait UdpSocket {
     /// I.e. after setting a value, reading the same setting back may return a different value.
     ///
     /// Equivalent to the SO_SNDBUF socket options.
-    fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()>;
+    fn set_send_buffer_size(&self, value: usize) -> io::Result<()>;
 }
 
 /// The state of a UDP socket.
@@ -127,19 +143,45 @@ impl DefaultUdpSocket {
 }
 
 impl UdpSocket for DefaultUdpSocket {
-    fn bind(&mut self, local_address: SocketAddr) -> io::Result<()> {
+    fn bind(&self, local_address: SocketAddr) -> io::Result<()> {
         self.addr_check
             .check(&local_address, SocketAddrUse::UdpBind)?;
         self.system.bind(local_address)
     }
 
-    fn connect(&mut self, remote_address: SocketAddr) -> io::Result<()> {
+    fn connect(&self, remote_address: SocketAddr) -> io::Result<()> {
         self.addr_check
             .check(&remote_address, SocketAddrUse::UdpConnect)?;
         self.system.connect(remote_address)
     }
 
-    fn disconnect(&mut self) -> io::Result<()> {
+    fn await_readable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        self.system.await_readable()
+    }
+
+    fn await_writable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        self.system.await_readable()
+    }
+
+    fn send_data(&self, data: &[u8]) -> io::Result<()> {
+        self.addr_check.check(
+            &self.system.remote_address()?,
+            SocketAddrUse::UdpOutgoingDatagram,
+        )?;
+        self.system.send_data(data)
+    }
+
+    fn send_data_to(&self, remote_address: SocketAddr, data: &[u8]) -> io::Result<()> {
+        self.addr_check
+            .check(&remote_address, SocketAddrUse::UdpOutgoingDatagram)?;
+        self.system.send_data_to(remote_address, data)
+    }
+
+    fn receive_data(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        self.system.receive_data(buf)
+    }
+
+    fn disconnect(&self) -> io::Result<()> {
         self.system.disconnect()
     }
 
@@ -159,7 +201,7 @@ impl UdpSocket for DefaultUdpSocket {
         self.system.hop_limit()
     }
 
-    fn set_hop_limit(&mut self, value: u8) -> io::Result<()> {
+    fn set_hop_limit(&self, value: u8) -> io::Result<()> {
         self.system.set_hop_limit(value)
     }
 
@@ -167,7 +209,7 @@ impl UdpSocket for DefaultUdpSocket {
         self.system.receive_buffer_size()
     }
 
-    fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()> {
+    fn set_receive_buffer_size(&self, value: usize) -> io::Result<()> {
         self.system.set_receive_buffer_size(value)
     }
 
@@ -175,7 +217,7 @@ impl UdpSocket for DefaultUdpSocket {
         self.system.send_buffer_size()
     }
 
-    fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()> {
+    fn set_send_buffer_size(&self, value: usize) -> io::Result<()> {
         self.system.set_send_buffer_size(value)
     }
 }
@@ -191,9 +233,6 @@ pub struct SystemUdpSocket {
     /// The part of a `UdpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
     pub(crate) inner: Arc<tokio::net::UdpSocket>,
-
-    /// The current state in the bind/connect progression.
-    pub(crate) udp_state: UdpState,
 
     /// Socket address family.
     pub(crate) family: SocketAddrFamily,
@@ -214,7 +253,6 @@ impl SystemUdpSocket {
 
         Ok(Self {
             inner: Arc::new(socket),
-            udp_state: UdpState::Default,
             family,
         })
     }
@@ -231,7 +269,7 @@ impl SystemUdpSocket {
 }
 
 impl UdpSocket for SystemUdpSocket {
-    fn bind(&mut self, local_address: SocketAddr) -> io::Result<()> {
+    fn bind(&self, local_address: SocketAddr) -> io::Result<()> {
         util::validate_address_family(&local_address, &self.family)?;
 
         // Perform the OS bind call.
@@ -249,7 +287,7 @@ impl UdpSocket for SystemUdpSocket {
         Ok(())
     }
 
-    fn connect(&mut self, remote_address: SocketAddr) -> io::Result<()> {
+    fn connect(&self, remote_address: SocketAddr) -> io::Result<()> {
         util::validate_remote_address(&remote_address)?;
         util::validate_address_family(&remote_address, &self.family)?;
 
@@ -265,7 +303,46 @@ impl UdpSocket for SystemUdpSocket {
         Ok(())
     }
 
-    fn disconnect(&mut self) -> io::Result<()> {
+    fn await_readable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        let inner = self.inner.clone();
+        Box::pin(async move {
+            // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+            let _ = inner.ready(Interest::READABLE).await?;
+            Ok(())
+        })
+    }
+
+    fn await_writable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        let inner = self.inner.clone();
+        Box::pin(async move {
+            // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+            let _ = inner.ready(Interest::WRITABLE).await?;
+            Ok(())
+        })
+    }
+
+    fn send_data(&self, data: &[u8]) -> io::Result<()> {
+        let addr = self.remote_address()?;
+        util::validate_remote_address(&addr)?;
+        util::validate_address_family(&addr, &self.address_family())?;
+
+        self.inner.try_send(data)?;
+        Ok(())
+    }
+
+    fn send_data_to(&self, remote_address: SocketAddr, data: &[u8]) -> io::Result<()> {
+        util::validate_remote_address(&remote_address)?;
+        util::validate_address_family(&remote_address, &remote_address.family())?;
+
+        self.inner.try_send_to(data, remote_address)?;
+        Ok(())
+    }
+
+    fn receive_data(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        self.inner.try_recv_from(buf)
+    }
+
+    fn disconnect(&self) -> io::Result<()> {
         Ok(util::udp_disconnect(self.udp_socket())?)
     }
 
@@ -289,7 +366,7 @@ impl UdpSocket for SystemUdpSocket {
         Ok(ttl)
     }
 
-    fn set_hop_limit(&mut self, value: u8) -> io::Result<()> {
+    fn set_hop_limit(&self, value: u8) -> io::Result<()> {
         match self.family {
             SocketAddrFamily::V4 => util::set_ip_ttl(self.udp_socket(), value)?,
             SocketAddrFamily::V6 => util::set_ipv6_unicast_hops(self.udp_socket(), value)?,
@@ -302,7 +379,7 @@ impl UdpSocket for SystemUdpSocket {
         Ok(value)
     }
 
-    fn set_receive_buffer_size(&mut self, value: usize) -> io::Result<()> {
+    fn set_receive_buffer_size(&self, value: usize) -> io::Result<()> {
         util::set_socket_recv_buffer_size(self.udp_socket(), value)?;
         Ok(())
     }
@@ -312,24 +389,24 @@ impl UdpSocket for SystemUdpSocket {
         Ok(value)
     }
 
-    fn set_send_buffer_size(&mut self, value: usize) -> io::Result<()> {
+    fn set_send_buffer_size(&self, value: usize) -> io::Result<()> {
         util::set_socket_send_buffer_size(self.udp_socket(), value)?;
         Ok(())
     }
 }
 
 pub struct IncomingDatagramStream {
-    pub(crate) inner: Arc<dyn UdpSocket>,
+    pub(crate) inner: Arc<dyn UdpSocket + Send + Sync>,
 
-    /// If this has a value, the stream is "connected".
-    pub(crate) remote_address: Option<SocketAddr>,
+    /// Whether the UDP stream is connected to a remote host.
+    pub(crate) is_connected: bool,
 }
 
 pub struct OutgoingDatagramStream {
-    pub(crate) inner: Arc<dyn UdpSocket>,
+    pub(crate) inner: Arc<dyn UdpSocket + Send + Sync>,
 
-    /// If this has a value, the stream is "connected".
-    pub(crate) remote_address: Option<SocketAddr>,
+    /// Whether the UDP stream is connected to a remote host.
+    pub(crate) is_connected: bool,
 
     pub(crate) send_state: SendState,
 }
