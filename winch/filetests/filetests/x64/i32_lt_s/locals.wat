@@ -15,22 +15,27 @@
         (i32.lt_s)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 48c744240800000000   	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f873a000000         	ja	0x52
+;;   18:	 48c744240800000000   	
 ;; 				mov	qword ptr [rsp + 8], 0
-;;   11:	 4c893424             	mov	qword ptr [rsp], r14
-;;   15:	 b802000000           	mov	eax, 2
-;;   1a:	 8944240c             	mov	dword ptr [rsp + 0xc], eax
-;;   1e:	 b803000000           	mov	eax, 3
-;;   23:	 89442408             	mov	dword ptr [rsp + 8], eax
-;;   27:	 8b442408             	mov	eax, dword ptr [rsp + 8]
-;;   2b:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
-;;   2f:	 39c1                 	cmp	ecx, eax
-;;   31:	 b900000000           	mov	ecx, 0
-;;   36:	 400f9cc1             	setl	cl
-;;   3a:	 89c8                 	mov	eax, ecx
-;;   3c:	 4883c410             	add	rsp, 0x10
-;;   40:	 5d                   	pop	rbp
-;;   41:	 c3                   	ret	
+;;      	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 b802000000           	mov	eax, 2
+;;      	 8944240c             	mov	dword ptr [rsp + 0xc], eax
+;;      	 b803000000           	mov	eax, 3
+;;      	 89442408             	mov	dword ptr [rsp + 8], eax
+;;      	 8b442408             	mov	eax, dword ptr [rsp + 8]
+;;      	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
+;;      	 39c1                 	cmp	ecx, eax
+;;      	 b900000000           	mov	ecx, 0
+;;      	 400f9cc1             	setl	cl
+;;      	 89c8                 	mov	eax, ecx
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   52:	 0f0b                 	ud2	

@@ -1366,17 +1366,17 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, 0(%rdx)
-;   movq    %rsi, 8(%rdx)
-;   movq    %rdi, 16(%rdx)
-;   movq    %rsi, 24(%rdx)
+;   movq    %rsi, 0(%rdx)
+;   movq    %rdi, 8(%rdx)
+;   movq    %rsi, 16(%rdx)
+;   movq    %rdi, 24(%rdx)
 ;   movq    %rdi, 32(%rdx)
-;   movq    %rdi, 40(%rdx)
-;   movq    %rsi, 48(%rdx)
-;   movq    %rdi, 56(%rdx)
-;   movq    %rdi, %rax
-;   movq    %rsi, 64(%rdx)
+;   movq    %rsi, 40(%rdx)
+;   movq    %rdi, 48(%rdx)
+;   movq    %rdi, %rcx
+;   movq    %rsi, 56(%rdx)
 ;   movq    %rsi, %rdx
+;   movq    %rcx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1386,17 +1386,17 @@ block0(v0: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, (%rdx)
-;   movq %rsi, 8(%rdx)
-;   movq %rdi, 0x10(%rdx)
-;   movq %rsi, 0x18(%rdx)
+;   movq %rsi, (%rdx)
+;   movq %rdi, 8(%rdx)
+;   movq %rsi, 0x10(%rdx)
+;   movq %rdi, 0x18(%rdx)
 ;   movq %rdi, 0x20(%rdx)
-;   movq %rdi, 0x28(%rdx)
-;   movq %rsi, 0x30(%rdx)
-;   movq %rdi, 0x38(%rdx)
-;   movq %rdi, %rax
-;   movq %rsi, 0x40(%rdx)
+;   movq %rsi, 0x28(%rdx)
+;   movq %rdi, 0x30(%rdx)
+;   movq %rdi, %rcx
+;   movq %rsi, 0x38(%rdx)
 ;   movq %rsi, %rdx
+;   movq %rcx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1421,12 +1421,10 @@ block0(v0: i128, v1: i128):
 ;   load_ext_name %g+0, %r9
 ;   call    *%r9
 ;   movq    0(%rsp), %r8
-;   movq    8(%rsp), %r9
 ;   addq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust -16
-;   movq    %r13, %rcx
-;   movq    %r8, 0(%rcx)
-;   movq    %r9, 8(%rcx)
+;   movq    %r13, %r9
+;   movq    %r8, 0(%r9)
 ;   movq    0(%rsp), %r13
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
@@ -1446,11 +1444,9 @@ block0(v0: i128, v1: i128):
 ;   movabsq $0, %r9 ; reloc_external Abs8 %g 0
 ;   callq *%r9
 ;   movq (%rsp), %r8
-;   movq 8(%rsp), %r9
 ;   addq $0x10, %rsp
-;   movq %r13, %rcx
-;   movq %r8, (%rcx)
-;   movq %r9, 8(%rcx)
+;   movq %r13, %r9
+;   movq %r8, (%r9)
 ;   movq (%rsp), %r13
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp

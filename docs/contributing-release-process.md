@@ -6,7 +6,7 @@ others might be curious in this as well!
 
 ## Releasing a major version
 
-Major versions of Wasmtime are relased once-a-month. Most of this is automatic
+Major versions of Wasmtime are released once-a-month. Most of this is automatic
 and all that needs to be done is to merge GitHub PRs that CI will
 generate. At a high-level the structure of Wasmtime's release process is:
 

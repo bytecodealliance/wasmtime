@@ -1,5 +1,15 @@
 --------------------------------------------------------------------------------
 
+## 18.0.0
+
+Unreleased.
+
+### Added
+
+### Changed
+
+--------------------------------------------------------------------------------
+
 ## 17.0.0
 
 Unreleased.
@@ -12,7 +22,7 @@ Unreleased.
 
 ## 16.0.0
 
-Unreleased.
+Released 2023-12-20
 
 ### Added
 
@@ -47,6 +57,10 @@ Unreleased.
 * The `wasmtime --version` CLI output will now include date/commit information
   when Wasmtime is built from a git checkout.
   [#7610](https://github.com/bytecodealliance/wasmtime/pull/7610)
+
+* Debug intrinsic symbols required by LLDB and GDB have been moved behind a
+  `debug-builtins` feature of the `wasmtime` crate which is enabled by default.
+  [#7626](https://github.com/bytecodealliance/wasmtime/pull/7626)
 
 ### Fixed
 

@@ -68,17 +68,17 @@ be called `libwasmtime.{a,so}`, on macOS it will be called
 ## Building Other Wasmtime Crates
 
 You can build any of the Wasmtime crates by appending `-p wasmtime-whatever` to
-the `cargo build` invocation. For example, to build the `wasmtime-jit` crate,
+the `cargo build` invocation. For example, to build the `wasmtime-environ` crate,
 execute this command:
 
 ```shell
-cargo build -p wasmtime-jit
+cargo build -p wasmtime-environ
 ```
 
 Alternatively, you can `cd` into the crate's directory, and run `cargo build`
 there, without needing to supply the `-p` flag:
 
 ```shell
-cd crates/jit/
+cd crates/environ/
 cargo build
 ```

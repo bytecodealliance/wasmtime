@@ -57,12 +57,12 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{ABIOperand, ABIResultsData, ABISig, RetArea, ABI},
+    abi::{ABIOperand, ABISig, RetArea, ABI},
     codegen::{
         ptr_type_from_ptr_size, BuiltinFunction, BuiltinType, Callee, CalleeInfo, CodeGenContext,
         TypedReg,
     },
-    masm::{CalleeKind, MacroAssembler, OperandSize, SPOffset},
+    masm::{CalleeKind, MacroAssembler, MemMoveDirection, OperandSize, SPOffset},
     reg::Reg,
     stack::Val,
     CallingConvention,
@@ -92,15 +92,14 @@ impl FnCall {
     {
         let callee = resolve(context);
         let ptr_type = ptr_type_from_ptr_size(context.vmoffsets.ptr.size());
-        let sig = Self::get_sig::<M>(&callee, ptr_type);
-        let sig = sig.as_ref();
-        let kind = Self::map(&context.vmoffsets, &callee, sig, context, masm);
+        let mut sig = Self::get_sig::<M>(&callee, ptr_type);
+        let kind = Self::map(&context.vmoffsets, &callee, sig.as_ref(), context, masm);
 
         context.spill(masm);
         let ret_area = Self::make_ret_area(&sig, masm);
         let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
-            Self::assign(sig, ret_area.as_ref(), context, masm);
+            Self::assign(sig.as_ref(), ret_area.as_ref(), context, masm);
             kind
         });
 
@@ -109,14 +108,18 @@ impl FnCall {
             _ => {}
         }
 
-        Self::cleanup(sig, reserved_stack, ret_area, masm, context);
+        Self::cleanup(&mut sig, reserved_stack, ret_area, masm, context);
     }
 
     /// Calculates the return area for the callee, if any.
     fn make_ret_area<M: MacroAssembler>(callee_sig: &ABISig, masm: &mut M) -> Option<RetArea> {
-        callee_sig.results.has_stack_results().then(|| {
-            masm.reserve_stack(callee_sig.results_stack_size());
-            RetArea::sp(masm.sp_offset())
+        callee_sig.has_stack_results().then(|| {
+            let base = masm.sp_offset().as_u32();
+            let end = base + callee_sig.results_stack_size();
+            if end > base {
+                masm.reserve_stack(end - base);
+            }
+            RetArea::sp(SPOffset::from_u32(end))
         })
     }
 
@@ -300,7 +303,7 @@ impl FnCall {
     /// Cleanup stack space, handle multiple results, and free registers after
     /// emitting the call.
     fn cleanup<M: MacroAssembler>(
-        sig: &ABISig,
+        sig: &mut Cow<'_, ABISig>,
         reserved_space: u32,
         ret_area: Option<RetArea>,
         masm: &mut M,
@@ -330,16 +333,29 @@ impl FnCall {
                 let result_bytes = sig.results_stack_size();
                 debug_assert!(sp.as_u32() >= stack_consumed + result_bytes);
                 let dst = SPOffset::from_u32(sp.as_u32() - stack_consumed);
-                masm.memmove(sp, dst, result_bytes);
+                masm.memmove(sp, dst, result_bytes, MemMoveDirection::LowToHigh);
             }
         };
 
         // Free the bytes consumed by the call.
         masm.free_stack(stack_consumed);
 
-        let mut results_data = ABIResultsData::wrap(sig.results.clone());
-        results_data.ret_area = ret_area;
+        if let Some(area) = ret_area {
+            debug_assert!(!area.is_uninit());
+            if stack_consumed > 0 {
+                sig.to_mut()
+                    .results
+                    .set_ret_area(RetArea::sp(masm.sp_offset()));
+            } else {
+                // If theres a return area, and no memory was adjusted
+                // (memmoved), the offsets should be equal.
+                debug_assert_eq!(area.unwrap_sp(), masm.sp_offset());
+                sig.to_mut().results.set_ret_area(area);
+            }
+        }
 
-        context.push_abi_results(&results_data, masm);
+        context.push_abi_results(&sig.results, masm, |results, _, _| {
+            results.ret_area().copied()
+        });
     }
 }

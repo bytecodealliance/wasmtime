@@ -144,7 +144,7 @@ async fn handler(
     use_tls: bool,
     connect_timeout: Duration,
     first_byte_timeout: Duration,
-    request: http::Request<HyperOutgoingBody>,
+    mut request: http::Request<HyperOutgoingBody>,
     between_bytes_timeout: Duration,
 ) -> Result<IncomingResponseInternal, types::ErrorCode> {
     let tcp_stream = TcpStream::connect(authority.clone())
@@ -243,6 +243,20 @@ async fn handler(
 
         (sender, worker)
     };
+
+    // at this point, the request contains the scheme and the authority, but
+    // the http packet should only include those if addressing a proxy, so
+    // remove them here, since SendRequest::send_request does not do it for us
+    *request.uri_mut() = http::Uri::builder()
+        .path_and_query(
+            request
+                .uri()
+                .path_and_query()
+                .map(|p| p.as_str())
+                .unwrap_or("/"),
+        )
+        .build()
+        .expect("comes from valid request");
 
     let resp = timeout(first_byte_timeout, sender.send_request(request))
         .await

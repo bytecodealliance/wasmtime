@@ -7,12 +7,17 @@
 	(i32.add)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 b8ffffffff           	mov	eax, 0xffffffff
-;;   11:	 83c0ff               	add	eax, -1
-;;   14:	 4883c408             	add	rsp, 8
-;;   18:	 5d                   	pop	rbp
-;;   19:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8712000000         	ja	0x2a
+;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 b8ffffffff           	mov	eax, 0xffffffff
+;;      	 83c0ff               	add	eax, -1
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   2a:	 0f0b                 	ud2	

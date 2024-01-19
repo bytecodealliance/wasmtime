@@ -8,10 +8,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use super::{
-    network::{SocketAddrCheck, SocketProtocolMode},
-    SocketAddrFamily,
-};
+use super::network::{SocketAddrCheck, SocketAddrFamily};
 
 /// The state of a UDP socket.
 ///
@@ -45,7 +42,7 @@ pub struct UdpSocket {
     pub(crate) udp_state: UdpState,
 
     /// Socket address family.
-    pub(crate) family: SocketProtocolMode,
+    pub(crate) family: SocketAddrFamily,
 
     /// The check of allowed addresses
     pub(crate) addr_check: SocketAddrCheck,
@@ -65,19 +62,16 @@ impl UdpSocket {
         // by our async implementation.
         let fd = util::udp_socket(family, Blocking::No)?;
 
-        let socket_address_family = match family {
-            SocketAddrFamily::V4 => SocketProtocolMode::Ipv4,
-            SocketAddrFamily::V6 => SocketProtocolMode::Ipv6 {
-                v6only: rustix::net::sockopt::get_ipv6_v6only(&fd)?,
-            },
-        };
+        if family == SocketAddrFamily::V6 {
+            rustix::net::sockopt::set_ipv6_v6only(&fd, true)?;
+        }
 
         let socket = Self::setup_tokio_udp_socket(fd)?;
 
         Ok(UdpSocket {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
-            family: socket_address_family,
+            family,
             addr_check: socket_addr_check,
         })
     }
@@ -107,7 +101,7 @@ pub struct OutgoingDatagramStream {
     pub(crate) remote_address: Option<SocketAddr>,
 
     /// Socket address family.
-    pub(crate) family: SocketProtocolMode,
+    pub(crate) family: SocketAddrFamily,
 
     pub(crate) send_state: SendState,
 

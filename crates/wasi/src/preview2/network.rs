@@ -195,12 +195,6 @@ impl From<rustix::io::Errno> for SocketError {
     }
 }
 
-#[derive(Copy, Clone)]
-pub(crate) enum SocketProtocolMode {
-    Ipv4,
-    Ipv6 { v6only: bool },
-}
-
 /// IP version. Effectively the discriminant of `SocketAddr`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum SocketAddrFamily {

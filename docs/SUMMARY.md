@@ -54,6 +54,7 @@
   - [Testing](./contributing-testing.md)
   - [Fuzzing](./contributing-fuzzing.md)
   - [CI](./contributing-ci.md)
+  - [Reducing Test Cases](./contributing-reducing-test-cases.md)
   - [Cross Compiling](./contributing-cross-compiling.md)
   - [Coding Guidelines](./contributing-coding-guidelines.md)
   - [Development Process](./contributing-development-process.md)

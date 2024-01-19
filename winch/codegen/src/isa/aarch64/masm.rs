@@ -1,7 +1,7 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData},
     isa::reg::Reg,
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
@@ -47,6 +47,10 @@ impl Masm for MacroAssembler {
         self.asm.stp(fp, lr, addr);
         self.asm.mov_rr(sp, fp, OperandSize::S64);
         self.move_sp_to_shadow_sp();
+    }
+
+    fn check_stack(&mut self) {
+        // TODO: implement when we have more complete assembler support
     }
 
     fn epilogue(&mut self, locals_size: u32) {
@@ -113,6 +117,10 @@ impl Masm for MacroAssembler {
     }
 
     fn table_size(&mut self, _table_data: &TableData, _context: &mut CodeGenContext) {
+        todo!()
+    }
+
+    fn memory_size(&mut self, _heap_data: &HeapData, _context: &mut CodeGenContext) {
         todo!()
     }
 
@@ -337,6 +345,64 @@ impl Masm for MacroAssembler {
     }
 
     fn popcnt(&mut self, _context: &mut CodeGenContext, _size: OperandSize) {
+        todo!()
+    }
+
+    fn signed_truncate(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn unsigned_truncate(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _tmp_fpr: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn signed_convert(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn unsigned_convert(
+        &mut self,
+        _src: Reg,
+        _dst: Reg,
+        _tmp_gpr: Reg,
+        _src_size: OperandSize,
+        _dst_size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn reinterpret_float_as_int(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn reinterpret_int_as_float(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn demote(&mut self, _src: Reg, _dst: Reg) {
+        todo!()
+    }
+
+    fn promote(&mut self, _src: Reg, _dst: Reg) {
         todo!()
     }
 

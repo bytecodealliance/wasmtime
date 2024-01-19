@@ -88,38 +88,21 @@ fn test_udp_connect_dual_stack(net: &Network) {
         IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, v4_server_addr.port());
 
     // Tests:
-    {
-        let v6_client = UdpSocket::new(IpAddressFamily::Ipv6).unwrap();
+    let v6_client = UdpSocket::new(IpAddressFamily::Ipv6).unwrap();
 
-        // Even on platforms that don't support dualstack sockets,
-        // setting ipv6_only to true (disabling dualstack mode) should work.
-        v6_client.set_ipv6_only(true).unwrap();
+    v6_client.blocking_bind_unspecified(&net).unwrap();
 
-        v6_client.blocking_bind_unspecified(&net).unwrap();
+    // Connecting to an IPv4 address on an IPv6 socket should fail:
+    assert!(matches!(
+        v6_client.stream(Some(v4_server_addr)),
+        Err(ErrorCode::InvalidArgument)
+    ));
 
-        // Connecting to an IPv4-mapped-IPv6 address on an ipv6-only socket should fail:
-        assert!(matches!(
-            v6_client.stream(Some(v6_server_addr)),
-            Err(ErrorCode::InvalidArgument)
-        ));
-    }
-
-    {
-        let v6_client = UdpSocket::new(IpAddressFamily::Ipv6).unwrap();
-
-        v6_client.set_ipv6_only(false).unwrap();
-        v6_client.blocking_bind_unspecified(&net).unwrap();
-        v6_client.stream(Some(v6_server_addr)).unwrap();
-
-        assert_eq!(
-            v6_client.local_address().unwrap().family(),
-            IpAddressFamily::Ipv6
-        );
-        assert_eq!(
-            v6_client.remote_address().unwrap().family(),
-            IpAddressFamily::Ipv6
-        );
-    }
+    // Connecting to an IPv4-mapped-IPv6 address on an IPv6 socket should fail:
+    assert!(matches!(
+        v6_client.stream(Some(v6_server_addr)),
+        Err(ErrorCode::InvalidArgument)
+    ));
 }
 
 fn main() {

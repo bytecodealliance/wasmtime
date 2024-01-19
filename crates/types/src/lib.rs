@@ -486,6 +486,7 @@ pub trait TypeConvert {
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
 
             wasmparser::HeapType::Any
+            | wasmparser::HeapType::Exn
             | wasmparser::HeapType::None
             | wasmparser::HeapType::NoExtern
             | wasmparser::HeapType::NoFunc

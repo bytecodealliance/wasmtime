@@ -1,5 +1,7 @@
 ;; Prelude definitions specific to the mid-end.
 
+;; Any `extern` definitions here are generally implemented in `src/opts.rs`.
+
 ;;;;; eclass and enode access ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extract any node(s) for the given eclass ID.
@@ -92,3 +94,41 @@
 	(if-let $true (u64_le c (ty_umax ty)))
     (iconst ty (imm64 c)))
 (rule 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))
+
+;; These take `Value`, rather than going through `inst_data_tupled`, because
+;; most of the time they want to return the original `Value`, and it would be
+;; a waste to need to re-GVN the instruction data in those cases.
+(decl multi sextend_maybe_etor (Type Value) Value)
+(extern extractor infallible sextend_maybe_etor sextend_maybe_etor)
+(decl multi uextend_maybe_etor (Type Value) Value)
+(extern extractor infallible uextend_maybe_etor uextend_maybe_etor)
+
+;; Match or Construct a possibly-`uextend`ed value.
+;; Gives the extended-to type and inner value when matching something that was
+;; extended, or the input value and its type when the value isn't an extension.
+;; Useful to write a single pattern that can match things that may or may not
+;; have undergone C's "usual arithmetic conversions".
+;; When generating values, extending to the same type is invalid CLIF,
+;; so this avoids doing that where there's no extension actually needed.
+(decl uextend_maybe (Type Value) Value)
+(extractor (uextend_maybe ty val) (uextend_maybe_etor ty val))
+(rule 0 (uextend_maybe ty val) (uextend ty val))
+(rule 1 (uextend_maybe ty val@(value_type ty)) val)
+
+;; Same as `uextend_maybe` above, just for `sextend`.
+(decl sextend_maybe (Type Value) Value)
+(extractor (sextend_maybe ty val) (sextend_maybe_etor ty val))
+(rule 0 (sextend_maybe ty val) (sextend ty val))
+(rule 1 (sextend_maybe ty val@(value_type ty)) val)
+
+(decl unary_op (Type Opcode Value) Value)
+(extractor (unary_op ty opcode x)
+           (inst_data ty (InstructionData.Unary opcode x)))
+(rule (unary_op ty opcode x)
+      (make_inst ty (InstructionData.Unary opcode x)))
+
+(decl binary_op (Type Opcode Value Value) Value)
+(extractor (binary_op ty opcode x y)
+           (inst_data ty (InstructionData.Binary opcode (value_array_2 x y))))
+(rule (binary_op ty opcode x y)
+      (make_inst ty (InstructionData.Binary opcode (value_array_2_ctor x y))))

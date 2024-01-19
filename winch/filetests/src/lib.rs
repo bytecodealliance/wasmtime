@@ -2,7 +2,7 @@ pub mod disasm;
 
 #[cfg(test)]
 mod test {
-    use super::disasm::disasm;
+    use super::disasm::{disasm, OffsetStyle};
     use anyhow::Context;
     use cranelift_codegen::settings::{self, Configurable};
     use serde_derive::{Deserialize, Serialize};
@@ -173,7 +173,7 @@ mod test {
             )
             .expect("Couldn't compile function");
 
-        disasm(buffer.data(), isa).unwrap()
+        disasm(buffer.data(), isa, OffsetStyle::Minimal).unwrap()
     }
 
     struct DummyConvert;

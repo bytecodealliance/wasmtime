@@ -1,8 +1,8 @@
 use crate::{
-    abi::{ABIOperand, ABIResultsData, ABISig, RetArea, ABI},
-    codegen::BlockTypeInfo,
+    abi::{ABIOperand, ABISig, RetArea, ABI},
+    codegen::BlockSig,
     isa::reg::Reg,
-    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
+    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::TypedReg,
 };
 use anyhow::Result;
@@ -27,7 +27,7 @@ where
     M: MacroAssembler,
 {
     /// The ABI-specific representation of the function signature, excluding results.
-    sig: ABISig,
+    pub sig: ABISig,
 
     /// The code generation context.
     pub context: CodeGenContext<'a, 'translation>,
@@ -76,29 +76,32 @@ where
         Ok(())
     }
 
-    // TODO stack checks
     fn emit_start(&mut self) -> Result<()> {
         self.masm.prologue();
         self.masm.reserve_stack(self.context.frame.locals_size);
 
-        // If the function has multiple returns, assign the corresponding base.
-        let mut results_data = ABIResultsData::wrap(self.sig.results.clone());
-        if self.sig.params.has_retptr() {
-            results_data.ret_area =
-                Some(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
-        }
+        // Check for stack overflow after reserving space, so that we get the most up-to-date view
+        // of the stack pointer. This assumes that no writes to the stack occur in `reserve_stack`.
+        self.masm.check_stack();
+
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
-        self.control_frames
-            .push(ControlStackFrame::function_body_block(
-                results_data,
-                BlockTypeInfo::new(
-                    self.sig.params_without_retptr().len(),
-                    self.sig.results.len(),
-                ),
-                self.masm,
-                &mut self.context,
-            ));
+        self.control_frames.push(ControlStackFrame::block(
+            BlockSig::from_sig(self.sig.clone()),
+            self.masm,
+            &mut self.context,
+        ));
+
+        // Set the return area of the results *after* initializing the block. In
+        // the function body block case, we'll treat the results as any other
+        // case, addressed from the stack pointer, and when ending the function
+        // the return area will be set to the return pointer.
+        if self.sig.params.has_retptr() {
+            self.sig
+                .results
+                .set_ret_area(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
+        }
+
         Ok(())
     }
 
@@ -117,34 +120,26 @@ where
             // if-then branch, but if the `if` was reachable at
             // entry, the if-else branch will be reachable.
             self.context.reachable = true;
-            self.context.ensure_stack_state(self.masm, &frame);
-            frame.bind_else(self.masm, self.context.reachable);
+            frame.ensure_stack_state(self.masm, &mut self.context);
+            frame.bind_else(self.masm, &mut self.context);
         }
     }
 
     pub fn handle_unreachable_end(&mut self) {
-        let frame = self.control_frames.pop().unwrap();
+        let mut frame = self.control_frames.pop().unwrap();
         // We just popped the outermost block.
         let is_outermost = self.control_frames.len() == 0;
+
         if frame.is_next_sequence_reachable() {
             self.context.reachable = true;
-
-            self.context.ensure_stack_state(self.masm, &frame);
-            // If the current frame is the outermost frame, which corresponds to the
-            // current function's body, only bind the exit label as we don't need to
-            // push any more values to the value stack, else perform the entire `bind_end`
-            // process, which involves pushing results to the value stack.
-            if is_outermost {
-                frame.bind_exit_label(self.masm);
-            } else {
-                frame.bind_end(self.masm, &mut self.context);
-            }
+            frame.ensure_stack_state(self.masm, &mut self.context);
+            frame.bind_end(self.masm, &mut self.context);
         } else if is_outermost {
             // If we reach the end of the function in an unreachable
             // state, perform the necessary cleanup to leave the stack
             // and SP in the expected state.  The compiler can enter
             // in this state through an infinite loop.
-            self.context.ensure_stack_state(self.masm, &frame);
+            frame.ensure_stack_state(self.masm, &mut self.context);
         }
     }
 
@@ -288,7 +283,25 @@ where
 
     /// Emit the usual function end instruction sequence.
     fn emit_end(&mut self) -> Result<()> {
-        assert!(self.context.stack.len() == 0);
+        // The implicit body block is treated a normal block (it pushes results
+        // to the stack); so when reaching the end, we pop them taking as
+        // reference the current function's signature.
+        let base = SPOffset::from_u32(self.context.frame.locals_size);
+        if self.context.reachable {
+            ControlStackFrame::pop_abi_results_impl(
+                &mut self.sig.results,
+                &mut self.context,
+                self.masm,
+                |results, _, _| results.ret_area().copied(),
+            );
+        } else {
+            // If we reach the end of the function in a unreachable code state,
+            // simly truncate to the the expected values.
+            // The compiler could enter in this state through an infinite loop.
+            self.context.truncate_stack_to(0);
+            self.masm.reset_stack_pointer(base);
+        }
+        debug_assert_eq!(self.context.stack.len(), 0);
         self.masm.epilogue(self.context.frame.locals_size);
         Ok(())
     }

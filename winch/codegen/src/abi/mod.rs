@@ -1,5 +1,3 @@
-//! This module provides all the necessary building blocks for
-//! implementing ISA specific ABIs.
 //!
 //! # Default ABI
 //!
@@ -232,11 +230,25 @@ impl Default for ABIOperands {
 /// Machine stack location of the stack results.
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum RetArea {
-    /// Addressed from SP at the given offset.
+    /// Addressed from the stack pointer at the given offset.
     SP(SPOffset),
     /// The address of the results base is stored at a particular,
     /// well known [LocalSlot].
     Slot(LocalSlot),
+    /// The return area cannot be fully resolved ahead-of-time.
+    /// If there are results on the stack, this is the default state to which
+    /// all return areas get initialized to until they can be fully resolved to
+    /// either a [RetArea::SP] or [RetArea::Slot].
+    ///
+    /// This allows a more explicit differentiation between the existence of
+    /// a return area versus no return area at all.
+    Uninit,
+}
+
+impl Default for RetArea {
+    fn default() -> Self {
+        Self::Uninit
+    }
 }
 
 impl RetArea {
@@ -260,6 +272,22 @@ impl RetArea {
             _ => unreachable!(),
         }
     }
+
+    /// Returns true if the return area is addressed via the stack pointer.
+    pub fn is_sp(&self) -> bool {
+        match self {
+            Self::SP(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Returns true if the return area is uninitiliazed.
+    pub fn is_uninit(&self) -> bool {
+        match self {
+            Self::Uninit => true,
+            _ => false,
+        }
+    }
 }
 
 /// ABI-specific representation of an [`ABISig`].
@@ -267,33 +295,8 @@ impl RetArea {
 pub(crate) struct ABIResults {
     /// The result operands.
     operands: ABIOperands,
-}
-
-/// Data about the [`ABIResults`].
-/// This struct is meant to be used once the [`ABIResults`] can be
-/// materialized to a particular location in the machine stack,
-/// if any.
-#[derive(Debug, Clone)]
-pub(crate) struct ABIResultsData {
-    /// The results.
-    pub results: ABIResults,
-    /// The return pointer, if any.
-    pub ret_area: Option<RetArea>,
-}
-
-impl ABIResultsData {
-    /// Create a [`ABIResultsData`] without a stack results base.
-    pub fn wrap(results: ABIResults) -> Self {
-        Self {
-            results,
-            ret_area: None,
-        }
-    }
-
-    /// Unwraps the stack results base.
-    pub fn unwrap_ret_area(&self) -> &RetArea {
-        self.ret_area.as_ref().unwrap()
-    }
+    /// The return area, if there are results on the stack.
+    ret_area: Option<RetArea>,
 }
 
 impl ABIResults {
@@ -357,7 +360,8 @@ impl ABIResults {
 
     /// Create a new [`ABIResults`] from [`ABIOperands`].
     pub fn new(operands: ABIOperands) -> Self {
-        Self { operands }
+        let ret_area = (operands.bytes > 0).then(|| RetArea::default());
+        Self { operands, ret_area }
     }
 
     /// Returns a reference to a [HashSet<Reg>], which includes
@@ -374,6 +378,11 @@ impl ABIResults {
     /// Returns the length of the result.
     pub fn len(&self) -> usize {
         self.operands.inner.len()
+    }
+
+    /// Returns the length of results on the stack.
+    pub fn stack_operands_len(&self) -> usize {
+        self.operands().len() - self.regs().len()
     }
 
     /// Get the [`ABIOperand`] result in the nth position.
@@ -400,8 +409,27 @@ impl ABIResults {
 
     /// Returns true if the [`ABIResults`] require space on the machine stack
     /// for results.
-    pub fn has_stack_results(&self) -> bool {
+    pub fn on_stack(&self) -> bool {
         self.operands.bytes > 0
+    }
+
+    /// Set the return area of the signature.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if trying to set a return area if there are
+    /// no results on the stack or if trying to set an uninitialize return area.
+    /// This method must only be used when the return area can be fully
+    /// materialized.
+    pub fn set_ret_area(&mut self, area: RetArea) {
+        debug_assert!(self.on_stack());
+        debug_assert!(!area.is_uninit());
+        self.ret_area = Some(area);
+    }
+
+    /// Returns a reference to the return area, if any.
+    pub fn ret_area(&self) -> Option<&RetArea> {
+        self.ret_area.as_ref()
     }
 }
 
@@ -587,7 +615,7 @@ impl ABISig {
 
     /// Returns true if the signature has results on the stack.
     pub fn has_stack_results(&self) -> bool {
-        self.results.has_stack_results()
+        self.results.on_stack()
     }
 }
 

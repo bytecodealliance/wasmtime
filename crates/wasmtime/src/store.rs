@@ -780,12 +780,13 @@ impl<T> Store<T> {
         self.inner.gc()
     }
 
-    /// Returns the amount fuel in this [`Store`].
+    /// Returns the amount fuel in this [`Store`]. When fuel is enabled, it must
+    /// be configured via [`Store::set_fuel`].
     ///
-    /// If fuel consumption is not enabled via
-    /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
-    /// function will return `None`. Also note that fuel, if enabled, must be
-    /// originally configured via [`Store::set_fuel`].
+    /// # Errors
+    ///
+    /// This function will return an error if fuel consumption is not enabled
+    /// via [`Config::consume_fuel`](crate::Config::consume_fuel).
     pub fn get_fuel(&self) -> Result<u64> {
         self.inner.get_fuel()
     }

@@ -775,15 +775,7 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_half_width(&mut self, ty: Type) -> Option<Type> {
-            let new_lane = match ty.lane_type() {
-                I16 => I8,
-                I32 => I16,
-                I64 => I32,
-                F64 => F32,
-                _ => return None,
-            };
-
-            new_lane.by(ty.lane_count())
+            ty.half_width()
         }
 
         #[inline]
@@ -827,7 +819,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
+        fn signed_cond_code(&mut self, cc: &IntCC) -> Option<IntCC> {
             match cc {
                 IntCC::Equal
                 | IntCC::UnsignedGreaterThanOrEqual

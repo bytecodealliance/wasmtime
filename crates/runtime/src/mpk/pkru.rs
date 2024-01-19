@@ -30,6 +30,7 @@ pub const ALLOW_ACCESS: u32 = 0;
 pub const DISABLE_ACCESS: u32 = 0b11111111_11111111_11111111_11111111;
 
 /// Read the value of the `PKRU` register.
+#[inline]
 pub fn read() -> u32 {
     // ECX must be 0 to prevent a general protection exception (#GP).
     let ecx: u32 = 0;
@@ -42,6 +43,7 @@ pub fn read() -> u32 {
 }
 
 /// Write a value to the `PKRU` register.
+#[inline]
 pub fn write(pkru: u32) {
     // Both ECX and EDX must be 0 to prevent a general protection exception
     // (#GP).

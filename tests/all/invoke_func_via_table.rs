@@ -11,7 +11,7 @@ fn test_invoke_func_via_table() -> Result<()> {
       (module
         (func $f (result i64) (i64.const 42))
 
-        (table (export "table") 1 1 anyfunc)
+        (table (export "table") 1 1 funcref)
         (elem (i32.const 0) $f)
       )
     "#;

@@ -1,5 +1,4 @@
 use crate::{isa::reg::Reg, masm::StackSlot};
-use std::collections::VecDeque;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::WasmType;
 
@@ -261,7 +260,7 @@ impl Val {
 /// The shadow stack used for compilation.
 #[derive(Default, Debug)]
 pub(crate) struct Stack {
-    inner: VecDeque<Val>,
+    inner: Vec<Val>,
 }
 
 impl Stack {
@@ -314,12 +313,12 @@ impl Stack {
 
     /// Push a value to the stack.
     pub fn push(&mut self, val: Val) {
-        self.inner.push_back(val);
+        self.inner.push(val);
     }
 
     /// Peek into the top in the stack.
     pub fn peek(&self) -> Option<&Val> {
-        self.inner.back()
+        self.inner.last()
     }
 
     /// Returns an iterator referencing the last n items of the stack,
@@ -329,29 +328,12 @@ impl Stack {
         assert!(n <= len);
 
         let partition = len - n;
-        self.inner.range(partition..)
-    }
-
-    /// Duplicates the top `n` elements of the stack.
-    // Will be needed for control flow, it's just not integrated yet.
-    #[allow(dead_code)]
-    pub fn dup(&mut self, n: usize) {
-        let len = self.len();
-        assert!(n <= len);
-        let partition = len - n;
-
-        if n > 0 {
-            for e in partition..len {
-                if let Some(v) = self.inner.get(e) {
-                    self.push(*v)
-                }
-            }
-        }
+        self.inner[partition..].into_iter()
     }
 
     /// Pops the top element of the stack, if any.
     pub fn pop(&mut self) -> Option<Val> {
-        self.inner.pop_back()
+        self.inner.pop()
     }
 
     /// Pops the element at the top of the stack if it is an i32 const;
@@ -393,8 +375,13 @@ impl Stack {
     }
 
     /// Get a mutable reference to the inner stack representation.
-    pub fn inner_mut(&mut self) -> &mut VecDeque<Val> {
+    pub fn inner_mut(&mut self) -> &mut Vec<Val> {
         &mut self.inner
+    }
+
+    /// Get a reference to the inner stack representation.
+    pub fn inner(&self) -> &Vec<Val> {
+        &self.inner
     }
 
     /// Calculates the size of, in bytes, of the top n [Memory] entries

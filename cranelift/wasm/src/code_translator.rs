@@ -2503,7 +2503,42 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(r);
         }
 
-        Operator::RefI31 | Operator::I31GetS | Operator::I31GetU => {
+        Operator::TryTable { .. } | Operator::ThrowRef => {
+            unimplemented!("exception operators not yet implemented")
+        }
+
+        Operator::RefI31
+        | Operator::I31GetS
+        | Operator::I31GetU
+        | Operator::RefEq
+        | Operator::RefTestNonNull { .. }
+        | Operator::RefTestNullable { .. }
+        | Operator::RefCastNonNull { .. }
+        | Operator::RefCastNullable { .. }
+        | Operator::BrOnCast { .. }
+        | Operator::BrOnCastFail { .. }
+        | Operator::AnyConvertExtern
+        | Operator::ExternConvertAny
+        | Operator::ArrayNew { .. }
+        | Operator::ArrayNewDefault { .. }
+        | Operator::ArrayNewFixed { .. }
+        | Operator::ArrayNewData { .. }
+        | Operator::ArrayNewElem { .. }
+        | Operator::ArrayGet { .. }
+        | Operator::ArrayGetU { .. }
+        | Operator::ArrayGetS { .. }
+        | Operator::ArraySet { .. }
+        | Operator::ArrayLen { .. }
+        | Operator::ArrayFill { .. }
+        | Operator::ArrayCopy { .. }
+        | Operator::ArrayInitData { .. }
+        | Operator::ArrayInitElem { .. }
+        | Operator::StructNew { .. }
+        | Operator::StructNewDefault { .. }
+        | Operator::StructGetS { .. }
+        | Operator::StructGetU { .. }
+        | Operator::StructSet { .. }
+        | Operator::StructGet { .. } => {
             unimplemented!("GC operators not yet implemented")
         }
     };
@@ -2685,7 +2720,7 @@ where
     // `addr32 + offset` to `addr32 + offset + width` (not inclusive). In this
     // scenario our adjusted offset that we're checking is `memarg.offset +
     // access_size`. Note that we do saturating arithmetic here to avoid
-    // overflow. THe addition here is in the 64-bit space, which means that
+    // overflow. The addition here is in the 64-bit space, which means that
     // we'll never overflow for 32-bit wasm but for 64-bit this is an issue. If
     // our effective offset is u64::MAX though then it's impossible for for
     // that to actually be a valid offset because otherwise the wasm linear

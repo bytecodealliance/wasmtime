@@ -7,40 +7,50 @@
     (loop (result i32) (call $dummy) (call $dummy) (i32.const 8) (call $dummy))
   )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 4883c408             	add	rsp, 8
-;;   10:	 5d                   	pop	rbp
-;;   11:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f870a000000         	ja	0x22
+;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   22:	 0f0b                 	ud2	
 ;;
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 4883ec08             	sub	rsp, 8
-;;   10:	 e800000000           	call	0x15
-;;   15:	 4883c408             	add	rsp, 8
-;;   19:	 4883ec08             	sub	rsp, 8
-;;   1d:	 e800000000           	call	0x22
-;;   22:	 4883c408             	add	rsp, 8
-;;   26:	 4883ec08             	sub	rsp, 8
-;;   2a:	 e800000000           	call	0x2f
-;;   2f:	 4883c408             	add	rsp, 8
-;;   33:	 4883ec08             	sub	rsp, 8
-;;   37:	 e800000000           	call	0x3c
-;;   3c:	 4883c408             	add	rsp, 8
-;;   40:	 4883ec08             	sub	rsp, 8
-;;   44:	 e800000000           	call	0x49
-;;   49:	 4883c408             	add	rsp, 8
-;;   4d:	 4883ec08             	sub	rsp, 8
-;;   51:	 e800000000           	call	0x56
-;;   56:	 4883c408             	add	rsp, 8
-;;   5a:	 4883ec08             	sub	rsp, 8
-;;   5e:	 e800000000           	call	0x63
-;;   63:	 4883c408             	add	rsp, 8
-;;   67:	 b808000000           	mov	eax, 8
-;;   6c:	 4883c408             	add	rsp, 8
-;;   70:	 5d                   	pop	rbp
-;;   71:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f876a000000         	ja	0x82
+;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x25
+;;      	 4883c408             	add	rsp, 8
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x32
+;;      	 4883c408             	add	rsp, 8
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x3f
+;;      	 4883c408             	add	rsp, 8
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x4c
+;;      	 4883c408             	add	rsp, 8
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x59
+;;      	 4883c408             	add	rsp, 8
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x66
+;;      	 4883c408             	add	rsp, 8
+;;      	 4883ec08             	sub	rsp, 8
+;;      	 e800000000           	call	0x73
+;;      	 4883c408             	add	rsp, 8
+;;      	 b808000000           	mov	eax, 8
+;;      	 4883c408             	add	rsp, 8
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   82:	 0f0b                 	ud2	
