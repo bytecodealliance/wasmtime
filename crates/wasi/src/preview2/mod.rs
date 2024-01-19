@@ -163,7 +163,7 @@ pub mod bindings {
         with: {
             "wasi:sockets/network/network": super::network::NetworkResource,
             "wasi:sockets/tcp/tcp-socket": super::host::tcp::TcpSocketResource,
-            "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
+            "wasi:sockets/udp/udp-socket": super::host::udp::UdpSocketResource,
             "wasi:sockets/udp/incoming-datagram-stream": super::udp::IncomingDatagramStream,
             "wasi:sockets/udp/outgoing-datagram-stream": super::udp::OutgoingDatagramStream,
             "wasi:sockets/ip-name-lookup/resolve-address-stream": super::host::ip_name_lookup::ResolveAddressStreamResource,

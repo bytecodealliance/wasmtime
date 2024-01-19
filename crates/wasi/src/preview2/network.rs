@@ -2,6 +2,7 @@ use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
 use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
 use crate::preview2::ip_name_lookup::resolve_addresses;
 use crate::preview2::tcp::{DefaultTcpSocket, SystemTcpSocket, TcpSocket};
+use crate::preview2::udp::{DefaultUdpSocket, SystemUdpSocket, UdpSocket};
 use crate::preview2::{BoxSyncFuture, TrappableError};
 use futures::Future;
 use std::io;
@@ -20,6 +21,9 @@ pub trait Network: Sync + Send {
 
     /// Create a new TCP socket.
     fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>>;
+
+    /// Create a new UDP socket.
+    fn new_udp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn UdpSocket>>;
 }
 
 /// The default network implementation
@@ -28,6 +32,7 @@ pub struct DefaultNetwork {
     system: SystemNetwork,
     allow_ip_name_lookup: bool,
     tcp_addr_check: SocketAddrCheck,
+    udp_addr_check: SocketAddrCheck,
 }
 
 impl DefaultNetwork {
@@ -37,6 +42,7 @@ impl DefaultNetwork {
             system: SystemNetwork::new(),
             allow_ip_name_lookup: false,
             tcp_addr_check: SocketAddrCheck::deny(),
+            udp_addr_check: SocketAddrCheck::deny(),
         }
     }
 
@@ -46,6 +52,10 @@ impl DefaultNetwork {
 
     pub fn allow_tcp(&mut self, check: SocketAddrCheck) {
         self.tcp_addr_check = check;
+    }
+
+    pub fn allow_udp(&mut self, check: SocketAddrCheck) {
+        self.udp_addr_check = check;
     }
 }
 
@@ -71,16 +81,25 @@ impl Network for DefaultNetwork {
             self.tcp_addr_check.clone(),
         )))
     }
+
+    fn new_udp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn UdpSocket>> {
+        Ok(Box::new(DefaultUdpSocket::new(
+            self.system.new_udp_socket(family)?,
+            self.udp_addr_check.clone(),
+        )))
+    }
 }
 
 /// An implementation of `Networked` that uses the underlying system
 #[derive(Debug, Clone, Default)]
-pub struct SystemNetwork {}
+pub struct SystemNetwork {
+    _priv: (),
+}
 
 impl SystemNetwork {
     /// Create a new `SystemNetwork`
     pub fn new() -> Self {
-        Self {}
+        Self { _priv: () }
     }
 
     /// Non-boxing variant of [Network::resolve_addresses]
@@ -95,6 +114,11 @@ impl SystemNetwork {
     pub fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<SystemTcpSocket> {
         SystemTcpSocket::new(family)
     }
+
+    /// Non-boxing variant of [Network::new_udp_socket]
+    pub fn new_udp_socket(&mut self, family: SocketAddrFamily) -> io::Result<SystemUdpSocket> {
+        SystemUdpSocket::new(family)
+    }
 }
 
 impl Network for SystemNetwork {
@@ -104,6 +128,10 @@ impl Network for SystemNetwork {
 
     fn new_tcp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn TcpSocket>> {
         Ok(Box::new(self.new_tcp_socket(family)?))
+    }
+
+    fn new_udp_socket(&mut self, family: SocketAddrFamily) -> io::Result<Box<dyn UdpSocket>> {
+        Ok(Box::new(self.new_udp_socket(family)?))
     }
 }
 
