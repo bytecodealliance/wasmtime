@@ -10,6 +10,7 @@ use fxprof_processed_profile::{
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use wasmtime_environ::demangle_function_name;
 use wasmtime_runtime::Backtrace;
 
 // TODO: collect more data
@@ -186,9 +187,10 @@ fn module_symbols(name: String, compiled: &CompiledModule) -> Option<LibraryInfo
     let symbols = Vec::from_iter(compiled.finished_functions().map(|(defined_idx, _)| {
         let loc = compiled.func_loc(defined_idx);
         let func_idx = compiled.module().func_index(defined_idx);
-        let name = match compiled.func_name(func_idx) {
-            None => format!("wasm_function_{}", defined_idx.as_u32()),
-            Some(name) => name.to_string(),
+        let mut name = String::new();
+        match compiled.func_name(func_idx) {
+            None => name = format!("wasm_function_{}", defined_idx.as_u32()),
+            Some(func_name) => demangle_function_name(&mut name, func_name).unwrap(),
         };
         Symbol {
             address: loc.start,
