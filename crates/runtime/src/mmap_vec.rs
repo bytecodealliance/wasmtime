@@ -122,6 +122,14 @@ impl MmapVec {
     pub fn original_offset(&self) -> usize {
         self.range.start
     }
+
+    /// Returns the bounds, in host memory, of where this mmap
+    /// image resides.
+    pub fn image_range(&self) -> Range<*const u8> {
+        let base = self.as_ptr();
+        let len = self.len();
+        base..base.wrapping_add(len)
+    }
 }
 
 impl Deref for MmapVec {

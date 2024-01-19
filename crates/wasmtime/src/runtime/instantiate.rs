@@ -319,14 +319,6 @@ impl CompiledModule {
     pub fn has_address_map(&self) -> bool {
         !self.code_memory.address_map_data().is_empty()
     }
-
-    /// Returns the bounds, in host memory, of where this module's compiled
-    /// image resides.
-    pub fn image_range(&self) -> Range<usize> {
-        let base = self.mmap().as_ptr() as usize;
-        let len = self.mmap().len();
-        base..base + len
-    }
 }
 
 #[cfg(feature = "addr2line")]

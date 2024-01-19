@@ -5,6 +5,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::mem;
+use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -509,6 +510,15 @@ impl Component {
             }
         }
         Some(resources)
+    }
+
+    /// Returns the range, in the host's address space, that this module's
+    /// compiled code resides at.
+    ///
+    /// For more information see
+    /// [`Module;:image_range`](crate::Module::image_range).
+    pub fn image_range(&self) -> Range<*const u8> {
+        self.inner.code.code_memory().mmap().image_range()
     }
 }
 
