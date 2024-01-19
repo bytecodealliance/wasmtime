@@ -813,4 +813,17 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn engine_weak_upgrades() {
+        let engine = Engine::default();
+        let weak = engine.weak();
+        weak.upgrade()
+            .expect("engine is still alive, so weak reference can upgrade");
+        drop(engine);
+        assert!(
+            weak.upgrade().is_none(),
+            "engine was dropped, so weak reference cannot upgrade"
+        );
+    }
 }
