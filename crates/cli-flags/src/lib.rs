@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::Parser;
 use std::time::Duration;
-use wasmtime::{Config, MpkEnabled};
+use wasmtime::Config;
 
 pub mod opt;
 
@@ -523,7 +523,7 @@ impl CommonOptions {
                     }
                     if let Some(enable) = self.opts.memory_protection_keys {
                         if enable {
-                            cfg.memory_protection_keys(MpkEnabled::Enable);
+                            cfg.memory_protection_keys(wasmtime::MpkEnabled::Enable);
                         }
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
