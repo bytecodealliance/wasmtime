@@ -794,9 +794,9 @@ impl RunCommand {
 struct Host {
     preview1_ctx: Option<wasmtime_wasi::WasiCtx>,
 
-    // The Mutex is only needed to satisfy the Sync constraint, but we never
-    // actually perform any locking on it as use Mutex::get_mut for
-    // all accesses.
+    // The Mutex is only needed to satisfy the Sync constraint but we never
+    // actually perform any locking on it as we use Mutex::get_mut for every
+    // access.
     preview2_ctx: Option<Arc<Mutex<preview2::WasiCtx>>>,
 
     // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
