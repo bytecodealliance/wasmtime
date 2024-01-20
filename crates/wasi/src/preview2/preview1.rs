@@ -23,7 +23,7 @@ use wiggle::{GuestError, GuestPtr, GuestStrCow, GuestType};
 
 #[derive(Debug)]
 struct File {
-    /// The handle to the preview2 descriptor that this file is referencing.
+    /// The handle to the preview2 descriptor of type [`crate::preview2::filesystem::Descriptor::File`].
     fd: Resource<filesystem::Descriptor>,
 
     /// The current-position pointer.
@@ -151,7 +151,14 @@ enum Descriptor {
         stream: Resource<streams::OutputStream>,
         isatty: IsATTY,
     },
-    PreopenDirectory((Resource<filesystem::Descriptor>, String)),
+    /// A fd of type [`crate::preview2::filesystem::Descriptor::Dir`]
+    Directory {
+        fd: Resource<filesystem::Descriptor>,
+        /// The path this directory was preopened as.
+        /// `None` means this directory was opened using `open-at`.
+        preopen_path: Option<String>,
+    },
+    /// A fd of type [`crate::preview2::filesystem::Descriptor::File`]
     File(File),
 }
 
@@ -255,7 +262,10 @@ impl Descriptors {
             .context("failed to call `get-directories`")
             .map_err(types::Error::trap)?
         {
-            descriptors.push(Descriptor::PreopenDirectory((dir.0, dir.1)))?;
+            descriptors.push(Descriptor::Directory {
+                fd: dir.0,
+                preopen_path: Some(dir.1),
+            })?;
         }
         Ok(descriptors)
     }
@@ -299,11 +309,6 @@ impl Descriptors {
         };
         assert!(self.insert(fd, desc).is_none());
         Ok(fd)
-    }
-
-    /// Like [Self::push], but for [`File`]
-    fn push_file(&mut self, file: File) -> Result<u32> {
-        self.push(Descriptor::File(file))
     }
 }
 
@@ -355,33 +360,27 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 
     /// Borrows [`File`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
+    /// if it describes a [`Descriptor::File`]
     fn get_file(&self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
-            Some(Descriptor::File(file @ File { fd, .. })) => {
-                self.view.table().get(fd)?.file()?;
-                Ok(file)
-            }
+            Some(Descriptor::File(file)) => Ok(file),
             _ => Err(types::Errno::Badf.into()),
         }
     }
 
     /// Mutably borrows [`File`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
+    /// if it describes a [`Descriptor::File`]
     fn get_file_mut(&mut self, fd: types::Fd) -> Result<&mut File> {
         let fd = fd.into();
         match self.descriptors.get_mut(&fd) {
-            Some(Descriptor::File(file)) => {
-                self.view.table().get(&file.fd)?.file()?;
-                Ok(file)
-            }
+            Some(Descriptor::File(file)) => Ok(file),
             _ => Err(types::Errno::Badf.into()),
         }
     }
 
     /// Borrows [`File`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type.
+    /// if it describes a [`Descriptor::File`]
     ///
     /// # Errors
     ///
@@ -389,11 +388,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     fn get_seekable(&self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
-            Some(Descriptor::File(file @ File { fd, .. }))
-                if self.view.table().get(fd)?.is_file() =>
-            {
-                Ok(file)
-            }
+            Some(Descriptor::File(file)) => Ok(file),
             Some(
                 Descriptor::Stdin { .. } | Descriptor::Stdout { .. } | Descriptor::Stderr { .. },
             ) => {
@@ -408,7 +403,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     fn get_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         match self.get_descriptor(fd)? {
             Descriptor::File(File { fd, .. }) => Ok(fd.borrowed()),
-            Descriptor::PreopenDirectory((fd, _)) => Ok(fd.borrowed()),
+            Descriptor::Directory { fd, .. } => Ok(fd.borrowed()),
             Descriptor::Stdin { .. } | Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
                 Err(types::Errno::Badf.into())
             }
@@ -416,21 +411,17 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
+    /// if it describes a [`Descriptor::File`]
     fn get_file_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         self.get_file(fd).map(|File { fd, .. }| fd.borrowed())
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
-    /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
-    /// of [`crate::preview2::filesystem::Dir`] type
+    /// if it describes a [`Descriptor::Directory`]
     fn get_dir_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
-            Some(Descriptor::File(File { fd, .. })) if self.view.table().get(fd)?.is_dir() => {
-                Ok(fd.borrowed())
-            }
-            Some(Descriptor::PreopenDirectory((fd, _))) => Ok(fd.borrowed()),
+            Some(Descriptor::Directory { fd, .. }) => Ok(fd.borrowed()),
             _ => Err(types::Errno::Badf.into()),
         }
     }
@@ -1025,7 +1016,7 @@ impl<
                 streams::HostOutputStream::drop(self, stream)
                     .context("failed to call `drop` on `output-stream`")
             }
-            Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => {
+            Descriptor::File(File { fd, .. }) | Descriptor::Directory { fd, .. } => {
                 filesystem::HostDescriptor::drop(self, fd).context("failed to call `drop`")
             }
         }
@@ -1067,7 +1058,10 @@ impl<
                     fs_rights_inheriting: fs_rights_base,
                 });
             }
-            Descriptor::PreopenDirectory((_, _)) => {
+            Descriptor::Directory {
+                preopen_path: Some(_),
+                ..
+            } => {
                 // Hard-coded set or rights expected by many userlands:
                 let fs_rights_base = types::Rights::PATH_CREATE_DIRECTORY
                     | types::Rights::PATH_CREATE_FILE
@@ -1108,6 +1102,7 @@ impl<
                     fs_rights_inheriting,
                 });
             }
+            Descriptor::Directory { fd, .. } => (fd.borrowed(), BlockingMode::Blocking, false),
             Descriptor::File(File {
                 fd,
                 blocking_mode,
@@ -1221,7 +1216,7 @@ impl<
                 mtim: 0,
                 ctim: 0,
             }),
-            Descriptor::PreopenDirectory((fd, _)) | Descriptor::File(File { fd, .. }) => {
+            Descriptor::Directory { fd, .. } | Descriptor::File(File { fd, .. }) => {
                 let fd = fd.borrowed();
                 drop(t);
                 let filesystem::DescriptorStat {
@@ -1324,7 +1319,7 @@ impl<
                 blocking_mode,
                 position,
                 ..
-            }) if t.view.table().get(fd)?.is_file() => {
+            }) => {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 let position = position.clone();
@@ -1384,7 +1379,7 @@ impl<
         let (buf, read) = match desc {
             Descriptor::File(File {
                 fd, blocking_mode, ..
-            }) if t.view.table().get(fd)?.is_file() => {
+            }) => {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 drop(t);
@@ -1433,7 +1428,7 @@ impl<
                 blocking_mode,
                 append,
                 position,
-            }) if t.view.table().get(fd)?.is_file() => {
+            }) => {
                 let fd = fd.borrowed();
                 let fd2 = fd.borrowed();
                 let blocking_mode = *blocking_mode;
@@ -1500,7 +1495,7 @@ impl<
         let n = match desc {
             Descriptor::File(File {
                 fd, blocking_mode, ..
-            }) if t.view.table().get(fd)?.is_file() => {
+            }) => {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 drop(t);
@@ -1526,7 +1521,11 @@ impl<
     /// Return a description of the given preopened file descriptor.
     #[instrument(skip(self))]
     fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, types::Error> {
-        if let Descriptor::PreopenDirectory((_, p)) = self.transact()?.get_descriptor(fd)? {
+        if let Descriptor::Directory {
+            preopen_path: Some(p),
+            ..
+        } = self.transact()?.get_descriptor(fd)?
+        {
             let pr_name_len = p.len().try_into()?;
             return Ok(types::Prestat::Dir(types::PrestatDir { pr_name_len }));
         }
@@ -1542,7 +1541,11 @@ impl<
         path_max_len: types::Size,
     ) -> Result<(), types::Error> {
         let path_max_len = path_max_len.try_into()?;
-        if let Descriptor::PreopenDirectory((_, p)) = self.transact()?.get_descriptor(fd)? {
+        if let Descriptor::Directory {
+            preopen_path: Some(p),
+            ..
+        } = self.transact()?.get_descriptor(fd)?
+        {
             if p.len() > path_max_len {
                 return Err(types::Errno::Nametoolong.into());
             }
@@ -1897,11 +1900,8 @@ impl<
 
         let t = self.transact()?;
         let dirfd = match t.get_descriptor(dirfd)? {
-            Descriptor::PreopenDirectory((fd, _)) => fd.borrowed(),
-            Descriptor::File(File { fd, .. }) => {
-                t.view.table().get(fd)?.dir()?;
-                fd.borrowed()
-            }
+            Descriptor::Directory { fd, .. } => fd.borrowed(),
+            Descriptor::File(_) => return Err(types::Errno::Notdir.into()),
             _ => return Err(types::Errno::Badf.into()),
         };
         drop(t);
@@ -1913,12 +1913,20 @@ impl<
                     .context("failed to call `open-at`")
                     .unwrap_or_else(types::Error::trap)
             })?;
-        let fd = self.transact()?.descriptors.push_file(File {
-            fd,
-            position: Default::default(),
-            append: fdflags.contains(types::Fdflags::APPEND),
-            blocking_mode: BlockingMode::from_fdflags(&fdflags),
-        })?;
+        let mut t = self.transact()?;
+        let desc = match t.view.table().get(&fd)? {
+            crate::preview2::filesystem::Descriptor::Dir(_) => Descriptor::Directory {
+                fd,
+                preopen_path: None,
+            },
+            crate::preview2::filesystem::Descriptor::File(_) => Descriptor::File(File {
+                fd,
+                position: Default::default(),
+                append: fdflags.contains(types::Fdflags::APPEND),
+                blocking_mode: BlockingMode::from_fdflags(&fdflags),
+            }),
+        };
+        let fd = t.descriptors.push(desc)?;
         Ok(fd.into())
     }
 
@@ -2096,9 +2104,7 @@ impl<
                         let desc = t.get_descriptor(file_descriptor)?;
                         match desc {
                             Descriptor::Stdin { stream, .. } => stream.borrowed(),
-                            Descriptor::File(File { fd, position, .. })
-                                if t.view.table().get(fd)?.is_file() =>
-                            {
+                            Descriptor::File(File { fd, position, .. }) => {
                                 let pos = position.load(Ordering::Relaxed);
                                 let fd = fd.borrowed();
                                 drop(t);
@@ -2130,7 +2136,7 @@ impl<
                                 position,
                                 append,
                                 ..
-                            }) if t.view.table().get(fd)?.is_file() => {
+                            }) => {
                                 let fd = fd.borrowed();
                                 let position = position.clone();
                                 let append = *append;
@@ -2202,9 +2208,7 @@ impl<
                                 nbytes: 1,
                             },
                         },
-                        Descriptor::File(File { fd, position, .. })
-                            if t.view.table().get(fd)?.is_file() =>
-                        {
+                        Descriptor::File(File { fd, position, .. }) => {
                             let fd = fd.borrowed();
                             let position = position.clone();
                             drop(t);
@@ -2247,17 +2251,15 @@ impl<
                                 nbytes: 1,
                             },
                         },
-                        Descriptor::File(File { fd, .. }) if t.view.table().get(fd)?.is_file() => {
-                            types::Event {
-                                userdata: sub.userdata,
-                                error: types::Errno::Success,
-                                type_: types::Eventtype::FdWrite,
-                                fd_readwrite: types::EventFdReadwrite {
-                                    flags: types::Eventrwflags::empty(),
-                                    nbytes: 1,
-                                },
-                            }
-                        }
+                        Descriptor::File(_) => types::Event {
+                            userdata: sub.userdata,
+                            error: types::Errno::Success,
+                            type_: types::Eventtype::FdWrite,
+                            fd_readwrite: types::EventFdReadwrite {
+                                flags: types::Eventrwflags::empty(),
+                                nbytes: 1,
+                            },
+                        },
                         // TODO: Support sockets
                         _ => return Err(types::Errno::Badf.into()),
                     }
