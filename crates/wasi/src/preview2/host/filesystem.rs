@@ -78,9 +78,9 @@ impl<T: WasiView> HostDescriptor for T {
     }
 
     async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let table = self.table();
+        let descriptor = self.table().get(&fd)?;
 
-        match table.get(&fd)? {
+        match descriptor {
             Descriptor::File(f) => {
                 match f.spawn_blocking(|f| f.sync_data()).await {
                     Ok(()) => Ok(()),
@@ -125,8 +125,8 @@ impl<T: WasiView> HostDescriptor for T {
             out
         }
 
-        let table = self.table();
-        match table.get(&fd)? {
+        let descriptor = self.table().get(&fd)?;
+        match descriptor {
             Descriptor::File(f) => {
                 let flags = f.spawn_blocking(|f| f.get_fd_flags()).await?;
                 let mut flags = get_from_fdflags(flags);
@@ -156,9 +156,9 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::DescriptorType> {
-        let table = self.table();
+        let descriptor = self.table().get(&fd)?;
 
-        match table.get(&fd)? {
+        match descriptor {
             Descriptor::File(f) => {
                 let meta = f.spawn_blocking(|f| f.metadata()).await?;
                 Ok(descriptortype_from(meta.file_type()))
@@ -188,8 +188,8 @@ impl<T: WasiView> HostDescriptor for T {
     ) -> FsResult<()> {
         use fs_set_times::SetTimes;
 
-        let table = self.table();
-        match table.get(&fd)? {
+        let descriptor = self.table().get(&fd)?;
+        match descriptor {
             Descriptor::File(f) => {
                 if !f.perms.contains(FilePerms::WRITE) {
                     return Err(ErrorCode::NotPermitted.into());
@@ -337,9 +337,9 @@ impl<T: WasiView> HostDescriptor for T {
     }
 
     async fn sync(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let table = self.table();
+        let descriptor = self.table().get(&fd)?;
 
-        match table.get(&fd)? {
+        match descriptor {
             Descriptor::File(f) => {
                 match f.spawn_blocking(|f| f.sync_all()).await {
                     Ok(()) => Ok(()),
@@ -378,8 +378,8 @@ impl<T: WasiView> HostDescriptor for T {
     }
 
     async fn stat(&mut self, fd: Resource<types::Descriptor>) -> FsResult<types::DescriptorStat> {
-        let table = self.table();
-        match table.get(&fd)? {
+        let descriptor = self.table().get(&fd)?;
+        match descriptor {
             Descriptor::File(f) => {
                 // No permissions check on stat: if opened, allowed to stat it
                 let meta = f.spawn_blocking(|f| f.metadata()).await?;
@@ -772,10 +772,10 @@ impl<T: WasiView> HostDescriptor for T {
         b: Resource<types::Descriptor>,
     ) -> anyhow::Result<bool> {
         use cap_fs_ext::MetadataExt;
-        let table = self.table();
-        let meta_a = get_descriptor_metadata(table.get(&a)?).await?;
-        let table = self.table();
-        let meta_b = get_descriptor_metadata(table.get(&b)?).await?;
+        let descriptor_a = self.table().get(&a)?;
+        let meta_a = get_descriptor_metadata(descriptor_a).await?;
+        let descriptor_b = self.table().get(&b)?;
+        let meta_b = get_descriptor_metadata(descriptor_b).await?;
         if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
             // MetadataHashValue does not derive eq, so use a pair of
             // comparisons to check equality:
@@ -797,8 +797,8 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::MetadataHashValue> {
-        let table = self.table();
-        let meta = get_descriptor_metadata(table.get(&fd)?).await?;
+        let descriptor_a = self.table().get(&fd)?;
+        let meta = get_descriptor_metadata(descriptor_a).await?;
         Ok(calculate_metadata_hash(&meta))
     }
     async fn metadata_hash_at(
