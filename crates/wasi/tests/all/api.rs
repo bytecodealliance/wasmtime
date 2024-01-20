@@ -19,16 +19,10 @@ struct CommandCtx {
 }
 
 impl WasiView for CommandCtx {
-    fn table(&self) -> &ResourceTable {
-        &self.table
-    }
-    fn table_mut(&mut self) -> &mut ResourceTable {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
-    fn ctx(&self) -> &WasiCtx {
-        &self.wasi
-    }
-    fn ctx_mut(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }
 }
@@ -184,7 +178,7 @@ async fn api_reactor() -> Result<()> {
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let writepipe = preview2::pipe::MemoryOutputPipe::new(4096);
     let stream: preview2::OutputStream = Box::new(writepipe.clone());
-    let table_ix = store.data_mut().table_mut().push(stream)?;
+    let table_ix = store.data_mut().table().push(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 

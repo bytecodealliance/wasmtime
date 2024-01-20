@@ -16,7 +16,7 @@ impl<T: WasiView> network::Host for T {
 
 impl<T: WasiView> crate::preview2::bindings::sockets::network::HostNetwork for T {
     fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
-        let table = self.table_mut();
+        let table = self.table();
 
         table.delete(this)?;
 

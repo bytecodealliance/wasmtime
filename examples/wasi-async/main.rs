@@ -18,19 +18,11 @@ struct WasiHostCtx {
 }
 
 impl preview2::WasiView for WasiHostCtx {
-    fn table(&self) -> &wasmtime::component::ResourceTable {
-        &self.preview2_table
-    }
-
-    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.preview2_table
     }
 
-    fn ctx(&self) -> &preview2::WasiCtx {
-        &self.preview2_ctx
-    }
-
-    fn ctx_mut(&mut self) -> &mut preview2::WasiCtx {
+    fn ctx(&mut self) -> &mut preview2::WasiCtx {
         &mut self.preview2_ctx
     }
 }

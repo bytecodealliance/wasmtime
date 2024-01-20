@@ -19,7 +19,7 @@ impl<T: WasiView> preopens::Host for T {
         let mut results = Vec::new();
         for (dir, name) in self.ctx().preopens.clone() {
             let fd = self
-                .table_mut()
+                .table()
                 .push(Descriptor::Dir(dir))
                 .with_context(|| format!("failed to push preopen {name}"))?;
             results.push((fd, name));
@@ -38,7 +38,7 @@ impl<T: WasiView> types::Host for T {
         &mut self,
         err: Resource<anyhow::Error>,
     ) -> anyhow::Result<Option<ErrorCode>> {
-        let err = self.table_mut().get(&err)?;
+        let err = self.table().get(&err)?;
 
         // Currently `err` always comes from the stream implementation which
         // uses standard reads/writes so only check for `std::io::Error` here.
@@ -275,7 +275,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<types::DirectoryEntryStream>> {
-        let table = self.table_mut();
+        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
@@ -492,7 +492,7 @@ impl<T: WasiView> HostDescriptor for T {
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
 
-        let table = self.table_mut();
+        let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             Err(ErrorCode::NotPermitted)?;
@@ -596,7 +596,7 @@ impl<T: WasiView> HostDescriptor for T {
     }
 
     fn drop(&mut self, fd: Resource<types::Descriptor>) -> anyhow::Result<()> {
-        let table = self.table_mut();
+        let table = self.table();
 
         // The Drop will close the file/dir, but if the close syscall
         // blocks the thread, I will face god and walk backwards into hell.
@@ -713,7 +713,7 @@ impl<T: WasiView> HostDescriptor for T {
         let reader = FileInputStream::new(clone, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push(InputStream::File(reader))?;
+        let index = self.table().push(InputStream::File(reader))?;
 
         Ok(index)
     }
@@ -738,7 +738,7 @@ impl<T: WasiView> HostDescriptor for T {
         let writer: OutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push(writer)?;
+        let index = self.table().push(writer)?;
 
         Ok(index)
     }
@@ -761,7 +761,7 @@ impl<T: WasiView> HostDescriptor for T {
         let appender: OutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push(appender)?;
+        let index = self.table().push(appender)?;
 
         Ok(index)
     }
@@ -835,7 +835,7 @@ impl<T: WasiView> HostDirectoryEntryStream for T {
     }
 
     fn drop(&mut self, stream: Resource<types::DirectoryEntryStream>) -> anyhow::Result<()> {
-        self.table_mut().delete(stream)?;
+        self.table().delete(stream)?;
         Ok(())
     }
 }

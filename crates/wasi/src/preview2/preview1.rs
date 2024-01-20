@@ -1664,7 +1664,7 @@ impl<
 
         let mut dir = Vec::new();
         for (entry, d_next) in self
-            .table_mut()
+            .table()
             // remove iterator from table and use it directly:
             .delete(stream)?
             .into_iter()

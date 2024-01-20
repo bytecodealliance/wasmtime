@@ -33,19 +33,11 @@ struct Host {
 }
 
 impl WasiView for Host {
-    fn table(&self) -> &wasmtime::component::ResourceTable {
-        &self.table
-    }
-
-    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
 
-    fn ctx(&self) -> &WasiCtx {
-        &self.ctx
-    }
-
-    fn ctx_mut(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.ctx
     }
 }

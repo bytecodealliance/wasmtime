@@ -267,10 +267,8 @@ impl WasiCtxBuilder {
 }
 
 pub trait WasiView: Send {
-    fn table(&self) -> &ResourceTable;
-    fn table_mut(&mut self) -> &mut ResourceTable;
-    fn ctx(&self) -> &WasiCtx;
-    fn ctx_mut(&mut self) -> &mut WasiCtx;
+    fn table(&mut self) -> &mut ResourceTable;
+    fn ctx(&mut self) -> &mut WasiCtx;
 }
 
 pub struct WasiCtx {

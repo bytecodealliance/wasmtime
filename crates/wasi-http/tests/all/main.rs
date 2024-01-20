@@ -38,16 +38,10 @@ struct Ctx {
 }
 
 impl WasiView for Ctx {
-    fn table(&self) -> &ResourceTable {
-        &self.table
-    }
-    fn table_mut(&mut self) -> &mut ResourceTable {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
-    fn ctx(&self) -> &WasiCtx {
-        &self.wasi
-    }
-    fn ctx_mut(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }
 }
@@ -277,9 +271,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                         between_bytes_timeout,
                     })
                 });
-                Ok(view
-                    .table()
-                    .push(HostFutureIncomingResponse::Ready(response))?)
+                Ok(WasiHttpView::table(view).push(HostFutureIncomingResponse::Ready(response))?)
             },
         ) as RequestSender)
     } else {
