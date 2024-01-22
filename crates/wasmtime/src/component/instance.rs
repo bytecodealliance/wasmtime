@@ -1,12 +1,13 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::{
-    Component, ComponentNamedList, Func, Lift, Lower, ResourceImportIndex, ResourceType, TypedFunc,
+    Component, ComponentItemType, ComponentNamedList, Func, Lift, Lower, ResourceImportIndex,
+    ResourceType, TypedFunc,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::store::{StoreOpaque, Stored};
-use crate::{AsContextMut, Module, StoreContextMut};
+use crate::{AsContextMut, Module, StoreContext, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
 use indexmap::IndexMap;
 use std::marker;
@@ -61,6 +62,25 @@ pub(crate) struct InstanceData {
 }
 
 impl Instance {
+    /// Iterates over all types imported by this component instance
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn import_types<'a, T: 'a>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> impl Iterator<Item = (&'a String, ComponentItemType)> {
+        let store = store.into();
+        let data = store.0[self.0].as_ref().unwrap();
+        let instance_ty = data.ty();
+        data.component
+            .env_component()
+            .import_types
+            .iter()
+            .map(move |(_, (name, ty))| (name, ComponentItemType::from(ty, &instance_ty)))
+    }
+
     /// Returns information about the exports of this instance.
     ///
     /// This method can be used to extract exported values from this component

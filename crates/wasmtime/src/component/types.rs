@@ -2,17 +2,19 @@
 
 use crate::component::matching::InstanceType;
 use crate::component::values::{self, Val};
+use crate::{ExternType, FuncType};
 use anyhow::{anyhow, Result};
 use std::fmt;
 use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, ResourceIndex, TypeEnumIndex, TypeFlagsIndex,
-    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
-    TypeTupleIndex, TypeVariantIndex,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, ResourceIndex, TypeComponentIndex,
+    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex,
+    TypeListIndex, TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex,
+    TypeResultIndex, TypeTupleIndex, TypeVariantIndex,
 };
-use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::{PrimaryMap, SignatureIndex};
 
 pub use crate::component::resources::ResourceType;
 
@@ -754,6 +756,198 @@ impl Type {
             Type::Flags(_) => "flags",
             Type::Own(_) => "own",
             Type::Borrow(_) => "borrow",
+        }
+    }
+}
+
+/// Core function type
+#[derive(Debug)]
+pub struct CoreFunc(Handle<SignatureIndex>);
+
+impl CoreFunc {
+    pub(crate) fn from(index: SignatureIndex, ty: &InstanceType<'_>) -> Self {
+        Self(Handle::new(index, ty))
+    }
+
+    /// Returns [`FuncType`] associated with this function
+    pub fn ty(&self) -> FuncType {
+        FuncType::from_wasm_func_type(self.0.types[self.0.index].clone())
+    }
+}
+
+/// Component function type
+#[derive(Debug)]
+pub struct ComponentFunc(Handle<TypeFuncIndex>);
+
+impl ComponentFunc {
+    pub(crate) fn from(index: TypeFuncIndex, ty: &InstanceType<'_>) -> Self {
+        Self(Handle::new(index, ty))
+    }
+
+    /// Iterates over types of function parameters
+    pub fn params(&self) -> impl Iterator<Item = Type> + '_ {
+        let params = self.0.types[self.0.index].params;
+        self.0.types[params]
+            .types
+            .iter()
+            .map(|ty| Type::from(ty, &self.0.instance()))
+    }
+
+    /// Iterates over types of function results
+    pub fn results(&self) -> impl Iterator<Item = Type> + '_ {
+        let results = self.0.types[self.0.index].results;
+        self.0.types[results]
+            .types
+            .iter()
+            .map(|ty| Type::from(ty, &self.0.instance()))
+    }
+}
+
+/// Core module type
+#[derive(Debug)]
+pub struct Module(Handle<TypeModuleIndex>);
+
+impl Module {
+    pub(crate) fn from(index: TypeModuleIndex, ty: &InstanceType<'_>) -> Self {
+        Self(Handle::new(index, ty))
+    }
+
+    /// Iterates over imports of the module
+    pub fn imports(&self) -> impl Iterator<Item = (&(String, String), ExternType)> {
+        self.0.types[self.0.index].imports.iter().map(|(name, ty)| {
+            (
+                name,
+                ExternType::from_wasmtime(self.0.types.module_types(), ty),
+            )
+        })
+    }
+
+    /// Iterates over exports of the module
+    pub fn exports(&self) -> impl Iterator<Item = (&String, ExternType)> {
+        self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
+            (
+                name,
+                ExternType::from_wasmtime(self.0.types.module_types(), ty),
+            )
+        })
+    }
+}
+
+/// Component type
+#[derive(Debug)]
+pub struct Component(Handle<TypeComponentIndex>);
+
+impl Component {
+    pub(crate) fn from(index: TypeComponentIndex, ty: &InstanceType<'_>) -> Self {
+        Self(Handle::new(index, ty))
+    }
+
+    /// Returns import associated with `name`, if such exists in the component
+    pub fn get_import(&self, name: &str) -> Option<ComponentItem> {
+        self.0.types[self.0.index]
+            .imports
+            .get(name)
+            .map(|ty| ComponentItem::from(ty, &self.0.instance()))
+    }
+
+    /// Iterates over imports of the component
+    pub fn imports(&self) -> impl Iterator<Item = (&String, ComponentItem)> {
+        self.0.types[self.0.index]
+            .imports
+            .iter()
+            .map(|(name, ty)| (name, ComponentItem::from(ty, &self.0.instance())))
+    }
+
+    /// Returns export associated with `name`, if such exists in the component
+    pub fn get_export(&self, name: &str) -> Option<ComponentItem> {
+        self.0.types[self.0.index]
+            .exports
+            .get(name)
+            .map(|ty| ComponentItem::from(ty, &self.0.instance()))
+    }
+
+    /// Iterates over exports of the component
+    pub fn exports(&self) -> impl Iterator<Item = (&String, ComponentItem)> {
+        self.0.types[self.0.index]
+            .exports
+            .iter()
+            .map(|(name, ty)| (name, ComponentItem::from(ty, &self.0.instance())))
+    }
+}
+
+/// Component instance type
+#[derive(Debug)]
+pub struct ComponentInstance(Handle<TypeComponentInstanceIndex>);
+
+impl ComponentInstance {
+    pub(crate) fn from(index: TypeComponentInstanceIndex, ty: &InstanceType<'_>) -> Self {
+        Self(Handle::new(index, ty))
+    }
+
+    /// Returns export associated with `name`, if such exists in the component instance
+    pub fn get_export(&self, name: &str) -> Option<ComponentItem> {
+        self.0.types[self.0.index]
+            .exports
+            .get(name)
+            .map(|ty| ComponentItem::from(ty, &self.0.instance()))
+    }
+
+    /// Iterates over exports of the component instance
+    pub fn exports(&self) -> impl Iterator<Item = (&String, ComponentItem)> {
+        self.0.types[self.0.index]
+            .exports
+            .iter()
+            .map(|(name, ty)| (name, ComponentItem::from(ty, &self.0.instance())))
+    }
+}
+
+/// Resource type
+#[derive(Debug)]
+pub struct Resource(Handle<TypeResourceTableIndex>);
+
+impl Resource {
+    pub(crate) fn from(index: TypeResourceTableIndex, ty: &InstanceType<'_>) -> Self {
+        Self(Handle::new(index, ty))
+    }
+
+    /// Returns [ResourceType] associated with this resource
+    pub fn ty(&self) -> ResourceType {
+        let idx = self.0.types[self.0.index].ty;
+        self.0.resources[idx]
+    }
+}
+
+/// Type of an item contained within the component
+#[derive(Debug)]
+pub enum ComponentItem {
+    /// Component function item
+    ComponentFunc(ComponentFunc),
+    /// Core function item
+    CoreFunc(CoreFunc),
+    /// Core module item
+    Module(Module),
+    /// Component item
+    Component(Component),
+    /// Component instance item
+    ComponentInstance(ComponentInstance),
+    /// Interface type item
+    Type(Type),
+    /// Resource item
+    Resource(Resource),
+}
+
+impl ComponentItem {
+    pub(crate) fn from(def: &TypeDef, ty: &InstanceType<'_>) -> Self {
+        match def {
+            TypeDef::Component(idx) => Self::Component(Component::from(*idx, ty)),
+            TypeDef::ComponentInstance(idx) => {
+                Self::ComponentInstance(ComponentInstance::from(*idx, ty))
+            }
+            TypeDef::ComponentFunc(idx) => Self::ComponentFunc(ComponentFunc::from(*idx, ty)),
+            TypeDef::Interface(iface_ty) => Self::Type(Type::from(iface_ty, ty)),
+            TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
+            TypeDef::CoreFunc(idx) => Self::CoreFunc(CoreFunc::from(*idx, ty)),
+            TypeDef::Resource(idx) => Self::Resource(Resource::from(*idx, ty)),
         }
     }
 }

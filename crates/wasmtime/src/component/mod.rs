@@ -24,7 +24,11 @@ pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance, ResourceImportIndex};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny};
-pub use self::types::{ResourceType, Type};
+pub use self::types::{
+    ComponentFunc as ComponentFuncType, ComponentInstance as ComponentInstanceType,
+    ComponentItem as ComponentItemType, CoreFunc as CoreFuncType, Module as ModuleType,
+    ResourceType, Type,
+};
 pub use self::values::{Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Val, Variant};
 pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 
