@@ -215,7 +215,7 @@ impl Engine {
 ///
 /// The blob of bytes is inserted into the object file specified to become part
 /// of the final compiled artifact.
-pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
+pub(crate) fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
         obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
