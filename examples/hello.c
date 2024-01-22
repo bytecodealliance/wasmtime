@@ -63,7 +63,10 @@ int main() {
   fseek(file, 0L, SEEK_SET);
   wasm_byte_vec_t wat;
   wasm_byte_vec_new_uninitialized(&wat, file_size);
-  assert(fread(wat.data, file_size, 1, file) == 1);
+  if (fread(wat.data, file_size, 1, file) != 1) {
+    printf("> Error loading module!\n");
+    return 1;
+  }
   fclose(file);
 
   // Parse the wat into the binary wasm format
