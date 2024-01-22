@@ -1,8 +1,9 @@
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
-use crate::component::matching::TypeChecker;
+use crate::component::matching::{InstanceType, TypeChecker};
 use crate::component::{
-    Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
+    Component, ComponentItemType, ComponentNamedList, Instance, InstancePre, Lift, Lower,
+    ResourceType, Val,
 };
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
@@ -174,25 +175,7 @@ impl<T> Linker<T> {
         self.root().into_instance(name)
     }
 
-    /// Performs a "pre-instantiation" to resolve the imports of the
-    /// [`Component`] specified with the items defined within this linker.
-    ///
-    /// This method will perform as much work as possible short of actually
-    /// instantiating an instance. Internally this will use the names defined
-    /// within this linker to satisfy the imports of the [`Component`] provided.
-    /// Additionally this will perform type-checks against the component's
-    /// imports against all items defined within this linker.
-    ///
-    /// Note that unlike internally in components where subtyping at the
-    /// interface-types layer is supported this is not supported here. Items
-    /// defined in this linker must match the component's imports precisely.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if this linker doesn't define a name that the
-    /// `component` imports or if a name defined doesn't match the type of the
-    /// item imported by the `component` provided.
-    pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
+    fn typecheck<'a>(&'a self, component: &'a Component) -> Result<TypeChecker<'a>> {
         let mut cx = TypeChecker {
             component: component.env_component(),
             types: component.types(),
@@ -212,11 +195,59 @@ impl<T> Linker<T> {
             cx.definition(ty, import)
                 .with_context(|| format!("import `{name}` has the wrong type"))?;
         }
+        Ok(cx)
+    }
+
+    /// Iterates over all types imported by this component
+    pub fn import_types<'a>(
+        &'a self,
+        component: &'a Component,
+    ) -> Result<impl Iterator<Item = (&'a String, ComponentItemType)>> {
+        let cx = self.typecheck(&component)?;
+        Ok(component
+            .env_component()
+            .import_types
+            .iter()
+            .map(move |(_, (name, ty))| {
+                (
+                    name,
+                    ComponentItemType::from(
+                        ty,
+                        &InstanceType {
+                            types: cx.types,
+                            resources: &cx.imported_resources,
+                        },
+                    ),
+                )
+            }))
+    }
+
+    /// Performs a "pre-instantiation" to resolve the imports of the
+    /// [`Component`] specified with the items defined within this linker.
+    ///
+    /// This method will perform as much work as possible short of actually
+    /// instantiating an instance. Internally this will use the names defined
+    /// within this linker to satisfy the imports of the [`Component`] provided.
+    /// Additionally this will perform type-checks against the component's
+    /// imports against all items defined within this linker.
+    ///
+    /// Note that unlike internally in components where subtyping at the
+    /// interface-types layer is supported this is not supported here. Items
+    /// defined in this linker must match the component's imports precisely.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this linker doesn't define a name that the
+    /// `component` imports or if a name defined doesn't match the type of the
+    /// item imported by the `component` provided.
+    pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
+        self.typecheck(&component)?;
 
         // Now that all imports are known to be defined and satisfied by this
         // linker a list of "flat" import items (aka no instances) is created
         // using the import map within the component created at
         // component-compile-time.
+        let env_component = component.env_component();
         let mut imports = PrimaryMap::with_capacity(env_component.imports.len());
         let mut resource_imports = PrimaryMap::from(vec![None; self.resource_imports]);
         for (idx, (import, names)) in env_component.imports.iter() {
