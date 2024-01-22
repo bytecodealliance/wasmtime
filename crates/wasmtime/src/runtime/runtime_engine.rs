@@ -78,6 +78,11 @@ impl Engine {
     /// for an introduction to epoch-based interruption and pointers
     /// to the other relevant methods.
     ///
+    /// When performing `increment_epoch` in a separate thread, consider using
+    /// [`Engine::weak`] to hold an [`EngineWeak`] and performing
+    /// [`EngineWeak::upgrade`] on each tick, so that the epoch ticking thread
+    /// does not keep an [`Engine`] alive longer than any of its consumers.
+    ///
     /// ## Signal Safety
     ///
     /// This method is signal-safe: it does not make any syscalls, and

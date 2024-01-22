@@ -32,6 +32,7 @@ pub mod async_trait_crate {
 }
 
 pub mod wasmtime;
+#[cfg(feature = "wasmtime")]
 pub mod wasmtime_crate {
     pub use wasmtime::*;
 }

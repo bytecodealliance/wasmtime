@@ -675,9 +675,16 @@ impl Type {
         }
     }
 
-    pub(crate) fn check(&self, value: &Val) -> Result<()> {
+    /// Checks whether type of `value` is a subtype of `self`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in case of a type mismatch
+    pub(crate) fn is_supertype_of(&self, value: &Val) -> Result<()> {
         let other = &value.ty();
-        if self == other {
+        if self == other
+            || matches!((self, other), (Self::Borrow(s), Self::Own(other)) if s == other)
+        {
             Ok(())
         } else if mem::discriminant(self) != mem::discriminant(other) {
             Err(anyhow!(

@@ -26,7 +26,7 @@ impl List {
         let element_type = ty.ty();
         for (index, value) in values.iter().enumerate() {
             element_type
-                .check(value)
+                .is_supertype_of(value)
                 .with_context(|| format!("type mismatch for element {index} of list"))?;
         }
 
@@ -83,7 +83,7 @@ impl Record {
                     if name == field.name {
                         field
                             .ty
-                            .check(&value)
+                            .is_supertype_of(&value)
                             .with_context(|| format!("type mismatch for field {name} of record"))?;
 
                         values.push(value);
@@ -150,7 +150,7 @@ impl Tuple {
         }
 
         for (index, (value, ty)) in values.iter().zip(ty.types()).enumerate() {
-            ty.check(value)
+            ty.is_supertype_of(value)
                 .with_context(|| format!("type mismatch for field {index} of tuple"))?;
         }
 
@@ -256,7 +256,7 @@ impl Variant {
 fn typecheck_payload(name: &str, case_type: Option<&Type>, value: Option<&Val>) -> Result<()> {
     match (case_type, value) {
         (Some(expected), Some(actual)) => expected
-            .check(&actual)
+            .is_supertype_of(&actual)
             .with_context(|| format!("type mismatch for case {name} of variant")),
         (None, None) => Ok(()),
         (Some(_), None) => bail!("expected a payload for case `{name}`"),
@@ -341,7 +341,9 @@ impl OptionVal {
     pub fn new(ty: &types::OptionType, value: Option<Val>) -> Result<Self> {
         let value = value
             .map(|value| {
-                ty.ty().check(&value).context("type mismatch for option")?;
+                ty.ty()
+                    .is_supertype_of(&value)
+                    .context("type mismatch for option")?;
 
                 Ok::<_, Error>(value)
             })

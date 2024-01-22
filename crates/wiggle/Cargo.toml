@@ -20,13 +20,14 @@ wiggle-macro = { workspace = true }
 tracing = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
-wasmtime = { workspace = true }
+wasmtime = { workspace = true, optional = true }
 anyhow = { workspace = true }
 
 [dev-dependencies]
 wiggle-test = { path = "test-helpers" }
 proptest = "1.0.0"
 tokio = { version = "1", features = ["rt-multi-thread","time", "macros"] }
+wasmtime = { workspace = true }
 
 [[test]]
 name = "atoms_async"
@@ -62,7 +63,10 @@ wiggle_metadata = ['witx', "wiggle-macro/wiggle_metadata"]
 # the logs out of wiggle-generated libraries.
 tracing_log = [ "tracing/log" ]
 
+# This feature enables integration with wasmtime.
+wasmtime = ["dep:wasmtime"]
+
 # Support for async in the wasmtime crates.
 wasmtime_async = [ "wasmtime/async" ]
 
-default = ["wiggle_metadata", "wasmtime_async" ]
+default = ["wiggle_metadata", "wasmtime", "wasmtime_async" ]

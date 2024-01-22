@@ -146,6 +146,27 @@ impl Engine {
             .map(|a| f(a))
             .collect::<Result<Vec<B>, E>>()
     }
+
+    /// Take a weak reference to this engine.
+    pub fn weak(&self) -> EngineWeak {
+        EngineWeak {
+            inner: Arc::downgrade(&self.inner),
+        }
+    }
+}
+
+/// A weak reference to an [`Engine`].
+#[derive(Clone)]
+pub struct EngineWeak {
+    inner: std::sync::Weak<EngineInner>,
+}
+
+impl EngineWeak {
+    /// Upgrade this weak reference into an [`Engine`]. Returns `None` if
+    /// strong references (the [`Engine`] type itself) no longer exist.
+    pub fn upgrade(&self) -> Option<Engine> {
+        std::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -344,5 +365,18 @@ Caused by:
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn engine_weak_upgrades() {
+        let engine = Engine::default();
+        let weak = engine.weak();
+        weak.upgrade()
+            .expect("engine is still alive, so weak reference can upgrade");
+        drop(engine);
+        assert!(
+            weak.upgrade().is_none(),
+            "engine was dropped, so weak reference cannot upgrade"
+        );
     }
 }

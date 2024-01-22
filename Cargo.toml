@@ -179,7 +179,7 @@ component-fuzz-util = { path = "crates/misc/component-fuzz-util" }
 wiggle = { path = "crates/wiggle", version = "=18.0.0", default-features = false }
 wiggle-macro = { path = "crates/wiggle/macro", version = "=18.0.0" }
 wiggle-generate = { path = "crates/wiggle/generate", version = "=18.0.0" }
-wasi-common = { path = "crates/wasi-common", version = "=18.0.0" }
+wasi-common = { path = "crates/wasi-common", version = "=18.0.0", default-features = false }
 wasi-tokio = { path = "crates/wasi-common/tokio", version = "=18.0.0" }
 wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=18.0.0" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }

@@ -385,7 +385,7 @@ where
     let mut cx = LowerContext::new(store, &options, types, instance);
     let instance = cx.instance_type();
     for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-        Type::from(ty, &instance).check(val)?;
+        Type::from(ty, &instance).is_supertype_of(val)?;
     }
     if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
         let mut dst = storage[..cnt].iter_mut();

@@ -1208,6 +1208,24 @@ fn float_args() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn mpk_without_pooling() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "-O",
+            "memory-protection-keys=y",
+            "--invoke",
+            "echo_f32",
+            "tests/all/cli_tests/simple.wat",
+            "1.0",
+        ])
+        .env("WASMTIME_NEW_CLI", "1")
+        .output()?;
+    assert!(!output.status.success());
+    Ok(())
+}
+
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
     use anyhow::Result;

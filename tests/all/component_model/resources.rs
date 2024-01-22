@@ -857,6 +857,72 @@ fn cannot_use_borrow_for_own() -> Result<()> {
 }
 
 #[test]
+fn can_use_own_for_borrow() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+
+                (core func $drop (canon resource.drop $t))
+
+                (core module $m
+                    (import "" "drop" (func $drop (param i32)))
+                    (func (export "f") (param i32)
+                        (call $drop (local.get 0))
+                    )
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "drop" (func $drop))
+                    ))
+                ))
+
+                (func (export "f") (param "x" (borrow $t))
+                    (canon lift (core func $i "f")))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    let ty_idx = linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
+    let i_pre = linker.instantiate_pre(&c)?;
+    let i = i_pre.instantiate(&mut store)?;
+
+    let f = i.get_func(&mut store, "f").unwrap();
+    let f_typed = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f")?;
+
+    let resource = Resource::new_own(100);
+    f_typed.call(&mut store, (&resource,))?;
+    f_typed.post_return(&mut store)?;
+
+    let resource = Resource::new_borrow(200);
+    f_typed.call(&mut store, (&resource,))?;
+    f_typed.post_return(&mut store)?;
+
+    let resource =
+        Resource::<MyType>::new_own(300).try_into_resource_any(&mut store, &i_pre, ty_idx)?;
+    f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
+    f.post_return(&mut store)?;
+    resource.resource_drop(&mut store)?;
+
+    // TODO: Enable once https://github.com/bytecodealliance/wasmtime/issues/7793 is fixed
+    //let resource =
+    //    Resource::<MyType>::new_borrow(400).try_into_resource_any(&mut store, &i_pre, ty_idx)?;
+    //f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
+    //f.post_return(&mut store)?;
+    //resource.resource_drop(&mut store)?;
+
+    Ok(())
+}
+
+#[test]
 fn passthrough_wrong_type() -> Result<()> {
     let engine = super::engine();
     let c = Component::new(
