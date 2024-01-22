@@ -79,9 +79,10 @@ impl Engine {
     /// to the other relevant methods.
     ///
     /// When performing `increment_epoch` in a separate thread, consider using
-    /// [`Engine::weak`] to hold an [`EngineWeak`] and performing
-    /// [`EngineWeak::upgrade`] on each tick, so that the epoch ticking thread
-    /// does not keep an [`Engine`] alive longer than any of its consumers.
+    /// [`Engine::weak`] to hold an [`EngineWeak`](crate::EngineWeak) and
+    /// performing [`EngineWeak::upgrade`](crate::EngineWeak::upgrade) on each
+    /// tick, so that the epoch ticking thread does not keep an [`Engine`] alive
+    /// longer than any of its consumers.
     ///
     /// ## Signal Safety
     ///
