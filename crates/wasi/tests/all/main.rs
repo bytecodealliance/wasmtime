@@ -72,10 +72,11 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
         builder.env(var, val);
     }
+    let wasi = builder.build();
 
     let ctx = Ctx {
         table: ResourceTable::new(),
-        wasi: builder.build(),
+        wasi,
         stderr,
         stdout,
         adapter: WasiPreview1Adapter::new(),

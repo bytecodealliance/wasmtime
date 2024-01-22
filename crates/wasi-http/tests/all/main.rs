@@ -86,9 +86,10 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     builder.env("HTTP_SERVER", server.addr().to_string());
+    let wasi = builder.build();
     let ctx = Ctx {
         table: ResourceTable::new(),
-        wasi: builder.build(),
+        wasi,
         http: WasiHttpCtx {},
         stderr,
         stdout,

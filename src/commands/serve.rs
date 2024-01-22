@@ -152,10 +152,10 @@ impl ServeCommand {
             prefix: format!("stderr [{req_id}] :: "),
             output: Output::Stderr,
         });
-
+        let ctx = builder.build();
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
-            ctx: builder.build(),
+            ctx,
             http: WasiHttpCtx,
 
             limits: StoreLimits::default(),

@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::network::{SocketAddrUse, SocketAddressFamily};
+use crate::preview2::network::{SocketAddrFamily, SocketAddrUse};
 use crate::preview2::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -31,8 +31,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx().allowed_network_uses.check_allowed_udp()?;
         let table = self.table_mut();
+        table.get(&network)?.check_access()?;
 
         match table.get(&this)?.udp_state {
             UdpState::Default => {}
@@ -40,20 +40,15 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             UdpState::Bound | UdpState::Connected => return Err(ErrorCode::InvalidState.into()),
         }
 
-        // Set the socket addr check on the socket so later functions have access to it through the socket handle
-        let check = table.get(&network)?.socket_addr_check.clone();
-        table
-            .get_mut(&this)?
-            .socket_addr_check
-            .replace(check.clone());
-
         let socket = table.get(&this)?;
         let local_address: SocketAddr = local_address.into();
 
         util::validate_address_family(&local_address, &socket.family)?;
 
         {
-            check.check(&local_address, SocketAddrUse::UdpBind)?;
+            socket
+                .addr_check
+                .check(&local_address, SocketAddrUse::UdpBind)?;
 
             // Perform the OS bind call.
             util::udp_bind(socket.udp_socket(), &local_address).map_err(|error| match error {
@@ -128,12 +123,11 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
-            let Some(check) = socket.socket_addr_check.as_ref() else {
-                return Err(ErrorCode::InvalidState.into());
-            };
             util::validate_remote_address(&connect_addr)?;
             util::validate_address_family(&connect_addr, &socket.family)?;
-            check.check(&connect_addr, SocketAddrUse::UdpConnect)?;
+            socket
+                .addr_check
+                .check(&connect_addr, SocketAddrUse::UdpConnect)?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
                 |error| match error {
@@ -157,7 +151,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             remote_address,
             family: socket.family,
             send_state: SendState::Idle,
-            socket_addr_check: socket.socket_addr_check.clone(),
+            addr_check: socket.addr_check.clone(),
         };
 
         Ok((
@@ -206,10 +200,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        match socket.family {
-            SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketAddressFamily::Ipv6 => Ok(IpAddressFamily::Ipv6),
-        }
+        Ok(socket.family.into())
     }
 
     fn unicast_hop_limit(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u8> {
@@ -217,8 +208,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         let ttl = match socket.family {
-            SocketAddressFamily::Ipv4 => util::get_ip_ttl(socket.udp_socket())?,
-            SocketAddressFamily::Ipv6 => util::get_ipv6_unicast_hops(socket.udp_socket())?,
+            SocketAddrFamily::V4 => util::get_ip_ttl(socket.udp_socket())?,
+            SocketAddrFamily::V6 => util::get_ipv6_unicast_hops(socket.udp_socket())?,
         };
 
         Ok(ttl)
@@ -233,8 +224,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let socket = table.get(&this)?;
 
         match socket.family {
-            SocketAddressFamily::Ipv4 => util::set_ip_ttl(socket.udp_socket(), value)?,
-            SocketAddressFamily::Ipv6 => util::set_ipv6_unicast_hops(socket.udp_socket(), value)?,
+            SocketAddrFamily::V4 => util::set_ip_ttl(socket.udp_socket(), value)?,
+            SocketAddrFamily::V6 => util::set_ipv6_unicast_hops(socket.udp_socket(), value)?,
         }
 
         Ok(())
@@ -423,10 +414,9 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (stream.remote_address, provided_addr) {
                 (None, Some(addr)) => {
-                    let Some(check) = stream.socket_addr_check.as_ref() else {
-                        return Err(ErrorCode::InvalidState.into());
-                    };
-                    check.check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
+                    stream
+                        .addr_check
+                        .check(&addr, SocketAddrUse::UdpOutgoingDatagram)?;
                     addr
                 }
                 (Some(addr), None) => addr,
