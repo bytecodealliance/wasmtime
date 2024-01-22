@@ -64,10 +64,10 @@ impl HostMonotonicClock for MonotonicClock {
     }
 }
 
-pub fn monotonic_clock() -> Box<dyn HostMonotonicClock + Send + Sync> {
+pub fn monotonic_clock() -> Box<dyn HostMonotonicClock + Send> {
     Box::new(MonotonicClock::new(ambient_authority()))
 }
 
-pub fn wall_clock() -> Box<dyn HostWallClock + Send + Sync> {
+pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
     Box::new(WallClock::new(ambient_authority()))
 }

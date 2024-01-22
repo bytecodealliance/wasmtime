@@ -77,11 +77,11 @@ impl<T: WasiView> monotonic_clock::Host for T {
         } else {
             Duration::from_nanos(0)
         };
-        subscribe_to_duration(&mut self.table_mut(), duration)
+        subscribe_to_duration(&mut self.table(), duration)
     }
 
     fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
-        subscribe_to_duration(&mut self.table_mut(), Duration::from_nanos(duration))
+        subscribe_to_duration(&mut self.table(), Duration::from_nanos(duration))
     }
 }
 

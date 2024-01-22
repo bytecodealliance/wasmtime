@@ -9,7 +9,7 @@ impl<T: WasiView> tcp_create_socket::Host for T {
         address_family: IpAddressFamily,
     ) -> SocketResult<Resource<TcpSocket>> {
         let socket = TcpSocket::new(address_family.into())?;
-        let socket = self.table_mut().push(socket)?;
+        let socket = self.table().push(socket)?;
         Ok(socket)
     }
 }

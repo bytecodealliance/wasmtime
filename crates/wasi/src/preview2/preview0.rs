@@ -4,13 +4,13 @@ use crate::preview2::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as S
 use crate::preview2::preview1::WasiPreview1View;
 use wiggle::{GuestError, GuestPtr};
 
-pub fn add_to_linker_async<T: WasiPreview1View + Sync>(
+pub fn add_to_linker_async<T: WasiPreview1View>(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
     wasi_unstable::add_to_linker(linker, |t| t)
 }
 
-pub fn add_to_linker_sync<T: WasiPreview1View + Sync>(
+pub fn add_to_linker_sync<T: WasiPreview1View>(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
     sync::add_wasi_unstable_to_linker(linker, |t| t)

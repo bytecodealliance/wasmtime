@@ -22,11 +22,11 @@ pub struct WasiCtxBuilder {
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
     socket_addr_check: SocketAddrCheck,
-    random: Box<dyn RngCore + Send + Sync>,
-    insecure_random: Box<dyn RngCore + Send + Sync>,
+    random: Box<dyn RngCore + Send>,
+    insecure_random: Box<dyn RngCore + Send>,
     insecure_random_seed: u128,
-    wall_clock: Box<dyn HostWallClock + Send + Sync>,
-    monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
+    wall_clock: Box<dyn HostWallClock + Send>,
+    monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     allowed_network_uses: AllowedNetworkUses,
     built: bool,
 }
@@ -159,15 +159,12 @@ impl WasiCtxBuilder {
     /// unpredictable random data in order to maintain its security invariants,
     /// and ideally should use the insecure random API otherwise, so using any
     /// prerecorded or otherwise predictable data may compromise security.
-    pub fn secure_random(&mut self, random: impl RngCore + Send + Sync + 'static) -> &mut Self {
+    pub fn secure_random(&mut self, random: impl RngCore + Send + 'static) -> &mut Self {
         self.random = Box::new(random);
         self
     }
 
-    pub fn insecure_random(
-        &mut self,
-        insecure_random: impl RngCore + Send + Sync + 'static,
-    ) -> &mut Self {
+    pub fn insecure_random(&mut self, insecure_random: impl RngCore + Send + 'static) -> &mut Self {
         self.insecure_random = Box::new(insecure_random);
         self
     }
@@ -270,18 +267,16 @@ impl WasiCtxBuilder {
 }
 
 pub trait WasiView: Send {
-    fn table(&self) -> &ResourceTable;
-    fn table_mut(&mut self) -> &mut ResourceTable;
-    fn ctx(&self) -> &WasiCtx;
-    fn ctx_mut(&mut self) -> &mut WasiCtx;
+    fn table(&mut self) -> &mut ResourceTable;
+    fn ctx(&mut self) -> &mut WasiCtx;
 }
 
 pub struct WasiCtx {
-    pub(crate) random: Box<dyn RngCore + Send + Sync>,
-    pub(crate) insecure_random: Box<dyn RngCore + Send + Sync>,
+    pub(crate) random: Box<dyn RngCore + Send>,
+    pub(crate) insecure_random: Box<dyn RngCore + Send>,
     pub(crate) insecure_random_seed: u128,
-    pub(crate) wall_clock: Box<dyn HostWallClock + Send + Sync>,
-    pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
+    pub(crate) wall_clock: Box<dyn HostWallClock + Send>,
+    pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
     pub(crate) preopens: Vec<(Dir, String)>,

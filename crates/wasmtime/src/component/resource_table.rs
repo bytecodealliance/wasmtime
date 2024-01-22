@@ -69,7 +69,7 @@ impl Entry {
 #[derive(Debug)]
 struct TableEntry {
     /// The entry in the table, as a boxed dynamically-typed object
-    entry: Box<dyn Any + Send + Sync>,
+    entry: Box<dyn Any + Send>,
     /// The index of the parent of this entry, if it has one.
     parent: Option<u32>,
     /// The indicies of any children of this entry.
@@ -77,7 +77,7 @@ struct TableEntry {
 }
 
 impl TableEntry {
-    fn new(entry: Box<dyn Any + Send + Sync>, parent: Option<u32>) -> Self {
+    fn new(entry: Box<dyn Any + Send>, parent: Option<u32>) -> Self {
         Self {
             entry,
             parent,
@@ -115,7 +115,7 @@ impl ResourceTable {
     /// `Resource<T>` which can be used to refer to it after it was inserted.
     pub fn push<T>(&mut self, entry: T) -> Result<Resource<T>, ResourceTableError>
     where
-        T: Send + Sync + 'static,
+        T: Send + 'static,
     {
         let idx = self.push_(TableEntry::new(Box::new(entry), None))?;
         Ok(Resource::new_own(idx))
@@ -209,7 +209,7 @@ impl ResourceTable {
         parent: &Resource<U>,
     ) -> Result<Resource<T>, ResourceTableError>
     where
-        T: Send + Sync + 'static,
+        T: Send + 'static,
         U: 'static,
     {
         let parent = parent.rep();
@@ -301,7 +301,7 @@ impl ResourceTable {
     pub fn iter_children<T>(
         &self,
         parent: &Resource<T>,
-    ) -> Result<impl Iterator<Item = &(dyn Any + Send + Sync)>, ResourceTableError>
+    ) -> Result<impl Iterator<Item = &(dyn Any + Send)>, ResourceTableError>
     where
         T: 'static,
     {

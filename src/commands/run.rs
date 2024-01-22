@@ -11,7 +11,7 @@ use anyhow::{anyhow, bail, Context as _, Error, Result};
 use clap::Parser;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::maybe_exit_on_error;
@@ -784,7 +784,8 @@ impl RunCommand {
             builder.allow_udp(enable);
         }
 
-        store.data_mut().preview2_ctx = Some(Arc::new(builder.build()));
+        let ctx = builder.build();
+        store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
         Ok(())
     }
 }
@@ -792,11 +793,15 @@ impl RunCommand {
 #[derive(Default, Clone)]
 struct Host {
     preview1_ctx: Option<wasmtime_wasi::WasiCtx>,
-    preview2_ctx: Option<Arc<preview2::WasiCtx>>,
+
+    // The Mutex is only needed to satisfy the Sync constraint but we never
+    // actually perform any locking on it as we use Mutex::get_mut for every
+    // access.
+    preview2_ctx: Option<Arc<Mutex<preview2::WasiCtx>>>,
 
     // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
     // "just" an empty table.
-    preview2_table: Arc<wasmtime::component::ResourceTable>,
+    preview2_table: Arc<Mutex<wasmtime::component::ResourceTable>>,
 
     // State necessary for the preview1 implementation of WASI backed by the
     // preview2 host implementation. Only used with the `--preview2` flag right
@@ -815,21 +820,19 @@ struct Host {
 }
 
 impl preview2::WasiView for Host {
-    fn table(&self) -> &wasmtime::component::ResourceTable {
-        &self.preview2_table
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        Arc::get_mut(&mut self.preview2_table)
+            .expect("preview2 is not compatible with threads")
+            .get_mut()
+            .unwrap()
     }
 
-    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
-    }
-
-    fn ctx(&self) -> &preview2::WasiCtx {
-        self.preview2_ctx.as_ref().unwrap()
-    }
-
-    fn ctx_mut(&mut self) -> &mut preview2::WasiCtx {
+    fn ctx(&mut self) -> &mut preview2::WasiCtx {
         let ctx = self.preview2_ctx.as_mut().unwrap();
-        Arc::get_mut(ctx).expect("preview2 is not compatible with threads")
+        Arc::get_mut(ctx)
+            .expect("preview2 is not compatible with threads")
+            .get_mut()
+            .unwrap()
     }
 }
 
@@ -851,7 +854,10 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     }
 
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
+        Arc::get_mut(&mut self.preview2_table)
+            .expect("preview2 is not compatible with threads")
+            .get_mut()
+            .unwrap()
     }
 }
 
