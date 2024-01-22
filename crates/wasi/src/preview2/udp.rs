@@ -1,17 +1,22 @@
 use crate::preview2::host::network::util;
-use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::Blocking;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use rustix::io::Errno;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::{io, pin::Pin};
-use tokio::io::Interest;
 
-use super::network::{SocketAddrCheck, SocketAddrExt, SocketAddrFamily, SocketAddrUse};
+use super::network::{SocketAddrCheck, SocketAddrFamily, SocketAddrUse};
 
+pub type OutgoingDatagramStream = Box<dyn OutgoingStream + Send + Sync + 'static>;
+pub type IncomingDatagramStream = Box<dyn IncomingStream + Send + Sync + 'static>;
+
+/// A WASI-compliant UDP socket.
+///
+/// Implementations are encouraged to wrap [SystemUdpSocket] as that provides a
+/// cross-platform and WASI-compliant base implementation.
 pub trait UdpSocket {
     /// Bind the socket to a specific network on the provided IP address and port.
     ///
@@ -31,20 +36,8 @@ pub trait UdpSocket {
     /// - has the port set to 0.
     fn connect(&self, remote_address: SocketAddr) -> io::Result<()>;
 
-    fn await_readable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>>;
-
-    fn await_writable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>>;
-
-    /// Send data on the connected socket.
-    fn send_data(&self, data: &[u8]) -> io::Result<()>;
-
-    /// Send data on an unconnected socket to a remote address.
-    fn send_data_to(&self, remote_address: SocketAddr, data: &[u8]) -> io::Result<()>;
-
-    /// Receive data on the socket.
-    ///
-    /// Returns the number of bytes received and the address of the remote peer.
-    fn receive_data(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)>;
+    /// Get the streams for sending and receiving datagrams.
+    fn streams(&self) -> (IncomingDatagramStream, OutgoingDatagramStream);
 
     /// Disconnect from the remote endpoint.
     fn disconnect(&self) -> io::Result<()>;
@@ -102,6 +95,26 @@ pub trait UdpSocket {
     fn set_send_buffer_size(&self, value: usize) -> io::Result<()>;
 }
 
+#[async_trait]
+pub trait OutgoingStream {
+    /// Send the given data to the target.
+    fn send(&self, buf: &[u8], target: SocketAddr) -> io::Result<usize>;
+
+    /// Wait until the stream is ready to send data.
+    async fn ready(&self);
+}
+
+#[async_trait]
+pub trait IncomingStream {
+    /// Receive data into the given buffer.
+    ///
+    /// Returns the number of bytes received and the address of the remote peer.
+    fn recv(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)>;
+
+    /// Wait until the stream is ready to receive data.
+    async fn ready(&self);
+}
+
 /// The state of a UDP socket.
 ///
 /// This represents the various states a socket can be in during the
@@ -121,10 +134,7 @@ pub(crate) enum UdpState {
     Connected,
 }
 
-/// A host UDP socket, plus associated bookkeeping.
-///
-/// The inner state is wrapped in an Arc because the same underlying socket is
-/// used for implementing the stream types.
+/// A host UDP socket, plus address checks.
 pub struct DefaultUdpSocket {
     /// The underlying system socket
     system: SystemUdpSocket,
@@ -155,30 +165,16 @@ impl UdpSocket for DefaultUdpSocket {
         self.system.connect(remote_address)
     }
 
-    fn await_readable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        self.system.await_readable()
-    }
-
-    fn await_writable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        self.system.await_readable()
-    }
-
-    fn send_data(&self, data: &[u8]) -> io::Result<()> {
-        self.addr_check.check(
-            &self.system.remote_address()?,
-            SocketAddrUse::UdpOutgoingDatagram,
-        )?;
-        self.system.send_data(data)
-    }
-
-    fn send_data_to(&self, remote_address: SocketAddr, data: &[u8]) -> io::Result<()> {
-        self.addr_check
-            .check(&remote_address, SocketAddrUse::UdpOutgoingDatagram)?;
-        self.system.send_data_to(remote_address, data)
-    }
-
-    fn receive_data(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-        self.system.receive_data(buf)
+    fn streams(&self) -> (IncomingDatagramStream, OutgoingDatagramStream) {
+        let (incoming, outgoing) = self.system.streams();
+        (
+            // Just use the system stream for incoming data
+            incoming,
+            Box::new(DefaultOutgoingStream {
+                system: outgoing,
+                addr_check: self.addr_check.clone(),
+            }),
+        )
     }
 
     fn disconnect(&self) -> io::Result<()> {
@@ -219,13 +215,6 @@ impl UdpSocket for DefaultUdpSocket {
 
     fn set_send_buffer_size(&self, value: usize) -> io::Result<()> {
         self.system.set_send_buffer_size(value)
-    }
-}
-
-#[async_trait]
-impl Subscribe for DefaultUdpSocket {
-    async fn ready(&mut self) {
-        // None of the socket-level operations block natively
     }
 }
 
@@ -303,43 +292,16 @@ impl UdpSocket for SystemUdpSocket {
         Ok(())
     }
 
-    fn await_readable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-            let _ = inner.ready(Interest::READABLE).await?;
-            Ok(())
-        })
-    }
-
-    fn await_writable(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-            let _ = inner.ready(Interest::WRITABLE).await?;
-            Ok(())
-        })
-    }
-
-    fn send_data(&self, data: &[u8]) -> io::Result<()> {
-        let addr = self.remote_address()?;
-        util::validate_remote_address(&addr)?;
-        util::validate_address_family(&addr, &self.address_family())?;
-
-        self.inner.try_send(data)?;
-        Ok(())
-    }
-
-    fn send_data_to(&self, remote_address: SocketAddr, data: &[u8]) -> io::Result<()> {
-        util::validate_remote_address(&remote_address)?;
-        util::validate_address_family(&remote_address, &remote_address.family())?;
-
-        self.inner.try_send_to(data, remote_address)?;
-        Ok(())
-    }
-
-    fn receive_data(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-        self.inner.try_recv_from(buf)
+    fn streams(&self) -> (IncomingDatagramStream, OutgoingDatagramStream) {
+        (
+            Box::new(SystemIncomingStream {
+                inner: self.inner.clone(),
+            }),
+            Box::new(SystemOutgoingStream {
+                inner: self.inner.clone(),
+                family: self.family,
+            }),
+        )
     }
 
     fn disconnect(&self) -> io::Result<()> {
@@ -395,29 +357,61 @@ impl UdpSocket for SystemUdpSocket {
     }
 }
 
-pub struct IncomingDatagramStream {
-    pub(crate) inner: Arc<dyn UdpSocket + Send + Sync>,
-
-    /// Whether the UDP stream is connected to a remote host.
-    pub(crate) is_connected: bool,
+pub struct SystemIncomingStream {
+    pub(crate) inner: Arc<tokio::net::UdpSocket>,
 }
 
-pub struct OutgoingDatagramStream {
-    pub(crate) inner: Arc<dyn UdpSocket + Send + Sync>,
+#[async_trait]
+impl IncomingStream for SystemIncomingStream {
+    fn recv(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        self.inner.try_recv_from(buf)
+    }
 
-    /// Whether the UDP stream is connected to a remote host.
-    pub(crate) is_connected: bool,
-
-    pub(crate) send_state: SendState,
+    async fn ready(&self) {
+        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+        self.inner
+            .ready(tokio::io::Interest::READABLE)
+            .await
+            .expect("failed to await UDP socket readiness");
+    }
 }
 
-pub(crate) enum SendState {
-    /// Waiting for the API consumer to call `check-send`.
-    Idle,
+pub struct SystemOutgoingStream {
+    pub(crate) inner: Arc<tokio::net::UdpSocket>,
+    family: SocketAddrFamily,
+}
 
-    /// Ready to send up to x datagrams.
-    Permitted(usize),
+#[async_trait]
+impl OutgoingStream for SystemOutgoingStream {
+    fn send(&self, buf: &[u8], target: SocketAddr) -> io::Result<usize> {
+        util::validate_remote_address(&target)?;
+        util::validate_address_family(&target, &self.family)?;
+        self.inner.try_send_to(buf, target)
+    }
 
-    /// Waiting for the OS.
-    Waiting,
+    async fn ready(&self) {
+        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+        self.inner
+            .ready(tokio::io::Interest::WRITABLE)
+            .await
+            .expect("failed to await UDP socket readiness");
+    }
+}
+
+struct DefaultOutgoingStream {
+    system: OutgoingDatagramStream,
+    addr_check: SocketAddrCheck,
+}
+
+#[async_trait]
+impl OutgoingStream for DefaultOutgoingStream {
+    fn send(&self, buf: &[u8], target: SocketAddr) -> io::Result<usize> {
+        self.addr_check
+            .check(&target, SocketAddrUse::UdpOutgoingDatagram)?;
+        self.system.send(buf, target)
+    }
+
+    async fn ready(&self) {
+        self.system.ready().await
+    }
 }

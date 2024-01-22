@@ -173,10 +173,6 @@ impl SocketAddrCheck {
         Self(Arc::new(|_, _| false))
     }
 
-    pub fn allow() -> Self {
-        Self(Arc::new(|_, _| true))
-    }
-
     pub fn check(&self, addr: &SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
         if (self.0)(addr, reason) {
             Ok(())
