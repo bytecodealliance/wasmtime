@@ -8,6 +8,7 @@ use cranelift_codegen::{
     entity::EntityRef,
     ir::{types, ConstantPool, ExternalName, LibCall, Opcode, TrapCode, UserExternalNameRef},
     isa::{
+        unwind::UnwindInst,
         x64::{
             args::{
                 self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
@@ -227,6 +228,11 @@ impl Assembler {
                 SyntheticAmode::ConstantOffset(constant)
             }
         }
+    }
+
+    /// Emit an unwind instruction.
+    pub fn emit_unwind_inst(&mut self, inst: UnwindInst) {
+        self.emit(Inst::Unwind { inst })
     }
 
     /// Push register.
