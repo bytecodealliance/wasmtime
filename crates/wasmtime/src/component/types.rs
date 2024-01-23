@@ -14,7 +14,7 @@ use wasmtime_environ::component::{
     TypeListIndex, TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex,
     TypeResultIndex, TypeTupleIndex, TypeVariantIndex,
 };
-use wasmtime_environ::{PrimaryMap, SignatureIndex};
+use wasmtime_environ::PrimaryMap;
 
 pub use crate::component::resources::ResourceType;
 
@@ -760,21 +760,6 @@ impl Type {
     }
 }
 
-/// Core function type
-#[derive(Debug)]
-pub struct CoreFunc(Handle<SignatureIndex>);
-
-impl CoreFunc {
-    pub(crate) fn from(index: SignatureIndex, ty: &InstanceType<'_>) -> Self {
-        Self(Handle::new(index, ty))
-    }
-
-    /// Returns [`FuncType`] associated with this function
-    pub fn ty(&self) -> FuncType {
-        FuncType::from_wasm_func_type(self.0.types[self.0.index].clone())
-    }
-}
-
 /// Component function type
 #[derive(Debug)]
 pub struct ComponentFunc(Handle<TypeFuncIndex>);
@@ -813,20 +798,23 @@ impl Module {
     }
 
     /// Iterates over imports of the module
-    pub fn imports(&self) -> impl Iterator<Item = (&(String, String), ExternType)> {
-        self.0.types[self.0.index].imports.iter().map(|(name, ty)| {
-            (
-                name,
-                ExternType::from_wasmtime(self.0.types.module_types(), ty),
-            )
-        })
+    pub fn imports(&self) -> impl ExactSizeIterator<Item = ((&str, &str), ExternType)> {
+        self.0.types[self.0.index]
+            .imports
+            .iter()
+            .map(|((namespace, name), ty)| {
+                (
+                    (namespace.as_str(), name.as_str()),
+                    ExternType::from_wasmtime(self.0.types.module_types(), ty),
+                )
+            })
     }
 
     /// Iterates over exports of the module
-    pub fn exports(&self) -> impl Iterator<Item = (&String, ExternType)> {
+    pub fn exports(&self) -> impl ExactSizeIterator<Item = (&str, ExternType)> {
         self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
             (
-                name,
+                name.as_str(),
                 ExternType::from_wasmtime(self.0.types.module_types(), ty),
             )
         })
@@ -851,11 +839,11 @@ impl Component {
     }
 
     /// Iterates over imports of the component
-    pub fn imports(&self) -> impl Iterator<Item = (&String, ComponentItem)> {
+    pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
         self.0.types[self.0.index]
             .imports
             .iter()
-            .map(|(name, ty)| (name, ComponentItem::from(ty, &self.0.instance())))
+            .map(|(name, ty)| (name.as_str(), ComponentItem::from(ty, &self.0.instance())))
     }
 
     /// Returns export associated with `name`, if such exists in the component
@@ -867,11 +855,11 @@ impl Component {
     }
 
     /// Iterates over exports of the component
-    pub fn exports(&self) -> impl Iterator<Item = (&String, ComponentItem)> {
+    pub fn exports(&self) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
         self.0.types[self.0.index]
             .exports
             .iter()
-            .map(|(name, ty)| (name, ComponentItem::from(ty, &self.0.instance())))
+            .map(|(name, ty)| (name.as_str(), ComponentItem::from(ty, &self.0.instance())))
     }
 }
 
@@ -893,27 +881,11 @@ impl ComponentInstance {
     }
 
     /// Iterates over exports of the component instance
-    pub fn exports(&self) -> impl Iterator<Item = (&String, ComponentItem)> {
+    pub fn exports(&self) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
         self.0.types[self.0.index]
             .exports
             .iter()
-            .map(|(name, ty)| (name, ComponentItem::from(ty, &self.0.instance())))
-    }
-}
-
-/// Resource type
-#[derive(Debug)]
-pub struct Resource(Handle<TypeResourceTableIndex>);
-
-impl Resource {
-    pub(crate) fn from(index: TypeResourceTableIndex, ty: &InstanceType<'_>) -> Self {
-        Self(Handle::new(index, ty))
-    }
-
-    /// Returns [ResourceType] associated with this resource
-    pub fn ty(&self) -> ResourceType {
-        let idx = self.0.types[self.0.index].ty;
-        self.0.resources[idx]
+            .map(|(name, ty)| (name.as_str(), ComponentItem::from(ty, &self.0.instance())))
     }
 }
 
@@ -923,7 +895,7 @@ pub enum ComponentItem {
     /// Component function item
     ComponentFunc(ComponentFunc),
     /// Core function item
-    CoreFunc(CoreFunc),
+    CoreFunc(FuncType),
     /// Core module item
     Module(Module),
     /// Component item
@@ -933,7 +905,7 @@ pub enum ComponentItem {
     /// Interface type item
     Type(Type),
     /// Resource item
-    Resource(Resource),
+    Resource(ResourceType),
 }
 
 impl ComponentItem {
@@ -946,8 +918,10 @@ impl ComponentItem {
             TypeDef::ComponentFunc(idx) => Self::ComponentFunc(ComponentFunc::from(*idx, ty)),
             TypeDef::Interface(iface_ty) => Self::Type(Type::from(iface_ty, ty)),
             TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
-            TypeDef::CoreFunc(idx) => Self::CoreFunc(CoreFunc::from(*idx, ty)),
-            TypeDef::Resource(idx) => Self::Resource(Resource::from(*idx, ty)),
+            TypeDef::CoreFunc(idx) => {
+                Self::CoreFunc(FuncType::from_wasm_func_type(ty.types[*idx].clone()))
+            }
+            TypeDef::Resource(idx) => Self::Resource(ty.resources[ty.types[*idx].ty]),
         }
     }
 }
