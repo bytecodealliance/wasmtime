@@ -771,7 +771,7 @@ impl ComponentFunc {
     }
 
     /// Iterates over types of function parameters
-    pub fn params(&self) -> impl Iterator<Item = Type> + '_ {
+    pub fn params(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         let params = self.0.types[self.0.index].params;
         self.0.types[params]
             .types
@@ -780,7 +780,7 @@ impl ComponentFunc {
     }
 
     /// Iterates over types of function results
-    pub fn results(&self) -> impl Iterator<Item = Type> + '_ {
+    pub fn results(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         let results = self.0.types[self.0.index].results;
         self.0.types[results]
             .types
