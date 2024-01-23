@@ -3,8 +3,10 @@
 use super::{make_echo_component, make_echo_component_with_params, Param, Type};
 use anyhow::Result;
 use component_test_util::FuncExt;
-use wasmtime::component::{self, Component, Linker, Val};
+use wasmtime::component::types::{self, Case, ComponentItem, Field};
+use wasmtime::component::{self, Component, Linker, ResourceType, Val};
 use wasmtime::Store;
+use wasmtime_component_util::REALLOC_AND_FREE;
 
 #[test]
 fn primitives() -> Result<()> {
@@ -549,5 +551,250 @@ fn everything() -> Result<()> {
 
     assert_eq!(input, output[0]);
 
+    Ok(())
+}
+
+#[test]
+fn introspection() -> Result<()> {
+    let engine = super::engine();
+
+    let component = Component::new(
+        &engine,
+        format!(
+            r#"
+            (component
+                (import "res" (type $res (sub resource)))
+
+                (type $b' (enum "a" "b"))
+                (export $b "b" (type $b'))
+                (type $c' (record (field "D" bool) (field "E" u32)))
+                (export $c "c" (type $c'))
+                (type $f' (flags "G" "H" "I"))
+                (export $f "f" (type $f'))
+                (type $m' (record (field "N" bool) (field "O" u32)))
+                (export $m "m" (type $m'))
+                (type $j' (variant
+                    (case "K" u32)
+                    (case "L" float64)
+                    (case "M" $m)
+                ))
+                (export $j "j" (type $j'))
+
+                (type $Foo' (record
+                    (field "A" u32)
+                    (field "B" $b)
+                    (field "C" $c)
+                    (field "F" (list $f))
+                    (field "J" $j)
+                    (field "P" s8)
+                    (field "Q" s16)
+                    (field "R" s32)
+                    (field "S" s64)
+                    (field "T" float32)
+                    (field "U" float64)
+                    (field "V" string)
+                    (field "W" char)
+                    (field "Y" (tuple u32 u32))
+                    (field "AA" (option u32))
+                    (field "BB" (result string (error string)))
+                    (field "CC" (own $res))
+                ))
+                (export $Foo "foo" (type $Foo'))
+
+                (core module $m
+                    (func (export "f") (param i32) (result i32)
+                        local.get 0
+                    )
+                    (memory (export "memory") 1)
+                    {REALLOC_AND_FREE}
+                )
+                (core instance $i (instantiate $m))
+
+                (func (export "fn") (param "x" (option $Foo)) (result (option (tuple u32 u32)))
+                    (canon lift
+                        (core func $i "f")
+                        (memory $i "memory")
+                        (realloc (func $i "realloc"))
+                    )
+                )
+            )
+        "#
+        ),
+    )?;
+
+    struct MyType;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .root()
+        .resource("res", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
+
+    let component_ty = linker.substituted_component_type(&component)?;
+
+    let mut imports = component_ty.imports();
+    assert_eq!(imports.len(), 1);
+    let (name, res_ty) = imports.next().unwrap();
+    assert_eq!(name, "res");
+    let ComponentItem::Resource(res_ty) = res_ty else {
+        panic!("`res` import item of wrong type")
+    };
+    assert_eq!(res_ty, ResourceType::host::<MyType>());
+
+    let mut exports = component_ty.exports();
+    assert_eq!(exports.len(), 7);
+    let (name, b_ty) = exports.next().unwrap();
+    assert_eq!(name, "b");
+    let ComponentItem::Type(b_ty) = b_ty else {
+        panic!("`b` export item of wrong type")
+    };
+    assert_eq!(b_ty.unwrap_enum().names().collect::<Vec<_>>(), ["a", "b"]);
+
+    let (name, c_ty) = exports.next().unwrap();
+    assert_eq!(name, "c");
+    let ComponentItem::Type(c_ty) = c_ty else {
+        panic!("`c` export item of wrong type")
+    };
+    let mut fields = c_ty.unwrap_record().fields();
+    {
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "D");
+        assert_eq!(ty, types::Type::Bool);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "E");
+        assert_eq!(ty, types::Type::U32);
+    }
+
+    let (name, f_ty) = exports.next().unwrap();
+    assert_eq!(name, "f");
+    let ComponentItem::Type(f_ty) = f_ty else {
+        panic!("`f` export item of wrong type")
+    };
+    assert_eq!(
+        f_ty.unwrap_flags().names().collect::<Vec<_>>(),
+        ["G", "H", "I"]
+    );
+
+    let (name, m_ty) = exports.next().unwrap();
+    assert_eq!(name, "m");
+    let ComponentItem::Type(m_ty) = m_ty else {
+        panic!("`m` export item of wrong type")
+    };
+    {
+        let mut fields = m_ty.unwrap_record().fields();
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "N");
+        assert_eq!(ty, types::Type::Bool);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "O");
+        assert_eq!(ty, types::Type::U32);
+    }
+
+    let (name, j_ty) = exports.next().unwrap();
+    assert_eq!(name, "j");
+    let ComponentItem::Type(j_ty) = j_ty else {
+        panic!("`j` export item of wrong type")
+    };
+    let mut cases = j_ty.unwrap_variant().cases();
+    {
+        let Case { name, ty } = cases.next().unwrap();
+        assert_eq!(name, "K");
+        assert_eq!(ty, Some(types::Type::U32));
+        let Case { name, ty } = cases.next().unwrap();
+        assert_eq!(name, "L");
+        assert_eq!(ty, Some(types::Type::Float64));
+        let Case { name, ty } = cases.next().unwrap();
+        assert_eq!(name, "M");
+        assert_eq!(ty, Some(m_ty));
+    }
+
+    let (name, foo_ty) = exports.next().unwrap();
+    assert_eq!(name, "foo");
+    let ComponentItem::Type(foo_ty) = foo_ty else {
+        panic!("`foo` export item of wrong type")
+    };
+    {
+        let mut fields = foo_ty.unwrap_record().fields();
+        assert_eq!(fields.len(), 17);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "A");
+        assert_eq!(ty, types::Type::U32);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "B");
+        assert_eq!(ty, b_ty);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "C");
+        assert_eq!(ty, c_ty);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "F");
+        let ty = ty.unwrap_list();
+        assert_eq!(ty.ty(), f_ty);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "J");
+        assert_eq!(ty, j_ty);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "P");
+        assert_eq!(ty, types::Type::S8);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "Q");
+        assert_eq!(ty, types::Type::S16);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "R");
+        assert_eq!(ty, types::Type::S32);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "S");
+        assert_eq!(ty, types::Type::S64);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "T");
+        assert_eq!(ty, types::Type::Float32);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "U");
+        assert_eq!(ty, types::Type::Float64);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "V");
+        assert_eq!(ty, types::Type::String);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "W");
+        assert_eq!(ty, types::Type::Char);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "Y");
+        assert_eq!(
+            ty.unwrap_tuple().types().collect::<Vec<_>>(),
+            [types::Type::U32, types::Type::U32]
+        );
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "AA");
+        assert_eq!(ty.unwrap_option().ty(), types::Type::U32);
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "BB");
+        let ty = ty.unwrap_result();
+        assert_eq!(ty.ok(), Some(types::Type::String));
+        assert_eq!(ty.err(), Some(types::Type::String));
+        let Field { name, ty } = fields.next().unwrap();
+        assert_eq!(name, "CC");
+        assert_eq!(*ty.unwrap_own(), res_ty);
+    }
+
+    let (name, fn_ty) = exports.next().unwrap();
+    assert_eq!(name, "fn");
+    let ComponentItem::ComponentFunc(fn_ty) = fn_ty else {
+        panic!("`fn` export item of wrong type")
+    };
+    let mut params = fn_ty.params();
+    assert_eq!(params.len(), 1);
+    assert_eq!(params.next().unwrap().unwrap_option().ty(), foo_ty);
+
+    let mut results = fn_ty.results();
+    assert_eq!(results.len(), 1);
+    assert_eq!(
+        results
+            .next()
+            .unwrap()
+            .unwrap_option()
+            .ty()
+            .unwrap_tuple()
+            .types()
+            .collect::<Vec<_>>(),
+        [types::Type::U32, types::Type::U32]
+    );
     Ok(())
 }
