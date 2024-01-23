@@ -15,25 +15,15 @@ pub fn wasi_tests_environment() -> &'static [(&'static str, &'static str)] {
             // Windows does not support renaming a directory to an empty directory -
             // empty directory must be deleted.
             ("NO_RENAME_DIR_TO_EMPTY_DIR", "1"),
-            // cap-std-sync does not support the sync family of fdflags
-            ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
         ]
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        &[
-            ("ERRNO_MODE_UNIX", "1"),
-            // cap-std-sync does not support the sync family of fdflags
-            ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
-        ]
+        &[("ERRNO_MODE_UNIX", "1")]
     }
     #[cfg(target_os = "macos")]
     {
-        &[
-            ("ERRNO_MODE_MACOS", "1"),
-            // cap-std-sync does not support the sync family of fdflags
-            ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
-        ]
+        &[("ERRNO_MODE_MACOS", "1")]
     }
 }
 
