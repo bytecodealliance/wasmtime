@@ -275,6 +275,7 @@ impl List {
 }
 
 /// A field declaration belonging to a `record`
+#[derive(Debug)]
 pub struct Field<'a> {
     /// The name of the field
     pub name: &'a str,
