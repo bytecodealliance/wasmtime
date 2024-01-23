@@ -1029,7 +1029,10 @@ impl<'a> Inliner<'a> {
             // from.
             ComponentItemDef::Module(module) => match module {
                 ModuleDef::Static(idx) => dfg::Export::ModuleStatic(idx),
-                ModuleDef::Import(path, _) => dfg::Export::ModuleImport(self.runtime_import(&path)),
+                ModuleDef::Import(path, ty) => dfg::Export::ModuleImport {
+                    ty,
+                    import: self.runtime_import(&path),
+                },
             },
 
             ComponentItemDef::Func(func) => match func {
@@ -1051,7 +1054,7 @@ impl<'a> Inliner<'a> {
             },
 
             ComponentItemDef::Instance(instance) => {
-                let mut result = IndexMap::new();
+                let mut exports = IndexMap::new();
                 match instance {
                     // If this instance is one that was originally imported by
                     // the component itself then the imports are translated here
@@ -1064,20 +1067,24 @@ impl<'a> Inliner<'a> {
                         for (name, ty) in types[ty].exports.iter() {
                             let path = path.push(name);
                             let def = ComponentItemDef::from_import(path, *ty)?;
-                            self.record_export(name, def, types, &mut result)?;
+                            self.record_export(name, def, types, &mut exports)?;
+                        }
+                        dfg::Export::Instance {
+                            ty: Some(ty),
+                            exports,
                         }
                     }
 
                     // An exported instance which is itself a bag of items is
-                    // translated recursively here to our `result` map which is
+                    // translated recursively here to our `exports` map which is
                     // the bag of items we're exporting.
                     ComponentInstanceDef::Items(map) => {
                         for (name, def) in map {
-                            self.record_export(name, def, types, &mut result)?;
+                            self.record_export(name, def, types, &mut exports)?;
                         }
+                        dfg::Export::Instance { ty: None, exports }
                     }
                 }
-                dfg::Export::Instance(result)
             }
 
             // FIXME(#4283) should make an official decision on whether this is

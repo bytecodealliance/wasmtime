@@ -714,8 +714,8 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
                 options,
             )),
             Export::ModuleStatic(_)
-            | Export::ModuleImport(_)
-            | Export::Instance(_)
+            | Export::ModuleImport { .. }
+            | Export::Instance { .. }
             | Export::Type(_) => None,
         }
     }
@@ -738,7 +738,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     pub fn module(&mut self, name: &str) -> Option<&'a Module> {
         match self.exports.get(name)? {
             Export::ModuleStatic(idx) => Some(&self.data.component.static_module(*idx)),
-            Export::ModuleImport(idx) => Some(match &self.data.imports[*idx] {
+            Export::ModuleImport { import, .. } => Some(match &self.data.imports[*import] {
                 RuntimeImport::Module(m) => m,
                 _ => unreachable!(),
             }),
@@ -753,8 +753,8 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
             Export::Type(_)
             | Export::LiftedFunction { .. }
             | Export::ModuleStatic(_)
-            | Export::ModuleImport(_)
-            | Export::Instance(_) => None,
+            | Export::ModuleImport { .. }
+            | Export::Instance { .. } => None,
         }
     }
 
@@ -774,7 +774,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
         self.exports.iter().filter_map(|(name, export)| {
             let module = match *export {
                 Export::ModuleStatic(idx) => self.data.component.static_module(idx),
-                Export::ModuleImport(idx) => match &self.data.imports[idx] {
+                Export::ModuleImport { import, .. } => match &self.data.imports[import] {
                     RuntimeImport::Module(m) => m,
                     _ => unreachable!(),
                 },
@@ -803,7 +803,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     /// return value with the same lifetimes.
     pub fn into_instance(self, name: &str) -> Option<ExportInstance<'a, 'store>> {
         match self.exports.get(name)? {
-            Export::Instance(exports) => Some(ExportInstance {
+            Export::Instance { exports, .. } => Some(ExportInstance {
                 exports,
                 instance: self.instance,
                 data: self.data,

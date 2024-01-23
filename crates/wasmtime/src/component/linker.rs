@@ -1,9 +1,9 @@
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::{InstanceType, TypeChecker};
+use crate::component::types;
 use crate::component::{
-    Component, ComponentItemType, ComponentNamedList, Instance, InstancePre, Lift, Lower,
-    ResourceType, Val,
+    Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
@@ -198,28 +198,17 @@ impl<T> Linker<T> {
         Ok(cx)
     }
 
-    /// Iterates over all types imported by this component
-    pub fn import_types<'a>(
-        &'a self,
-        component: &'a Component,
-    ) -> Result<impl Iterator<Item = (&'a String, ComponentItemType)>> {
+    /// Returns the [`types::Component`] corresponding to `component` with resource
+    /// types imported by it replaced using imports present in [`Self`].
+    pub fn substituted_component_type(&self, component: &Component) -> Result<types::Component> {
         let cx = self.typecheck(&component)?;
-        Ok(component
-            .env_component()
-            .import_types
-            .iter()
-            .map(move |(_, (name, ty))| {
-                (
-                    name,
-                    ComponentItemType::from(
-                        ty,
-                        &InstanceType {
-                            types: cx.types,
-                            resources: &cx.imported_resources,
-                        },
-                    ),
-                )
-            }))
+        Ok(types::Component::from(
+            component.ty(),
+            &InstanceType {
+                types: cx.types,
+                resources: &cx.imported_resources,
+            },
+        ))
     }
 
     /// Performs a "pre-instantiation" to resolve the imports of the

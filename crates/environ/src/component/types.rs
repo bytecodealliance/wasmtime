@@ -398,10 +398,24 @@ macro_rules! intern_and_fill_flat_types {
 
 impl ComponentTypesBuilder {
     /// Finishes this list of component types and returns the finished
-    /// structure.
-    pub fn finish(mut self) -> ComponentTypes {
+    /// structure and the [`TypeComponentIndex`] corresponding to top-level component
+    /// with `imports` and `exports` specified.
+    pub fn finish(
+        mut self,
+        imports: impl IntoIterator<Item = (String, TypeDef)>,
+        exports: impl IntoIterator<Item = (String, TypeDef)>,
+    ) -> (ComponentTypes, TypeComponentIndex) {
+        let mut component_ty = TypeComponent::default();
+        for (name, ty) in imports {
+            component_ty.imports.insert(name, ty);
+        }
+        for (name, ty) in exports {
+            component_ty.exports.insert(name, ty);
+        }
+        let ty = self.component_types.components.push(component_ty);
+
         self.component_types.module_types = self.module_types.finish();
-        self.component_types
+        (self.component_types, ty)
     }
 
     /// Smaller helper method to find a `SignatureIndex` which corresponds to
