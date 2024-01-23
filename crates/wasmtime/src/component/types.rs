@@ -762,7 +762,7 @@ impl Type {
 }
 
 /// Component function type
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ComponentFunc(Handle<TypeFuncIndex>);
 
 impl ComponentFunc {
@@ -790,7 +790,7 @@ impl ComponentFunc {
 }
 
 /// Core module type
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Module(Handle<TypeModuleIndex>);
 
 impl Module {
@@ -823,7 +823,7 @@ impl Module {
 }
 
 /// Component type
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Component(Handle<TypeComponentIndex>);
 
 impl Component {
@@ -865,7 +865,7 @@ impl Component {
 }
 
 /// Component instance type
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ComponentInstance(Handle<TypeComponentInstanceIndex>);
 
 impl ComponentInstance {
@@ -891,7 +891,7 @@ impl ComponentInstance {
 }
 
 /// Type of an item contained within the component
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ComponentItem {
     /// Component function item
     ComponentFunc(ComponentFunc),
