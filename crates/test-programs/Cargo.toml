@@ -20,4 +20,4 @@ futures = { workspace = true, default-features = false, features = ['alloc'] }
 url = { workspace = true }
 sha2 = "0.10.2"
 base64 = "0.21.0"
-image2tensor = { git = "https://github.com/jianjunz/ba-wasi-nn.git", branch = "img" }
+image2tensor = { git = "https://github.com/bytecodealliance/wasi-nn.git", rev = "dec0dd4" }
