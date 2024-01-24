@@ -14,8 +14,7 @@ use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
 use regalloc2::RegClass;
 use smallvec::SmallVec;
-use wasmparser::BrTable;
-use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
+use wasmparser::{BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator};
 use wasmtime_environ::{
     FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType,
     WasmValType, FUNCREF_INIT_BIT,
@@ -208,6 +207,30 @@ macro_rules! def_unsupported {
     (emit MemoryFill $($rest:tt)*) => {};
     (emit MemorySize $($rest:tt)*) => {};
     (emit MemoryGrow $($rest:tt)*) => {};
+    (emit I32Load $($rest:tt)*) => {};
+    (emit I32Load8S $($rest:tt)*) => {};
+    (emit I32Load8U $($rest:tt)*) => {};
+    (emit I32Load16S $($rest:tt)*) => {};
+    (emit I32Load16U $($rest:tt)*) => {};
+    (emit I64Load8S $($rest:tt)*) => {};
+    (emit I64Load8U $($rest:tt)*) => {};
+    (emit I64Load16S $($rest:tt)*) => {};
+    (emit I64Load16U $($rest:tt)*) => {};
+    (emit I64Load32S $($rest:tt)*) => {};
+    (emit I64Load32U $($rest:tt)*) => {};
+    (emit I64Load $($rest:tt)*) => {};
+    (emit I32Store $($rest:tt)*) => {};
+    (emit I32Store $($rest:tt)*) => {};
+    (emit I32Store8 $($rest:tt)*) => {};
+    (emit I32Store16 $($rest:tt)*) => {};
+    (emit I64Store $($rest:tt)*) => {};
+    (emit I64Store8 $($rest:tt)*) => {};
+    (emit I64Store16 $($rest:tt)*) => {};
+    (emit I64Store32 $($rest:tt)*) => {};
+    (emit F32Load $($rest:tt)*) => {};
+    (emit F32Store $($rest:tt)*) => {};
+    (emit F64Load $($rest:tt)*) => {};
+    (emit F64Store $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -1804,6 +1827,123 @@ where
         self.context.free_reg(cond);
     }
 
+    fn visit_i32_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S32, None);
+    }
+
+    fn visit_i32_load8_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I32,
+            OperandSize::S8,
+            Some(ExtendKind::I32Extend8S),
+        );
+    }
+
+    fn visit_i32_load8_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S8, None);
+    }
+
+    fn visit_i32_load16_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I32,
+            OperandSize::S16,
+            Some(ExtendKind::I32Extend16S),
+        )
+    }
+
+    fn visit_i32_load16_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S16, None)
+    }
+
+    fn visit_i32_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S32);
+    }
+
+    fn visit_i32_store8(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S8)
+    }
+
+    fn visit_i32_store16(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S16)
+    }
+
+    fn visit_i64_load8_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S8,
+            Some(ExtendKind::I64Extend8S),
+        )
+    }
+
+    fn visit_i64_load8_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S8, None)
+    }
+
+    fn visit_i64_load16_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S16, None)
+    }
+
+    fn visit_i64_load16_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S16,
+            Some(ExtendKind::I64Extend16S),
+        )
+    }
+
+    fn visit_i64_load32_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S32, None)
+    }
+
+    fn visit_i64_load32_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S32,
+            Some(ExtendKind::I64Extend32S),
+        )
+    }
+
+    fn visit_i64_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S64, None)
+    }
+
+    fn visit_i64_store(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S64)
+    }
+
+    fn visit_i64_store8(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S8)
+    }
+
+    fn visit_i64_store16(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S16)
+    }
+
+    fn visit_i64_store32(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S32)
+    }
+
+    fn visit_f32_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::F32, OperandSize::S32, None)
+    }
+
+    fn visit_f32_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S32)
+    }
+
+    fn visit_f64_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::F64, OperandSize::S64, None)
+    }
+
+    fn visit_f64_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S64)
+    }
+
     wasmparser::for_each_operator!(def_unsupported);
 }
 
@@ -1842,7 +1982,7 @@ impl From<WasmValType> for OperandSize {
                     t => unimplemented!("Support for WasmHeapType: {t}"),
                 }
             }
-            ty => unimplemented!("Support for WasmType {ty}"),
+            ty => unimplemented!("Support for WasmValType {ty}"),
         }
     }
 }

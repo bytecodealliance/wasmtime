@@ -40,7 +40,7 @@ impl DefinedLocals {
         reader: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<Self> {
-        let mut next_stack = 0;
+        let mut next_stack: u32 = 0;
         // The first 32 bits of a Wasm binary function describe the number of locals.
         let local_count = reader.read_var_u32()?;
         let mut slots: Locals = Default::default();
@@ -54,7 +54,7 @@ impl DefinedLocals {
             let ty = types.convert_valtype(ty);
             for _ in 0..count {
                 let ty_size = <A as ABI>::sizeof(&ty);
-                next_stack = align_to(next_stack, ty_size) + ty_size;
+                next_stack = align_to(next_stack, ty_size as u32) + (ty_size as u32);
                 slots.push(LocalSlot::new(ty, next_stack));
             }
         }
@@ -103,8 +103,10 @@ impl Frame {
 
         // Align the locals to add a slot for the VMContext pointer.
         let ptr_size = <A as ABI>::word_bytes();
-        let vmctx_offset =
-            align_to(defined_locals_start + defined_locals.stack_size, ptr_size) + ptr_size;
+        let vmctx_offset = align_to(
+            defined_locals_start + defined_locals.stack_size,
+            ptr_size as u32,
+        ) + (ptr_size as u32);
 
         let (results_base_slot, locals_size) = if sig.params.has_retptr() {
             match sig.params.unwrap_results_area_operand() {
@@ -116,7 +118,7 @@ impl Frame {
                     align_to(vmctx_offset, <A as ABI>::stack_align().into()),
                 ),
                 ABIOperand::Reg { ty, .. } => {
-                    let offs = align_to(vmctx_offset, ptr_size) + ptr_size;
+                    let offs = align_to(vmctx_offset, ptr_size as u32) + (ptr_size as u32);
                     (
                         Some(LocalSlot::new(*ty, offs)),
                         align_to(offs, <A as ABI>::stack_align().into()),

@@ -462,7 +462,30 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | MemoryFill { .. }
                         | MemoryInit { .. }
                         | DataDrop { .. }
-                        | MemorySize { .. } => {}
+                        | MemorySize { .. }
+                        | I32Load { .. }
+                        | I32Load8S { .. }
+                        | I32Load8U { .. }
+                        | I32Load16S { .. }
+                        | I32Load16U { .. }
+                        | I64Load8S { .. }
+                        | I64Load8U { .. }
+                        | I64Load16S { .. }
+                        | I64Load16U { .. }
+                        | I64Load32S { .. }
+                        | I64Load32U { .. }
+                        | I64Load { .. }
+                        | I32Store { .. }
+                        | I32Store8 { .. }
+                        | I32Store16 { .. }
+                        | I64Store { .. }
+                        | I64Store8 { .. }
+                        | I64Store16 { .. }
+                        | I64Store32 { .. }
+                        | F32Load { .. }
+                        | F32Store { .. }
+                        | F64Load { .. }
+                        | F64Store { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

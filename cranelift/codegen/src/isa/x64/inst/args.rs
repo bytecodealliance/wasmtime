@@ -329,7 +329,8 @@ impl Amode {
         Self::RipRelative { target }
     }
 
-    pub(crate) fn with_flags(&self, flags: MemFlags) -> Self {
+    /// Set the specified [MemFlags] to the [Amode].
+    pub fn with_flags(&self, flags: MemFlags) -> Self {
         match self {
             &Self::ImmReg { simm32, base, .. } => Self::ImmReg {
                 simm32,

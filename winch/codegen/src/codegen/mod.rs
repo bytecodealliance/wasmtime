@@ -2,13 +2,17 @@ use crate::{
     abi::{ABIOperand, ABISig, RetArea, ABI},
     codegen::BlockSig,
     isa::reg::Reg,
-    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
+    masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::TypedReg,
 };
 use anyhow::Result;
 use smallvec::SmallVec;
-use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
-use wasmtime_environ::{PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType, FUNCREF_MASK};
+use wasmparser::{
+    BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
+};
+use wasmtime_environ::{
+    MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType, FUNCREF_MASK,
+};
 
 mod context;
 pub(crate) use context::*;
@@ -20,6 +24,9 @@ mod control;
 pub(crate) use control::*;
 mod builtin;
 pub use builtin::*;
+pub(crate) mod bounds;
+
+use bounds::{Bounds, ImmOffset, Index};
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M>
@@ -430,6 +437,210 @@ where
 
         self.masm.bind(cont);
     }
+
+    /// Emits a series of instructions to bounds check and calculate the address
+    /// of the given WebAssembly memory.
+    /// This function returns a register containing the requested address.
+    ///
+    /// In essence, when computing the heap address for a WebAssembly load or
+    /// store instruction the objective is to ensure that such access is safe,
+    /// but also to perform the least amount of checks, and rely on the system to
+    /// detect illegal memory accesses where applicable.
+    ///
+    /// Winch follows almost the same principles as Cranelift when it comes to
+    /// bounds checks, for a more detailed explanation refer to
+    /// [cranelift_wasm::code_translator::prepare_addr].
+    ///
+    /// Winch implementation differs in that, it defaults to the general case
+    /// for dynamic heaps rather than optimizing for doing the least amount of
+    /// work possible at runtime, this is done to align with Winch's principle
+    /// of doing the least amount of work possible at compile time. For static
+    /// heaps, Winch does a bit more of work, given that some of the cases that
+    /// are checked against, can benefit compilation times, like for example,
+    /// detecting an out of bouds access at compile time.
+    pub fn emit_compute_heap_address(
+        &mut self,
+        memarg: &MemArg,
+        access_size: OperandSize,
+    ) -> Option<Reg> {
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+        let enable_spectre_mitigation = self.env.heap_access_spectre_mitigation();
+        let add_offset_and_access_size = |offset: ImmOffset, access_size: OperandSize| {
+            (access_size.bytes() as u64) + (offset.as_u32() as u64)
+        };
+
+        let memory_index = MemoryIndex::from_u32(memarg.memory);
+        let heap = self.env.resolve_heap(memory_index);
+        let index = self.context.pop_to_reg(self.masm, None);
+        let (index, offset) = bounds::ensure_index_and_offset(
+            self.masm,
+            Index::from_typed_reg(index),
+            memarg.offset,
+            ptr_size,
+        );
+        let offset_with_access_size = add_offset_and_access_size(offset, access_size);
+
+        let addr = match heap.style {
+            // == Dynamic Heaps ==
+
+            // Account for the general case for dynamic memories. The access is
+            // out of bounds if:
+            // * index + offset + access_size overflows
+            //   OR
+            // * index + offset + access_size > bound
+            HeapStyle::Dynamic => {
+                let bounds =
+                    bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
+
+                let index_reg = index.as_typed_reg().reg;
+                // Perform
+                // index = index + offset + access_size, trapping if the
+                // addition overflows.
+                self.masm.checked_uadd(
+                    index_reg,
+                    index_reg,
+                    RegImm::i64(offset_with_access_size as i64),
+                    ptr_size,
+                    TrapCode::HeapOutOfBounds,
+                );
+
+                let addr = bounds::check_addr(
+                    self.masm,
+                    &mut self.context,
+                    ptr_size,
+                    &heap,
+                    enable_spectre_mitigation,
+                    bounds,
+                    index,
+                    offset,
+                    |masm, bounds, index| {
+                        let index_reg = index.as_typed_reg().reg;
+                        let bounds_reg = bounds.as_typed_reg().reg;
+                        masm.cmp(bounds_reg.into(), index_reg.into(), heap.ty.into());
+                        IntCmpKind::GtU
+                    },
+                );
+                self.context.free_reg(bounds.as_typed_reg().reg);
+                Some(addr)
+            }
+
+            // == Static Heaps ==
+
+            // Detect at compile time if the access is out of bounds.
+            // Doing so will put the compiler in an unreachable code state,
+            // optimizing the work that the compiler has to do until the
+            // reachability is restored or when reaching the end of the
+            // function.
+            HeapStyle::Static { bound } if offset_with_access_size > bound => {
+                self.masm.trap(TrapCode::HeapOutOfBounds);
+                self.context.reachable = false;
+                None
+            }
+
+            // Account for the case in which we can completely elide the bounds
+            // checks.
+            //
+            // This case, makes use of the fact that if a memory access uses
+            // a 32-bit index, then we be certain that
+            //
+            //      index <= u32::MAX
+            //
+            // Therfore if any 32-bit index access occurs in the region
+            // represented by
+            //
+            //      bound + guard_size - (offset + access_size)
+            //
+            // We are certain that it's in bounds or that the underlying virtual
+            // memory subsystem will report an illegal access at runtime.
+            //
+            // Note:
+            //
+            // * bound - (offset + access_size) cannot wrap, because it's checked
+            // in the condition above.
+            // * bound + heap.offset_guard_size is guaranteed to not overflow if
+            // the heap configuration is correct, given that it's address must
+            // fit in 64-bits.
+            // * If the heap type is 32-bits, the offset is at most u32::MAX, so
+            // no  adjustment is needed as part of
+            // [bounds::ensure_index_and_offset].
+            HeapStyle::Static { bound }
+                if heap.ty == WasmValType::I32
+                    && u64::from(u32::MAX)
+                        <= u64::from(bound) + u64::from(heap.offset_guard_size)
+                            - offset_with_access_size =>
+            {
+                let addr = self.context.any_gpr(self.masm);
+                let scratch = <M::ABI as ABI>::scratch_reg();
+                bounds::load_heap_addr(self.masm, &heap, index, offset, addr, scratch, ptr_size);
+                Some(addr)
+            }
+
+            // Account for the general case of static memories. The access is out
+            // of bounds if:
+            //
+            // index > bound - (offset + access_size)
+            //
+            // bound - (offset + access_size) cannot wrap, because we already
+            // checked that (offset + access_size) > bound, above.
+            HeapStyle::Static { bound } => {
+                let bounds = Bounds::from_u64(bound);
+                let addr = bounds::check_addr(
+                    self.masm,
+                    &mut self.context,
+                    ptr_size,
+                    &heap,
+                    enable_spectre_mitigation,
+                    bounds,
+                    index,
+                    offset,
+                    |masm, bounds, index| {
+                        let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
+                        let index_reg = index.as_typed_reg().reg;
+                        masm.cmp(RegImm::i64(adjusted_bounds as i64), index_reg, ptr_size);
+                        IntCmpKind::GtU
+                    },
+                );
+                Some(addr)
+            }
+        };
+
+        self.context.free_reg(index.as_typed_reg().reg);
+        addr
+    }
+
+    /// Emit a WebAssembly load.
+    pub fn emit_wasm_load(
+        &mut self,
+        arg: &MemArg,
+        ty: WasmValType,
+        size: OperandSize,
+        sextend: Option<ExtendKind>,
+    ) {
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size) {
+            let dst = match ty {
+                WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm),
+                WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm),
+                _ => unreachable!(),
+            };
+
+            let src = self.masm.address_at_reg(addr, 0);
+            self.masm.wasm_load(src, dst, size, sextend);
+            self.context.stack.push(TypedReg::new(ty, dst).into());
+            self.context.free_reg(addr);
+        }
+    }
+
+    /// Emit a WebAssembly store.
+    pub fn emit_wasm_store(&mut self, arg: &MemArg, size: OperandSize) {
+        let src = self.context.pop_to_reg(self.masm, None);
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size) {
+            self.masm
+                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0), size);
+
+            self.context.free_reg(addr);
+            self.context.free_reg(src);
+        }
+    }
 }
 
 /// Returns the index of the [`ControlStackFrame`] for the given
@@ -437,5 +648,5 @@ where
 pub fn control_index(depth: u32, control_length: usize) -> usize {
     (control_length - 1)
         .checked_sub(depth as usize)
-        .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth))
+        .unwrap_or_else(|| panic!("exected valid control stack frame at index: {}", depth))
 }
