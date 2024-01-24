@@ -57,6 +57,75 @@ impl Entry {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct SlotIdentity(Option<std::ptr::NonNull<dyn Any + Send>>);
+
+// SAFETY: the pointer is never dereferenced.
+unsafe impl Send for SlotIdentity {}
+
+impl SlotIdentity {
+    fn from(data: &Box<dyn Any + Send>) -> SlotIdentity {
+        let as_const = data.as_ref() as *const (dyn Any + Send);
+        let as_mut = as_const as *mut (dyn Any + Send);
+        Self(std::ptr::NonNull::new(as_mut))
+    }
+
+    fn none() -> SlotIdentity {
+        Self(None)
+    }
+}
+
+#[derive(Debug)]
+enum Slot {
+    /// The resource is present in the table, ready for use.
+    Present(Box<dyn Any + Send>),
+    /// The resource is temporarily leased out for external mutation.
+    /// To ensure we're getting back the same resource as the one we've handed
+    /// out, we remember the raw address of the box and check for pointer
+    /// equality on restore.
+    LeasedOut(SlotIdentity),
+}
+
+impl Slot {
+    fn unwrap_ref(&self) -> &(dyn Any + Send + 'static) {
+        match self {
+            Slot::Present(data) => data.as_ref(),
+            Slot::LeasedOut(_) => panic!("taken"),
+        }
+    }
+
+    fn unwrap_mut(&mut self) -> &mut (dyn Any + Send + 'static) {
+        match self {
+            Slot::Present(data) => data.as_mut(),
+            Slot::LeasedOut(_) => panic!("taken"),
+        }
+    }
+
+    fn take(&mut self) -> Box<dyn Any + Send> {
+        match std::mem::replace(self, Slot::LeasedOut(SlotIdentity::none())) {
+            Slot::Present(data) => {
+                *self = Slot::LeasedOut(SlotIdentity::from(&data));
+                data
+            }
+            Slot::LeasedOut(_) => panic!("already taken"),
+        }
+    }
+
+    fn restore(&mut self, data: Box<dyn Any + Send>) {
+        match std::mem::replace(self, Slot::LeasedOut(SlotIdentity::none())) {
+            Slot::Present(_) => panic!("already present"),
+            Slot::LeasedOut(id) => {
+                assert_eq!(
+                    id,
+                    SlotIdentity::from(&data),
+                    "expecting different resource"
+                );
+                *self = Slot::Present(data);
+            }
+        }
+    }
+}
+
 /// This structure tracks parent and child relationships for a given table entry.
 ///
 /// Parents and children are referred to by table index. We maintain the
@@ -68,8 +137,8 @@ impl Entry {
 /// * an entry with children may not be deleted.
 #[derive(Debug)]
 struct TableEntry {
-    /// The entry in the table, as a boxed dynamically-typed object
-    entry: Box<dyn Any + Send>,
+    /// The entry in the table.
+    slot: Slot,
     /// The index of the parent of this entry, if it has one.
     parent: Option<u32>,
     /// The indicies of any children of this entry.
@@ -79,7 +148,7 @@ struct TableEntry {
 impl TableEntry {
     fn new(entry: Box<dyn Any + Send>, parent: Option<u32>) -> Self {
         Self {
-            entry,
+            slot: Slot::Present(entry),
             parent,
             children: BTreeSet::new(),
         }
@@ -91,6 +160,72 @@ impl TableEntry {
     fn remove_child(&mut self, child: u32) {
         let was_removed = self.children.remove(&child);
         debug_assert!(was_removed);
+    }
+}
+
+/// Represents temporary ownership of an entry in the [ResourceTable].
+/// For more information, see [ResourceTable::take].
+///
+/// # Panics
+/// To prevent silent memory leaks, dropping a lease without manually handing it
+/// back using [ResourceTable::restore] is considered a logic error and panics.
+#[must_use]
+#[derive(Debug)]
+pub struct Lease<T: 'static>(Option<(Resource<T>, Box<T>)>);
+
+impl<T> Lease<T> {
+    fn new(resource: Resource<T>, data: Box<T>) -> Self {
+        Self(Some((resource, data)))
+    }
+
+    fn destruct(mut self) -> (Resource<T>, Box<T>) {
+        self.0.take().unwrap()
+    }
+}
+
+impl<T> Drop for Lease<T> {
+    fn drop(&mut self) {
+        if self.0.is_some() && !std::thread::panicking() {
+            panic!("lease dropped unexpectedly")
+        }
+    }
+}
+
+impl<T> AsRef<T> for Lease<T> {
+    fn as_ref(&self) -> &T {
+        &self.0.as_ref().unwrap().1
+    }
+}
+
+impl<T> AsMut<T> for Lease<T> {
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.0.as_mut().unwrap().1
+    }
+}
+
+impl<T> std::borrow::Borrow<T> for Lease<T> {
+    fn borrow(&self) -> &T {
+        self.as_ref()
+    }
+}
+
+impl<T> std::borrow::BorrowMut<T> for Lease<T> {
+    fn borrow_mut(&mut self) -> &mut T {
+        self.as_mut()
+    }
+}
+
+impl<T> std::ops::Deref for Lease<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.as_ref()
+    }
+}
+
+impl<T> std::ops::DerefMut for Lease<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.as_mut()
     }
 }
 
@@ -231,7 +366,7 @@ impl ResourceTable {
 
     fn get_(&self, key: u32) -> Result<&dyn Any, ResourceTableError> {
         let r = self.occupied(key)?;
-        Ok(&*r.entry)
+        Ok(r.slot.unwrap_ref())
     }
 
     /// Get an mutable reference to a resource of a given type at a given
@@ -248,7 +383,7 @@ impl ResourceTable {
     /// Returns the raw `Any` at the `key` index provided.
     pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, ResourceTableError> {
         let r = self.occupied_mut(key)?;
-        Ok(&mut *r.entry)
+        Ok(r.slot.unwrap_mut())
     }
 
     /// Same as `delete`, but typed
@@ -257,17 +392,19 @@ impl ResourceTable {
         T: Any,
     {
         debug_assert!(resource.owned());
-        let entry = self.delete_entry(resource.rep())?;
-        match entry.entry.downcast() {
+        let data = self.delete_entry(resource.rep())?;
+        match data.downcast() {
             Ok(t) => Ok(*t),
             Err(_e) => Err(ResourceTableError::WrongType),
         }
     }
 
-    fn delete_entry(&mut self, key: u32) -> Result<TableEntry, ResourceTableError> {
-        if !self.occupied(key)?.children.is_empty() {
+    fn delete_entry(&mut self, key: u32) -> Result<Box<dyn Any + Send>, ResourceTableError> {
+        let entry = self.occupied_mut(key)?;
+        if !entry.children.is_empty() {
             return Err(ResourceTableError::HasChildren);
         }
+        let data = entry.slot.take();
         let e = self.free_entry(key as usize);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
@@ -277,7 +414,7 @@ impl ResourceTable {
                 .expect("missing parent")
                 .remove_child(key);
         }
-        Ok(e)
+        Ok(data)
     }
 
     /// Zip the values of the map with mutable references to table entries corresponding to each
@@ -290,7 +427,7 @@ impl ResourceTable {
         map.into_iter().map(move |(k, v)| {
             let item = self
                 .occupied_mut(k)
-                .map(|e| Box::as_mut(&mut e.entry))
+                .map(|e| e.slot.unwrap_mut())
                 // Safety: extending the lifetime of the mutable reference.
                 .map(|item| unsafe { &mut *(item as *mut dyn Any) });
             (item, v)
@@ -308,8 +445,51 @@ impl ResourceTable {
         let parent_entry = self.occupied(parent.rep())?;
         Ok(parent_entry.children.iter().map(|child_index| {
             let child = self.occupied(*child_index).expect("missing child");
-            child.entry.as_ref()
+            child.slot.unwrap_ref()
         }))
+    }
+
+    /// Temporarily take the resource out of the table.
+    ///
+    /// This is an advanced operation to allow mutating resources independent of
+    /// the table's mutable reference lifetime. For simple access to the resource,
+    /// try [ResourceTable::get_mut] instead.
+    ///
+    /// Unlike deleting the resource and pushing it back in, this method retains
+    /// the resource's index in the table and the parent/children relationships.
+    ///
+    /// # Panics
+    /// - It's the caller's responsibility to put the resource back using
+    ///   [ResourceTable::restore]. Dropping the Lease without doing so will panic.
+    /// - While a resource is leased out, any attempt to access that resource's
+    ///   index through the table is considered a logic error and will panic.
+    pub fn take<T>(&mut self, resource: Resource<T>) -> Result<Lease<T>, ResourceTableError>
+    where
+        T: Any + Send + 'static,
+    {
+        let entry = self.occupied_mut(resource.rep())?;
+        match entry.slot.take().downcast() {
+            Ok(data) => Ok(Lease::new(resource, data)),
+            Err(data) => {
+                entry.slot.restore(data);
+                Err(ResourceTableError::WrongType)
+            }
+        }
+    }
+
+    /// Put the resource back into the table. This returns the resource handle
+    /// originally passed to [ResourceTable::take].
+    ///
+    /// # Panics
+    /// Panics when the provided lease did not originate from this table.
+    pub fn restore<T>(&mut self, lease: Lease<T>) -> Resource<T>
+    where
+        T: Any + Send + 'static,
+    {
+        let (resource, data) = lease.destruct();
+        let entry = self.occupied_mut(resource.rep()).expect("wrong table");
+        entry.slot.restore(data);
+        resource
     }
 }
 
@@ -320,7 +500,7 @@ impl Default for ResourceTable {
 }
 
 #[test]
-pub fn test_free_list() {
+fn test_free_list() {
     let mut table = ResourceTable::new();
 
     let x = table.push(()).unwrap();
@@ -347,4 +527,76 @@ pub fn test_free_list() {
     // As the free list is empty, this entry will have a new id.
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 2);
+}
+
+#[test]
+fn test_slot_identity() {
+    let a: Box<dyn Any + Send> = Box::new(42u32);
+    let b: Box<dyn Any + Send> = Box::new(42u32);
+
+    assert_eq!(SlotIdentity::from(&a), SlotIdentity::from(&a));
+    assert_ne!(SlotIdentity::from(&a), SlotIdentity::from(&b));
+}
+
+#[test]
+fn test_slot() {
+    let mut a = Slot::Present(Box::new(42u32));
+    let _ = a.unwrap_ref();
+    let _ = a.unwrap_mut();
+    let a_data = a.take();
+    assert_eq!(*a_data.downcast_ref::<u32>().unwrap(), 42u32);
+    a.restore(a_data);
+    let _ = a.unwrap_ref();
+    let _ = a.unwrap_mut();
+}
+
+#[test]
+fn test_take_restore() {
+    let mut table = ResourceTable::new();
+    let a = table.push(()).unwrap();
+    let a_rep = a.rep();
+    let l = table.take(a).unwrap();
+    table.push(()).unwrap();
+    let a = table.restore(l);
+    assert_eq!(a.rep(), a_rep);
+}
+
+#[test]
+#[should_panic]
+fn test_get_taken() {
+    let mut table = ResourceTable::new();
+    let a = table.push(42u32).unwrap();
+    let a_bad: Resource<u32> = Resource::new_borrow(a.rep());
+    let _ = table.take(a).unwrap();
+
+    // Should panic:
+    let _ = table.get(&a_bad);
+}
+
+#[test]
+#[should_panic]
+fn test_restore_wrong_table() {
+    let mut table_a = ResourceTable::new();
+    let mut table_b = ResourceTable::new();
+
+    let a = table_a.push(42u32).unwrap();
+    let b = table_b.push(42u32).unwrap();
+
+    let lease_a = table_a.take(a).unwrap();
+    let lease_b = table_b.take(b).unwrap();
+
+    // Should panic:
+    table_a.restore(lease_b);
+    table_b.restore(lease_a);
+}
+
+#[test]
+#[should_panic]
+fn test_lease_drop() {
+    let mut table = ResourceTable::new();
+    let a = table.push(()).unwrap();
+    let lease_a = table.take(a).unwrap();
+
+    // Should panic:
+    drop(lease_a)
 }
