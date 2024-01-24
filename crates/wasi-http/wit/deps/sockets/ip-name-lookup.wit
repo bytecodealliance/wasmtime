@@ -1,6 +1,6 @@
 
 interface ip-name-lookup {
-    use wasi:io/poll@0.2.0-rc-2023-11-10.{pollable};
+    use wasi:io/poll@0.2.0.{pollable};
     use network.{network, error-code, ip-address};
 
 

@@ -1,4 +1,4 @@
-package wasi:filesystem@0.2.0-rc-2023-11-10;
+package wasi:filesystem@0.2.0;
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -24,8 +24,8 @@ package wasi:filesystem@0.2.0-rc-2023-11-10;
 ///
 /// [WASI filesystem path resolution]: https://github.com/WebAssembly/wasi-filesystem/blob/main/path-resolution.md
 interface types {
-    use wasi:io/streams@0.2.0-rc-2023-11-10.{input-stream, output-stream, error};
-    use wasi:clocks/wall-clock@0.2.0-rc-2023-11-10.{datetime};
+    use wasi:io/streams@0.2.0.{input-stream, output-stream, error};
+    use wasi:clocks/wall-clock@0.2.0.{datetime};
 
     /// File size or length of a region within a file.
     type filesize = u64;

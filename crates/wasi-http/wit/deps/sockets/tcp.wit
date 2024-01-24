@@ -1,8 +1,8 @@
 
 interface tcp {
-    use wasi:io/streams@0.2.0-rc-2023-11-10.{input-stream, output-stream};
-    use wasi:io/poll@0.2.0-rc-2023-11-10.{pollable};
-    use wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10.{duration};
+    use wasi:io/streams@0.2.0.{input-stream, output-stream};
+    use wasi:io/poll@0.2.0.{pollable};
+    use wasi:clocks/monotonic-clock@0.2.0.{duration};
     use network.{network, error-code, ip-socket-address, ip-address-family};
 
     enum shutdown-type {
