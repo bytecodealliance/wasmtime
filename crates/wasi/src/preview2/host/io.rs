@@ -2,7 +2,7 @@ use crate::preview2::{
     bindings::io::error,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::subscribe,
-    Pollable, StreamError, StreamResult, WasiView,
+    PollableResource, StreamError, StreamResult, WasiView,
 };
 use wasmtime::component::Resource;
 
@@ -48,7 +48,10 @@ impl<T: WasiView> streams::HostOutputStream for T {
         Ok(())
     }
 
-    fn subscribe(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(
+        &mut self,
+        stream: Resource<OutputStream>,
+    ) -> anyhow::Result<Resource<PollableResource>> {
         subscribe(self.table(), stream)
     }
 
@@ -219,7 +222,10 @@ impl<T: WasiView> streams::HostInputStream for T {
         self.skip(stream, len).await
     }
 
-    fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(
+        &mut self,
+        stream: Resource<InputStream>,
+    ) -> anyhow::Result<Resource<PollableResource>> {
         crate::preview2::poll::subscribe(self.table(), stream)
     }
 }
@@ -230,9 +236,8 @@ pub mod sync {
             self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
             HostOutputStream as AsyncHostOutputStream,
         },
-        bindings::sync_io::io::poll::Pollable,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
-        in_tokio, StreamError, StreamResult, WasiView,
+        in_tokio, PollableResource, StreamError, StreamResult, WasiView,
     };
     use wasmtime::component::Resource;
 
@@ -290,7 +295,7 @@ pub mod sync {
         fn subscribe(
             &mut self,
             stream: Resource<OutputStream>,
-        ) -> anyhow::Result<Resource<Pollable>> {
+        ) -> anyhow::Result<Resource<PollableResource>> {
             Ok(AsyncHostOutputStream::subscribe(self, stream)?)
         }
 
@@ -359,7 +364,7 @@ pub mod sync {
         fn subscribe(
             &mut self,
             stream: Resource<InputStream>,
-        ) -> anyhow::Result<Resource<Pollable>> {
+        ) -> anyhow::Result<Resource<PollableResource>> {
             AsyncHostInputStream::subscribe(self, stream)
         }
     }

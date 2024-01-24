@@ -14,7 +14,7 @@ use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
-    Pollable,
+    PollableResource,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -643,7 +643,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
     fn subscribe(
         &mut self,
         index: Resource<HostFutureTrailers>,
-    ) -> wasmtime::Result<Resource<Pollable>> {
+    ) -> wasmtime::Result<Resource<PollableResource>> {
         wasmtime_wasi::preview2::subscribe(self.table(), index)
     }
 
@@ -851,7 +851,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
     fn subscribe(
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
-    ) -> wasmtime::Result<Resource<Pollable>> {
+    ) -> wasmtime::Result<Resource<PollableResource>> {
         wasmtime_wasi::preview2::subscribe(self.table(), id)
     }
 }

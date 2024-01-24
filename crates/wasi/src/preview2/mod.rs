@@ -45,7 +45,9 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketError, SocketResult};
-pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
+pub use self::poll::{
+    subscribe, ClosureFuture, MakeFuture, PollableFuture, PollableResource, Subscribe,
+};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
     stderr, stdin, stdout, IsATTY, Stderr, Stdin, StdinStream, Stdout, StdoutStream,
@@ -171,7 +173,7 @@ pub mod bindings {
             "wasi:io/streams/input-stream": super::stream::InputStream,
             "wasi:io/streams/output-stream": super::stream::OutputStream,
             "wasi:io/error/error": super::stream::Error,
-            "wasi:io/poll/pollable": super::poll::Pollable,
+            "wasi:io/poll/pollable": super::poll::PollableResource,
             "wasi:cli/terminal-input/terminal-input": super::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": super::stdio::TerminalOutput,
         },

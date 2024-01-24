@@ -5,7 +5,7 @@ use crate::preview2::bindings::{
     clocks::wall_clock::{self, Datetime},
 };
 use crate::preview2::poll::{subscribe, Subscribe};
-use crate::preview2::{Pollable, WasiView};
+use crate::preview2::{PollableResource, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -45,7 +45,7 @@ impl<T: WasiView> wall_clock::Host for T {
 fn subscribe_to_duration(
     table: &mut wasmtime::component::ResourceTable,
     duration: tokio::time::Duration,
-) -> anyhow::Result<Resource<Pollable>> {
+) -> anyhow::Result<Resource<PollableResource>> {
     let sleep = if duration.is_zero() {
         table.push(Deadline::Past)?
     } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
@@ -70,7 +70,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<PollableResource>> {
         let clock_now = self.ctx().monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
@@ -80,7 +80,10 @@ impl<T: WasiView> monotonic_clock::Host for T {
         subscribe_to_duration(&mut self.table(), duration)
     }
 
-    fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe_duration(
+        &mut self,
+        duration: WasiDuration,
+    ) -> anyhow::Result<Resource<PollableResource>> {
         subscribe_to_duration(&mut self.table(), Duration::from_nanos(duration))
     }
 }
