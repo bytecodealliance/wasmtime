@@ -520,6 +520,18 @@ jobs:
       shell: pwsh
       if: matrix.os == 'windows-latest'
 
+    # Since MPK (PKU) is not present on some GitHub runners, we check if it is
+    # available before force-enabling it. This occasional testing is better than
+    # none at all; ideally we would test in a system-mode QEMU VM.
+    - name: Force-run with MPK enabled, if available
+      run: |
+        if cargo run --example mpk-available; then
+          echo "::warning::This CI run will force-enable MPK; this ensures tests conditioned with the \`WASMTIME_TEST_FORCE_MPK\` environment variable will run with MPK-protected memory pool stripes."
+          echo WASMTIME_TEST_FORCE_MPK=1 >> $GITHUB_ENV
+        else
+          echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (\`cargo run --example mpk-available\`)."
+        fi
+
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
       env:
