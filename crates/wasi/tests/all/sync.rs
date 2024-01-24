@@ -294,8 +294,12 @@ fn preview2_stream_pollable_traps() {
     )
 }
 #[test_log::test]
-fn preview2_pollable() {
-    run(PREVIEW2_POLLABLE_COMPONENT, false).unwrap()
+fn preview2_pollable_correct() {
+    run(PREVIEW2_POLLABLE_CORRECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_pollable_traps() {
+    run(PREVIEW2_POLLABLE_TRAPS_COMPONENT, false).unwrap_err();
 }
 #[test_log::test]
 fn preview2_adapter_badfd() {

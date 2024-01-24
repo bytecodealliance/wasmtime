@@ -1,5 +1,5 @@
 use crate::preview2::{bindings::io::poll, WasiView};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use futures::Future;
 use smallvec::{smallvec, SmallVec};
 use std::{
@@ -155,8 +155,7 @@ impl PollableResource {
 impl<T: WasiView> poll::Host for T {
     async fn poll(&mut self, pollables: Vec<Resource<PollableResource>>) -> Result<Vec<u32>> {
         if pollables.is_empty() {
-            futures::future::pending::<()>().await;
-            unreachable!();
+            return Err(anyhow!("empty poll list"));
         }
 
         type PollableRep = u32;
