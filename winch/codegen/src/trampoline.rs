@@ -705,8 +705,10 @@ where
     fn prologue_with_callee_saved(&mut self) {
         self.masm.prologue();
         // Save any callee-saved registers.
+        let mut off = 0;
         for (r, s) in &self.callee_saved_regs {
-            self.masm.push(*r, *s);
+            let slot = self.masm.save(off, *r, *s);
+            off += slot.size;
         }
     }
 

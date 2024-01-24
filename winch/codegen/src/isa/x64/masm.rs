@@ -124,6 +124,19 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn save(&mut self, clobber_offset: u32, reg: Reg, size: OperandSize) -> StackSlot {
+        let slot = self.push(reg, size);
+
+        if self.shared_flags.unwind_info() {
+            self.asm.emit_unwind_inst(UnwindInst::SaveReg {
+                clobber_offset,
+                reg: reg.into(),
+            });
+        }
+
+        slot
+    }
+
     fn reserve_stack(&mut self, bytes: u32) {
         if bytes == 0 {
             return;
