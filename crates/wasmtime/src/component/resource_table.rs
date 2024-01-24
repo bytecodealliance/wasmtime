@@ -1,6 +1,6 @@
 use super::Resource;
 use std::any::Any;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 #[derive(Debug)]
 /// Errors returned by operations on `ResourceTable`
@@ -415,23 +415,6 @@ impl ResourceTable {
                 .remove_child(key);
         }
         Ok(data)
-    }
-
-    /// Zip the values of the map with mutable references to table entries corresponding to each
-    /// key. As the keys in the [HashMap] are unique, this iterator can give mutable references
-    /// with the same lifetime as the mutable reference to the [ResourceTable].
-    pub fn iter_entries<'a, T>(
-        &'a mut self,
-        map: HashMap<u32, T>,
-    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, ResourceTableError>, T)> {
-        map.into_iter().map(move |(k, v)| {
-            let item = self
-                .occupied_mut(k)
-                .map(|e| e.slot.unwrap_mut())
-                // Safety: extending the lifetime of the mutable reference.
-                .map(|item| unsafe { &mut *(item as *mut dyn Any) });
-            (item, v)
-        })
     }
 
     /// Iterate over all children belonging to the provided parent
