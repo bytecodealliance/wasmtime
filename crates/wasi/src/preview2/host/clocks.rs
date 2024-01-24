@@ -58,7 +58,7 @@ fn subscribe_to_duration(
         // represent it, wait forever rather than trap.
         table.push(Deadline::Never)?
     };
-    subscribe(table, sleep)
+    subscribe(table, &sleep)
 }
 
 impl<T: WasiView> monotonic_clock::Host for T {

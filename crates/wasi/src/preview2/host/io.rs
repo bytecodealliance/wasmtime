@@ -52,7 +52,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
         &mut self,
         stream: Resource<OutputStream>,
     ) -> anyhow::Result<Resource<PollableResource>> {
-        subscribe(self.table(), stream)
+        subscribe(self.table(), &stream)
     }
 
     async fn blocking_write_and_flush(
@@ -226,7 +226,7 @@ impl<T: WasiView> streams::HostInputStream for T {
         &mut self,
         stream: Resource<InputStream>,
     ) -> anyhow::Result<Resource<PollableResource>> {
-        crate::preview2::poll::subscribe(self.table(), stream)
+        crate::preview2::poll::subscribe(self.table(), &stream)
     }
 }
 

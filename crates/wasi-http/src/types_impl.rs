@@ -644,7 +644,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
         &mut self,
         index: Resource<HostFutureTrailers>,
     ) -> wasmtime::Result<Resource<PollableResource>> {
-        wasmtime_wasi::preview2::subscribe(self.table(), index)
+        wasmtime_wasi::preview2::subscribe(self.table(), &index)
     }
 
     fn get(
@@ -852,7 +852,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
     ) -> wasmtime::Result<Resource<PollableResource>> {
-        wasmtime_wasi::preview2::subscribe(self.table(), id)
+        wasmtime_wasi::preview2::subscribe(self.table(), &id)
     }
 }
 

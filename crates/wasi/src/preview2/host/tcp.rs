@@ -563,7 +563,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         &mut self,
         this: Resource<tcp::TcpSocket>,
     ) -> anyhow::Result<Resource<PollableResource>> {
-        crate::preview2::poll::subscribe(self.table(), this)
+        crate::preview2::poll::subscribe(self.table(), &this)
     }
 
     fn shutdown(

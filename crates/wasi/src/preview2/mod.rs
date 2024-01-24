@@ -28,7 +28,7 @@ mod host;
 mod ip_name_lookup;
 mod network;
 pub mod pipe;
-mod poll;
+pub mod poll;
 #[cfg(feature = "preview1-on-preview2")]
 pub mod preview0;
 #[cfg(feature = "preview1-on-preview2")]
@@ -45,9 +45,7 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketError, SocketResult};
-pub use self::poll::{
-    subscribe, ClosureFuture, MakeFuture, PollableFuture, PollableResource, Subscribe,
-};
+pub use self::poll::{subscribe, Pollable, PollableResource, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
     stderr, stdin, stdout, IsATTY, Stderr, Stdin, StdinStream, Stdout, StdoutStream,

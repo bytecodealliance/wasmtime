@@ -294,6 +294,10 @@ fn preview2_stream_pollable_traps() {
     )
 }
 #[test_log::test]
+fn preview2_pollable() {
+    run(PREVIEW2_POLLABLE_COMPONENT, false).unwrap()
+}
+#[test_log::test]
 fn preview2_adapter_badfd() {
     run(PREVIEW2_ADAPTER_BADFD_COMPONENT, false).unwrap()
 }
