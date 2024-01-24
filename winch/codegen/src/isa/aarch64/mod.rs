@@ -98,7 +98,7 @@ impl TargetIsa for Aarch64 {
         let stack = Stack::new();
         let abi_sig = abi::Aarch64ABI::sig(sig, &CallingConvention::Default);
 
-        let env = FuncEnv::new(&vmoffsets, translation, types, self);
+        let env = FuncEnv::new(&vmoffsets, translation, types, builtins, self);
         let defined_locals = DefinedLocals::new::<abi::Aarch64ABI>(&env, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
@@ -109,7 +109,7 @@ impl TargetIsa for Aarch64 {
         // TODO: Add floating point bitmask
         let fpr = RegBitSet::float(0, 0, usize::try_from(MAX_FPR).unwrap());
         let regalloc = RegAlloc::from(gpr, fpr);
-        let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
+        let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;

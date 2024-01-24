@@ -37,7 +37,7 @@ where
     pub sig: ABISig,
 
     /// The code generation context.
-    pub context: CodeGenContext<'a, 'translation>,
+    pub context: CodeGenContext<'a>,
 
     /// A reference to the function compilation environment.
     pub env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
@@ -57,7 +57,7 @@ where
 {
     pub fn new(
         masm: &'a mut M,
-        context: CodeGenContext<'a, 'translation>,
+        context: CodeGenContext<'a>,
         env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
         sig: ABISig,
     ) -> Self {
@@ -368,7 +368,7 @@ where
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
         let builtin = self
-            .context
+            .env
             .builtins
             .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
 
@@ -416,9 +416,11 @@ where
         // This is safe since the FnCall::emit call below, will ensure
         // that the result register is placed on the value stack.
         self.context.free_reg(elem_value);
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
-            Callee::Builtin(builtin.clone())
-        });
+        FnCall::emit::<M, M::Ptr>(
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin.clone()),
+        );
 
         // We know the signature of the libcall in this case, so we assert that there's
         // one element in the stack and that it's  the ABI signature's result register.

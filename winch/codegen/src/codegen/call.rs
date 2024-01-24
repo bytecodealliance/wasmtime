@@ -65,11 +65,8 @@ use crate::{
     masm::{CalleeKind, MacroAssembler, MemMoveDirection, OperandSize, SPOffset},
     reg::Reg,
     stack::Val,
-    CallingConvention,
 };
-use smallvec::SmallVec;
-use std::borrow::Cow;
-use wasmtime_environ::{PtrSize, VMOffsets, WasmValType};
+use wasmtime_environ::{PtrSize, VMOffsets};
 
 /// All the information needed to emit a function call.
 #[derive(Copy, Clone)]
@@ -83,23 +80,19 @@ impl FnCall {
     /// 4. Creates the stack space needed for the return area.
     /// 5. Emits the call.
     /// 6. Cleans up the stack space.
-    pub fn emit<M: MacroAssembler, P: PtrSize, R>(
+    pub fn emit<'a, M: MacroAssembler, P: PtrSize>(
         masm: &mut M,
         context: &mut CodeGenContext,
-        mut resolve: R,
-    ) where
-        R: FnMut(&mut CodeGenContext) -> Callee,
-    {
-        let callee = resolve(context);
-        let ptr_type = ptr_type_from_ptr_size(context.vmoffsets.ptr.size());
-        let mut sig = Self::get_sig::<M>(&callee, ptr_type);
-        let kind = Self::map(&context.vmoffsets, &callee, sig.as_ref(), context, masm);
+        callee: Callee<'a>,
+    ) {
+        let sig = callee.sig();
+        let kind = Self::map(&context.vmoffsets, &callee, sig, context, masm);
 
         context.spill(masm);
         let ret_area = Self::make_ret_area(&sig, masm);
         let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
-            Self::assign(sig.as_ref(), ret_area.as_ref(), context, masm);
+            Self::assign(sig, ret_area.as_ref(), context, masm);
             kind
         });
 
@@ -108,7 +101,7 @@ impl FnCall {
             _ => {}
         }
 
-        Self::cleanup(&mut sig, reserved_stack, ret_area, masm, context);
+        Self::cleanup(sig, reserved_stack, ret_area, masm, context);
     }
 
     /// Calculates the return area for the callee, if any.
@@ -121,30 +114,6 @@ impl FnCall {
             }
             RetArea::sp(SPOffset::from_u32(end))
         })
-    }
-
-    /// Derive the [`ABISig`] for a particular [`Callee`].
-    fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmValType) -> Cow<'_, ABISig> {
-        match callee {
-            Callee::Builtin(info) => Cow::Borrowed(info.sig()),
-            Callee::Import(info) => {
-                let mut params: SmallVec<[WasmValType; 6]> =
-                    SmallVec::with_capacity(info.ty.params().len() + 2);
-                params.extend_from_slice(&[ptr_type, ptr_type]);
-                params.extend_from_slice(info.ty.params());
-                Cow::Owned(<M::ABI as ABI>::sig_from(
-                    &params,
-                    info.ty.returns(),
-                    &CallingConvention::Default,
-                ))
-            }
-            Callee::Local(info) => {
-                Cow::Owned(<M::ABI as ABI>::sig(&info.ty, &CallingConvention::Default))
-            }
-            Callee::FuncRef(ty) => {
-                Cow::Owned(<M::ABI as ABI>::sig(&ty, &CallingConvention::Default))
-            }
-        }
     }
 
     /// Maps the given [`Callee`] to a [`CalleeKind`].
@@ -221,7 +190,7 @@ impl FnCall {
         let location = stack.len().checked_sub(sig.params.len() - 2).unwrap_or(0);
         context.stack.insert_many(
             location,
-            [
+            &[
                 TypedReg::new(ptr_type, callee_vmctx).into(),
                 TypedReg::new(ptr_type, caller_vmctx).into(),
             ],
@@ -303,7 +272,7 @@ impl FnCall {
     /// Cleanup stack space, handle multiple results, and free registers after
     /// emitting the call.
     fn cleanup<M: MacroAssembler>(
-        sig: &mut Cow<'_, ABISig>,
+        sig: &ABISig,
         reserved_space: u32,
         ret_area: Option<RetArea>,
         masm: &mut M,
@@ -340,22 +309,22 @@ impl FnCall {
         // Free the bytes consumed by the call.
         masm.free_stack(stack_consumed);
 
-        if let Some(area) = ret_area {
-            debug_assert!(!area.is_uninit());
+        let ret_area = ret_area.map(|area| {
             if stack_consumed > 0 {
-                sig.to_mut()
-                    .results
-                    .set_ret_area(RetArea::sp(masm.sp_offset()));
+                // If there's a return area and stack space was consumed by the
+                // call, adjust the return area to be to the current stack
+                // pointer offset.
+                RetArea::sp(masm.sp_offset())
             } else {
-                // If theres a return area, and no memory was adjusted
-                // (memmoved), the offsets should be equal.
+                // Else if no stack space was consumed by the call, simply use
+                // the previously calculated area.
                 debug_assert_eq!(area.unwrap_sp(), masm.sp_offset());
-                sig.to_mut().results.set_ret_area(area);
+                area
             }
-        }
-
-        context.push_abi_results(&sig.results, masm, |results, _, _| {
-            results.ret_area().copied()
         });
+
+        // In the case of [Callee], there's no need to set the [RetArea] of the
+        // signature, as it's only used here to push abi results.
+        context.push_abi_results(&sig.results, masm, |_, _, _| ret_area);
     }
 }

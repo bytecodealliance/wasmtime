@@ -1,7 +1,9 @@
 use crate::{
-    codegen::{control, BlockSig, BuiltinFunction, OperandSize},
-    isa::TargetIsa,
+    abi::{ABISig, ABI},
+    codegen::{control, BlockSig, BuiltinFunction, BuiltinFunctions, OperandSize},
+    isa::{CallingConvention, TargetIsa},
 };
+use smallvec::SmallVec;
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
@@ -10,7 +12,7 @@ use wasmparser::BlockType;
 use wasmtime_environ::{
     FuncIndex, GlobalIndex, MemoryIndex, MemoryPlan, MemoryStyle, ModuleTranslation,
     ModuleTypesBuilder, PtrSize, TableIndex, TablePlan, TypeConvert, TypeIndex, VMOffsets,
-    WasmFuncType, WasmHeapType, WasmValType, WASM_PAGE_SIZE,
+    WasmHeapType, WasmValType, WASM_PAGE_SIZE,
 };
 
 /// Table metadata.
@@ -74,23 +76,34 @@ pub struct HeapData {
 /// It categorizes how the callee should be treated
 /// when performing the call.
 #[derive(Clone)]
-pub enum Callee {
+pub(crate) enum Callee<'a> {
     /// Locally defined function.
-    Local(CalleeInfo),
+    Local(&'a CalleeInfo),
     /// Imported function.
-    Import(CalleeInfo),
+    Import(&'a CalleeInfo),
     /// Function reference.
-    FuncRef(WasmFuncType),
+    FuncRef(&'a ABISig),
     /// A built-in function.
     Builtin(BuiltinFunction),
+}
+
+impl<'a> Callee<'a> {
+    /// Returns the [ABISig] of the [Callee].
+    pub(crate) fn sig(&'a self) -> &'a ABISig {
+        match self {
+            Self::Local(info) | Self::Import(info) => &info.sig,
+            Self::FuncRef(sig) => sig,
+            Self::Builtin(b) => b.sig(),
+        }
+    }
 }
 
 /// Metadata about a function callee. Used by the code generation to
 /// emit function calls to local or imported functions.
 #[derive(Clone)]
 pub struct CalleeInfo {
-    /// The function type.
-    pub ty: WasmFuncType,
+    /// The function's ABI signature.
+    pub(crate) sig: ABISig,
     /// The callee index in the WebAssembly function index space.
     pub index: FuncIndex,
 }
@@ -106,10 +119,20 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     pub translation: &'translation ModuleTranslation<'data>,
     /// The module's function types.
     pub types: &'translation ModuleTypesBuilder,
+    /// The built-in functions available to the JIT code.
+    pub builtins: &'translation mut BuiltinFunctions,
     /// Track resolved table information.
     resolved_tables: HashMap<TableIndex, TableData>,
     /// Track resolved heap information.
     resolved_heaps: HashMap<MemoryIndex, HeapData>,
+    /// A map from [FunctionIndex] to [CalleeInfo], to keep track of the resolved
+    /// function callees.
+    resolved_callees: HashMap<FuncIndex, CalleeInfo>,
+    /// A map from [TypeIndex] to [ABISig], to keep track of the resolved
+    /// indirect function signatures.
+    resolved_sigs: HashMap<TypeIndex, ABISig>,
+    /// Pointer size represented as a WebAssembly type.
+    ptr_type: WasmValType,
     /// Whether or not to enable Spectre mitigation on heap bounds checks.
     heap_access_spectre_mitigation: bool,
 }
@@ -126,6 +149,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         vmoffsets: &'a VMOffsets<P>,
         translation: &'translation ModuleTranslation<'data>,
         types: &'translation ModuleTypesBuilder,
+        builtins: &'translation mut BuiltinFunctions,
         isa: &dyn TargetIsa,
     ) -> Self {
         Self {
@@ -134,40 +158,63 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             types,
             resolved_tables: HashMap::new(),
             resolved_heaps: HashMap::new(),
+            resolved_callees: HashMap::new(),
+            resolved_sigs: HashMap::new(),
+            ptr_type: ptr_type_from_ptr_size(vmoffsets.ptr.size()),
             heap_access_spectre_mitigation: isa.flags().enable_heap_access_spectre_mitigation(),
+            builtins,
         }
     }
 
     /// Derive the [`WasmType`] from the pointer size.
     pub(crate) fn ptr_type(&self) -> WasmValType {
-        ptr_type_from_ptr_size(self.ptr_size())
-    }
-
-    /// Returns the pointer size for the target ISA.
-    fn ptr_size(&self) -> u8 {
-        self.vmoffsets.ptr.size()
+        self.ptr_type
     }
 
     /// Resolves a [`Callee::FuncRef`] from a type index.
-    pub fn funcref(&self, idx: TypeIndex) -> Callee {
-        let sig_index = self.translation.module.types[idx].unwrap_function();
-        let ty = self.types[sig_index].clone();
-        Callee::FuncRef(ty)
+    pub(crate) fn funcref<A>(&mut self, idx: TypeIndex) -> Callee
+    where
+        A: ABI,
+    {
+        let val = || {
+            let sig_index = self.translation.module.types[idx].unwrap_function();
+            let ty = &self.types[sig_index];
+            let sig = <A as ABI>::sig(ty, &CallingConvention::Default);
+            sig
+        };
+        Callee::FuncRef(self.resolved_sigs.entry(idx).or_insert_with(val))
     }
 
     /// Resolves a function [`Callee`] from an index.
-    pub fn callee_from_index(&self, idx: FuncIndex) -> Callee {
+    pub(crate) fn callee_from_index<A>(&mut self, idx: FuncIndex) -> Callee
+    where
+        A: ABI,
+    {
+        let ptr = self.ptr_type();
         let types = &self.translation.get_types();
         let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
         let ty = self.convert_func_type(ty);
         let import = self.translation.module.is_imported_function(idx);
+        let val = || {
+            let info = if import {
+                let mut params: SmallVec<[WasmValType; 6]> =
+                    SmallVec::with_capacity(ty.params().len() + 2);
+                params.extend_from_slice(&[ptr, ptr]);
+                params.extend_from_slice(ty.params());
+                let sig = <A as ABI>::sig_from(&params, ty.returns(), &CallingConvention::Default);
+                CalleeInfo { sig, index: idx }
+            } else {
+                let sig = <A as ABI>::sig(&ty, &CallingConvention::Default);
+                CalleeInfo { sig, index: idx }
+            };
 
-        let info = CalleeInfo { ty, index: idx };
+            info
+        };
 
         if import {
-            Callee::Import(info)
+            Callee::Import(self.resolved_callees.entry(idx).or_insert_with(val))
         } else {
-            Callee::Local(info)
+            Callee::Local(self.resolved_callees.entry(idx).or_insert_with(val))
         }
     }
 

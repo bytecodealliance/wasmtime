@@ -3,7 +3,6 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 use super::ControlStackFrame;
 use crate::{
     abi::{ABIOperand, ABIResults, RetArea, ABI},
-    codegen::BuiltinFunctions,
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm, SPOffset, StackSlot},
@@ -27,7 +26,7 @@ use crate::{
 /// generation process. The code generation context should
 /// be generally used as the single entry point to access
 /// the compound functionality provided by its elements.
-pub(crate) struct CodeGenContext<'a, 'builtins: 'a> {
+pub(crate) struct CodeGenContext<'a> {
     /// The register allocator.
     pub regalloc: RegAlloc,
     /// The value stack.
@@ -36,19 +35,16 @@ pub(crate) struct CodeGenContext<'a, 'builtins: 'a> {
     pub frame: Frame,
     /// Reachability state.
     pub reachable: bool,
-    /// The built-in functions available to the JIT code.
-    pub builtins: &'builtins mut BuiltinFunctions,
     /// A reference to the VMOffsets.
     pub vmoffsets: &'a VMOffsets<u8>,
 }
 
-impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
+impl<'a> CodeGenContext<'a> {
     /// Create a new code generation context.
     pub fn new(
         regalloc: RegAlloc,
         stack: Stack,
         frame: Frame,
-        builtins: &'builtins mut BuiltinFunctions,
         vmoffsets: &'a VMOffsets<u8>,
     ) -> Self {
         Self {
@@ -56,7 +52,6 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             stack,
             frame,
             reachable: true,
-            builtins,
             vmoffsets,
         }
     }

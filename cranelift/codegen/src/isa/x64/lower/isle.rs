@@ -33,7 +33,7 @@ use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 
-type BoxCallInfo = Box<CallInfo>;
+type BoxCallInfo = Option<Box<CallInfo>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecArgPair = Vec<ArgPair>;
 

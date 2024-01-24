@@ -1,5 +1,5 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{CodeGenContext, HeapData, TableData};
+use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
     ir::{Endianness, LibCall, MemFlags},
@@ -603,7 +603,14 @@ pub(crate) trait MacroAssembler {
     fn float_neg(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a floating point floor operation.
-    fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize);
+    fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
+        &mut self,
+        mode: RoundingMode,
+        env: &mut FuncEnv<Self::Ptr>,
+        context: &mut CodeGenContext,
+        size: OperandSize,
+        fallback: F,
+    );
 
     /// Perform a floating point square root operation.
     fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize);
