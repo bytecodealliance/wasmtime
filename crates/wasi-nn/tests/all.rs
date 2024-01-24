@@ -95,13 +95,7 @@ fn nn_image_classification_named() {
     run(NN_IMAGE_CLASSIFICATION_NAMED, true).unwrap()
 }
 
-#[cfg_attr(
-    not(all(
-        target_arch = "x86_64",
-        target_os = "windows"
-    )),
-    ignore
-)]
+#[cfg_attr(not(all(target_arch = "x86_64", target_os = "windows")), ignore)]
 #[test]
 fn nn_image_classification_winml() {
     run(NN_IMAGE_CLASSIFICATION_WINML, true).unwrap()
