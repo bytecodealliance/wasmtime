@@ -3,7 +3,7 @@ package wasi:io@0.2.0-rc-2023-11-10;
 /// A poll API intended to let users wait for I/O events on multiple handles
 /// at once.
 interface poll {
-    /// `pollable` epresents a single I/O event which may be ready, or not.
+    /// `pollable` represents a single I/O event which may be ready, or not.
     resource pollable {
 
       /// Return the readiness of a pollable. This function never blocks.

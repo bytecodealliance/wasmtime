@@ -1,15 +1,11 @@
 use std::{env, process, time::Duration};
 use test_programs::preview1::{
-    assert_errno, assert_fs_time_eq, config, open_scratch_directory, TestConfig,
+    assert_errno, assert_fs_time_eq, open_scratch_directory, TestConfig,
 };
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let cfg = TestConfig::from_env();
-    let fdflags = if config().support_fdflags_sync() {
-        wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC
-    } else {
-        wasi::FDFLAGS_APPEND
-    };
+    let fdflags = wasi::FDFLAGS_APPEND;
 
     // Create a file in the scratch directory.
     let file_fd = wasi::path_open(
@@ -34,29 +30,19 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         wasi::FDFLAGS_APPEND,
         "file should have the APPEND fdflag used to create the file"
     );
-    if config().support_fdflags_sync() {
-        assert_eq!(
-            fdstat.fs_flags & wasi::FDFLAGS_SYNC,
+    assert_errno!(
+        wasi::path_open(
+            dir_fd,
+            0,
+            "file",
+            0,
+            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            0,
             wasi::FDFLAGS_SYNC,
-            "file should have the SYNC fdflag used to create the file"
-        );
-    }
-
-    if !config().support_fdflags_sync() {
-        assert_errno!(
-            wasi::path_open(
-                dir_fd,
-                0,
-                "file",
-                0,
-                wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
-                0,
-                wasi::FDFLAGS_SYNC,
-            )
-            .expect_err("FDFLAGS_SYNC not supported by platform"),
-            wasi::ERRNO_NOTSUP
-        );
-    }
+        )
+        .expect_err("FDFLAGS_SYNC not supported by platform"),
+        wasi::ERRNO_NOTSUP
+    );
 
     // Check file size
     let file_stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
