@@ -1345,6 +1345,12 @@ criteria = "safe-to-deploy"
 delta = "0.3.19 -> 0.4.0"
 notes = "A number of changes but nothing adding new `unsafe` or anything outside the purview of what this crate already manages."
 
+[[audits.h2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.4.2"
+notes = "Minor updates and fixes in this version bump, nothing major."
+
 [[audits.hashbrown]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
