@@ -2,11 +2,78 @@
 
 ## 17.0.0
 
-Released 2024-01-20.
+Released 2024-01-25
+
+The major feature of this release is that the WASI support in Wasmtime is now
+considered stable and flagged at an 0.2.0 version approved by the WASI subgroup.
+The release was delayed a few days to hold off until the WASI subgroup voted to
+approve the CLI and HTTP worlds and they're now on-by-default! Additionally the
+component model is now enabled by default in Wasmtime, for example an opt-in
+flag is no longer required on the CLI. Note that embeddings still must opt-in to
+using the component model by using the `wasmtime::component` module.
 
 ### Added
 
+* Cranelift optimizations have been added for "3-way comparisons", or `Ord::cmp`
+  in Rust or `<=>` in C++.
+  [#7636](https://github.com/bytecodealliance/wasmtime/pull/7636)
+  [#7702](https://github.com/bytecodealliance/wasmtime/pull/7702)
+
+* Components now use Wasmtime's compilation cache used for core wasm modules by
+  default.
+  [#7649](https://github.com/bytecodealliance/wasmtime/pull/7649)
+
+* The `Resource<T>` and `ResourceAny` types can now be converted between each
+  other.
+  [#7649](https://github.com/bytecodealliance/wasmtime/pull/7649)
+  [#7712](https://github.com/bytecodealliance/wasmtime/pull/7712)
+
 ### Changed
+
+* Minor changes have been made to a number of WITs as they progressed to their
+  official 0.2.0 status.
+  [#7625](https://github.com/bytecodealliance/wasmtime/pull/7625)
+  [#7640](https://github.com/bytecodealliance/wasmtime/pull/7640)
+  [#7690](https://github.com/bytecodealliance/wasmtime/pull/7690)
+  [#7781](https://github.com/bytecodealliance/wasmtime/pull/7781)
+  [#7817](https://github.com/bytecodealliance/wasmtime/pull/7817)
+
+* The component model is now enabled by default.
+  [#7821](https://github.com/bytecodealliance/wasmtime/pull/7821)
+
+* The implementation of `memory.atomic.{wait,notify}` has been rewritten.
+  [#7629](https://github.com/bytecodealliance/wasmtime/pull/7629)
+
+* The `wasmtime_wasi::preview2::Table` type has been moved to
+  `wasmtime::component::ResourceTable`.
+  [#7655](https://github.com/bytecodealliance/wasmtime/pull/7655)
+
+* Creating a UDP stream now validates the address being sent to.
+  [#7648](https://github.com/bytecodealliance/wasmtime/pull/7648)
+
+* Defining resource types in `Linker<T>` now takes the type to define as a
+  runtime parameter.
+  [#7680](https://github.com/bytecodealliance/wasmtime/pull/7680)
+
+* Socket address checks can now be performed dynamically at runtime.
+  [#7662](https://github.com/bytecodealliance/wasmtime/pull/7662)
+
+* Wasmtime and Cranelift's MSRV is now 1.73.0.
+  [#7739](https://github.com/bytecodealliance/wasmtime/pull/7739)
+
+### Fixed
+
+* Bindings for WIT APIs where interfaces have multiple versions are now fixed by
+  putting the version in the generated binding names.
+  [#7656](https://github.com/bytecodealliance/wasmtime/pull/7656)
+
+* The preview1 `fd_{read,write}` APIs are now fixed when a shared memory is
+  used.
+  [#7755](https://github.com/bytecodealliance/wasmtime/pull/7755)
+
+* The preview1 `fd_{read,write}` APIs no longer leak an intermediate stream
+  created.
+  [#7819](https://github.com/bytecodealliance/wasmtime/pull/7819)
 
 --------------------------------------------------------------------------------
 
