@@ -228,6 +228,7 @@ impl Config {
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
+        ret.wasm_component_model(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
         // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
