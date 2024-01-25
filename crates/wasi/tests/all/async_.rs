@@ -362,9 +362,13 @@ async fn preview2_pollable_correct() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview2_pollable_traps() {
-    run(PREVIEW2_POLLABLE_TRAPS_COMPONENT, false)
+    let e = run(PREVIEW2_POLLABLE_TRAPS_COMPONENT, false)
         .await
         .unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "empty poll list"
+    )
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview2_adapter_badfd() {
