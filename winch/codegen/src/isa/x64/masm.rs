@@ -57,8 +57,7 @@ impl Masm for MacroAssembler {
 
         if self.shared_flags.unwind_info() {
             self.asm.emit_unwind_inst(UnwindInst::PushFrameRegs {
-                // RBP, return address
-                offset_upward_to_caller_sp: 16,
+                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
             })
         }
 
@@ -67,8 +66,7 @@ impl Masm for MacroAssembler {
 
         if self.shared_flags.unwind_info() {
             self.asm.emit_unwind_inst(UnwindInst::DefineNewFrame {
-                // RBP, return address
-                offset_upward_to_caller_sp: 16,
+                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
                 offset_downward_to_clobbers: 0,
             })
         }

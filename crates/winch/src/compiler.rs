@@ -64,6 +64,27 @@ impl Compiler {
         context.allocations = allocs;
         self.contexts.lock().unwrap().push(context);
     }
+
+    /// Emit unwind info into the [`CompiledFunction`].
+    fn emit_unwind_info(
+        &self,
+        compiled_function: &mut CompiledFunction<CompiledFuncEnv>,
+    ) -> Result<(), CompileError> {
+        let kind = match self.isa.triple().operating_system {
+            target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
+            _ => UnwindInfoKind::SystemV,
+        };
+
+        if let Some(info) = self
+            .isa
+            .emit_unwind_info(&compiled_function.buffer, kind)
+            .map_err(|e| CompileError::Codegen(format!("{e:?}")))?
+        {
+            compiled_function.set_unwind_info(info);
+        }
+
+        Ok(())
+    }
 }
 
 impl wasmtime_environ::Compiler for Compiler {
@@ -104,18 +125,7 @@ impl wasmtime_environ::Compiler for Compiler {
             CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         if self.isa.flags().unwind_info() {
-            let kind = match self.isa.triple().operating_system {
-                target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
-                _ => UnwindInfoKind::SystemV,
-            };
-
-            if let Some(info) = self
-                .isa
-                .emit_unwind_info(&compiled_function.buffer, kind)
-                .map_err(|e| CompileError::Codegen(format!("{e:?}")))?
-            {
-                compiled_function.set_unwind_info(info);
-            }
+            self.emit_unwind_info(&mut compiled_function)?;
         }
 
         Ok((
@@ -145,18 +155,7 @@ impl wasmtime_environ::Compiler for Compiler {
             CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         if self.isa.flags().unwind_info() {
-            let kind = match self.isa.triple().operating_system {
-                target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
-                _ => UnwindInfoKind::SystemV,
-            };
-
-            if let Some(info) = self
-                .isa
-                .emit_unwind_info(&compiled_function.buffer, kind)
-                .map_err(|e| CompileError::Codegen(format!("{e:?}")))?
-            {
-                compiled_function.set_unwind_info(info);
-            }
+            self.emit_unwind_info(&mut compiled_function)?;
         }
 
         Ok(Box::new(compiled_function))
@@ -181,18 +180,7 @@ impl wasmtime_environ::Compiler for Compiler {
             CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         if self.isa.flags().unwind_info() {
-            let kind = match self.isa.triple().operating_system {
-                target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
-                _ => UnwindInfoKind::SystemV,
-            };
-
-            if let Some(info) = self
-                .isa
-                .emit_unwind_info(&compiled_function.buffer, kind)
-                .map_err(|e| CompileError::Codegen(format!("{e:?}")))?
-            {
-                compiled_function.set_unwind_info(info);
-            }
+            self.emit_unwind_info(&mut compiled_function)?;
         }
 
         Ok(Box::new(compiled_function))
@@ -211,18 +199,7 @@ impl wasmtime_environ::Compiler for Compiler {
             CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         if self.isa.flags().unwind_info() {
-            let kind = match self.isa.triple().operating_system {
-                target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
-                _ => UnwindInfoKind::SystemV,
-            };
-
-            if let Some(info) = self
-                .isa
-                .emit_unwind_info(&compiled_function.buffer, kind)
-                .map_err(|e| CompileError::Codegen(format!("{e:?}")))?
-            {
-                compiled_function.set_unwind_info(info);
-            }
+            self.emit_unwind_info(&mut compiled_function)?;
         }
 
         Ok(Box::new(compiled_function))
