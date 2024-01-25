@@ -97,7 +97,6 @@ default = [
   'coredump',
   'debug-builtins',
   'runtime',
-  'host-arch',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -143,12 +142,7 @@ pooling-allocator = ["runtime", "wasmtime-runtime/pooling-allocator"]
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
-all-arch = [
-  "wasmtime-cranelift?/all-arch",
-  "wasmtime-winch?/all-arch",
-]
-
-host-arch = ["wasmtime-cranelift?/host-arch"]
+all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch"]
 
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal
@@ -176,4 +170,5 @@ coredump = ["dep:wasm-encoder", "runtime"]
 # Cranelift-generated code with native debuggers like GDB and LLDB.
 debug-builtins = ["wasmtime-runtime?/debug-builtins"]
 
+# Enable support for executing compiled Wasm modules.
 runtime = ["dep:wasmtime-runtime"]
