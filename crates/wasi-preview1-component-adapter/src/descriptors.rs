@@ -194,7 +194,7 @@ impl Descriptors {
 
     #[cfg(not(feature = "proxy"))]
     fn open_preopens(&self, import_alloc: &ImportAlloc, arena: &BumpArena) {
-        #[link(wasm_import_module = "wasi:filesystem/preopens@0.2.0-rc-2023-11-10")]
+        #[link(wasm_import_module = "wasi:filesystem/preopens@0.2.0")]
         #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
             #[link_name = "get-directories"]
