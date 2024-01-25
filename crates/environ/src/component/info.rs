@@ -411,7 +411,7 @@ pub enum Export {
     /// A nested instance is being exported which has recursively defined
     /// `Export` items.
     Instance {
-        /// Instance type index, if such exists
+        /// Instance type index, if such is assigned
         ty: Option<TypeComponentInstanceIndex>,
         /// Instance export map
         exports: IndexMap<String, Export>,

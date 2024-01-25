@@ -1,7 +1,7 @@
-use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
+use crate::component::{Export, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
-    EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TypeConvert,
-    WasmHeapType, WasmType,
+    CompiledModuleInfo, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
+    TypeConvert, WasmHeapType, WasmType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -397,20 +397,62 @@ macro_rules! intern_and_fill_flat_types {
 }
 
 impl ComponentTypesBuilder {
+    fn export_type_def(
+        &mut self,
+        static_modules: &PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+        ty: &Export,
+    ) -> TypeDef {
+        match ty {
+            Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(*ty),
+            Export::ModuleStatic(idx) => {
+                let mut module_ty = TypeModule::default();
+                let module = &static_modules[*idx].module;
+                for (namespace, name, ty) in module.imports() {
+                    module_ty
+                        .imports
+                        .insert((namespace.to_string(), name.to_string()), ty);
+                }
+                for (name, ty) in module.exports.iter() {
+                    module_ty
+                        .exports
+                        .insert(name.to_string(), module.type_of(*ty));
+                }
+                TypeDef::Module(self.component_types.modules.push(module_ty))
+            }
+            Export::ModuleImport { ty, .. } => TypeDef::Module(*ty),
+            Export::Instance { ty: Some(ty), .. } => TypeDef::ComponentInstance(*ty),
+            Export::Instance { exports, .. } => {
+                let mut instance_ty = TypeComponentInstance::default();
+                for (name, ty) in exports {
+                    instance_ty
+                        .exports
+                        .insert(name.to_string(), self.export_type_def(static_modules, ty));
+                }
+                TypeDef::ComponentInstance(
+                    self.component_types.component_instances.push(instance_ty),
+                )
+            }
+            Export::Type(ty) => *ty,
+        }
+    }
+
     /// Finishes this list of component types and returns the finished
     /// structure and the [`TypeComponentIndex`] corresponding to top-level component
     /// with `imports` and `exports` specified.
-    pub fn finish(
+    pub fn finish<'a>(
         mut self,
+        static_modules: &PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
         imports: impl IntoIterator<Item = (String, TypeDef)>,
-        exports: impl IntoIterator<Item = (String, TypeDef)>,
+        exports: impl IntoIterator<Item = (String, &'a Export)>,
     ) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
         for (name, ty) in imports {
             component_ty.imports.insert(name, ty);
         }
         for (name, ty) in exports {
-            component_ty.exports.insert(name, ty);
+            component_ty
+                .exports
+                .insert(name, self.export_type_def(static_modules, ty));
         }
         let ty = self.component_types.components.push(component_ty);
 
@@ -572,7 +614,7 @@ impl ComponentTypesBuilder {
         Ok(self.component_types.components.push(result))
     }
 
-    fn convert_instance(
+    pub(crate) fn convert_instance(
         &mut self,
         types: types::TypesRef<'_>,
         id: types::ComponentInstanceTypeId,

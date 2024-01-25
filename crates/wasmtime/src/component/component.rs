@@ -10,8 +10,8 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, Export, GlobalInitializer, InstantiateModule, StaticModuleIndex,
-    TrampolineIndex, Translator, TypeComponentIndex, TypeDef, VMComponentOffsets,
+    AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
+    TrampolineIndex, Translator, TypeComponentIndex, VMComponentOffsets,
 };
 use wasmtime_environ::{
     CompiledModuleInfo, FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec,
@@ -244,23 +244,6 @@ impl Component {
         );
         let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
 
-        let (types, ty) = types.finish(
-            component
-                .component
-                .import_types
-                .iter()
-                .map(|(_, (name, ty))| (name.clone(), *ty)),
-            component.component.exports.iter().filter_map(|(name, ty)| {
-                let ty = match ty {
-                    Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(*ty),
-                    Export::ModuleImport { ty, .. } => TypeDef::Module(*ty),
-                    Export::Instance { ty: Some(ty), .. } => TypeDef::ComponentInstance(*ty),
-                    Export::Type(ty) => *ty,
-                    _ => return None,
-                };
-                Some((name.clone(), ty))
-            }),
-        );
         let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
         let mut object = compiler.object(ObjectKind::Component)?;
@@ -273,6 +256,19 @@ impl Component {
             compiled_funcs,
             module_translations,
         )?;
+        let (types, ty) = types.finish(
+            &compilation_artifacts.modules,
+            component
+                .component
+                .import_types
+                .iter()
+                .map(|(_, (name, ty))| (name.clone(), *ty)),
+            component
+                .component
+                .exports
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty)),
+        );
 
         let info = CompiledComponentInfo {
             component: component.component,

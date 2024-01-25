@@ -330,7 +330,10 @@ enum ComponentInstanceDef<'a> {
     //
     // FIXME: same as the issue on `ComponentClosure` where this is cloned a lot
     // and may need `Rc`.
-    Items(IndexMap<&'a str, ComponentItemDef<'a>>),
+    Items(
+        IndexMap<&'a str, ComponentItemDef<'a>>,
+        Option<TypeComponentInstanceIndex>,
+    ),
 }
 
 #[derive(Clone)]
@@ -397,7 +400,7 @@ impl<'a> Inliner<'a> {
                     match frames.last_mut() {
                         Some((parent, _)) => {
                             parent.finish_instantiate(
-                                ComponentInstanceDef::Items(exports),
+                                ComponentInstanceDef::Items(exports, None),
                                 instance_ty.unwrap(),
                                 types,
                             );
@@ -783,14 +786,16 @@ impl<'a> Inliner<'a> {
                 return Ok(Some(frame));
             }
 
-            ComponentSynthetic(map) => {
+            ComponentSynthetic(map, ty) => {
                 let items = map
                     .iter()
                     .map(|(name, index)| Ok((*name, frame.item(*index, types)?)))
                     .collect::<Result<_>>()?;
+                let types_ref = frame.translation.types_ref();
+                let ty = types.convert_instance(types_ref, *ty)?;
                 frame
                     .component_instances
-                    .push(ComponentInstanceDef::Items(items));
+                    .push(ComponentInstanceDef::Items(items, Some(ty)));
             }
 
             // Core wasm aliases, this and the cases below, are creating
@@ -846,7 +851,7 @@ impl<'a> Inliner<'a> {
                     // through instantiation of a component or through a
                     // synthetic renaming of items we just schlep around the
                     // definitions of various items here.
-                    ComponentInstanceDef::Items(map) => frame.push_item(map[*name].clone()),
+                    ComponentInstanceDef::Items(map, _) => frame.push_item(map[*name].clone()),
                 }
             }
 
@@ -1078,11 +1083,11 @@ impl<'a> Inliner<'a> {
                     // An exported instance which is itself a bag of items is
                     // translated recursively here to our `exports` map which is
                     // the bag of items we're exporting.
-                    ComponentInstanceDef::Items(map) => {
+                    ComponentInstanceDef::Items(map, ty) => {
                         for (name, def) in map {
                             self.record_export(name, def, types, &mut exports)?;
                         }
-                        dfg::Export::Instance { ty: None, exports }
+                        dfg::Export::Instance { ty, exports }
                     }
                 }
             }
@@ -1299,7 +1304,7 @@ impl<'a> ComponentItemDef<'a> {
             cur = match instance {
                 // If this instance is a "bag of things" then this is as easy as
                 // looking up the name in the bag of names.
-                ComponentInstanceDef::Items(names) => names[element].clone(),
+                ComponentInstanceDef::Items(names, _) => names[element].clone(),
 
                 // If, however, this instance is an imported instance then this
                 // is a further projection within the import with one more path

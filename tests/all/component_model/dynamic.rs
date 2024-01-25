@@ -5,7 +5,7 @@ use anyhow::Result;
 use component_test_util::FuncExt;
 use wasmtime::component::types::{self, Case, ComponentItem, Field};
 use wasmtime::component::{self, Component, Linker, ResourceType, Val};
-use wasmtime::Store;
+use wasmtime::{Module, Store};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
 #[test]
@@ -565,6 +565,55 @@ fn introspection() -> Result<()> {
             (component
                 (import "res" (type $res (sub resource)))
 
+                (import "ai" (instance $i))
+                (import "bi" (instance $i2 (export "m" (core module))))
+
+                (alias export $i2 "m" (core module $m))
+
+                (type $t (func (param "a" u32) (result u32)))
+                (component $a
+                  (core module $m
+                    (func (export "add-five") (param i32) (result i32)
+                      local.get 0
+                      i32.const 5
+                      i32.add)
+                  )
+                  (core instance $m (instantiate $m))
+                  (func (export "add-five") (type $t) (canon lift (core func $m "add-five")))
+                )
+                (component $b
+                  (import "interface-v1" (instance $i
+                    (export "add-five" (func (type $t)))))
+                  (core module $m
+                    (func $add-five (import "interface-0.1.0" "add-five") (param i32) (result i32))
+                    (func) ;; causes index out of bounds
+                    (func (export "run") (result i32) i32.const 0 call $add-five)
+                  )
+                  (core func $add-five (canon lower (func $i "add-five")))
+                  (core instance $i (instantiate 0
+                    (with "interface-0.1.0" (instance
+                      (export "add-five" (func $add-five))
+                    ))
+                  ))
+                  (func (result u32) (canon lift (core func $i "run")))
+                  (export "run" (func 1))
+                )
+                (instance $a (instantiate $a))
+                (instance $b (instantiate $b (with "interface-v1" (instance $a))))
+                (export "run" (func $b "run"))
+
+                (component $c
+                    (component $c
+                        (export "m" (core module $m))
+                    )
+                    (instance $c (instantiate $c))
+                    (export "i" (instance $c))
+                )
+                (instance $c (instantiate $c))
+                (export "i" (instance $c))
+                (export "r" (instance $i))
+                (export "r2" (instance $i2))
+
                 (type $b' (enum "a" "b"))
                 (export $b "b" (type $b'))
                 (type $c' (record (field "D" bool) (field "E" u32)))
@@ -601,20 +650,20 @@ fn introspection() -> Result<()> {
                 ))
                 (export $Foo "foo" (type $Foo'))
 
-                (core module $m
+                (core module $m2
                     (func (export "f") (param i32) (result i32)
                         local.get 0
                     )
                     (memory (export "memory") 1)
                     {REALLOC_AND_FREE}
                 )
-                (core instance $i (instantiate $m))
+                (core instance $i3 (instantiate $m2))
 
                 (func (export "fn") (param "x" (option $Foo)) (result (option (tuple u32 u32)))
                     (canon lift
-                        (core func $i "f")
-                        (memory $i "memory")
-                        (realloc (func $i "realloc"))
+                        (core func $i3 "f")
+                        (memory $i3 "memory")
+                        (realloc (func $i3 "realloc"))
                     )
                 )
             )
@@ -628,11 +677,15 @@ fn introspection() -> Result<()> {
     linker
         .root()
         .resource("res", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
+    linker.instance("ai")?;
+    linker
+        .instance("bi")?
+        .module("m", &Module::new(&engine, "(module)")?)?;
 
     let component_ty = linker.substituted_component_type(&component)?;
 
     let mut imports = component_ty.imports();
-    assert_eq!(imports.len(), 1);
+    assert_eq!(imports.len(), 3);
     let (name, res_ty) = imports.next().unwrap();
     assert_eq!(name, "res");
     let ComponentItem::Resource(res_ty) = res_ty else {
@@ -640,8 +693,86 @@ fn introspection() -> Result<()> {
     };
     assert_eq!(res_ty, ResourceType::host::<MyType>());
 
+    let (name, ai_ty) = imports.next().unwrap();
+    assert_eq!(name, "ai");
+    let ComponentItem::ComponentInstance(ai_ty) = ai_ty else {
+        panic!("`ai` import item of wrong type")
+    };
+    assert_eq!(ai_ty.exports().len(), 0);
+
+    let (name, bi_ty) = imports.next().unwrap();
+    assert_eq!(name, "bi");
+    let ComponentItem::ComponentInstance(bi_ty) = bi_ty else {
+        panic!("`bi` import item of wrong type")
+    };
+    let mut bi_exports = bi_ty.exports();
+    assert_eq!(bi_exports.len(), 1);
+    let (name, bi_m_ty) = bi_exports.next().unwrap();
+    assert_eq!(name, "m");
+    let ComponentItem::Module(bi_m_ty) = bi_m_ty else {
+        panic!("`bi.m` import item of wrong type")
+    };
+    assert_eq!(bi_m_ty.imports().len(), 0);
+    assert_eq!(bi_m_ty.exports().len(), 0);
+
     let mut exports = component_ty.exports();
-    assert_eq!(exports.len(), 7);
+    assert_eq!(exports.len(), 11);
+
+    let (name, run_ty) = exports.next().unwrap();
+    assert_eq!(name, "run");
+    let ComponentItem::ComponentFunc(run_ty) = run_ty else {
+        panic!("`run` export item of wrong type")
+    };
+    assert_eq!(run_ty.params().len(), 0);
+
+    let mut run_results = run_ty.results();
+    assert_eq!(run_results.len(), 1);
+    assert_eq!(run_results.next().unwrap(), types::Type::U32);
+
+    let (name, i_ty) = exports.next().unwrap();
+    assert_eq!(name, "i");
+    let ComponentItem::ComponentInstance(i_ty) = i_ty else {
+        panic!("`i` export item of wrong type")
+    };
+    let mut i_ty_exports = i_ty.exports();
+    assert_eq!(i_ty_exports.len(), 1);
+    let (name, i_i_ty) = i_ty_exports.next().unwrap();
+    assert_eq!(name, "i");
+    let ComponentItem::ComponentInstance(i_i_ty) = i_i_ty else {
+        panic!("`i.i` import item of wrong type")
+    };
+    let mut i_i_ty_exports = i_i_ty.exports();
+    assert_eq!(i_i_ty_exports.len(), 1);
+    let (name, i_i_m_ty) = i_i_ty_exports.next().unwrap();
+    assert_eq!(name, "m");
+    let ComponentItem::Module(i_i_m_ty) = i_i_m_ty else {
+        panic!("`i.i.m` import item of wrong type")
+    };
+    assert_eq!(i_i_m_ty.imports().len(), 0);
+    assert_eq!(i_i_m_ty.exports().len(), 0);
+
+    let (name, r_ty) = exports.next().unwrap();
+    assert_eq!(name, "r");
+    let ComponentItem::ComponentInstance(r_ty) = r_ty else {
+        panic!("`r` export item of wrong type")
+    };
+    assert_eq!(r_ty.exports().len(), 0);
+
+    let (name, r2_ty) = exports.next().unwrap();
+    assert_eq!(name, "r2");
+    let ComponentItem::ComponentInstance(r2_ty) = r2_ty else {
+        panic!("`r2` export item of wrong type")
+    };
+    let mut r2_exports = r2_ty.exports();
+    assert_eq!(r2_exports.len(), 1);
+    let (name, r2_m_ty) = r2_exports.next().unwrap();
+    assert_eq!(name, "m");
+    let ComponentItem::Module(r2_m_ty) = r2_m_ty else {
+        panic!("`r2.m` export item of wrong type")
+    };
+    assert_eq!(r2_m_ty.imports().len(), 0);
+    assert_eq!(r2_m_ty.exports().len(), 0);
+
     let (name, b_ty) = exports.next().unwrap();
     assert_eq!(name, "b");
     let ComponentItem::Type(b_ty) = b_ty else {
