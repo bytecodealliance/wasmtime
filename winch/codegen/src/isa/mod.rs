@@ -1,6 +1,7 @@
 use crate::{BuiltinFunctions, TrampolineKind};
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
+use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
 use cranelift_codegen::settings;
 use cranelift_codegen::{Final, MachBufferFinalized, TextSectionBuilder};
@@ -183,6 +184,12 @@ pub trait TargetIsa: Send + Sync {
     fn endianness(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
     }
+
+    fn emit_unwind_info(
+        &self,
+        _result: &MachBufferFinalized<Final>,
+        _kind: UnwindInfoKind,
+    ) -> Result<Option<UnwindInfo>>;
 
     /// See `cranelift_codegen::isa::TargetIsa::create_systemv_cie`.
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
