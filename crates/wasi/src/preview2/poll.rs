@@ -32,7 +32,7 @@ pub trait Subscribe: Send + 'static {
     ///
     /// # Cancel safety
     /// The implementation must make sure to only await futures that are
-    /// cancel-safe, as the returned future will most liekly be canceled, even
+    /// cancel-safe, as the returned future will most likely be canceled, even
     /// during normal operation.
     async fn ready(&mut self);
 }
