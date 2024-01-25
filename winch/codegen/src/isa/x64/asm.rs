@@ -627,9 +627,10 @@ impl Assembler {
             _ => unimplemented!(),
         };
 
-        self.emit(Inst::XmmUnaryRmRUnaligned {
+        self.emit(Inst::XmmRmRUnaligned {
             op,
-            src: Xmm::new(src.into()).expect("valid xmm unaligned").into(),
+            src2: Xmm::new(src.into()).expect("valid xmm unaligned").into(),
+            src1: dst.into(),
             dst: dst.into(),
         });
     }
@@ -1158,9 +1159,10 @@ impl Assembler {
             OperandSize::S128 => unreachable!(),
         };
 
-        self.emit(Inst::XmmUnaryRmR {
+        self.emit(Inst::XmmRmR {
             op,
-            src: Xmm::from(src).into(),
+            src2: Xmm::from(src).into(),
+            src1: dst.into(),
             dst: dst.into(),
         })
     }
