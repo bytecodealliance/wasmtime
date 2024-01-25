@@ -427,17 +427,13 @@ mod component_artifacts;
 mod config;
 mod debug;
 mod engine;
-mod limits;
 mod profiling_agent;
-mod resources;
 
 #[cfg(feature = "async")]
 mod stack;
 
 pub use crate::config::*;
 pub use crate::engine::*;
-pub use crate::limits::*;
-pub use crate::resources::*;
 
 #[cfg(feature = "async")]
 pub use crate::stack::*;
