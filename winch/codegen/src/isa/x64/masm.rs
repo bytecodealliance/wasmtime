@@ -67,6 +67,9 @@ impl Masm for MacroAssembler {
         if self.shared_flags.unwind_info() {
             self.asm.emit_unwind_inst(UnwindInst::DefineNewFrame {
                 offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
+
+                // Clobbers appear directly after the RET and FP if they're present. As we just
+                // pushed the frame pointer, the offset to the clobbers will be `0`.
                 offset_downward_to_clobbers: 0,
             })
         }
