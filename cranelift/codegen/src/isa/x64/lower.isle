@@ -2577,9 +2577,9 @@
 
 ;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (sqrt x)))
-      (x64_sqrtss x))
+      (x64_sqrtss (xmm_zero $F32X4) x))
 (rule (lower (has_type $F64 (sqrt x)))
-      (x64_sqrtsd x))
+      (x64_sqrtsd (xmm_zero $F64X2) x))
 (rule (lower (has_type $F32X4 (sqrt x)))
       (x64_sqrtps x))
 (rule (lower (has_type $F64X2 (sqrt x)))
@@ -2587,7 +2587,7 @@
 
 ;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F64 (fpromote x)))
-      (x64_cvtss2sd x))
+      (x64_cvtss2sd (xmm_zero $F64X2) x))
 
 ;; Rules for `fvpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F64X2 (fvpromote_low x)))
@@ -2595,7 +2595,7 @@
 
 ;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (fdemote x)))
-      (x64_cvtsd2ss x))
+      (x64_cvtsd2ss (xmm_zero $F32X4) x))
 
 ;; Rules for `fvdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32X4 (fvdemote x)))

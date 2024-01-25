@@ -4889,25 +4889,25 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Sqrtss, RegMem::reg(xmm7), w_xmm8),
+        Inst::xmm_rm_r(SseOpcode::Sqrtss, RegMem::reg(xmm7), w_xmm8),
         "F3440F51C7",
-        "sqrtss  %xmm7, %xmm8",
+        "sqrtss  %xmm8, %xmm7, %xmm8",
     ));
     insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Sqrtsd, RegMem::reg(xmm1), w_xmm2),
+        Inst::xmm_rm_r(SseOpcode::Sqrtsd, RegMem::reg(xmm1), w_xmm2),
         "F20F51D1",
-        "sqrtsd  %xmm1, %xmm2",
+        "sqrtsd  %xmm2, %xmm1, %xmm2",
     ));
 
     insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Cvtss2sd, RegMem::reg(xmm0), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Cvtss2sd, RegMem::reg(xmm0), w_xmm1),
         "F30F5AC8",
-        "cvtss2sd %xmm0, %xmm1",
+        "cvtss2sd %xmm1, %xmm0, %xmm1",
     ));
     insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Cvtsd2ss, RegMem::reg(xmm1), w_xmm0),
+        Inst::xmm_rm_r(SseOpcode::Cvtsd2ss, RegMem::reg(xmm1), w_xmm0),
         "F20F5AC1",
-        "cvtsd2ss %xmm1, %xmm0",
+        "cvtsd2ss %xmm0, %xmm1, %xmm0",
     ));
 
     insns.push((
