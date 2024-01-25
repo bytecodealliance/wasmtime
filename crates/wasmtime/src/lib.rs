@@ -409,8 +409,6 @@
 // most features enabled. This will present warnings in stripped-down doc builds
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
-// TODOABK: Figure out why this is needed for the map_maybe_uninit macro
-#![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 
 #[cfg(feature = "runtime")]
 mod runtime;
