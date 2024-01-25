@@ -134,6 +134,7 @@ async = [
   "wasmtime-runtime/async",
   "dep:async-trait",
   "wasmtime-component-macro?/async",
+  "runtime",
 ]
 
 # Enables support for the pooling instance allocation strategy
@@ -169,7 +170,7 @@ wmemcheck = ["wasmtime-runtime?/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
 demangle = ["wasmtime-environ/demangle"]
 
 # Enable support for generating core dumps on traps.
-coredump = ["dep:wasm-encoder"]
+coredump = ["dep:wasm-encoder", "runtime"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
