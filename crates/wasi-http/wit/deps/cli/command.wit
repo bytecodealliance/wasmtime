@@ -1,4 +1,4 @@
-package wasi:cli@0.2.0-rc-2024-01-16;
+package wasi:cli@0.2.0;
 
 world command {
   include imports;
