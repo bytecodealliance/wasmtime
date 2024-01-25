@@ -107,7 +107,7 @@ impl RunCommon {
 
     #[cfg(feature = "component-model")]
     fn ensure_allow_components(&self) -> Result<()> {
-        if self.common.wasm.component_model != Some(true) {
+        if self.common.wasm.component_model == Some(false) {
             bail!("cannot execute a component without `--wasm component-model`");
         }
 
