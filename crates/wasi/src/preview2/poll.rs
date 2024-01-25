@@ -47,28 +47,14 @@ impl<T: Subscribe> Pollable for T {
 ///
 /// Similar to [std::future::ready].
 pub fn ready() -> impl Pollable {
-    struct Ready;
-    impl Pollable for Ready {
-        fn poll_ready(&mut self, _cx: &mut Context<'_>, _view: &mut dyn WasiView) -> Poll<()> {
-            Poll::Ready(())
-        }
-    }
-
-    Ready
+    poll_ready_fn(|_, _| Poll::Ready(()))
 }
 
 /// Create a pollable that is never ready.
 ///
 /// Similar to [std::future::pending].
 pub fn pending() -> impl Pollable {
-    struct Pending;
-    impl Pollable for Pending {
-        fn poll_ready(&mut self, _cx: &mut Context<'_>, _view: &mut dyn WasiView) -> Poll<()> {
-            Poll::Pending
-        }
-    }
-
-    Pending
+    poll_ready_fn(|_, _| Poll::Pending)
 }
 
 /// Create a pollable that initially starts out as pending and transitions to
