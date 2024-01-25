@@ -429,14 +429,8 @@ mod debug;
 mod engine;
 mod profiling_agent;
 
-#[cfg(feature = "async")]
-mod stack;
-
 pub use crate::config::*;
 pub use crate::engine::*;
-
-#[cfg(feature = "async")]
-pub use crate::stack::*;
 
 #[cfg(feature = "coredump")]
 mod coredump;

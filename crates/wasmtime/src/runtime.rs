@@ -25,6 +25,9 @@ pub(crate) mod values;
 #[cfg(feature = "component-model")]
 pub mod component;
 
+#[cfg(feature = "async")]
+pub(crate) mod stack;
+
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
         // no extensions on miri
@@ -61,6 +64,9 @@ pub use values::*;
 
 #[cfg(feature = "profiling")]
 pub use profiling::GuestProfiler;
+
+#[cfg(feature = "async")]
+pub use stack::*;
 
 fn _assertions_runtime() {
     use crate::_assert_send_and_sync;
