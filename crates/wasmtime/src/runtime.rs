@@ -34,3 +34,59 @@ cfg_if::cfg_if! {
         // ... unknown os!
     }
 }
+
+pub use code_memory::CodeMemory;
+pub use externals::*;
+pub use func::*;
+pub use instance::{Instance, InstancePre};
+pub use instantiate::CompiledModule;
+pub use linker::*;
+pub use memory::*;
+pub use module::Module;
+pub use r#ref::ExternRef;
+pub use runtime_engine::*;
+#[cfg(feature = "async")]
+pub use store::CallHookHandler;
+pub use store::{
+    AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, UpdateDeadline,
+};
+pub use trap::*;
+pub use types::*;
+pub use v128::V128;
+pub use values::*;
+
+#[cfg(feature = "profiling")]
+pub use profiling::GuestProfiler;
+
+fn _assertions_runtime() {
+    use crate::_assert_send_and_sync;
+
+    #[cfg(feature = "async")]
+    fn _assert_send<T: Send>(_t: T) {}
+
+    _assert_send_and_sync::<Caller<'_, ()>>();
+    _assert_send_and_sync::<ExternRef>();
+    _assert_send_and_sync::<(Func, TypedFunc<(), ()>, Global, Table, Memory)>();
+    _assert_send_and_sync::<Instance>();
+    _assert_send_and_sync::<InstancePre<()>>();
+    _assert_send_and_sync::<InstancePre<*mut u8>>();
+    _assert_send_and_sync::<Linker<()>>();
+    _assert_send_and_sync::<Linker<*mut u8>>();
+    _assert_send_and_sync::<Module>();
+    _assert_send_and_sync::<Store<()>>();
+    _assert_send_and_sync::<StoreContext<'_, ()>>();
+    _assert_send_and_sync::<StoreContextMut<'_, ()>>();
+
+    #[cfg(feature = "async")]
+    fn _call_async(s: &mut Store<()>, f: Func) {
+        _assert_send(f.call_async(&mut *s, &[], &mut []))
+    }
+    #[cfg(feature = "async")]
+    fn _typed_call_async(s: &mut Store<()>, f: TypedFunc<(), ()>) {
+        _assert_send(f.call_async(&mut *s, ()))
+    }
+    #[cfg(feature = "async")]
+    fn _instantiate_async(s: &mut Store<()>, m: &Module) {
+        _assert_send(Instance::new_async(s, m, &[]))
+    }
+}

@@ -412,50 +412,10 @@
 // TODOABK: Figure out why this is needed for the map_maybe_uninit macro
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "runtime")] {
-        mod runtime;
-        pub(crate) use runtime::*;
-
-        pub use code_memory::CodeMemory;
-        pub use instance::{Instance, InstancePre};
-        pub use instantiate::CompiledModule;
-        pub use runtime_engine::*;
-        pub use externals::*;
-        pub use func::*;
-        pub use linker::*;
-        pub use memory::*;
-        pub use module::Module;
-        pub use r#ref::ExternRef;
-        #[cfg(feature = "async")]
-        pub use store::CallHookHandler;
-        pub use store::{
-            AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, UpdateDeadline,
-        };
-        pub use trap::*;
-        pub use types::*;
-        pub use v128::V128;
-        pub use values::*;
-
-        #[cfg(feature = "component-model")]
-        pub use runtime::component;
-
-        #[cfg(feature = "profiling")]
-        pub use runtime::profiling::GuestProfiler;
-
-        cfg_if::cfg_if! {
-            if #[cfg(miri)] {
-                // no extensions on miri
-            } else if #[cfg(unix)] {
-                pub use runtime::unix;
-            } else if #[cfg(windows)] {
-                pub use runtime::windows;
-            } else {
-                // ... unknown os!
-            }
-        }
-    }
-}
+#[cfg(feature = "runtime")]
+mod runtime;
+#[cfg(feature = "runtime")]
+pub use runtime::*;
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 mod compile;
@@ -494,38 +454,9 @@ pub use crate::coredump::*;
 /// This type alias is identical to `anyhow::Result`.
 pub use anyhow::{Error, Result};
 
-fn _assert_send_sync() {
-    fn _assert<T: Send + Sync>() {}
-    fn _assert_send<T: Send>(_t: T) {}
+fn _assert_send_and_sync<T: Send + Sync>() {}
 
-    #[cfg(feature = "runtime")]
-    {
-        _assert::<Caller<'_, ()>>();
-        _assert::<Engine>();
-        _assert::<ExternRef>();
-        _assert::<(Func, TypedFunc<(), ()>, Global, Table, Memory)>();
-        _assert::<Instance>();
-        _assert::<InstancePre<()>>();
-        _assert::<InstancePre<*mut u8>>();
-        _assert::<Linker<()>>();
-        _assert::<Linker<*mut u8>>();
-        _assert::<Module>();
-        _assert::<Store<()>>();
-        _assert::<StoreContext<'_, ()>>();
-        _assert::<StoreContextMut<'_, ()>>();
-    }
-    _assert::<Config>();
-
-    #[cfg(all(feature = "async", feature = "runtime"))]
-    fn _call_async(s: &mut Store<()>, f: Func) {
-        _assert_send(f.call_async(&mut *s, &[], &mut []))
-    }
-    #[cfg(all(feature = "async", feature = "runtime"))]
-    fn _typed_call_async(s: &mut Store<()>, f: TypedFunc<(), ()>) {
-        _assert_send(f.call_async(&mut *s, ()))
-    }
-    #[cfg(all(feature = "async", feature = "runtime"))]
-    fn _instantiate_async(s: &mut Store<()>, m: &Module) {
-        _assert_send(Instance::new_async(s, m, &[]))
-    }
+fn _assertions_lib() {
+    _assert_send_and_sync::<Engine>();
+    _assert_send_and_sync::<Config>();
 }
