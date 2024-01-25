@@ -425,17 +425,11 @@ mod compiler;
 #[cfg(feature = "component-model")]
 mod component_artifacts;
 mod config;
-mod debug;
 mod engine;
 mod profiling_agent;
 
 pub use crate::config::*;
 pub use crate::engine::*;
-
-#[cfg(feature = "coredump")]
-mod coredump;
-#[cfg(feature = "coredump")]
-pub use crate::coredump::*;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.
 ///

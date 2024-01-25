@@ -3,6 +3,7 @@ pub(crate) mod func;
 
 pub(crate) mod code;
 pub(crate) mod code_memory;
+pub(crate) mod debug;
 pub(crate) mod externals;
 pub(crate) mod instance;
 pub(crate) mod instantiate;
@@ -27,6 +28,9 @@ pub mod component;
 
 #[cfg(feature = "async")]
 pub(crate) mod stack;
+
+#[cfg(feature = "coredump")]
+mod coredump;
 
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
@@ -67,6 +71,9 @@ pub use profiling::GuestProfiler;
 
 #[cfg(feature = "async")]
 pub use stack::*;
+
+#[cfg(feature = "coredump")]
+pub use coredump::*;
 
 fn _assertions_runtime() {
     use crate::_assert_send_and_sync;
