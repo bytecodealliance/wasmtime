@@ -1,4 +1,4 @@
-package wasi:io@0.2.0-rc-2023-11-10;
+package wasi:io@0.2.0;
 
 /// A poll API intended to let users wait for I/O events on multiple handles
 /// at once.

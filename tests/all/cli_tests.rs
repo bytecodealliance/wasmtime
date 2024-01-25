@@ -760,6 +760,7 @@ fn component_missing_feature() -> Result<()> {
     let wasm = build_wasm(path)?;
     let output = get_wasmtime_command()?
         .arg("-Ccache=n")
+        .arg("-Wcomponent-model=n")
         .arg(wasm.path())
         .output()?;
     assert!(!output.status.success());
@@ -772,6 +773,7 @@ fn component_missing_feature() -> Result<()> {
     // also tests with raw *.wat input
     let output = get_wasmtime_command()?
         .arg("-Ccache=n")
+        .arg("-Wcomponent-model=n")
         .arg(path)
         .output()?;
     assert!(!output.status.success());
@@ -780,6 +782,27 @@ fn component_missing_feature() -> Result<()> {
         stderr.contains("cannot execute a component without `--wasm component-model`"),
         "bad stderr: {stderr}"
     );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_enabled_by_default() -> Result<()> {
+    let path = "tests/all/cli_tests/component-basic.wat";
+    let wasm = build_wasm(path)?;
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg(wasm.path())
+        .output()?;
+    assert!(output.status.success());
+
+    // also tests with raw *.wat input
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg(path)
+        .output()?;
+    assert!(output.status.success());
 
     Ok(())
 }
