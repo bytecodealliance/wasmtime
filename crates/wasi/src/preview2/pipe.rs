@@ -118,7 +118,7 @@ pub struct AsyncReadStream {
 impl AsyncReadStream {
     /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
-    pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(mut reader: T) -> Self {
+    pub fn new<T: tokio::io::AsyncRead + Send + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = mpsc::channel(1);
         let join_handle = crate::preview2::spawn(async move {
             loop {
@@ -354,7 +354,7 @@ mod test {
         assert_eq!(bs.len(), 0);
     }
 
-    async fn finite_async_reader(contents: &[u8]) -> impl AsyncRead + Send + Sync + 'static {
+    async fn finite_async_reader(contents: &[u8]) -> impl AsyncRead + Send + 'static {
         let (r, mut w) = simplex(contents.len());
         w.write_all(contents).await.unwrap();
         r

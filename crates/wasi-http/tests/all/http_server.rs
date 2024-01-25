@@ -32,7 +32,7 @@ pub struct Server {
 
 impl Server {
     fn new<F>(
-        run: impl FnOnce(TokioIo<tokio::net::TcpStream>) -> F + Send + Sync + 'static,
+        run: impl FnOnce(TokioIo<tokio::net::TcpStream>) -> F + Send + 'static,
     ) -> Result<Self>
     where
         F: Future<Output = Result<()>>,

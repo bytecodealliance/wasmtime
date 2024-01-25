@@ -99,7 +99,7 @@ impl Worker {
         }
         self.write_ready_changed.notify_one();
     }
-    async fn work<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(&self, mut writer: T) {
+    async fn work<T: tokio::io::AsyncWrite + Send + Unpin + 'static>(&self, mut writer: T) {
         use tokio::io::AsyncWriteExt;
         loop {
             while let Some(job) = self.pop() {
@@ -145,7 +145,7 @@ pub struct AsyncWriteStream {
 impl AsyncWriteStream {
     /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
-    pub fn new<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(
+    pub fn new<T: tokio::io::AsyncWrite + Send + Unpin + 'static>(
         write_budget: usize,
         writer: T,
     ) -> Self {

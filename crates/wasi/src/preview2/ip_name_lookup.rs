@@ -34,7 +34,7 @@ impl<T: WasiView> Host for T {
         }
 
         let task = spawn_blocking(move || blocking_resolve(&host));
-        let resource = self.table_mut().push(ResolveAddressStream::Waiting(task))?;
+        let resource = self.table().push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
 }
@@ -45,7 +45,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
         &mut self,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Option<IpAddress>, SocketError> {
-        let stream = self.table_mut().get_mut(&resource)?;
+        let stream: &mut ResolveAddressStream = self.table().get_mut(&resource)?;
         loop {
             match stream {
                 ResolveAddressStream::Waiting(future) => {
@@ -69,11 +69,11 @@ impl<T: WasiView> HostResolveAddressStream for T {
         &mut self,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Resource<Pollable>> {
-        subscribe(self.table_mut(), resource)
+        subscribe(self.table(), resource)
     }
 
     fn drop(&mut self, resource: Resource<ResolveAddressStream>) -> Result<()> {
-        self.table_mut().delete(resource)?;
+        self.table().delete(resource)?;
         Ok(())
     }
 }

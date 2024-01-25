@@ -2445,30 +2445,6 @@ when = "2023-12-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.wasmtime-jit]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit]]
-version = "16.0.0"
-when = "2023-12-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
 [[publisher.wasmtime-jit-debug]]
 version = "14.0.2"
 when = "2023-10-26"

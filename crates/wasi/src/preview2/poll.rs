@@ -9,7 +9,7 @@ use wasmtime::component::{Resource, ResourceTable};
 
 pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> PollableFuture<'a>;
-pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync + 'static>;
+pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + 'static>;
 
 /// A host representation of the `wasi:io/poll.pollable` resource.
 ///
@@ -24,7 +24,7 @@ pub struct Pollable {
 }
 
 #[async_trait::async_trait]
-pub trait Subscribe: Send + Sync + 'static {
+pub trait Subscribe: Send + 'static {
     async fn ready(&mut self);
 }
 
@@ -68,7 +68,7 @@ impl<T: WasiView> poll::Host for T {
     async fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
         type ReadylistIndex = u32;
 
-        let table = self.table_mut();
+        let table = self.table();
 
         let mut table_futures: HashMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = HashMap::new();
 
@@ -121,14 +121,14 @@ impl<T: WasiView> poll::Host for T {
 #[async_trait::async_trait]
 impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
     async fn block(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-        let table = self.table_mut();
+        let table = self.table();
         let pollable = table.get(&pollable)?;
         let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
         ready.await;
         Ok(())
     }
     async fn ready(&mut self, pollable: Resource<Pollable>) -> Result<bool> {
-        let table = self.table_mut();
+        let table = self.table();
         let pollable = table.get(&pollable)?;
         let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
         futures::pin_mut!(ready);
@@ -138,9 +138,9 @@ impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
         ))
     }
     fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-        let pollable = self.table_mut().delete(pollable)?;
+        let pollable = self.table().delete(pollable)?;
         if let Some(delete) = pollable.remove_index_on_delete {
-            delete(self.table_mut(), pollable.index)?;
+            delete(self.table(), pollable.index)?;
         }
         Ok(())
     }
