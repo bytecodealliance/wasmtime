@@ -14,7 +14,6 @@ pub(crate) mod module;
 pub(crate) mod profiling;
 pub(crate) mod r#ref;
 pub(crate) mod resources;
-pub(crate) mod runtime_engine;
 pub(crate) mod signatures;
 pub(crate) mod store;
 pub(crate) mod trampoline;
@@ -55,7 +54,6 @@ pub use memory::*;
 pub use module::Module;
 pub use r#ref::ExternRef;
 pub use resources::*;
-pub use runtime_engine::*;
 #[cfg(feature = "async")]
 pub use store::CallHookHandler;
 pub use store::{
