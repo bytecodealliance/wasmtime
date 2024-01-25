@@ -183,7 +183,7 @@ cfg_if::cfg_if! {
         use object::SectionKind;
         use wasmtime_environ::obj;
 
-        use crate::compile::append_compiler_info;
+        use crate::append_compiler_info;
     }
 }
 
@@ -237,7 +237,7 @@ impl Engine {
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(self, &bytes)?;
+        let (v, _) = crate::build_artifacts::<Vec<u8>>(self, &bytes)?;
         Ok(v)
     }
 
@@ -249,7 +249,7 @@ impl Engine {
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_component_artifacts::<Vec<u8>>(self, &bytes)?;
+        let (v, _) = crate::build_component_artifacts::<Vec<u8>>(self, &bytes)?;
         Ok(v)
     }
 }

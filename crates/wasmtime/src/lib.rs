@@ -420,7 +420,7 @@ pub use runtime::*;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 mod compile;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
-mod compiler;
+use compile::*;
 
 #[cfg(feature = "component-model")]
 mod component_artifacts;

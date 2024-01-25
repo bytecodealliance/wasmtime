@@ -302,7 +302,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
+        use crate::{build_artifacts, instantiate::MmapVecWrapper};
 
         engine
             .check_compatible_with_native_host()

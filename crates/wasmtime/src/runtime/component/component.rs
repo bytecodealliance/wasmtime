@@ -101,7 +101,7 @@ impl Component {
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
         use wasmtime_runtime::MmapVec;
 
-        use crate::compile::build_component_artifacts;
+        use crate::build_component_artifacts;
         use crate::module::HashedEngineCompileEnv;
 
         engine
