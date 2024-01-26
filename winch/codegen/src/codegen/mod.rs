@@ -240,14 +240,14 @@ where
     /// Emits a a series of instructions that will type check a function reference call.
     pub fn emit_typecheck_funcref(&mut self, funcref_ptr: Reg, type_index: TypeIndex) {
         let ptr_size: OperandSize = self.env.ptr_type().into();
-        let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_signature_index();
+        let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_type_index();
         let sig_size = OperandSize::from_bytes(sig_index_bytes);
         let sig_index = self.env.translation.module.types[type_index].unwrap_function();
         let sig_offset = sig_index
             .as_u32()
             .checked_mul(sig_index_bytes.into())
             .unwrap();
-        let signatures_base_offset = self.env.vmoffsets.vmctx_signature_ids_array();
+        let signatures_base_offset = self.env.vmoffsets.vmctx_type_ids_array();
         let scratch = <M::ABI as ABI>::scratch_reg();
         let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
 

@@ -3,7 +3,7 @@ use crate::{
     code_memory::CodeMemory,
     instantiate::CompiledModule,
     resources::ResourcesRequired,
-    signatures::SignatureCollection,
+    type_registry::TypeCollection,
     types::{ExportType, ExternType, ImportType},
     Engine,
 };
@@ -22,7 +22,7 @@ use wasmtime_environ::{
 };
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
-    VMNativeCallFunction, VMSharedSignatureIndex, VMWasmCallFunction,
+    VMNativeCallFunction, VMSharedTypeIndex, VMWasmCallFunction,
 };
 
 mod registry;
@@ -555,7 +555,7 @@ impl Module {
         // Note that the unsafety here should be ok since the `trampolines`
         // field should only point to valid trampoline function pointers
         // within the text section.
-        let signatures = SignatureCollection::new_for_module(engine.signatures(), &types);
+        let signatures = TypeCollection::new_for_module(engine.signatures(), &types);
 
         // Package up all our data into a `CodeObject` and delegate to the final
         // step of module compilation.
@@ -690,7 +690,7 @@ impl Module {
         self.inner.code.module_types()
     }
 
-    pub(crate) fn signatures(&self) -> &SignatureCollection {
+    pub(crate) fn signatures(&self) -> &TypeCollection {
         self.inner.code.signatures()
     }
 
@@ -1186,9 +1186,9 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
 
     fn wasm_to_native_trampoline(
         &self,
-        signature: VMSharedSignatureIndex,
+        signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>> {
-        let sig = self.code.signatures().local_signature(signature)?;
+        let sig = self.code.signatures().module_local_type(signature)?;
         let ptr = self
             .module
             .wasm_to_native_trampoline(sig)
@@ -1211,7 +1211,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.module.code_memory().wasm_data()
     }
 
-    fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+    fn type_ids(&self) -> &[VMSharedTypeIndex] {
         self.code.signatures().as_module_map().values().as_slice()
     }
 
@@ -1252,7 +1252,7 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 /// default-callee instance).
 pub(crate) struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
-    one_signature: Option<VMSharedSignatureIndex>,
+    one_signature: Option<VMSharedTypeIndex>,
     offsets: VMOffsets<HostPtr>,
 }
 
@@ -1263,7 +1263,7 @@ impl BareModuleInfo {
 
     pub(crate) fn maybe_imported_func(
         module: Arc<wasmtime_environ::Module>,
-        one_signature: Option<VMSharedSignatureIndex>,
+        one_signature: Option<VMSharedTypeIndex>,
     ) -> Self {
         BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
@@ -1299,7 +1299,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
 
     fn wasm_to_native_trampoline(
         &self,
-        _signature: VMSharedSignatureIndex,
+        _signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>> {
         unreachable!()
     }
@@ -1316,7 +1316,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
         &[]
     }
 
-    fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
+    fn type_ids(&self) -> &[VMSharedTypeIndex] {
         match &self.one_signature {
             Some(id) => std::slice::from_ref(id),
             None => &[],

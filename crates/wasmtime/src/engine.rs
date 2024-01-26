@@ -1,4 +1,4 @@
-use crate::{profiling_agent::ProfilingAgent, signatures::SignatureRegistry, CodeMemory, Config};
+use crate::{profiling_agent::ProfilingAgent, type_registry::TypeRegistry, CodeMemory, Config};
 use anyhow::{Context, Result};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
@@ -49,7 +49,7 @@ struct EngineInner {
     compiler: Box<dyn wasmtime_environ::Compiler>,
     allocator: Box<dyn InstanceAllocator + Send + Sync>,
     profiler: Box<dyn ProfilingAgent>,
-    signatures: SignatureRegistry,
+    signatures: TypeRegistry,
     epoch: AtomicU64,
     unique_id_allocator: CompiledModuleIdAllocator,
 
@@ -79,7 +79,7 @@ impl Engine {
         #[cfg(feature = "debug-builtins")]
         wasmtime_runtime::debug_builtins::ensure_exported();
 
-        let registry = SignatureRegistry::new();
+        let registry = TypeRegistry::new();
         let config = config.clone();
         config.validate()?;
 
@@ -154,7 +154,7 @@ impl Engine {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
 
-    pub(crate) fn signatures(&self) -> &SignatureRegistry {
+    pub(crate) fn signatures(&self) -> &TypeRegistry {
         &self.inner.signatures
     }
 

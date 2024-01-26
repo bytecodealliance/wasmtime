@@ -316,7 +316,7 @@ impl<'a> Instantiator<'a> {
             let signature = self
                 .component
                 .signatures()
-                .shared_signature(*sig)
+                .shared_type(*sig)
                 .expect("found unregistered signature");
             self.data.state.set_trampoline(
                 idx,
@@ -495,7 +495,7 @@ impl<'a> Instantiator<'a> {
         if let wasmtime_runtime::Export::Function(f) = &export {
             let expected = expected.unwrap_func();
             let actual = unsafe { f.func_ref.as_ref().type_index };
-            assert_eq!(module.signatures().shared_signature(expected), Some(actual));
+            assert_eq!(module.signatures().shared_type(expected), Some(actual));
             return;
         }
 

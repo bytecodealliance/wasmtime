@@ -28,11 +28,12 @@
 //! fused adapters, what arguments make their way to core wasm modules, etc.
 
 use crate::component::*;
-use crate::{EntityIndex, EntityRef, PrimaryMap, SignatureIndex, WasmType};
+use crate::{EntityIndex, EntityRef, PrimaryMap, WasmType};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
+use wasmtime_types::ModuleInternedTypeIndex;
 
 #[derive(Default)]
 #[allow(missing_docs)]
@@ -48,7 +49,7 @@ pub struct ComponentDfg {
 
     /// All trampolines and their type signature which will need to get
     /// compiled by Cranelift.
-    pub trampolines: Intern<TrampolineIndex, (SignatureIndex, Trampoline)>,
+    pub trampolines: Intern<TrampolineIndex, (ModuleInternedTypeIndex, Trampoline)>,
 
     /// Know reallocation functions which are used by `lowerings` (e.g. will be
     /// used by the host)
@@ -413,7 +414,7 @@ impl ComponentDfg {
 struct LinearizeDfg<'a> {
     dfg: &'a ComponentDfg,
     initializers: Vec<GlobalInitializer>,
-    trampolines: PrimaryMap<TrampolineIndex, SignatureIndex>,
+    trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
     trampoline_defs: PrimaryMap<TrampolineIndex, info::Trampoline>,
     trampoline_map: HashMap<TrampolineIndex, TrampolineIndex>,
     runtime_memories: HashMap<MemoryId, RuntimeMemoryIndex>,

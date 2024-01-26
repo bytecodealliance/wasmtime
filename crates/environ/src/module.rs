@@ -780,13 +780,13 @@ pub struct TableSegment {
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub enum ModuleType {
-    Function(SignatureIndex),
+    Function(ModuleInternedTypeIndex),
 }
 
 impl ModuleType {
     /// Asserts this is a `ModuleType::Function`, returning the underlying
     /// `SignatureIndex`.
-    pub fn unwrap_function(&self) -> SignatureIndex {
+    pub fn unwrap_function(&self) -> ModuleInternedTypeIndex {
         match self {
             ModuleType::Function(f) => *f,
         }
@@ -1029,7 +1029,7 @@ impl Module {
     /// Appends a new function to this module with the given type information,
     /// used for functions that either don't escape or aren't certain whether
     /// they escape yet.
-    pub fn push_function(&mut self, signature: SignatureIndex) -> FuncIndex {
+    pub fn push_function(&mut self, signature: ModuleInternedTypeIndex) -> FuncIndex {
         self.functions.push(FunctionType {
             signature,
             func_ref: FuncRefIndex::reserved_value(),
@@ -1039,7 +1039,7 @@ impl Module {
     /// Appends a new function to this module with the given type information.
     pub fn push_escaped_function(
         &mut self,
-        signature: SignatureIndex,
+        signature: ModuleInternedTypeIndex,
         func_ref: FuncRefIndex,
     ) -> FuncIndex {
         self.functions.push(FunctionType {
@@ -1054,7 +1054,7 @@ impl Module {
 pub struct FunctionType {
     /// The type of this function, indexed into the module-wide type tables for
     /// a module compilation.
-    pub signature: SignatureIndex,
+    pub signature: ModuleInternedTypeIndex,
     /// The index into the funcref table, if present. Note that this is
     /// `reserved_value()` if the function does not escape from a module.
     pub func_ref: FuncRefIndex,

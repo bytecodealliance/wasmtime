@@ -11,7 +11,7 @@
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
 //      builtins: *mut VMBuiltinFunctionsArray,
-//      signature_ids: *const VMSharedSignatureIndex,
+//      type_ids: *const VMSharedTypeIndex,
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
 //      imported_memories: [VMMemoryImport; module.num_imported_memories],
@@ -80,7 +80,7 @@ pub struct VMOffsets<P> {
     externref_activations_table: u32,
     store: u32,
     builtin_functions: u32,
-    signature_ids: u32,
+    type_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
     imported_memories: u32,
@@ -355,7 +355,7 @@ impl<P: PtrSize> VMOffsets<P> {
             imported_memories: "imported memories",
             imported_tables: "imported tables",
             imported_functions: "imported functions",
-            signature_ids: "module types",
+            type_ids: "module types",
             builtin_functions: "jit builtin functions state",
             store: "jit store state",
             externref_activations_table: "jit host externref state",
@@ -387,7 +387,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             externref_activations_table: 0,
             store: 0,
             builtin_functions: 0,
-            signature_ids: 0,
+            type_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
             imported_memories: 0,
@@ -438,7 +438,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(externref_activations_table) = ret.ptr.size(),
             size(store) = ret.ptr.size() * 2,
             size(builtin_functions) = ret.pointer_size(),
-            size(signature_ids) = ret.ptr.size(),
+            size(type_ids) = ret.ptr.size(),
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
             size(imported_tables)
@@ -596,11 +596,11 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMSharedSignatureIndex`.
+/// Offsets for `VMSharedTypeIndex`.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the size of `VMSharedSignatureIndex`.
+    /// Return the size of `VMSharedTypeIndex`.
     #[inline]
-    pub fn size_of_vmshared_signature_index(&self) -> u8 {
+    pub fn size_of_vmshared_type_index(&self) -> u8 {
         4
     }
 }
@@ -643,10 +643,10 @@ impl<P: PtrSize> VMOffsets<P> {
         self.store
     }
 
-    /// The offset of the `signature_ids` array pointer.
+    /// The offset of the `type_ids` array pointer.
     #[inline]
-    pub fn vmctx_signature_ids_array(&self) -> u32 {
-        self.signature_ids
+    pub fn vmctx_type_ids_array(&self) -> u32 {
+        self.type_ids
     }
 
     /// The offset of the `tables` array.

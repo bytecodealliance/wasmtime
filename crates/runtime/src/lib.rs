@@ -62,7 +62,7 @@ pub use crate::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMInvokeArgument, VMMemoryDefinition,
     VMMemoryImport, VMNativeCallFunction, VMNativeCallHostFuncContext, VMOpaqueContext,
-    VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
+    VMRuntimeLimits, VMSharedTypeIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
     ValRaw,
 };
 pub use send_sync_ptr::SendSyncPtr;
@@ -191,7 +191,7 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// call a native function of the given signature.
     fn wasm_to_native_trampoline(
         &self,
-        signature: VMSharedSignatureIndex,
+        signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>>;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
@@ -209,7 +209,7 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
 
     /// Returns an array, indexed by `SignatureIndex` of all
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
-    fn signature_ids(&self) -> &[VMSharedSignatureIndex];
+    fn type_ids(&self) -> &[VMSharedTypeIndex];
 
     /// Offset information for the current host.
     fn offsets(&self) -> &VMOffsets<HostPtr>;

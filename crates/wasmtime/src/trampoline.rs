@@ -20,7 +20,7 @@ use std::sync::Arc;
 use wasmtime_environ::{MemoryIndex, Module, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
-    StorePtr, VMFunctionImport, VMSharedSignatureIndex,
+    StorePtr, VMFunctionImport, VMSharedTypeIndex,
 };
 
 fn create_handle(
@@ -28,7 +28,7 @@ fn create_handle(
     store: &mut StoreOpaque,
     host_state: Box<dyn Any + Send + Sync>,
     func_imports: &[VMFunctionImport],
-    one_signature: Option<VMSharedSignatureIndex>,
+    one_signature: Option<VMSharedTypeIndex>,
 ) -> Result<InstanceId> {
     let mut imports = Imports::default();
     imports.functions = func_imports;

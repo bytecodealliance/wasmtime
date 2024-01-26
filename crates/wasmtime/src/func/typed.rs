@@ -6,7 +6,7 @@ use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::ptr::{self, NonNull};
 use wasmtime_runtime::{
-    VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex,
+    VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedTypeIndex,
 };
 
 /// A statically typed WebAssembly function.
@@ -189,7 +189,7 @@ where
     }
 
     /// Purely a debug-mode assertion, not actually used in release builds.
-    fn debug_typecheck(store: &StoreOpaque, func: VMSharedSignatureIndex) {
+    fn debug_typecheck(store: &StoreOpaque, func: VMSharedTypeIndex) {
         let ty = FuncType::from_wasm_func_type(
             store
                 .engine()

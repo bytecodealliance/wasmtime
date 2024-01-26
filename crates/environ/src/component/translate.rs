@@ -1,8 +1,8 @@
 use crate::component::*;
 use crate::ScopeVec;
 use crate::{
-    EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
-    SignatureIndex, Tunables, TypeConvert, WasmHeapType, WasmType,
+    EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables,
+    TypeConvert, WasmHeapType, WasmType,
 };
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
@@ -12,6 +12,7 @@ use wasmparser::types::{
     AliasableResourceId, ComponentEntityType, ComponentFuncTypeId, ComponentInstanceTypeId, Types,
 };
 use wasmparser::{Chunk, ComponentImportName, Encoding, Parser, Payload, Validator};
+use wasmtime_types::ModuleInternedTypeIndex;
 
 mod adapt;
 pub use self::adapt::*;
@@ -173,16 +174,16 @@ enum LocalInitializer<'data> {
     Lower {
         func: ComponentFuncIndex,
         lower_ty: ComponentFuncTypeId,
-        canonical_abi: SignatureIndex,
+        canonical_abi: ModuleInternedTypeIndex,
         options: LocalCanonicalOptions,
     },
     Lift(ComponentFuncTypeId, FuncIndex, LocalCanonicalOptions),
 
     // resources
     Resource(AliasableResourceId, WasmType, Option<FuncIndex>),
-    ResourceNew(AliasableResourceId, SignatureIndex),
-    ResourceRep(AliasableResourceId, SignatureIndex),
-    ResourceDrop(AliasableResourceId, SignatureIndex),
+    ResourceNew(AliasableResourceId, ModuleInternedTypeIndex),
+    ResourceRep(AliasableResourceId, ModuleInternedTypeIndex),
+    ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),
 
     // core wasm modules
     ModuleStatic(StaticModuleIndex),
@@ -890,7 +891,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         return ret;
     }
 
-    fn core_func_signature(&mut self, idx: u32) -> SignatureIndex {
+    fn core_func_signature(&mut self, idx: u32) -> ModuleInternedTypeIndex {
         let types = self.validator.types(0).unwrap();
         let id = types.core_function_at(idx);
         let ty = types[id].unwrap_func();
