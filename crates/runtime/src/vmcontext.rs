@@ -584,6 +584,11 @@ impl VMSharedSignatureIndex {
     /// Create a new `VMSharedSignatureIndex`.
     #[inline]
     pub fn new(value: u32) -> Self {
+        assert_ne!(
+            value,
+            u32::MAX,
+            "u32::MAX is reserved for the default value"
+        );
         Self(value)
     }
 
@@ -597,7 +602,7 @@ impl VMSharedSignatureIndex {
 impl Default for VMSharedSignatureIndex {
     #[inline]
     fn default() -> Self {
-        Self::new(u32::MAX)
+        Self(u32::MAX)
     }
 }
 

@@ -72,8 +72,20 @@ struct RegistryEntry {
 
 #[derive(Debug, Default)]
 struct SignatureRegistryInner {
+    // A map from the Wasm function type to a `VMSharedSignatureIndex`, for all
+    // the Wasm function types we have already registered.
     map: HashMap<WasmFuncType, VMSharedSignatureIndex>,
+
+    // A map from `VMSharedSignatureIndex::bits()` to the signature index's
+    // associated data, such as the underlying Wasm type.
     entries: Vec<Option<RegistryEntry>>,
+
+    // A free list of the `VMSharedSignatureIndex`es that are no longer being
+    // used by anything, and can therefore be reused.
+    //
+    // This is a size optimization, and not strictly necessary for correctness:
+    // we reuse entries rather than leak them and have logical holes in our
+    // `self.entries` list.
     free: Vec<VMSharedSignatureIndex>,
 }
 
@@ -99,8 +111,9 @@ impl SignatureRegistryInner {
                 let (index, entry) = match self.free.pop() {
                     Some(index) => (index, &mut self.entries[index.bits() as usize]),
                     None => {
-                        // Keep `index_map` len under 2**32 -- VMSharedSignatureIndex::new(std::u32::MAX)
-                        // is reserved for VMSharedSignatureIndex::default().
+                        // Keep `index_map`'s length under `u32::MAX` because
+                        // `u32::MAX` is reserved for `VMSharedSignatureIndex`'s
+                        // default value.
                         assert!(
                             len < std::u32::MAX as usize,
                             "Invariant check: index_map.len() < std::u32::MAX"
@@ -169,8 +182,13 @@ impl SignatureRegistryInner {
 impl Drop for SignatureRegistryInner {
     fn drop(&mut self) {
         assert!(
-            self.map.is_empty() && self.free.len() == self.entries.len(),
-            "signature registry not empty"
+            self.map.is_empty(),
+            "signature registry not empty: still have registered types in self.map"
+        );
+        assert_eq!(
+            self.free.len(),
+            self.entries.len(),
+            "signature registery not empty: not all entries in free list"
         );
     }
 }
