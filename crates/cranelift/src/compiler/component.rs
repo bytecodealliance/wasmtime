@@ -5,10 +5,11 @@ use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
+use cranelift_wasm::ModuleInternedTypeIndex;
 use std::any::Any;
 use wasmtime_cranelift_shared::{ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use wasmtime_environ::component::*;
-use wasmtime_environ::{PtrSize, TypeIndex, WasmType};
+use wasmtime_environ::{PtrSize, WasmType};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,
@@ -19,7 +20,7 @@ struct TrampolineCompiler<'a> {
     offsets: VMComponentOffsets<u8>,
     abi: Abi,
     block0: ir::Block,
-    signature: TypeIndex,
+    signature: ModuleInternedTypeIndex,
 }
 
 #[derive(Copy, Clone)]

@@ -22,6 +22,7 @@ use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
 use std::string::ToString;
 use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
+use wasmtime_types::ModuleInternedTypeIndex;
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -704,7 +705,7 @@ pub trait ModuleEnvironment<'data>: TypeConvert {
 
     /// Translates a type index to its signature index, only called for type
     /// indices which point to functions.
-    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<TypeIndex> {
+    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<ModuleInternedTypeIndex> {
         let _ = index;
         Err(WasmError::Unsupported("module linking".to_string()))
     }

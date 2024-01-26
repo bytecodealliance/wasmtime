@@ -20,6 +20,7 @@ use wasmparser::{
     ExternalKind, FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser,
     Payload, TypeRef, Validator, ValidatorResources,
 };
+use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'a, 'data> {
@@ -55,7 +56,7 @@ pub struct ModuleTranslation<'data> {
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and
     /// trampolines for each of these signatures are required.
-    pub exported_signatures: Vec<TypeIndex>,
+    pub exported_signatures: Vec<ModuleInternedTypeIndex>,
 
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,

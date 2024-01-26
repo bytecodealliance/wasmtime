@@ -2,8 +2,8 @@ use crate::linker::DefinitionType;
 use crate::{type_registry::TypeCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, Table, TypeIndex, WasmFuncType, WasmHeapType,
-    WasmRefType, WasmType,
+    EntityType, Global, Memory, ModuleInternedTypeIndex, ModuleTypes, Table, TypeIndex,
+    WasmFuncType, WasmHeapType, WasmRefType, WasmType,
 };
 use wasmtime_runtime::VMSharedTypeIndex;
 
@@ -16,7 +16,7 @@ pub struct MatchCx<'a> {
 impl MatchCx<'_> {
     pub fn vmshared_signature_index(
         &self,
-        expected: TypeIndex,
+        expected: ModuleInternedTypeIndex,
         actual: VMSharedTypeIndex,
     ) -> Result<()> {
         let matches = match self.signatures.shared_type(expected) {

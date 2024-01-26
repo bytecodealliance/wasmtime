@@ -47,9 +47,10 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
-use crate::{EntityIndex, PrimaryMap, TypeIndex, WasmType};
+use crate::{EntityIndex, PrimaryMap, WasmType};
 use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
+use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Metadata as a result of compiling a component.
 pub struct ComponentTranslation {
@@ -146,7 +147,7 @@ pub struct Component {
     pub num_runtime_post_returns: u32,
 
     /// WebAssembly type signature of all trampolines.
-    pub trampolines: PrimaryMap<TrampolineIndex, TypeIndex>,
+    pub trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
 
     /// The number of lowered host functions (maximum `LoweredIndex`) needed to
     /// instantiate this component.

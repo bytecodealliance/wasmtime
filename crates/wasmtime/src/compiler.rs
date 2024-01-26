@@ -28,8 +28,8 @@ use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
     CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FuncIndex,
-    FunctionBodyData, ModuleTranslation, ModuleType, ModuleTypesBuilder, PrimaryMap,
-    StaticModuleIndex, TypeIndex, WasmFunctionInfo,
+    FunctionBodyData, ModuleInternedTypeIndex, ModuleTranslation, ModuleType, ModuleTypesBuilder,
+    PrimaryMap, StaticModuleIndex, TypeIndex, WasmFunctionInfo,
 };
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
@@ -39,8 +39,11 @@ type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> +
 /// Two `u32`s to align with `cranelift_codegen::ir::UserExternalName`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CompileKey {
-    // [ kind:i4 module:i28 ]
+    // The namespace field is bitpacked like:
+    //
+    //     [ kind:i3 module:i29 ]
     namespace: u32,
+
     index: u32,
 }
 
@@ -93,7 +96,7 @@ impl CompileKey {
         }
     }
 
-    fn wasm_to_native_trampoline(index: TypeIndex) -> Self {
+    fn wasm_to_native_trampoline(index: ModuleInternedTypeIndex) -> Self {
         Self {
             namespace: Self::WASM_TO_NATIVE_TRAMPOLINE_KIND,
             index: index.as_u32(),

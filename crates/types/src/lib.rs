@@ -89,7 +89,7 @@ pub enum WasmHeapType {
     // `WasmHeapType<VMSharedTypeIndex>`. This `<T>` would need to be
     // propagated to quite a few locations though so it's left for a future
     // refactoring at this time.
-    TypedFunc(TypeIndex),
+    TypedFunc(ModuleInternedTypeIndex),
 }
 
 impl fmt::Display for WasmHeapType {
@@ -211,6 +211,15 @@ entity_impl!(MemoryIndex);
 pub struct TypeIndex(u32);
 entity_impl!(TypeIndex);
 
+/// Index type of a deduplicated type (imported or defined) inside a WebAssembly
+/// module.
+///
+/// Note that this is deduplicated only at the level of a WebAssembly module,
+/// not at the level of a whole store or engine.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct ModuleInternedTypeIndex(u32);
+entity_impl!(ModuleInternedTypeIndex);
+
 /// Index type of a passive data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DataIndex(u32);
@@ -286,7 +295,7 @@ pub enum EntityType {
     Table(Table),
     /// A function type where the index points to the type section and records a
     /// function signature.
-    Function(TypeIndex),
+    Function(ModuleInternedTypeIndex),
 }
 
 impl EntityType {
@@ -323,7 +332,7 @@ impl EntityType {
     }
 
     /// Assert that this entity is a function
-    pub fn unwrap_func(&self) -> TypeIndex {
+    pub fn unwrap_func(&self) -> ModuleInternedTypeIndex {
         match self {
             EntityType::Function(g) => *g,
             _ => panic!("not a func"),

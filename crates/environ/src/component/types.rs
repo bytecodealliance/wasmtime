@@ -1,7 +1,7 @@
 use crate::component::{Export, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
     CompiledModuleInfo, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
-    TypeIndex, WasmHeapType, WasmType,
+    WasmHeapType, WasmType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -13,6 +13,7 @@ use std::ops::Index;
 use wasmparser::names::KebabString;
 use wasmparser::types;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+use wasmtime_types::ModuleInternedTypeIndex;
 
 pub use wasmtime_types::StaticModuleIndex;
 
@@ -468,7 +469,7 @@ impl ComponentTypesBuilder {
     /// wouldn't be needed and instead the `SignatureIndex` itself would be
     /// threaded through appropriately, but that's left for a future
     /// refactoring. Try not to lean too hard on this method though.
-    pub fn find_resource_drop_signature(&self) -> Option<TypeIndex> {
+    pub fn find_resource_drop_signature(&self) -> Option<ModuleInternedTypeIndex> {
         self.module_types
             .wasm_signatures()
             .find(|(_, sig)| {
@@ -1007,7 +1008,7 @@ pub enum TypeDef {
     /// A core wasm module and its type.
     Module(TypeModuleIndex),
     /// A core wasm function using only core wasm types.
-    CoreFunc(TypeIndex),
+    CoreFunc(ModuleInternedTypeIndex),
     /// A resource type which operates on the specified resource table.
     ///
     /// Note that different resource tables may point to the same underlying

@@ -26,12 +26,12 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr};
+use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableIndex,
-    TableInitialValue, Trap, TypeIndex, VMOffsets, WasmHeapType, WasmRefType, WasmType,
-    VMCONTEXT_MAGIC,
+    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -691,7 +691,12 @@ impl Instance {
     /// than tracking state related to whether it's been initialized
     /// before, because resetting that state on (re)instantiation is
     /// very expensive if there are many funcrefs.
-    fn construct_func_ref(&mut self, index: FuncIndex, sig: TypeIndex, into: *mut VMFuncRef) {
+    fn construct_func_ref(
+        &mut self,
+        index: FuncIndex,
+        sig: ModuleInternedTypeIndex,
+        into: *mut VMFuncRef,
+    ) {
         let type_index = unsafe {
             let base: *const VMSharedTypeIndex =
                 *self.vmctx_plus_offset_mut(self.offsets().vmctx_type_ids_array());

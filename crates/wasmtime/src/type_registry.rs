@@ -8,7 +8,7 @@ use std::{
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
-use wasmtime_environ::{ModuleTypes, PrimaryMap, TypeIndex, WasmFuncType};
+use wasmtime_environ::{ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, TypeIndex, WasmFuncType};
 use wasmtime_runtime::VMSharedTypeIndex;
 
 /// Represents a collection of shared types.
@@ -20,8 +20,8 @@ use wasmtime_runtime::VMSharedTypeIndex;
 #[derive(Debug)]
 pub struct TypeCollection {
     registry: Arc<RwLock<TypeRegistryInner>>,
-    types: PrimaryMap<TypeIndex, VMSharedTypeIndex>,
-    reverse_types: HashMap<VMSharedTypeIndex, TypeIndex>,
+    types: PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+    reverse_types: HashMap<VMSharedTypeIndex, ModuleInternedTypeIndex>,
 }
 
 impl TypeCollection {
@@ -42,18 +42,18 @@ impl TypeCollection {
     ///
     /// This is used for looking up module shared type indexes during module
     /// instantiation.
-    pub fn as_module_map(&self) -> &PrimaryMap<TypeIndex, VMSharedTypeIndex> {
+    pub fn as_module_map(&self) -> &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex> {
         &self.types
     }
 
     /// Gets the shared type index given a module type index.
     #[inline]
-    pub fn shared_type(&self, index: TypeIndex) -> Option<VMSharedTypeIndex> {
+    pub fn shared_type(&self, index: ModuleInternedTypeIndex) -> Option<VMSharedTypeIndex> {
         self.types.get(index).copied()
     }
 
     /// Get the module-local type index for the given shared type index.
-    pub fn module_local_type(&self, index: VMSharedTypeIndex) -> Option<TypeIndex> {
+    pub fn module_local_type(&self, index: VMSharedTypeIndex) -> Option<ModuleInternedTypeIndex> {
         self.reverse_types.get(&index).copied()
     }
 }
@@ -95,7 +95,7 @@ impl TypeRegistryInner {
     fn register_for_module(
         &mut self,
         types: &ModuleTypes,
-    ) -> PrimaryMap<TypeIndex, VMSharedTypeIndex> {
+    ) -> PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex> {
         let mut map = PrimaryMap::default();
         for (idx, ty) in types.wasm_types() {
             let b = map.push(self.register(ty));

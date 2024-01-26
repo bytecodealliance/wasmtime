@@ -5,7 +5,7 @@
 
 use crate::{
     obj, DefinedFuncIndex, FuncIndex, FunctionLoc, MemoryInitialization, Module, ModuleTranslation,
-    PrimaryMap, Tunables, TypeIndex, WasmFunctionInfo,
+    PrimaryMap, Tunables, WasmFunctionInfo,
 };
 use anyhow::{bail, Result};
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
@@ -14,6 +14,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::ops::Range;
 use std::str;
+use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Secondary in-memory results of function compilation.
 #[derive(Serialize, Deserialize)]
@@ -46,7 +47,7 @@ pub struct CompiledModuleInfo {
 
     /// Metadata about wasm-to-native trampolines. Used when exposing a native
     /// callee (e.g. `Func::wrap`) to a Wasm caller. Sorted by signature index.
-    pub wasm_to_native_trampolines: Vec<(TypeIndex, FunctionLoc)>,
+    pub wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
 
     /// General compilation metadata.
     pub meta: Metadata,
@@ -170,7 +171,7 @@ impl<'a> ObjectBuilder<'a> {
         &mut self,
         translation: ModuleTranslation<'_>,
         funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-        wasm_to_native_trampolines: Vec<(TypeIndex, FunctionLoc)>,
+        wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
     ) -> Result<CompiledModuleInfo> {
         let ModuleTranslation {
             mut module,
