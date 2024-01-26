@@ -13,7 +13,7 @@ use std::sync::Arc;
 use wasmtime_environ::{
     CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FinishedObject, FuncIndex,
     FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex, ObjectBuilder,
-    PrimaryMap, StackMapInformation, TypeIndex, WasmFunctionInfo,
+    PrimaryMap, StackMapInformation, WasmFunctionInfo,
 };
 use wasmtime_runtime::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 

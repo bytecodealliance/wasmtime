@@ -29,7 +29,7 @@ use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
     CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FuncIndex,
     FunctionBodyData, ModuleInternedTypeIndex, ModuleTranslation, ModuleType, ModuleTypesBuilder,
-    PrimaryMap, StaticModuleIndex, TypeIndex, WasmFunctionInfo,
+    PrimaryMap, StaticModuleIndex, WasmFunctionInfo,
 };
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;

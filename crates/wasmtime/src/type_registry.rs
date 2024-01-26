@@ -8,7 +8,7 @@ use std::{
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
-use wasmtime_environ::{ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, TypeIndex, WasmFuncType};
+use wasmtime_environ::{ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, WasmFuncType};
 use wasmtime_runtime::VMSharedTypeIndex;
 
 /// Represents a collection of shared types.

@@ -2,8 +2,8 @@ use crate::linker::DefinitionType;
 use crate::{type_registry::TypeCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleInternedTypeIndex, ModuleTypes, Table, TypeIndex,
-    WasmFuncType, WasmHeapType, WasmRefType, WasmType,
+    EntityType, Global, Memory, ModuleInternedTypeIndex, ModuleTypes, Table, WasmFuncType,
+    WasmHeapType, WasmRefType, WasmType,
 };
 use wasmtime_runtime::VMSharedTypeIndex;
 
