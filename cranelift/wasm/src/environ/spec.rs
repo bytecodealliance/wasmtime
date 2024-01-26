@@ -9,8 +9,8 @@
 use crate::state::FuncTranslationState;
 use crate::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
-    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex,
-    WasmError, WasmFuncType, WasmHeapType, WasmResult,
+    MemoryIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
+    WasmHeapType, WasmResult,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -704,7 +704,7 @@ pub trait ModuleEnvironment<'data>: TypeConvert {
 
     /// Translates a type index to its signature index, only called for type
     /// indices which point to functions.
-    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
+    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<TypeIndex> {
         let _ = index;
         Err(WasmError::Unsupported("module linking".to_string()))
     }

@@ -29,7 +29,7 @@ use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
     CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FuncIndex,
     FunctionBodyData, ModuleTranslation, ModuleType, ModuleTypesBuilder, PrimaryMap,
-    SignatureIndex, StaticModuleIndex, WasmFunctionInfo,
+    StaticModuleIndex, TypeIndex, WasmFunctionInfo,
 };
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
@@ -93,7 +93,7 @@ impl CompileKey {
         }
     }
 
-    fn wasm_to_native_trampoline(index: SignatureIndex) -> Self {
+    fn wasm_to_native_trampoline(index: TypeIndex) -> Self {
         Self {
             namespace: Self::WASM_TO_NATIVE_TRAMPOLINE_KIND,
             index: index.as_u32(),

@@ -1067,7 +1067,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // If necessary, check the signature.
         match self.env.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
-                let sig_id_size = self.env.offsets.size_of_vmshared_signature_index();
+                let sig_id_size = self.env.offsets.size_of_vmshared_type_index();
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
                 let vmctx = self.env.vmctx(self.builder.func);
                 let base = self.builder.ins().global_value(pointer_type, vmctx);
@@ -1080,7 +1080,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     pointer_type,
                     mem_flags,
                     base,
-                    i32::try_from(self.env.offsets.vmctx_signature_ids_array()).unwrap(),
+                    i32::try_from(self.env.offsets.vmctx_type_ids_array()).unwrap(),
                 );
                 let sig_index = self.env.module.types[ty_index].unwrap_function();
                 let offset =

@@ -1,6 +1,6 @@
 use crate::{
     code::CodeObject, code_memory::CodeMemory, instantiate::finish_object,
-    signatures::SignatureCollection, Engine, Module, ResourcesRequired,
+    type_registry::TypeCollection, Engine, Module, ResourcesRequired,
 };
 use anyhow::{bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
@@ -318,8 +318,7 @@ impl Component {
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the
         // component and for all included core wasm modules.
-        let signatures =
-            SignatureCollection::new_for_module(engine.signatures(), types.module_types());
+        let signatures = TypeCollection::new_for_module(engine.signatures(), types.module_types());
 
         // Assemble the `CodeObject` artifact which is shared by all core wasm
         // modules as well as the final component.
@@ -361,7 +360,7 @@ impl Component {
         self.inner.component_types()
     }
 
-    pub(crate) fn signatures(&self) -> &SignatureCollection {
+    pub(crate) fn signatures(&self) -> &TypeCollection {
         self.inner.code.signatures()
     }
 

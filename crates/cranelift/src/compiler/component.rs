@@ -8,7 +8,7 @@ use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
 use wasmtime_cranelift_shared::{ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use wasmtime_environ::component::*;
-use wasmtime_environ::{PtrSize, SignatureIndex, WasmType};
+use wasmtime_environ::{PtrSize, TypeIndex, WasmType};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,
@@ -19,7 +19,7 @@ struct TrampolineCompiler<'a> {
     offsets: VMComponentOffsets<u8>,
     abi: Abi,
     block0: ir::Block,
-    signature: SignatureIndex,
+    signature: TypeIndex,
 }
 
 #[derive(Copy, Clone)]

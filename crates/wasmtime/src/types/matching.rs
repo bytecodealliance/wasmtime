@@ -1,14 +1,14 @@
 use crate::linker::DefinitionType;
-use crate::{signatures::SignatureCollection, Engine};
+use crate::{type_registry::TypeCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmHeapType,
+    EntityType, Global, Memory, ModuleTypes, Table, TypeIndex, WasmFuncType, WasmHeapType,
     WasmRefType, WasmType,
 };
-use wasmtime_runtime::VMSharedSignatureIndex;
+use wasmtime_runtime::VMSharedTypeIndex;
 
 pub struct MatchCx<'a> {
-    pub signatures: &'a SignatureCollection,
+    pub signatures: &'a TypeCollection,
     pub types: &'a ModuleTypes,
     pub engine: &'a Engine,
 }
@@ -16,10 +16,10 @@ pub struct MatchCx<'a> {
 impl MatchCx<'_> {
     pub fn vmshared_signature_index(
         &self,
-        expected: SignatureIndex,
-        actual: VMSharedSignatureIndex,
+        expected: TypeIndex,
+        actual: VMSharedTypeIndex,
     ) -> Result<()> {
-        let matches = match self.signatures.shared_signature(expected) {
+        let matches = match self.signatures.shared_type(expected) {
             Some(idx) => actual == idx,
             // If our expected signature isn't registered, then there's no way
             // that `actual` can match it.
