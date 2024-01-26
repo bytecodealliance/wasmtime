@@ -1,6 +1,6 @@
 use std::fmt;
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmRefType, WasmType,
+    EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmRefType, WasmValType,
 };
 
 pub(crate) mod matching;
@@ -73,34 +73,34 @@ impl ValType {
         }
     }
 
-    pub(crate) fn to_wasm_type(&self) -> WasmType {
+    pub(crate) fn to_wasm_type(&self) -> WasmValType {
         match self {
-            Self::I32 => WasmType::I32,
-            Self::I64 => WasmType::I64,
-            Self::F32 => WasmType::F32,
-            Self::F64 => WasmType::F64,
-            Self::V128 => WasmType::V128,
-            Self::FuncRef => WasmType::Ref(WasmRefType::FUNCREF),
-            Self::ExternRef => WasmType::Ref(WasmRefType::EXTERNREF),
+            Self::I32 => WasmValType::I32,
+            Self::I64 => WasmValType::I64,
+            Self::F32 => WasmValType::F32,
+            Self::F64 => WasmValType::F64,
+            Self::V128 => WasmValType::V128,
+            Self::FuncRef => WasmValType::Ref(WasmRefType::FUNCREF),
+            Self::ExternRef => WasmValType::Ref(WasmRefType::EXTERNREF),
         }
     }
 
-    pub(crate) fn from_wasm_type(ty: &WasmType) -> Self {
+    pub(crate) fn from_wasm_type(ty: &WasmValType) -> Self {
         match ty {
-            WasmType::I32 => Self::I32,
-            WasmType::I64 => Self::I64,
-            WasmType::F32 => Self::F32,
-            WasmType::F64 => Self::F64,
-            WasmType::V128 => Self::V128,
-            WasmType::Ref(WasmRefType::FUNCREF) => Self::FuncRef,
-            WasmType::Ref(WasmRefType::EXTERNREF) => Self::ExternRef,
+            WasmValType::I32 => Self::I32,
+            WasmValType::I64 => Self::I64,
+            WasmValType::F32 => Self::F32,
+            WasmValType::F64 => Self::F64,
+            WasmValType::V128 => Self::V128,
+            WasmValType::Ref(WasmRefType::FUNCREF) => Self::FuncRef,
+            WasmValType::Ref(WasmRefType::EXTERNREF) => Self::ExternRef,
             // FIXME: exposing the full function-references (and beyond)
             // proposals will require redesigning the embedder API for `ValType`
             // and types in Wasmtime. That is a large undertaking which is
             // deferred for later. The intention for now is that
             // function-references types can't show up in the "public API" of a
             // core wasm module but it can use everything internally still.
-            WasmType::Ref(_) => {
+            WasmValType::Ref(_) => {
                 unimplemented!("typed function references are not exposed in the public API yet")
             }
         }
@@ -331,7 +331,7 @@ impl TableType {
 
     /// Returns the element value type of this table.
     pub fn element(&self) -> ValType {
-        ValType::from_wasm_type(&WasmType::Ref(self.ty.wasm_ty))
+        ValType::from_wasm_type(&WasmValType::Ref(self.ty.wasm_ty))
     }
 
     /// Returns minimum number of elements this table must have

@@ -6,7 +6,7 @@
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
+use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmValType};
 use target_lexicon::Architecture;
 use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
@@ -40,14 +40,14 @@ fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
 }
 
 /// Returns the corresponding cranelift type for the provided wasm type.
-fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
+fn value_type(isa: &dyn TargetIsa, ty: WasmValType) -> ir::types::Type {
     match ty {
-        WasmType::I32 => ir::types::I32,
-        WasmType::I64 => ir::types::I64,
-        WasmType::F32 => ir::types::F32,
-        WasmType::F64 => ir::types::F64,
-        WasmType::V128 => ir::types::I8X16,
-        WasmType::Ref(rt) => reference_type(rt.heap_type, isa.pointer_type()),
+        WasmValType::I32 => ir::types::I32,
+        WasmValType::I64 => ir::types::I64,
+        WasmValType::F32 => ir::types::F32,
+        WasmValType::F64 => ir::types::F64,
+        WasmValType::V128 => ir::types::I8X16,
+        WasmValType::Ref(rt) => reference_type(rt.heap_type, isa.pointer_type()),
     }
 }
 
@@ -89,7 +89,7 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
 /// pointer.
 fn native_call_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
     let mut sig = blank_sig(isa, CallConv::triple_default(isa.triple()));
-    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
+    let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm.params().iter().map(&cvt));
     if let Some(first_ret) = wasm.returns().get(0) {
         sig.returns.push(cvt(first_ret));
@@ -165,7 +165,7 @@ fn wasm_call_signature(
         _ => CallConv::Fast,
     };
     let mut sig = blank_sig(isa, call_conv);
-    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
+    let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm_func_ty.params().iter().map(&cvt));
     sig.returns.extend(wasm_func_ty.returns().iter().map(&cvt));
     sig

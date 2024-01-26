@@ -47,7 +47,7 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
-use crate::{EntityIndex, PrimaryMap, WasmType};
+use crate::{EntityIndex, PrimaryMap, WasmValType};
 use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_types::ModuleInternedTypeIndex;
@@ -467,7 +467,7 @@ pub struct Resource {
     /// The local index of the resource being defined.
     pub index: DefinedResourceIndex,
     /// Core wasm representation of this resource.
-    pub rep: WasmType,
+    pub rep: WasmValType,
     /// Optionally-specified destructor and where it comes from.
     pub dtor: Option<CoreDef>,
     /// Which component instance this resource logically belongs to.

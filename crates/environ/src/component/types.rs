@@ -1,7 +1,7 @@
 use crate::component::{Export, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
     CompiledModuleInfo, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
-    WasmHeapType, WasmType,
+    WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -475,7 +475,7 @@ impl ComponentTypesBuilder {
             .find(|(_, sig)| {
                 sig.params().len() == 1
                     && sig.returns().len() == 0
-                    && sig.params()[0] == WasmType::I32
+                    && sig.params()[0] == WasmValType::I32
             })
             .map(|(i, _)| i)
     }

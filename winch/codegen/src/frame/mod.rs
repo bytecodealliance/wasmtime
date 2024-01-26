@@ -6,7 +6,7 @@ use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;
 use wasmparser::{BinaryReader, FuncValidator, ValidatorResources};
-use wasmtime_environ::{TypeConvert, WasmType};
+use wasmtime_environ::{TypeConvert, WasmValType};
 
 // TODO:
 // SpiderMonkey's implementation uses 16;
@@ -154,7 +154,7 @@ impl Frame {
         &self,
         index: u32,
         masm: &mut M,
-    ) -> (WasmType, M::Address) {
+    ) -> (WasmValType, M::Address) {
         self.get_local(index)
             .map(|slot| (slot.ty, masm.local_address(slot)))
             .unwrap_or_else(|| panic!("Invalid local slot: {}", index))

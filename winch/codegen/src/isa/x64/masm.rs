@@ -28,7 +28,7 @@ use cranelift_codegen::{
     MachBufferFinalized, MachLabel,
 };
 
-use wasmtime_environ::{PtrSize, WasmType, WASM_PAGE_SIZE};
+use wasmtime_environ::{PtrSize, WasmValType, WASM_PAGE_SIZE};
 
 /// x64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -285,8 +285,8 @@ impl Masm for MacroAssembler {
         // Ensure that the constant is correctly typed according to the heap
         // type to reduce register pressure when emitting the shift operation.
         match heap_data.ty {
-            WasmType::I32 => context.stack.push(Val::i32(pow as i32)),
-            WasmType::I64 => context.stack.push(Val::i64(pow as i64)),
+            WasmValType::I32 => context.stack.push(Val::i32(pow as i32)),
+            WasmValType::I64 => context.stack.push(Val::i64(pow as i64)),
             _ => unreachable!(),
         }
 

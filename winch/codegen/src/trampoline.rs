@@ -19,7 +19,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use smallvec::SmallVec;
 use std::mem;
-use wasmtime_environ::{FuncIndex, PtrSize, WasmFuncType, WasmType};
+use wasmtime_environ::{FuncIndex, PtrSize, WasmFuncType, WasmValType};
 
 /// The supported trampoline kinds.
 /// See <https://github.com/bytecodealliance/rfcs/blob/main/accepted/tail-calls.md#new-trampolines-and-vmcallercheckedanyfunc-changes>
@@ -60,7 +60,7 @@ where
     /// The pointer size of the current ISA.
     pointer_size: M::Ptr,
     /// WasmType representation of the pointer size.
-    pointer_type: WasmType,
+    pointer_type: WasmValType,
 }
 
 impl<'a, M> Trampoline<'a, M>
@@ -495,7 +495,7 @@ where
     }
 
     /// Get the type of the caller and callee VM contexts.
-    fn callee_and_caller_vmctx_types(&self) -> SmallVec<[WasmType; 2]> {
+    fn callee_and_caller_vmctx_types(&self) -> SmallVec<[WasmValType; 2]> {
         std::iter::repeat(self.pointer_type).take(2).collect()
     }
 

@@ -13,7 +13,7 @@ use std::marker;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmType};
+use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 use wasmtime_runtime::VMFuncRef;
 
@@ -160,7 +160,7 @@ impl InstanceData {
                 wasmtime_runtime::Export::Global(wasmtime_runtime::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
                     global: Global {
-                        wasm_ty: WasmType::I32,
+                        wasm_ty: WasmValType::I32,
                         mutability: true,
                     },
                 })

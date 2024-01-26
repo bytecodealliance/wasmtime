@@ -17,7 +17,7 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     DefinedFuncIndex, FuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, WasmFuncType,
-    WasmType,
+    WasmValType,
 };
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationKind, SectionKind};
@@ -893,7 +893,7 @@ impl Compiler {
     fn store_values_to_array(
         &self,
         builder: &mut FunctionBuilder,
-        types: &[WasmType],
+        types: &[WasmValType],
         values: &[Value],
         values_vec_ptr: Value,
         values_vec_capacity: Value,
@@ -925,7 +925,7 @@ impl Compiler {
     /// function that uses the array calling convention.
     fn load_values_from_array(
         &self,
-        types: &[WasmType],
+        types: &[WasmValType],
         builder: &mut FunctionBuilder,
         values_vec_ptr: Value,
         values_vec_capacity: Value,
@@ -1266,10 +1266,10 @@ impl NativeRet {
                 let mut max_align = 1;
                 for ty in other[1..].iter() {
                     let size = match ty {
-                        WasmType::I32 | WasmType::F32 => 4,
-                        WasmType::I64 | WasmType::F64 => 8,
-                        WasmType::Ref(_) => pointer_type.bytes(),
-                        WasmType::V128 => 16,
+                        WasmValType::I32 | WasmValType::F32 => 4,
+                        WasmValType::I64 | WasmValType::F64 => 8,
+                        WasmValType::Ref(_) => pointer_type.bytes(),
+                        WasmValType::V128 => 16,
                     };
                     offset = align_to(offset, size);
                     offsets.push(offset);

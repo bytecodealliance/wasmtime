@@ -2,7 +2,7 @@ use crate::component::*;
 use crate::ScopeVec;
 use crate::{
     EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables,
-    TypeConvert, WasmHeapType, WasmType,
+    TypeConvert, WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
@@ -180,7 +180,7 @@ enum LocalInitializer<'data> {
     Lift(ComponentFuncTypeId, FuncIndex, LocalCanonicalOptions),
 
     // resources
-    Resource(AliasableResourceId, WasmType, Option<FuncIndex>),
+    Resource(AliasableResourceId, WasmValType, Option<FuncIndex>),
     ResourceNew(AliasableResourceId, ModuleInternedTypeIndex),
     ResourceRep(AliasableResourceId, ModuleInternedTypeIndex),
     ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),

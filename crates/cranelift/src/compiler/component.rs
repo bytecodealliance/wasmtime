@@ -9,7 +9,7 @@ use cranelift_wasm::ModuleInternedTypeIndex;
 use std::any::Any;
 use wasmtime_cranelift_shared::{ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use wasmtime_environ::component::*;
-use wasmtime_environ::{PtrSize, WasmType};
+use wasmtime_environ::{PtrSize, WasmValType};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,
@@ -289,7 +289,7 @@ impl<'a> TrampolineCompiler<'a> {
         host_args.push(args[2]);
 
         // Currently this only support resources represented by `i32`
-        assert_eq!(self.types[self.signature].params()[0], WasmType::I32);
+        assert_eq!(self.types[self.signature].params()[0], WasmValType::I32);
         let (host_sig, offset) = host::resource_new32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);
@@ -320,7 +320,7 @@ impl<'a> TrampolineCompiler<'a> {
         host_args.push(args[2]);
 
         // Currently this only support resources represented by `i32`
-        assert_eq!(self.types[self.signature].returns()[0], WasmType::I32);
+        assert_eq!(self.types[self.signature].returns()[0], WasmValType::I32);
         let (host_sig, offset) = host::resource_rep32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);

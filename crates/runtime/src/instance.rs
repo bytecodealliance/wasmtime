@@ -31,7 +31,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableIndex,
-    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
+    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmValType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -1235,7 +1235,7 @@ impl Instance {
                     // count as values move between globals, everything else is just
                     // copy-able bits.
                     match wasm_ty {
-                        WasmType::Ref(WasmRefType {
+                        WasmValType::Ref(WasmRefType {
                             heap_type: WasmHeapType::Extern,
                             ..
                         }) => *(*to).as_externref_mut() = from.as_externref().clone(),
@@ -1247,7 +1247,7 @@ impl Instance {
                 }
                 GlobalInit::RefNullConst => match wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits
-                    WasmType::Ref(WasmRefType { nullable: true, .. }) => {}
+                    WasmValType::Ref(WasmRefType { nullable: true, .. }) => {}
                     ty => panic!("unsupported reference type for global: {:?}", ty),
                 },
             }
@@ -1283,7 +1283,7 @@ impl Drop for Instance {
             };
             match global.wasm_ty {
                 // For now only externref globals need to get destroyed
-                WasmType::Ref(WasmRefType {
+                WasmValType::Ref(WasmRefType {
                     heap_type: WasmHeapType::Extern,
                     ..
                 }) => {}

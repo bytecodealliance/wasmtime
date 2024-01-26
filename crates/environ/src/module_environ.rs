@@ -5,7 +5,7 @@ use crate::module::{
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
     GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, TableIndex, TableInitialValue,
-    Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmType,
+    Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmValType,
     WasmparserTypeConverter,
 };
 use cranelift_entity::packed_option::ReservedValue;
@@ -153,8 +153,8 @@ pub struct WasmFileInfo {
 #[derive(Debug)]
 #[allow(missing_docs)]
 pub struct FunctionMetadata {
-    pub params: Box<[WasmType]>,
-    pub locals: Box<[(u32, WasmType)]>,
+    pub params: Box<[WasmValType]>,
+    pub locals: Box<[(u32, WasmValType)]>,
 }
 
 impl<'a, 'data> ModuleEnvironment<'a, 'data> {
