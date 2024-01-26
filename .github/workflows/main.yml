@@ -215,7 +215,7 @@ jobs:
     - run: cd crates/c-api && doxygen doxygen.conf
 
     # install mdbook, build the docs, and test the docs
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/mdbook
         key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
@@ -324,7 +324,7 @@ jobs:
     - run: rustup target add aarch64-linux-android
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/cargo-ndk
         key: cargo-ndk-bin-${{ env.CARGO_NDK_VERSION }}
@@ -439,7 +439,7 @@ jobs:
 
     - run: cargo fetch --locked
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
@@ -659,7 +659,7 @@ jobs:
       with:
         toolchain: nightly-2023-10-10
     - run: rustup component add rust-src miri
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/cargo-nextest
         key: cargo-nextest-bin-${{ env.CARGO_NEXTEST_VERSION }}
