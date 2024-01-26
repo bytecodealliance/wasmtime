@@ -184,8 +184,14 @@ pub enum Export {
         options: CanonicalOptions,
     },
     ModuleStatic(StaticModuleIndex),
-    ModuleImport(RuntimeImportIndex),
-    Instance(IndexMap<String, Export>),
+    ModuleImport {
+        ty: TypeModuleIndex,
+        import: RuntimeImportIndex,
+    },
+    Instance {
+        ty: Option<TypeComponentInstanceIndex>,
+        exports: IndexMap<String, Export>,
+    },
     Type(TypeDef),
 }
 
@@ -487,12 +493,17 @@ impl LinearizeDfg<'_> {
                 }
             }
             Export::ModuleStatic(i) => info::Export::ModuleStatic(*i),
-            Export::ModuleImport(i) => info::Export::ModuleImport(*i),
-            Export::Instance(map) => info::Export::Instance(
-                map.iter()
+            Export::ModuleImport { ty, import } => info::Export::ModuleImport {
+                ty: *ty,
+                import: *import,
+            },
+            Export::Instance { ty, exports } => info::Export::Instance {
+                ty: *ty,
+                exports: exports
+                    .iter()
                     .map(|(name, export)| (name.clone(), self.export(export)))
                     .collect(),
-            ),
+            },
             Export::Type(def) => info::Export::Type(*def),
         }
     }

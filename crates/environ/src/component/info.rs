@@ -402,10 +402,20 @@ pub enum Export {
     /// A module defined within this component is exported.
     ModuleStatic(StaticModuleIndex),
     /// A module imported into this component is exported.
-    ModuleImport(RuntimeImportIndex),
+    ModuleImport {
+        /// Module type index
+        ty: TypeModuleIndex,
+        /// Module runtime import index
+        import: RuntimeImportIndex,
+    },
     /// A nested instance is being exported which has recursively defined
     /// `Export` items.
-    Instance(IndexMap<String, Export>),
+    Instance {
+        /// Instance type index, if such is assigned
+        ty: Option<TypeComponentInstanceIndex>,
+        /// Instance export map
+        exports: IndexMap<String, Export>,
+    },
     /// An exported type from a component or instance, currently only
     /// informational.
     Type(TypeDef),

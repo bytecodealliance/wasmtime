@@ -200,7 +200,7 @@ enum LocalInitializer<'data> {
         HashMap<&'data str, ComponentItem>,
         ComponentInstanceTypeId,
     ),
-    ComponentSynthetic(HashMap<&'data str, ComponentItem>),
+    ComponentSynthetic(HashMap<&'data str, ComponentItem>, ComponentInstanceTypeId),
 
     // alias section
     AliasExportFunc(ModuleInstanceIndex, &'data str),
@@ -581,18 +581,18 @@ impl<'a, 'data> Translator<'a, 'data> {
                 let mut index = self.validator.types(0).unwrap().component_instance_count();
                 self.validator.component_instance_section(&s)?;
                 for instance in s {
+                    let types = self.validator.types(0).unwrap();
+                    let ty = types.component_instance_at(index);
                     let init = match instance? {
                         wasmparser::ComponentInstance::Instantiate {
                             component_index,
                             args,
                         } => {
-                            let types = self.validator.types(0).unwrap();
-                            let ty = types.component_instance_at(index);
                             let index = ComponentIndex::from_u32(component_index);
                             self.instantiate_component(index, &args, ty)?
                         }
                         wasmparser::ComponentInstance::FromExports(exports) => {
-                            self.instantiate_component_from_exports(&exports)?
+                            self.instantiate_component_from_exports(&exports, ty)?
                         }
                     };
                     self.result.initializers.push(init);
@@ -746,6 +746,7 @@ impl<'a, 'data> Translator<'a, 'data> {
     fn instantiate_component_from_exports(
         &mut self,
         exports: &[wasmparser::ComponentExport<'data>],
+        ty: ComponentInstanceTypeId,
     ) -> Result<LocalInitializer<'data>> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
@@ -753,7 +754,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             map.insert(export.name.0, idx);
         }
 
-        Ok(LocalInitializer::ComponentSynthetic(map))
+        Ok(LocalInitializer::ComponentSynthetic(map, ty))
     }
 
     fn kind_to_item(
