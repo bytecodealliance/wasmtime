@@ -10,7 +10,7 @@ use fxprof_processed_profile::{
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use wasmtime_environ::demangle_function_name;
+use wasmtime_environ::demangle_function_name_or_index;
 use wasmtime_runtime::Backtrace;
 
 // TODO: collect more data
@@ -195,10 +195,12 @@ fn module_symbols(name: String, compiled: &CompiledModule) -> Option<LibraryInfo
         let loc = compiled.func_loc(defined_idx);
         let func_idx = compiled.module().func_index(defined_idx);
         let mut name = String::new();
-        match compiled.func_name(func_idx) {
-            None => name = format!("wasm_function_{}", defined_idx.as_u32()),
-            Some(func_name) => demangle_function_name(&mut name, func_name).unwrap(),
-        };
+        demangle_function_name_or_index(
+            &mut name,
+            compiled.func_name(func_idx),
+            defined_idx.as_u32() as usize,
+        )
+        .unwrap();
         Symbol {
             address: loc.start,
             size: Some(loc.length),
