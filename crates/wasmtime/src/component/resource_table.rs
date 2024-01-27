@@ -88,28 +88,6 @@ impl Slot {
             Slot::Taken(_) => Err(ResourceTableError::Taken),
         }
     }
-
-    fn take(&mut self) -> Result<Box<dyn Any + Send>, ResourceTableError> {
-        let (result, replacement) = match std::mem::replace(self, Slot::Taken(TypeId::of::<()>())) {
-            Slot::Present(data) => {
-                let type_id = data.as_ref().type_id();
-                (Ok(data), Slot::Taken(type_id))
-            }
-            Slot::Taken(id) => (Err(ResourceTableError::Taken), Slot::Taken(id)),
-        };
-        *self = replacement;
-        result
-    }
-
-    fn restore(&mut self, data: Box<dyn Any + Send>) -> Result<(), ResourceTableError> {
-        let (result, replacement) = match std::mem::replace(self, Slot::Taken(TypeId::of::<()>())) {
-            Slot::Present(data) => (Err(ResourceTableError::NotTaken), Slot::Present(data)),
-            Slot::Taken(id) if id == data.as_ref().type_id() => (Ok(()), Slot::Present(data)),
-            Slot::Taken(id) => (Err(ResourceTableError::WrongType), Slot::Taken(id)),
-        };
-        *self = replacement;
-        result
-    }
 }
 
 /// This structure tracks parent and child relationships for a given table entry.
@@ -324,7 +302,7 @@ impl ResourceTable {
         if !entry.children.is_empty() {
             return Err(ResourceTableError::HasChildren);
         }
-        let data = entry.slot.take()?;
+        let data = self.take_any(key)?;
         let e = self.free_entry(key as usize);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
@@ -372,12 +350,11 @@ impl ResourceTable {
     where
         T: Any + Send + 'static,
     {
-        let entry = self.occupied_mut(resource.rep())?;
-        let data = entry.slot.take()?;
-        match data.downcast() {
+        match self.take_any(resource.rep())?.downcast() {
             Ok(data) => Ok(data),
             Err(data) => {
-                entry.slot.restore(data).expect("resource was just taken");
+                self.restore_any(resource.rep(), data)
+                    .expect("resource was just taken");
                 Err(ResourceTableError::WrongType)
             }
         }
@@ -392,9 +369,54 @@ impl ResourceTable {
     where
         T: Any + Send + 'static,
     {
-        let entry = self.occupied_mut(resource.rep())?;
-        entry.slot.restore(data)?;
-        Ok(())
+        self.restore_any(resource.rep(), data)
+    }
+
+    /// Temporarily take the resource out of the table.
+    ///
+    /// This is an advanced operation to allow mutating resources independent of
+    /// the table's mutable reference lifetime. For simple access to the resource,
+    /// try [ResourceTable::get_any_mut] instead.
+    ///
+    /// Unlike deleting the resource and pushing it back in, this method retains
+    /// the resource's index in the table and the parent/children relationships.
+    ///
+    /// While a resource is taken out, any attempt to access that resource's
+    /// index through the table returns [ResourceTableError::Taken]. It's the
+    /// caller's responsibility to put the resource back in using [ResourceTable::restore_any].
+    pub fn take_any(
+        &mut self,
+        key: u32,
+    ) -> Result<Box<dyn Any + Send + 'static>, ResourceTableError> {
+        let entry = self.occupied_mut(key)?;
+
+        let replacement: Slot = match &entry.slot {
+            Slot::Present(data) => Slot::Taken(data.as_ref().type_id()),
+            Slot::Taken(_) => return Err(ResourceTableError::Taken),
+        };
+        match std::mem::replace(&mut entry.slot, replacement) {
+            Slot::Present(data) => Ok(data),
+            Slot::Taken(_) => unreachable!(),
+        }
+    }
+
+    /// Put the resource back into the table.
+    pub fn restore_any(
+        &mut self,
+        key: u32,
+        data: Box<dyn Any + Send + 'static>,
+    ) -> Result<(), ResourceTableError> {
+        let entry = self.occupied_mut(key)?;
+
+        let replacement = match &entry.slot {
+            Slot::Taken(id) if *id == data.as_ref().type_id() => Slot::Present(data),
+            Slot::Taken(_) => return Err(ResourceTableError::WrongType),
+            Slot::Present(_) => return Err(ResourceTableError::NotTaken),
+        };
+        match std::mem::replace(&mut entry.slot, replacement) {
+            Slot::Taken(_) => Ok(()),
+            Slot::Present(_) => unreachable!(),
+        }
     }
 }
 
