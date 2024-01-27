@@ -8,15 +8,27 @@
 use crate::common::{Profile, RunCommon, RunTarget};
 
 use anyhow::{anyhow, bail, Context as _, Error, Result};
+use bytes::Bytes;
 use clap::Parser;
+use futures_util::stream::MapOk;
+use futures_util::TryStreamExt;
+use http::{Response, StatusCode};
+use http_body_util::StreamBody;
+use hyper::body::Frame;
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
 use std::ffi::OsString;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use tokio::fs::File;
+use tokio_util::io::ReaderStream;
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::preview2;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
+use wasmtime_wasi_http::io::TokioIo;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -370,9 +382,76 @@ impl RunCommand {
             } else {
                 eprintln!();
                 eprintln!("Profile written to: {path}");
-                eprintln!("View this profile at https://profiler.firefox.com/.");
+                if let Err(e) = Self::run_profile_server(path) {
+                    eprintln!("Local profile server failed: {e:#}");
+                    eprintln!("View this profile at https://profiler.firefox.com/.");
+                }
             }
         });
+    }
+
+    fn run_profile_server(path: String) -> anyhow::Result<()> {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_io()
+            .build()?;
+
+        runtime.block_on(async move {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    Ok(())
+                }
+
+                res = Self::serve_profile(path) => {
+                    res
+                }
+            }
+        })
+    }
+
+    async fn serve_profile(path: String) -> anyhow::Result<()> {
+        let sockaddr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
+        let listener = tokio::net::TcpListener::bind(sockaddr).await?;
+        // FIXME: properly url-encode the from-url
+        eprintln!(
+            "View this profile at https://profiler.firefox.com/from-url/http:%2F%2F{}/",
+            listener.local_addr()?
+        );
+        let path = Arc::new(path);
+        loop {
+            let (stream, _) = listener.accept().await?;
+            let io = TokioIo::new(stream);
+            let path = path.clone();
+            tokio::task::spawn(async move {
+                let service = service_fn(|_req| Self::serve_file(&path));
+                if let Err(e) = http1::Builder::new()
+                    .keep_alive(true)
+                    .serve_connection(io, service)
+                    .await
+                {
+                    eprintln!("incoming connection error: {e:?}");
+                }
+            });
+        }
+    }
+
+    async fn serve_file(
+        path: &str,
+    ) -> anyhow::Result<
+        Response<Box<StreamBody<MapOk<ReaderStream<File>, impl Fn(Bytes) -> Frame<Bytes>>>>>,
+    > {
+        let file = File::open(path).await?;
+        let reader_stream = tokio_util::io::ReaderStream::new(file);
+        let stream_body = Box::new(StreamBody::new(reader_stream.map_ok(Frame::data)));
+        let mut response = Response::builder()
+            .status(StatusCode::OK)
+            .body(stream_body)
+            .unwrap();
+        // FIXME: only offer CORS header if a XSRF token is present in the request path
+        response.headers_mut().insert(
+            http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            http::header::HeaderValue::from_static("*"),
+        );
+        Ok(response)
     }
 
     fn load_main_module(
