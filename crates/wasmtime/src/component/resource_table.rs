@@ -1,5 +1,5 @@
 use super::Resource;
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::collections::BTreeSet;
 
 #[derive(Debug)]
@@ -64,69 +64,51 @@ impl Entry {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-struct SlotIdentity(Option<std::ptr::NonNull<dyn Any + Send>>);
-
-// SAFETY: the pointer is never dereferenced.
-unsafe impl Send for SlotIdentity {}
-
-impl SlotIdentity {
-    fn from(data: &Box<dyn Any + Send>) -> SlotIdentity {
-        let as_const = data.as_ref() as *const (dyn Any + Send);
-        let as_mut = as_const as *mut (dyn Any + Send);
-        Self(std::ptr::NonNull::new(as_mut))
-    }
-
-    fn none() -> SlotIdentity {
-        Self(None)
-    }
-}
-
 #[derive(Debug)]
 enum Slot {
     /// The resource is present in the table, ready for use.
     Present(Box<dyn Any + Send>),
-    /// The resource is temporarily leased out for external mutation.
-    /// To ensure we're getting back the same resource as the one we've handed
-    /// out, we remember the raw address of the box and check for pointer
-    /// equality on restore.
-    LeasedOut(SlotIdentity),
+    /// The resource is temporarily taken out for external mutation.
+    /// To ensure we're getting back the same type of resource as the one we've
+    /// handed out, we remember the TypeId of the data and validate it on restore.
+    Taken(TypeId),
 }
 
 impl Slot {
     fn get(&self) -> Result<&(dyn Any + Send + 'static), ResourceTableError> {
         match self {
             Slot::Present(data) => Ok(data.as_ref()),
-            Slot::LeasedOut(_) => Err(ResourceTableError::Taken),
+            Slot::Taken(_) => Err(ResourceTableError::Taken),
         }
     }
 
     fn get_mut(&mut self) -> Result<&mut (dyn Any + Send + 'static), ResourceTableError> {
         match self {
             Slot::Present(data) => Ok(data.as_mut()),
-            Slot::LeasedOut(_) => Err(ResourceTableError::Taken),
+            Slot::Taken(_) => Err(ResourceTableError::Taken),
         }
     }
 
     fn take(&mut self) -> Result<Box<dyn Any + Send>, ResourceTableError> {
-        match std::mem::replace(self, Slot::LeasedOut(SlotIdentity::none())) {
+        let (result, replacement) = match std::mem::replace(self, Slot::Taken(TypeId::of::<()>())) {
             Slot::Present(data) => {
-                *self = Slot::LeasedOut(SlotIdentity::from(&data));
-                Ok(data)
+                let type_id = data.as_ref().type_id();
+                (Ok(data), Slot::Taken(type_id))
             }
-            Slot::LeasedOut(_) => Err(ResourceTableError::Taken),
-        }
+            Slot::Taken(id) => (Err(ResourceTableError::Taken), Slot::Taken(id)),
+        };
+        *self = replacement;
+        result
     }
 
     fn restore(&mut self, data: Box<dyn Any + Send>) -> Result<(), ResourceTableError> {
-        match std::mem::replace(self, Slot::LeasedOut(SlotIdentity::none())) {
-            Slot::Present(_) => Err(ResourceTableError::NotTaken),
-            Slot::LeasedOut(id) if id == SlotIdentity::from(&data) => {
-                *self = Slot::Present(data);
-                Ok(())
-            }
-            Slot::LeasedOut(_) => Err(ResourceTableError::WrongType),
-        }
+        let (result, replacement) = match std::mem::replace(self, Slot::Taken(TypeId::of::<()>())) {
+            Slot::Present(data) => (Err(ResourceTableError::NotTaken), Slot::Present(data)),
+            Slot::Taken(id) if id == data.as_ref().type_id() => (Ok(()), Slot::Present(data)),
+            Slot::Taken(id) => (Err(ResourceTableError::WrongType), Slot::Taken(id)),
+        };
+        *self = replacement;
+        result
     }
 }
 
@@ -164,60 +146,6 @@ impl TableEntry {
     fn remove_child(&mut self, child: u32) {
         let was_removed = self.children.remove(&child);
         debug_assert!(was_removed);
-    }
-}
-
-/// Represents temporary ownership of an entry in the [ResourceTable].
-/// For more information, see [ResourceTable::take].
-#[must_use]
-#[derive(Debug)]
-pub struct Lease<T: 'static>(Resource<T>, Box<T>);
-
-impl<T> Lease<T> {
-    fn new(resource: Resource<T>, data: Box<T>) -> Self {
-        Self(resource, data)
-    }
-
-    fn destruct(self) -> (Resource<T>, Box<T>) {
-        (self.0, self.1)
-    }
-}
-
-impl<T> AsRef<T> for Lease<T> {
-    fn as_ref(&self) -> &T {
-        self.1.as_ref()
-    }
-}
-
-impl<T> AsMut<T> for Lease<T> {
-    fn as_mut(&mut self) -> &mut T {
-        self.1.as_mut()
-    }
-}
-
-impl<T> std::borrow::Borrow<T> for Lease<T> {
-    fn borrow(&self) -> &T {
-        self.as_ref()
-    }
-}
-
-impl<T> std::borrow::BorrowMut<T> for Lease<T> {
-    fn borrow_mut(&mut self) -> &mut T {
-        self.as_mut()
-    }
-}
-
-impl<T> std::ops::Deref for Lease<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.as_ref()
-    }
-}
-
-impl<T> std::ops::DerefMut for Lease<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.as_mut()
     }
 }
 
@@ -437,17 +365,17 @@ impl ResourceTable {
     /// Unlike deleting the resource and pushing it back in, this method retains
     /// the resource's index in the table and the parent/children relationships.
     ///
-    /// While a resource is leased out, any attempt to access that resource's
+    /// While a resource is taken out, any attempt to access that resource's
     /// index through the table returns [ResourceTableError::Taken]. It's the
     /// caller's responsibility to put the resource back in using [ResourceTable::restore].
-    pub fn take<T>(&mut self, resource: Resource<T>) -> Result<Lease<T>, ResourceTableError>
+    pub fn take<T>(&mut self, resource: &Resource<T>) -> Result<Box<T>, ResourceTableError>
     where
         T: Any + Send + 'static,
     {
         let entry = self.occupied_mut(resource.rep())?;
         let data = entry.slot.take()?;
         match data.downcast() {
-            Ok(data) => Ok(Lease::new(resource, data)),
+            Ok(data) => Ok(data),
             Err(data) => {
                 entry.slot.restore(data).expect("resource was just taken");
                 Err(ResourceTableError::WrongType)
@@ -455,16 +383,18 @@ impl ResourceTable {
         }
     }
 
-    /// Put the resource back into the table. This returns the resource handle
-    /// originally passed to [ResourceTable::take].
-    pub fn restore<T>(&mut self, lease: Lease<T>) -> Result<Resource<T>, ResourceTableError>
+    /// Put the resource back into the table.
+    pub fn restore<T>(
+        &mut self,
+        resource: &Resource<T>,
+        data: Box<T>,
+    ) -> Result<(), ResourceTableError>
     where
         T: Any + Send + 'static,
     {
-        let (resource, data) = lease.destruct();
         let entry = self.occupied_mut(resource.rep())?;
         entry.slot.restore(data)?;
-        Ok(resource)
+        Ok(())
     }
 }
 
@@ -505,37 +435,22 @@ fn test_free_list() {
 }
 
 #[test]
-fn test_slot_identity() {
-    let a: Box<dyn Any + Send> = Box::new(42u32);
-    let b: Box<dyn Any + Send> = Box::new(42u32);
-
-    assert_eq!(SlotIdentity::from(&a), SlotIdentity::from(&a));
-    assert_ne!(SlotIdentity::from(&a), SlotIdentity::from(&b));
-}
-
-#[test]
-fn test_slot() {
-    let mut a = Slot::Present(Box::new(42u32));
-    let _ = a.get();
-    let _ = a.get_mut();
-    let a_data = a.take().unwrap();
-    assert_eq!(*a_data.downcast_ref::<u32>().unwrap(), 42u32);
-    a.restore(a_data).unwrap();
-    let _ = a.get();
-    let _ = a.get_mut();
-}
-
-#[test]
 fn test_take_restore() {
     let mut table = ResourceTable::new();
-    let a = table.push(()).unwrap();
-    let a_rep = a.rep();
-    let a_bad: Resource<u32> = Resource::new_borrow(a_rep);
+    let a_u32: Resource<u32> = table.push(42).unwrap();
+    let a_f64: Resource<f64> = Resource::new_borrow(a_u32.rep());
 
-    let l = table.take(a).unwrap();
+    table.take(&a_u32).unwrap();
 
-    assert!(matches!(table.get(&a_bad), Err(ResourceTableError::Taken)));
+    assert!(matches!(table.get(&a_f64), Err(ResourceTableError::Taken)));
 
-    let a = table.restore(l).unwrap();
-    assert_eq!(a.rep(), a_rep);
+    assert!(matches!(
+        table.restore(&a_f64, Box::new(42f64)),
+        Err(ResourceTableError::WrongType)
+    ));
+    table.restore(&a_u32, Box::new(42u32)).unwrap();
+    assert!(matches!(
+        table.restore(&a_u32, Box::new(42u32)),
+        Err(ResourceTableError::NotTaken)
+    ));
 }

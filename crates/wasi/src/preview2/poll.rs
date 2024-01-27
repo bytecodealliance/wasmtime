@@ -7,7 +7,7 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use wasmtime::component::{Lease, Resource, ResourceTable};
+use wasmtime::component::{Resource, ResourceTable};
 
 /// A host representation of the `wasi:io/poll.pollable` resource.
 ///
@@ -113,15 +113,12 @@ pub fn subscribe<T: Pollable>(
     table: &mut ResourceTable,
     resource: &Resource<T>,
 ) -> Result<Resource<PollableResource>> {
-    let resource_rep = resource.rep();
+    let resource_clone = Resource::<T>::new_borrow(resource.rep());
     let pollable = PollableResource::new(Box::new(poll_ready_fn(move |cx, view| {
-        let mut parent = view
-            .table()
-            .take(Resource::<T>::new_borrow(resource_rep))
-            .expect("parent to exist");
+        let mut parent = view.table().take(&resource_clone).expect("parent to exist");
         let poll = parent.poll_ready(cx, view);
         view.table()
-            .restore(parent)
+            .restore(&resource_clone, parent)
             .expect("parent to still be taken");
         poll
     })));
@@ -149,7 +146,8 @@ impl<T: WasiView> poll::Host for T {
         type PollableRep = u32;
         type ReadylistIndex = u32;
         struct PollEntry {
-            pollable: Lease<PollableResource>,
+            resource: Resource<PollableResource>,
+            pollable: Box<PollableResource>,
             input_indexes: SmallVec<[ReadylistIndex; 1]>,
         }
 
@@ -161,7 +159,8 @@ impl<T: WasiView> poll::Host for T {
             match entries.entry(pollable.rep()) {
                 Entry::Vacant(v) => {
                     v.insert(PollEntry {
-                        pollable: table.take(pollable)?,
+                        resource: Resource::new_borrow(pollable.rep()),
+                        pollable: table.take(&pollable)?,
                         input_indexes: smallvec![input_index],
                     });
                 }
@@ -193,7 +192,7 @@ impl<T: WasiView> poll::Host for T {
 
         let table = self.table();
         for entry in entries.into_values() {
-            table.restore(entry.pollable)?;
+            table.restore(&entry.resource, entry.pollable)?;
         }
 
         Ok(results)
@@ -202,21 +201,21 @@ impl<T: WasiView> poll::Host for T {
 
 #[async_trait::async_trait]
 impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
-    async fn block(&mut self, pollable: Resource<PollableResource>) -> Result<()> {
-        let mut pollable = self.table().take(pollable)?;
+    async fn block(&mut self, resource: Resource<PollableResource>) -> Result<()> {
+        let mut pollable = self.table().take(&resource)?;
         futures::future::poll_fn(|cx| pollable.inner.poll_ready(cx, self)).await;
-        self.table().restore(pollable)?;
+        self.table().restore(&resource, pollable)?;
         Ok(())
     }
-    async fn ready(&mut self, pollable: Resource<PollableResource>) -> Result<bool> {
-        let mut pollable = self.table().take(pollable)?;
+    async fn ready(&mut self, resource: Resource<PollableResource>) -> Result<bool> {
+        let mut pollable = self.table().take(&resource)?;
         let mut cx = Context::from_waker(futures::task::noop_waker_ref());
         let poll = pollable.inner.poll_ready(&mut cx, self);
-        self.table().restore(pollable)?;
+        self.table().restore(&resource, pollable)?;
         Ok(poll.is_ready())
     }
-    fn drop(&mut self, pollable: Resource<PollableResource>) -> Result<()> {
-        self.table().delete(pollable)?;
+    fn drop(&mut self, resource: Resource<PollableResource>) -> Result<()> {
+        self.table().delete(resource)?;
         Ok(())
     }
 }
