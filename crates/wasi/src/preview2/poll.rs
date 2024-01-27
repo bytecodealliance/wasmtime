@@ -120,7 +120,9 @@ pub fn subscribe<T: Pollable>(
             .take(Resource::<T>::new_borrow(resource_rep))
             .expect("parent to exist");
         let poll = parent.poll_ready(cx, view);
-        view.table().restore(parent);
+        view.table()
+            .restore(parent)
+            .expect("parent to still be taken");
         poll
     })));
     Ok(table.push_child(pollable, &resource)?)
@@ -191,7 +193,7 @@ impl<T: WasiView> poll::Host for T {
 
         let table = self.table();
         for entry in entries.into_values() {
-            table.restore(entry.pollable);
+            table.restore(entry.pollable)?;
         }
 
         Ok(results)
@@ -203,14 +205,14 @@ impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
     async fn block(&mut self, pollable: Resource<PollableResource>) -> Result<()> {
         let mut pollable = self.table().take(pollable)?;
         futures::future::poll_fn(|cx| pollable.inner.poll_ready(cx, self)).await;
-        self.table().restore(pollable);
+        self.table().restore(pollable)?;
         Ok(())
     }
     async fn ready(&mut self, pollable: Resource<PollableResource>) -> Result<bool> {
         let mut pollable = self.table().take(pollable)?;
         let mut cx = Context::from_waker(futures::task::noop_waker_ref());
         let poll = pollable.inner.poll_ready(&mut cx, self);
-        self.table().restore(pollable);
+        self.table().restore(pollable)?;
         Ok(poll.is_ready())
     }
     fn drop(&mut self, pollable: Resource<PollableResource>) -> Result<()> {

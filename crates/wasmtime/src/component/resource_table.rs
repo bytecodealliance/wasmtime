@@ -14,6 +14,11 @@ pub enum ResourceTableError {
     /// Resource cannot be deleted because child resources exist in the table. Consult wit docs for
     /// the particular resource to see which methods may return child resources.
     HasChildren,
+    /// Resource has been temporarily taken from the table.
+    Taken,
+    /// Resource is not taken. This can happen when attempting to restore a resource
+    /// that has already been restored, or was never taken in the first place.
+    NotTaken,
 }
 
 impl std::fmt::Display for ResourceTableError {
@@ -23,6 +28,8 @@ impl std::fmt::Display for ResourceTableError {
             Self::NotPresent => write!(f, "resource not present"),
             Self::WrongType => write!(f, "resource is of another type"),
             Self::HasChildren => write!(f, "resource has children"),
+            Self::Taken => write!(f, "resource is taken"),
+            Self::NotTaken => write!(f, "resource is not taken"),
         }
     }
 }
@@ -87,41 +94,38 @@ enum Slot {
 }
 
 impl Slot {
-    fn unwrap_ref(&self) -> &(dyn Any + Send + 'static) {
+    fn get(&self) -> Result<&(dyn Any + Send + 'static), ResourceTableError> {
         match self {
-            Slot::Present(data) => data.as_ref(),
-            Slot::LeasedOut(_) => panic!("taken"),
+            Slot::Present(data) => Ok(data.as_ref()),
+            Slot::LeasedOut(_) => Err(ResourceTableError::Taken),
         }
     }
 
-    fn unwrap_mut(&mut self) -> &mut (dyn Any + Send + 'static) {
+    fn get_mut(&mut self) -> Result<&mut (dyn Any + Send + 'static), ResourceTableError> {
         match self {
-            Slot::Present(data) => data.as_mut(),
-            Slot::LeasedOut(_) => panic!("taken"),
+            Slot::Present(data) => Ok(data.as_mut()),
+            Slot::LeasedOut(_) => Err(ResourceTableError::Taken),
         }
     }
 
-    fn take(&mut self) -> Box<dyn Any + Send> {
+    fn take(&mut self) -> Result<Box<dyn Any + Send>, ResourceTableError> {
         match std::mem::replace(self, Slot::LeasedOut(SlotIdentity::none())) {
             Slot::Present(data) => {
                 *self = Slot::LeasedOut(SlotIdentity::from(&data));
-                data
+                Ok(data)
             }
-            Slot::LeasedOut(_) => panic!("already taken"),
+            Slot::LeasedOut(_) => Err(ResourceTableError::Taken),
         }
     }
 
-    fn restore(&mut self, data: Box<dyn Any + Send>) {
+    fn restore(&mut self, data: Box<dyn Any + Send>) -> Result<(), ResourceTableError> {
         match std::mem::replace(self, Slot::LeasedOut(SlotIdentity::none())) {
-            Slot::Present(_) => panic!("already present"),
-            Slot::LeasedOut(id) => {
-                assert_eq!(
-                    id,
-                    SlotIdentity::from(&data),
-                    "expecting different resource"
-                );
+            Slot::Present(_) => Err(ResourceTableError::NotTaken),
+            Slot::LeasedOut(id) if id == SlotIdentity::from(&data) => {
                 *self = Slot::Present(data);
+                Ok(())
             }
+            Slot::LeasedOut(_) => Err(ResourceTableError::WrongType),
         }
     }
 }
@@ -165,41 +169,29 @@ impl TableEntry {
 
 /// Represents temporary ownership of an entry in the [ResourceTable].
 /// For more information, see [ResourceTable::take].
-///
-/// # Panics
-/// To prevent silent memory leaks, dropping a lease without manually handing it
-/// back using [ResourceTable::restore] is considered a logic error and panics.
 #[must_use]
 #[derive(Debug)]
-pub struct Lease<T: 'static>(Option<(Resource<T>, Box<T>)>);
+pub struct Lease<T: 'static>(Resource<T>, Box<T>);
 
 impl<T> Lease<T> {
     fn new(resource: Resource<T>, data: Box<T>) -> Self {
-        Self(Some((resource, data)))
+        Self(resource, data)
     }
 
-    fn destruct(mut self) -> (Resource<T>, Box<T>) {
-        self.0.take().unwrap()
-    }
-}
-
-impl<T> Drop for Lease<T> {
-    fn drop(&mut self) {
-        if self.0.is_some() && !std::thread::panicking() {
-            panic!("lease dropped unexpectedly")
-        }
+    fn destruct(self) -> (Resource<T>, Box<T>) {
+        (self.0, self.1)
     }
 }
 
 impl<T> AsRef<T> for Lease<T> {
     fn as_ref(&self) -> &T {
-        &self.0.as_ref().unwrap().1
+        self.1.as_ref()
     }
 }
 
 impl<T> AsMut<T> for Lease<T> {
     fn as_mut(&mut self) -> &mut T {
-        &mut self.0.as_mut().unwrap().1
+        self.1.as_mut()
     }
 }
 
@@ -366,7 +358,7 @@ impl ResourceTable {
 
     fn get_(&self, key: u32) -> Result<&dyn Any, ResourceTableError> {
         let r = self.occupied(key)?;
-        Ok(r.slot.unwrap_ref())
+        Ok(r.slot.get()?)
     }
 
     /// Get an mutable reference to a resource of a given type at a given
@@ -383,7 +375,7 @@ impl ResourceTable {
     /// Returns the raw `Any` at the `key` index provided.
     pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, ResourceTableError> {
         let r = self.occupied_mut(key)?;
-        Ok(r.slot.unwrap_mut())
+        Ok(r.slot.get_mut()?)
     }
 
     /// Same as `delete`, but typed
@@ -404,7 +396,7 @@ impl ResourceTable {
         if !entry.children.is_empty() {
             return Err(ResourceTableError::HasChildren);
         }
-        let data = entry.slot.take();
+        let data = entry.slot.take()?;
         let e = self.free_entry(key as usize);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
@@ -417,18 +409,22 @@ impl ResourceTable {
         Ok(data)
     }
 
-    /// Iterate over all children belonging to the provided parent
+    /// Iterate over all children belonging to the provided parent.
+    /// This returns an iterator of results, because some children may be taken.
     pub fn iter_children<T>(
         &self,
         parent: &Resource<T>,
-    ) -> Result<impl Iterator<Item = &(dyn Any + Send)>, ResourceTableError>
+    ) -> Result<
+        impl Iterator<Item = Result<&(dyn Any + Send), ResourceTableError>>,
+        ResourceTableError,
+    >
     where
         T: 'static,
     {
         let parent_entry = self.occupied(parent.rep())?;
         Ok(parent_entry.children.iter().map(|child_index| {
             let child = self.occupied(*child_index).expect("missing child");
-            child.slot.unwrap_ref()
+            child.slot.get()
         }))
     }
 
@@ -441,20 +437,19 @@ impl ResourceTable {
     /// Unlike deleting the resource and pushing it back in, this method retains
     /// the resource's index in the table and the parent/children relationships.
     ///
-    /// # Panics
-    /// - It's the caller's responsibility to put the resource back using
-    ///   [ResourceTable::restore]. Dropping the Lease without doing so will panic.
-    /// - While a resource is leased out, any attempt to access that resource's
-    ///   index through the table is considered a logic error and will panic.
+    /// While a resource is leased out, any attempt to access that resource's
+    /// index through the table returns [ResourceTableError::Taken]. It's the
+    /// caller's responsibility to put the resource back in using [ResourceTable::restore].
     pub fn take<T>(&mut self, resource: Resource<T>) -> Result<Lease<T>, ResourceTableError>
     where
         T: Any + Send + 'static,
     {
         let entry = self.occupied_mut(resource.rep())?;
-        match entry.slot.take().downcast() {
+        let data = entry.slot.take()?;
+        match data.downcast() {
             Ok(data) => Ok(Lease::new(resource, data)),
             Err(data) => {
-                entry.slot.restore(data);
+                entry.slot.restore(data).expect("resource was just taken");
                 Err(ResourceTableError::WrongType)
             }
         }
@@ -462,17 +457,14 @@ impl ResourceTable {
 
     /// Put the resource back into the table. This returns the resource handle
     /// originally passed to [ResourceTable::take].
-    ///
-    /// # Panics
-    /// Panics when the provided lease did not originate from this table.
-    pub fn restore<T>(&mut self, lease: Lease<T>) -> Resource<T>
+    pub fn restore<T>(&mut self, lease: Lease<T>) -> Result<Resource<T>, ResourceTableError>
     where
         T: Any + Send + 'static,
     {
         let (resource, data) = lease.destruct();
-        let entry = self.occupied_mut(resource.rep()).expect("wrong table");
-        entry.slot.restore(data);
-        resource
+        let entry = self.occupied_mut(resource.rep())?;
+        entry.slot.restore(data)?;
+        Ok(resource)
     }
 }
 
@@ -524,13 +516,13 @@ fn test_slot_identity() {
 #[test]
 fn test_slot() {
     let mut a = Slot::Present(Box::new(42u32));
-    let _ = a.unwrap_ref();
-    let _ = a.unwrap_mut();
-    let a_data = a.take();
+    let _ = a.get();
+    let _ = a.get_mut();
+    let a_data = a.take().unwrap();
     assert_eq!(*a_data.downcast_ref::<u32>().unwrap(), 42u32);
-    a.restore(a_data);
-    let _ = a.unwrap_ref();
-    let _ = a.unwrap_mut();
+    a.restore(a_data).unwrap();
+    let _ = a.get();
+    let _ = a.get_mut();
 }
 
 #[test]
@@ -538,48 +530,12 @@ fn test_take_restore() {
     let mut table = ResourceTable::new();
     let a = table.push(()).unwrap();
     let a_rep = a.rep();
+    let a_bad: Resource<u32> = Resource::new_borrow(a_rep);
+
     let l = table.take(a).unwrap();
-    table.push(()).unwrap();
-    let a = table.restore(l);
+
+    assert!(matches!(table.get(&a_bad), Err(ResourceTableError::Taken)));
+
+    let a = table.restore(l).unwrap();
     assert_eq!(a.rep(), a_rep);
-}
-
-#[test]
-#[should_panic]
-fn test_get_taken() {
-    let mut table = ResourceTable::new();
-    let a = table.push(42u32).unwrap();
-    let a_bad: Resource<u32> = Resource::new_borrow(a.rep());
-    let _ = table.take(a).unwrap();
-
-    // Should panic:
-    let _ = table.get(&a_bad);
-}
-
-#[test]
-#[should_panic]
-fn test_restore_wrong_table() {
-    let mut table_a = ResourceTable::new();
-    let mut table_b = ResourceTable::new();
-
-    let a = table_a.push(42u32).unwrap();
-    let b = table_b.push(42u32).unwrap();
-
-    let lease_a = table_a.take(a).unwrap();
-    let lease_b = table_b.take(b).unwrap();
-
-    // Should panic:
-    table_a.restore(lease_b);
-    table_b.restore(lease_a);
-}
-
-#[test]
-#[should_panic]
-fn test_lease_drop() {
-    let mut table = ResourceTable::new();
-    let a = table.push(()).unwrap();
-    let lease_a = table.take(a).unwrap();
-
-    // Should panic:
-    drop(lease_a)
 }
