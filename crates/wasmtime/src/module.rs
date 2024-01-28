@@ -369,7 +369,7 @@ impl Module {
     /// entire lifetime of the [`Module`] returned. Any changes to the file on
     /// disk may change future instantiations of the module to be incorrect.
     /// This is because the file is mapped into memory and lazily loaded pages
-    /// reflect the current state of the file, not necessarily the origianl
+    /// reflect the current state of the file, not necessarily the original
     /// state of the file.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
@@ -1060,7 +1060,7 @@ impl Module {
     /// after an entry's offset, but before the next entry's offset, is
     /// considered to map to the same Wasm binary offset as the original
     /// entry. For example, the address map will not contain the following
-    /// sequnce of entries:
+    /// sequence of entries:
     ///
     /// ```ignore
     /// [
@@ -1101,7 +1101,7 @@ impl Module {
 
     /// Get the locations of functions in this module's `.text` section.
     ///
-    /// Each function's locartion is a (`.text` section offset, length) pair.
+    /// Each function's location is a (`.text` section offset, length) pair.
     pub fn function_locations<'a>(&'a self) -> impl ExactSizeIterator<Item = (usize, usize)> + 'a {
         self.compiled_module().finished_functions().map(|(f, _)| {
             let loc = self.compiled_module().func_loc(f);
