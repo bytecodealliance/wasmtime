@@ -2,14 +2,16 @@ use crate::linker::{Definition, DefinitionType};
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
-    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory, StoreContext,
-    StoreContextMut, Table, TypedFunc,
+    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
+    StoreContext, StoreContextMut, Table, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
+use wasmtime_environ::{
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex,
+};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
     VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext, VMTableImport,
@@ -395,8 +397,16 @@ impl Instance {
         let InstanceData { exports, id, .. } = &store[self.0];
         if exports.iter().any(|e| e.is_none()) {
             let module = Arc::clone(store.instance(*id).module());
+            let data = &store[self.0];
+            let id = data.id;
+
             for name in module.exports.keys() {
-                self._get_export(store, name);
+                let instance = store.instance(id);
+                if let Some((export_name_index, _, &entity)) =
+                    instance.module().exports.get_full(name)
+                {
+                    self._get_export(store, entity, export_name_index);
+                }
             }
         }
 
@@ -427,26 +437,60 @@ impl Instance {
     /// instantiating a module faster, but also means this method requires a
     /// mutable context.
     pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
-        self._get_export(store.as_context_mut().0, name)
+        let store = store.as_context_mut().0;
+        let data = &store[self.0];
+        let instance = store.instance(data.id);
+        let (export_name_index, _, &entity) = instance.module().exports.get_full(name)?;
+        self._get_export(store, entity, export_name_index)
     }
 
-    fn _get_export(&self, store: &mut StoreOpaque, name: &str) -> Option<Extern> {
+    /// Looks up an exported [`Extern`] value by a [`ModuleExport`] value.
+    ///
+    /// This is similar to [`Instance::get_export`] but uses a [`ModuleExport`] value to avoid
+    /// string lookups where possible. [`ModuleExport`]s can be obtained by calling
+    /// [`Module::get_export_index`] on the [`Module`] that this instance was instantiated with.
+    ///
+    /// This method will search the module for an export with a matching entity index and return
+    /// the value, if found.
+    ///
+    /// Returns `None` if there was no export with a matching entity index.
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_module_export(
+        &self,
+        mut store: impl AsContextMut,
+        export: &ModuleExport,
+    ) -> Option<Extern> {
+        let store = store.as_context_mut().0;
+
+        // Verify the `ModuleExport` matches the module used in this instance.
+        if self._module(store).id() != export.module {
+            return None;
+        }
+
+        self._get_export(store, export.entity, export.export_name_index)
+    }
+
+    fn _get_export(
+        &self,
+        store: &mut StoreOpaque,
+        entity: EntityIndex,
+        export_name_index: usize,
+    ) -> Option<Extern> {
         // Instantiated instances will lazily fill in exports, so we process
         // all that lazy logic here.
         let data = &store[self.0];
 
-        let instance = store.instance(data.id);
-        let (i, _, &index) = instance.module().exports.get_full(name)?;
-        if let Some(export) = &data.exports[i] {
+        if let Some(export) = &data.exports[export_name_index] {
             return Some(export.clone());
         }
 
-        let id = data.id;
-        let instance = store.instance_mut(id); // reborrow the &mut Instancehandle
+        let instance = store.instance_mut(data.id); // Reborrow the &mut InstanceHandle
         let item =
-            unsafe { Extern::from_wasmtime_export(instance.get_export_by_index(index), store) };
+            unsafe { Extern::from_wasmtime_export(instance.get_export_by_index(entity), store) };
         let data = &mut store[self.0];
-        data.exports[i] = Some(item.clone());
+        data.exports[export_name_index] = Some(item.clone());
         Some(item)
     }
 

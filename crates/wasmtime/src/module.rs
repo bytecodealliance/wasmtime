@@ -17,8 +17,8 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment,
-    ModuleTypes, ObjectKind, VMOffsets,
+    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr,
+    ModuleEnvironment, ModuleTypes, ObjectKind, VMOffsets,
 };
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
@@ -369,7 +369,7 @@ impl Module {
     /// entire lifetime of the [`Module`] returned. Any changes to the file on
     /// disk may change future instantiations of the module to be incorrect.
     /// This is because the file is mapped into memory and lazily loaded pages
-    /// reflect the current state of the file, not necessarily the origianl
+    /// reflect the current state of the file, not necessarily the original
     /// state of the file.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
@@ -897,6 +897,25 @@ impl Module {
         ))
     }
 
+    /// Looks up an export in this [`Module`] by name to get its index.
+    ///
+    /// This function will return the index of an export with the given name. This can be useful
+    /// to avoid the cost of looking up the export by name multiple times. Instead the
+    /// [`ModuleExport`] can be stored and used to look up the export on the
+    /// [`Instance`](crate::Instance) later.
+    pub fn get_export_index(&self, name: &str) -> Option<ModuleExport> {
+        let compiled_module = self.compiled_module();
+        let module = compiled_module.module();
+        module
+            .exports
+            .get_full(name)
+            .map(|(export_name_index, _, &entity)| ModuleExport {
+                module: self.id(),
+                entity,
+                export_name_index,
+            })
+    }
+
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
@@ -1041,7 +1060,7 @@ impl Module {
     /// after an entry's offset, but before the next entry's offset, is
     /// considered to map to the same Wasm binary offset as the original
     /// entry. For example, the address map will not contain the following
-    /// sequnce of entries:
+    /// sequence of entries:
     ///
     /// ```ignore
     /// [
@@ -1082,7 +1101,7 @@ impl Module {
 
     /// Get the locations of functions in this module's `.text` section.
     ///
-    /// Each function's locartion is a (`.text` section offset, length) pair.
+    /// Each function's location is a (`.text` section offset, length) pair.
     pub fn function_locations<'a>(&'a self) -> impl ExactSizeIterator<Item = (usize, usize)> + 'a {
         self.compiled_module().finished_functions().map(|(f, _)| {
             let loc = self.compiled_module().func_loc(f);
@@ -1115,6 +1134,17 @@ impl Drop for ModuleInner {
             .allocator()
             .purge_module(self.module.unique_id());
     }
+}
+
+/// Describes the location of an export in a module.
+#[derive(Copy, Clone)]
+pub struct ModuleExport {
+    /// The module that this export is defined in.
+    pub(crate) module: CompiledModuleId,
+    /// A raw index into the wasm module.
+    pub(crate) entity: EntityIndex,
+    /// The index of the export name.
+    pub(crate) export_name_index: usize,
 }
 
 fn _assert_send_sync() {

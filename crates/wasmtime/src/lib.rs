@@ -454,7 +454,7 @@ pub use crate::instantiate::CompiledModule;
 pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
-pub use crate::module::Module;
+pub use crate::module::{Module, ModuleExport};
 #[cfg(feature = "profiling")]
 pub use crate::profiling::GuestProfiler;
 pub use crate::r#ref::ExternRef;
