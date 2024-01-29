@@ -97,8 +97,7 @@ fn check_winml_artifacts_are_available() -> Result<()> {
         fs::create_dir(&artifacts_dir)?;
     }
     const MODEL_URL: &str="https://github.com/onnx/models/raw/5faef4c33eba0395177850e1e31c4a6a9e634c82/vision/classification/mobilenet/model/mobilenetv2-12.onnx";
-    const IMG_URL: &str="https://github.com/microsoft/Windows-Machine-Learning/blob/master/SharedContent/media/kitten_224.png?raw=true";
-    for (from, to) in [(MODEL_URL, "mobilenet.onnx"), (IMG_URL, "kitten.png")] {
+    for (from, to) in [(MODEL_URL, "mobilenet.onnx")] {
         let local_path = artifacts_dir.join(to);
         if !local_path.is_file() {
             download(&from, &local_path).with_context(|| "unable to retrieve test artifact")?;
@@ -106,6 +105,12 @@ fn check_winml_artifacts_are_available() -> Result<()> {
             println!("> using cached artifact: {}", local_path.display())
         }
     }
+    // kitten.rgb is converted from https://github.com/microsoft/Windows-Machine-Learning/blob/master/SharedContent/media/kitten_224.png?raw=true.
+    let tensor_path = env::current_dir()?
+        .join("tests")
+        .join("fixtures")
+        .join("kitten.rgb");
+    fs::copy(tensor_path, artifacts_dir.join("kitten.rgb"))?;
     Ok(())
 }
 

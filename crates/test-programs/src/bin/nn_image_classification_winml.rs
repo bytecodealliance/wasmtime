@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::fs;
 use std::time::Instant;
 use wasi_nn::*;
 
@@ -13,16 +14,7 @@ pub fn main() -> Result<()> {
     println!("Created an execution context.");
 
     // Convert image to tensor data.
-    let mut tensor_data = image2tensor::convert_image_to_planar_tensor_bytes(
-        "fixture/kitten.png",
-        224,
-        224,
-        image2tensor::TensorType::F32,
-        image2tensor::ColorOrder::RGB,
-    )
-    .unwrap();
-    // The model requires values in the range of [0, 1].
-    scale(&mut tensor_data);
+    let tensor_data = fs::read("fixture/kitten.rgb")?;
     context
         .set_input(0, TensorType::F32, &[1, 3, 224, 224], &tensor_data)
         .unwrap();
@@ -40,9 +32,8 @@ pub fn main() -> Result<()> {
     context.get_output(0, &mut output_buffer[..]).unwrap();
 
     let result = sort_results(&output_buffer);
-    assert_eq!(result[0].0, 284);
-
     println!("Found results, sorted top 5: {:?}", &result[..5]);
+    assert_eq!(result[0].0, 284);
     Ok(())
 }
 
@@ -60,17 +51,6 @@ fn sort_results(buffer: &[f32]) -> Vec<InferenceResult> {
         .collect();
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     results
-}
-
-// Convert values from [0, 255] to [0, 1].
-fn scale(buffer: &mut Vec<u8>) {
-    const F32_LEN: usize = 4;
-    for i in (0..buffer.len()).step_by(F32_LEN) {
-        let mut num = f32::from_ne_bytes(buffer[i..i + F32_LEN].try_into().unwrap());
-        num /= 225.0;
-        let num_vec = num.to_ne_bytes().to_vec();
-        buffer.splice(i..i + F32_LEN, num_vec);
-    }
 }
 
 // A wrapper for class ID and match probabilities.

@@ -20,4 +20,3 @@ futures = { workspace = true, default-features = false, features = ['alloc'] }
 url = { workspace = true }
 sha2 = "0.10.2"
 base64 = "0.21.0"
-image2tensor = "0.3.1"
