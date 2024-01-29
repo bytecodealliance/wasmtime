@@ -6,7 +6,8 @@ use std::collections::{
 use wasmparser::BlockType;
 use wasmtime_environ::{
     FuncIndex, GlobalIndex, MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    TableIndex, TablePlan, TypeConvert, TypeIndex, VMOffsets, WasmFuncType, WasmHeapType, WasmType,
+    TableIndex, TablePlan, TypeConvert, TypeIndex, VMOffsets, WasmFuncType, WasmHeapType,
+    WasmValType,
 };
 
 /// Table metadata.
@@ -36,7 +37,7 @@ pub struct HeapData {
     /// base of the heap.
     pub import_from: Option<u32>,
     /// The memory type (32 or 64).
-    pub ty: WasmType,
+    pub ty: WasmValType,
 }
 
 /// A function callee.
@@ -80,9 +81,9 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     resolved_heaps: HashMap<MemoryIndex, HeapData>,
 }
 
-pub fn ptr_type_from_ptr_size(size: u8) -> WasmType {
+pub fn ptr_type_from_ptr_size(size: u8) -> WasmValType {
     (size == 8)
-        .then(|| WasmType::I64)
+        .then(|| WasmValType::I64)
         .unwrap_or_else(|| unimplemented!("Support for non-64-bit architectures"))
 }
 
@@ -103,7 +104,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 
     /// Derive the [`WasmType`] from the pointer size.
-    pub(crate) fn ptr_type(&self) -> WasmType {
+    pub(crate) fn ptr_type(&self) -> WasmValType {
         ptr_type_from_ptr_size(self.ptr_size())
     }
 
@@ -154,7 +155,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 
     /// Resolves the type and offset of a global at the given index.
-    pub fn resolve_global_type_and_offset(&self, index: GlobalIndex) -> (WasmType, u32) {
+    pub fn resolve_global_type_and_offset(&self, index: GlobalIndex) -> (WasmValType, u32) {
         let ty = self.translation.module.globals[index].wasm_ty;
         let offset = match self.translation.module.defined_global_index(index) {
             Some(defined_index) => self.vmoffsets.vmctx_vmglobal_definition(defined_index),
@@ -230,9 +231,9 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     import_from,
                     current_length_offset,
                     ty: if self.translation.module.memory_plans[index].memory.memory64 {
-                        WasmType::I64
+                        WasmValType::I64
                     } else {
-                        WasmType::I32
+                        WasmValType::I32
                     },
                 })
             }

@@ -10,9 +10,9 @@ use std::fmt;
 mod error;
 pub use error::*;
 
-/// WebAssembly value type -- equivalent of `wasmparser`'s Type.
+/// WebAssembly value type -- equivalent of `wasmparser::ValType`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum WasmType {
+pub enum WasmValType {
     /// I32 type
     I32,
     /// I64 type
@@ -27,15 +27,15 @@ pub enum WasmType {
     Ref(WasmRefType),
 }
 
-impl fmt::Display for WasmType {
+impl fmt::Display for WasmValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WasmType::I32 => write!(f, "i32"),
-            WasmType::I64 => write!(f, "i64"),
-            WasmType::F32 => write!(f, "f32"),
-            WasmType::F64 => write!(f, "f64"),
-            WasmType::V128 => write!(f, "v128"),
-            WasmType::Ref(rt) => write!(f, "{rt}"),
+            WasmValType::I32 => write!(f, "i32"),
+            WasmValType::I64 => write!(f, "i64"),
+            WasmValType::F32 => write!(f, "f32"),
+            WasmValType::F64 => write!(f, "f64"),
+            WasmValType::V128 => write!(f, "v128"),
+            WasmValType::Ref(rt) => write!(f, "{rt}"),
         }
     }
 }
@@ -105,26 +105,26 @@ impl fmt::Display for WasmHeapType {
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
-    params: Box<[WasmType]>,
+    params: Box<[WasmValType]>,
     externref_params_count: usize,
-    returns: Box<[WasmType]>,
+    returns: Box<[WasmValType]>,
     externref_returns_count: usize,
 }
 
 impl WasmFuncType {
     #[inline]
-    pub fn new(params: Box<[WasmType]>, returns: Box<[WasmType]>) -> Self {
+    pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
         let externref_params_count = params
             .iter()
             .filter(|p| match **p {
-                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
                 _ => false,
             })
             .count();
         let externref_returns_count = returns
             .iter()
             .filter(|r| match **r {
-                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
                 _ => false,
             })
             .count();
@@ -138,7 +138,7 @@ impl WasmFuncType {
 
     /// Function params types.
     #[inline]
-    pub fn params(&self) -> &[WasmType] {
+    pub fn params(&self) -> &[WasmValType] {
         &self.params
     }
 
@@ -150,7 +150,7 @@ impl WasmFuncType {
 
     /// Returns params types.
     #[inline]
-    pub fn returns(&self) -> &[WasmType] {
+    pub fn returns(&self) -> &[WasmValType] {
         &self.returns
     }
 
@@ -350,7 +350,7 @@ impl EntityType {
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Global {
     /// The Wasm type of the value stored in the global.
-    pub wasm_ty: crate::WasmType,
+    pub wasm_ty: crate::WasmValType,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
 }
@@ -463,14 +463,14 @@ pub trait TypeConvert {
     }
 
     /// Converts a wasmparser value type to a wasmtime type
-    fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmType {
+    fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmValType {
         match ty {
-            wasmparser::ValType::I32 => WasmType::I32,
-            wasmparser::ValType::I64 => WasmType::I64,
-            wasmparser::ValType::F32 => WasmType::F32,
-            wasmparser::ValType::F64 => WasmType::F64,
-            wasmparser::ValType::V128 => WasmType::V128,
-            wasmparser::ValType::Ref(t) => WasmType::Ref(self.convert_ref_type(t)),
+            wasmparser::ValType::I32 => WasmValType::I32,
+            wasmparser::ValType::I64 => WasmValType::I64,
+            wasmparser::ValType::F32 => WasmValType::F32,
+            wasmparser::ValType::F64 => WasmValType::F64,
+            wasmparser::ValType::V128 => WasmValType::V128,
+            wasmparser::ValType::Ref(t) => WasmValType::Ref(self.convert_ref_type(t)),
         }
     }
 

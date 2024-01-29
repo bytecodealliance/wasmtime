@@ -8,7 +8,7 @@ use crate::{
 use anyhow::Result;
 use smallvec::SmallVec;
 use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
-use wasmtime_environ::{PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmType, FUNCREF_MASK};
+use wasmtime_environ::{PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType, FUNCREF_MASK};
 
 mod context;
 pub(crate) use context::*;
@@ -307,7 +307,7 @@ where
     }
 
     fn spill_register_arguments(&mut self) {
-        use WasmType::*;
+        use WasmValType::*;
         self.sig
             // Skip the results base param if any; [Self::emit_body],
             // will handle spilling the results base param if it's in a register.

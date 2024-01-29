@@ -14,7 +14,7 @@ use crate::{
     CallingConvention,
 };
 use cranelift_codegen::MachLabel;
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmValType};
 
 /// Categorization of the type of the block.
 #[derive(Debug, Clone)]
@@ -22,7 +22,7 @@ pub(crate) enum BlockType {
     /// Doesn't produce or consume any values.
     Void,
     /// Produces a single value.
-    Single(WasmType),
+    Single(WasmValType),
     /// Consumes multiple values and produces multiple values.
     Func(WasmFuncType),
     /// An already resolved ABI signature.
@@ -147,7 +147,7 @@ impl BlockType {
     }
 
     /// Create a [BlockType::Single] from the given [WasmType].
-    pub fn single(ty: WasmType) -> Self {
+    pub fn single(ty: WasmValType) -> Self {
         Self::Single(ty)
     }
 

@@ -69,7 +69,7 @@ use crate::{
 };
 use smallvec::SmallVec;
 use std::borrow::Cow;
-use wasmtime_environ::{PtrSize, VMOffsets, WasmType};
+use wasmtime_environ::{PtrSize, VMOffsets, WasmValType};
 
 /// All the information needed to emit a function call.
 #[derive(Copy, Clone)]
@@ -124,11 +124,11 @@ impl FnCall {
     }
 
     /// Derive the [`ABISig`] for a particular [`Callee`].
-    fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmType) -> Cow<'_, ABISig> {
+    fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmValType) -> Cow<'_, ABISig> {
         match callee {
             Callee::Builtin(info) => Cow::Borrowed(info.sig()),
             Callee::Import(info) => {
-                let mut params: SmallVec<[WasmType; 6]> =
+                let mut params: SmallVec<[WasmValType; 6]> =
                     SmallVec::with_capacity(info.ty.params().len() + 2);
                 params.extend_from_slice(&[ptr_type, ptr_type]);
                 params.extend_from_slice(info.ty.params());

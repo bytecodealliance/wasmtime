@@ -28,7 +28,7 @@
 //! fused adapters, what arguments make their way to core wasm modules, etc.
 
 use crate::component::*;
-use crate::{EntityIndex, EntityRef, PrimaryMap, WasmType};
+use crate::{EntityIndex, EntityRef, PrimaryMap, WasmValType};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -284,7 +284,7 @@ pub struct CanonicalOptions {
 /// Same as `info::Resource`
 #[allow(missing_docs)]
 pub struct Resource {
-    pub rep: WasmType,
+    pub rep: WasmValType,
     pub dtor: Option<CoreDef>,
     pub instance: RuntimeComponentInstanceIndex,
 }

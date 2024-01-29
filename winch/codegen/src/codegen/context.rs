@@ -1,4 +1,4 @@
-use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
+use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
@@ -70,8 +70,8 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     }
 
     /// Allocate a register for the given WebAssembly type.
-    pub fn reg_for_type<M: MacroAssembler>(&mut self, ty: WasmType, masm: &mut M) -> Reg {
-        use WasmType::*;
+    pub fn reg_for_type<M: MacroAssembler>(&mut self, ty: WasmValType, masm: &mut M) -> Reg {
+        use WasmValType::*;
         match ty {
             I32 | I64 => self.reg_for_class(RegClass::Int, masm),
             F32 | F64 => self.reg_for_class(RegClass::Float, masm),
@@ -323,7 +323,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     }
 
     /// Prepares arguments for emitting a convert operation.
-    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmType, mut emit: F)
+    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmValType, mut emit: F)
     where
         F: FnMut(&mut M, Reg, Reg, OperandSize),
         M: MacroAssembler,
@@ -331,12 +331,12 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         let src = self.pop_to_reg(masm, None);
         let dst = self.reg_for_type(dst_ty, masm);
         let dst_size = match dst_ty {
-            WasmType::I32 => OperandSize::S32,
-            WasmType::I64 => OperandSize::S64,
-            WasmType::F32 => OperandSize::S32,
-            WasmType::F64 => OperandSize::S64,
-            WasmType::V128 => unreachable!(),
-            WasmType::Ref(_) => unreachable!(),
+            WasmValType::I32 => OperandSize::S32,
+            WasmValType::I64 => OperandSize::S64,
+            WasmValType::F32 => OperandSize::S32,
+            WasmValType::F64 => OperandSize::S64,
+            WasmValType::V128 => unreachable!(),
+            WasmValType::Ref(_) => unreachable!(),
         };
 
         emit(masm, dst, src.into(), dst_size);
@@ -350,7 +350,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     pub fn convert_op_with_tmp_reg<F, M>(
         &mut self,
         masm: &mut M,
-        dst_ty: WasmType,
+        dst_ty: WasmValType,
         tmp_reg_class: RegClass,
         mut emit: F,
     ) where

@@ -1,6 +1,6 @@
 use crate::{isa::reg::Reg, masm::StackSlot};
 use wasmparser::{Ieee32, Ieee64};
-use wasmtime_environ::WasmType;
+use wasmtime_environ::WasmValType;
 
 /// A typed register value used to track register values in the value
 /// stack.
@@ -9,19 +9,19 @@ pub struct TypedReg {
     /// The physical register.
     pub reg: Reg,
     /// The type associated to the physical register.
-    pub ty: WasmType,
+    pub ty: WasmValType,
 }
 
 impl TypedReg {
     /// Create a new [`TypedReg`].
-    pub fn new(ty: WasmType, reg: Reg) -> Self {
+    pub fn new(ty: WasmValType, reg: Reg) -> Self {
         Self { ty, reg }
     }
 
     /// Create an i64 [`TypedReg`].
     pub fn i64(reg: Reg) -> Self {
         Self {
-            ty: WasmType::I64,
+            ty: WasmValType::I64,
             reg,
         }
     }
@@ -29,7 +29,7 @@ impl TypedReg {
     /// Create an i32 [`TypedReg`].
     pub fn i32(reg: Reg) -> Self {
         Self {
-            ty: WasmType::I32,
+            ty: WasmValType::I32,
             reg,
         }
     }
@@ -37,7 +37,7 @@ impl TypedReg {
     /// Create an f64 [`TypedReg`].
     pub fn f64(reg: Reg) -> Self {
         Self {
-            ty: WasmType::F64,
+            ty: WasmValType::F64,
             reg,
         }
     }
@@ -45,7 +45,7 @@ impl TypedReg {
     /// Create an f32 [`TypedReg`].
     pub fn f32(reg: Reg) -> Self {
         Self {
-            ty: WasmType::F32,
+            ty: WasmValType::F32,
             reg,
         }
     }
@@ -63,14 +63,14 @@ pub struct Local {
     /// The index of the local.
     pub index: u32,
     /// The type of the local.
-    pub ty: WasmType,
+    pub ty: WasmValType,
 }
 
 /// A memory value.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Memory {
     /// The type associated with the memory offset.
-    pub ty: WasmType,
+    pub ty: WasmValType,
     /// The stack slot corresponding to the memory value.
     pub slot: StackSlot,
 }
@@ -140,17 +140,17 @@ impl Val {
     }
 
     /// Create a new Reg value.
-    pub fn reg(reg: Reg, ty: WasmType) -> Self {
+    pub fn reg(reg: Reg, ty: WasmValType) -> Self {
         Self::Reg(TypedReg { reg, ty })
     }
 
     /// Create a new Local value.
-    pub fn local(index: u32, ty: WasmType) -> Self {
+    pub fn local(index: u32, ty: WasmValType) -> Self {
         Self::Local(Local { index, ty })
     }
 
     /// Create a Memory value.
-    pub fn mem(ty: WasmType, slot: StackSlot) -> Self {
+    pub fn mem(ty: WasmValType, slot: StackSlot) -> Self {
         Self::Memory(Memory { ty, slot })
     }
 
@@ -244,12 +244,12 @@ impl Val {
     }
 
     /// Get the type of the value.
-    pub fn ty(&self) -> WasmType {
+    pub fn ty(&self) -> WasmValType {
         match self {
-            Val::I32(_) => WasmType::I32,
-            Val::I64(_) => WasmType::I64,
-            Val::F32(_) => WasmType::F32,
-            Val::F64(_) => WasmType::F64,
+            Val::I32(_) => WasmValType::I32,
+            Val::I64(_) => WasmValType::I64,
+            Val::F32(_) => WasmValType::F32,
+            Val::F64(_) => WasmValType::F64,
             Val::Reg(r) => r.ty,
             Val::Memory(m) => m.ty,
             Val::Local(l) => l.ty,
@@ -401,7 +401,7 @@ impl Stack {
 mod tests {
     use super::{Stack, Val};
     use crate::isa::reg::Reg;
-    use wasmtime_environ::WasmType;
+    use wasmtime_environ::WasmValType;
 
     #[test]
     fn test_pop_i32_const() {
@@ -409,7 +409,7 @@ mod tests {
         stack.push(Val::i32(33i32));
         assert_eq!(33, stack.pop_i32_const().unwrap());
 
-        stack.push(Val::local(10, WasmType::I32));
+        stack.push(Val::local(10, WasmValType::I32));
         assert!(stack.pop_i32_const().is_none());
     }
 
@@ -417,7 +417,7 @@ mod tests {
     fn test_pop_reg() {
         let mut stack = Stack::new();
         let reg = Reg::int(2usize);
-        stack.push(Val::reg(reg, WasmType::I32));
+        stack.push(Val::reg(reg, WasmValType::I32));
         stack.push(Val::i32(4));
 
         assert_eq!(None, stack.pop_reg());
@@ -429,8 +429,8 @@ mod tests {
     fn test_pop_named_reg() {
         let mut stack = Stack::new();
         let reg = Reg::int(2usize);
-        stack.push(Val::reg(reg, WasmType::I32));
-        stack.push(Val::reg(Reg::int(4), WasmType::I32));
+        stack.push(Val::reg(reg, WasmValType::I32));
+        stack.push(Val::reg(Reg::int(4), WasmValType::I32));
 
         assert_eq!(None, stack.pop_named_reg(reg));
         let _ = stack.pop().unwrap();

@@ -17,8 +17,8 @@ use smallvec::SmallVec;
 use wasmparser::BrTable;
 use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType, WasmType,
-    FUNCREF_INIT_BIT,
+    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType,
+    WasmValType, FUNCREF_INIT_BIT,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -598,7 +598,7 @@ where
 
     fn visit_f32_convert_i32_s(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::F32, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
                 masm.signed_convert(src, dst, OperandSize::S32, dst_size);
             });
     }
@@ -606,7 +606,7 @@ where
     fn visit_f32_convert_i32_u(&mut self) {
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::F32,
+            WasmValType::F32,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S32, dst_size);
@@ -616,7 +616,7 @@ where
 
     fn visit_f32_convert_i64_s(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::F32, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
                 masm.signed_convert(src, dst, OperandSize::S64, dst_size);
             });
     }
@@ -624,7 +624,7 @@ where
     fn visit_f32_convert_i64_u(&mut self) {
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::F32,
+            WasmValType::F32,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S64, dst_size);
@@ -634,7 +634,7 @@ where
 
     fn visit_f64_convert_i32_s(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::F64, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
                 masm.signed_convert(src, dst, OperandSize::S32, dst_size);
             });
     }
@@ -642,7 +642,7 @@ where
     fn visit_f64_convert_i32_u(&mut self) {
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::F64,
+            WasmValType::F64,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S32, dst_size);
@@ -652,7 +652,7 @@ where
 
     fn visit_f64_convert_i64_s(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::F64, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
                 masm.signed_convert(src, dst, OperandSize::S64, dst_size);
             });
     }
@@ -660,7 +660,7 @@ where
     fn visit_f64_convert_i64_u(&mut self) {
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::F64,
+            WasmValType::F64,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S64, dst_size);
@@ -670,14 +670,14 @@ where
 
     fn visit_f32_reinterpret_i32(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::F32, |masm, dst, src, size| {
+            .convert_op(self.masm, WasmValType::F32, |masm, dst, src, size| {
                 masm.reinterpret_int_as_float(src.into(), dst, size);
             });
     }
 
     fn visit_f64_reinterpret_i64(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::F64, |masm, dst, src, size| {
+            .convert_op(self.masm, WasmValType::F64, |masm, dst, src, size| {
                 masm.reinterpret_int_as_float(src.into(), dst, size);
             });
     }
@@ -1138,7 +1138,7 @@ where
         use OperandSize::*;
 
         self.context
-            .convert_op(self.masm, WasmType::I32, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
                 masm.signed_truncate(src, dst, S32, dst_size);
             });
     }
@@ -1148,7 +1148,7 @@ where
 
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::I32,
+            WasmValType::I32,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
                 masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size);
@@ -1160,7 +1160,7 @@ where
         use OperandSize::*;
 
         self.context
-            .convert_op(self.masm, WasmType::I32, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
                 masm.signed_truncate(src, dst, S64, dst_size);
             });
     }
@@ -1170,7 +1170,7 @@ where
 
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::I32,
+            WasmValType::I32,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
                 masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size);
@@ -1182,7 +1182,7 @@ where
         use OperandSize::*;
 
         self.context
-            .convert_op(self.masm, WasmType::I64, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
                 masm.signed_truncate(src, dst, S32, dst_size);
             });
     }
@@ -1192,7 +1192,7 @@ where
 
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::I64,
+            WasmValType::I64,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
                 masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size);
@@ -1204,7 +1204,7 @@ where
         use OperandSize::*;
 
         self.context
-            .convert_op(self.masm, WasmType::I64, |masm, dst, src, dst_size| {
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
                 masm.signed_truncate(src, dst, S64, dst_size);
             });
     }
@@ -1214,7 +1214,7 @@ where
 
         self.context.convert_op_with_tmp_reg(
             self.masm,
-            WasmType::I64,
+            WasmValType::I64,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
                 masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size);
@@ -1224,20 +1224,20 @@ where
 
     fn visit_i32_reinterpret_f32(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::I32, |masm, dst, src, size| {
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, size| {
                 masm.reinterpret_float_as_int(src.into(), dst, size);
             });
     }
 
     fn visit_i64_reinterpret_f64(&mut self) {
         self.context
-            .convert_op(self.masm, WasmType::I64, |masm, dst, src, size| {
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, size| {
                 masm.reinterpret_float_as_int(src.into(), dst, size);
             });
     }
 
     fn visit_local_get(&mut self, index: u32) {
-        use WasmType::*;
+        use WasmValType::*;
         let context = &mut self.context;
         let slot = context
             .frame
@@ -1827,12 +1827,12 @@ where
     }
 }
 
-impl From<WasmType> for OperandSize {
-    fn from(ty: WasmType) -> OperandSize {
+impl From<WasmValType> for OperandSize {
+    fn from(ty: WasmValType) -> OperandSize {
         match ty {
-            WasmType::I32 | WasmType::F32 => OperandSize::S32,
-            WasmType::I64 | WasmType::F64 => OperandSize::S64,
-            WasmType::Ref(rt) => {
+            WasmValType::I32 | WasmValType::F32 => OperandSize::S32,
+            WasmValType::I64 | WasmValType::F64 => OperandSize::S64,
+            WasmValType::Ref(rt) => {
                 match rt.heap_type {
                     // TODO: Harcoded size, assuming 64-bit support only. Once
                     // Wasmtime supports 32-bit architectures, this will need
