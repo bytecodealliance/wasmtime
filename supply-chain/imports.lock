@@ -2,792 +2,200 @@
 # cargo-vet imports lock
 
 [[unpublished.cranelift]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift]]
-version = "0.104.0"
-audited_as = "0.102.1"
-
-[[unpublished.cranelift]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-bforest]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-bforest]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-bforest]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-bforest]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-codegen]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-codegen]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-codegen]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-codegen]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-codegen-meta]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-codegen-shared]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-control]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-control]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-control]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-control]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-entity]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-entity]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-entity]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-entity]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-frontend]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-frontend]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-frontend]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-frontend]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-interpreter]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-isle]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-isle]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-isle]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-isle]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-jit]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-jit]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-jit]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-jit]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-module]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-module]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-module]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-module]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-native]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-native]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-native]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-native]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-object]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-object]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-object]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-object]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-reader]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-reader]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-reader]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-reader]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-serde]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-serde]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-serde]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-serde]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.cranelift-wasm]]
-version = "0.102.0"
-audited_as = "0.101.2"
-
-[[unpublished.cranelift-wasm]]
-version = "0.103.0"
-audited_as = "0.101.4"
-
-[[unpublished.cranelift-wasm]]
-version = "0.104.0"
-audited_as = "0.102.1"
+audited_as = "0.104.0"
 
 [[unpublished.cranelift-wasm]]
 version = "0.105.0"
-audited_as = "0.103.0"
-
-[[unpublished.wasi-cap-std-sync]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasi-cap-std-sync]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasi-cap-std-sync]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "0.104.0"
 
 [[unpublished.wasi-cap-std-sync]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasi-common]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasi-common]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasi-common]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasi-common]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasi-tokio]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasi-tokio]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasi-tokio]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasi-tokio]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-asm-macros]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-cache]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-cache]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-cache]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-cache]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-cli]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-cli]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-cli]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-cli]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-component-macro]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-component-macro]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-component-macro]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-component-macro]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-component-util]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-component-util]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-component-util]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-component-util]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-cranelift]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-cranelift]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-cranelift]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-cranelift]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-cranelift-shared]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-cranelift-shared]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-cranelift-shared]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-cranelift-shared]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-environ]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-environ]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-environ]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-environ]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-explorer]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-explorer]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-explorer]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-explorer]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-fiber]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-fiber]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-fiber]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-fiber]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-jit]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-jit]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-jit]]
-version = "17.0.0"
-audited_as = "15.0.1"
-
-[[unpublished.wasmtime-jit]]
-version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-jit-debug]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-runtime]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-runtime]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-runtime]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-runtime]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-types]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-types]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-types]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-types]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-wasi]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-wasi]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-wasi]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-wasi]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-wasi-http]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-wasi-threads]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-wast]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-wast]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-wast]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-wast]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-winch]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-winch]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-winch]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-winch]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-wit-bindgen]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wasmtime-wmemcheck]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wiggle]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wiggle]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wiggle]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wiggle]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wiggle-generate]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wiggle-generate]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wiggle-generate]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wiggle-generate]]
 version = "18.0.0"
-audited_as = "16.0.0"
-
-[[unpublished.wiggle-macro]]
-version = "15.0.0"
-audited_as = "14.0.2"
-
-[[unpublished.wiggle-macro]]
-version = "16.0.0"
-audited_as = "14.0.4"
-
-[[unpublished.wiggle-macro]]
-version = "17.0.0"
-audited_as = "15.0.1"
+audited_as = "17.0.0"
 
 [[unpublished.wiggle-macro]]
 version = "18.0.0"
-audited_as = "16.0.0"
+audited_as = "17.0.0"
 
 [[unpublished.wiggle-test]]
 version = "0.0.0"
 audited_as = "0.1.0"
 
 [[unpublished.winch-codegen]]
-version = "0.13.0"
-audited_as = "0.12.2"
-
-[[unpublished.winch-codegen]]
-version = "0.14.0"
-audited_as = "0.12.4"
-
-[[unpublished.winch-codegen]]
-version = "0.15.0"
-audited_as = "0.13.1"
-
-[[unpublished.winch-codegen]]
 version = "0.16.0"
-audited_as = "0.14.0"
+audited_as = "0.15.0"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
@@ -867,8 +275,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.bumpalo]]
-version = "3.12.0"
-when = "2023-01-17"
+version = "3.14.0"
+when = "2023-09-14"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
@@ -881,22 +289,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.cap-fs-ext]]
-version = "2.0.0"
-when = "2023-06-30"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-fs-ext]]
 version = "2.0.1"
 when = "2024-01-02"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-net-ext]]
-version = "2.0.0"
-when = "2023-06-30"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -909,22 +303,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.cap-primitives]]
-version = "2.0.0"
-when = "2023-06-30"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-primitives]]
 version = "2.0.1"
 when = "2024-01-02"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-rand]]
-version = "2.0.0"
-when = "2023-06-30"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -937,13 +317,6 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.cap-std]]
-version = "2.0.0"
-when = "2023-06-30"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-std]]
 version = "2.0.1"
 when = "2024-01-02"
 user-id = 6825
@@ -951,22 +324,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.cap-tempfile]]
-version = "2.0.0"
-when = "2023-06-30"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-tempfile]]
 version = "2.0.1"
 when = "2024-01-02"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-time-ext]]
-version = "2.0.0"
-when = "2023-06-30"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1014,410 +373,104 @@ user-login = "jrmuizel"
 user-name = "Jeff Muizelaar"
 
 [[publisher.cranelift]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-bforest]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-bforest]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-bforest]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-bforest]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen-meta]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-meta]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen-shared]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-codegen-shared]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-control]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-control]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-control]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-control]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-entity]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-entity]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-entity]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-entity]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-frontend]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-frontend]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-frontend]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-frontend]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-interpreter]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-interpreter]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-interpreter]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-interpreter]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-isle]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-isle]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-isle]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-isle]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-jit]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-jit]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-jit]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-jit]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-module]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-module]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-module]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-module]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-native]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-native]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-native]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-native]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-object]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-object]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-object]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-object]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-reader]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-reader]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-reader]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-reader]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-serde]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-serde]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-serde]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-serde]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-wasm]]
-version = "0.101.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.101.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.102.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.cranelift-wasm]]
-version = "0.103.0"
-when = "2023-12-20"
+version = "0.104.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1436,22 +489,8 @@ user-login = "cuviper"
 user-name = "Josh Stone"
 
 [[publisher.errno]]
-version = "0.3.6"
-when = "2023-11-07"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.errno]]
 version = "0.3.8"
 when = "2023-11-28"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.fd-lock]]
-version = "4.0.0"
-when = "2023-06-30"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1466,13 +505,6 @@ user-name = "Dan Gohman"
 [[publisher.filecheck]]
 version = "0.5.0"
 when = "2020-03-17"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.fs-set-times]]
-version = "0.20.0"
-when = "2023-06-29"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1506,13 +538,6 @@ user-login = "cuviper"
 user-name = "Josh Stone"
 
 [[publisher.io-extras]]
-version = "0.18.0"
-when = "2023-06-11"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.io-extras]]
 version = "0.18.1"
 when = "2023-12-01"
 user-id = 6825
@@ -1522,13 +547,6 @@ user-name = "Dan Gohman"
 [[publisher.io-lifetimes]]
 version = "2.0.2"
 when = "2023-06-30"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.is-terminal]]
-version = "0.4.9"
-when = "2023-07-06"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1560,13 +578,6 @@ when = "2023-05-15"
 user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
-
-[[publisher.linux-raw-sys]]
-version = "0.4.10"
-when = "2023-10-09"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
 
 [[publisher.linux-raw-sys]]
 version = "0.4.12"
@@ -1639,13 +650,6 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.rustix]]
-version = "0.38.21"
-when = "2023-10-26"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.rustix]]
 version = "0.38.28"
 when = "2023-12-09"
 user-id = 6825
@@ -1708,13 +712,6 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.syn]]
-version = "2.0.29"
-when = "2023-08-17"
-user-id = 3618
-user-login = "dtolnay"
-user-name = "David Tolnay"
-
-[[publisher.syn]]
 version = "2.0.32"
 when = "2023-09-10"
 user-id = 3618
@@ -1722,22 +719,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.system-interface]]
-version = "0.26.0"
-when = "2023-06-30"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.system-interface]]
 version = "0.26.1"
 when = "2024-01-02"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.target-lexicon]]
-version = "0.12.3"
-when = "2022-02-01"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1806,74 +789,20 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.wasi-cap-std-sync]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-cap-std-sync]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-cap-std-sync]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-cap-std-sync]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasi-common]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-common]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-common]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-common]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasi-tokio]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-tokio]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-tokio]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-tokio]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1913,34 +842,6 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-encoder]]
-version = "0.35.0"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-encoder]]
-version = "0.36.1"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-encoder]]
-version = "0.36.2"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-encoder]]
-version = "0.38.0"
-when = "2023-11-20"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-encoder]]
 version = "0.38.1"
 when = "2023-11-29"
 user-id = 1
@@ -1948,183 +849,29 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-encoder]]
-version = "0.39.0"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-encoder]]
-version = "0.40.0"
-when = "2024-01-24"
+version = "0.41.0"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-metadata]]
-version = "0.10.9"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-metadata]]
-version = "0.10.10"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-metadata]]
-version = "0.10.11"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-metadata]]
-version = "0.10.13"
-when = "2023-11-20"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-metadata]]
-version = "0.10.14"
-when = "2023-11-29"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-metadata]]
-version = "0.10.15"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-metadata]]
-version = "0.10.16"
-when = "2024-01-24"
+version = "0.10.17"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-mutate]]
-version = "0.2.38"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-mutate]]
-version = "0.2.39"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-mutate]]
-version = "0.2.40"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-mutate]]
-version = "0.2.42"
-when = "2023-11-20"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-mutate]]
-version = "0.2.44"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-mutate]]
-version = "0.2.45"
-when = "2024-01-24"
+version = "0.2.46"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-smith]]
-version = "0.12.21"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.12.22"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.12.23"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.13.0"
-when = "2023-11-20"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.13.1"
-when = "2023-11-29"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.14.0"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.15.0"
-when = "2024-01-24"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmparser]]
-version = "0.115.0"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmparser]]
-version = "0.116.0"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmparser]]
-version = "0.116.1"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmparser]]
-version = "0.118.0"
-when = "2023-11-20"
+version = "0.15.1"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -2137,811 +884,192 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasmparser]]
-version = "0.119.0"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmparser]]
-version = "0.120.0"
-when = "2024-01-24"
+version = "0.121.0"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasmprinter]]
-version = "0.2.70"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.71"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.72"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.74"
-when = "2023-11-20"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.75"
-when = "2023-11-29"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.76"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.77"
-when = "2024-01-24"
+version = "0.2.78"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasmtime]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-asm-macros]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-asm-macros]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-asm-macros]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-asm-macros]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cache]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cli]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cli-flags]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli-flags]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli-flags]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cli-flags]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-component-macro]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-macro]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-macro]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-macro]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-component-util]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cranelift]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cranelift-shared]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift-shared]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift-shared]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift-shared]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-environ]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-environ]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-environ]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-environ]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-explorer]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-fiber]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-jit-debug]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-jit-icache-coherence]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-runtime]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-runtime]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-runtime]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-runtime]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-types]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-types]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-http]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-http]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-http]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-http]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-nn]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-nn]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-nn]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-nn]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-threads]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-threads]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-threads]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wasi-threads]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wast]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wast]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wast]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wast]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-winch]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wit-bindgen]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wmemcheck]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wast]]
-version = "66.0.2"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wast]]
-version = "67.0.0"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wast]]
-version = "67.0.1"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wast]]
-version = "69.0.0"
-when = "2023-11-20"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wast]]
-version = "69.0.1"
-when = "2023-11-29"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wast]]
-version = "70.0.0"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wast]]
-version = "70.0.1"
-when = "2024-01-24"
+version = "70.0.2"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wat]]
-version = "1.0.77"
-when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.78"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.79"
-when = "2023-11-06"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.81"
-when = "2023-11-20"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.82"
-when = "2023-11-29"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.83"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.84"
-when = "2024-01-24"
+version = "1.0.85"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wiggle]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wiggle-generate]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-generate]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-generate]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-generate]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wiggle-macro]]
-version = "14.0.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-macro]]
-version = "14.0.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-macro]]
-version = "15.0.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wiggle-macro]]
-version = "16.0.0"
-when = "2023-12-20"
+version = "17.0.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -2960,26 +1088,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.winch-codegen]]
-version = "0.12.2"
-when = "2023-10-26"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.winch-codegen]]
-version = "0.12.4"
-when = "2023-11-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.winch-codegen]]
-version = "0.13.1"
-when = "2023-12-01"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.winch-codegen]]
-version = "0.14.0"
-when = "2023-12-20"
+version = "0.15.0"
+when = "2024-01-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -3117,13 +1227,6 @@ user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
 [[publisher.winx]]
-version = "0.36.1"
-when = "2023-06-29"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.winx]]
 version = "0.36.3"
 when = "2023-12-01"
 user-id = 6825
@@ -3131,36 +1234,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.13.0"
-when = "2023-10-18"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen]]
-version = "0.13.1"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen]]
 version = "0.15.0"
 when = "2023-11-27"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen-core]]
-version = "0.13.0"
-when = "2023-10-18"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen-core]]
-version = "0.13.1"
-when = "2023-10-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -3173,20 +1248,6 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.13.0"
-when = "2023-10-18"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen-rust]]
-version = "0.13.2"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen-rust]]
 version = "0.15.0"
 when = "2023-11-27"
 user-id = 1
@@ -3194,43 +1255,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.13.0"
-when = "2023-10-18"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen-rust-macro]]
-version = "0.13.1"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen-rust-macro]]
 version = "0.15.0"
 when = "2023-11-27"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-component]]
-version = "0.16.0"
-when = "2023-10-18"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-component]]
-version = "0.17.0"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-component]]
-version = "0.18.0"
-when = "2023-11-06"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -3243,43 +1269,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-component]]
-version = "0.19.0"
-when = "2023-11-29"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-component]]
-version = "0.19.1"
-when = "2024-01-09"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-component]]
-version = "0.20.0"
-when = "2024-01-24"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-parser]]
-version = "0.12.1"
-when = "2023-10-18"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-parser]]
-version = "0.12.2"
-when = "2023-10-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-parser]]
-version = "0.13.0"
-when = "2023-11-06"
+version = "0.20.1"
+when = "2024-01-29"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -3679,12 +1670,6 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 version = "0.12.3"
 notes = "This version is used in rust's libstd, so effectively we're already trusting it"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.hermit-abi]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "0.1.19 -> 0.2.6"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.lazy_static]]
