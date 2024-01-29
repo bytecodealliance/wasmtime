@@ -4281,18 +4281,27 @@
 (rule (x64_vfnmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132pd) a b c))
 
 ;; Helper for creating `sqrtss` instructions.
-(decl x64_sqrtss (XmmMem) Xmm)
-(rule (x64_sqrtss x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtss) x))
-(rule 1 (x64_sqrtss x)
+;;
+;; NB: the square-root operation technically only has one operand but this
+;; instruction has two. This is to reflect how the square root operation copies
+;; the upper bits of the first register and only performs the square root
+;; operation on the low bits of the second register. This introduces
+;; a data-dependency on the contents of the first register which is modeled
+;; here.
+(decl x64_sqrtss (Xmm XmmMem) Xmm)
+(rule (x64_sqrtss x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtss) x y))
+(rule 1 (x64_sqrtss x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtss) x))
+        (xmm_rmir_vex (AvxOpcode.Vsqrtss) x y))
 
 ;; Helper for creating `sqrtsd` instructions.
-(decl x64_sqrtsd (XmmMem) Xmm)
-(rule (x64_sqrtsd x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtsd) x))
-(rule 1 (x64_sqrtsd x)
+;;
+;; NB: see `x64_sqrtss` for explanation of why this has two args.
+(decl x64_sqrtsd (Xmm XmmMem) Xmm)
+(rule (x64_sqrtsd x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtsd) x y))
+(rule 1 (x64_sqrtsd x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtsd) x))
+        (xmm_rmir_vex (AvxOpcode.Vsqrtsd) x y))
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
@@ -4309,18 +4318,22 @@
         (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtpd) x))
 
 ;; Helper for creating `cvtss2sd` instructions.
-(decl x64_cvtss2sd (XmmMem) Xmm)
-(rule (x64_cvtss2sd x) (xmm_unary_rm_r_unaligned (SseOpcode.Cvtss2sd) x))
-(rule 1 (x64_cvtss2sd x)
+;;
+;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
+(decl x64_cvtss2sd (Xmm XmmMem) Xmm)
+(rule (x64_cvtss2sd x y) (xmm_rm_r_unaligned (SseOpcode.Cvtss2sd) x y))
+(rule 1 (x64_cvtss2sd x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vcvtss2sd) x))
+        (xmm_rmir_vex (AvxOpcode.Vcvtss2sd) x y))
 
 ;; Helper for creating `cvtsd2ss` instructions.
-(decl x64_cvtsd2ss (XmmMem) Xmm)
-(rule (x64_cvtsd2ss x) (xmm_unary_rm_r_unaligned (SseOpcode.Cvtsd2ss) x))
-(rule 1 (x64_cvtsd2ss x)
+;;
+;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
+(decl x64_cvtsd2ss (Xmm XmmMem) Xmm)
+(rule (x64_cvtsd2ss x y) (xmm_rm_r_unaligned (SseOpcode.Cvtsd2ss) x y))
+(rule 1 (x64_cvtsd2ss x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vcvtsd2ss) x))
+        (xmm_rmir_vex (AvxOpcode.Vcvtsd2ss) x y))
 
 ;; Helper for creating `cvtdq2ps` instructions.
 (decl x64_cvtdq2ps (XmmMem) Xmm)

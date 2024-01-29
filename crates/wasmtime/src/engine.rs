@@ -11,7 +11,7 @@ use wasmtime_runtime::{CompiledModuleIdAllocator, InstanceAllocator};
 
 use crate::Config;
 #[cfg(feature = "runtime")]
-use crate::{profiling_agent::ProfilingAgent, runtime::signatures::SignatureRegistry};
+use crate::{profiling_agent::ProfilingAgent, runtime::type_registry::TypeRegistry};
 
 pub(crate) const VERSION: u8 = 0;
 
@@ -51,7 +51,7 @@ pub(crate) struct EngineInner {
     #[cfg(feature = "runtime")]
     pub(crate) profiler: Box<dyn ProfilingAgent>,
     #[cfg(feature = "runtime")]
-    pub(crate) signatures: SignatureRegistry,
+    pub(crate) signatures: TypeRegistry,
     pub(crate) epoch: AtomicU64,
     #[cfg(feature = "runtime")]
     pub(crate) unique_id_allocator: CompiledModuleIdAllocator,
@@ -110,7 +110,7 @@ impl Engine {
                 #[cfg(feature = "runtime")]
                 profiler: config.build_profiler()?,
                 #[cfg(feature = "runtime")]
-                signatures: SignatureRegistry::new(),
+                signatures: TypeRegistry::new(),
                 epoch: AtomicU64::new(0),
                 #[cfg(feature = "runtime")]
                 unique_id_allocator: CompiledModuleIdAllocator::new(),
@@ -305,7 +305,7 @@ impl Engine {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
 
-    pub(crate) fn signatures(&self) -> &SignatureRegistry {
+    pub(crate) fn signatures(&self) -> &TypeRegistry {
         &self.inner.signatures
     }
 

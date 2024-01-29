@@ -1954,6 +1954,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-encoder]]
+version = "0.40.0"
+when = "2024-01-24"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-metadata]]
 version = "0.10.9"
 when = "2023-10-14"
@@ -1996,6 +2003,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-metadata]]
+version = "0.10.16"
+when = "2024-01-24"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-mutate]]
 version = "0.2.38"
 when = "2023-10-14"
@@ -2027,6 +2041,13 @@ user-name = "Alex Crichton"
 [[publisher.wasm-mutate]]
 version = "0.2.44"
 when = "2024-01-09"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasm-mutate]]
+version = "0.2.45"
+when = "2024-01-24"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -2073,6 +2094,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-smith]]
+version = "0.15.0"
+when = "2024-01-24"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasmparser]]
 version = "0.115.0"
 when = "2023-10-14"
@@ -2115,6 +2143,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasmparser]]
+version = "0.120.0"
+when = "2024-01-24"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasmprinter]]
 version = "0.2.70"
 when = "2023-10-14"
@@ -2153,6 +2188,13 @@ user-name = "Alex Crichton"
 [[publisher.wasmprinter]]
 version = "0.2.76"
 when = "2024-01-09"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasmprinter]]
+version = "0.2.77"
+when = "2024-01-24"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -2775,6 +2817,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wast]]
+version = "70.0.1"
+when = "2024-01-24"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wat]]
 version = "1.0.77"
 when = "2023-10-14"
@@ -2813,6 +2862,13 @@ user-name = "Alex Crichton"
 [[publisher.wat]]
 version = "1.0.83"
 when = "2024-01-09"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wat]]
+version = "1.0.84"
+when = "2024-01-24"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -3196,6 +3252,13 @@ user-name = "Alex Crichton"
 [[publisher.wit-component]]
 version = "0.19.1"
 when = "2024-01-09"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-component]]
+version = "0.20.0"
+when = "2024-01-24"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"

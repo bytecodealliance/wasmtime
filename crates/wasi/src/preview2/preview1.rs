@@ -821,17 +821,14 @@ fn first_non_empty_ciovec<'a, 'b>(
 
 // Find first non-empty buffer.
 fn first_non_empty_iovec<'a>(iovs: &types::IovecArray<'a>) -> Result<Option<GuestPtr<'a, [u8]>>> {
-    iovs.iter()
-        .map(|iov| {
-            let iov = iov?.read()?;
-            if iov.buf_len == 0 {
-                return Ok(None);
-            }
-            let slice = iov.buf.as_array(iov.buf_len);
-            Ok(Some(slice))
-        })
-        .find_map(Result::transpose)
-        .transpose()
+    for iov in iovs.iter() {
+        let iov = iov?.read()?;
+        if iov.buf_len == 0 {
+            continue;
+        }
+        return Ok(Some(iov.buf.as_array(iov.buf_len)));
+    }
+    Ok(None)
 }
 
 #[async_trait::async_trait]

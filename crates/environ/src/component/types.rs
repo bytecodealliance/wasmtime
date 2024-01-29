@@ -1,6 +1,6 @@
-use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
+use crate::component::{Export, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
-    EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TypeConvert,
+    CompiledModuleInfo, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
     WasmHeapType, WasmType,
 };
 use anyhow::{bail, Result};
@@ -13,6 +13,7 @@ use std::ops::Index;
 use wasmparser::names::KebabString;
 use wasmparser::types;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+use wasmtime_types::ModuleInternedTypeIndex;
 
 pub use wasmtime_types::StaticModuleIndex;
 
@@ -219,7 +220,7 @@ indices! {
 
 // Reexport for convenience some core-wasm indices which are also used in the
 // component model, typically for when aliasing exports of core wasm modules.
-pub use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
+pub use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
 
 /// Equivalent of `EntityIndex` but for the component model instead of core
 /// wasm.
@@ -397,11 +398,67 @@ macro_rules! intern_and_fill_flat_types {
 }
 
 impl ComponentTypesBuilder {
+    fn export_type_def(
+        &mut self,
+        static_modules: &PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+        ty: &Export,
+    ) -> TypeDef {
+        match ty {
+            Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(*ty),
+            Export::ModuleStatic(idx) => {
+                let mut module_ty = TypeModule::default();
+                let module = &static_modules[*idx].module;
+                for (namespace, name, ty) in module.imports() {
+                    module_ty
+                        .imports
+                        .insert((namespace.to_string(), name.to_string()), ty);
+                }
+                for (name, ty) in module.exports.iter() {
+                    module_ty
+                        .exports
+                        .insert(name.to_string(), module.type_of(*ty));
+                }
+                TypeDef::Module(self.component_types.modules.push(module_ty))
+            }
+            Export::ModuleImport { ty, .. } => TypeDef::Module(*ty),
+            Export::Instance { ty: Some(ty), .. } => TypeDef::ComponentInstance(*ty),
+            Export::Instance { exports, .. } => {
+                let mut instance_ty = TypeComponentInstance::default();
+                for (name, ty) in exports {
+                    instance_ty
+                        .exports
+                        .insert(name.to_string(), self.export_type_def(static_modules, ty));
+                }
+                TypeDef::ComponentInstance(
+                    self.component_types.component_instances.push(instance_ty),
+                )
+            }
+            Export::Type(ty) => *ty,
+        }
+    }
+
     /// Finishes this list of component types and returns the finished
-    /// structure.
-    pub fn finish(mut self) -> ComponentTypes {
+    /// structure and the [`TypeComponentIndex`] corresponding to top-level component
+    /// with `imports` and `exports` specified.
+    pub fn finish<'a>(
+        mut self,
+        static_modules: &PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+        imports: impl IntoIterator<Item = (String, TypeDef)>,
+        exports: impl IntoIterator<Item = (String, &'a Export)>,
+    ) -> (ComponentTypes, TypeComponentIndex) {
+        let mut component_ty = TypeComponent::default();
+        for (name, ty) in imports {
+            component_ty.imports.insert(name, ty);
+        }
+        for (name, ty) in exports {
+            component_ty
+                .exports
+                .insert(name, self.export_type_def(static_modules, ty));
+        }
+        let ty = self.component_types.components.push(component_ty);
+
         self.component_types.module_types = self.module_types.finish();
-        self.component_types
+        (self.component_types, ty)
     }
 
     /// Smaller helper method to find a `SignatureIndex` which corresponds to
@@ -412,7 +469,7 @@ impl ComponentTypesBuilder {
     /// wouldn't be needed and instead the `SignatureIndex` itself would be
     /// threaded through appropriately, but that's left for a future
     /// refactoring. Try not to lean too hard on this method though.
-    pub fn find_resource_drop_signature(&self) -> Option<SignatureIndex> {
+    pub fn find_resource_drop_signature(&self) -> Option<ModuleInternedTypeIndex> {
         self.module_types
             .wasm_signatures()
             .find(|(_, sig)| {
@@ -558,7 +615,7 @@ impl ComponentTypesBuilder {
         Ok(self.component_types.components.push(result))
     }
 
-    fn convert_instance(
+    pub(crate) fn convert_instance(
         &mut self,
         types: types::TypesRef<'_>,
         id: types::ComponentInstanceTypeId,
@@ -951,7 +1008,7 @@ pub enum TypeDef {
     /// A core wasm module and its type.
     Module(TypeModuleIndex),
     /// A core wasm function using only core wasm types.
-    CoreFunc(SignatureIndex),
+    CoreFunc(ModuleInternedTypeIndex),
     /// A resource type which operates on the specified resource table.
     ///
     /// Note that different resource tables may point to the same underlying

@@ -37,8 +37,8 @@ use object::{
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
     obj, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
-    FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, ModuleType, ModuleTypes,
-    ModuleTypesBuilder, ObjectKind, PrimaryMap, SignatureIndex, StaticModuleIndex,
+    FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex, ModuleTranslation,
+    ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex,
     WasmFunctionInfo,
 };
 
@@ -144,7 +144,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         }),
     );
     let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
-    let types = types.finish();
+
     let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
     let mut object = compiler.object(ObjectKind::Component)?;
@@ -157,6 +157,19 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         compiled_funcs,
         module_translations,
     )?;
+    let (types, ty) = types.finish(
+        &compilation_artifacts.modules,
+        component
+            .component
+            .import_types
+            .iter()
+            .map(|(_, (name, ty))| (name.clone(), *ty)),
+        component
+            .component
+            .exports
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty)),
+    );
 
     let info = CompiledComponentInfo {
         component: component.component,
@@ -166,6 +179,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     };
     let artifacts = ComponentArtifacts {
         info,
+        ty,
         types,
         static_modules: compilation_artifacts.modules,
     };
@@ -212,8 +226,11 @@ type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> +
 /// Two `u32`s to align with `cranelift_codegen::ir::UserExternalName`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CompileKey {
-    // [ kind:i4 module:i28 ]
+    // The namespace field is bitpacked like:
+    //
+    //     [ kind:i3 module:i29 ]
     namespace: u32,
+
     index: u32,
 }
 
@@ -266,7 +283,7 @@ impl CompileKey {
         }
     }
 
-    fn wasm_to_native_trampoline(index: SignatureIndex) -> Self {
+    fn wasm_to_native_trampoline(index: ModuleInternedTypeIndex) -> Self {
         Self {
             namespace: Self::WASM_TO_NATIVE_TRAMPOLINE_KIND,
             index: index.as_u32(),

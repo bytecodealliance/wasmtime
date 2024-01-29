@@ -81,7 +81,7 @@ runs:
       run: echo CARGO_REGISTRY_CACHE_KEY=$(date +%Y%m%d) >> $GITHUB_ENV
 
     - name: Cache Cargo registry index
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry/index/
         key: cargo-registry-${{ env.CARGO_REGISTRY_CACHE_KEY }}
@@ -90,7 +90,7 @@ runs:
         restore-keys: cargo-registry-
 
     - name: Cache crate sources for dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry/cache/

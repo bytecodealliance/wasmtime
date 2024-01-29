@@ -11,7 +11,7 @@ use std::{
     ptr::NonNull,
     sync::{Arc, RwLock},
 };
-use wasmtime_runtime::{ModuleInfo, VMSharedSignatureIndex, VMWasmCallFunction};
+use wasmtime_runtime::{ModuleInfo, VMSharedTypeIndex, VMWasmCallFunction};
 
 /// Used for registering modules with a store.
 ///
@@ -186,7 +186,7 @@ impl ModuleRegistry {
 
     pub fn wasm_to_native_trampoline(
         &self,
-        sig: VMSharedSignatureIndex,
+        sig: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>> {
         // TODO: We are doing a linear search over each module. This is fine for
         // now because we typically have very few modules per store (almost

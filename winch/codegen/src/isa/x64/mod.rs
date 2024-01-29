@@ -169,4 +169,16 @@ impl TargetIsa for X64 {
 
         Ok(masm.finalize())
     }
+
+    fn emit_unwind_info(
+        &self,
+        buffer: &MachBufferFinalized<Final>,
+        kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
+    ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
+        Ok(cranelift_codegen::isa::x64::emit_unwind_info(buffer, kind)?)
+    }
+
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        Some(cranelift_codegen::isa::x64::create_cie())
+    }
 }

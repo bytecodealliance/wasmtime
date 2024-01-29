@@ -557,33 +557,38 @@ impl VMGlobalDefinition {
     }
 }
 
-/// An index into the shared signature registry, usable for checking signatures
+/// An index into the shared type registry, usable for checking signatures
 /// at indirect calls.
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
-pub struct VMSharedSignatureIndex(u32);
+pub struct VMSharedTypeIndex(u32);
 
 #[cfg(test)]
-mod test_vmshared_signature_index {
-    use super::VMSharedSignatureIndex;
+mod test_vmshared_type_index {
+    use super::VMSharedTypeIndex;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
-    fn check_vmshared_signature_index() {
+    fn check_vmshared_type_index() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
-            size_of::<VMSharedSignatureIndex>(),
-            usize::from(offsets.size_of_vmshared_signature_index())
+            size_of::<VMSharedTypeIndex>(),
+            usize::from(offsets.size_of_vmshared_type_index())
         );
     }
 }
 
-impl VMSharedSignatureIndex {
-    /// Create a new `VMSharedSignatureIndex`.
+impl VMSharedTypeIndex {
+    /// Create a new `VMSharedTypeIndex`.
     #[inline]
     pub fn new(value: u32) -> Self {
+        assert_ne!(
+            value,
+            u32::MAX,
+            "u32::MAX is reserved for the default value"
+        );
         Self(value)
     }
 
@@ -594,16 +599,16 @@ impl VMSharedSignatureIndex {
     }
 }
 
-impl Default for VMSharedSignatureIndex {
+impl Default for VMSharedTypeIndex {
     #[inline]
     fn default() -> Self {
-        Self::new(u32::MAX)
+        Self(u32::MAX)
     }
 }
 
 /// The VM caller-checked "funcref" record, for caller-side signature checking.
 ///
-/// It consists of function pointer(s), a signature id to be checked by the
+/// It consists of function pointer(s), a type id to be checked by the
 /// caller, and the vmctx closure associated with this function.
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -636,8 +641,8 @@ pub struct VMFuncRef {
     /// the vast vast vast majority of the time.
     pub wasm_call: Option<NonNull<VMWasmCallFunction>>,
 
-    /// Function signature id.
-    pub type_index: VMSharedSignatureIndex,
+    /// Function signature's type id.
+    pub type_index: VMSharedTypeIndex,
 
     /// The VM state associated with this function.
     ///

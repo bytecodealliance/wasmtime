@@ -3,7 +3,7 @@ use crate::{
     code_memory::CodeMemory,
     component_artifacts::{CompiledComponentInfo, ComponentArtifacts},
     instantiate::MmapVecWrapper,
-    signatures::SignatureCollection,
+    type_registry::TypeCollection,
     Engine, Module, ResourcesRequired,
 };
 use anyhow::{bail, Context, Result};
@@ -14,7 +14,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
     AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
-    TrampolineIndex, VMComponentOffsets,
+    TrampolineIndex, TypeComponentIndex, VMComponentOffsets,
 };
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
@@ -31,6 +31,9 @@ pub struct Component {
 }
 
 struct ComponentInner {
+    /// Component type index
+    ty: TypeComponentIndex,
+
     /// Core wasm modules that the component defined internally, indexed by the
     /// compile-time-assigned `ModuleUpvarIndex`.
     static_modules: PrimaryMap<StaticModuleIndex, Module>,
@@ -187,6 +190,7 @@ impl Component {
         artifacts: Option<ComponentArtifacts>,
     ) -> Result<Component> {
         let ComponentArtifacts {
+            ty,
             info,
             types,
             static_modules,
@@ -206,8 +210,7 @@ impl Component {
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the
         // component and for all included core wasm modules.
-        let signatures =
-            SignatureCollection::new_for_module(engine.signatures(), types.module_types());
+        let signatures = TypeCollection::new_for_module(engine.signatures(), types.module_types());
 
         // Assemble the `CodeObject` artifact which is shared by all core wasm
         // modules as well as the final component.
@@ -224,11 +227,16 @@ impl Component {
 
         Ok(Component {
             inner: Arc::new(ComponentInner {
+                ty,
                 static_modules,
                 code,
                 info,
             }),
         })
+    }
+
+    pub(crate) fn ty(&self) -> TypeComponentIndex {
+        self.inner.ty
     }
 
     pub(crate) fn env_component(&self) -> &wasmtime_environ::component::Component {
@@ -244,7 +252,7 @@ impl Component {
         self.inner.component_types()
     }
 
-    pub(crate) fn signatures(&self) -> &SignatureCollection {
+    pub(crate) fn signatures(&self) -> &TypeCollection {
         self.inner.code.signatures()
     }
 

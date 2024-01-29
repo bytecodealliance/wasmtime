@@ -24,7 +24,8 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized, MachLabel,
+    isa::unwind::UnwindInst, isa::x64::settings as x64_settings, settings, Final,
+    MachBufferFinalized, MachLabel,
 };
 
 use wasmtime_environ::{PtrSize, WasmType, WASM_PAGE_SIZE};
@@ -53,8 +54,25 @@ impl Masm for MacroAssembler {
         let stack_pointer = rsp();
 
         self.asm.push_r(frame_pointer);
+
+        if self.shared_flags.unwind_info() {
+            self.asm.emit_unwind_inst(UnwindInst::PushFrameRegs {
+                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
+            })
+        }
+
         self.asm
             .mov_rr(stack_pointer, frame_pointer, OperandSize::S64);
+
+        if self.shared_flags.unwind_info() {
+            self.asm.emit_unwind_inst(UnwindInst::DefineNewFrame {
+                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
+
+                // Clobbers appear directly after the RET and FP if they're present. As we just
+                // pushed the frame pointer, the offset to the clobbers will be `0`.
+                offset_downward_to_clobbers: 0,
+            })
+        }
     }
 
     fn check_stack(&mut self) {
@@ -105,6 +123,19 @@ impl Masm for MacroAssembler {
             offset: SPOffset::from_u32(self.sp_offset),
             size: bytes,
         }
+    }
+
+    fn save(&mut self, clobber_offset: u32, reg: Reg, size: OperandSize) -> StackSlot {
+        let slot = self.push(reg, size);
+
+        if self.shared_flags.unwind_info() {
+            self.asm.emit_unwind_inst(UnwindInst::SaveReg {
+                clobber_offset,
+                reg: reg.into(),
+            });
+        }
+
+        slot
     }
 
     fn reserve_stack(&mut self, bytes: u32) {

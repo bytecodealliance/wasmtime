@@ -1,4 +1,4 @@
-use crate::{code_memory::CodeMemory, signatures::SignatureCollection};
+use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
 use std::sync::Arc;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
@@ -26,7 +26,7 @@ pub struct CodeObject {
     /// Note that this type has a significant destructor which unregisters
     /// signatures within the `Engine` it was originally tied to, and this ends
     /// up corresponding to the liftime of a `Component` or `Module`.
-    signatures: SignatureCollection,
+    signatures: TypeCollection,
 
     /// Type information for the loaded object.
     ///
@@ -36,7 +36,7 @@ pub struct CodeObject {
 }
 
 impl CodeObject {
-    pub fn new(mmap: Arc<CodeMemory>, signatures: SignatureCollection, types: Types) -> CodeObject {
+    pub fn new(mmap: Arc<CodeMemory>, signatures: TypeCollection, types: Types) -> CodeObject {
         // The corresopnding unregister for this is below in `Drop for
         // CodeObject`.
         crate::module::register_code(&mmap);
@@ -61,7 +61,7 @@ impl CodeObject {
         self.types.module_types()
     }
 
-    pub fn signatures(&self) -> &SignatureCollection {
+    pub fn signatures(&self) -> &TypeCollection {
         &self.signatures
     }
 }

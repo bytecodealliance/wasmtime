@@ -766,4 +766,11 @@ pub(crate) trait MacroAssembler {
             self.free_stack(bytes);
         }
     }
+
+    /// Save the value of this register to the stack. By default this is the same as pushing the
+    /// register, however it's present in the [`MacroAssembler`] trait to ensure that it's possible
+    /// to add unwind info for register saves in backends.
+    fn save(&mut self, _off: u32, src: Reg, size: OperandSize) -> StackSlot {
+        self.push(src, size)
+    }
 }

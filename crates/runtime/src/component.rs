@@ -8,7 +8,7 @@
 
 use crate::{
     SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
+    VMNativeCallFunction, VMOpaqueContext, VMSharedTypeIndex, VMWasmCallFunction, ValRaw,
 };
 use anyhow::Result;
 use memoffset::offset_of;
@@ -395,7 +395,7 @@ impl ComponentInstance {
         wasm_call: NonNull<VMWasmCallFunction>,
         native_call: NonNull<VMNativeCallFunction>,
         array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
+        type_index: VMSharedTypeIndex,
     ) {
         unsafe {
             let offset = self.offsets.trampoline_func_ref(idx);
@@ -732,7 +732,7 @@ impl OwnedComponentInstance {
         wasm_call: NonNull<VMWasmCallFunction>,
         native_call: NonNull<VMNativeCallFunction>,
         array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
+        type_index: VMSharedTypeIndex,
     ) {
         unsafe {
             self.instance_mut()

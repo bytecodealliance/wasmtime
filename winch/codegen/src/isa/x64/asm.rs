@@ -8,6 +8,7 @@ use cranelift_codegen::{
     entity::EntityRef,
     ir::{types, ConstantPool, ExternalName, LibCall, Opcode, TrapCode, UserExternalNameRef},
     isa::{
+        unwind::UnwindInst,
         x64::{
             args::{
                 self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
@@ -227,6 +228,11 @@ impl Assembler {
                 SyntheticAmode::ConstantOffset(constant)
             }
         }
+    }
+
+    /// Emit an unwind instruction.
+    pub fn emit_unwind_inst(&mut self, inst: UnwindInst) {
+        self.emit(Inst::Unwind { inst })
     }
 
     /// Push register.
@@ -627,9 +633,10 @@ impl Assembler {
             _ => unimplemented!(),
         };
 
-        self.emit(Inst::XmmUnaryRmRUnaligned {
+        self.emit(Inst::XmmRmRUnaligned {
             op,
-            src: Xmm::new(src.into()).expect("valid xmm unaligned").into(),
+            src2: Xmm::new(src.into()).expect("valid xmm unaligned").into(),
+            src1: dst.into(),
             dst: dst.into(),
         });
     }
@@ -1158,9 +1165,10 @@ impl Assembler {
             OperandSize::S128 => unreachable!(),
         };
 
-        self.emit(Inst::XmmUnaryRmR {
+        self.emit(Inst::XmmRmR {
             op,
-            src: Xmm::from(src).into(),
+            src2: Xmm::from(src).into(),
+            src1: dst.into(),
             dst: dst.into(),
         })
     }

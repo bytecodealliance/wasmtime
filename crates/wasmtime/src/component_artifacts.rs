@@ -2,12 +2,13 @@
 
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_environ::{
-    component::{AllCallFunc, ComponentTypes, TrampolineIndex},
+    component::{AllCallFunc, ComponentTypes, TrampolineIndex, TypeComponentIndex},
     CompiledModuleInfo, FunctionLoc, PrimaryMap, StaticModuleIndex,
 };
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ComponentArtifacts {
+    pub(crate) ty: TypeComponentIndex,
     pub(crate) info: CompiledComponentInfo,
     pub(crate) types: ComponentTypes,
     pub(crate) static_modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
