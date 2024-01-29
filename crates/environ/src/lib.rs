@@ -10,8 +10,8 @@ mod address_map;
 mod builtin;
 mod compilation;
 mod demangling;
-mod instantiate;
 mod module;
+mod module_artifacts;
 mod module_environ;
 mod module_types;
 pub mod obj;
@@ -37,7 +37,7 @@ pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
 pub use object;
 
-pub use crate::instantiate::{
+pub use crate::module_artifacts::{
     CompiledFunctionInfo, CompiledModuleInfo, FinishedObject, FunctionName, Metadata, ObjectBuilder,
 };
 

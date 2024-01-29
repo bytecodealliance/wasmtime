@@ -26,7 +26,7 @@ wasmtime-environ = { workspace = true }
 wasmtime-jit-debug = { workspace = true, features = [
   "perf_jitdump",
 ], optional = true }
-wasmtime-jit-icache-coherence = { workspace = true }
+wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-cranelift = { workspace = true, optional = true }
@@ -97,6 +97,7 @@ default = [
   'coredump',
   'debug-builtins',
   'runtime',
+  'component-model',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -171,4 +172,4 @@ coredump = ["dep:wasm-encoder", "runtime"]
 debug-builtins = ["wasmtime-runtime?/debug-builtins"]
 
 # Enable support for executing compiled Wasm modules.
-runtime = ["dep:wasmtime-runtime"]
+runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence"]
