@@ -360,7 +360,7 @@ wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hype
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",
-  "wasmtime-wast/component-model",
+  "wasmtime-wast?/component-model",
   "wasmtime-cli-flags/component-model"
 ]
 wat = ["dep:wat", "wasmtime/wat"]
