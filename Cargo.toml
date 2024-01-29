@@ -326,6 +326,7 @@ default = [
   "coredump",
   "addr2line",
   "debug-builtins",
+  "component-model",
 
   # Enable some nice features of clap by default, but they come at a binary size
   # cost, so allow disabling this through disabling of our own `default`
