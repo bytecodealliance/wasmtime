@@ -410,72 +410,24 @@
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
 
-#[macro_use]
-mod func;
+#[cfg(feature = "runtime")]
+mod runtime;
+#[cfg(feature = "runtime")]
+pub use runtime::*;
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
-mod compiler;
+mod compile;
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+use compile::*;
 
-mod code;
-mod code_memory;
+#[cfg(feature = "component-model")]
+mod component_artifacts;
 mod config;
-mod debug;
 mod engine;
-mod externals;
-mod instance;
-mod instantiate;
-mod limits;
-mod linker;
-mod memory;
-mod module;
-#[cfg(feature = "profiling")]
-mod profiling;
 mod profiling_agent;
-mod r#ref;
-mod resources;
-mod store;
-mod trampoline;
-mod trap;
-mod type_registry;
-mod types;
-mod v128;
-mod values;
 
-#[cfg(feature = "async")]
-mod stack;
-
-pub use crate::code_memory::CodeMemory;
 pub use crate::config::*;
 pub use crate::engine::*;
-pub use crate::externals::*;
-pub use crate::func::*;
-pub use crate::instance::{Instance, InstancePre};
-pub use crate::instantiate::CompiledModule;
-pub use crate::limits::*;
-pub use crate::linker::*;
-pub use crate::memory::*;
-pub use crate::module::{Module, ModuleExport};
-#[cfg(feature = "profiling")]
-pub use crate::profiling::GuestProfiler;
-pub use crate::r#ref::ExternRef;
-pub use crate::resources::*;
-#[cfg(feature = "async")]
-pub use crate::store::CallHookHandler;
-pub use crate::store::{
-    AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, UpdateDeadline,
-};
-pub use crate::trap::*;
-pub use crate::types::*;
-pub use crate::v128::V128;
-pub use crate::values::*;
-
-#[cfg(feature = "async")]
-pub use crate::stack::*;
-
-#[cfg(feature = "coredump")]
-mod coredump;
-#[cfg(feature = "coredump")]
-pub use crate::coredump::*;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.
 ///
@@ -484,49 +436,9 @@ pub use crate::coredump::*;
 /// This type alias is identical to `anyhow::Result`.
 pub use anyhow::{Error, Result};
 
-#[cfg(feature = "component-model")]
-pub mod component;
+fn _assert_send_and_sync<T: Send + Sync>() {}
 
-cfg_if::cfg_if! {
-    if #[cfg(miri)] {
-        // no extensions on miri
-    } else if #[cfg(unix)] {
-        pub mod unix;
-    } else if #[cfg(windows)] {
-        pub mod windows;
-    } else {
-        // ... unknown os!
-    }
-}
-
-fn _assert_send_sync() {
-    fn _assert<T: Send + Sync>() {}
-    fn _assert_send<T: Send>(_t: T) {}
-    _assert::<Engine>();
-    _assert::<Config>();
-    _assert::<(Func, TypedFunc<(), ()>, Global, Table, Memory)>();
-    _assert::<Instance>();
-    _assert::<Module>();
-    _assert::<Store<()>>();
-    _assert::<StoreContext<'_, ()>>();
-    _assert::<StoreContextMut<'_, ()>>();
-    _assert::<Caller<'_, ()>>();
-    _assert::<Linker<()>>();
-    _assert::<Linker<*mut u8>>();
-    _assert::<ExternRef>();
-    _assert::<InstancePre<()>>();
-    _assert::<InstancePre<*mut u8>>();
-
-    #[cfg(feature = "async")]
-    fn _call_async(s: &mut Store<()>, f: Func) {
-        _assert_send(f.call_async(&mut *s, &[], &mut []))
-    }
-    #[cfg(feature = "async")]
-    fn _typed_call_async(s: &mut Store<()>, f: TypedFunc<(), ()>) {
-        _assert_send(f.call_async(&mut *s, ()))
-    }
-    #[cfg(feature = "async")]
-    fn _instantiate_async(s: &mut Store<()>, m: &Module) {
-        _assert_send(Instance::new_async(s, m, &[]))
-    }
+fn _assertions_lib() {
+    _assert_send_and_sync::<Engine>();
+    _assert_send_and_sync::<Config>();
 }

@@ -1,6 +1,3 @@
-use crate::memory::MemoryCreator;
-use crate::profiling_agent::{self, ProfilingAgent};
-use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, ensure, Result};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -14,7 +11,15 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::Tunables;
-use wasmtime_runtime::{mpk, InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
+
+#[cfg(feature = "runtime")]
+use crate::memory::MemoryCreator;
+#[cfg(feature = "runtime")]
+use crate::profiling_agent::{self, ProfilingAgent};
+#[cfg(feature = "runtime")]
+use crate::trampoline::MemoryCreatorProxy;
+#[cfg(feature = "runtime")]
+use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
 #[cfg(feature = "async")]
 use crate::stack::{StackCreator, StackCreatorProxy};
@@ -22,7 +27,8 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
 pub use wasmtime_environ::CacheStore;
-pub use wasmtime_runtime::MpkEnabled;
+#[cfg(feature = "pooling-allocator")]
+pub use wasmtime_runtime::{mpk, MpkEnabled};
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -101,6 +107,7 @@ pub struct Config {
     pub(crate) tunables: Tunables,
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
+    #[cfg(feature = "runtime")]
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
@@ -189,6 +196,7 @@ impl Config {
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiling_strategy: ProfilingStrategy::None,
+            #[cfg(feature = "runtime")]
             mem_creator: None,
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
             // 512k of stack -- note that this is chosen currently to not be too
@@ -1108,6 +1116,7 @@ impl Config {
     ///
     /// Custom memory creators are used when creating host `Memory` objects or when
     /// creating instance linear memories for the on-demand instance allocation strategy.
+    #[cfg(feature = "runtime")]
     pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
         self.mem_creator = Some(Arc::new(MemoryCreatorProxy(mem_creator)));
         self
@@ -1607,6 +1616,7 @@ impl Config {
         Ok(())
     }
 
+    #[cfg(feature = "runtime")]
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
@@ -1639,6 +1649,7 @@ impl Config {
         }
     }
 
+    #[cfg(feature = "runtime")]
     pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
         Ok(match self.profiling_strategy {
             ProfilingStrategy::PerfMap => profiling_agent::new_perfmap()?,
@@ -1650,24 +1661,22 @@ impl Config {
 
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn build_compiler(mut self) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
+        let target = self.compiler_config.target.clone();
+
         let mut compiler = match self.compiler_config.strategy {
             #[cfg(feature = "cranelift")]
-            Strategy::Auto => wasmtime_cranelift::builder(),
+            Strategy::Auto => wasmtime_cranelift::builder(target)?,
             #[cfg(all(feature = "winch", not(feature = "cranelift")))]
-            Strategy::Auto => wasmtime_winch::builder(),
+            Strategy::Auto => wasmtime_winch::builder(target)?,
             #[cfg(feature = "cranelift")]
-            Strategy::Cranelift => wasmtime_cranelift::builder(),
+            Strategy::Cranelift => wasmtime_cranelift::builder(target)?,
             #[cfg(not(feature = "cranelift"))]
             Strategy::Cranelift => bail!("cranelift support not compiled in"),
             #[cfg(feature = "winch")]
-            Strategy::Winch => wasmtime_winch::builder(),
+            Strategy::Winch => wasmtime_winch::builder(target)?,
             #[cfg(not(feature = "winch"))]
             Strategy::Winch => bail!("winch support not compiled in"),
         };
-
-        if let Some(target) = &self.compiler_config.target {
-            compiler.target(target.clone())?;
-        }
 
         if let Some(path) = &self.compiler_config.clif_dir {
             compiler.clif_dir(path)?;
@@ -1813,6 +1822,15 @@ impl Config {
     }
 }
 
+/// If building without the runtime feature we can't determine the page size of
+/// the platform where the execution will happen so just keep the original
+/// values.
+#[cfg(not(feature = "runtime"))]
+fn round_up_to_pages(val: u64) -> u64 {
+    val
+}
+
+#[cfg(feature = "runtime")]
 fn round_up_to_pages(val: u64) -> u64 {
     let page_size = wasmtime_runtime::page_size() as u64;
     debug_assert!(page_size.is_power_of_two());

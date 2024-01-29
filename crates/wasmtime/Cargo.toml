@@ -21,7 +21,7 @@ rustdoc-args = ["--cfg", "nightlydoc"]
 features = ["component-model"]
 
 [dependencies]
-wasmtime-runtime = { workspace = true }
+wasmtime-runtime = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-jit-debug = { workspace = true, features = [
   "perf_jitdump",
@@ -96,6 +96,7 @@ default = [
   'addr2line',
   'coredump',
   'debug-builtins',
+  'runtime',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -132,18 +133,16 @@ async = [
   "wasmtime-runtime/async",
   "dep:async-trait",
   "wasmtime-component-macro?/async",
+  "runtime",
 ]
 
 # Enables support for the pooling instance allocation strategy
-pooling-allocator = ["wasmtime-runtime/pooling-allocator"]
+pooling-allocator = ["runtime", "wasmtime-runtime/pooling-allocator"]
 
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
-all-arch = [
-  "wasmtime-cranelift?/all-arch",
-  "wasmtime-winch?/all-arch",
-]
+all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch"]
 
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal
@@ -152,21 +151,24 @@ component-model = [
   "wasmtime-environ/component-model",
   "wasmtime-cranelift?/component-model",
   "wasmtime-winch?/component-model",
-  "wasmtime-runtime/component-model",
+  "wasmtime-runtime?/component-model",
   "dep:wasmtime-component-macro",
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
 ]
 
-wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
+wmemcheck = ["wasmtime-runtime?/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
 
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
 demangle = ["wasmtime-environ/demangle"]
 
 # Enable support for generating core dumps on traps.
-coredump = ["dep:wasm-encoder"]
+coredump = ["dep:wasm-encoder", "runtime"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["wasmtime-runtime/debug-builtins"]
+debug-builtins = ["wasmtime-runtime?/debug-builtins"]
+
+# Enable support for executing compiled Wasm modules.
+runtime = ["dep:wasmtime-runtime"]

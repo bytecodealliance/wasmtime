@@ -1,20 +1,19 @@
-use crate::{profiling_agent::ProfilingAgent, type_registry::TypeRegistry, CodeMemory, Config};
-use anyhow::{Context, Result};
-use object::write::{Object, StandardSegment};
-use object::SectionKind;
+use std::sync::{atomic::AtomicU64, Arc};
+
+use anyhow::Result;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
-use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-#[cfg(feature = "cache")]
-use wasmtime_cache::CacheConfig;
-use wasmtime_environ::obj;
-use wasmtime_environ::{FlagValue, ObjectKind};
-use wasmtime_runtime::{CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
+use serde_derive::{Deserialize, Serialize};
+use wasmtime_environ::{FlagValue, Tunables};
+#[cfg(feature = "runtime")]
+use wasmtime_runtime::{CompiledModuleIdAllocator, InstanceAllocator};
 
-mod serialization;
+use crate::Config;
+#[cfg(feature = "runtime")]
+use crate::{profiling_agent::ProfilingAgent, runtime::type_registry::TypeRegistry};
+
+pub(crate) const VERSION: u8 = 0;
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -40,22 +39,33 @@ mod serialization;
 /// default settings.
 #[derive(Clone)]
 pub struct Engine {
-    inner: Arc<EngineInner>,
+    pub(crate) inner: Arc<EngineInner>,
 }
 
-struct EngineInner {
-    config: Config,
+pub(crate) struct EngineInner {
+    pub(crate) config: Config,
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    compiler: Box<dyn wasmtime_environ::Compiler>,
-    allocator: Box<dyn InstanceAllocator + Send + Sync>,
-    profiler: Box<dyn ProfilingAgent>,
-    signatures: TypeRegistry,
-    epoch: AtomicU64,
-    unique_id_allocator: CompiledModuleIdAllocator,
+    pub(crate) compiler: Box<dyn wasmtime_environ::Compiler>,
+    #[cfg(feature = "runtime")]
+    pub(crate) allocator: Box<dyn InstanceAllocator + Send + Sync>,
+    #[cfg(feature = "runtime")]
+    pub(crate) profiler: Box<dyn ProfilingAgent>,
+    #[cfg(feature = "runtime")]
+    pub(crate) signatures: TypeRegistry,
+    pub(crate) epoch: AtomicU64,
+    #[cfg(feature = "runtime")]
+    pub(crate) unique_id_allocator: CompiledModuleIdAllocator,
 
-    // One-time check of whether the compiler's settings, if present, are
-    // compatible with the native host.
-    compatible_with_native_host: OnceCell<Result<(), String>>,
+    /// One-time check of whether the compiler's settings, if present, are
+    /// compatible with the native host.
+    #[cfg(feature = "runtime")]
+    pub(crate) compatible_with_native_host: OnceCell<Result<(), String>>,
+}
+
+impl Default for Engine {
+    fn default() -> Engine {
+        Engine::new(&Config::default()).unwrap()
+    }
 }
 
 impl Engine {
@@ -72,38 +82,190 @@ impl Engine {
     /// to `true`, but explicitly disable these two compiler settings
     /// will cause errors.
     pub fn new(config: &Config) -> Result<Engine> {
-        // Ensure that wasmtime_runtime's signal handlers are configured. This
-        // is the per-program initialization required for handling traps, such
-        // as configuring signals, vectored exception handlers, etc.
-        wasmtime_runtime::init_traps(crate::module::is_wasm_trap_pc, config.macos_use_mach_ports);
-        #[cfg(feature = "debug-builtins")]
-        wasmtime_runtime::debug_builtins::ensure_exported();
+        #[cfg(feature = "runtime")]
+        {
+            // Ensure that wasmtime_runtime's signal handlers are configured. This
+            // is the per-program initialization required for handling traps, such
+            // as configuring signals, vectored exception handlers, etc.
+            wasmtime_runtime::init_traps(
+                crate::module::is_wasm_trap_pc,
+                config.macos_use_mach_ports,
+            );
+            #[cfg(feature = "debug-builtins")]
+            wasmtime_runtime::debug_builtins::ensure_exported();
+        }
 
-        let registry = TypeRegistry::new();
         let config = config.clone();
         config.validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let (config, compiler) = config.build_compiler()?;
 
-        let allocator = config.build_allocator()?;
-        let profiler = config.build_profiler()?;
-
         Ok(Engine {
             inner: Arc::new(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
-                config,
-                allocator,
-                profiler,
-                signatures: registry,
+                #[cfg(feature = "runtime")]
+                allocator: config.build_allocator()?,
+                #[cfg(feature = "runtime")]
+                profiler: config.build_profiler()?,
+                #[cfg(feature = "runtime")]
+                signatures: TypeRegistry::new(),
                 epoch: AtomicU64::new(0),
+                #[cfg(feature = "runtime")]
                 unique_id_allocator: CompiledModuleIdAllocator::new(),
+                #[cfg(feature = "runtime")]
                 compatible_with_native_host: OnceCell::new(),
+                config,
             }),
         })
     }
 
+    /// Returns the configuration settings that this engine is using.
+    #[inline]
+    pub fn config(&self) -> &Config {
+        &self.inner.config
+    }
+
+    pub(crate) fn run_maybe_parallel<
+        A: Send,
+        B: Send,
+        E: Send,
+        F: Fn(A) -> Result<B, E> + Send + Sync,
+    >(
+        &self,
+        input: Vec<A>,
+        f: F,
+    ) -> Result<Vec<B>, E> {
+        if self.config().parallel_compilation {
+            #[cfg(feature = "parallel-compilation")]
+            return input
+                .into_par_iter()
+                .map(|a| f(a))
+                .collect::<Result<Vec<B>, E>>();
+        }
+
+        // In case the parallel-compilation feature is disabled or the parallel_compilation config
+        // was turned off dynamically fallback to the non-parallel version.
+        input
+            .into_iter()
+            .map(|a| f(a))
+            .collect::<Result<Vec<B>, E>>()
+    }
+
+    /// Take a weak reference to this engine.
+    pub fn weak(&self) -> EngineWeak {
+        EngineWeak {
+            inner: Arc::downgrade(&self.inner),
+        }
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "runtime")] {
+        use anyhow::Context;
+        use std::path::Path;
+        use std::sync::atomic::Ordering;
+        #[cfg(feature = "cache")]
+        use wasmtime_cache::CacheConfig;
+        use wasmtime_environ::ObjectKind;
+        use wasmtime_runtime::MmapVec;
+
+        use crate::CodeMemory;
+
+        mod serialization;
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(any(feature = "cranelift", feature = "winch"))] {
+        use object::write::{Object, StandardSegment};
+        use object::SectionKind;
+        use wasmtime_environ::obj;
+
+        use crate::append_compiler_info;
+    }
+}
+
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+impl Engine {
+    pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
+        &*self.inner.compiler
+    }
+
+    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
+        append_compiler_info(self, obj);
+    }
+
+    pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
+        let section = obj.add_section(
+            obj.segment_name(StandardSegment::Data).to_vec(),
+            obj::ELF_WASM_BTI.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let contents = if self.compiler().is_branch_protection_enabled() {
+            1
+        } else {
+            0
+        };
+        obj.append_section_data(section, &[contents], 1);
+    }
+
+    /// Ahead-of-time (AOT) compiles a WebAssembly module.
+    ///
+    /// The `bytes` provided must be in one of two formats:
+    ///
+    /// * A [binary-encoded][binary] WebAssembly module. This is always supported.
+    /// * A [text-encoded][text] instance of the WebAssembly text format.
+    ///   This is only supported when the `wat` feature of this crate is enabled.
+    ///   If this is supplied then the text format will be parsed before validation.
+    ///   Note that the `wat` feature is enabled by default.
+    ///
+    /// This method may be used to compile a module for use with a different target
+    /// host. The output of this method may be used with
+    /// [`Module::deserialize`](crate::Module::deserialize) on hosts compatible
+    /// with the [`Config`](crate::Config) associated with this [`Engine`].
+    ///
+    /// The output of this method is safe to send to another host machine for later
+    /// execution. As the output is already a compiled module, translation and code
+    /// generation will be skipped and this will improve the performance of constructing
+    /// a [`Module`](crate::Module) from the output of this method.
+    ///
+    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
+    /// [text]: https://webassembly.github.io/spec/core/text/index.html
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(&bytes)?;
+        let (v, _) = crate::build_artifacts::<Vec<u8>>(self, &bytes)?;
+        Ok(v)
+    }
+
+    /// Same as [`Engine::precompile_module`] except for a
+    /// [`Component`](crate::component::Component)
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg(feature = "component-model")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
+    pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(&bytes)?;
+        let (v, _) = crate::build_component_artifacts::<Vec<u8>>(self, &bytes)?;
+        Ok(v)
+    }
+}
+
+/// Return value from the [`Engine::detect_precompiled`] API.
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[cfg(feature = "runtime")]
+pub enum Precompiled {
+    /// The input bytes look like a precompiled core wasm module.
+    Module,
+    /// The input bytes look like a precompiled wasm component.
+    Component,
+}
+
+#[cfg(feature = "runtime")]
+impl Engine {
     /// Eagerly initialize thread-local functionality shared by all [`Engine`]s.
     ///
     /// Wasmtime's implementation on some platforms may involve per-thread
@@ -123,17 +285,6 @@ impl Engine {
     /// necessarily true of all embeddings.
     pub fn tls_eager_initialize() {
         wasmtime_runtime::tls_eager_initialize();
-    }
-
-    /// Returns the configuration settings that this engine is using.
-    #[inline]
-    pub fn config(&self) -> &Config {
-        &self.inner.config
-    }
-
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
-        &*self.inner.compiler
     }
 
     pub(crate) fn allocator(&self) -> &dyn InstanceAllocator {
@@ -181,9 +332,10 @@ impl Engine {
     /// to the other relevant methods.
     ///
     /// When performing `increment_epoch` in a separate thread, consider using
-    /// [`Engine::weak`] to hold an [`EngineWeak`] and performing
-    /// [`EngineWeak::upgrade`] on each tick, so that the epoch ticking thread
-    /// does not keep an [`Engine`] alive longer than any of its consumers.
+    /// [`Engine::weak`] to hold an [`EngineWeak`](crate::EngineWeak) and
+    /// performing [`EngineWeak::upgrade`](crate::EngineWeak::upgrade) on each
+    /// tick, so that the epoch ticking thread does not keep an [`Engine`] alive
+    /// longer than any of its consumers.
     ///
     /// ## Signal Safety
     ///
@@ -198,50 +350,6 @@ impl Engine {
         &self.inner.unique_id_allocator
     }
 
-    /// Ahead-of-time (AOT) compiles a WebAssembly module.
-    ///
-    /// The `bytes` provided must be in one of two formats:
-    ///
-    /// * A [binary-encoded][binary] WebAssembly module. This is always supported.
-    /// * A [text-encoded][text] instance of the WebAssembly text format.
-    ///   This is only supported when the `wat` feature of this crate is enabled.
-    ///   If this is supplied then the text format will be parsed before validation.
-    ///   Note that the `wat` feature is enabled by default.
-    ///
-    /// This method may be used to compile a module for use with a different target
-    /// host. The output of this method may be used with
-    /// [`Module::deserialize`](crate::Module::deserialize) on hosts compatible
-    /// with the [`Config`] associated with this [`Engine`].
-    ///
-    /// The output of this method is safe to send to another host machine for later
-    /// execution. As the output is already a compiled module, translation and code
-    /// generation will be skipped and this will improve the performance of constructing
-    /// a [`Module`](crate::Module) from the output of this method.
-    ///
-    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
-    /// [text]: https://webassembly.github.io/spec/core/text/index.html
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(&bytes)?;
-        let (mmap, _) = crate::Module::build_artifacts(self, &bytes)?;
-        Ok(mmap.to_vec())
-    }
-
-    /// Same as [`Engine::precompile_module`] except for a
-    /// [`Component`](crate::component::Component)
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    #[cfg(feature = "component-model")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
-    pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(&bytes)?;
-        let (mmap, _) = crate::component::Component::build_artifacts(self, &bytes)?;
-        Ok(mmap.to_vec())
-    }
-
     /// Returns a [`std::hash::Hash`] that can be used to check precompiled WebAssembly compatibility.
     ///
     /// The outputs of [`Engine::precompile_module`] and [`Engine::precompile_component`]
@@ -252,32 +360,6 @@ impl Engine {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
         crate::module::HashedEngineCompileEnv(self)
-    }
-
-    pub(crate) fn run_maybe_parallel<
-        A: Send,
-        B: Send,
-        E: Send,
-        F: Fn(A) -> Result<B, E> + Send + Sync,
-    >(
-        &self,
-        input: Vec<A>,
-        f: F,
-    ) -> Result<Vec<B>, E> {
-        if self.config().parallel_compilation {
-            #[cfg(feature = "parallel-compilation")]
-            return input
-                .into_par_iter()
-                .map(|a| f(a))
-                .collect::<Result<Vec<B>, E>>();
-        }
-
-        // In case the parallel-compilation feature is disabled or the parallel_compilation config
-        // was turned off dynamically fallback to the non-parallel version.
-        input
-            .into_iter()
-            .map(|a| f(a))
-            .collect::<Result<Vec<B>, E>>()
     }
 
     /// Executes `f1` and `f2` in parallel if parallel compilation is enabled at
@@ -581,26 +663,6 @@ impl Engine {
         ))
     }
 
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
-        serialization::append_compiler_info(self, obj);
-    }
-
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
-        let section = obj.add_section(
-            obj.segment_name(StandardSegment::Data).to_vec(),
-            obj::ELF_WASM_BTI.as_bytes().to_vec(),
-            SectionKind::ReadOnlyData,
-        );
-        let contents = if self.compiler().is_branch_protection_enabled() {
-            1
-        } else {
-            0
-        };
-        obj.append_section_data(section, &[contents], 1);
-    }
-
     /// Loads a `CodeMemory` from the specified in-memory slice, copying it to a
     /// uniquely owned mmap.
     ///
@@ -659,28 +721,6 @@ impl Engine {
     pub fn detect_precompiled_file(&self, path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
         serialization::detect_precompiled_file(path)
     }
-
-    /// Take a weak reference to this engine.
-    pub fn weak(&self) -> EngineWeak {
-        EngineWeak {
-            inner: Arc::downgrade(&self.inner),
-        }
-    }
-}
-
-impl Default for Engine {
-    fn default() -> Engine {
-        Engine::new(&Config::default()).unwrap()
-    }
-}
-
-/// Return value from the [`Engine::detect_precompiled`] API.
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-pub enum Precompiled {
-    /// The input bytes look like a precompiled core wasm module.
-    Module,
-    /// The input bytes look like a precompiled wasm component.
-    Component,
 }
 
 /// A weak reference to an [`Engine`].
@@ -697,17 +737,282 @@ impl EngineWeak {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Metadata<'a> {
+    pub(crate) target: String,
+    #[serde(borrow)]
+    pub(crate) shared_flags: Vec<(&'a str, FlagValue<'a>)>,
+    #[serde(borrow)]
+    pub(crate) isa_flags: Vec<(&'a str, FlagValue<'a>)>,
+    pub(crate) tunables: Tunables,
+    pub(crate) features: WasmFeatures,
+}
+
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+impl Metadata<'_> {
+    pub(crate) fn new(engine: &Engine) -> Metadata<'static> {
+        let wasmparser::WasmFeatures {
+            reference_types,
+            multi_value,
+            bulk_memory,
+            component_model,
+            simd,
+            threads,
+            tail_call,
+            multi_memory,
+            exceptions,
+            memory64,
+            relaxed_simd,
+            extended_const,
+            memory_control,
+            function_references,
+            gc,
+            component_model_values,
+            component_model_nested_names,
+
+            // Always on; we don't currently have knobs for these.
+            mutable_global: _,
+            saturating_float_to_int: _,
+            sign_extension: _,
+            floats: _,
+        } = engine.config().features;
+
+        assert!(!memory_control);
+        assert!(!gc);
+        assert!(!component_model_values);
+        assert!(!component_model_nested_names);
+
+        Metadata {
+            target: engine.compiler().triple().to_string(),
+            shared_flags: engine.compiler().flags(),
+            isa_flags: engine.compiler().isa_flags(),
+            tunables: engine.config().tunables.clone(),
+            features: WasmFeatures {
+                reference_types,
+                multi_value,
+                bulk_memory,
+                component_model,
+                simd,
+                threads,
+                tail_call,
+                multi_memory,
+                exceptions,
+                memory64,
+                relaxed_simd,
+                extended_const,
+                function_references,
+            },
+        }
+    }
+}
+// This exists because `wasmparser::WasmFeatures` isn't serializable
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub(crate) struct WasmFeatures {
+    pub(crate) reference_types: bool,
+    pub(crate) multi_value: bool,
+    pub(crate) bulk_memory: bool,
+    pub(crate) component_model: bool,
+    pub(crate) simd: bool,
+    pub(crate) tail_call: bool,
+    pub(crate) threads: bool,
+    pub(crate) multi_memory: bool,
+    pub(crate) exceptions: bool,
+    pub(crate) memory64: bool,
+    pub(crate) relaxed_simd: bool,
+    pub(crate) extended_const: bool,
+    pub(crate) function_references: bool,
+}
+
 #[cfg(test)]
-mod tests {
-    use std::{
-        collections::hash_map::DefaultHasher,
-        hash::{Hash, Hasher},
-    };
+mod test {
+    use super::*;
 
     use crate::{Config, Engine, Module, ModuleVersionStrategy, OptLevel};
 
     use anyhow::Result;
     use tempfile::TempDir;
+
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+
+    #[test]
+    fn test_architecture_mismatch() -> Result<()> {
+        let engine = Engine::default();
+        let mut metadata = Metadata::new(&engine);
+        metadata.target = "unknown-generic-linux".to_string();
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled for architecture 'unknown'",
+            ),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_os_mismatch() -> Result<()> {
+        let engine = Engine::default();
+        let mut metadata = Metadata::new(&engine);
+
+        metadata.target = format!(
+            "{}-generic-unknown",
+            target_lexicon::Triple::host().architecture
+        );
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled for operating system 'unknown'",
+            ),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cranelift_flags_mismatch() -> Result<()> {
+        let engine = Engine::default();
+        let mut metadata = Metadata::new(&engine);
+
+        metadata
+            .shared_flags
+            .push(("preserve_frame_pointers", FlagValue::Bool(false)));
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert!(format!("{:?}", e).starts_with(
+                "\
+compilation settings of module incompatible with native host
+
+Caused by:
+    setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported"
+            )),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_isa_flags_mismatch() -> Result<()> {
+        let engine = Engine::default();
+        let mut metadata = Metadata::new(&engine);
+
+        metadata
+            .isa_flags
+            .push(("not_a_flag", FlagValue::Bool(true)));
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert!(format!("{:?}", e).starts_with(
+                "\
+compilation settings of module incompatible with native host
+
+Caused by:
+    cannot test if target-specific flag \"not_a_flag\" is available at runtime",
+            )),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_tunables_int_mismatch() -> Result<()> {
+        let engine = Engine::default();
+        let mut metadata = Metadata::new(&engine);
+
+        metadata.tunables.static_memory_offset_guard_size = 0;
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled with a static memory guard size of '0' but '2147483648' is expected for the host"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_tunables_bool_mismatch() -> Result<()> {
+        let mut config = Config::new();
+        config.epoch_interruption(true);
+
+        let engine = Engine::new(&config)?;
+        let mut metadata = Metadata::new(&engine);
+        metadata.tunables.epoch_interruption = false;
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled without epoch interruption but it is enabled for the host"
+            ),
+        }
+
+        let mut config = Config::new();
+        config.epoch_interruption(false);
+
+        let engine = Engine::new(&config)?;
+        let mut metadata = Metadata::new(&engine);
+        metadata.tunables.epoch_interruption = true;
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled with epoch interruption but it is not enabled for the host"
+            ),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_feature_mismatch() -> Result<()> {
+        let mut config = Config::new();
+        config.wasm_threads(true);
+
+        let engine = Engine::new(&config)?;
+        let mut metadata = Metadata::new(&engine);
+        metadata.features.threads = false;
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled without WebAssembly threads support but it is enabled for the host"),
+        }
+
+        let mut config = Config::new();
+        config.wasm_threads(false);
+
+        let engine = Engine::new(&config)?;
+        let mut metadata = Metadata::new(&engine);
+        metadata.features.threads = true;
+
+        match metadata.check_compatible(&engine) {
+            Ok(_) => unreachable!(),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly threads support but it is not enabled for the host"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn engine_weak_upgrades() {
+        let engine = Engine::default();
+        let weak = engine.weak();
+        weak.upgrade()
+            .expect("engine is still alive, so weak reference can upgrade");
+        drop(engine);
+        assert!(
+            weak.upgrade().is_none(),
+            "engine was dropped, so weak reference cannot upgrade"
+        );
+    }
 
     #[test]
     #[cfg_attr(miri, ignore)]
@@ -812,18 +1117,5 @@ mod tests {
         assert_ne!(default_version_hash, none_version_hash);
 
         Ok(())
-    }
-
-    #[test]
-    fn engine_weak_upgrades() {
-        let engine = Engine::default();
-        let weak = engine.weak();
-        weak.upgrade()
-            .expect("engine is still alive, so weak reference can upgrade");
-        drop(engine);
-        assert!(
-            weak.upgrade().is_none(),
-            "engine was dropped, so weak reference cannot upgrade"
-        );
     }
 }

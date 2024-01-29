@@ -20,7 +20,7 @@ pub struct IsaBuilder<T> {
 
 impl<T> IsaBuilder<T> {
     /// Create a new ISA builder with the given lookup function.
-    pub fn new(lookup: fn(Triple) -> Result<Builder<T>>) -> Self {
+    pub fn new(triple: Option<Triple>, lookup: fn(Triple) -> Result<Builder<T>>) -> Result<Self> {
         let mut flags = settings::builder();
 
         // We don't use probestack as a stack limit mechanism
@@ -28,14 +28,15 @@ impl<T> IsaBuilder<T> {
             .set("enable_probestack", "false")
             .expect("should be valid flag");
 
-        let mut isa_flags = lookup(Triple::host()).expect("host machine is not a supported target");
+        let triple = triple.unwrap_or_else(Triple::host);
+        let mut isa_flags = lookup(triple)?;
         cranelift_native::infer_native_flags(&mut isa_flags).unwrap();
 
-        Self {
+        Ok(Self {
             shared_flags: flags,
             inner: isa_flags,
             lookup,
-        }
+        })
     }
 
     pub fn triple(&self) -> &target_lexicon::Triple {
