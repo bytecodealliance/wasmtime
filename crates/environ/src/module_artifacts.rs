@@ -1,7 +1,5 @@
-//! Define the `instantiate` function, which takes a byte array containing an
-//! encoded wasm module and returns a live wasm instance. Also, define
-//! `CompiledModule` to allow compiling and instantiating to be done as separate
-//! steps.
+//! Definitions of runtime structures and metadata which are serialized into ELF
+//! with `bincode` as part of a module's compilation process.
 
 use crate::{
     obj, DefinedFuncIndex, FuncIndex, FunctionLoc, MemoryInitialization, Module, ModuleTranslation,

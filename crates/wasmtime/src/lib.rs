@@ -238,6 +238,10 @@
 //! crate. Be sure to check the API you're using to see if any crate features
 //! are enabled.
 //!
+//! * `runtime` - Enabled by default, this features enables executing
+//!   WebAssembly modules. If modules are only compiled, however, this feature
+//!   can be disabled.
+//!
 //! * `cranelift` - Enabled by default, this features enables using Cranelift at
 //!   runtime to compile a WebAssembly module to native code. This feature is
 //!   required to process and compile new WebAssembly modules. If this feature
@@ -417,11 +421,7 @@ pub use runtime::*;
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 mod compile;
-#[cfg(any(feature = "cranelift", feature = "winch"))]
-use compile::*;
 
-#[cfg(feature = "component-model")]
-mod component_artifacts;
 mod config;
 mod engine;
 mod profiling_agent;

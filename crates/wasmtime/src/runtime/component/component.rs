@@ -1,10 +1,6 @@
 use crate::{
-    code::CodeObject,
-    code_memory::CodeMemory,
-    component_artifacts::{CompiledComponentInfo, ComponentArtifacts},
-    instantiate::MmapVecWrapper,
-    type_registry::TypeCollection,
-    Engine, Module, ResourcesRequired,
+    code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
+    type_registry::TypeCollection, Engine, Module, ResourcesRequired,
 };
 use anyhow::{bail, Context, Result};
 use std::fs;
@@ -13,9 +9,10 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
-    TrampolineIndex, TypeComponentIndex, VMComponentOffsets,
+    AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, GlobalInitializer,
+    InstantiateModule, StaticModuleIndex, TrampolineIndex, TypeComponentIndex, VMComponentOffsets,
 };
+
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
@@ -102,10 +99,9 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
-        use wasmtime_runtime::MmapVec;
-
-        use crate::build_component_artifacts;
+        use crate::compile::build_component_artifacts;
         use crate::module::HashedEngineCompileEnv;
+        use wasmtime_runtime::MmapVec;
 
         engine
             .check_compatible_with_native_host()
