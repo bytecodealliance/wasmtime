@@ -1,20 +1,20 @@
-use crate::file::convert_systimespec;
+use crate::sync::file::convert_systimespec;
 use fs_set_times::SetTimes;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, IsTerminal, Read, Write};
 use system_interface::io::ReadReady;
 
+use crate::{
+    file::{FdFlags, FileType, WasiFile},
+    Error, ErrorExt,
+};
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
 use io_lifetimes::{AsHandle, BorrowedHandle};
-use wasi_common::{
-    file::{FdFlags, FileType, WasiFile},
-    Error, ErrorExt,
-};
 
 pub struct Stdin(std::io::Stdin);
 
@@ -22,7 +22,7 @@ pub fn stdin() -> Stdin {
     Stdin(std::io::stdin())
 }
 
-#[async_trait::async_trait]
+#[wiggle::async_trait]
 impl WasiFile for Stdin {
     fn as_any(&self) -> &dyn Any {
         self
@@ -64,8 +64,8 @@ impl WasiFile for Stdin {
     }
     async fn set_times(
         &self,
-        atime: Option<wasi_common::SystemTimeSpec>,
-        mtime: Option<wasi_common::SystemTimeSpec>,
+        atime: Option<crate::SystemTimeSpec>,
+        mtime: Option<crate::SystemTimeSpec>,
     ) -> Result<(), Error> {
         self.0
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
@@ -103,7 +103,7 @@ impl AsFd for Stdin {
 
 macro_rules! wasi_file_write_impl {
     ($ty:ty, $ident:ident) => {
-        #[async_trait::async_trait]
+        #[wiggle::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
@@ -149,8 +149,8 @@ macro_rules! wasi_file_write_impl {
             }
             async fn set_times(
                 &self,
-                atime: Option<wasi_common::SystemTimeSpec>,
-                mtime: Option<wasi_common::SystemTimeSpec>,
+                atime: Option<crate::SystemTimeSpec>,
+                mtime: Option<crate::SystemTimeSpec>,
             ) -> Result<(), Error> {
                 self.0
                     .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;

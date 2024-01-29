@@ -27,7 +27,6 @@ wasmtime-cli-flags = { workspace = true, default-features = true, features = [
 ] }
 wasmtime-wasi = { workspace = true, default-features = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
-wasi-cap-std-sync = { workspace = true }
 cap-std = { workspace = true }
 clap = { workspace = true }
 

@@ -6,16 +6,16 @@ pub mod net;
 pub mod sched;
 pub mod stdio;
 
-use crate::sched::sched_ctx;
+use self::sched::sched_ctx;
+use crate::sync::net::Socket;
+pub use crate::sync::{clocks_ctx, random_ctx};
+use crate::{file::FileAccessMode, Error, Table, WasiCtx, WasiFile};
 pub use dir::Dir;
 pub use file::File;
 pub use net::*;
 use std::future::Future;
 use std::mem;
 use std::path::Path;
-use wasi_cap_std_sync::net::Socket;
-pub use wasi_cap_std_sync::{clocks_ctx, random_ctx};
-use wasi_common::{file::FileAccessMode, Error, Table, WasiCtx, WasiFile};
 
 pub struct WasiCtxBuilder {
     ctx: WasiCtx,
@@ -29,40 +29,33 @@ impl WasiCtxBuilder {
             built: false,
         }
     }
-    pub fn env(
-        &mut self,
-        var: &str,
-        value: &str,
-    ) -> Result<&mut Self, wasi_common::StringArrayError> {
+    pub fn env(&mut self, var: &str, value: &str) -> Result<&mut Self, crate::StringArrayError> {
         self.ctx.push_env(var, value)?;
         Ok(self)
     }
-    pub fn envs(
-        &mut self,
-        env: &[(String, String)],
-    ) -> Result<&mut Self, wasi_common::StringArrayError> {
+    pub fn envs(&mut self, env: &[(String, String)]) -> Result<&mut Self, crate::StringArrayError> {
         for (k, v) in env {
             self.ctx.push_env(k, v)?;
         }
         Ok(self)
     }
-    pub fn inherit_env(&mut self) -> Result<&mut Self, wasi_common::StringArrayError> {
+    pub fn inherit_env(&mut self) -> Result<&mut Self, crate::StringArrayError> {
         for (key, value) in std::env::vars() {
             self.ctx.push_env(&key, &value)?;
         }
         Ok(self)
     }
-    pub fn arg(&mut self, arg: &str) -> Result<&mut Self, wasi_common::StringArrayError> {
+    pub fn arg(&mut self, arg: &str) -> Result<&mut Self, crate::StringArrayError> {
         self.ctx.push_arg(arg)?;
         Ok(self)
     }
-    pub fn args(&mut self, arg: &[String]) -> Result<&mut Self, wasi_common::StringArrayError> {
+    pub fn args(&mut self, arg: &[String]) -> Result<&mut Self, crate::StringArrayError> {
         for a in arg {
             self.ctx.push_arg(&a)?;
         }
         Ok(self)
     }
-    pub fn inherit_args(&mut self) -> Result<&mut Self, wasi_common::StringArrayError> {
+    pub fn inherit_args(&mut self) -> Result<&mut Self, crate::StringArrayError> {
         for arg in std::env::args() {
             self.ctx.push_arg(&arg)?;
         }
@@ -81,13 +74,13 @@ impl WasiCtxBuilder {
         self
     }
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin(Box::new(crate::stdio::stdin()))
+        self.stdin(Box::new(crate::tokio::stdio::stdin()))
     }
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout(Box::new(crate::stdio::stdout()))
+        self.stdout(Box::new(crate::tokio::stdio::stdout()))
     }
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr(Box::new(crate::stdio::stderr()))
+        self.stderr(Box::new(crate::tokio::stdio::stderr()))
     }
     pub fn inherit_stdio(&mut self) -> &mut Self {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
@@ -97,7 +90,7 @@ impl WasiCtxBuilder {
         dir: cap_std::fs::Dir,
         guest_path: impl AsRef<Path>,
     ) -> Result<&mut Self, Error> {
-        let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
+        let dir = Box::new(crate::tokio::dir::Dir::from_cap_std(dir));
         self.ctx.push_preopened_dir(dir, guest_path)?;
         Ok(self)
     }
@@ -121,8 +114,8 @@ impl WasiCtxBuilder {
     }
 }
 
-// Much of this crate is implemented in terms of `async` methods from the
-// wasi-cap-std-sync crate. These methods may be async in signature, however,
+// Much of this mod is implemented in terms of `async` methods from the
+// wasmtime_wasi::sync module. These methods may be async in signature, however,
 // they are synchronous in implementation (always Poll::Ready on first poll)
 // and perform blocking syscalls.
 //

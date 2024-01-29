@@ -63,7 +63,11 @@ pub mod random;
 pub mod sched;
 pub mod snapshots;
 mod string_array;
+#[cfg(feature = "sync")]
+pub mod sync;
 pub mod table;
+#[cfg(feature = "tokio")]
+pub mod tokio;
 
 pub use cap_rand::RngCore;
 pub use clocks::{SystemTimeSpec, WasiClocks, WasiMonotonicClock, WasiSystemClock};

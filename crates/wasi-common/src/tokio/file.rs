@@ -1,4 +1,8 @@
-use crate::block_on_dummy_executor;
+use crate::tokio::block_on_dummy_executor;
+use crate::{
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
+    Error,
+};
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 #[cfg(not(windows))]
@@ -6,86 +10,82 @@ use io_lifetimes::AsFd;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::io;
-use wasi_common::{
-    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
-    Error,
-};
 
-pub struct File(wasi_cap_std_sync::file::File);
+pub struct File(crate::sync::file::File);
 
 impl File {
-    pub(crate) fn from_inner(file: wasi_cap_std_sync::file::File) -> Self {
+    pub(crate) fn from_inner(file: crate::sync::file::File) -> Self {
         File(file)
     }
     pub fn from_cap_std(file: cap_std::fs::File) -> Self {
-        Self::from_inner(wasi_cap_std_sync::file::File::from_cap_std(file))
+        Self::from_inner(crate::sync::file::File::from_cap_std(file))
     }
 }
 
-pub struct TcpListener(wasi_cap_std_sync::net::TcpListener);
+pub struct TcpListener(crate::sync::net::TcpListener);
 
 impl TcpListener {
-    pub(crate) fn from_inner(listener: wasi_cap_std_sync::net::TcpListener) -> Self {
+    pub(crate) fn from_inner(listener: crate::sync::net::TcpListener) -> Self {
         TcpListener(listener)
     }
     pub fn from_cap_std(listener: cap_std::net::TcpListener) -> Self {
-        Self::from_inner(wasi_cap_std_sync::net::TcpListener::from_cap_std(listener))
+        Self::from_inner(crate::sync::net::TcpListener::from_cap_std(listener))
     }
 }
 
-pub struct TcpStream(wasi_cap_std_sync::net::TcpStream);
+pub struct TcpStream(crate::sync::net::TcpStream);
 
 impl TcpStream {
-    pub(crate) fn from_inner(stream: wasi_cap_std_sync::net::TcpStream) -> Self {
+    pub(crate) fn from_inner(stream: crate::sync::net::TcpStream) -> Self {
         TcpStream(stream)
     }
     pub fn from_cap_std(stream: cap_std::net::TcpStream) -> Self {
-        Self::from_inner(wasi_cap_std_sync::net::TcpStream::from_cap_std(stream))
+        Self::from_inner(crate::sync::net::TcpStream::from_cap_std(stream))
     }
 }
 
 #[cfg(unix)]
-pub struct UnixListener(wasi_cap_std_sync::net::UnixListener);
+pub struct UnixListener(crate::sync::net::UnixListener);
 
 #[cfg(unix)]
 impl UnixListener {
-    pub(crate) fn from_inner(listener: wasi_cap_std_sync::net::UnixListener) -> Self {
+    pub(crate) fn from_inner(listener: crate::sync::net::UnixListener) -> Self {
         UnixListener(listener)
     }
     pub fn from_cap_std(listener: cap_std::os::unix::net::UnixListener) -> Self {
-        Self::from_inner(wasi_cap_std_sync::net::UnixListener::from_cap_std(listener))
+        Self::from_inner(crate::sync::net::UnixListener::from_cap_std(listener))
     }
 }
 
 #[cfg(unix)]
-pub struct UnixStream(wasi_cap_std_sync::net::UnixStream);
+pub struct UnixStream(crate::sync::net::UnixStream);
 
 #[cfg(unix)]
 impl UnixStream {
-    fn from_inner(stream: wasi_cap_std_sync::net::UnixStream) -> Self {
+    fn from_inner(stream: crate::sync::net::UnixStream) -> Self {
         UnixStream(stream)
     }
     pub fn from_cap_std(stream: cap_std::os::unix::net::UnixStream) -> Self {
-        Self::from_inner(wasi_cap_std_sync::net::UnixStream::from_cap_std(stream))
+        Self::from_inner(crate::sync::net::UnixStream::from_cap_std(stream))
     }
 }
 
-pub struct Stdin(wasi_cap_std_sync::stdio::Stdin);
+pub struct Stdin(crate::sync::stdio::Stdin);
 
 pub fn stdin() -> Stdin {
-    Stdin(wasi_cap_std_sync::stdio::stdin())
+    Stdin(crate::sync::stdio::stdin())
 }
 
-pub struct Stdout(wasi_cap_std_sync::stdio::Stdout);
+pub struct Stdout(crate::sync::stdio::Stdout);
 
 pub fn stdout() -> Stdout {
-    Stdout(wasi_cap_std_sync::stdio::stdout())
+    Stdout(crate::sync::stdio::stdout())
 }
 
-pub struct Stderr(wasi_cap_std_sync::stdio::Stderr);
+pub struct Stderr(crate::sync::stdio::Stderr);
 
 pub fn stderr() -> Stderr {
-    Stderr(wasi_cap_std_sync::stdio::stderr())
+    Stderr(crate::sync::stdio::stderr())
 }
 
 macro_rules! wasi_file_impl {
@@ -158,8 +158,8 @@ macro_rules! wasi_file_impl {
             }
             async fn set_times(
                 &self,
-                atime: Option<wasi_common::SystemTimeSpec>,
-                mtime: Option<wasi_common::SystemTimeSpec>,
+                atime: Option<crate::SystemTimeSpec>,
+                mtime: Option<crate::SystemTimeSpec>,
             ) -> Result<(), Error> {
                 block_on_dummy_executor(move || self.0.set_times(atime, mtime))
             }

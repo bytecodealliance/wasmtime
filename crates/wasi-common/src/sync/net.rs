@@ -1,3 +1,7 @@
+use crate::{
+    file::{FdFlags, FileType, RiFlags, RoFlags, SdFlags, SiFlags, WasiFile},
+    Error, ErrorExt,
+};
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 use io_lifetimes::AsSocketlike;
@@ -13,10 +17,6 @@ use system_interface::fs::GetSetFdFlags;
 use system_interface::io::IoExt;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
-use wasi_common::{
-    file::{FdFlags, FileType, RiFlags, RoFlags, SdFlags, SiFlags, WasiFile},
-    Error, ErrorExt,
-};
 
 pub enum Socket {
     TcpListener(cap_std::net::TcpListener),
@@ -57,10 +57,10 @@ impl From<cap_std::os::unix::net::UnixStream> for Socket {
 impl From<Socket> for Box<dyn WasiFile> {
     fn from(listener: Socket) -> Self {
         match listener {
-            Socket::TcpListener(l) => Box::new(crate::net::TcpListener::from_cap_std(l)),
-            Socket::UnixListener(l) => Box::new(crate::net::UnixListener::from_cap_std(l)),
-            Socket::TcpStream(l) => Box::new(crate::net::TcpStream::from_cap_std(l)),
-            Socket::UnixStream(l) => Box::new(crate::net::UnixStream::from_cap_std(l)),
+            Socket::TcpListener(l) => Box::new(crate::sync::net::TcpListener::from_cap_std(l)),
+            Socket::UnixListener(l) => Box::new(crate::sync::net::UnixListener::from_cap_std(l)),
+            Socket::TcpStream(l) => Box::new(crate::sync::net::TcpStream::from_cap_std(l)),
+            Socket::UnixStream(l) => Box::new(crate::sync::net::UnixStream::from_cap_std(l)),
         }
     }
 }
@@ -69,15 +69,15 @@ impl From<Socket> for Box<dyn WasiFile> {
 impl From<Socket> for Box<dyn WasiFile> {
     fn from(listener: Socket) -> Self {
         match listener {
-            Socket::TcpListener(l) => Box::new(crate::net::TcpListener::from_cap_std(l)),
-            Socket::TcpStream(l) => Box::new(crate::net::TcpStream::from_cap_std(l)),
+            Socket::TcpListener(l) => Box::new(crate::sync::net::TcpListener::from_cap_std(l)),
+            Socket::TcpStream(l) => Box::new(crate::sync::net::TcpStream::from_cap_std(l)),
         }
     }
 }
 
 macro_rules! wasi_listen_write_impl {
     ($ty:ty, $stream:ty) => {
-        #[async_trait::async_trait]
+        #[wiggle::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
@@ -105,7 +105,7 @@ macro_rules! wasi_listen_write_impl {
                 Ok(fdflags)
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
-                if fdflags == wasi_common::file::FdFlags::NONBLOCK {
+                if fdflags == crate::file::FdFlags::NONBLOCK {
                     self.0.set_nonblocking(true)?;
                 } else if fdflags.is_empty() {
                     self.0.set_nonblocking(false)?;
@@ -170,7 +170,7 @@ wasi_listen_write_impl!(UnixListener, UnixStream);
 
 macro_rules! wasi_stream_write_impl {
     ($ty:ty, $std_ty:ty) => {
-        #[async_trait::async_trait]
+        #[wiggle::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
@@ -192,7 +192,7 @@ macro_rules! wasi_stream_write_impl {
                 Ok(fdflags)
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
-                if fdflags == wasi_common::file::FdFlags::NONBLOCK {
+                if fdflags == crate::file::FdFlags::NONBLOCK {
                     self.0.set_nonblocking(true)?;
                 } else if fdflags.is_empty() {
                     self.0.set_nonblocking(false)?;
@@ -356,18 +356,16 @@ pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
 /// Return the file-descriptor flags for a given file-like object.
 ///
 /// This returns the flags needed to implement [`WasiFile::get_fdflags`].
-pub fn get_fd_flags<Socketlike: AsSocketlike>(
-    f: Socketlike,
-) -> io::Result<wasi_common::file::FdFlags> {
+pub fn get_fd_flags<Socketlike: AsSocketlike>(f: Socketlike) -> io::Result<crate::file::FdFlags> {
     // On Unix-family platforms, we can use the same system call that we'd use
     // for files on sockets here.
     #[cfg(not(windows))]
     {
-        let mut out = wasi_common::file::FdFlags::empty();
+        let mut out = crate::file::FdFlags::empty();
         if f.get_fd_flags()?
             .contains(system_interface::fs::FdFlags::NONBLOCK)
         {
-            out |= wasi_common::file::FdFlags::NONBLOCK;
+            out |= crate::file::FdFlags::NONBLOCK;
         }
         Ok(out)
     }
@@ -377,8 +375,8 @@ pub fn get_fd_flags<Socketlike: AsSocketlike>(
     // by testing whether a zero-length `recv` appears to block.
     #[cfg(windows)]
     match rustix::net::recv(f, &mut [], rustix::net::RecvFlags::empty()) {
-        Ok(_) => Ok(wasi_common::file::FdFlags::empty()),
-        Err(rustix::io::Errno::WOULDBLOCK) => Ok(wasi_common::file::FdFlags::NONBLOCK),
+        Ok(_) => Ok(crate::file::FdFlags::empty()),
+        Err(rustix::io::Errno::WOULDBLOCK) => Ok(crate::file::FdFlags::NONBLOCK),
         Err(e) => Err(e.into()),
     }
 }

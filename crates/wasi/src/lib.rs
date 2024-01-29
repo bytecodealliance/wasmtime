@@ -19,7 +19,7 @@ pub use wasi_common::{Error, I32Exit, WasiCtx, WasiDir, WasiFile};
 /// in sync.
 #[cfg(feature = "sync")]
 pub mod sync {
-    pub use wasi_cap_std_sync::*;
+    pub use wasi_common::sync::*;
     super::define_wasi!(block_on);
 }
 
@@ -32,7 +32,7 @@ pub use sync::*;
 /// to keep additional dependencies in sync.
 #[cfg(feature = "tokio")]
 pub mod tokio {
-    pub use wasi_tokio::*;
+    pub use wasi_common::tokio::*;
     super::define_wasi!(async T: Send);
 }
 

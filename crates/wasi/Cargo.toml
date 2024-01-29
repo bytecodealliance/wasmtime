@@ -18,8 +18,6 @@ workspace = true
 wasmtime = { workspace = true }
 anyhow = { workspace = true }
 wasi-common = { workspace = true }
-wasi-cap-std-sync = { workspace = true, optional = true }
-wasi-tokio = { workspace = true, optional = true }
 wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
 libc = { workspace = true }
 once_cell = { workspace = true }
@@ -63,8 +61,8 @@ rustix = { workspace = true, features = ["event", "net"], optional = true }
 
 [features]
 default = ["sync", "preview2", "preview1-on-preview2"]
-sync = ["wasi-cap-std-sync", "wiggle"]
-tokio = ["wasi-tokio", "wasmtime/async", "wiggle/wasmtime_async" ]
+sync = ["wasi-common/sync", "wiggle"]
+tokio = ["wasi-common/tokio", "wasmtime/async", "wiggle/wasmtime_async" ]
 exit = []
 preview2 = [
     'wasmtime/component-model',
