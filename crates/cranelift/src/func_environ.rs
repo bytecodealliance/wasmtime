@@ -870,10 +870,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
-        // details.
-        let value_masked = builder
-            .ins()
-            .band_imm(value, Imm64::from(FUNCREF_MASK as i64));
+        // details. Note that `FUNCREF_MASK` has type `usize` which may not be
+        // appropriate for the target architecture. Right now its value is
+        // always -2 so assert that part doesn't change and then thread through
+        // -2 as the immediate.
+        assert_eq!(FUNCREF_MASK as isize, -2);
+        let value_masked = builder.ins().band_imm(value, Imm64::from(-2));
 
         let null_block = builder.create_block();
         let continuation_block = builder.create_block();
