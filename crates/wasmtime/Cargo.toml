@@ -97,6 +97,7 @@ default = [
   'coredump',
   'debug-builtins',
   'runtime',
+  'component-model',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
