@@ -13,7 +13,7 @@ publish = false
 workspace = true
 
 [lib]
-name = "wamstime_c_api"
+name = "wasmtime_c_api"
 doc = false
 test = false
 doctest = false
