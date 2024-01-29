@@ -275,6 +275,7 @@ impl WasiCtxBuilder {
         let mut network = DefaultNetwork::new();
         network.allow_ip_name_lookup(allow_ip_name_lookup);
         network.allow_tcp(tcp_addr_check);
+        network.allow_udp(udp_addr_check);
 
         WasiCtx {
             stdin,
@@ -288,7 +289,6 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-            udp_addr_check,
             network: Box::new(network),
         }
     }
@@ -313,6 +313,5 @@ pub struct WasiCtx {
     pub(crate) stdin: Box<dyn StdinStream>,
     pub(crate) stdout: Box<dyn StdoutStream>,
     pub(crate) stderr: Box<dyn StdoutStream>,
-    pub(crate) udp_addr_check: SocketAddrCheck,
     pub(crate) network: Box<dyn Network>,
 }

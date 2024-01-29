@@ -8,5 +8,4 @@ pub(crate) mod ip_name_lookup;
 pub(crate) mod network;
 mod random;
 pub(crate) mod tcp;
-mod udp;
-mod udp_create_socket;
+pub(crate) mod udp;
