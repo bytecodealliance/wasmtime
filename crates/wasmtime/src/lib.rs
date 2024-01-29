@@ -238,7 +238,7 @@
 //! crate. Be sure to check the API you're using to see if any crate features
 //! are enabled.
 //!
-//! * `runtime` - Enabled by default, this features enables executing
+//! * `runtime` - Enabled by default, this feature enables executing
 //!   WebAssembly modules. If modules are only compiled, however, this feature
 //!   can be disabled.
 //!
