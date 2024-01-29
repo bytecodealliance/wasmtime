@@ -100,7 +100,14 @@ impl CompileCommand {
         });
 
         let output_bytes = if wasmparser::Parser::is_component(&input) {
-            engine.precompile_component(&input)?
+            #[cfg(feature = "component-model")]
+            {
+                engine.precompile_component(&input)?
+            }
+            #[cfg(not(feature = "component-model"))]
+            {
+                bail!("component model support was disabled at compile time")
+            }
         } else {
             engine.precompile_module(&input)?
         };
