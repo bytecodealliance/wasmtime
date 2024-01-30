@@ -7,6 +7,8 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
+links = "wasmtime-c-api"
+include = ["include", "src", "wasm-c-api/include", "build.rs"]
 
 [lints]
 workspace = true
