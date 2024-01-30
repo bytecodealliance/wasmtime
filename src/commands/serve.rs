@@ -175,7 +175,7 @@ impl ServeCommand {
         let mut store = Store::new(engine, host);
 
         if self.run.common.wasm.timeout.is_some() {
-            store.set_epoch_deadline(1);
+            store.set_epoch_deadline(u64::from(EPOCH_PRECISION) + 1);
         }
 
         store.data_mut().limits = self.run.store_limits();
@@ -268,7 +268,10 @@ impl ServeCommand {
         eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
 
         let _epoch_thread = if let Some(timeout) = self.run.common.wasm.timeout {
-            Some(EpochThread::spawn(timeout, engine.clone()))
+            Some(EpochThread::spawn(
+                timeout / EPOCH_PRECISION,
+                engine.clone(),
+            ))
         } else {
             None
         };
@@ -293,6 +296,12 @@ impl ServeCommand {
         }
     }
 }
+
+/// This is the number of epochs that we will observe before expiring a request handler. As
+/// instances may be started at any point within an epoch, and epochs are counted globally per
+/// engine, we expire after `EPOCH_PRECISION + 1` epochs have been observed. This gives a maximum
+/// overshoot of `timeout / EPOCH_PRECISION`, which is more desirable than expiring early.
+const EPOCH_PRECISION: u32 = 10;
 
 struct EpochThread {
     shutdown: Arc<AtomicBool>,
