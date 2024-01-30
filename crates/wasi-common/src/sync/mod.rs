@@ -135,3 +135,6 @@ pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
     let mut rng = cap_rand::thread_rng(cap_rand::ambient_authority());
     Box::new(cap_rand::rngs::StdRng::from_seed(rng.gen()))
 }
+
+#[cfg(feature = "wasmtime")]
+super::define_wasi!(block_on);

@@ -132,3 +132,6 @@ where
         wiggle::run_in_dummy_executor(f()).expect("wrapped operation should be synchronous")
     })
 }
+
+#[cfg(feature = "wasmtime")]
+super::define_wasi!(async T: Send);

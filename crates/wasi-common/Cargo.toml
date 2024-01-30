@@ -31,7 +31,7 @@ bitflags = { workspace = true }
 log = { workspace = true }
 
 # Optional, enabled by wasmtime feature:
-wasmtime = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true, features = ['runtime'] }
 # Optional, enabled by sync feature:
 cap-fs-ext = { workspace = true, optional = true }
 cap-time-ext = { workspace = true, optional = true }
@@ -60,8 +60,7 @@ features = [
 tempfile = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift', 'async'] }
-wasmtime-wasi = { path = "../wasi", features = ['sync', 'tokio'] }
+wasmtime = { workspace = true, features = ['cranelift', 'async', 'runtime'] }
 test-programs-artifacts = { workspace = true }
 tokio = { workspace = true, features = ['macros', 'rt-multi-thread'] }
 
@@ -91,5 +90,12 @@ sync = [
 ]
 tokio = [
     "sync",
+    "wasmtime/async",
+    "wiggle/wasmtime_async",
     "dep:tokio",
 ]
+exit = []
+
+[[test]]
+name = "all"
+required-features = ["wasmtime", "sync", "tokio"]

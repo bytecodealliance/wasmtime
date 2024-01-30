@@ -1,6 +1,6 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime_wasi::sync::{add_to_linker, WasiCtxBuilder};
+use wasi_common::sync::{add_to_linker, WasiCtxBuilder};
 
 foreach_preview1!(assert_test_exists);
 

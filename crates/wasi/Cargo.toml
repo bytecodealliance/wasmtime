@@ -9,7 +9,7 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
-include = ["src/**/*", "README.md", "LICENSE", "build.rs", "witx/*", "wit/**/*", "tests/*"]
+include = ["src/**/*", "README.md", "LICENSE", "witx/*", "wit/**/*", "tests/*"]
 
 [lints]
 workspace = true
@@ -17,7 +17,6 @@ workspace = true
 [dependencies]
 wasmtime = { workspace = true }
 anyhow = { workspace = true }
-wasi-common = { workspace = true }
 wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
 libc = { workspace = true }
 once_cell = { workspace = true }
@@ -60,9 +59,7 @@ windows-sys = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"], optional = true }
 
 [features]
-default = ["sync", "preview2", "preview1-on-preview2"]
-sync = ["wasi-common/sync", "wiggle"]
-tokio = ["wasi-common/tokio", "wasmtime/async", "wiggle/wasmtime_async" ]
+default = ["preview2", "preview1-on-preview2"]
 exit = []
 preview2 = [
     'wasmtime/component-model',
