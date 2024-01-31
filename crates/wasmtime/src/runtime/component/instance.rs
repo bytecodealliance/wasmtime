@@ -19,11 +19,18 @@ use wasmtime_runtime::VMFuncRef;
 
 /// An instantiated component.
 ///
-/// This is similar to [`crate::Instance`] except that it represents an
-/// instantiated component instead of an instantiated module. Otherwise though
-/// the two behave similarly.
-//
-// FIXME: need to write more docs here.
+/// This type represents an instantiated [`Component`](super::Component).
+/// Instances have exports which can be accessed through functions such as
+/// [`Instance::get_func`] or [`Instance::exports`]. Instances are owned by a
+/// [`Store`](crate::Store) and all methods require a handle to the store.
+///
+/// Component instances are created through
+/// [`Linker::instantiate`](super::Linker::instantiate) and its family of
+/// methods.
+///
+/// This type is similar to the core wasm version
+/// [`wasmtime::Instance`](crate::Instance) except that it represents an
+/// instantiated component instead of an instantiated module.
 #[derive(Copy, Clone)]
 pub struct Instance(pub(crate) Stored<Option<Box<InstanceData>>>);
 

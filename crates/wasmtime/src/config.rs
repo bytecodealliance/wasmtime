@@ -28,7 +28,9 @@ use wasmtime_fiber::RuntimeFiberStackCreator;
 
 pub use wasmtime_environ::CacheStore;
 #[cfg(feature = "pooling-allocator")]
-pub use wasmtime_runtime::{mpk, MpkEnabled};
+use wasmtime_runtime::mpk;
+#[cfg(feature = "pooling-allocator")]
+pub use wasmtime_runtime::MpkEnabled;
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]

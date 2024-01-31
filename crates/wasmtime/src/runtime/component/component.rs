@@ -20,8 +20,36 @@ use wasmtime_runtime::{
 };
 
 /// A compiled WebAssembly Component.
-//
-// FIXME: need to write more docs here.
+///
+/// This structure represents a compiled component that is ready to be
+/// instantiated. This owns a region of virtual memory which contains executable
+/// code compiled from a WebAssembly binary originally. This is the analog of
+/// [`Module`](crate::Module) in the component embedding API.
+///
+/// A [`Component`] can be turned into an
+/// [`Instance`](crate::component::Instance) through a
+/// [`Linker`](crate::component::Linker). [`Component`]s are safe to share
+/// across threads. The compilation model of a component is the same as that of
+/// [a module](crate::Module) which is to say:
+///
+/// * Compilation happens synchronously during [`Component::new`].
+/// * The result of compilation can be saved into storage with
+///   [`Component::serialize`].
+/// * A previously compiled artifact can be parsed with
+///   [`Component::deserialize`].
+/// * No compilation happens at runtime for a component, everything is done
+///   after [`Component::new`] returns.
+///
+/// ## Components and `Clone`
+///
+/// Using `clone` on a `Component` is a cheap operation. It will not create an
+/// entirely new component, but rather just a new reference to the existing
+/// component. In other words it's a shallow copy, not a deep copy.
+///
+/// ## Examples
+///
+/// For example usage see the documentation of [`Module`](crate::Module) as
+/// [`Component`] has the same high-level API.
 #[derive(Clone)]
 pub struct Component {
     inner: Arc<ComponentInner>,
@@ -53,10 +81,64 @@ pub(crate) struct AllCallFuncPointers {
 }
 
 impl Component {
-    /// Compiles a new WebAssembly component from the in-memory wasm image
+    /// Compiles a new WebAssembly component from the in-memory list of bytes
     /// provided.
-    //
-    // FIXME: need to write more docs here.
+    ///
+    /// The `bytes` provided can either be the binary or text format of a
+    /// [WebAssembly component]. Note that the text format requires the `wat`
+    /// feature of this crate to be enabled. This API does not support
+    /// streaming compilation.
+    ///
+    /// This function will synchronously validate the entire component,
+    /// including all core modules, and then compile all components, modules,
+    /// etc, found within the provided bytes.
+    ///
+    /// [WebAssembly component]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md
+    ///
+    /// # Errors
+    ///
+    /// This function may fail and return an error. Errors may include
+    /// situations such as:
+    ///
+    /// * The binary provided could not be decoded because it's not a valid
+    ///   WebAssembly binary
+    /// * The WebAssembly binary may not validate (e.g. contains type errors)
+    /// * Implementation-specific limits were exceeded with a valid binary (for
+    ///   example too many locals)
+    /// * The wasm binary may use features that are not enabled in the
+    ///   configuration of `engine`
+    /// * If the `wat` feature is enabled and the input is text, then it may be
+    ///   rejected if it fails to parse.
+    ///
+    /// The error returned should contain full information about why compilation
+    /// failed.
+    ///
+    /// # Examples
+    ///
+    /// The `new` function can be invoked with a in-memory array of bytes:
+    ///
+    /// ```no_run
+    /// # use wasmtime::*;
+    /// # use wasmtime::component::Component;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let engine = Engine::default();
+    /// # let wasm_bytes: Vec<u8> = Vec::new();
+    /// let component = Component::new(&engine, &wasm_bytes)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Or you can also pass in a string to be parsed as the wasm text
+    /// format:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # use wasmtime::component::Component;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let engine = Engine::default();
+    /// let component = Component::new(&engine, "(component (core module))")?;
+    /// # Ok(())
+    /// # }
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
@@ -66,10 +148,11 @@ impl Component {
         Component::from_binary(engine, &bytes)
     }
 
-    /// Compiles a new WebAssembly component from a wasm file on disk pointed to
-    /// by `file`.
-    //
-    // FIXME: need to write more docs here.
+    /// Compiles a new WebAssembly component from a wasm file on disk pointed
+    /// to by `file`.
+    ///
+    /// This is a convenience function for reading the contents of `file` on
+    /// disk and then calling [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
@@ -94,8 +177,13 @@ impl Component {
 
     /// Compiles a new WebAssembly component from the in-memory wasm image
     /// provided.
-    //
-    // FIXME: need to write more docs here.
+    ///
+    /// This function is the same as [`Component::new`] except that it does not
+    /// accept the text format of WebAssembly. Even if the `wat` feature
+    /// is enabled an error will be returned here if `binary` is the text
+    /// format.
+    ///
+    /// For more information on semantics and errors see [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
@@ -153,11 +241,16 @@ impl Component {
 
     /// Same as [`Module::deserialize`], but for components.
     ///
-    /// Note that the file referenced here must contain contents previously
+    /// Note that the bytes referenced here must contain contents previously
     /// produced by [`Engine::precompile_component`] or
     /// [`Component::serialize`].
     ///
     /// For more information see the [`Module::deserialize`] method.
+    ///
+    /// # Unsafety
+    ///
+    /// The unsafety of this method is the same as that of the
+    /// [`Module::deserialize`] method.
     ///
     /// [`Module::deserialize`]: crate::Module::deserialize
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
@@ -167,8 +260,16 @@ impl Component {
 
     /// Same as [`Module::deserialize_file`], but for components.
     ///
-    /// For more information see the [`Component::deserialize`] and
-    /// [`Module::deserialize_file`] methods.
+    /// Note that the file referenced here must contain contents previously
+    /// produced by [`Engine::precompile_component`] or
+    /// [`Component::serialize`].
+    ///
+    /// For more information see the [`Module::deserialize_file`] method.
+    ///
+    /// # Unsafety
+    ///
+    /// The unsafety of this method is the same as that of the
+    /// [`Module::deserialize_file`] method.
     ///
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Component> {
