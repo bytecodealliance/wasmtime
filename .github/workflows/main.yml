@@ -323,7 +323,7 @@ jobs:
     # Check whether `wasmtime` cross-compiles to aarch64-linux-android
     - run: rustup target add aarch64-linux-android
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
+      uses: android-actions/setup-android@v3
     - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/cargo-ndk
