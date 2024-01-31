@@ -247,7 +247,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -557,7 +557,7 @@ jobs:
       env:
         VERSION: ${{ github.sha }}
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
@@ -740,7 +740,7 @@ jobs:
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: bins-${{ matrix.build }}
         path: dist
