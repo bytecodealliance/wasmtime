@@ -322,6 +322,11 @@ jobs:
 
     # Check whether `wasmtime` cross-compiles to aarch64-linux-android
     - run: rustup target add aarch64-linux-android
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
     - uses: actions/cache@v4
