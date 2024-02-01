@@ -1,0 +1,248 @@
+;; Constant propagation.
+
+(rule (simplify
+       (iadd (fits_in_64 ty)
+             (iconst ty (u64_from_imm64 k1))
+             (iconst ty (u64_from_imm64 k2))))
+      (subsume (iconst ty (imm64_masked ty (u64_add k1 k2)))))
+
+(rule (simplify
+       (isub (fits_in_64 ty)
+             (iconst ty (u64_from_imm64 k1))
+             (iconst ty (u64_from_imm64 k2))))
+      (subsume (iconst ty (imm64_masked ty (u64_sub k1 k2)))))
+
+(rule (simplify
+       (imul (fits_in_64 ty)
+             (iconst ty (u64_from_imm64 k1))
+             (iconst ty (u64_from_imm64 k2))))
+      (subsume (iconst ty (imm64_masked ty (u64_mul k1 k2)))))
+
+(rule (simplify
+       (sdiv (fits_in_64 ty)
+             (iconst ty (u64_from_imm64 k1))
+             (iconst ty (u64_from_imm64 k2))))
+      (if-let d (u64_sdiv k1 k2))
+      (subsume (iconst ty (imm64_masked ty d))))
+
+(rule (simplify
+       (udiv (fits_in_64 ty)
+             (iconst ty (u64_from_imm64 k1))
+             (iconst ty (u64_from_imm64 k2))))
+      (if-let d (u64_udiv k1 k2))
+      (subsume (iconst ty (imm64_masked ty d))))
+
+(rule (simplify
+       (bor (fits_in_64 ty)
+            (iconst ty (u64_from_imm64 k1))
+            (iconst ty (u64_from_imm64 k2))))
+      (subsume (iconst ty (imm64_masked ty (u64_or k1 k2)))))
+
+(rule (simplify
+       (band (fits_in_64 ty)
+            (iconst ty (u64_from_imm64 k1))
+            (iconst ty (u64_from_imm64 k2))))
+      (subsume (iconst ty (imm64_masked ty (u64_and k1 k2)))))
+
+(rule (simplify
+       (bxor (fits_in_64 ty)
+            (iconst ty (u64_from_imm64 k1))
+            (iconst ty (u64_from_imm64 k2))))
+      (subsume (iconst ty (imm64_masked ty (u64_xor k1 k2)))))
+
+(rule (simplify
+       (bnot (fits_in_64 ty)
+            (iconst ty (u64_from_imm64 k))))
+      (subsume (iconst ty (imm64_masked ty (u64_not k)))))
+
+(rule (simplify (ishl (fits_in_64 ty)
+                      (iconst ty k1)
+                      (iconst _ k2)))
+      (subsume (iconst ty (imm64_shl ty k1 k2))))
+
+(rule (simplify (ushr (fits_in_64 ty)
+                      (iconst ty k1)
+                      (iconst _ k2)))
+      (subsume (iconst ty (imm64_ushr ty k1 k2))))
+
+(rule (simplify (sshr (fits_in_64 ty)
+                      (iconst ty k1)
+                      (iconst _ k2)))
+      (subsume (iconst ty (imm64_sshr ty k1 k2))))
+
+(rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
+      (subsume (iconst narrow (imm64_masked narrow imm))))
+
+;; iconst_[su] support $I128, but do so by extending, so restricting to
+;; 64-bit or smaller keeps it from just remaking essentially the same thing.
+(rule (simplify (uextend (fits_in_64 wide) (iconst_u narrow k)))
+      (subsume (iconst_u wide k)))
+(rule (simplify (sextend (fits_in_64 wide) (iconst_s narrow k)))
+      (subsume (iconst_s wide k)))
+
+(rule (simplify
+       (icmp result_ty
+            cc
+            (iconst ty k1)
+            (iconst ty k2)))
+      (subsume (iconst result_ty (imm64_icmp ty cc k1 k2))))
+
+
+;; Canonicalize via commutativity: push immediates to the right.
+;;
+;;   (op k x) --> (op x k)
+
+(rule (simplify
+       (iadd ty k @ (iconst ty _) x))
+      (iadd ty x k))
+;; sub is not commutative, but we can flip the args and negate the
+;; whole thing.
+(rule (simplify
+       (isub ty k @ (iconst ty _) x))
+      (ineg ty (isub ty x k)))
+(rule (simplify
+       (imul ty k @ (iconst ty _) x))
+      (imul ty x k))
+
+(rule (simplify
+       (bor ty k @ (iconst ty _) x))
+      (bor ty x k))
+(rule (simplify
+       (band ty k @ (iconst ty _) x))
+      (band ty x k))
+(rule (simplify
+       (bxor ty k @ (iconst ty _) x))
+      (bxor ty x k))
+
+(rule (simplify
+       (icmp ty cc k @ (iconst _ _) x))
+      (icmp ty (intcc_swap_args cc) x k))
+
+;; Canonicalize via associativity: reassociate to a right-heavy tree
+;; for constants.
+;;
+;;   (op (op x k) k) --> (op x (op k k))
+
+(rule (simplify
+       (iadd ty (iadd ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
+      (iadd ty x (iadd ty k1 k2)))
+;; sub is not directly associative, but we can flip a sub to an add to
+;; make it work:
+;; - (sub (sub x k1) k2) -> (sub x (add k1 k2))
+;; - (sub (sub k1 x) k2) -> (sub (sub k1 k2) x)
+;; - (sub (add x k1) k2) -> (sub x (sub k2 k1))
+;; - (add (sub x k1) k2) -> (add x (sub k2 k1))
+;; - (add (sub k1 x) k2) -> (sub (add k1 k2) x)
+(rule (simplify (isub ty
+                      (isub ty x (iconst ty (u64_from_imm64 k1)))
+                      (iconst ty (u64_from_imm64 k2))))
+      (isub ty x (iconst ty (imm64_masked ty (u64_add k1 k2)))))
+(rule (simplify (isub ty
+                      (isub ty (iconst ty (u64_from_imm64 k1)) x)
+                      (iconst ty (u64_from_imm64 k2))))
+      (isub ty (iconst ty (imm64_masked ty (u64_sub k1 k2))) x))
+(rule (simplify (isub ty
+                      (iadd ty x (iconst ty (u64_from_imm64 k1)))
+                      (iconst ty (u64_from_imm64 k2))))
+      (isub ty x (iconst ty (imm64_masked ty (u64_sub k2 k1)))))
+(rule (simplify (iadd ty
+                      (isub ty x (iconst ty (u64_from_imm64 k1)))
+                      (iconst ty (u64_from_imm64 k2))))
+      (iadd ty x (iconst ty (imm64_masked ty (u64_sub k2 k1)))))
+(rule (simplify (iadd ty
+                      (isub ty (iconst ty (u64_from_imm64 k1)) x)
+                      (iconst ty (u64_from_imm64 k2))))
+      (isub ty (iconst ty (imm64_masked ty (u64_add k1 k2))) x))
+
+(rule (simplify
+       (imul ty (imul ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
+      (imul ty x (imul ty k1 k2)))
+(rule (simplify
+       (bor ty (bor ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
+      (bor ty x (bor ty k1 k2)))
+(rule (simplify
+       (band ty (band ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
+      (band ty x (band ty k1 k2)))
+(rule (simplify
+       (bxor ty (bxor ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
+      (bxor ty x (bxor ty k1 k2)))
+
+(rule (simplify
+       (select ty (iconst_u _ (u64_nonzero _)) x y))
+      x)
+(rule (simplify
+       (select ty (iconst_u _ 0) x y))
+      y)
+
+;; Replace subtraction by a "negative" constant with addition.
+;; Notably, this gives `x - (-1) == x + 1`, so other patterns don't have to
+;; match the subtract-negative-one version too.
+;; TODO: it would be nice to do this for `x + (-1) == x - 1` as well, but
+;; that needs work in lowering first to avoid regressing addressing modes.
+
+(rule (simplify (isub ty x (iconst_s ty k)))
+      (if-let $true (u64_lt (i64_as_u64 (i64_neg k)) (i64_as_u64 k)))
+      (iadd ty x (iconst ty (imm64_masked ty (i64_as_u64 (i64_neg k))))))
+
+;; TODO: fadd, fsub, fmul, fdiv, fneg, fabs
+
+;; A splat of a constant can become a direct `vconst` with the appropriate bit
+;; pattern.
+(rule (simplify (splat dst (iconst $I8 n)))
+      (vconst dst (splat8 (u64_uextend_imm64 $I8 n))))
+(rule (simplify (splat dst (iconst $I16 n)))
+      (vconst dst (splat16 (u64_uextend_imm64 $I16 n))))
+(rule (simplify (splat dst (iconst $I32 n)))
+      (vconst dst (splat32 (u64_uextend_imm64 $I32 n))))
+(rule (simplify (splat dst (iconst $I64 n)))
+      (vconst dst (splat64 (u64_uextend_imm64 $I64 n))))
+(rule (simplify (splat dst (f32const _ (u32_from_ieee32 n))))
+      (vconst dst (splat32 n)))
+(rule (simplify (splat dst (f64const _ (u64_from_ieee64 n))))
+      (vconst dst (splat64 n)))
+
+(decl splat8 (u64) Constant)
+(rule (splat8 n) (splat16 (u64_or n (u64_shl n 8))))
+(decl splat16 (u64) Constant)
+(rule (splat16 n) (splat32 (u64_or n (u64_shl n 16))))
+(decl splat32 (u64) Constant)
+(rule (splat32 n) (splat64 (u64_or n (u64_shl n 32))))
+(decl splat64 (u64) Constant)
+(extern constructor splat64 splat64)
+
+;; Reassociate nested shifts of constants to put constants together for cprop.
+;;
+;; ((A shift b) shift C) ==> ((A shift C) shift b)
+(rule (simplify (ishl ty (ishl ty a@(iconst _ _) b) c@(iconst _ _)))
+      (ishl ty (ishl ty a c) b))
+(rule (simplify (ushr ty (ushr ty a@(iconst _ _) b) c@(iconst _ _)))
+      (ushr ty (ushr ty a c) b))
+(rule (simplify (sshr ty (sshr ty a@(iconst _ _) b) c@(iconst _ _)))
+      (sshr ty (sshr ty a c) b))
+
+;; When we operations that are both commutative and associative, reassociate
+;; constants together for cprop:
+;;
+;; ((a op B) op (c op D)) ==> ((a op c) op (B op D))
+;;
+;; Where `op` is one of: `iadd`, `imul`, `band`, `bor`, or `bxor`.
+(rule (simplify (iadd ty
+                      (iadd ty a b@(iconst _ _))
+                      (iadd ty c d@(iconst _ _))))
+      (iadd ty (iadd ty a c) (iadd ty b d)))
+(rule (simplify (imul ty
+                      (imul ty a b@(iconst _ _))
+                      (imul ty c d@(iconst _ _))))
+      (imul ty (imul ty a c) (imul ty b d)))
+(rule (simplify (band ty
+                      (band ty a b@(iconst _ _))
+                      (band ty c d@(iconst _ _))))
+      (band ty (band ty a c) (band ty b d)))
+(rule (simplify (bor ty
+                      (bor ty a b@(iconst _ _))
+                      (bor ty c d@(iconst _ _))))
+      (bor ty (bor ty a c) (bor ty b d)))
+(rule (simplify (bxor ty
+                      (bxor ty a b@(iconst _ _))
+                      (bxor ty c d@(iconst _ _))))
+      (bxor ty (bxor ty a c) (bxor ty b d)))

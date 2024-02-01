@@ -1,0 +1,20 @@
+test compile precise-output
+target aarch64
+
+function %a() -> f32x4 system_v {
+block0:
+    v16 = f32const 0x1.fffe00p-126
+    v25 = splat.f32x4 v16
+    return v25
+}
+
+; VCode:
+; block0:
+;   movi v0.2d, #72056494543077120
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.2d, #0xffff0000ffff00
+;   ret
+

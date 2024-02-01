@@ -1,0 +1,132 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %atomic_store_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  atomic_store.i64 v0, v1
+  return
+}
+
+; VCode:
+; block0:
+;   atomic_store.i64 a0,(a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fence rw, w
+;   sd a0, 0(a1)
+;   ret
+
+function %atomic_store_i64_sym(i64) {
+  gv0 = symbol colocated %sym
+block0(v0: i64):
+  v1 = symbol_value.i64 gv0
+  atomic_store.i64 v0, v1
+  return
+}
+
+; VCode:
+; block0:
+;   load_sym a2,%sym+0
+;   atomic_store.i64 a0,(a2)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %sym 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   fence rw, w
+;   sd a0, 0(a2)
+;   ret
+
+function %atomic_store_imm_i64(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 12345
+  atomic_store.i64 v1, v0
+  return
+}
+
+; VCode:
+; block0:
+;   lui a2,3
+;   addi a4,a2,57
+;   atomic_store.i64 a4,(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a2, 3
+;   addi a4, a2, 0x39
+;   fence rw, w
+;   sd a4, 0(a0)
+;   ret
+
+function %atomic_store_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  atomic_store.i32 v0, v1
+  return
+}
+
+; VCode:
+; block0:
+;   atomic_store.i32 a0,(a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fence rw, w
+;   sw a0, 0(a1)
+;   ret
+
+function %atomic_store_i32_sym(i32) {
+  gv0 = symbol colocated %sym
+block0(v0: i32):
+  v1 = symbol_value.i64 gv0
+  atomic_store.i32 v0, v1
+  return
+}
+
+; VCode:
+; block0:
+;   load_sym a2,%sym+0
+;   atomic_store.i32 a0,(a2)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %sym 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   fence rw, w
+;   sw a0, 0(a2)
+;   ret
+
+function %atomic_store_imm_i32(i64) {
+block0(v0: i64):
+  v1 = iconst.i32 12345
+  atomic_store.i32 v1, v0
+  return
+}
+
+; VCode:
+; block0:
+;   lui a2,3
+;   addi a4,a2,57
+;   atomic_store.i32 a4,(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a2, 3
+;   addi a4, a2, 0x39
+;   fence rw, w
+;   sw a4, 0(a0)
+;   ret
+

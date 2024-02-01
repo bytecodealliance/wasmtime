@@ -1,0 +1,75 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %vall_true_i8x16(i8x16) -> i8 {
+block0(v0: i8x16):
+    v1 = vall_true v0
+    return v1
+}
+; run: %vall_true_i8x16([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]) == 0
+; run: %vall_true_i8x16([-1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]) == 0
+; run: %vall_true_i8x16([-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1]) == 1
+; run: %vall_true_i8x16(0xffffffffffffffffffffffffffffff00) == 0
+; run: %vall_true_i8x16(0x00ffffffffffffffffffffffffffffff) == 0
+; run: %vall_true_i8x16(0xffffffffffffff00ffffffffffffffff) == 0
+; run: %vall_true_i8x16(0x01010101010101010101010101010101) == 1
+; run: %vall_true_i8x16(0xffffffffffffffffffffffffffffffff) == 1
+; run: %vall_true_i8x16(0xe66021830506f2fffdfebfc8c8c8c8c8) == 1
+
+function %vall_true_i16x8(i16x8) -> i8 {
+block0(v0: i16x8):
+    v1 = vall_true v0
+    return v1
+}
+; run: %vall_true_i16x8([0 0 0 0 0 0 0 0]) == 0
+; run: %vall_true_i16x8([-1 0 0 0 0 0 0 0]) == 0
+; run: %vall_true_i16x8([-1 -1 -1 -1 -1 -1 -1 -1]) == 1
+
+
+function %vall_true_i32x4(i32x4) -> i8 {
+block0(v0: i32x4):
+    v1 = vall_true v0
+    return v1
+}
+; run: %vall_true_i32x4([0 0 0 0]) == 0
+; run: %vall_true_i32x4([-1 0 0 0]) == 0
+; run: %vall_true_i32x4([-1 -1 -1 -1]) == 1
+
+
+function %vall_true_i64x2(i64x2) -> i8 {
+block0(v0: i64x2):
+    v1 = vall_true v0
+    return v1
+}
+; run: %vall_true_i64x2([0 0]) == 0
+; run: %vall_true_i64x2([-1 0]) == 0
+; run: %vall_true_i64x2([-1 -1]) == 1
+; run: %vall_true_i64x2([0xffffffff_00000000 -1]) == 1
+
+function %vall_true_f32x4(f32x4) -> i8 {
+block0(v0: f32x4):
+    v1 = vall_true v0
+    return v1
+}
+; run: %vall_true_f32x4([0.0 0.0 0.0 0.0]) == 0
+; run: %vall_true_f32x4([0.0 -0.0 0.0 0.0]) == 0
+; run: %vall_true_f32x4([-0.0 -0.0 -0.0 -0.0]) == 1
+; run: %vall_true_f32x4([0x1.0 0x1.0 0x1.0 0x1.0]) == 1
+
+function %vall_true_f64x2(f64x2) -> i8 {
+block0(v0: f64x2):
+    v1 = vall_true v0
+    return v1
+}
+; run: %vall_true_f64x2([0.0 0.0]) == 0
+; run: %vall_true_f64x2([0.0 -0.0]) == 0
+; run: %vall_true_f64x2([-0.0 -0.0]) == 1
+; run: %vall_true_f64x2([0x1.0 0x1.0]) == 1

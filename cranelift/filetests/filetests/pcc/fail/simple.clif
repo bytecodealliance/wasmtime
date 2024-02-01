@@ -1,0 +1,27 @@
+test compile expect-fail
+set enable_pcc=true
+target aarch64
+target x86_64
+
+;; The `memory` memtype is not large enough here -- the 4GiB-range
+;; 32-bit offset could go out of range. PCC should catch this.
+
+function %simple1(i64 vmctx, i32) -> i8 {
+    mt0 = memory 0x8000_0000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 0xffff_ffff): i32):
+    v2 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1
+    v3 ! mem(mt0, 0, 0xffff_ffff) = iadd.i64 v0, v2
+    v4 = load.i8 checked v3
+    return v4
+}
+
+;; Check that the offset in the `mem` is validated too.
+
+function %simple2(i64 vmctx, i32) -> i8 {
+    mt0 = memory 0x8000_0000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 0xffff_ffff): i32):
+    v2 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1
+    v3 ! mem(mt0, 0, 0) = iadd.i64 v0, v2
+    v4 = load.i8 checked v3
+    return v4
+}

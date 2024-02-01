@@ -1,0 +1,124 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-codegen"
+version = "0.105.0"
+description = "Low-level code generator library"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/cranelift-codegen"
+repository = "https://github.com/bytecodealliance/wasmtime"
+categories = ["no-std"]
+readme = "README.md"
+keywords = ["compile", "compiler", "jit"]
+build = "build.rs"
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+bumpalo = "3"
+capstone = { workspace = true, optional = true }
+cranelift-codegen-shared = { path = "./shared", version = "0.105.0" }
+cranelift-entity = { workspace = true }
+cranelift-bforest = { workspace = true }
+cranelift-control = { workspace = true }
+hashbrown = { workspace = true, features = ["raw"] }
+target-lexicon = { workspace = true }
+log = { workspace = true }
+serde = { version = "1.0.188", optional = true }
+serde_derive = { version = "1.0.188", optional = true }
+bincode = { version = "1.2.1", optional = true }
+gimli = { workspace = true, features = ["write"], optional = true }
+smallvec = { workspace = true }
+regalloc2 = { workspace = true, features = ["checker"] }
+souper-ir = { version = "2.1.0", optional = true }
+sha2 = { version = "0.10.2", optional = true }
+# It is a goal of the cranelift-codegen crate to have minimal external dependencies.
+# Please don't add any unless they are essential to the task of creating binary
+# machine code. Integration tests that need external dependencies can be
+# accomodated in `tests`.
+
+[dev-dependencies]
+criterion = { version = "0.5.0", features = ["html_reports"] }
+similar = "2.1.0"
+
+[build-dependencies]
+cranelift-codegen-meta = { path = "meta", version = "0.105.0" }
+cranelift-isle = { path = "../isle/isle", version = "=0.105.0" }
+
+[features]
+default = ["std", "unwind", "host-arch", "timing"]
+
+# The "std" feature enables use of libstd. The "core" feature enables use
+# of some minimal std-like replacement libraries. At least one of these two
+# features need to be enabled.
+std = []
+
+# The "core" feature used to enable a hashmap workaround, but is now
+# deprecated (we (i) always use hashbrown, and (ii) don't support a
+# no_std build anymore). The feature remains for backward
+# compatibility as a no-op.
+core = []
+
+# Enable the `to_capstone` method on TargetIsa, for constructing a Capstone
+# context, and the `disassemble` method on `MachBufferFinalized`.
+disas = ["anyhow", "capstone"]
+
+# Enables detailed logging which can be somewhat expensive.
+trace-log = []
+
+# This enables unwind info generation functionality.
+unwind = ["gimli"]
+
+# ISA targets for which we should build.
+# If no ISA targets are explicitly enabled, the ISA target for the host machine is enabled.
+x86 = []
+arm64 = []
+s390x = []
+riscv64 = []
+# Enable the ISA target for the host machine
+host-arch = []
+
+# Option to enable all architectures.
+all-arch = [
+    "x86",
+    "arm64",
+    "s390x",
+    "riscv64"
+]
+
+# For dependent crates that want to serialize some parts of cranelift
+enable-serde = [
+    "serde",
+    "serde_derive",
+    "cranelift-entity/enable-serde",
+    "regalloc2/enable-serde",
+    "smallvec/serde"
+]
+
+# Enable the incremental compilation cache for hot-reload use cases.
+incremental-cache = [
+    "enable-serde",
+    "bincode",
+    "sha2"
+]
+
+# Enable support for the Souper harvester.
+souper-harvest = ["souper-ir", "souper-ir/stringify"]
+
+# Report any ISLE errors in pretty-printed style.
+isle-errors = ["cranelift-isle/fancy-errors"]
+
+# Put ISLE generated files in isle_generated_code/, for easier
+# inspection, rather than inside of target/.
+isle-in-source-tree = []
+
+# Enable tracking how long passes take in Cranelift.
+#
+# Enabled by default.
+timing = []
+
+[[bench]]
+name = "x64-evex-encoding"
+harness = false

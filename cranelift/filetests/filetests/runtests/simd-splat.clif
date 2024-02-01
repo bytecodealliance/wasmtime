@@ -1,0 +1,209 @@
+; test interpret TODO: Not yet implemented
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 ssse3
+target x86_64 sse41
+target x86_64 sse41 has_avx
+target x86_64 sse41 has_avx has_avx2
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %splat_i8x16(i8) -> i8x16 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    return v1
+}
+; run: %splat_i8x16(-1) == [-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1]
+; run: %splat_i8x16(0) == [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+; run: %splat_i8x16(1) == [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+function %splat_i16x8(i16) -> i16x8 {
+block0(v0: i16):
+    v1 = splat.i16x8 v0
+    return v1
+}
+; run: %splat_i16x8(-1) == [-1 -1 -1 -1 -1 -1 -1 -1]
+; run: %splat_i16x8(0) == [0 0 0 0 0 0 0 0]
+; run: %splat_i16x8(512) == [512 512 512 512 512 512 512 512]
+
+function %splat_i32x4(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = splat.i32x4 v0
+    return v1
+}
+; run: %splat_i32x4(-1) == [-1 -1 -1 -1]
+; run: %splat_i32x4(0) == [0 0 0 0]
+; run: %splat_i32x4(2000000) == [2000000 2000000 2000000 2000000]
+
+function %splat_i64x2(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = splat.i64x2 v0
+    return v1
+}
+; run: %splat_i64x2(-1) == [-1 -1]
+; run: %splat_i64x2(0) == [0 0]
+; run: %splat_i64x2(5000000000) == [5000000000 5000000000]
+
+function %splat_f32x4(f32) -> f32x4 {
+block0(v0: f32):
+    v1 = splat.f32x4 v0
+    return v1
+}
+; run: %splat_f32x4(-0x0.0) == [-0x0.0 -0x0.0 -0x0.0 -0x0.0]
+; run: %splat_f32x4(0x1.0) == [0x1.0 0x1.0 0x1.0 0x1.0]
+; run: %splat_f32x4(NaN) == [NaN NaN NaN NaN]
+
+function %splat_f64x2(f64) -> f64x2 {
+block0(v0: f64):
+    v1 = splat.f64x2 v0
+    return v1
+}
+; run: %splat_f64x2(0x0.0) == [0x0.0 0x0.0]
+; run: %splat_f64x2(0x2.0) == [0x2.0 0x2.0]
+; run: %splat_f64x2(NaN) == [NaN NaN]
+
+function %splat_i8x16_2(i8x16) -> i8x16 {
+block0(v0: i8x16):
+  v1 = iconst.i8 116
+  v2 = splat.i8x16 v1
+  v3 = iadd v0, v2
+  return v3
+}
+; run: %splat_i8x16_2([-128 -101 -75 -59 -22 -12 -7 -1 0 3 17 34 68 92 111 127]) == [-12 15 41 57 94 104 109 115 116 119 -123 -106 -72 -48 -29 -13]
+
+function %splat_i8x16_3(i8x16) -> i8x16 {
+block0(v0: i8x16):
+  v1 = iconst.i16 116
+  v2 = ireduce.i8 v1
+  v3 = splat.i8x16 v2
+  v4 = iadd v0, v3
+  return v4
+}
+; run: %splat_i8x16_3([-128 -101 -75 -59 -22 -12 -7 -1 0 3 17 34 68 92 111 127]) == [-12 15 41 57 94 104 109 115 116 119 -123 -106 -72 -48 -29 -13]
+
+function %splat_i16x8_2(i16x8) -> i16x8 {
+block0(v0: i16x8):
+  v1 = iconst.i16 42
+  v2 = splat.i16x8 v1
+  v3 = iadd v0, v2
+  return v3
+}
+; run: %splat_i16x8_2([-32768 -1500 -1 0 42 200 8576 32767]) == [-32726 -1458 41 42 84 242 8618 -32727]
+
+function %splat_i16x8_3(i16x8) -> i16x8 {
+block0(v0: i16x8):
+  v1 = iconst.i64 42
+  v2 = ireduce.i16 v1
+  v3 = splat.i16x8 v2
+  v4 = iadd v0, v3
+  return v4
+}
+; run: %splat_i16x8_3([-32768 -1500 -1 0 42 200 8576 32767]) == [-32726 -1458 41 42 84 242 8618 -32727]
+
+function %splat_i32x4_2(i32x4) -> i32x4 {
+block0(v0: i32x4):
+  v1 = iconst.i32 1024
+  v2 = splat.i32x4 v1
+  v3 = iadd v0, v2
+  return v3
+}
+; run: %splat_i32x4_2([-2147483648 -1 0 2147483647]) == [-2147482624 1023 1024 -2147482625]
+
+function %splat_i32x4_3(i32x4) -> i32x4 {
+block0(v0: i32x4):
+  v1 = iconst.i64 1024
+  v2 = ireduce.i32 v1
+  v3 = splat.i32x4 v2
+  v4 = iadd v0, v3
+  return v4
+}
+; run: %splat_i32x4_3([-2147483648 -1 0 2147483647]) == [-2147482624 1023 1024 -2147482625]
+
+function %splat_i64x2_2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i64 -1
+    v2 = splat.i64x2 v1
+    v3 = iadd v0, v2
+    return v3
+}
+; run: %splat_i64x2_2([-1 0]) == [-2 -1]
+
+function %load_splat_i8x16(i8) -> i8x16 {
+    ss0 = explicit_slot 8
+
+block0(v0: i8):
+    stack_store.i8 v0, ss0
+    v1 = stack_load.i8 ss0
+    v2 = splat.i8x16 v1
+    return v2
+}
+; run: %load_splat_i8x16(-1) == [-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1]
+; run: %load_splat_i8x16(0) == [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+; run: %load_splat_i8x16(1) == [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+function %load_splat_i16x8(i16) -> i16x8 {
+    ss0 = explicit_slot 8
+
+block0(v0: i16):
+    stack_store.i16 v0, ss0
+    v1 = stack_load.i16 ss0
+    v2 = splat.i16x8 v1
+    return v2
+}
+; run: %load_splat_i16x8(-1) == [-1 -1 -1 -1 -1 -1 -1 -1]
+; run: %load_splat_i16x8(0) == [0 0 0 0 0 0 0 0]
+; run: %load_splat_i16x8(512) == [512 512 512 512 512 512 512 512]
+
+function %load_splat_i32x4(i32) -> i32x4 {
+    ss0 = explicit_slot 8
+
+block0(v0: i32):
+    stack_store.i32 v0, ss0
+    v1 = stack_load.i32 ss0
+    v2 = splat.i32x4 v1
+    return v2
+}
+; run: %load_splat_i32x4(-1) == [-1 -1 -1 -1]
+; run: %load_splat_i32x4(0) == [0 0 0 0]
+; run: %load_splat_i32x4(2000000) == [2000000 2000000 2000000 2000000]
+
+function %load_splat_i64x2(i64) -> i64x2 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0
+    v1 = stack_load.i64 ss0
+    v2 = splat.i64x2 v1
+    return v2
+}
+; run: %load_splat_i64x2(-1) == [-1 -1]
+; run: %load_splat_i64x2(0) == [0 0]
+; run: %load_splat_i64x2(5000000000) == [5000000000 5000000000]
+
+function %load_splat_f32x4(f32) -> f32x4 {
+    ss0 = explicit_slot 8
+
+block0(v0: f32):
+    stack_store.f32 v0, ss0
+    v1 = stack_load.f32 ss0
+    v2 = splat.f32x4 v1
+    return v2
+}
+; run: %load_splat_f32x4(-0x0.0) == [-0x0.0 -0x0.0 -0x0.0 -0x0.0]
+; run: %load_splat_f32x4(0x1.0) == [0x1.0 0x1.0 0x1.0 0x1.0]
+; run: %load_splat_f32x4(NaN) == [NaN NaN NaN NaN]
+
+function %load_splat_f64x2(f64) -> f64x2 {
+    ss0 = explicit_slot 8
+
+block0(v0: f64):
+    stack_store.f64 v0, ss0
+    v1 = stack_load.f64 ss0
+    v2 = splat.f64x2 v1
+    return v2
+}
+; run: %load_splat_f64x2(0x0.0) == [0x0.0 0x0.0]
+; run: %load_splat_f64x2(0x2.0) == [0x2.0 0x2.0]
+; run: %load_splat_f64x2(NaN) == [NaN NaN]

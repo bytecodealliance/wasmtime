@@ -1,0 +1,96 @@
+test compile precise-output
+
+target x86_64
+
+function %no_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    brif v0, block1(v0), block2
+
+block1(v1: i32):
+    return v1
+
+block2:
+    v2 = iconst.i32 97
+    jump block1(v2)
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   testl   %edi, %edi
+;   jnz     label1; j label2
+; block1:
+;   movq    %rdi, %rax
+;   jmp     label3
+; block2:
+;   movl    $97, %eax
+;   jmp     label3
+; block3:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   testl %edi, %edi
+;   je 0x14
+; block2: ; offset 0xc
+;   movq %rdi, %rax
+;   jmp 0x19
+; block3: ; offset 0x14
+;   movl $0x61, %eax
+; block4: ; offset 0x19
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    brif v0, block1(v0), block2
+
+block1(v1: i32):
+    return v1
+
+block2 cold:
+    v2 = iconst.i32 97
+    jump block1(v2)
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   testl   %edi, %edi
+;   jnz     label1; j label2
+; block1:
+;   movq    %rdi, %rax
+;   jmp     label3
+; block3:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $97, %eax
+;   jmp     label3
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   testl %edi, %edi
+;   je 0x14
+; block2: ; offset 0xc
+;   movq %rdi, %rax
+; block3: ; offset 0xf
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block4: ; offset 0x14
+;   movl $0x61, %eax
+;   jmp 0xf
+

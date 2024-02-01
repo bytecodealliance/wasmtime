@@ -1,0 +1,175 @@
+;; Test our lowerings that do things like `A >= B + 1 ==> A > B` to make better
+;; use of immediate encodings.
+
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %a(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111001
+    v2 = icmp.i32 uge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #1118208
+;   cset x0, hi
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x111, lsl #12
+;   cset x0, hi
+;   ret
+
+function %b(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111000
+    v2 = icmp.i32 uge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #1118208
+;   cset x0, hs
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x111, lsl #12
+;   cset x0, hs
+;   ret
+
+function %c(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111111
+    v2 = icmp.i32 uge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   movz w3, #4369
+;   movk w3, w3, #17, LSL #16
+;   subs wzr, w0, w3
+;   cset x0, hs
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w3, #0x1111
+;   movk w3, #0x11, lsl #16
+;   cmp w0, w3
+;   cset x0, hs
+;   ret
+
+function %d(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111110
+    v2 = icmp.i32 uge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   movz w3, #4368
+;   movk w3, w3, #17, LSL #16
+;   subs wzr, w0, w3
+;   cset x0, hs
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w3, #0x1110
+;   movk w3, #0x11, lsl #16
+;   cmp w0, w3
+;   cset x0, hs
+;   ret
+
+function %e(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111001
+    v2 = icmp.i32 sge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #1118208
+;   cset x0, gt
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x111, lsl #12
+;   cset x0, gt
+;   ret
+
+function %f(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111000
+    v2 = icmp.i32 sge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #1118208
+;   cset x0, ge
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x111, lsl #12
+;   cset x0, ge
+;   ret
+
+function %g(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111111
+    v2 = icmp.i32 sge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   movz w3, #4369
+;   movk w3, w3, #17, LSL #16
+;   subs wzr, w0, w3
+;   cset x0, ge
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w3, #0x1111
+;   movk w3, #0x11, lsl #16
+;   cmp w0, w3
+;   cset x0, ge
+;   ret
+
+function %h(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x111110
+    v2 = icmp.i32 sge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   movz w3, #4368
+;   movk w3, w3, #17, LSL #16
+;   subs wzr, w0, w3
+;   cset x0, ge
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w3, #0x1110
+;   movk w3, #0x11, lsl #16
+;   cmp w0, w3
+;   cset x0, ge
+;   ret
+

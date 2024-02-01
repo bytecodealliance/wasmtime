@@ -1,0 +1,14 @@
+test compile
+set opt_level=speed
+target x86_64
+target aarch64
+target s390x
+target riscv64
+
+function %my_fn(i16) system_v {
+block0(v0: i16):
+    v1 = icmp eq v0, v0
+    v2 = select_spectre_guard v1, v1, v1
+    return
+}
+; run: %my_fn(6330)

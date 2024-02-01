@@ -1,0 +1,51 @@
+[package]
+name = "wasmtime-environ"
+version.workspace = true
+authors.workspace = true
+description = "Standalone environment support for WebAsssembly code in Cranelift"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-environ/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+bincode = "1.2.1"
+cpp_demangle = { version = "0.3.2", optional = true }
+cranelift-entity = { workspace = true }
+wasmtime-types = { workspace = true }
+wasmparser = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+serde = "1.0.188"
+serde_derive = "1.0.188"
+log = { workspace = true }
+gimli = { workspace = true, features = ["write"] }
+object = { workspace = true, features = ['write_core'] }
+rustc-demangle = { version = "0.1.16", optional = true }
+target-lexicon = { workspace = true }
+wasm-encoder = { workspace = true, optional = true }
+wasmprinter = { workspace = true, optional = true }
+wasmtime-component-util = { workspace = true, optional = true }
+
+[dev-dependencies]
+clap = { workspace = true, features = ['default'] }
+env_logger = { workspace = true }
+wat = { workspace = true }
+
+[[example]]
+name = "factc"
+required-features = ['component-model']
+
+[features]
+component-model = [
+  "dep:wasm-encoder",
+  "dep:wasmprinter",
+  "dep:wasmtime-component-util",
+]
+demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']

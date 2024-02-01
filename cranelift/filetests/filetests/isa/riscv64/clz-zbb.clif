@@ -1,0 +1,103 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbb
+
+function %clz_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   andi a2,a0,255
+;   clz a4,a2
+;   addi a0,a4,-56
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a2, a0, 0xff
+;   .byte 0x13, 0x17, 0x06, 0x60
+;   addi a0, a4, -0x38
+;   ret
+
+function %clz_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   zext.h a2,a0
+;   clz a4,a2
+;   addi a0,a4,-48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0x46, 0x05, 0x08
+;   .byte 0x13, 0x17, 0x06, 0x60
+;   addi a0, a4, -0x30
+;   ret
+
+function %clz_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   clzw a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1b, 0x15, 0x05, 0x60
+;   ret
+
+function %clz_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   clz a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x05, 0x60
+;   ret
+
+function %clz_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = clz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   clz a3,a1
+;   clz a5,a0
+;   select a1,a5,zero##condition=(a1 eq zero)
+;   add a0,a3,a1
+;   li a1,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x93, 0x96, 0x05, 0x60
+;   .byte 0x93, 0x17, 0x05, 0x60
+;   bnez a1, 0xc
+;   mv a1, a5
+;   j 8
+;   mv a1, zero
+;   add a0, a3, a1
+;   mv a1, zero
+;   ret
+

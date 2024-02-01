@@ -1,0 +1,64 @@
+test run
+target x86_64 has_avx has_fma
+target x86_64 has_avx=false has_fma=false
+target aarch64
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+;; This file is not enabled in the interpreter since SIMD fneg is currently broken
+;; there.
+
+function %fma_neg_add_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+; run: %fma_neg_add_f64x2([0x1.0 0x1.0], [0x2.0 0x2.0], [0x3.0 0x3.0]) == [-0x1.0 -0x1.0]
+
+function %fma_neg_add_splat_f64x2(f64, f64x2, f64x2) -> f64x2 {
+block0(v0: f64, v1: f64x2, v2: f64x2):
+    v3 = splat.f64x2 v0
+    v4 = fneg v2
+    v5 = fma v3, v1, v4
+    return v5
+}
+; run: %fma_neg_add_splat_f64x2(0x1.0, [0x2.0 0x2.0], [0x3.0 0x3.0]) == [-0x1.0 -0x1.0]
+
+function %fma_neg_add_neg_mul_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = fneg v2
+    v4 = fneg v0
+    v5 = fma v4, v1, v3
+    return v5
+}
+; run: %fma_neg_add_neg_mul_f64x2([0x1.0 0x1.0], [0x2.0 0x2.0], [0x3.0 0x3.0]) == [-0x1.4p2 -0x1.4p2]
+
+function %fma_neg_add_neg_mul_splat_f64x2(f64, f64x2, f64x2) -> f64x2 {
+block0(v0: f64, v1: f64x2, v2: f64x2):
+    v3 = splat.f64x2 v0
+    v4 = fneg v3
+    v5 = fneg v2
+    v6 = fma v4, v1, v5
+    return v6
+}
+; run: %fma_neg_add_neg_mul_f64x2(0x1.0, [0x2.0 0x2.0], [0x3.0 0x3.0]) == [-0x1.4p2 -0x1.4p2]
+
+function %fma_neg_mul_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v4 = fneg v0
+    v5 = fma v4, v1, v2
+    return v5
+}
+; run: %fma_neg_add_f64x2([0x1.0 0x1.0], [0x2.0 0x2.0], [0x3.0 0x3.0]) == [0x1.0 0x1.0]
+
+
+function %fma_neg_mul_splat_f64x2(f64, f64x2, f64x2) -> f64x2 {
+block0(v0: f64, v1: f64x2, v2: f64x2):
+    v3 = splat.f64x2 v0
+    v4 = fneg v3
+    v6 = fma v4, v1, v2
+    return v6
+}
+; run: %fma_neg_add_f64x2(0x1.0, [0x2.0 0x2.0], [0x3.0 0x3.0]) == [0x1.0 0x1.0]
+

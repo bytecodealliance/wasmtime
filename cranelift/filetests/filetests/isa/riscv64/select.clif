@@ -1,0 +1,875 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %select_icmp_i8_i8(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a5,a0,255
+;   andi a3,a3,255
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a5, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i8_i16(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a5,a0,255
+;   andi a3,a3,255
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a5, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i8_i32(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a5,a0,255
+;   andi a3,a3,255
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a5, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i8_i64(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a5,a0,255
+;   andi a3,a3,255
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a5, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i8_i128(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s1,-8(sp)
+;   sd s8,-16(sp)
+;   addi sp,sp,-16
+; block0:
+;   mv s8,a1
+;   li a5,42
+;   andi s1,a0,255
+;   andi a5,a5,255
+;   select [a0,a1],[s8,a2],[a3,a4]##condition=(s1 eq a5)
+;   addi sp,sp,16
+;   ld s1,-8(sp)
+;   ld s8,-16(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s1, -8(sp)
+;   sd s8, -0x10(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x1c
+;   mv s8, a1
+;   addi a5, zero, 0x2a
+;   andi s1, a0, 0xff
+;   andi a5, a5, 0xff
+;   bne s1, a5, 0x10
+;   mv a0, s8
+;   mv a1, a2
+;   j 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s1, -8(sp)
+;   ld s8, -0x10(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i16_i8(i16, i8, i8) -> i8 {
+block0(v0: i16, v1: i8, v2: i8):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   slli a5,a0,48
+;   srai a4,a5,48
+;   slli a3,a3,48
+;   srai a5,a3,48
+;   select a0,a1,a2##condition=(a4 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   slli a5, a0, 0x30
+;   srai a4, a5, 0x30
+;   slli a3, a3, 0x30
+;   srai a5, a3, 0x30
+;   bne a4, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i16_i16(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   slli a5,a0,48
+;   srai a4,a5,48
+;   slli a3,a3,48
+;   srai a5,a3,48
+;   select a0,a1,a2##condition=(a4 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   slli a5, a0, 0x30
+;   srai a4, a5, 0x30
+;   slli a3, a3, 0x30
+;   srai a5, a3, 0x30
+;   bne a4, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i16_i32(i16, i32, i32) -> i32 {
+block0(v0: i16, v1: i32, v2: i32):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   slli a5,a0,48
+;   srai a4,a5,48
+;   slli a3,a3,48
+;   srai a5,a3,48
+;   select a0,a1,a2##condition=(a4 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   slli a5, a0, 0x30
+;   srai a4, a5, 0x30
+;   slli a3, a3, 0x30
+;   srai a5, a3, 0x30
+;   bne a4, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i16_i64(i16, i64, i64) -> i64 {
+block0(v0: i16, v1: i64, v2: i64):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   slli a5,a0,48
+;   srai a4,a5,48
+;   slli a3,a3,48
+;   srai a5,a3,48
+;   select a0,a1,a2##condition=(a4 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   slli a5, a0, 0x30
+;   srai a4, a5, 0x30
+;   slli a3, a3, 0x30
+;   srai a5, a3, 0x30
+;   bne a4, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i16_i128(i16, i128, i128) -> i128 {
+block0(v0: i16, v1: i128, v2: i128):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s6,-8(sp)
+;   sd s7,-16(sp)
+;   addi sp,sp,-16
+; block0:
+;   mv t0,a1
+;   li s6,42
+;   slli a1,a0,48
+;   srai a5,a1,48
+;   slli a0,s6,48
+;   srai s7,a0,48
+;   select [a0,a1],[t0,a2],[a3,a4]##condition=(a5 eq s7)
+;   addi sp,sp,16
+;   ld s6,-8(sp)
+;   ld s7,-16(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s6, -8(sp)
+;   sd s7, -0x10(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x1c
+;   mv t0, a1
+;   addi s6, zero, 0x2a
+;   slli a1, a0, 0x30
+;   srai a5, a1, 0x30
+;   slli a0, s6, 0x30
+;   srai s7, a0, 0x30
+;   bne a5, s7, 0x10
+;   mv a0, t0
+;   mv a1, a2
+;   j 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s6, -8(sp)
+;   ld s7, -0x10(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i32_i8(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i32_i16(i32, i16, i16) -> i16 {
+block0(v0: i32, v1: i16, v2: i16):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i32_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i32_i64(i32, i64, i64) -> i64 {
+block0(v0: i32, v1: i64, v2: i64):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i32_i128(i32, i128, i128) -> i128 {
+block0(v0: i32, v1: i128, v2: i128):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s1,-8(sp)
+;   sd s8,-16(sp)
+;   addi sp,sp,-16
+; block0:
+;   mv s8,a1
+;   li a5,42
+;   sext.w s1,a0
+;   sext.w a5,a5
+;   select [a0,a1],[s8,a2],[a3,a4]##condition=(s1 eq a5)
+;   addi sp,sp,16
+;   ld s1,-8(sp)
+;   ld s8,-16(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s1, -8(sp)
+;   sd s8, -0x10(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x1c
+;   mv s8, a1
+;   addi a5, zero, 0x2a
+;   sext.w s1, a0
+;   sext.w a5, a5
+;   bne s1, a5, 0x10
+;   mv a0, s8
+;   mv a1, a2
+;   j 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s1, -8(sp)
+;   ld s8, -0x10(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i64_i8(i64, i8, i8) -> i8 {
+block0(v0: i64, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   select a0,a1,a2##condition=(a0 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   bne a0, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i64_i16(i64, i16, i16) -> i16 {
+block0(v0: i64, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   select a0,a1,a2##condition=(a0 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   bne a0, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i64_i32(i64, i32, i32) -> i32 {
+block0(v0: i64, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   select a0,a1,a2##condition=(a0 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   bne a0, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i64_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   select a0,a1,a2##condition=(a0 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   bne a0, a5, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %select_icmp_i64_i128(i64, i128, i128) -> i128 {
+block0(v0: i64, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s4,-8(sp)
+;   sd s6,-16(sp)
+;   addi sp,sp,-16
+; block0:
+;   mv s4,a1
+;   mv s6,a0
+;   li a5,42
+;   select [a0,a1],[s4,a2],[a3,a4]##condition=(s6 eq a5)
+;   addi sp,sp,16
+;   ld s4,-8(sp)
+;   ld s6,-16(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s4, -8(sp)
+;   sd s6, -0x10(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x1c
+;   mv s4, a1
+;   mv s6, a0
+;   addi a5, zero, 0x2a
+;   bne s6, a5, 0x10
+;   mv a0, s4
+;   mv a1, a2
+;   j 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s4, -8(sp)
+;   ld s6, -0x10(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i128_i8(i128, i8, i8) -> i8 {
+block0(v0: i128, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i8 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   li a4,0
+;   xor a5,a0,a5
+;   xor a4,a1,a4
+;   or a0,a5,a4
+;   seqz a4,a0
+;   select a0,a2,a3##condition=(a4 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   mv a4, zero
+;   xor a5, a0, a5
+;   xor a4, a1, a4
+;   or a0, a5, a4
+;   seqz a4, a0
+;   beqz a4, 0xc
+;   mv a0, a2
+;   j 8
+;   mv a0, a3
+;   ret
+
+function %select_icmp_i128_i16(i128, i16, i16) -> i16 {
+block0(v0: i128, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i16 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   li a4,0
+;   xor a5,a0,a5
+;   xor a4,a1,a4
+;   or a0,a5,a4
+;   seqz a4,a0
+;   select a0,a2,a3##condition=(a4 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   mv a4, zero
+;   xor a5, a0, a5
+;   xor a4, a1, a4
+;   or a0, a5, a4
+;   seqz a4, a0
+;   beqz a4, 0xc
+;   mv a0, a2
+;   j 8
+;   mv a0, a3
+;   ret
+
+function %select_icmp_i128_i32(i128, i32, i32) -> i32 {
+block0(v0: i128, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i32 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   li a4,0
+;   xor a5,a0,a5
+;   xor a4,a1,a4
+;   or a0,a5,a4
+;   seqz a4,a0
+;   select a0,a2,a3##condition=(a4 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   mv a4, zero
+;   xor a5, a0, a5
+;   xor a4, a1, a4
+;   or a0, a5, a4
+;   seqz a4, a0
+;   beqz a4, 0xc
+;   mv a0, a2
+;   j 8
+;   mv a0, a3
+;   ret
+
+function %select_icmp_i128_i64(i128, i64, i64) -> i64 {
+block0(v0: i128, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i64 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   li a4,0
+;   xor a5,a0,a5
+;   xor a4,a1,a4
+;   or a0,a5,a4
+;   seqz a4,a0
+;   select a0,a2,a3##condition=(a4 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   mv a4, zero
+;   xor a5, a0, a5
+;   xor a4, a1, a4
+;   or a0, a5, a4
+;   seqz a4, a0
+;   beqz a4, 0xc
+;   mv a0, a2
+;   j 8
+;   mv a0, a3
+;   ret
+
+function %select_icmp_i128_i128(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i128 v5, v1, v2
+  return v6
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s7,-8(sp)
+;   sd s8,-16(sp)
+;   sd s9,-24(sp)
+;   addi sp,sp,-32
+; block0:
+;   li s8,42
+;   li s9,0
+;   xor a0,a0,s8
+;   xor a1,a1,s9
+;   or a0,a0,a1
+;   seqz a0,a0
+;   select [s7,a1],[a2,a3],[a4,a5]##condition=(a0 ne zero)
+;   mv a0,s7
+;   addi sp,sp,32
+;   ld s7,-8(sp)
+;   ld s8,-16(sp)
+;   ld s9,-24(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s7, -8(sp)
+;   sd s8, -0x10(sp)
+;   sd s9, -0x18(sp)
+;   addi sp, sp, -0x20
+; block1: ; offset 0x20
+;   addi s8, zero, 0x2a
+;   mv s9, zero
+;   xor a0, a0, s8
+;   xor a1, a1, s9
+;   or a0, a0, a1
+;   seqz a0, a0
+;   beqz a0, 0x10
+;   mv s7, a2
+;   mv a1, a3
+;   j 0xc
+;   mv s7, a4
+;   mv a1, a5
+;   mv a0, s7
+;   addi sp, sp, 0x20
+;   ld s7, -8(sp)
+;   ld s8, -0x10(sp)
+;   ld s9, -0x18(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

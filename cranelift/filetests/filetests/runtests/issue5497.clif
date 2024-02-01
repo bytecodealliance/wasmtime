@@ -1,0 +1,12 @@
+test interpret
+test run
+target riscv64
+target riscv64 has_c has_zcb
+
+function %a(i16, i128) -> i128 system_v {
+block0(v0: i16, v1: i128):
+    v2 = smin v1, v1
+    return v2
+}
+
+; run: %a(0, 1) == 1

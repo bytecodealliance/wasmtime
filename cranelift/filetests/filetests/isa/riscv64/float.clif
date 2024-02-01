@@ -1,0 +1,1228 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f1(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fadd.s fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fadd.s fa0, fa0, fa1, rne
+;   ret
+
+function %f2(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fadd.d fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fadd.d fa0, fa0, fa1, rne
+;   ret
+
+function %f3(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fsub.s fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fsub.s fa0, fa0, fa1, rne
+;   ret
+
+function %f4(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fsub.d fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fsub.d fa0, fa0, fa1, rne
+;   ret
+
+function %f5(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fmul.s fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmul.s fa0, fa0, fa1, rne
+;   ret
+
+function %f6(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fmul.d fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmul.d fa0, fa0, fa1, rne
+;   ret
+
+function %f7(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fdiv.s fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fdiv.s fa0, fa0, fa1, rne
+;   ret
+
+function %f8(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fdiv.d fa0,fa0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fdiv.d fa0, fa0, fa1, rne
+;   ret
+
+function %f13(f32) -> f32 {
+block0(v0: f32):
+  v1 = sqrt v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fsqrt.s fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fsqrt.s fa0, fa0, rne
+;   ret
+
+function %f15(f64) -> f64 {
+block0(v0: f64):
+  v1 = sqrt v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fsqrt.d fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fsqrt.d fa0, fa0, rne
+;   ret
+
+function %f16(f32) -> f32 {
+block0(v0: f32):
+  v1 = fabs v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fabs.s fa0,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fabs.s fa0, fa0
+;   ret
+
+function %f17(f64) -> f64 {
+block0(v0: f64):
+  v1 = fabs v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fabs.d fa0,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fabs.d fa0, fa0
+;   ret
+
+function %f18(f32) -> f32 {
+block0(v0: f32):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fneg.s fa0,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fneg.s fa0, fa0
+;   ret
+
+function %f19(f64) -> f64 {
+block0(v0: f64):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fneg.d fa0,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fneg.d fa0, fa0
+;   ret
+
+function %f20(f32) -> f64 {
+block0(v0: f32):
+  v1 = fpromote.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.d.s fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.d.s fa0, fa0
+;   ret
+
+function %f21(f64) -> f32 {
+block0(v0: f64):
+  v1 = fdemote.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.s.d fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.s.d fa0, fa0, rne
+;   ret
+
+function %f22(f32) -> f32 {
+block0(v0: f32):
+  v1 = ceil v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   ceil fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.s a3, fa5, fa5
+;   beqz a3, 0x28
+;   lui t6, 0x4b800
+;   fmv.w.x fa4, t6
+;   fabs.s fa0, fa5
+;   flt.s a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.s a3, fa5, rup
+;   fcvt.s.l fa0, a3, rup
+;   fsgnj.s fa0, fa0, fa5
+;   j 0x10
+;   fadd.s fa0, fa5, fa5, rne
+;   j 8
+;   fmv.s fa0, fa5
+;   ret
+
+function %f22(f64) -> f64 {
+block0(v0: f64):
+  v1 = ceil v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   ceil fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f64
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.d a3, fa5, fa5
+;   beqz a3, 0x38
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x40, 0x43
+;   fmv.d.x fa4, t6
+;   fabs.d fa0, fa5
+;   flt.d a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.d a3, fa5, rup
+;   fcvt.d.l fa0, a3, rup
+;   fsgnj.d fa0, fa0, fa5
+;   j 0x10
+;   fadd.d fa0, fa5, fa5, rne
+;   j 8
+;   fmv.d fa0, fa5
+;   ret
+
+function %f23(f32) -> f32 {
+block0(v0: f32):
+  v1 = floor v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   floor fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.s a3, fa5, fa5
+;   beqz a3, 0x28
+;   lui t6, 0x4b800
+;   fmv.w.x fa4, t6
+;   fabs.s fa0, fa5
+;   flt.s a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.s a3, fa5, rdn
+;   fcvt.s.l fa0, a3, rdn
+;   fsgnj.s fa0, fa0, fa5
+;   j 0x10
+;   fadd.s fa0, fa5, fa5, rne
+;   j 8
+;   fmv.s fa0, fa5
+;   ret
+
+function %f24(f64) -> f64 {
+block0(v0: f64):
+  v1 = floor v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   floor fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f64
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.d a3, fa5, fa5
+;   beqz a3, 0x38
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x40, 0x43
+;   fmv.d.x fa4, t6
+;   fabs.d fa0, fa5
+;   flt.d a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.d a3, fa5, rdn
+;   fcvt.d.l fa0, a3, rdn
+;   fsgnj.d fa0, fa0, fa5
+;   j 0x10
+;   fadd.d fa0, fa5, fa5, rne
+;   j 8
+;   fmv.d fa0, fa5
+;   ret
+
+function %f25(f32) -> f32 {
+block0(v0: f32):
+  v1 = trunc v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   trunc fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.s a3, fa5, fa5
+;   beqz a3, 0x28
+;   lui t6, 0x4b800
+;   fmv.w.x fa4, t6
+;   fabs.s fa0, fa5
+;   flt.s a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.s a3, fa5, rtz
+;   fcvt.s.l fa0, a3, rtz
+;   fsgnj.s fa0, fa0, fa5
+;   j 0x10
+;   fadd.s fa0, fa5, fa5, rne
+;   j 8
+;   fmv.s fa0, fa5
+;   ret
+
+function %f26(f64) -> f64 {
+block0(v0: f64):
+  v1 = trunc v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   trunc fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f64
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.d a3, fa5, fa5
+;   beqz a3, 0x38
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x40, 0x43
+;   fmv.d.x fa4, t6
+;   fabs.d fa0, fa5
+;   flt.d a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.d a3, fa5, rtz
+;   fcvt.d.l fa0, a3, rtz
+;   fsgnj.d fa0, fa0, fa5
+;   j 0x10
+;   fadd.d fa0, fa5, fa5, rne
+;   j 8
+;   fmv.d fa0, fa5
+;   ret
+
+function %f27(f32) -> f32 {
+block0(v0: f32):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   nearest fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.s a3, fa5, fa5
+;   beqz a3, 0x28
+;   lui t6, 0x4b800
+;   fmv.w.x fa4, t6
+;   fabs.s fa0, fa5
+;   flt.s a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.s a3, fa5, rne
+;   fcvt.s.l fa0, a3, rne
+;   fsgnj.s fa0, fa0, fa5
+;   j 0x10
+;   fadd.s fa0, fa5, fa5, rne
+;   j 8
+;   fmv.s fa0, fa5
+;   ret
+
+function %f28(f64) -> f64 {
+block0(v0: f64):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa5,fa0
+;   nearest fa0,fa5##int_tmp=a3 f_tmp=fa4 ty=f64
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa5, fa0
+;   feq.d a3, fa5, fa5
+;   beqz a3, 0x38
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x40, 0x43
+;   fmv.d.x fa4, t6
+;   fabs.d fa0, fa5
+;   flt.d a3, fa4, fa0
+;   bnez a3, 0x1c
+;   fcvt.l.d a3, fa5, rne
+;   fcvt.d.l fa0, a3, rne
+;   fsgnj.d fa0, fa0, fa5
+;   j 0x10
+;   fadd.d fa0, fa5, fa5, rne
+;   j 8
+;   fmv.d fa0, fa5
+;   ret
+
+function %f29(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   fmadd.s fa0,fa0,fa1,fa2,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmadd.s fa0, fa0, fa1, fa2, rne
+;   ret
+
+function %f30(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   fmadd.d fa0,fa0,fa1,fa2,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmadd.d fa0, fa0, fa1, fa2, rne
+;   ret
+
+function %f31(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fsgnj.s fa0,fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fsgnj.s fa0, fa0, fa1
+;   ret
+
+function %f32(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   fsgnj.d fa0,fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fsgnj.d fa0, fa0, fa1
+;   ret
+
+function %f33(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.s a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   lui a5,-264192
+;   fmv.w.x fa1,a5
+;   fle.s a3,fa0,fa1
+;   trap_if int_ovf##(a3 ne zero)
+;   lui a0,325632
+;   fmv.w.x fa2,a0
+;   fle.s a4,fa2,fa0
+;   trap_if int_ovf##(a4 ne zero)
+;   fcvt.wu.s a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   lui a5, 0xbf800
+;   fmv.w.x fa1, a5
+;   fle.s a3, fa0, fa1
+;   beqz a3, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a0, 0x4f800
+;   fmv.w.x fa2, a0
+;   fle.s a4, fa2, fa0
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.wu.s a0, fa0, rtz
+;   ret
+
+function %f34(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.s a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   lui a5,-200704
+;   addi a1,a5,1
+;   fmv.w.x fa3,a1
+;   fle.s a5,fa0,fa3
+;   trap_if int_ovf##(a5 ne zero)
+;   lui a2,323584
+;   fmv.w.x fa4,a2
+;   fle.s a0,fa4,fa0
+;   trap_if int_ovf##(a0 ne zero)
+;   fcvt.w.s a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   lui a5, 0xcf000
+;   addi a1, a5, 1
+;   fmv.w.x fa3, a1
+;   fle.s a5, fa0, fa3
+;   beqz a5, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a2, 0x4f000
+;   fmv.w.x fa4, a2
+;   fle.s a0, fa4, fa0
+;   beqz a0, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.w.s a0, fa0, rtz
+;   ret
+
+function %f35(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.s a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   lui a5,-264192
+;   fmv.w.x fa1,a5
+;   fle.s a3,fa0,fa1
+;   trap_if int_ovf##(a3 ne zero)
+;   lui a0,391168
+;   fmv.w.x fa2,a0
+;   fle.s a4,fa2,fa0
+;   trap_if int_ovf##(a4 ne zero)
+;   fcvt.lu.s a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   lui a5, 0xbf800
+;   fmv.w.x fa1, a5
+;   fle.s a3, fa0, fa1
+;   beqz a3, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a0, 0x5f800
+;   fmv.w.x fa2, a0
+;   fle.s a4, fa2, fa0
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.lu.s a0, fa0, rtz
+;   ret
+
+function %f36(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.s a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   lui a5,-135168
+;   addi a1,a5,1
+;   fmv.w.x fa3,a1
+;   fle.s a5,fa0,fa3
+;   trap_if int_ovf##(a5 ne zero)
+;   lui a2,389120
+;   fmv.w.x fa4,a2
+;   fle.s a0,fa4,fa0
+;   trap_if int_ovf##(a0 ne zero)
+;   fcvt.l.s a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   lui a5, 0xdf000
+;   addi a1, a5, 1
+;   fmv.w.x fa3, a1
+;   fle.s a5, fa0, fa3
+;   beqz a5, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a2, 0x5f000
+;   fmv.w.x fa4, a2
+;   fle.s a0, fa4, fa0
+;   beqz a0, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.l.s a0, fa0, rtz
+;   ret
+
+function %f37(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.d a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   lui a5,3071
+;   slli a1,a5,40
+;   fmv.d.x fa3,a1
+;   fle.d a5,fa0,fa3
+;   trap_if int_ovf##(a5 ne zero)
+;   lui a2,1055
+;   slli a4,a2,40
+;   fmv.d.x fa1,a4
+;   fle.d a2,fa1,fa0
+;   trap_if int_ovf##(a2 ne zero)
+;   fcvt.wu.d a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.d a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   lui a5, 0xbff
+;   slli a1, a5, 0x28
+;   fmv.d.x fa3, a1
+;   fle.d a5, fa0, fa3
+;   beqz a5, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a2, 0x41f
+;   slli a4, a2, 0x28
+;   fmv.d.x fa1, a4
+;   fle.d a2, fa1, fa0
+;   beqz a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.wu.d a0, fa0, rtz
+;   ret
+
+function %f38(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.d a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   ld a5,[const(0)]
+;   fmv.d.x fa1,a5
+;   fle.d a3,fa0,fa1
+;   trap_if int_ovf##(a3 ne zero)
+;   lui a0,527
+;   slli a2,a0,41
+;   fmv.d.x fa4,a2
+;   fle.d a0,fa4,fa0
+;   trap_if int_ovf##(a0 ne zero)
+;   fcvt.w.d a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.d a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   auipc a5, 0
+;   ld a5, 0x3c(a5)
+;   fmv.d.x fa1, a5
+;   fle.d a3, fa0, fa1
+;   beqz a3, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a0, 0x20f
+;   slli a2, a0, 0x29
+;   fmv.d.x fa4, a2
+;   fle.d a0, fa4, fa0
+;   beqz a0, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.w.d a0, fa0, rtz
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x20, 0x00
+;   .byte 0x00, 0x00, 0xe0, 0xc1
+
+function %f39(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.d a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   lui a5,3071
+;   slli a1,a5,40
+;   fmv.d.x fa3,a1
+;   fle.d a5,fa0,fa3
+;   trap_if int_ovf##(a5 ne zero)
+;   lui a2,1087
+;   slli a4,a2,40
+;   fmv.d.x fa1,a4
+;   fle.d a2,fa1,fa0
+;   trap_if int_ovf##(a2 ne zero)
+;   fcvt.lu.d a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.d a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   lui a5, 0xbff
+;   slli a1, a5, 0x28
+;   fmv.d.x fa3, a1
+;   fle.d a5, fa0, fa3
+;   beqz a5, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a2, 0x43f
+;   slli a4, a2, 0x28
+;   fmv.d.x fa1, a4
+;   fle.d a2, fa1, fa0
+;   beqz a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.lu.d a0, fa0, rtz
+;   ret
+
+function %f40(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   feq.d a2,fa0,fa0
+;   trap_if bad_toint##(a2 eq zero)
+;   ld a5,[const(0)]
+;   fmv.d.x fa1,a5
+;   fle.d a3,fa0,fa1
+;   trap_if int_ovf##(a3 ne zero)
+;   lui a0,543
+;   slli a2,a0,41
+;   fmv.d.x fa4,a2
+;   fle.d a0,fa4,fa0
+;   trap_if int_ovf##(a0 ne zero)
+;   fcvt.l.d a0,fa0,rtz
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.d a2, fa0, fa0
+;   bnez a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
+;   auipc a5, 0
+;   ld a5, 0x3c(a5)
+;   fmv.d.x fa1, a5
+;   fle.d a3, fa0, fa1
+;   beqz a3, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   lui a0, 0x21f
+;   slli a2, a0, 0x29
+;   fmv.d.x fa4, a2
+;   fle.d a0, fa4, fa0
+;   beqz a0, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fcvt.l.d a0, fa0, rtz
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x01, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0xe0, 0xc3
+
+function %f41(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.s.wu fa0,a0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.s.wu fa0, a0, rne
+;   ret
+
+function %f42(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.s.w fa0,a0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.s.w fa0, a0, rne
+;   ret
+
+function %f43(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.s.lu fa0,a0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.s.lu fa0, a0, rne
+;   ret
+
+function %f44(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.s.l fa0,a0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.s.l fa0, a0, rne
+;   ret
+
+function %f45(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.d.wu fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.d.wu fa0, a0
+;   ret
+
+function %f46(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.d.w fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.d.w fa0, a0
+;   ret
+
+function %f47(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.d.lu fa0,a0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.d.lu fa0, a0, rne
+;   ret
+
+function %f48(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.d.l fa0,a0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.d.l fa0, a0, rne
+;   ret
+
+function %f49(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.wu.s a2,fa0,rtz
+;   feq.s a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.wu.s a2, fa0, rtz
+;   feq.s a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+
+function %f50(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.w.s a2,fa0,rtz
+;   feq.s a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.w.s a2, fa0, rtz
+;   feq.s a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+
+function %f51(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.lu.s a2,fa0,rtz
+;   feq.s a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.lu.s a2, fa0, rtz
+;   feq.s a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+
+function %f52(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.l.s a2,fa0,rtz
+;   feq.s a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.l.s a2, fa0, rtz
+;   feq.s a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+
+function %f53(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.wu.d a2,fa0,rtz
+;   feq.d a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.wu.d a2, fa0, rtz
+;   feq.d a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+
+function %f54(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.w.d a2,fa0,rtz
+;   feq.d a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.w.d a2, fa0, rtz
+;   feq.d a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+
+function %f55(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.lu.d a2,fa0,rtz
+;   feq.d a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.lu.d a2, fa0, rtz
+;   feq.d a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+
+function %f56(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.l.d a2,fa0,rtz
+;   feq.d a4,fa0,fa0
+;   sub a0,zero,a4
+;   and a0,a2,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.l.d a2, fa0, rtz
+;   feq.d a4, fa0, fa0
+;   neg a0, a4
+;   and a0, a2, a0
+;   ret
+

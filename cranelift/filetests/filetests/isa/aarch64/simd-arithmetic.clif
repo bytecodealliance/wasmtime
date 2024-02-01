@@ -1,0 +1,522 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %average_rounding_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+    v2 = avg_round v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   urhadd v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   urhadd v0.8b, v0.8b, v1.8b
+;   ret
+
+function %average_rounding_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = avg_round v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   urhadd v0.16b, v0.16b, v1.16b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   urhadd v0.16b, v0.16b, v1.16b
+;   ret
+
+function %average_rounding_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+    v2 = avg_round v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   urhadd v0.4h, v0.4h, v1.4h
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   urhadd v0.4h, v0.4h, v1.4h
+;   ret
+
+function %average_rounding_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = avg_round v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   urhadd v0.8h, v0.8h, v1.8h
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   urhadd v0.8h, v0.8h, v1.8h
+;   ret
+
+function %average_rounding_i32x2(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+    v2 = avg_round v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   urhadd v0.2s, v0.2s, v1.2s
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   urhadd v0.2s, v0.2s, v1.2s
+;   ret
+
+function %average_rounding_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = avg_round v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   urhadd v0.4s, v0.4s, v1.4s
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   urhadd v0.4s, v0.4s, v1.4s
+;   ret
+
+function %average_rounding_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = avg_round v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   movz x3, #1
+;   dup v5.2d, x3
+;   orr v7.16b, v0.16b, v1.16b
+;   and v17.16b, v7.16b, v5.16b
+;   ushr v19.2d, v0.2d, #1
+;   ushr v21.2d, v1.2d, #1
+;   add v23.2d, v19.2d, v21.2d
+;   add v0.2d, v17.2d, v23.2d
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x3, #1
+;   dup v5.2d, x3
+;   orr v7.16b, v0.16b, v1.16b
+;   and v17.16b, v7.16b, v5.16b
+;   ushr v19.2d, v0.2d, #1
+;   ushr v21.2d, v1.2d, #1
+;   add v23.2d, v19.2d, v21.2d
+;   add v0.2d, v17.2d, v23.2d
+;   ret
+
+function %ishl_i8x16_imm(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i32 1
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.16b, v0.16b, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.16b, v0.16b, #1
+;   ret
+
+function %ishl_i16x8_imm(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = iconst.i32 15
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.8h, v0.8h, #15
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.8h, v0.8h, #0xf
+;   ret
+
+function %ishl_i32x4_imm(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 22
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.4s, v0.4s, #22
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.4s, v0.4s, #0x16
+;   ret
+
+function %ishl_i64x2_imm(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 55
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.2d, v0.2d, #55
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.2d, v0.2d, #0x37
+;   ret
+
+function %sshr_i8x16_imm(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i32 1
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sshr v0.16b, v0.16b, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v0.16b, v0.16b, #1
+;   ret
+
+function %sshr_i16x8_imm(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = iconst.i32 15
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sshr v0.8h, v0.8h, #15
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v0.8h, v0.8h, #0xf
+;   ret
+
+function %sshr_i32x4_imm(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 22
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sshr v0.4s, v0.4s, #22
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v0.4s, v0.4s, #0x16
+;   ret
+
+function %sshr_i64x2_imm(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 55
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sshr v0.2d, v0.2d, #55
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v0.2d, v0.2d, #0x37
+;   ret
+
+function %ushr_i8x16_imm(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i32 1
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ushr v0.16b, v0.16b, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ushr v0.16b, v0.16b, #1
+;   ret
+
+function %ushr_i16x8_imm(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = iconst.i32 15
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ushr v0.8h, v0.8h, #15
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ushr v0.8h, v0.8h, #0xf
+;   ret
+
+function %ushr_i32x4_imm(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 22
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ushr v0.4s, v0.4s, #22
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ushr v0.4s, v0.4s, #0x16
+;   ret
+
+function %ushr_i64x2_imm(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 55
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ushr v0.2d, v0.2d, #55
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ushr v0.2d, v0.2d, #0x37
+;   ret
+
+function %ishl_i8x16_full_width(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i32 8
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.16b, v0.16b, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.16b, v0.16b, #0
+;   ret
+
+function %ishl_i16x8_full_width(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = iconst.i32 16
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.8h, v0.8h, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.8h, v0.8h, #0
+;   ret
+
+function %ishl_i32x4_full_width(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 32
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.4s, v0.4s, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.4s, v0.4s, #0
+;   ret
+
+function %ishl_i64x2_full_width(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 64
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   shl v0.2d, v0.2d, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   shl v0.2d, v0.2d, #0
+;   ret
+
+function %sshr_i8x16_full_width(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i32 8
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %sshr_i16x8_full_width(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = iconst.i32 16
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %sshr_i32x4_full_width(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 32
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %sshr_i64x2_full_width(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 64
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %ushr_i8x16_full_width(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i32 8
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %ushr_i16x8_full_width(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = iconst.i32 16
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %ushr_i32x4_full_width(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 32
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %ushr_i64x2_full_width(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 64
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+

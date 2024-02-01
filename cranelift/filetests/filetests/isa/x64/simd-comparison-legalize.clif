@@ -1,0 +1,123 @@
+test compile precise-output
+target x86_64 sse41
+
+function %icmp_ne_32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm0, %xmm1, %xmm0
+;   uninit  %xmm6
+;   pcmpeqd %xmm6, %xmm6, %xmm6
+;   pxor    %xmm0, %xmm6, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pcmpeqd %xmm1, %xmm0
+;   pcmpeqd %xmm6, %xmm6
+;   pxor %xmm6, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %icmp_ugt_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp ugt v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pmaxud  %xmm0, %xmm1, %xmm0
+;   pcmpeqd %xmm0, %xmm1, %xmm0
+;   uninit  %xmm1
+;   pcmpeqd %xmm1, %xmm1, %xmm1
+;   pxor    %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pmaxud %xmm1, %xmm0
+;   pcmpeqd %xmm1, %xmm0
+;   pcmpeqd %xmm1, %xmm1
+;   pxor %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %icmp_sge_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = icmp sge v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm3
+;   pmaxsw  %xmm3, %xmm1, %xmm3
+;   pcmpeqw %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   pmaxsw %xmm1, %xmm3
+;   pcmpeqw %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %icmp_uge_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp uge v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm3
+;   pmaxub  %xmm3, %xmm1, %xmm3
+;   pcmpeqb %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   pmaxub %xmm1, %xmm3
+;   pcmpeqb %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

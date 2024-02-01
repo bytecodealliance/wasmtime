@@ -1,0 +1,88 @@
+test compile precise-output
+target s390x
+
+function %f(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   clgr %r2, %r3
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   clgr %r2, %r3
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   br %r14
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brif v2, block1, block2
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+
+block2:
+  v5 = iconst.i64 2
+  return v5
+}
+
+; VCode:
+; block0:
+;   clgr %r2, %r3
+;   jge label2 ; jg label1
+; block1:
+;   lghi %r2, 2
+;   br %r14
+; block2:
+;   lghi %r2, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   clgr %r2, %r3
+;   jge 0x10
+; block1: ; offset 0xa
+;   lghi %r2, 2
+;   br %r14
+; block2: ; offset 0x10
+;   lghi %r2, 1
+;   br %r14
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brif v2, block1, block1
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+}
+
+; VCode:
+; block0:
+;   clgr %r2, %r3
+;   jge label1 ; jg label2
+; block1:
+;   jg label3
+; block2:
+;   jg label3
+; block3:
+;   lghi %r2, 1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   clgr %r2, %r3
+; block1: ; offset 0x4
+;   lghi %r2, 1
+;   br %r14
+

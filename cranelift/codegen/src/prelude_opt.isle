@@ -1,0 +1,134 @@
+;; Prelude definitions specific to the mid-end.
+
+;; Any `extern` definitions here are generally implemented in `src/opts.rs`.
+
+;;;;; eclass and enode access ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Extract any node(s) for the given eclass ID.
+(decl multi inst_data (Type InstructionData) Value)
+(extern extractor inst_data inst_data_etor)
+
+;; Identical to `inst_data`, just with a different ISLE type.
+;; This is basically a manual version of `curry`/`uncurry` in Haskell:
+;; to compose extractors the outer one needs to be single-parameter,
+;; so this combines the two parameters of `inst_data` into one.
+(type TypeAndInstructionData (primitive TypeAndInstructionData))
+(decl multi inst_data_tupled (TypeAndInstructionData) Value)
+(extern extractor inst_data_tupled inst_data_tupled_etor)
+
+;; Construct a pure node, returning a new (or deduplicated
+;; already-existing) eclass ID.
+(decl make_inst (Type InstructionData) Value)
+(extern constructor make_inst make_inst_ctor)
+
+;; Constructors for value arrays.
+(decl value_array_2_ctor (Value Value) ValueArray2)
+(extern constructor value_array_2_ctor value_array_2_ctor)
+(decl value_array_3_ctor (Value Value Value) ValueArray3)
+(extern constructor value_array_3_ctor value_array_3_ctor)
+
+(rule (eq ty x y) (icmp ty (IntCC.Equal) x y))
+(rule (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
+(rule (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))
+(rule (ule ty x y) (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
+(rule (ugt ty x y) (icmp ty (IntCC.UnsignedGreaterThan) x y))
+(rule (uge ty x y) (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
+(rule (slt ty x y) (icmp ty (IntCC.SignedLessThan) x y))
+(rule (sle ty x y) (icmp ty (IntCC.SignedLessThanOrEqual) x y))
+(rule (sgt ty x y) (icmp ty (IntCC.SignedGreaterThan) x y))
+(rule (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
+
+;; 3-way comparison, returning -1/0/+1 in I8
+(decl spaceship_s (Type Value Value) Value)
+(rule (spaceship_s ty x y) (isub $I8 (sgt ty x y) (slt ty x y)))
+(extractor (spaceship_s ty x y) (isub $I8 (sgt ty x y) (slt ty x y)))
+(decl spaceship_u (Type Value Value) Value)
+(rule (spaceship_u ty x y) (isub $I8 (ugt ty x y) (ult ty x y)))
+(extractor (spaceship_u ty x y) (isub $I8 (ugt ty x y) (ult ty x y)))
+
+;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The main matcher rule invoked by the toplevel driver.
+(decl multi simplify (Value) Value)
+
+;; Mark a node as requiring remat when used in a different block.
+(decl remat (Value) Value)
+(extern constructor remat remat)
+
+;; Mark a node as subsuming whatever else it's rewritten from -- this
+;; is definitely preferable, not just a possible option. Useful for,
+;; e.g., constant propagation where we arrive at a definite "final
+;; answer".
+(decl subsume (Value) Value)
+(extern constructor subsume subsume)
+
+;;;;; constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl iconst_sextend_etor (Type i64) TypeAndInstructionData)
+(extern extractor iconst_sextend_etor iconst_sextend_etor)
+
+;; Construct an `iconst` from an `i64` or Extract an `i64` from an `iconst`
+;; by treating the constant as signed.
+;; When extracting, smaller types get their value sign-extended to 64-bits,
+;; so that `iconst.i8 255` will give you a `-1_i64`.
+;; When constructing, the rule will fail if the value cannot be represented in
+;; the target type.  If it fits, it'll be masked accordingly in the constant.
+(decl iconst_s (Type i64) Value)
+(extractor (iconst_s ty c) (inst_data_tupled (iconst_sextend_etor ty c)))
+(rule 0 (iconst_s ty c)
+	(if-let c_masked (u64_and (i64_as_u64 c) (ty_umax ty)))
+	(if-let c_reextended (i64_sextend_u64 ty c_masked))
+	(if-let $true (u64_eq (i64_as_u64 c) (i64_as_u64 c_reextended)))
+	(iconst ty (imm64 c_masked)))
+(rule 1 (iconst_s $I128 c) (sextend $I128 (iconst_s $I64 c)))
+
+;; Construct an `iconst` from a `u64` or Extract a `u64` from an `iconst`
+;; by treating the constant as unsigned.
+;; When extracting, smaller types get their value zero-extended to 64-bits,
+;; so that `iconst.i8 255` will give you a `255_u64`.
+;; When constructing, the rule will fail if the value cannot be represented in
+;; the target type.
+(decl iconst_u (Type u64) Value)
+(extractor (iconst_u ty c) (iconst ty (u64_from_imm64 c)))
+(rule 0 (iconst_u ty c)
+	(if-let $true (u64_le c (ty_umax ty)))
+    (iconst ty (imm64 c)))
+(rule 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))
+
+;; These take `Value`, rather than going through `inst_data_tupled`, because
+;; most of the time they want to return the original `Value`, and it would be
+;; a waste to need to re-GVN the instruction data in those cases.
+(decl multi sextend_maybe_etor (Type Value) Value)
+(extern extractor infallible sextend_maybe_etor sextend_maybe_etor)
+(decl multi uextend_maybe_etor (Type Value) Value)
+(extern extractor infallible uextend_maybe_etor uextend_maybe_etor)
+
+;; Match or Construct a possibly-`uextend`ed value.
+;; Gives the extended-to type and inner value when matching something that was
+;; extended, or the input value and its type when the value isn't an extension.
+;; Useful to write a single pattern that can match things that may or may not
+;; have undergone C's "usual arithmetic conversions".
+;; When generating values, extending to the same type is invalid CLIF,
+;; so this avoids doing that where there's no extension actually needed.
+(decl uextend_maybe (Type Value) Value)
+(extractor (uextend_maybe ty val) (uextend_maybe_etor ty val))
+(rule 0 (uextend_maybe ty val) (uextend ty val))
+(rule 1 (uextend_maybe ty val@(value_type ty)) val)
+
+;; Same as `uextend_maybe` above, just for `sextend`.
+(decl sextend_maybe (Type Value) Value)
+(extractor (sextend_maybe ty val) (sextend_maybe_etor ty val))
+(rule 0 (sextend_maybe ty val) (sextend ty val))
+(rule 1 (sextend_maybe ty val@(value_type ty)) val)
+
+(decl unary_op (Type Opcode Value) Value)
+(extractor (unary_op ty opcode x)
+           (inst_data ty (InstructionData.Unary opcode x)))
+(rule (unary_op ty opcode x)
+      (make_inst ty (InstructionData.Unary opcode x)))
+
+(decl binary_op (Type Opcode Value Value) Value)
+(extractor (binary_op ty opcode x y)
+           (inst_data ty (InstructionData.Binary opcode (value_array_2 x y))))
+(rule (binary_op ty opcode x y)
+      (make_inst ty (InstructionData.Binary opcode (value_array_2_ctor x y))))

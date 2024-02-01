@@ -1,0 +1,19 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_zbb
+target riscv64 has_c has_zcb
+
+function %bswap_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bswap v0
+    return v1
+}
+; run: %bswap_i128(0) == 0
+; run: %bswap_i128(1) == 0x01000000_00000000_00000000_00000000
+; run: %bswap_i128(0x12345678_9ABCDEF0_CAFEF00D_F00DCAFE) == 0xFECA0DF0_0DF0FECA_F0DEBC9A_78563412
+; run: %bswap_i128(-2) == 0xFEFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF

@@ -1,0 +1,73 @@
+test compile precise-output
+set preserve_frame_pointers=true
+target aarch64
+
+function %fp() -> i64 {
+block0:
+    v0 = get_frame_pointer.i64
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, fp
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   mov x0, x29
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %sp() -> i64 {
+block0:
+    v0 = get_stack_pointer.i64
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, sp
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   mov x0, sp
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %return_address() -> i64 {
+block0:
+    v0 = get_return_address.i64
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr x0, [fp, #8]
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldur x0, [x29, #8]
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

@@ -1,0 +1,53 @@
+test compile precise-output
+target s390x
+
+function %bswap_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   lrvgr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvgr %r2, %r2
+;   br %r14
+
+function %bswap_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   lrvr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvr %r2, %r2
+;   br %r14
+
+function %bswap_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   lrvr %r4, %r2
+;   srlk %r2, %r4, 16
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvr %r4, %r2
+;   srlk %r2, %r4, 0x10
+;   br %r14
+

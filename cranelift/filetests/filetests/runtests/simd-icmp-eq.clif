@@ -1,0 +1,93 @@
+test interpret
+test run
+target x86_64
+target x86_64 has_avx
+target aarch64
+target s390x
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %simd_icmp_eq_i8(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i8([1 0 -1 1 1 1 1 1 1 1 1 1 1 1 1 1], [1 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0]) == [-1 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0]
+
+function %simd_icmp_eq_i16(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i16([1 0 -1 1 1 1 1 1], [1 0 -1 0 0 0 0 0]) == [-1 -1 -1 0 0 0 0 0]
+
+function %simd_icmp_eq_i32(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i32([1 0 -1 1], [1 0 -1 0]) == [-1 -1 -1 0]
+
+function %simd_icmp_eq_i64(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i64([10 0], [1 0]) == [0 -1]
+; run: %simd_icmp_eq_i64([-1 1], [-1 0]) == [-1 0]
+
+
+function %icmp_eq_const_i8x16() -> i8 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 0x00
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 0
+    return v3
+}
+; run: %icmp_eq_const_i8x16() == -1
+
+
+function %icmp_eq_const_i64x2() -> i64 {
+block0:
+    v0 = vconst.i64x2 0xf1ffffffffffffffffffffffffffffff
+    v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 1
+    return v3
+}
+; run: %icmp_eq_const_i64x2()  == 0
+
+function %simd_icmp_eq_splat_rhs_i32(i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32):
+    v2 = splat.i32x4 v1
+    v3 = icmp eq v0, v2
+    return v3
+}
+; run: %simd_icmp_eq_splat_rhs_i32([1 0 -1 10], 10) == [0 0 0 -1]
+
+function %simd_icmp_eq_splat_const_rhs_i32(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 10
+    v2 = splat.i32x4 v1
+    v3 = icmp eq v0, v2
+    return v3
+}
+; run: %simd_icmp_eq_splat_const_rhs_i32([1 0 -1 10]) == [0 0 0 -1]
+
+function %simd_icmp_eq_splat_lhs_i32(i32, i32x4) -> i32x4 {
+block0(v0: i32, v1: i32x4):
+    v2 = splat.i32x4 v0
+    v3 = icmp eq v2, v1
+    return v3
+}
+; run: %simd_icmp_eq_splat_lhs_i32(10, [1 0 -1 10]) == [0 0 0 -1]
+
+function %simd_icmp_eq_splat_const_lhs_i32(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 10
+    v2 = splat.i32x4 v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+; run: %simd_icmp_eq_splat_const_lhs_i32([1 0 -1 10]) == [0 0 0 -1]

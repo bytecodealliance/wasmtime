@@ -1,0 +1,175 @@
+[package]
+name = "wasmtime"
+version.workspace = true
+authors.workspace = true
+description = "High-level API to expose the Wasmtime runtime"
+documentation = "https://docs.rs/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "nightlydoc"]
+# Docs.rs will use the `component-model` feature for documentation;
+# so this feature also passed in to the `cargo doc` invocation in CI.
+# See .github/workflows/main.yml
+features = ["component-model"]
+
+[dependencies]
+wasmtime-runtime = { workspace = true, optional = true }
+wasmtime-environ = { workspace = true }
+wasmtime-jit-debug = { workspace = true, features = [
+  "perf_jitdump",
+], optional = true }
+wasmtime-jit-icache-coherence = { workspace = true, optional = true }
+wasmtime-cache = { workspace = true, optional = true }
+wasmtime-fiber = { workspace = true, optional = true }
+wasmtime-cranelift = { workspace = true, optional = true }
+wasmtime-winch = { workspace = true, optional = true }
+wasmtime-component-macro = { workspace = true, optional = true }
+wasmtime-component-util = { workspace = true, optional = true }
+target-lexicon = { workspace = true }
+wasmparser = { workspace = true }
+wasm-encoder = { workspace = true, optional = true }
+anyhow = { workspace = true }
+libc = "0.2"
+cfg-if = { workspace = true }
+log = { workspace = true }
+wat = { workspace = true, optional = true }
+serde = "1.0.188"
+serde_derive = "1.0.188"
+serde_json = { workspace = true }
+bincode = "1.2.1"
+indexmap = { workspace = true }
+paste = "1.0.3"
+once_cell = { workspace = true }
+rayon = { version = "1.0", optional = true }
+object = { workspace = true }
+async-trait = { workspace = true, optional = true }
+encoding_rs = { version = "0.8.31", optional = true }
+bumpalo = "3.11.0"
+fxprof-processed-profile = { version = "0.6.0", optional = true }
+gimli = { workspace = true }
+# Support address-to-file/line information in traps when wasm files have DWARF
+# debugging information.
+addr2line = { version = "0.21.0", default-features = false, optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies.windows-sys]
+workspace = true
+features = ["Win32_System_Diagnostics_Debug"]
+
+[target.'cfg(all(target_arch = "x86_64", not(target_os = "android")))'.dependencies]
+ittapi = { version = "0.4.0", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ['thread'] }
+
+[dev-dependencies]
+tempfile = "3.0"
+wasmtime-wasi = { path = "../wasi", default-features = true }
+wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
+
+# =============================================================================
+#
+# Features for the Wasmtime crate.
+#
+# This section contains the compile-time features of the `wasmtime` crate. These
+# features can be used to add more functionality and APIs exposed from the
+# crate's API. Most of them are enabled by default. Disabling features can be
+# done to cut down on binary size by disabling features that are not required
+# for a particular embedding.
+[features]
+default = [
+  'async',
+  'cache',
+  'wat',
+  'profiling',
+  'parallel-compilation',
+  'cranelift',
+  'pooling-allocator',
+  'demangle',
+  'addr2line',
+  'coredump',
+  'debug-builtins',
+  'runtime',
+  'component-model',
+]
+
+# An on-by-default feature enabling runtime compilation of WebAssembly modules
+# with the Cranelift compiler. Cranelift is the default compilation backend of
+# Wasmtime. If disabled then WebAssembly modules can only be created from
+# precompiled WebAssembly modules.
+cranelift = ["dep:wasmtime-cranelift"]
+
+# Enables support for winch, the WebAssembly baseline compiler. The Winch compiler
+# strategy in `Config` will be available. It is currently in active development
+# and shouldn't be used in production applications.
+winch = ["dep:wasmtime-winch"]
+
+# Enables support for incremental compilation cache to be enabled in `Config`.
+incremental-cache = ["wasmtime-cranelift?/incremental-cache"]
+
+# Enables support for profiling guest modules.
+profiling = [
+  "dep:fxprof-processed-profile",
+  "dep:wasmtime-jit-debug",
+  "dep:ittapi",
+]
+
+# Enables parallel compilation of WebAssembly code.
+parallel-compilation = ["dep:rayon"]
+
+# Enables support for automatic cache configuration to be enabled in `Config`.
+cache = ["dep:wasmtime-cache"]
+
+# Enables support for "async stores" as well as defining host functions as
+# `async fn` and calling functions asynchronously.
+async = [
+  "dep:wasmtime-fiber",
+  "wasmtime-runtime/async",
+  "dep:async-trait",
+  "wasmtime-component-macro?/async",
+  "runtime",
+]
+
+# Enables support for the pooling instance allocation strategy
+pooling-allocator = ["runtime", "wasmtime-runtime/pooling-allocator"]
+
+# Enables support for all architectures in Cranelift, allowing
+# cross-compilation using the `wasmtime` crate's API, notably the
+# `Engine::precompile_module` function.
+all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch"]
+
+# Enables in-progress support for the component model. Note that this feature is
+# in-progress, buggy, and incomplete. This is primarily here for internal
+# testing purposes.
+component-model = [
+  "wasmtime-environ/component-model",
+  "wasmtime-cranelift?/component-model",
+  "wasmtime-winch?/component-model",
+  "wasmtime-runtime?/component-model",
+  "dep:wasmtime-component-macro",
+  "dep:wasmtime-component-util",
+  "dep:encoding_rs",
+]
+
+wmemcheck = ["wasmtime-runtime?/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
+
+# Enables support for demangling WebAssembly function names at runtime in
+# errors such as backtraces.
+demangle = ["wasmtime-environ/demangle"]
+
+# Enable support for generating core dumps on traps.
+coredump = ["dep:wasm-encoder", "runtime"]
+
+# Export some symbols from the final binary to assist in debugging
+# Cranelift-generated code with native debuggers like GDB and LLDB.
+debug-builtins = ["wasmtime-runtime?/debug-builtins"]
+
+# Enable support for executing compiled Wasm modules.
+runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence"]

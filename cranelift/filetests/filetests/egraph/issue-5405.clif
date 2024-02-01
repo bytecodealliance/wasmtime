@@ -1,0 +1,15 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+
+function %a(i64) -> i8 system_v {
+block0(v0: i64):
+    v6 = iconst.i8 51
+    v17 = imul v6, v6  ; v6 = 51, v6 = 51
+    v18 = icmp eq v17, v17
+    v52 = imul v18, v18
+    return v52
+}
+
+; run: %a(129) == 1

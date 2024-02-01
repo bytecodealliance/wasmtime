@@ -1,0 +1,218 @@
+test compile precise-output
+set preserve_frame_pointers=true
+target x86_64
+
+;;;; Test passing `i64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i64(i64) -> i64 tail {
+block0(v0: i64):
+    v1 = iadd_imm.i64 v0, 10
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     10(%rax), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addq $0xa, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %call_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %callee_i64+0, %rdx
+;   movq    %rbp, %rcx
+;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %rdx ; reloc_external Abs8 %callee_i64 0
+;   movq %rbp, %rcx
+;   movq (%rcx), %rbp
+;   leaq 8(%rcx), %rsp
+;   jmpq *%rdx
+
+;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %colocated_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = colocated %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %callee_i64+0, %rdx
+;   movq    %rbp, %rcx
+;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq (%rip), %rdx ; reloc_external CallPCRel4 %callee_i64 -4
+;   movq %rbp, %rcx
+;   movq (%rcx), %rbp
+;   leaq 8(%rcx), %rsp
+;   jmpq *%rdx
+
+;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_f64(f64) -> f64 tail {
+block0(v0: f64):
+    v1 = f64const 0x10.0
+    v2 = fadd.f64 v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addsd   %xmm0, const(0), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addsd 0x14(%rip), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %dh, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %call_f64(f64) -> f64 tail {
+    sig0 = (f64) -> f64 tail
+    fn0 = %callee_f64(f64) -> f64 tail
+
+block0(v0: f64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %callee_f64+0, %rdx
+;   movq    %rbp, %rcx
+;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %xmm0=%xmm0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %rdx ; reloc_external Abs8 %callee_f64 0
+;   movq %rbp, %rcx
+;   movq (%rcx), %rbp
+;   leaq 8(%rcx), %rsp
+;   jmpq *%rdx
+
+;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i8(i8) -> i8 tail {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   testb   %al, %al
+;   setz    %al
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   testb %al, %al
+;   sete %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %call_i8(i8) -> i8 tail {
+    sig0 = (i8) -> i8 tail
+    fn0 = %callee_i8(i8) -> i8 tail
+
+block0(v0: i8):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %callee_i8+0, %rdx
+;   movq    %rbp, %rcx
+;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %rdx ; reloc_external Abs8 %callee_i8 0
+;   movq %rbp, %rcx
+;   movq (%rcx), %rbp
+;   leaq 8(%rcx), %rsp
+;   jmpq *%rdx
+

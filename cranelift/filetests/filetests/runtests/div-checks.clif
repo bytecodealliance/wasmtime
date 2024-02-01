@@ -1,0 +1,126 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+
+function %i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = srem.i8 v0, v1
+  return v2
+}
+; run: %i8(0x80, 0xff) == 0
+
+function %i8_const(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 -1
+  v2 = srem.i8 v0, v1
+  return v2
+}
+; run: %i8_const(0x80) == 0
+
+function %i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = srem.i16 v0, v1
+  return v2
+}
+; run: %i16(0x8000, 0xffff) == 0
+
+function %i16_const(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 0xffff
+  v2 = srem.i16 v0, v1
+  return v2
+}
+; run: %i16_const(0x8000) == 0
+
+function %i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = srem.i32 v0, v1
+  return v2
+}
+; run: %i32(0x80000000, 0xffffffff) == 0
+
+function %i32_const(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = srem.i32 v0, v1
+  return v2
+}
+; run: %i32_const(0x80000000) == 0
+
+function %i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = srem.i64 v0, v1
+  return v2
+}
+; run: %i64(0x800000000000000, 0xffffffffffffffff) == 0
+
+function %i64_const(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = srem.i64 v0, v1
+  return v2
+}
+; run: %i64_const(0x800000000000000) == 0
+
+function %i8_u(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+  v2 = urem v0, v1
+  return v2
+}
+; run: %i8_u(0x80, 0xff) == 0x80
+
+function %i8_u_const(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 -1
+  v2 = urem v0, v1
+  return v2
+}
+; run: %i8_u_const(0x80) == 0x80
+
+function %i16_u(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = urem.i16 v0, v1
+  return v2
+}
+; run: %i16_u(0x8000, 0xffff) == 0x8000
+
+function %i16_u_const(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 0xffff
+  v2 = urem.i16 v0, v1
+  return v2
+}
+; run: %i16_u_const(0x8000) == 0x8000
+
+function %i32_u(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = urem.i32 v0, v1
+  return v2
+}
+; run: %i32_u(0x80000000, 0xffffffff) == 0x80000000
+
+function %i32_u_const(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = urem.i32 v0, v1
+  return v2
+}
+; run: %i32_u_const(0x80000000) == 0x80000000
+
+function %i64_u(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = urem.i64 v0, v1
+  return v2
+}
+; run: %i64_u(0x800000000000000, 0xffffffffffffffff) == 0x800000000000000
+
+function %i64_u_const(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = urem.i64 v0, v1
+  return v2
+}
+; run: %i64_u_const(0x800000000000000) == 0x800000000000000

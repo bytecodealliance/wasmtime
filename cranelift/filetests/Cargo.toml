@@ -1,0 +1,40 @@
+[package]
+name = "cranelift-filetests"
+authors = ["The Cranelift Project Developers"]
+version = "0.0.0"
+description = "Test driver and implementations of the filetest commands"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/cranelift-filetests"
+repository = "https://github.com/bytecodealliance/wasmtime"
+publish = false
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+cranelift-codegen = { workspace = true, features = ["disas"] }
+cranelift-frontend = { workspace = true }
+cranelift-interpreter = { workspace = true }
+cranelift-native = { workspace = true }
+cranelift-reader = { workspace = true }
+cranelift-jit = { workspace = true, features = ["selinux-fix"] }
+cranelift-module = { workspace = true }
+cranelift-control = { workspace = true }
+file-per-thread-logger = { workspace = true }
+filecheck = { workspace = true }
+gimli = { workspace = true }
+log = { workspace = true }
+num_cpus = "1.8.0"
+target-lexicon = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+similar = { workspace = true }
+wat.workspace = true
+toml = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+cranelift-wasm.workspace = true
+wasmparser.workspace = true
+cranelift.workspace = true
+smallvec = { workspace = true }

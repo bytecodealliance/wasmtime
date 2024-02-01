@@ -1,0 +1,68 @@
+test run
+set enable_llvm_abi_extensions=true
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_zbb
+target riscv64 has_zbkb
+target riscv64 has_zbb has_zbkb
+target riscv64 has_c has_zcb
+
+function %reverse_bits_zero() -> i8 {
+block0:
+    v0 = iconst.i64 0
+    v1 = iconcat v0, v0
+    v2 = bitrev.i128 v1
+    v3 = icmp eq v2, v1
+    return v3
+}
+; run
+
+function %reverse_bits_one() -> i8 {
+block0:
+    v0 = iconst.i64 0
+    v1 = iconst.i64 1
+    v2 = iconcat v0, v1
+
+    v3 = bitrev.i128 v2
+
+    v4 = iconst.i64 0x8000_0000_0000_0000
+    v5 = iconst.i64 0
+    v6 = iconcat v4, v5
+
+    v7 = icmp eq v3, v6
+    return v7
+}
+; run
+
+function %reverse_bits() -> i8 {
+block0:
+    v0 = iconst.i64 0x06AD_8667_69EC_41BA
+    v1 = iconst.i64 0x6C83_D81A_6E28_83AB
+    v2 = iconcat v0, v1
+
+    v3 = bitrev.i128 v2
+
+    v4 = iconst.i64 0xD5C11476581BC136
+    v5 = iconst.i64 0x5D823796E661B560
+    v6 = iconcat v4, v5
+
+    v7 = icmp eq v3, v6
+    return v7
+}
+; run
+
+
+function %bitrev_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bitrev v0
+    return v1
+}
+; run: %bitrev_i128(0) == 0
+; run: %bitrev_i128(-1) == -1
+; run: %bitrev_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %bitrev_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 0xFFFFFFFF_FFFFFFFF_00000000_00000000
+; run: %bitrev_i128(0x80000000_00000000_00000000_00000000) == 1
+; run: %bitrev_i128(0xFEDCBA98_76543210_01234567_89ABCDEF) == 0xF7B3D591_E6A2C480_084C2A6E_195D3B7F
+; run: %bitrev_i128(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 0xFFFF537B_7777FF03_7777FF03_FFFF537B

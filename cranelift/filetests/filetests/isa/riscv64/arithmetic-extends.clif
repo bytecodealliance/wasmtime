@@ -1,0 +1,178 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %sext_add_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = iadd.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   addw a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addw a0, a0, a1
+;   ret
+
+function %sext_sub_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = isub.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   subw a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   subw a0, a0, a1
+;   ret
+
+function %sext_ishl_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = ishl.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   sllw a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sllw a0, a0, a1
+;   ret
+
+function %sext_ushr_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = ushr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   srlw a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   srlw a0, a0, a1
+;   ret
+
+function %sext_sshr_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = sshr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   sraw a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sraw a0, a0, a1
+;   ret
+
+function %sext_add_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = iadd.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   addiw a0,a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addiw a0, a0, -1
+;   ret
+
+function %sext_ishl_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 31
+    v2 = ishl.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,31
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 0x1f
+;   ret
+
+function %sext_ushr_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 31
+    v2 = ushr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   srliw a0,a0,31
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   srliw a0, a0, 0x1f
+;   ret
+
+function %sext_sshr_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 31
+    v2 = sshr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   sraiw a0,a0,31
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sraiw a0, a0, 0x1f
+;   ret
+
+function %sext_sshr_i32_i128(i32, i128) -> i64 {
+block0(v0: i32, v1: i128):
+    v2 = sshr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   sraw a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sraw a0, a0, a1
+;   ret
+

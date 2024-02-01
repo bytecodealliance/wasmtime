@@ -1,0 +1,62 @@
+# Documentation for this configuration file can be found here
+# https://embarkstudios.github.io/cargo-deny/checks/cfg.html
+
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "aarch64-linux-android" },
+]
+
+# https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
+[licenses]
+allow = [
+    "Apache-2.0 WITH LLVM-exception",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "OpenSSL",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 }
+]
+
+# https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
+[bans]
+multiple-versions = "deny"
+wildcards = "allow"
+deny = []
+
+skip-tree = [
+    # wit-bindgen and wasmtime both depend on the wasm-tools crates, and
+    # wit-bindgen's latest release may sometimes lag behind when we bump
+    # wasmtime's dependencies on wasm-tools. wit-bindgen is only used for
+    # building component-based test programs, so we are going to ignore
+    # the multiple-versions errors it will introduce.
+    { name = "wit-bindgen", depth = 20 },
+
+    # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so
+    # ignore its dependency tree until it updates.
+    { name = "proptest", depth = 20 },
+
+    # This is maintained externally and we allow it to have duplicate
+    # dependencies relative to Wasmtime's main dependency tree.
+    { name = "witx", depth = 20 },
+
+    # The openvino-sys crate uses an older version of `pretty_env_logger` so
+    # ignore its dependency tree for now until it updates.
+    { name = "openvino-sys", depth = 20 },
+
+    # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
+    # it is duplicated for us.
+    { name = "indexmap", depth = 2 },
+]

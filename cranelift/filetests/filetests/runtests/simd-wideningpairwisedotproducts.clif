@@ -1,0 +1,22 @@
+test run
+target aarch64
+target s390x
+target x86_64 has_sse3 has_ssse3 has_sse41
+target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %wpdps(i16x8, i16x8) -> i32x4 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = swiden_low v0
+    v3 = swiden_low v1
+    v4 = imul v2, v3
+    v5 = swiden_high v0
+    v6 = swiden_high v1
+    v7 = imul v5, v6
+    v8 = iadd_pairwise v4, v7
+    return v8
+}
+; run: %wpdps([1 2 3 4 5 6 7 8], [8000 7000 6000 5000 4000 3000 2000 1000]) == [22000 38000 38000 22000]
+; run: %wpdps([1 -2 3 -4 5 -6 7 -8], [32767 32767 32767 32767 -32768 -32768 -32768 -32768]) == [-32767 -32767 32768 32768]
+; run: %wpdps([-32768 -32768 32767 32767 -32768 -32768 32767 32767], [-32768 -32768 32767 32767 32767 32767 -32768 -32768]) == [2147483648 2147352578 -2147418112 -2147418112]

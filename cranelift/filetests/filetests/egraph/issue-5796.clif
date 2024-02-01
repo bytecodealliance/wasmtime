@@ -1,0 +1,76 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f0(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  brif v0, block1, block2
+
+block1:
+  v3 = udiv v1, v2
+  return v3
+
+block2:
+  v4 = udiv v1, v2
+  brif v1, block3, block4
+
+block3:
+  return v4
+
+block4:
+  return v4
+}
+
+; check: block0(v0: i32, v1: i32, v2: i32):
+; check:     brif v0, block1, block2
+
+; check: block1:
+; check:     v3 = udiv.i32 v1, v2
+; check:     return v3
+
+; check: block2:
+; check:     v4 = udiv.i32 v1, v2
+; check:     brif.i32 v1, block3, block4
+
+; check: block3:
+; check:     return v4
+
+; check: block4:
+; check:     return v4
+
+function %f1(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  brif v0, block1, block2
+
+block1:
+  v3 = udiv v1, v2
+  return v3
+
+block2:
+  v4 = udiv v1, v2
+  brif v1, block3, block4
+
+block3:
+  v5 = udiv v1, v2
+  return v5
+
+block4:
+  return v4
+}
+
+; check: block0(v0: i32, v1: i32, v2: i32):
+; check:     brif v0, block1, block2
+
+; check: block1:
+; check:     v3 = udiv.i32 v1, v2
+; check:     return v3
+
+; check: block2:
+; check:     v4 = udiv.i32 v1, v2
+; check:     brif.i32 v1, block3, block4
+
+; check: block3:
+; check:     return v4
+
+; check: block4:
+; check:     return v4

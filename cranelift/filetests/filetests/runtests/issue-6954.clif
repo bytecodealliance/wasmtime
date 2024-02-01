@@ -1,0 +1,124 @@
+test interpret
+test run
+target riscv64 has_v has_c has_zbkb has_zba has_zbb has_zbc has_zbs
+target aarch64
+target s390x
+target x86_64
+
+function %a(i16 sext, f32, f64x2, i32 sext, i8 sext, i64x2, i8, f32x4, i16x8, i8 sext, i8 sext) -> f64x2, i16x8, i8, f64x2, i16x8, i16x8, i16x8, i16x8 {
+    ss0 = explicit_slot 126
+    ss1 = explicit_slot 126
+    ss2 = explicit_slot 126
+
+block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x4, v8: i16x8, v9: i8, v10: i8):
+    v11 = iconst.i8 0
+    v12 = iconst.i16 0
+    v13 = iconst.i32 0
+    v14 = iconst.i64 0
+    v15 = uextend.i128 v14  ; v14 = 0
+    stack_store v15, ss0
+    stack_store v15, ss0+16
+    stack_store v15, ss0+32
+    stack_store v15, ss0+48
+    stack_store v15, ss0+64
+    stack_store v15, ss0+80
+    stack_store v15, ss0+96
+    stack_store v14, ss0+112  ; v14 = 0
+    stack_store v13, ss0+120  ; v13 = 0
+    stack_store v12, ss0+124  ; v12 = 0
+    stack_store v15, ss1
+    stack_store v15, ss1+16
+    stack_store v15, ss1+32
+    stack_store v15, ss1+48
+    stack_store v15, ss1+64
+    stack_store v15, ss1+80
+    stack_store v15, ss1+96
+    stack_store v14, ss1+112  ; v14 = 0
+    stack_store v13, ss1+120  ; v13 = 0
+    stack_store v12, ss1+124  ; v12 = 0
+    stack_store v15, ss2
+    stack_store v15, ss2+16
+    stack_store v15, ss2+32
+    stack_store v15, ss2+48
+    stack_store v15, ss2+64
+    stack_store v15, ss2+80
+    stack_store v15, ss2+96
+    stack_store v14, ss2+112  ; v14 = 0
+    stack_store v13, ss2+120  ; v13 = 0
+    stack_store v12, ss2+124  ; v12 = 0
+    v16 = select v3, v8, v8
+    v17 = select v3, v16, v16
+    v18 = select v3, v17, v17
+    v77 = sqrt v2
+    v78 = fcmp ne v77, v77
+    v79 = f64const +NaN
+    v80 = splat.f64x2 v79  ; v79 = +NaN
+    v81 = bitcast.f64x2 v78
+    v19 = bitselect v81, v80, v77
+    v82 = sqrt v19
+    v83 = fcmp ne v82, v82
+    v84 = f64const +NaN
+    v85 = splat.f64x2 v84  ; v84 = +NaN
+    v86 = bitcast.f64x2 v83
+    v20 = bitselect v86, v85, v82
+    v21 = select v3, v18, v18
+    v22 = umin v0, v0
+    v23 = select v3, v21, v21
+    v24 = select v3, v23, v23
+    v25 = select v3, v24, v24
+    v26 = select v3, v25, v25
+    v27 = select v3, v26, v26
+    v28 = select v3, v27, v27
+    v29 = select v3, v28, v28
+    v30 = iadd v3, v3
+    v31 = select v30, v29, v29
+    v32 = umin v22, v22
+    v33 = select v30, v31, v31
+    v34 = select v30, v33, v33
+    v35 = select v30, v34, v34
+    v36 = select v30, v35, v35
+    v37 = smax v5, v5
+    v38 = ishl v32, v32
+    v39 = select v30, v36, v36
+    v40 = stack_addr.i64 ss0+3
+    v41 = iadd_imm v40, 0
+    v42 = atomic_rmw.i8 and v41, v10
+    v43 = select v30, v39, v39
+    v44 = select v30, v43, v43
+    v45 = select v30, v44, v44
+    v46 = isub v38, v38
+    v47 = select v30, v45, v45
+    v48 = select v30, v47, v47
+    v49 = select v30, v48, v48
+    v50 = select v30, v49, v49
+    stack_store v37, ss0+33
+    v51 = select v30, v50, v50
+    v52 = select v30, v51, v51
+    v53 = select v30, v52, v52
+    v54 = select v30, v53, v53
+    v55 = select v30, v54, v54
+    v56 = select v30, v55, v55
+    v57 = select v30, v56, v56
+    v58 = select v30, v57, v57
+    v59 = select v30, v58, v58
+    v60 = select v30, v59, v59
+    v61 = select v30, v60, v60
+    v62 = select v30, v61, v61
+    v63 = select v30, v62, v62
+    v64 = select v30, v63, v63
+    v65 = select v30, v64, v64
+    v66 = select v30, v65, v65
+    v67 = select v30, v66, v66
+    v68 = select v30, v67, v67
+    v69 = select v30, v68, v68
+    v70 = select v30, v69, v69
+    v71 = select v30, v70, v70
+    v72 = select v30, v71, v71
+    v73 = select v30, v72, v72
+    v74 = select v30, v73, v73
+    v75 = select v30, v74, v74
+    v76 = select v30, v75, v75
+    return v20, v76, v42, v20, v76, v76, v76, v76
+}
+
+; run: %a(-1, -NaN:0x3fffff, 0xffffff3fffffffffffffffffffffffff, -1, -1, 0xffffffffffffffffffffffffffc8ffff, -1, 0xffffffffffffffffffffffffffffffff, 0xffffffffffffffffffffffffffffffff, -1, -1) == [0x7ff80000000000007ff8000000000000, 0xffffffffffffffffffffffffffffffff, 0, 0x7ff80000000000007ff8000000000000, 0xffffffffffffffffffffffffffffffff, 0xffffffffffffffffffffffffffffffff, 0xffffffffffffffffffffffffffffffff, 0xffffffffffffffffffffffffffffffff]

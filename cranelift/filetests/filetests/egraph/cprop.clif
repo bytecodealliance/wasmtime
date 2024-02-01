@@ -1,0 +1,284 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f0() -> i8 {
+block0:
+    v1 = iconst.i8 51
+    v2 = imul.i8 v1, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 41
+; nextln: return v3
+
+function %f1() -> i16 {
+block0:
+    v1 = iconst.i16 1
+    v2 = bnot.i16 v1
+    return v2
+}
+
+; check: v3 = iconst.i16 0xfffe
+; nextln: return v3
+
+function %ishl() -> i8 {
+block0:
+    v0 = iconst.i8 1
+    v1 = iconst.i8 2
+    v2 = ishl v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 4
+; check: return v3
+
+function %ishl_i8_i16() -> i8 {
+block0:
+    v0 = iconst.i8 1
+    v1 = iconst.i16 0xf2
+    v2 = ishl v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 4
+; check: return v3
+
+function %ishl_i16_i8() -> i16 {
+block0:
+    v0 = iconst.i16 1
+    v1 = iconst.i8 0xf2
+    v2 = ishl v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i16 4
+; check: return v3
+
+function %ushr() -> i8 {
+block0:
+    v0 = iconst.i8 -1
+    v1 = iconst.i8 2
+    v2 = ushr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 63
+; check: return v3
+
+function %ushr_i8_i16() -> i8 {
+block0:
+    v0 = iconst.i8 -1
+    v1 = iconst.i16 0xf2
+    v2 = ushr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 63
+; check: return v3
+
+function %ushr_i16_i8() -> i16 {
+block0:
+    v0 = iconst.i16 -1
+    v1 = iconst.i8 0xf2
+    v2 = ushr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i16 0x3fff
+; check: return v3
+
+function %sshr() -> i8 {
+block0:
+    v0 = iconst.i8 0xf0
+    v1 = iconst.i8 2
+    v2 = sshr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 252
+; check: return v3
+
+function %sshr_i8_i16() -> i8 {
+block0:
+    v0 = iconst.i8 0xf0
+    v1 = iconst.i16 0xf2
+    v2 = sshr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 252
+; check: return v3
+
+function %sshr_i16_i8() -> i16 {
+block0:
+    v0 = iconst.i16 0xfff0
+    v1 = iconst.i8 0xf2
+    v2 = sshr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i16 0xfffc
+; check: return v3
+
+function %icmp_eq_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_ne_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_ult_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ult v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_ule_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ule v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_uge_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp uge v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_ugt_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ugt v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_slt_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_sle_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp sle v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_sge_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp sge v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_sgt_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp sgt v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %ireduce_iconst() -> i8 {
+block0:
+    v1 = iconst.i16 -10
+    v2 = ireduce.i8 v1
+    return v2
+}
+
+; check: v3 = iconst.i8 246
+; nextln: return v3
+
+function %sextend_iconst() -> i32 {
+block0:
+    v1 = iconst.i16 -10
+    v2 = sextend.i32 v1
+    return v2
+}
+
+; check: v3 = iconst.i32 0xffff_fff6
+; nextln: return v3
+
+function %uextend_iconst() -> i32 {
+block0:
+    v1 = iconst.i16 0xfff6
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; check: v3 = iconst.i32 0xfff6
+; nextln: return v3
+
+function %sub_u8max(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 255
+    v2 = isub v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: v4 = iadd v0, v3  ; v3 = 1
+; nextln: return v4
+
+function %sub_u32max(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0xFFFF_FFFF
+    v2 = isub v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i32 1
+; nextln: v4 = iadd v0, v3  ; v3 = 1
+; nextln: return v4

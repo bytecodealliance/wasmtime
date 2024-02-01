@@ -1,0 +1,23 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %fvdemote(f64x2) -> f32x4 {
+block0(v0: f64x2):
+    v1 = fvdemote v0
+    return v1
+}
+
+; run: %fvdemote([0x0.0 0x0.0]) == [0x0.0 0x0.0 0x0.0 0x0.0]
+; run: %fvdemote([0x0.1 0x0.2]) == [0x0.1 0x0.2 0x0.0 0x0.0]
+; run: %fvdemote([0x2.1 0x1.2]) == [0x2.1 0x1.2 0x0.0 0x0.0]
+; run: %fvdemote([0x2.1 0x1.2]) == [0x2.1 0x1.2 0x0.0 0x0.0]
+; run: %fvdemote([0x2.1 0x1.2]) == [0x2.1 0x1.2 0x0.0 0x0.0]
+

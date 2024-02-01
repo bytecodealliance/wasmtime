@@ -1,0 +1,89 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %br_table(i32) -> i32 {
+block0(v0: i32):
+  br_table v0, block4, [block1, block2, block2, block3]
+
+block1:
+  v1 = iconst.i32 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i32 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i32 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i32 4
+  jump block5(v4)
+
+block5(v5: i32):
+  v6 = iadd.i32 v0, v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   br_table a0,[MachLabel(6),MachLabel(5),MachLabel(1),MachLabel(2),MachLabel(3)]##tmp1=a2,tmp2=a3
+; block1:
+;   j label4
+; block2:
+;   j label4
+; block3:
+;   li a5,3
+;   j label7
+; block4:
+;   li a5,2
+;   j label7
+; block5:
+;   li a5,1
+;   j label7
+; block6:
+;   li a5,4
+;   j label7
+; block7:
+;   addw a0,a0,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli t6, a0, 0x20
+;   srli t6, t6, 0x20
+;   addi a3, zero, 4
+;   bltu t6, a3, 0xc
+;   auipc a3, 0
+;   jalr zero, a3, 0x54
+;   auipc a2, 0
+;   slli a3, t6, 3
+;   add a2, a2, a3
+;   jalr zero, a2, 0x10
+;   auipc a3, 0
+;   jalr zero, a3, 0x34
+;   auipc a3, 0
+;   jalr zero, a3, 0x24
+;   auipc a3, 0
+;   jalr zero, a3, 0x1c
+;   auipc a3, 0
+;   jalr zero, a3, 0xc
+; block1: ; offset 0x48
+;   j 0xc
+; block2: ; offset 0x4c
+;   addi a5, zero, 3
+;   j 0x18
+; block3: ; offset 0x54
+;   addi a5, zero, 2
+;   j 0x10
+; block4: ; offset 0x5c
+;   addi a5, zero, 1
+;   j 8
+; block5: ; offset 0x64
+;   addi a5, zero, 4
+; block6: ; offset 0x68
+;   addw a0, a0, a5
+;   ret
+

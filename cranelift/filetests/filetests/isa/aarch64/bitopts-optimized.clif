@@ -1,0 +1,56 @@
+test compile precise-output
+set unwind_info=false
+set opt_level=speed
+target aarch64
+
+function %band_not_i32_reversed(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = band v2, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   bic w0, w1, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bic w0, w1, w0
+;   ret
+
+function %bor_not_i32_reversed(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bor v2, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   orn w0, w1, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orn w0, w1, w0
+;   ret
+
+function %bxor_not_i32_reversed(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bxor v2, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   eon w0, w1, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   eon w0, w1, w0
+;   ret
+

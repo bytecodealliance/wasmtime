@@ -1,0 +1,22 @@
+[package]
+name = "wasmtime-wast"
+version.workspace = true
+authors.workspace = true
+description = "wast testing support for wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift', 'wat', 'runtime'] }
+wast = { workspace = true }
+log = { workspace = true }
+
+[features]
+component-model = ['wasmtime/component-model']

@@ -1,0 +1,190 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zba
+
+
+function %add_uw_i32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iadd.i64 v0, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   add.uw a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0x85, 0xa5, 0x08
+;   ret
+
+function %sh1add(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v0, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   sh1add a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xa5, 0xa5, 0x20
+;   ret
+
+function %sh1add_uw(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 1
+    v4 = ishl v2, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   sh1add.uw a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0xa5, 0xa5, 0x20
+;   ret
+
+function %sh2add(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 2
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v0, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   sh2add a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xc5, 0xa5, 0x20
+;   ret
+
+function %sh2add_uw(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 2
+    v4 = ishl v2, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   sh2add.uw a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0xc5, 0xa5, 0x20
+;   ret
+
+function %sh3add(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 3
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v0, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   sh3add a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xe5, 0xa5, 0x20
+;   ret
+
+function %sh3add_uw(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 3
+    v4 = ishl v2, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   sh3add.uw a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0xe5, 0xa5, 0x20
+;   ret
+
+;; Same as %sh1add but with the operands reversed
+function %sh1add_r(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v3, v0
+    return v4
+}
+
+; VCode:
+; block0:
+;   sh1add a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xa5, 0xa5, 0x20
+;   ret
+
+;; Same as %sh1add but with an uextended const
+function %sh1add_uextend(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 1
+    v3 = uextend.i64 v2
+    v4 = ishl v1, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   sh1add a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0xa5, 0xa5, 0x20
+;   ret
+
+function %slli_uw(i32) -> i64 {
+block0(v0: i32):
+    v1 = uextend.i64 v0
+    v2 = iconst.i64 5
+    v3 = ishl v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   slli.uw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1b, 0x15, 0x55, 0x08
+;   ret
+

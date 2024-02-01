@@ -1,0 +1,271 @@
+test compile precise-output
+target x86_64
+
+function %add_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iadd v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     0(%rdi,%rsi,1), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal (%rdi, %rsi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iadd v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     0(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq (%rdi, %rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i32_const(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 100
+  v2 = iadd v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     100(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal 0x64(%rdi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i64_const(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 100
+  v2 = iadd v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     100(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq 0x64(%rdi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i32_i32_const(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iconst.i32 100
+  v3 = iadd v0, v1
+  v4 = iadd v3, v2
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     100(%rdi,%rsi,1), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal 0x64(%rdi, %rsi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i64_i64_const(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 100
+  v3 = iadd v0, v1
+  v4 = iadd v3, v2
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     100(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq 0x64(%rdi, %rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i32_i32_mul_const(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iconst.i32 100
+  v3 = iconst.i32 2
+  v4 = ishl v1, v3
+  v5 = iadd v0, v4
+  v6 = iadd v5, v2
+  return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     100(%rdi,%rsi,4), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal 0x64(%rdi, %rsi, 4), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i64_i64_mul_const(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 100
+  v3 = iconst.i64 2
+  v4 = ishl v1, v3
+  v5 = iadd v0, v4
+  v6 = iadd v5, v2
+  return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     100(%rdi,%rsi,4), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq 0x64(%rdi, %rsi, 4), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i32_i32_mul(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v3 = iconst.i32 2
+  v4 = ishl v1, v3
+  v5 = iadd v0, v4
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     0(%rdi,%rsi,4), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal (%rdi, %rsi, 4), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_i64_i64_mul(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v3 = iconst.i64 2
+  v4 = ishl v1, v3
+  v5 = iadd v0, v4
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     0(%rdi,%rsi,4), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq (%rdi, %rsi, 4), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

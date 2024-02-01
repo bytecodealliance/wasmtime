@@ -1,0 +1,78 @@
+test compile precise-output
+target x86_64 has_avx512vl has_avx512vbmi
+
+function %shuffle_in_bounds(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    ;; pick the second lane of v1, the rest use the first lane of v0
+    v2 = shuffle v0, v1, 0x11000000000000000000000000000000
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   movdqu  const(0), %xmm0
+;   movdqa  %xmm5, %xmm6
+;   vpermi2b %xmm0, %xmm6, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   movdqu 0x10(%rip), %xmm0
+;   movdqa %xmm5, %xmm6
+;   vpermi2b %xmm1, %xmm6, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %f3(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [3 0 31 26 4 6 12 11 23 13 24 4 2 15 17 5]
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   movdqu  const(0), %xmm0
+;   movdqa  %xmm5, %xmm6
+;   vpermi2b %xmm0, %xmm6, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   movdqu 0x10(%rip), %xmm0
+;   movdqa %xmm5, %xmm6
+;   vpermi2b %xmm1, %xmm6, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rbx)
+;   addb %bl, (%rdi)
+;   sbbb (%rsi, %rax), %al
+;   orb $0xb, %al
+

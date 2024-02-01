@@ -1,0 +1,40 @@
+;; This tests that a call does not get rematerialized, even if a remat flag is
+;; set on a different node in its eclass.
+;;
+;; Below, `v97` is an add of `v238` (the call's first return value) and a
+;; constant 0; a mid-end rule rewrites this to just `v238` (i.e., `v97` is unioned
+;; in). Separately, a rule states that an add of a value and a constant always
+;; gets rematerialized at use. When `v97` is used in a later block, it would have
+;; rematerialized the add; except, if we instead use the result of the call
+;; directly, we should *not* remat the call. If we do, a compile error results
+;; later.
+
+test compile
+set opt_level=speed_and_size
+target aarch64
+
+function u0:33() system_v {
+ss0 = explicit_slot 32
+sig0 = (i64, i64, i64, i64, i64) -> i64, i64 system_v
+fn0 = colocated u0:0 sig0
+block0:
+  v80 = iconst.i32 0
+  v91 = iconst.i64 0
+  v92 = iconst.i64 0
+  v96 = iconst.i64 0
+  v235 = iconst.i64 0
+  v236 = iconst.i64 0
+  v237 = iconst.i64 0
+  v238, v239 = call fn0(v236, v237, v91, v92, v235) ; v236 = 0, v237 = 0, v91 = 0, v92 = 0, v235 = 0
+  v97 = iadd v238, v96 ; v96 = 0
+  br_table v80, block37, [block36, block38] ; v80 = 0
+block36:
+  trap user0
+block37:
+  trap unreachable
+block38:
+  v98 = load.i8 notrap v97
+  v99 = fcvt_from_uint.f64 v98
+  stack_store v99, ss0
+  trap user0
+}

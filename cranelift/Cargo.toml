@@ -1,0 +1,64 @@
+[package]
+name = "cranelift-tools"
+authors = ["The Cranelift Project Developers"]
+version = "0.0.0"
+description = "Binaries for testing the Cranelift libraries"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/docs/index.md"
+repository = "https://github.com/bytecodealliance/wasmtime"
+publish = false
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "clif-util"
+path = "src/clif-util.rs"
+
+[[test]]
+name = "filetests"
+path = "tests/filetests.rs"
+harness = false
+
+[dependencies]
+cfg-if = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["disas", "trace-log", "timing"] }
+cranelift-entity = { workspace = true }
+cranelift-interpreter = { workspace = true }
+cranelift-reader = { workspace = true }
+cranelift-frontend = { workspace = true }
+cranelift-wasm = { workspace = true, optional = true }
+cranelift-native = { workspace = true }
+cranelift-filetests = { workspace = true }
+cranelift-module = { workspace = true }
+cranelift-object = { workspace = true }
+cranelift-jit = { workspace = true }
+cranelift = { workspace = true }
+filecheck = { workspace = true }
+log = { workspace = true }
+termcolor = "1.1.2"
+capstone = { workspace = true, optional = true }
+wat = { workspace = true, optional = true }
+target-lexicon = { workspace = true, features = ["std"] }
+pretty_env_logger = { workspace = true }
+rayon = { version = "1", optional = true }
+indicatif = "0.13.0"
+thiserror = { workspace = true }
+walkdir = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ['default'] }
+similar = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true }
+fxhash = "0.2.1"
+# Note that this just enables `trace-log` for `clif-util` and doesn't turn it on
+# for all of Cranelift, which would be bad.
+regalloc2 = { workspace = true, features = ["trace-log"] }
+
+[features]
+default = ["disas", "wasm", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]
+disas = ["capstone"]
+wasm = ["wat", "cranelift-wasm"]
+souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
+all-arch = ["cranelift-codegen/all-arch"]

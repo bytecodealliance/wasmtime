@@ -1,0 +1,48 @@
+test run
+set enable_llvm_abi_extensions=true
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+
+function %i128_select(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+    v3 = select.i128 v0, v1, v2
+    return v3
+}
+; run: %i128_select(1, 0, 1) == 0
+; run: %i128_select(0, 0, 1) == 1
+; run: %i128_select(1, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0x00000000_00000000_DECAFFFF_C0FFEEEE
+; run: %i128_select(0, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF
+
+;; Test for issue: https://github.com/bytecodealliance/wasmtime/issues/3963.
+function %i128_fcmp_eq_select(f32, i128, i128) -> i128 {
+block0(v0: f32, v1: i128, v2: i128):
+    v3 = fcmp eq v0, v0
+    v4 = select.i128 v3, v1, v2
+    return v4
+}
+; run: %i128_fcmp_eq_select(0x42.42, 1, 0) == 1
+; run: %i128_fcmp_eq_select(NaN, 1, 0) == 0
+
+function %i128_cond_select(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+    v3 = select.i128 v0, v1, v2
+    return v3
+}
+; run: %i128_cond_select(1, 0, 1) == 0
+; run: %i128_cond_select(0, 0, 1) == 1
+; run: %i128_cond_select(1, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0x00000000_00000000_DECAFFFF_C0FFEEEE
+; run: %i128_cond_select(0, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF
+; run: %i128_cond_select(0x1_00000000_00000000, 2, 3) == 2
+
+; See: https://github.com/bytecodealliance/wasmtime/issues/6312
+function %i128_select_of_icmp(i64, i64, i128, i128) -> i64, i8 {
+block0(v0: i64, v1: i64, v2: i128,  v3: i128):
+    v4 = icmp.i128 sle v3, v2
+    v6 = select.i64 v4, v1, v0
+    return v6, v4
+}
+
+; run: %i128_select_of_icmp(0, 13724266, 0, 142088073609408121139349355241191013256) == [0, 0]

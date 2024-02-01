@@ -1,0 +1,137 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbb=true
+
+
+;;;; Uextend rules
+
+function %uextend16_32(i16) -> i32 {
+block0(v0: i16):
+    v1 = uextend.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   zext.h a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0x45, 0x05, 0x08
+;   ret
+
+function %uextend8_64(i8) -> i64 {
+block0(v0: i8):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,255
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a0, a0, 0xff
+;   ret
+
+function %uextend16_64(i16) -> i64 {
+block0(v0: i16):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   zext.h a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0x45, 0x05, 0x08
+;   ret
+
+;;;; Sextend Rules
+
+function %sextend8_16(i8) -> i16 {
+block0(v0: i8):
+    v1 = sextend.i16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.b a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x45, 0x60
+;   ret
+
+function %sextend8_32(i8) -> i32 {
+block0(v0: i8):
+    v1 = sextend.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.b a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x45, 0x60
+;   ret
+
+function %sextend16_32(i16) -> i32 {
+block0(v0: i16):
+    v1 = sextend.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.h a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x55, 0x60
+;   ret
+
+function %sextend8_64(i8) -> i64 {
+block0(v0: i8):
+    v1 = sextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.b a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x45, 0x60
+;   ret
+
+function %sextend16_64(i16) -> i64 {
+block0(v0: i16):
+    v1 = sextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.h a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x55, 0x60
+;   ret
+

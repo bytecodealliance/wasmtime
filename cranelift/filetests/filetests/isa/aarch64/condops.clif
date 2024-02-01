@@ -1,0 +1,1283 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %f(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w6, w0
+;   subs wzr, w6, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w6, w0
+;   cmp w6, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+
+function %f(i16, i8, i8) -> i8 {
+block0(v0: i16, v1: i8, v2: i8):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i16, i32, i32) -> i32 {
+block0(v0: i16, v1: i32, v2: i32):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i16, i64, i64) -> i64 {
+block0(v0: i16, v1: i64, v2: i64):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i16, i128, i128) -> i128 {
+block0(v0: i16, v1: i128, v2: i128):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w6, w0
+;   subs wzr, w6, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w6, w0
+;   cmp w6, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+
+function %f(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i32, i16, i16) -> i16 {
+block0(v0: i32, v1: i16, v2: i16):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i32, i64, i64) -> i64 {
+block0(v0: i32, v1: i64, v2: i64):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i32, i128, i128) -> i128 {
+block0(v0: i32, v1: i128, v2: i128):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+
+function %f(i64, i8, i8) -> i8 {
+block0(v0: i64, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i64, i16, i16) -> i16 {
+block0(v0: i64, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i64, i32, i32) -> i32 {
+block0(v0: i64, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %f(i64, i128, i128) -> i128 {
+block0(v0: i64, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+
+function %f(i128, i8, i8) -> i8 {
+block0(v0: i128, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i8 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   ret
+
+function %f(i128, i16, i16) -> i16 {
+block0(v0: i128, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i16 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   ret
+
+function %f(i128, i32, i32) -> i32 {
+block0(v0: i128, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i32 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   ret
+
+function %f(i128, i64, i64) -> i64 {
+block0(v0: i128, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i64 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   ret
+
+function %f(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i128 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x10, #42
+;   movz x11, #0
+;   subs xzr, x0, x10
+;   ccmp x1, x11, #nzcv, eq
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x10, #0x2a
+;   mov x11, #0
+;   cmp x0, x10
+;   ccmp x1, x11, #0, eq
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   ret
+
+function %f(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxtb w6, w0
+;   subs wzr, w6, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w6, w0
+;   cmp w6, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+
+function %f(i16, i8, i8) -> i8 {
+block0(v0: i16, v1: i8, v2: i8):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i16, i32, i32) -> i32 {
+block0(v0: i16, v1: i32, v2: i32):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i16, i64, i64) -> i64 {
+block0(v0: i16, v1: i64, v2: i64):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w4, w0
+;   subs wzr, w4, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w4, w0
+;   cmp w4, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i16, i128, i128) -> i128 {
+block0(v0: i16, v1: i128, v2: i128):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   uxth w6, w0
+;   subs wzr, w6, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w6, w0
+;   cmp w6, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+
+function %f(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i32, i16, i16) -> i16 {
+block0(v0: i32, v1: i16, v2: i16):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i32, i64, i64) -> i64 {
+block0(v0: i32, v1: i64, v2: i64):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i32, i128, i128) -> i128 {
+block0(v0: i32, v1: i128, v2: i128):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+
+function %f(i64, i8, i8) -> i8 {
+block0(v0: i64, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i64, i16, i16) -> i16 {
+block0(v0: i64, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i64, i32, i32) -> i32 {
+block0(v0: i64, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x1, x2, eq
+;   csdb
+;   ret
+
+function %f(i64, i128, i128) -> i128 {
+block0(v0: i64, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, #42
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0x2a
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+
+function %f(i128, i8, i8) -> i8 {
+block0(v0: i128, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i8 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+
+function %f(i128, i16, i16) -> i16 {
+block0(v0: i128, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i16 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+
+function %f(i128, i32, i32) -> i32 {
+block0(v0: i128, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i32 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+
+function %f(i128, i64, i64) -> i64 {
+block0(v0: i128, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i64 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x7, #42
+;   movz x8, #0
+;   subs xzr, x0, x7
+;   ccmp x1, x8, #nzcv, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x7, #0x2a
+;   mov x8, #0
+;   cmp x0, x7
+;   ccmp x1, x8, #0, eq
+;   csel x0, x2, x3, eq
+;   csdb
+;   ret
+
+function %f(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i128 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   movz x10, #42
+;   movz x11, #0
+;   subs xzr, x0, x10
+;   ccmp x1, x11, #nzcv, eq
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x10, #0x2a
+;   mov x11, #0
+;   cmp x0, x10
+;   ccmp x1, x11, #0, eq
+;   csel x0, x2, x4, eq
+;   csel x1, x3, x5, eq
+;   csdb
+;   ret
+
+function %g(i8) -> i8 {
+block0(v0: i8):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   uxtb w2, w0
+;   subs wzr, w2, #42
+;   cset x0, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w2, w0
+;   cmp w2, #0x2a
+;   cset x0, eq
+;   ret
+
+function %h(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = bitselect.i8 v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   and w4, w1, w0
+;   bic w6, w2, w0
+;   orr w0, w4, w6
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and w4, w1, w0
+;   bic w6, w2, w0
+;   orr w0, w4, w6
+;   ret
+
+function %i(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = select.i8 v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   ands wzr, w0, #255
+;   csel x0, x1, x2, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tst w0, #0xff
+;   csel x0, x1, x2, ne
+;   ret
+
+function %i(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp.i32 eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, #42
+;   csel x0, x1, x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0x2a
+;   csel x0, x1, x2, eq
+;   ret
+
+function %i128_select(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = select.i128 v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   ands wzr, w0, #255
+;   csel x0, x2, x4, ne
+;   csel x1, x3, x5, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tst w0, #0xff
+;   csel x0, x2, x4, ne
+;   csel x1, x3, x5, ne
+;   ret
+

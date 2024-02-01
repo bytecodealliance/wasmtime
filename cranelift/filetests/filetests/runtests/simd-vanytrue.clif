@@ -1,0 +1,69 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse41 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %vany_true_i8x16(i8x16) -> i8 {
+block0(v0: i8x16):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_i8x16([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]) == 0
+; run: %vany_true_i8x16([-1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]) == 1
+; run: %vany_true_i8x16([-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1]) == 1
+
+
+function %vany_true_i16x8(i16x8) -> i8 {
+block0(v0: i16x8):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_i16x8([0 0 0 0 0 0 0 0]) == 0
+; run: %vany_true_i16x8([-1 0 0 0 0 0 0 0]) == 1
+; run: %vany_true_i16x8([-1 -1 -1 -1 -1 -1 -1 -1]) == 1
+
+
+function %vany_true_i32x4(i32x4) -> i8 {
+block0(v0: i32x4):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_i32x4([0 0 0 0]) == 0
+; run: %vany_true_i32x4([-1 0 0 0]) == 1
+; run: %vany_true_i32x4([-1 -1 -1 -1]) == 1
+
+
+function %vany_true_i64x2(i64x2) -> i8 {
+block0(v0: i64x2):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_i64x2([0 0]) == 0
+; run: %vany_true_i64x2([-1 0]) == 1
+; run: %vany_true_i64x2([-1 -1]) == 1
+
+function %vany_true_f32x4(f32x4) -> i8 {
+block0(v0: f32x4):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_f32x4([0.0 0.0 0.0 0.0]) == 0
+; run: %vany_true_f32x4([0.0 -0.0 0.0 0.0]) == 1
+; run: %vany_true_f32x4([-0.0 -0.0 -0.0 -0.0]) == 1
+; run: %vany_true_f32x4([0x1.0 0x1.0 0x1.0 0x1.0]) == 1
+
+
+function %vany_true_f64x2(f64x2) -> i8 {
+block0(v0: f64x2):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_f64x2([0.0 0.0]) == 0
+; run: %vany_true_f64x2([0.0 -0.0]) == 1
+; run: %vany_true_f64x2([-0.0 -0.0]) == 1
+; run: %vany_true_f64x2([0x1.0 0x1.0]) == 1

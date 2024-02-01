@@ -1,0 +1,14 @@
+[package]
+name = "verify-component-adapter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+wasmparser = { workspace = true }
+wat = { workspace = true }
+anyhow = { workspace = true }

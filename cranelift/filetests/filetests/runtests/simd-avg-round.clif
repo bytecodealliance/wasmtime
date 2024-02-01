@@ -1,0 +1,21 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 skylake
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %average_rounding_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = avg_round v0, v1
+    return v2
+}
+; run: %average_rounding_i8x16([0 0 0 1 42 19 -1 0xff 5 0 0 0 1 42 19 -1], [0 1 2 4 42 18 -1 0 10 0 1 2 4 42 18 -1]) == [0 1 1 3 42 19 -1 0x80 8 0 1 1 3 42 19 -1]
+
+function %average_rounding_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = avg_round v0, v1
+    return v2
+}
+; run: %average_rounding_i16x8([0 0 0 1 42 19 -1 0xffff], [0 1 2 4 42 18 -1 0]) == [0 1 1 3 42 19 -1 0x8000]

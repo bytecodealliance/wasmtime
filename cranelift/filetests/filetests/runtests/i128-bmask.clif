@@ -1,0 +1,85 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64
+target aarch64
+target riscv64
+target riscv64 has_c has_zcb
+target s390x
+
+function %bmask_i128_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_i128_i128(1) == -1
+; run: %bmask_i128_i128(0) == 0
+; run: %bmask_i128_i128(0x00000001_00000000_00000000_00000000) == -1
+; run: %bmask_i128_i128(0x00000000_00000001_00000000_00000000) == -1
+; run: %bmask_i128_i128(0x00000000_00000000_00000001_00000000) == -1
+; run: %bmask_i128_i128(0x00000000_00000000_00000000_00000001) == -1
+
+function %bmask_i128_i64(i128) -> i64 {
+block0(v0: i128):
+  v1 = bmask.i64 v0
+  return v1
+}
+; run: %bmask_i128_i64(1) == -1
+; run: %bmask_i128_i64(0) == 0
+
+function %bmask_i128_i32(i128) -> i32 {
+block0(v0: i128):
+  v1 = bmask.i32 v0
+  return v1
+}
+; run: %bmask_i128_i32(1) == -1
+; run: %bmask_i128_i32(0) == 0
+
+function %bmask_i128_i16(i128) -> i16 {
+block0(v0: i128):
+  v1 = bmask.i16 v0
+  return v1
+}
+; run: %bmask_i128_i16(1) == -1
+; run: %bmask_i128_i16(0) == 0
+
+function %bmask_i128_i8(i128) -> i8 {
+block0(v0: i128):
+  v1 = bmask.i8 v0
+  return v1
+}
+; run: %bmask_i128_i8(1) == -1
+; run: %bmask_i128_i8(0) == 0
+
+
+function %bmask_i64_i128(i64) -> i128 {
+block0(v0: i64):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_i64_i128(1) == -1
+; run: %bmask_i64_i128(0) == 0
+
+function %bmask_i32_i128(i32) -> i128 {
+block0(v0: i32):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_i32_i128(1) == -1
+; run: %bmask_i32_i128(0) == 0
+
+function %bmask_i16_i128(i16) -> i128 {
+block0(v0: i16):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_i16_i128(1) == -1
+; run: %bmask_i16_i128(0) == 0
+
+function %bmask_i8_i128(i8) -> i128 {
+block0(v0: i8):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_i8_i128(1) == -1
+; run: %bmask_i8_i128(0) == 0

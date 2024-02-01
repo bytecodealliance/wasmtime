@@ -1,0 +1,172 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a5,a0,255
+;   andi a3,a3,255
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a5, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %g(i8) -> i8 {
+block0(v0: i8):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   slli a2,a0,56
+;   srai a4,a2,56
+;   xori a0,a4,42
+;   seqz a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x38
+;   srai a4, a2, 0x38
+;   xori a0, a4, 0x2a
+;   seqz a0, a0
+;   ret
+
+function %h(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = bitselect.i8 v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   and a4,a0,a1
+;   not a0,a0
+;   and a2,a0,a2
+;   or a0,a4,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and a4, a0, a1
+;   not a0, a0
+;   and a2, a0, a2
+;   or a0, a4, a2
+;   ret
+
+function %i(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = select.i8 v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   andi a4,a0,255
+;   select a0,a1,a2##condition=(a4 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a4, a0, 0xff
+;   beqz a4, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %i(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp.i32 eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
+;   mv a0, a1
+;   j 8
+;   mv a0, a2
+;   ret
+
+function %i128_select(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = select.i128 v0, v1, v2
+  return v3
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s4,-8(sp)
+;   addi sp,sp,-16
+; block0:
+;   mv s4,a1
+;   andi a5,a0,255
+;   select [a0,a1],[s4,a2],[a3,a4]##condition=(a5 ne zero)
+;   addi sp,sp,16
+;   ld s4,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s4, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   mv s4, a1
+;   andi a5, a0, 0xff
+;   beqz a5, 0x10
+;   mv a0, s4
+;   mv a1, a2
+;   j 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s4, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

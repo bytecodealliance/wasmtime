@@ -1,0 +1,51 @@
+name: Publish Artifacts
+on:
+  push:
+    branches: [main]
+    tags-ignore: [dev]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish artifacts of build
+    runs-on: ubuntu-latest
+    if: github.repository == 'bytecodealliance/wasmtime'
+    steps:
+    - uses: actions/checkout@v4
+    - run: |
+        sha=${{ github.sha }}
+        run_id=$(
+          gh api -H 'Accept: application/vnd.github+json' \
+              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?exclude_pull_requests=true \
+              | jq '.workflow_runs' \
+              | jq "map(select(.head_commit.id == \"$sha\"))[0].id" \
+        )
+        gh run download $run_id
+        ls
+        find bins-*
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - run: ./ci/merge-artifacts.sh
+
+    # Deploy the `gh-pages.tar.gz` artifact to the `gh-pages` branch.
+    - run: tar xf gh-pages.tar.gz
+      working-directory: gh-pages
+    - name: Deploy to gh-pages
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: ./gh-pages/gh-pages
+        single-commit: true
+        clean: true
+      if: github.ref == 'refs/heads/main'
+
+    - run: npm install --production
+      working-directory: .github/actions/github-release
+    - name: Publish Release
+      uses: ./.github/actions/github-release
+      with:
+        files: "dist/*"
+        token: ${{ github.token }}
+      continue-on-error: true

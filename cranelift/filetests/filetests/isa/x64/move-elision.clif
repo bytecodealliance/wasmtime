@@ -1,0 +1,31 @@
+test compile precise-output
+target x86_64 skylake
+
+function %move_registers(i32x4) -> i8x16 {
+block0(v0: i32x4):
+    ;; In the x64 backend, all of these pseudo-instructions are lowered to moves between registers (e.g. MOVAPD, MOVDQA,
+    ;; etc.). Because these have been marked as moves, no instructions are emitted by this function besides the prologue
+    ;; and epilogue.
+    v1 = bitcast.f32x4 little v0
+    v2 = bitcast.f64x2 little v1
+    v3 = bitcast.i8x16 little v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

@@ -1,0 +1,26 @@
+test interpret
+test run
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target aarch64
+target s390x
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %ceil_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = ceil v0
+  return v1
+}
+; run: %ceil_f32x4([0x0.5 0x1.0 0x1.5 0x2.9]) == [0x1.0 0x1.0 0x1.0p1 0x1.8p1]
+; run: %ceil_f32x4([-0x0.5 -0x1.0 -0x1.5 -0x2.9]) == [-0x0.0 -0x1.0 -0x1.0 -0x1.0p1]
+
+function %ceil_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = ceil v0
+  return v1
+}
+; run: %ceil_f64x2([0x0.5 0x1.0]) == [0x1.0 0x1.0]
+; run: %ceil_f64x2([-0x0.5 -0x1.0]) == [-0x0.0 -0x1.0]

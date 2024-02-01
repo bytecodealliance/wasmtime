@@ -1,0 +1,19 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+
+; Check that the fence instruction doesn't crash. Testing anything else would
+; require multiple threads, which requires a runtime like Wasmtime.
+
+function %fence() -> i8 {
+block0:
+    fence
+
+    v0 = iconst.i8 0
+    return v0
+}
+; run: %fence() == 0

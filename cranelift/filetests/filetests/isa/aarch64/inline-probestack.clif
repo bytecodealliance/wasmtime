@@ -1,0 +1,129 @@
+test compile precise-output
+set enable_probestack=true
+set probestack_strategy=inline
+; This is the default and is equivalent to a page size of 4096
+set probestack_size_log2=12
+target aarch64
+
+
+; If the stack size is just one page, we can avoid the stack probe entirely
+function %single_page() -> i64 system_v {
+ss0 = explicit_slot 2048
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #2048
+; block0:
+;   mov x0, sp
+;   add sp, sp, #2048
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x800
+; block1: ; offset 0xc
+;   mov x0, sp
+;   add sp, sp, #0x800
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %unrolled() -> i64 system_v {
+ss0 = explicit_slot 12288
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #4096
+;   str wzr, [sp]
+;   sub sp, sp, #4096
+;   str wzr, [sp]
+;   sub sp, sp, #4096
+;   str wzr, [sp]
+;   add sp, sp, #12288
+;   sub sp, sp, #12288
+; block0:
+;   mov x0, sp
+;   add sp, sp, #12288
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #1, lsl #12
+;   stur wzr, [sp]
+;   sub sp, sp, #1, lsl #12
+;   stur wzr, [sp]
+;   sub sp, sp, #1, lsl #12
+;   stur wzr, [sp]
+;   add sp, sp, #3, lsl #12
+;   sub sp, sp, #3, lsl #12
+; block1: ; offset 0x28
+;   mov x0, sp
+;   add sp, sp, #3, lsl #12
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %large() -> i64 system_v {
+ss0 = explicit_slot 100000
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz x16, #0
+;   movz w17, #34464
+;   movk w17, w17, #1, LSL #16
+;   stack_probe_loop x16, x17, #4096
+;   movz w16, #34464
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x0, sp
+;   movz w16, #34464
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov x16, #0
+;   mov w17, #0x86a0
+;   movk w17, #1, lsl #16
+;   sub x16, x16, #1, lsl #12
+;   str wzr, [sp, x16]
+;   cmn x16, x17
+;   b.gt #0x14
+;   mov w16, #0x86a0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x30
+;   mov x0, sp
+;   mov w16, #0x86a0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

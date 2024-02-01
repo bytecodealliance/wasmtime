@@ -1,0 +1,545 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f() -> i8 {
+block0:
+  v0 = iconst.i8 -1
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, -1
+;   ret
+
+function %f() -> i16 {
+block0:
+  v0 = iconst.i16 0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,16
+;   addi a0,a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0x10
+;   addi a0, a0, -1
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff0000
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,65535
+;   slli a0,a0,4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffff
+;   slli a0, a0, 4
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff00000000
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,65535
+;   slli a0,a0,20
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffff
+;   slli a0, a0, 0x14
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff000000000000
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,65535
+;   slli a0,a0,36
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffff
+;   slli a0, a0, 0x24
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffffffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, -1
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffff0000
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,-16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffff0
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffff0000ffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0xff, 0xff, 0x00, 0x00
+;   .byte 0xff, 0xff, 0xff, 0xff
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff0000ffffffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0xff, 0xff, 0xff, 0xff
+;   .byte 0x00, 0x00, 0xff, 0xff
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x0000ffffffffffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0xff, 0xff, 0xff, 0xff
+;   .byte 0xff, 0xff, 0x00, 0x00
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xf34bf0a31212003a ;; random digits
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x3a, 0x00, 0x12, 0x12
+;   .byte 0xa3, 0xf0, 0x4b, 0xf3
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x12e900001ef40000 ;; random digits with 2 clear half words
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0xf4, 0x1e
+;   .byte 0x00, 0x00, 0xe9, 0x12
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x12e9ffff1ef4ffff ;; random digits with 2 full half words
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0xff, 0xff, 0xf4, 0x1e
+;   .byte 0xff, 0xff, 0xe9, 0x12
+
+function %f() -> i32 {
+block0:
+  v0 = iconst.i32 -1
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, -1
+;   ret
+
+function %f() -> i32 {
+block0:
+  v0 = iconst.i32 0xfffffff7
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,-9
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, -9
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xfffffff7
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0xf7, 0xff, 0xff, 0xff
+;   .byte 0x00, 0x00, 0x00, 0x00
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xfffffffffffffff7
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,-9
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, -9
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,1023
+;   slli a2,a0,40
+;   fmv.d.x fa0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0x3ff
+;   slli a2, a0, 0x28
+;   fmv.d.x fa0, a2
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x5.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,264704
+;   fmv.w.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0x40a00
+;   fmv.w.x fa0, a0
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,16457
+;   slli a2,a0,36
+;   fmv.d.x fa0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0x4049
+;   slli a2, a0, 0x24
+;   fmv.d.x fa0, a2
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,271488
+;   fmv.w.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0x42480
+;   fmv.w.x fa0, a0
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   fmv.d.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   fmv.d.x fa0, a0
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   fmv.w.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   fmv.w.x fa0, a0
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,3075
+;   slli a2,a0,40
+;   fmv.d.x fa0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xc03
+;   slli a2, a0, 0x28
+;   fmv.d.x fa0, a2
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,-256000
+;   fmv.w.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xc1800
+;   fmv.w.x fa0, a0
+;   ret
+
+function %addi_1() -> i64 {
+block0:
+  v0 = iconst.i64 0xfff
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,1
+;   addi a0,a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 1
+;   addi a0, a0, -1
+;   ret
+
+function %addi_2() -> i64 {
+block0:
+  v0 = iconst.i64 0x800
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,1
+;   addi a0,a0,-2048
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 1
+;   addi a0, a0, -0x800
+;   ret
+
+function %addi_3() -> i64 {
+block0:
+  v0 = iconst.i64 0x7ff
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,2047
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, 0x7ff
+;   ret

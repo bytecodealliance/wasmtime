@@ -1,0 +1,96 @@
+test compile precise-output
+target s390x
+
+function %f(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   llcr %r2, %r2
+;   clfi %r2, 42
+;   lgr %r2, %r4
+;   locgre %r2, %r3
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llcr %r2, %r2
+;   clfi %r2, 0x2a
+;   lgr %r2, %r4
+;   locgre %r2, %r3
+;   br %r14
+
+function %g(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = select.i8 v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   lbr %r2, %r2
+;   chi %r2, 0
+;   lgr %r2, %r4
+;   locrlh %r2, %r3
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lbr %r2, %r2
+;   chi %r2, 0
+;   lgr %r2, %r4
+;   locrlh %r2, %r3
+;   br %r14
+
+function %i(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp.i32 eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   clfi %r2, 42
+;   lgr %r2, %r4
+;   locre %r2, %r3
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   clfi %r2, 0x2a
+;   lgr %r2, %r4
+;   locre %r2, %r3
+;   br %r14
+
+function %i(i32, i8x16, i8x16) -> i8x16 {
+block0(v0: i32, v1: i8x16, v2: i8x16):
+  v3 = iconst.i32 42
+  v4 = icmp.i32 eq v0, v3
+  v5 = select.i8x16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   clfi %r2, 42
+;   vlr %v6, %v24
+;   vlr %v24, %v25
+;   jne 10 ; vlr %v24, %v6
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   clfi %r2, 0x2a
+;   vlr %v6, %v24
+;   vlr %v24, %v25
+;   jne 0x1c
+;   vlr %v24, %v6
+;   br %r14
+

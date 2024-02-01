@@ -1,0 +1,53 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbkb=true
+
+
+function %uextend16_32(i16) -> i32 {
+block0(v0: i16):
+    v1 = uextend.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   packw a0,a0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0x45, 0x05, 0x08
+;   ret
+
+function %uextend16_64(i16) -> i64 {
+block0(v0: i16):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   packw a0,a0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x3b, 0x45, 0x05, 0x08
+;   ret
+
+function %uextend32_64(i32) -> i64 {
+block0(v0: i32):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   pack a0,a0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0x45, 0x05, 0x08
+;   ret
+

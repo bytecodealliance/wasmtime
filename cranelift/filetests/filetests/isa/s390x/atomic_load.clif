@@ -1,0 +1,121 @@
+test compile precise-output
+target s390x
+
+function %atomic_load_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = atomic_load.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lg %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lg %r2, 0(%r2)
+;   br %r14
+
+function %atomic_load_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = atomic_load.i64 aligned v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %sym + 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   br %r14
+
+function %atomic_load_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = atomic_load.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   l %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   l %r2, 0(%r2)
+;   br %r14
+
+function %atomic_load_i32_sym() -> i32 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = atomic_load.i32 aligned v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrl %r2, %sym + 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   br %r14
+
+function %atomic_load_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = atomic_load.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llh %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llh %r2, 0(%r2)
+;   br %r14
+
+function %atomic_load_i16_sym() -> i16 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = atomic_load.i16 aligned v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llhrl %r2, %sym + 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   br %r14
+
+function %atomic_load_i8(i64) -> i8 {
+block0(v0: i64):
+  v1 = atomic_load.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llc %r2, 0(%r2)
+;   br %r14
+

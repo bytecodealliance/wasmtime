@@ -1,0 +1,585 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+
+function %ishl_i8_const_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i8_const_i16(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i16 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i8_const_i32(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i32 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i8_const_i64(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i64 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i8_const_i128(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i64 5
+    v2 = uextend.i128 v1
+    v3 = ishl v0, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i16_const_i8(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i8 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i16_const_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i16_const_i32(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i32 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i16_const_i64(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i64 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i16_const_i128(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i64 5
+    v2 = uextend.i128 v1
+    v3 = ishl v0, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i32_const_i8(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i8 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i32_const_i16(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i16 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i32_const_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i32_const_i64(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i64 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i32_const_i128(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i64 5
+    v2 = uextend.i128 v1
+    v3 = ishl v0, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   slliw a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slliw a0, a0, 5
+;   ret
+
+function %ishl_i64_const_i8(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i8 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slli a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 5
+;   ret
+
+function %ishl_i64_const_i16(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i16 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slli a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 5
+;   ret
+
+function %ishl_i64_const_i32(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i32 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slli a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 5
+;   ret
+
+function %ishl_i64_const_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slli a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 5
+;   ret
+
+function %ishl_i64_const_i128(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = uextend.i128 v1
+    v3 = ishl v0, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   slli a0,a0,5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 5
+;   ret
+
+function %ishl_i128_const_i8(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i8 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,5
+;   andi a5,a3,63
+;   li a2,64
+;   sub a2,a2,a5
+;   sll a4,a0,a5
+;   srl a0,a0,a2
+;   select a2,zero,a0##condition=(a5 eq zero)
+;   sll a5,a1,a5
+;   or a5,a2,a5
+;   li a2,64
+;   andi a3,a3,127
+;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a3 uge a2)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 5
+;   andi a5, a3, 0x3f
+;   addi a2, zero, 0x40
+;   sub a2, a2, a5
+;   sll a4, a0, a5
+;   srl a0, a0, a2
+;   bnez a5, 0xc
+;   mv a2, zero
+;   j 8
+;   mv a2, a0
+;   sll a5, a1, a5
+;   or a5, a2, a5
+;   addi a2, zero, 0x40
+;   andi a3, a3, 0x7f
+;   bltu a3, a2, 0x10
+;   mv a0, zero
+;   mv a1, a4
+;   j 0xc
+;   mv a0, a4
+;   mv a1, a5
+;   ret
+
+function %ishl_i128_const_i16(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i16 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,5
+;   andi a5,a3,63
+;   li a2,64
+;   sub a2,a2,a5
+;   sll a4,a0,a5
+;   srl a0,a0,a2
+;   select a2,zero,a0##condition=(a5 eq zero)
+;   sll a5,a1,a5
+;   or a5,a2,a5
+;   li a2,64
+;   andi a3,a3,127
+;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a3 uge a2)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 5
+;   andi a5, a3, 0x3f
+;   addi a2, zero, 0x40
+;   sub a2, a2, a5
+;   sll a4, a0, a5
+;   srl a0, a0, a2
+;   bnez a5, 0xc
+;   mv a2, zero
+;   j 8
+;   mv a2, a0
+;   sll a5, a1, a5
+;   or a5, a2, a5
+;   addi a2, zero, 0x40
+;   andi a3, a3, 0x7f
+;   bltu a3, a2, 0x10
+;   mv a0, zero
+;   mv a1, a4
+;   j 0xc
+;   mv a0, a4
+;   mv a1, a5
+;   ret
+
+function %ishl_i128_const_i32(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i32 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,5
+;   andi a5,a3,63
+;   li a2,64
+;   sub a2,a2,a5
+;   sll a4,a0,a5
+;   srl a0,a0,a2
+;   select a2,zero,a0##condition=(a5 eq zero)
+;   sll a5,a1,a5
+;   or a5,a2,a5
+;   li a2,64
+;   andi a3,a3,127
+;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a3 uge a2)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 5
+;   andi a5, a3, 0x3f
+;   addi a2, zero, 0x40
+;   sub a2, a2, a5
+;   sll a4, a0, a5
+;   srl a0, a0, a2
+;   bnez a5, 0xc
+;   mv a2, zero
+;   j 8
+;   mv a2, a0
+;   sll a5, a1, a5
+;   or a5, a2, a5
+;   addi a2, zero, 0x40
+;   andi a3, a3, 0x7f
+;   bltu a3, a2, 0x10
+;   mv a0, zero
+;   mv a1, a4
+;   j 0xc
+;   mv a0, a4
+;   mv a1, a5
+;   ret
+
+function %ishl_i128_const_i64(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i64 5
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,5
+;   andi a5,a3,63
+;   li a2,64
+;   sub a2,a2,a5
+;   sll a4,a0,a5
+;   srl a0,a0,a2
+;   select a2,zero,a0##condition=(a5 eq zero)
+;   sll a5,a1,a5
+;   or a5,a2,a5
+;   li a2,64
+;   andi a3,a3,127
+;   select [a0,a1],[zero,a4],[a4,a5]##condition=(a3 uge a2)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 5
+;   andi a5, a3, 0x3f
+;   addi a2, zero, 0x40
+;   sub a2, a2, a5
+;   sll a4, a0, a5
+;   srl a0, a0, a2
+;   bnez a5, 0xc
+;   mv a2, zero
+;   j 8
+;   mv a2, a0
+;   sll a5, a1, a5
+;   or a5, a2, a5
+;   addi a2, zero, 0x40
+;   andi a3, a3, 0x7f
+;   bltu a3, a2, 0x10
+;   mv a0, zero
+;   mv a1, a4
+;   j 0xc
+;   mv a0, a4
+;   mv a1, a5
+;   ret
+
+function %ishl_i128_const_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i64 5
+    v2 = uextend.i128 v1
+    v3 = ishl v0, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   li a4,5
+;   li a5,0
+;   andi a2,a4,63
+;   li a3,64
+;   sub a3,a3,a2
+;   sll a5,a0,a2
+;   srl a3,a0,a3
+;   select a3,zero,a3##condition=(a2 eq zero)
+;   sll a0,a1,a2
+;   or a2,a3,a0
+;   li a3,64
+;   andi a4,a4,127
+;   select [a0,a1],[zero,a5],[a5,a2]##condition=(a4 uge a3)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 5
+;   mv a5, zero
+;   andi a2, a4, 0x3f
+;   addi a3, zero, 0x40
+;   sub a3, a3, a2
+;   sll a5, a0, a2
+;   srl a3, a0, a3
+;   bnez a2, 8
+;   mv a3, zero
+;   sll a0, a1, a2
+;   or a2, a3, a0
+;   addi a3, zero, 0x40
+;   andi a4, a4, 0x7f
+;   bltu a4, a3, 0x10
+;   mv a0, zero
+;   mv a1, a5
+;   j 0xc
+;   mv a0, a5
+;   mv a1, a2
+;   ret
+

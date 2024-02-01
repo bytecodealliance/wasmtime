@@ -1,0 +1,36 @@
+test compile precise-output
+set opt_level=speed
+set machine_code_cfg_info=true
+target x86_64
+
+;; We want to make sure that this compiles successfully, so we are properly
+;; handling multi-value operator nodes.
+
+function u0:359(i64) -> i8, i8 system_v {
+    sig0 = (i64) -> i8, i8 system_v
+    fn0 = colocated u0:521 sig0
+
+    block0(v0: i64):
+		v3, v4 = call fn0(v0)
+		return v3, v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   call    User(userextname0)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   callq 9 ; reloc_external CallPCRel4 u0:521 -4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

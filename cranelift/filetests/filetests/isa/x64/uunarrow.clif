@@ -1,0 +1,45 @@
+test compile precise-output
+target x86_64 sse41
+
+function %f1(f64x2) -> i32x4 {
+block0(v0: f64x2):
+  v1 = fcvt_to_uint_sat.i64x2 v0
+  v2 = vconst.i64x2 [0 0]
+  v3 = uunarrow v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm3
+;   xorpd   %xmm3, %xmm3, %xmm3
+;   maxpd   %xmm0, %xmm3, %xmm0
+;   minpd   %xmm0, const(0), %xmm0
+;   roundpd $3, %xmm0, %xmm0
+;   addpd   %xmm0, const(1), %xmm0
+;   shufps  $136, %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorpd %xmm3, %xmm3
+;   maxpd %xmm3, %xmm0
+;   minpd 0x1c(%rip), %xmm0
+;   roundpd $3, %xmm0, %xmm0
+;   addpd 0x1e(%rip), %xmm0
+;   shufps $0x88, %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %ah, %al
+

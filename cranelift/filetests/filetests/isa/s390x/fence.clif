@@ -1,0 +1,23 @@
+test compile precise-output
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FENCE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fence() {
+block0:
+  fence
+  return
+}
+
+; VCode:
+; block0:
+;   bcr 14, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bnor %r0
+;   br %r14
+

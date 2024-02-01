@@ -1,0 +1,176 @@
+test compile precise-output
+target s390x
+
+function %f1() -> i64, i64, i64, i64 {
+block1:
+  v0 = iconst.i64 1
+  v1 = iconst.i64 2
+  v2 = iconst.i64 3
+  v3 = iconst.i64 4
+  return v0, v1, v2, v3
+}
+
+; VCode:
+; block0:
+;   lghi %r2, 1
+;   lghi %r3, 2
+;   lghi %r4, 3
+;   lghi %r5, 4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lghi %r2, 1
+;   lghi %r3, 2
+;   lghi %r4, 3
+;   lghi %r5, 4
+;   br %r14
+
+function %f1() -> i64, i64, i64, i64, i64, i64 {
+block1:
+  v0 = iconst.i64 1
+  v1 = iconst.i64 2
+  v2 = iconst.i64 3
+  v3 = iconst.i64 4
+  v4 = iconst.i64 5
+  v5 = iconst.i64 6
+  return v0, v1, v2, v3, v4, v5
+}
+
+; VCode:
+;   stmg %r6, %r15, 48(%r15)
+; block0:
+;   lghi %r5, 1
+;   lgr %r6, %r5
+;   lghi %r3, 2
+;   lghi %r4, 3
+;   lghi %r5, 4
+;   lghi %r13, 5
+;   lghi %r14, 6
+;   stg %r13, 0(%r2)
+;   stg %r14, 8(%r2)
+;   lgr %r2, %r6
+;   lmg %r6, %r15, 48(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r6, %r15, 0x30(%r15)
+; block1: ; offset 0x6
+;   lghi %r5, 1
+;   lgr %r6, %r5
+;   lghi %r3, 2
+;   lghi %r4, 3
+;   lghi %r5, 4
+;   lghi %r13, 5
+;   lghi %r14, 6
+;   stg %r13, 0(%r2)
+;   stg %r14, 8(%r2)
+;   lgr %r2, %r6
+;   lmg %r6, %r15, 0x30(%r15)
+;   br %r14
+
+function %f3() -> f64, f64, f64, f64 {
+block1:
+  v0 = f64const 0x0.0
+  v1 = f64const 0x1.0
+  v2 = f64const 0x2.0
+  v3 = f64const 0x3.0
+  return v0, v1, v2, v3
+}
+
+; VCode:
+; block0:
+;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
+;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
+;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
+;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bras %r1, 0xc
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f0, 0(%r1)
+;   bras %r1, 0x1c
+;   sur %f15, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f2, 0(%r1)
+;   bras %r1, 0x2c
+;   sth %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f4, 0(%r1)
+;   bras %r1, 0x3c
+;   sth %r0, 0(%r8)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f6, 0(%r1)
+;   br %r14
+
+function %f4() -> f64, f64, f64, f64, f64, f64 {
+block1:
+  v0 = f64const 0x0.0
+  v1 = f64const 0x1.0
+  v2 = f64const 0x2.0
+  v3 = f64const 0x3.0
+  v4 = f64const 0x4.0
+  v5 = f64const 0x5.0
+  return v0, v1, v2, v3, v4, v5
+}
+
+; VCode:
+; block0:
+;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
+;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
+;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
+;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
+;   bras %r1, 12 ; data.f64 4 ; ld %f7, 0(%r1)
+;   bras %r1, 12 ; data.f64 5 ; vleg %v16, 0(%r1), 0
+;   std %f7, 0(%r2)
+;   vsteg %v16, 8(%r2), 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bras %r1, 0xc
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f0, 0(%r1)
+;   bras %r1, 0x1c
+;   sur %f15, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f2, 0(%r1)
+;   bras %r1, 0x2c
+;   sth %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f4, 0(%r1)
+;   bras %r1, 0x3c
+;   sth %r0, 0(%r8)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f6, 0(%r1)
+;   bras %r1, 0x4c
+;   sth %r1, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f7, 0(%r1)
+;   bras %r1, 0x5c
+;   sth %r1, 0(%r4)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   vleg %v16, 0(%r1), 0
+;   std %f7, 0(%r2)
+;   vsteg %v16, 8(%r2), 0
+;   br %r14
+

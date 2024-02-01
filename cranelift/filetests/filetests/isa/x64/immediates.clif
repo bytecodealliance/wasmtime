@@ -1,0 +1,62 @@
+test compile precise-output
+target x86_64
+
+function %f0(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 0xffff_eeee_dddd_cccc
+  v3 = iadd.i64 v0, v2
+  store v3, v1
+  v4 = isub.i64 v0, v2
+  store v4, v1
+  v5 = band.i64 v0, v2
+  store v5, v1
+  v6 = bor.i64 v0, v2
+  store v6, v1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $-18765284782900, %r10
+;   lea     0(%rdi,%r10,1), %r10
+;   movq    %r10, 0(%rsi)
+;   movq    %rdi, %r11
+;   subq    %r11, const(0), %r11
+;   movq    %r11, 0(%rsi)
+;   movq    %rdi, %rax
+;   andq    %rax, const(0), %rax
+;   movq    %rax, 0(%rsi)
+;   orq     %rdi, const(0), %rdi
+;   movq    %rdi, 0(%rsi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $18446725308424768716, %r10
+;   addq %rdi, %r10
+;   movq %r10, (%rsi) ; trap: heap_oob
+;   movq %rdi, %r11
+;   subq 0x22(%rip), %r11
+;   movq %r11, (%rsi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   andq 0x15(%rip), %rax
+;   movq %rax, (%rsi) ; trap: heap_oob
+;   orq 0xb(%rip), %rdi
+;   movq %rdi, (%rsi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %cl, %ah
+;   int3
+;   fstp %st(5)
+;   outb %al, %dx
+;   outb %al, %dx
+

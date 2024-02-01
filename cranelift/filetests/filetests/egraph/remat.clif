@@ -1,0 +1,30 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 42
+    v2 = iadd.i32 v0, v1
+    brif v2, block1, block2
+
+block1:
+    v3 = iconst.i32 84
+    v4 = iadd.i32 v2, v3
+    return v4
+
+block2:
+    return v2
+}
+
+; check:  block0(v0: i32):
+; check:      v1 = iconst.i32 42
+; check:      v2 = iadd v0, v1
+; check:      brif v2, block1, block2
+; check:   block1:
+; check:      v6 = iconst.i32 126
+; check:      v12 = iadd.i32 v0, v6
+; check:      return v12
+; check:   block2:
+; check:      v14 = iadd.i32 v0, v1
+; check:      return v14

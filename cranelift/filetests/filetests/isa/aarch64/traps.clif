@@ -1,0 +1,35 @@
+test compile precise-output
+target aarch64
+
+function %trap() {
+block0:
+  trap user0
+}
+
+; VCode:
+; block0:
+;   udf #0xc11f
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+
+function %trap_iadd_ifcout(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = uadd_overflow_trap v0, v1, user0
+  return
+}
+
+; VCode:
+; block0:
+;   adds x3, x0, x1
+;   b.hs #trap=user0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x3, x0, x1
+;   b.hs #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+

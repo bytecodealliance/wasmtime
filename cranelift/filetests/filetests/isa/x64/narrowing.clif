@@ -1,0 +1,147 @@
+test compile precise-output
+target x86_64 sse41
+
+function %f1(i16x8, i16x8) -> i8x16 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = snarrow v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packsswb %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   packsswb %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f2(i32x4, i32x4) -> i16x8 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = snarrow v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packssdw %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   packssdw %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f3(f64x2) -> i32x4 {
+block0(v0: f64x2):
+  v1 = fcvt_to_sint_sat.i64x2 v0
+  v2 = vconst.i64x2 0x00
+  v3 = snarrow v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm3
+;   cmppd   $0, %xmm3, %xmm0, %xmm3
+;   andps   %xmm3, const(0), %xmm3
+;   minpd   %xmm0, %xmm3, %xmm0
+;   cvttpd2dq %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   cmpeqpd %xmm0, %xmm3
+;   andps 0x1c(%rip), %xmm3
+;   minpd %xmm3, %xmm0
+;   cvttpd2dq %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, %al
+
+function %f4(i16x8, i16x8) -> i8x16 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = unarrow v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packuswb %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   packuswb %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f5(i32x4, i32x4) -> i16x8 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = unarrow v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packusdw %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   packusdw %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

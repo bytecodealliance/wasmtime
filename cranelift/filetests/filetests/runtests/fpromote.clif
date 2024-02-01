@@ -1,0 +1,98 @@
+test interpret
+test run
+target x86_64
+target x86_64 has_avx
+target s390x
+target aarch64
+target riscv64
+target riscv64 has_c has_zcb
+
+
+function %fpromote(f32) -> f64 {
+block0(v0: f32):
+    v1 = fpromote.f64 v0
+    return v1
+}
+
+; run: %fpromote(0x0.0) == 0x0.0
+; run: %fpromote(-0x0.0) == -0x0.0
+; run: %fpromote(0x0.1) == 0x0.1
+; run: %fpromote(0x0.2) == 0x0.2
+; run: %fpromote(0x3.2) == 0x3.2
+; run: %fpromote(0x1.5) == 0x1.5
+; run: %fpromote(0x1.1p10) == 0x1.1p10
+; run: %fpromote(0x1.4cccccp0) == 0x1.4cccccp0
+; run: %fpromote(0x1.b33334p0) == 0x1.b33334p0
+; run: %fpromote(-0x1.b33334p0) == -0x1.b33334p0
+; run: %fpromote(0x1.333334p-1) == 0x1.333334p-1
+; run: %fpromote(0x0.5) == 0x0.5
+; run: %fpromote(-0x0.5) == -0x0.5
+; run: %fpromote(0x1.5) == 0x1.5
+; run: %fpromote(-0x1.5) == -0x1.5
+; run: %fpromote(0x1.1p10) == 0x1.1p10
+; run: %fpromote(-0x1.1p10) == -0x1.1p10
+; run: %fpromote(0x1.99999ap-2) == 0x1.99999ap-2
+; run: %fpromote(-0x1.99999ap-2) == -0x1.99999ap-2
+; run: %fpromote(0x1.8p0) == 0x1.8p0
+; run: %fpromote(-0x1.8p0) == -0x1.8p0
+; run: %fpromote(0x1.4p1) == 0x1.4p1
+; run: %fpromote(-0x1.4p1) == -0x1.4p1
+
+
+;; Inf
+; run: %fpromote(Inf) == Inf
+; run: %fpromote(-Inf) == -Inf
+
+;; Epsilon / Max / Min Positive
+; run: %fpromote(0x1.000000p-23) == 0x1.000000p-23
+; run: %fpromote(-0x1.000000p-23) == -0x1.000000p-23
+; run: %fpromote(0x1.fffffep127) == 0x1.fffffep127
+; run: %fpromote(-0x1.fffffep127) == -0x1.fffffep127
+; run: %fpromote(0x1.000000p-126) == 0x1.000000p-126
+; run: %fpromote(-0x1.000000p-126) == -0x1.000000p-126
+
+;; Subnormals
+; run: %fpromote(0x0.800000p-126) == 0x0.800000p-126
+; run: %fpromote(-0x0.800000p-126) == -0x0.800000p-126
+; run: %fpromote(0x0.000002p-126) == 0x0.000002p-126
+; run: %fpromote(-0x0.000002p-126) == -0x0.000002p-126
+
+
+;; NaN's
+; For NaN's this operation is specified as producing a value that is a NaN
+function %fpromote_is_nan(f32) -> i8 {
+block0(v0: f32):
+    v1 = fpromote.f64 v0
+    v2 = fcmp ne v1, v1
+    return v2
+}
+; run: %fpromote_is_nan(+NaN) == 1
+; run: %fpromote_is_nan(-NaN) == 1
+; run: %fpromote_is_nan(+NaN:0x0) == 1
+; run: %fpromote_is_nan(+NaN:0x1) == 1
+; run: %fpromote_is_nan(+NaN:0x300001) == 1
+; run: %fpromote_is_nan(-NaN:0x0) == 1
+; run: %fpromote_is_nan(-NaN:0x1) == 1
+; run: %fpromote_is_nan(-NaN:0x300001) == 1
+; run: %fpromote_is_nan(+sNaN:0x1) == 1
+; run: %fpromote_is_nan(-sNaN:0x1) == 1
+; run: %fpromote_is_nan(+sNaN:0x200001) == 1
+; run: %fpromote_is_nan(-sNaN:0x200001) == 1
+
+
+;; Tests a fpromote+load combo which some backends may optimize
+function %fpromote_load(i64, f32) -> f64 {
+    ss0 = explicit_slot 16
+
+block0(v1: i64, v2: f32):
+    v3 = stack_addr.i64 ss0
+    store.f32 v2, v3
+    v4 = load.f32 v3
+    v5 = fpromote.f64 v4
+    return v5
+}
+; run: %fpromote_load(0, 0x0.0) == 0x0.0
+; run: %fpromote_load(1, 0x0.1) == 0x0.1
+; run: %fpromote_load(2, 0x0.2) == 0x0.2
+; run: %fpromote_load(3, 0x3.2) == 0x3.2
+; run: %fpromote_load(0xC, 0x3.2) == 0x3.2

@@ -1,0 +1,56 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 has_bmi2
+target riscv64
+
+function %bzhi32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iconst.i32 1
+  v3 = ishl v2, v1
+  v4 = isub v3, v2
+  v5 = band v0, v4
+  return v5
+}
+
+; run: %bzhi32(0, 0) == 0
+; run: %bzhi32(0, 1) == 0
+; run: %bzhi32(1, 0) == 0
+; run: %bzhi32(1, 32) == 0
+; run: %bzhi32(1, 8) == 1
+; run: %bzhi32(0xff, 4) == 0xf
+; run: %bzhi32(0xff, 1) == 1
+; run: %bzhi32(0xff, 0) == 0
+; run: %bzhi32(0xff, 0xff0001) == 1
+; run: %bzhi32(0x01234567, 16) == 0x4567
+; run: %bzhi32(0x01234567, 32) == 0
+; run: %bzhi32(0x01234567, 28) == 0x1234567
+; run: %bzhi32(0x01234567, 24) == 0x234567
+; run: %bzhi32(-1, 24) == 0xffffff
+
+function %bzhi64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 1
+  v3 = ishl v2, v1
+  v4 = isub v3, v2
+  v5 = band v0, v4
+  return v5
+}
+
+; run: %bzhi64(0, 0) == 0
+; run: %bzhi64(0, 1) == 0
+; run: %bzhi64(1, 0) == 0
+; run: %bzhi64(1, 64) == 0
+; run: %bzhi64(1, 8) == 1
+; run: %bzhi64(0xff, 4) == 0xf
+; run: %bzhi64(0xff, 1) == 1
+; run: %bzhi64(0xff, 0) == 0
+; run: %bzhi64(0xff, 0xff0001) == 1
+; run: %bzhi64(0x01234567, 16) == 0x4567
+; run: %bzhi64(0x01234567, 64) == 0
+; run: %bzhi64(0x01234567, 28) == 0x1234567
+; run: %bzhi64(0x01234567, 24) == 0x234567
+; run: %bzhi64(-1, 24) == 0xffffff
+; run: %bzhi64(-1, 56) == 0xffffffffffffff

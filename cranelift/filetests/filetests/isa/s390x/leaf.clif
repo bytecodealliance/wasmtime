@@ -1,0 +1,20 @@
+;; Test compilation of leaf functions without preserving frame pointers.
+
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=false
+target s390x
+
+function %leaf(i64) -> i64 {
+block0(v0: i64):
+    return v0
+}
+
+; VCode:
+; block0:
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   br %r14
+

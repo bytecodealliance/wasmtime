@@ -1,0 +1,133 @@
+# This is a workflow triggered by PR or triggered manually
+# Runs quick performance tests and reports the comparison against HEAD
+# Test should take less than 10 minutes to run on current self-hosted devices
+name: "Performance Testing"
+
+# Controls when the action will run.
+# This workflow runs when manually triggered by keywords used in the start of a review comment
+# Currently that phrase is /bench_x64. /bench_aarch64 and /bench_all are TODOs.
+on:
+  issue_comment:
+    types: [created]
+  push:
+
+# Env variables
+env:
+  SG_COMMIT: 2ab01ac
+  GITHUB_CONTEXT: ${{ toJson(github) }}
+
+jobs:
+  Wasmtime_Repo_On_PR_Comment:
+    name: Benchmark x64 on PR comment Wasmtime repo
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'issue_comment') &&
+      (github.event.issue.pull_request.url) &&
+      (contains(github.event.comment.body, '/bench_x64')) &&
+      (('abrown' == github.event.comment.user.login)
+        || ('afonso360' == github.event.comment.user.login)
+        || ('akirilov-arm' == github.event.comment.user.login)
+        || ('alexcrichton' == github.event.comment.user.login)
+        || ('bbouvier' == github.event.comment.user.login)
+        || ('bjorn3' == github.event.comment.user.login)
+        || ('cfallin' == github.event.comment.user.login)
+        || ('elliottt' == github.event.comment.user.login)
+        || ('fitzgen' == github.event.comment.user.login)
+        || ('jameysharp' == github.event.comment.user.login)
+        || ('jlb6740' == github.event.comment.user.login)
+        || ('sparker-arm' == github.event.comment.user.login)
+        || ('uweigand' == github.event.comment.user.login))
+    steps:
+      - run: echo "$GITHUB_CONTEXT"
+      - run: |
+          # Create and Push Branch
+          git clone https://wasmtime-publish:${{secrets.PERSONAL_ACCESS_TOKEN}}@github.com/bytecodealliance/wasmtime-sightglass-benchmarking.git
+          cd wasmtime-sightglass-benchmarking
+          git remote add wasmtime ${{ github.event.repository.clone_url }}
+          git fetch wasmtime refs/pull/*/merge:refs/remotes/wasmtime/pull/*/merge
+          export issue_pr_url=${{ github.event.issue.pull_request.url }}
+          export issue_commits_url=${{ github.event.issue.comments_url }}
+          export issue_ref_name=$(curl -sSL $issue_pr_url | jq -r '.head.ref' | head -n 1)
+          export issue_number=$(curl -sSL $issue_pr_url | jq -r '.number' | head -n 1)
+          export issue_merge_commit_sha=$(curl -sSL $issue_pr_url | jq -r '.merge_commit_sha' | head -n 1)
+          git submodule update --init --recursive
+          git checkout wasmtime/pull/${issue_number}/merge -b pull/${issue_number}/merge/${issue_merge_commit_sha}
+          git config user.name $(curl -sSL $issue_commits_url | jq -r '.[].commit.committer.name' | tail -n 1)
+          git config user.email $(curl -sSL $issue_commits_url | jq -r '.[].commit.committer.email' | tail -n 1)
+          git log -n 1
+          git commit --allow-empty -m "${issue_commits_url}"
+          git push origin --force pull/${issue_number}/merge/${issue_merge_commit_sha}
+          git log -n 1
+
+  Performance_Repo_On_Push:
+    name: Benchmark x64 on push Performance repo
+    runs-on: [self-hosted, linux, x64]
+    if: (github.event_name == 'push') && (github.repository == 'bytecodealliance/wasmtime-sightglass-benchmarking')
+    steps:
+      - run: echo "$GITHUB_CONTEXT"
+      - run: echo "${{ github.event.head_commit.message }}"
+      - name: "Build sightglass commit '${{ env.SG_COMMIT }}'"
+        run: |
+          cd ../ && ls -l && rm -rf ./sightglass
+          git clone https://github.com/bytecodealliance/sightglass.git && cd ./sightglass
+          git checkout ${{env.SG_COMMIT}}
+          cargo build --release
+
+      - name: Checkout patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          path: wasmtime_commit
+
+      - run: rustup update nightly && rustup default nightly
+
+      - name: Build patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
+        working-directory: ./wasmtime_commit
+        run: |
+          cargo --version
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_commit.so
+
+      - name: Checkout main from bytecodealliance/wasmtime
+        uses: actions/checkout@v4
+        with:
+          ref: 'main'
+          repository: 'bytecodealliance/wasmtime'
+          submodules: true
+          path: wasmtime_main
+
+      - name: Build main from bytecodealliance/wasmtime
+        working-directory: ./wasmtime_main
+        run: |
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_main.so
+
+      - name: Run performance tests
+        working-directory: ../sightglass
+        run: |
+          cargo run -- \
+          benchmark \
+          --processes 5 \
+          --iterations-per-process 5 \
+          --engine /tmp/wasmtime_main.so \
+          --engine /tmp/wasmtime_commit.so \
+          --output-file /tmp/results.txt
+
+      - name: Print Results
+        run: cat /tmp/results.txt
+
+      - id: get-comment-body
+        name: Create Results Body
+        run: |
+            body="$(cat /tmp/results.txt)"
+            body="${body//'%'/'%25'}"
+            body="${body//$'\n'/'%0A'}"
+            body="${body//$'\r'/'%0D'}"
+            echo "::set-output name=body::$body"
+
+      - name: Publish Results
+        run: |
+          curl -X POST -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ secrets.WASMTIME_PUBLISHING_TOKEN }}" \
+          ${{ github.event.head_commit.message }} \
+          -d '{"body": ${{ toJSON(steps.get-comment-body.outputs.body) }}}'

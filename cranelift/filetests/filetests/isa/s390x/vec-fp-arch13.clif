@@ -1,0 +1,143 @@
+test compile precise-output
+target s390x arch13
+
+function %fcvt_from_uint_i32x4_f32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = fcvt_from_uint.f32x4 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vcelfb %v24, %v24, 0, 4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcdlg %v24, %v24, 2, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i32x4_f32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = fcvt_from_sint.f32x4 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vcefb %v24, %v24, 0, 4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcdg %v24, %v24, 2, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i64x2_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_uint.f64x2 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vcdlgb %v24, %v24, 0, 4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcdlgb %v24, %v24, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i64x2_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_sint.f64x2 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vcdgb %v24, %v24, 0, 4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcdgb %v24, %v24, 0, 4
+;   br %r14
+
+function %fcvt_to_uint_sat_f32x4_i32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = fcvt_to_uint_sat.i32x4 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vclfeb %v24, %v24, 0, 5
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vclgd %v24, %v24, 2, 0, 5
+;   br %r14
+
+function %fcvt_to_sint_sat_f32x4_i32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = fcvt_to_sint_sat.i32x4 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vcfeb %v2, %v24, 0, 5
+;   vgbm %v4, 0
+;   vfcesb %v6, %v24, %v24
+;   vsel %v24, %v2, %v4, %v6
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcgd %v2, %v24, 2, 0, 5
+;   vzero %v4
+;   vfcesb %v6, %v24, %v24
+;   vsel %v24, %v2, %v4, %v6
+;   br %r14
+
+function %fcvt_to_uint_sat_f64x2_i64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = fcvt_to_uint_sat.i64x2 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vclgdb %v24, %v24, 0, 5
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vclgdb %v24, %v24, 0, 5
+;   br %r14
+
+function %fcvt_to_sint_sat_f64x2_i64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = fcvt_to_sint_sat.i64x2 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vcgdb %v2, %v24, 0, 5
+;   vgbm %v4, 0
+;   vfcedb %v6, %v24, %v24
+;   vsel %v24, %v2, %v4, %v6
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcgdb %v2, %v24, 0, 5
+;   vzero %v4
+;   vfcedb %v6, %v24, %v24
+;   vsel %v24, %v2, %v4, %v6
+;   br %r14
+

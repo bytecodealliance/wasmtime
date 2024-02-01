@@ -1,0 +1,15 @@
+name: Run cargo-audit
+on:
+  schedule:
+    - cron: '0 0 * * *'
+jobs:
+  security_audit:
+    if: github.repository == 'bytecodealliance/wasmtime'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

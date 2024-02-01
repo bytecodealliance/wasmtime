@@ -1,0 +1,36 @@
+[package]
+name = "wasmtime-component-macro"
+version.workspace = true
+authors.workspace = true
+description = "Macros for deriving component interface types from Rust types"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-component-macro/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+proc-macro = true
+test = false
+doctest = false
+
+[dependencies]
+anyhow = "1.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { workspace = true, features = ["extra-traits"] }
+wasmtime-component-util = { workspace = true }
+wasmtime-wit-bindgen = { workspace = true }
+wit-parser = { workspace = true }
+
+[dev-dependencies]
+wasmtime = { path = '../wasmtime', features = ['component-model'] }
+component-macro-test-helpers = { path = 'test-helpers' }
+tracing = { workspace = true }
+
+[features]
+async = []

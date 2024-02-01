@@ -1,0 +1,81 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %iadd_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v0, v1
+    v5 = iadd v4, v2
+    v6 = iadd v5, v3
+    return v6
+; check:  v4 = iadd v0, v1
+; nextln: v7 = iadd v2, v3
+; nextln: v8 = iadd v4, v7
+; check: return v8
+}
+
+function %iadd_shallow_and_wide_twice(i32, i32, i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32):
+    v6 = iadd v0, v1
+    v7 = iadd v6, v2
+    v8 = iadd v7, v3
+    v9 = iadd v8, v4
+    v10 = iadd v9, v5
+    return v10
+; check:  v6 = iadd v0, v1
+; nextln: v11 = iadd v2, v3
+; nextln: v12 = iadd v6, v11
+; nextln: v16 = iadd v4, v5
+; nextln: v23 = iadd v12, v16
+; nextln: return v23
+}
+
+function %iadd_reassociate_then_cprop(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 42
+    v3 = iconst.i32 36
+    v4 = iadd v0, v2
+    v5 = iadd v1, v3
+    v6 = iadd v4, v5
+    return v6
+; check:  v7 = iadd v0, v1
+; nextln: v9 = iconst.i32 78
+; nextln: v15 = iadd v7, v9  ; v9 = 78
+; check:  return v15
+}
+
+function %imul_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = imul v0, v1
+    v5 = imul v4, v2
+    v6 = imul v5, v3
+    return v6
+; check:  v4 = imul v0, v1
+; nextln: v7 = imul v2, v3
+; nextln: v8 = imul v4, v7
+; check: return v8
+}
+
+function %band_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = band v0, v1
+    v5 = band v4, v2
+    v6 = band v5, v3
+    return v6
+; check:  v4 = band v0, v1
+; nextln: v7 = band v2, v3
+; nextln: v8 = band v4, v7
+; check: return v8
+}
+
+function %bxor_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = bxor v0, v1
+    v5 = bxor v4, v2
+    v6 = bxor v5, v3
+    return v6
+; check:  v4 = bxor v0, v1
+; nextln: v7 = bxor v2, v3
+; nextln: v8 = bxor v4, v7
+; check: return v8
+}

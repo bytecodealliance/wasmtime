@@ -1,0 +1,25 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 skylake
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %fmax_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = fmax v0, v1
+    return v2
+}
+; This operation exhibits non-deterministic behaviour for some input NaN values;
+; refer to the simd-fmax-fmin-nondeterministic*.clif files for the respective tests.
+; run: %fmax_f64x2([-0x0.0 -0x1.0], [+0x0.0 0x1.0]) == [+0x0.0 0x1.0]
+
+function %fmin_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = fmin v0, v1
+    return v2
+}
+; This operation exhibits non-deterministic behaviour for some input NaN values;
+; refer to the simd-fmax-fmin-nondeterministic*.clif files for the respective tests.
+; run: %fmin_f64x2([-0x0.0 -0x1.0], [+0x0.0 0x1.0]) == [-0x0.0 -0x1.0]

@@ -1,0 +1,43 @@
+test compile precise-output
+target x86_64
+
+; Check that no intervening moves are inserted when lowering `select` (see
+; https://github.com/bytecodealliance/wasmtime/issues/3744).
+function %select_eq_f32(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp eq v0, v1
+    v3 = iconst.i32 1
+    v4 = iconst.i32 0
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $1, %eax
+;   ucomiss %xmm1, %xmm0
+;   cmovpl  const(0), %eax, %eax
+;   cmovnzl const(0), %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $1, %eax
+;   ucomiss %xmm1, %xmm0
+;   cmovpl 0xd(%rip), %eax
+;   cmovnel 6(%rip), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+

@@ -1,0 +1,29 @@
+[package]
+name = "wasmtime-environ-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition.workspace = true
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { workspace = true, features = ["derive"] }
+env_logger = { workspace = true }
+libfuzzer-sys = { workspace = true }
+wasmparser = { workspace = true }
+wasmprinter = { workspace = true }
+wat = { workspace = true }
+wasmtime-environ = { workspace = true }
+component-fuzz-util = { workspace = true, optional = true }
+
+[[bin]]
+name = "fact-valid-module"
+path = "fuzz_targets/fact-valid-module.rs"
+test = false
+doc = false
+required-features = ["component-model"]
+
+[features]
+component-model = ["wasmtime-environ/component-model", "dep:component-fuzz-util"]

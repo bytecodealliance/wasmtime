@@ -1,0 +1,65 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+
+function %icmp_ugt_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp ugt v0, v1
+    return v2
+}
+; run: %icmp_ugt_i8(0, 0) == 0
+; run: %icmp_ugt_i8(1, 0) == 1
+; run: %icmp_ugt_i8(-1, -1) == 0
+; run: %icmp_ugt_i8(0, 1) == 0
+; run: %icmp_ugt_i8(-5, -1) == 0
+; run: %icmp_ugt_i8(1, -1) == 0
+
+function %icmp_ugt_i16(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+    v2 = icmp ugt v0, v1
+    return v2
+}
+; run: %icmp_ugt_i16(0, 0) == 0
+; run: %icmp_ugt_i16(1, 0) == 1
+; run: %icmp_ugt_i16(-1, -1) == 0
+; run: %icmp_ugt_i16(0, 1) == 0
+; run: %icmp_ugt_i16(-5, -1) == 0
+; run: %icmp_ugt_i16(1, -1) == 0
+
+function %icmp_ugt_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ugt v0, v1
+    return v2
+}
+; run: %icmp_ugt_i32(0, 0) == 0
+; run: %icmp_ugt_i32(1, 0) == 1
+; run: %icmp_ugt_i32(-1, -1) == 0
+; run: %icmp_ugt_i32(0, 1) == 0
+; run: %icmp_ugt_i32(-5, -1) == 0
+; run: %icmp_ugt_i32(1, -1) == 0
+
+function %icmp_ugt_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp ugt v0, v1
+    return v2
+}
+; run: %icmp_ugt_i64(0, 0) == 0
+; run: %icmp_ugt_i64(1, 0) == 1
+; run: %icmp_ugt_i64(-1, -1) == 0
+; run: %icmp_ugt_i64(0, 1) == 0
+; run: %icmp_ugt_i64(-5, -1) == 0
+; run: %icmp_ugt_i64(1, -1) == 0
+
+
+function %icmp_ugt_const() -> i8  {
+block0:
+    v11 = iconst.i8 196
+    v17 = icmp ugt v11, v11
+    return v17
+}
+
+; run: %icmp_ugt_const() == 0

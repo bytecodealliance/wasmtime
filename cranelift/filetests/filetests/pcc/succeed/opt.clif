@@ -1,0 +1,85 @@
+test compile
+set enable_pcc=true
+set opt_level=speed
+target aarch64
+target x86_64
+
+;; Equivalent to a Wasm `i64.load` from a static memory, but with some
+;; redundant stuff that should be optimized away (x+0 -> x).
+function %f0(i64, i32) -> i64 {
+    ;; mock vmctx struct:
+    mt0 = struct 8 { 0: i64 readonly ! mem(mt1, 0, 0) }
+    ;; mock static memory: 4GiB range, plus 2GiB guard
+    mt1 = memory 0x1_8000_0000
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1: i32):
+    v2 ! mem(mt1, 0, 0) = load.i64 checked v0+0
+    v3 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1
+    v4 = iconst.i64 0
+    v5 = iadd.i64 v3, v4
+    v6 ! mem(mt1, 0, 0xffff_ffff) = iadd.i64 v2, v5
+    v7 = load.i64 checked v6
+    return v7
+}
+
+;; GVN opportunity.
+function %f1(i64, i32) -> i64 {
+    ;; mock vmctx struct:
+    mt0 = struct 8 { 0: i64 readonly ! mem(mt1, 0, 0) }
+    ;; mock static memory: 4GiB range, plus 2GiB guard
+    mt1 = memory 0x1_8000_0000
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1: i32):
+    v2 ! mem(mt1, 0, 0) = load.i64 checked notrap readonly v0+0
+    v3 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1
+    v4 = iconst.i64 0
+    v5 = iadd.i64 v3, v4
+    v6 ! mem(mt1, 0, 0xffff_ffff) = iadd.i64 v2, v5
+    v7 = load.i64 checked v6
+
+    v8 = load.i64 checked notrap readonly v0+0
+    v9 = uextend.i64 v1
+    v10 ! mem(mt1, 0, 0xffff_ffff) = iadd.i64 v8, v9
+    v11 = load.i64 checked v10
+
+    v12 = iadd.i64 v7, v11
+
+    return v12
+}
+
+;; RLE opportunity.
+function %f2(i64, i32) -> i64 {
+    ;; mock vmctx struct:
+    mt0 = struct 8 { 0: i64 readonly ! mem(mt1, 0, 0) }
+    ;; mock static memory: 4GiB range, plus 2GiB guard
+    mt1 = memory 0x1_8000_0000
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1: i32):
+    v2 ! mem(mt1, 0, 0) = load.i64 checked notrap readonly aligned v0+0
+    brif v1, block1, block2
+
+block1:
+    v3 ! mem(mt1, 0, 0) = load.i64 checked notrap readonly aligned v0+0
+    return v3
+
+block2:
+    v4 ! mem(mt1, 0, 0) = load.i64 checked notrap readonly aligned v0+0
+    return v4
+}
+
+function %f3(i64, i32) {
+    mt0 = struct 4 { 0: i32 ! range(32, 1, 3) }
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 1): i32):
+    v2 ! range(32, 1, 1) = iconst.i32 1
+    v3 ! range(32, 1, 2) = iadd.i32 v1, v2
+
+    v4 ! range(32, 1, 1) = iconst.i32 1
+    v5 ! range(32, 1, 3) = iadd.i32 v1, v4  ;; should GVN onto v3.
+
+    ;; v3/v5's facts should merge to the narrower range.
+    store.i32 checked v3, v0
+    store.i32 checked v5, v0
+
+    return
+}

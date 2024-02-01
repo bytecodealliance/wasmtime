@@ -1,0 +1,39 @@
+test compile precise-output
+set enable_probestack=true
+target x86_64
+
+function %f1() -> i64 {
+ss0 = explicit_slot 100000
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   movl    $100000, %eax
+;   call    LibCall(Probestack)
+;   subq    %rsp, $100000, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %rax
+;   addq    %rsp, $100000, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   movl $0x186a0, %eax
+;   callq 0xe ; reloc_external CallPCRel4 %Probestack -4
+;   subq $0x186a0, %rsp
+; block1: ; offset 0x15
+;   leaq (%rsp), %rax
+;   addq $0x186a0, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

@@ -1,0 +1,21 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+
+function %a(i8, i8) -> i32 {
+block0(v0: i8, v1: i8):
+    v2 = icmp sle v0, v1
+    v3 = uextend.i32 v2
+    v4 = iconst.i32 0
+    v5 = iconst.i32 1
+    v6 = icmp.i32 eq v3, v4  ; v4 = 0
+    v7 = select v6, v5, v3  ; v5 = 1
+    return v7
+}
+
+; run: %a(20, -11) == 1

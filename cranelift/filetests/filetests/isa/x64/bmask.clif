@@ -1,0 +1,863 @@
+test compile precise-output
+set enable_llvm_abi_extensions
+target x86_64
+
+
+function %bmask_i64_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = bmask.i64 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negq    %rax, %rax
+;   movq    %rdi, %rax
+;   sbbq    %rax, %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negq %rax
+;   movq %rdi, %rax
+;   sbbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i64_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = bmask.i32 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negq    %rax, %rax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negq %rax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i64_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = bmask.i16 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negq    %rax, %rax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negq %rax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i64_i8(i64) -> i8 {
+block0(v0: i64):
+  v1 = bmask.i8 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negq    %rax, %rax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negq %rax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i32_i64(i32) -> i64 {
+block0(v0: i32):
+  v1 = bmask.i64 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negl    %eax, %eax
+;   movq    %rdi, %rax
+;   sbbq    %rax, %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negl %eax
+;   movq %rdi, %rax
+;   sbbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i32_i32(i32) -> i32 {
+block0(v0: i32):
+  v1 = bmask.i32 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negl    %eax, %eax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negl %eax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i32_i16(i32) -> i16 {
+block0(v0: i32):
+  v1 = bmask.i16 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negl    %eax, %eax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negl %eax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i32_i8(i32) -> i8 {
+block0(v0: i32):
+  v1 = bmask.i8 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negl    %eax, %eax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negl %eax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i16_i64(i16) -> i64 {
+block0(v0: i16):
+  v1 = bmask.i64 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negw    %ax, %ax
+;   movq    %rdi, %rax
+;   sbbq    %rax, %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negw %ax
+;   movq %rdi, %rax
+;   sbbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i16_i32(i16) -> i32 {
+block0(v0: i16):
+  v1 = bmask.i32 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negw    %ax, %ax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negw %ax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i16_i16(i16) -> i16 {
+block0(v0: i16):
+  v1 = bmask.i16 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negw    %ax, %ax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negw %ax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i16_i8(i16) -> i8 {
+block0(v0: i16):
+  v1 = bmask.i8 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negw    %ax, %ax
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negw %ax
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i8_i64(i8) -> i64 {
+block0(v0: i8):
+  v1 = bmask.i64 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negb    %al, %al
+;   movq    %rdi, %rax
+;   sbbq    %rax, %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negb %al
+;   movq %rdi, %rax
+;   sbbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i8_i32(i8) -> i32 {
+block0(v0: i8):
+  v1 = bmask.i32 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negb    %al, %al
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negb %al
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i8_i16(i8) -> i16 {
+block0(v0: i8):
+  v1 = bmask.i16 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negb    %al, %al
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negb %al
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i8_i8(i8) -> i8 {
+block0(v0: i8):
+  v1 = bmask.i8 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negb    %al, %al
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negb %al
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i128_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rdi, %rsi, %rdi
+;   movq    %rdi, %r8
+;   negq    %r8, %r8
+;   movq    %rdi, %rdx
+;   sbbq    %rdx, %rdi, %rdx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orq %rsi, %rdi
+;   movq %rdi, %r8
+;   negq %r8
+;   movq %rdi, %rdx
+;   sbbq %rdi, %rdx
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i128_i64(i128) -> i64 {
+block0(v0: i128):
+  v1 = bmask.i64 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rdi, %rsi, %rdi
+;   movq    %rdi, %r8
+;   negq    %r8, %r8
+;   movq    %rdi, %rax
+;   sbbq    %rax, %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orq %rsi, %rdi
+;   movq %rdi, %r8
+;   negq %r8
+;   movq %rdi, %rax
+;   sbbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i128_i32(i128) -> i32 {
+block0(v0: i128):
+  v1 = bmask.i32 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rdi, %rsi, %rdi
+;   movq    %rdi, %r8
+;   negq    %r8, %r8
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orq %rsi, %rdi
+;   movq %rdi, %r8
+;   negq %r8
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i128_i16(i128) -> i16 {
+block0(v0: i128):
+  v1 = bmask.i16 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rdi, %rsi, %rdi
+;   movq    %rdi, %r8
+;   negq    %r8, %r8
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orq %rsi, %rdi
+;   movq %rdi, %r8
+;   negq %r8
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i128_i8(i128) -> i8 {
+block0(v0: i128):
+  v1 = bmask.i8 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   orq     %rdi, %rsi, %rdi
+;   movq    %rdi, %r8
+;   negq    %r8, %r8
+;   movq    %rdi, %rax
+;   sbbl    %eax, %edi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orq %rsi, %rdi
+;   movq %rdi, %r8
+;   negq %r8
+;   movq %rdi, %rax
+;   sbbl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i64_i128(i64) -> i128 {
+block0(v0: i64):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negq    %rax, %rax
+;   movq    %rdi, %rdx
+;   sbbq    %rdx, %rdi, %rdx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negq %rax
+;   movq %rdi, %rdx
+;   sbbq %rdi, %rdx
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i32_i128(i32) -> i128 {
+block0(v0: i32):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negl    %eax, %eax
+;   movq    %rdi, %rdx
+;   sbbq    %rdx, %rdi, %rdx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negl %eax
+;   movq %rdi, %rdx
+;   sbbq %rdi, %rdx
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i16_i128(i16) -> i128 {
+block0(v0: i16):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negw    %ax, %ax
+;   movq    %rdi, %rdx
+;   sbbq    %rdx, %rdi, %rdx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negw %ax
+;   movq %rdi, %rdx
+;   sbbq %rdi, %rdx
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_i8_i128(i8) -> i128 {
+block0(v0: i8):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negb    %al, %al
+;   movq    %rdi, %rdx
+;   sbbq    %rdx, %rdi, %rdx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negb %al
+;   movq %rdi, %rdx
+;   sbbq %rdi, %rdx
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bmask_icmp_i32_i8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2 = icmp sgt v0, v1
+  v3 = bmask.i8 v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    %esi, %edi
+;   setnle  %al
+;   movq    %rax, %r8
+;   negb    %r8b, %r8b
+;   sbbl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   setg %al
+;   movq %rax, %r8
+;   negb %r8b
+;   sbbl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %ineg_icmp_i32_i8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2 = icmp sgt v0, v1
+  v3 = ineg v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    %esi, %edi
+;   setnle  %al
+;   negb    %al, %al
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   setg %al
+;   negb %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq

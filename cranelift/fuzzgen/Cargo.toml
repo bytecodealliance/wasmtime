@@ -1,0 +1,22 @@
+[package]
+name = "cranelift-fuzzgen"
+version = "0.0.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Cranelift module generator"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cranelift = { workspace = true }
+cranelift-native = { workspace = true }
+
+anyhow = { workspace = true }
+arbitrary = { workspace = true }
+once_cell = { workspace = true }
+target-lexicon = { workspace = true, features = ["std"] }

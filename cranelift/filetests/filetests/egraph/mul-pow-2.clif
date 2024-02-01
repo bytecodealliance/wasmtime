@@ -1,0 +1,33 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f0(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 4
+    v2 = imul v0, v1
+    ; check:  v3 = iconst.i32 2
+    ; nextln: v4 = ishl v0, v3
+    ; check:  return v4
+    return v2
+}
+
+function %f1(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = imul v0, v1
+    ; check:  v3 = iconst.i32 3
+    ; nextln: v4 = ishl v0, v3
+    ; check:  return v4
+    return v2
+}
+
+function %f2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 16
+    v2 = imul v0, v1
+    ; check:  v3 = iconst.i32 4
+    ; nextln: v4 = ishl v0, v3
+    ; check:  return v4
+    return v2
+}

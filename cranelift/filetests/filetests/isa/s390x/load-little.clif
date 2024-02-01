@@ -1,0 +1,454 @@
+test compile precise-output
+target s390x
+
+function %load_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i64 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrvg %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvg %r2, 0(%r2)
+;   br %r14
+
+function %load_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = load.i64 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrvg %r2, 0(%r1)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvg %r2, 0(%r1)
+;   br %r14
+
+function %uload8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = uload8.i64 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llgc %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llgc %r2, 0(%r2)
+;   br %r14
+
+function %sload8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = sload8.i64 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lgb %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgb %r2, 0(%r2)
+;   br %r14
+
+function %uload16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = uload16.i64 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrvh %r4, 0(%r2)
+;   llghr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvh %r4, 0(%r2)
+;   llghr %r2, %r4
+;   br %r14
+
+function %uload16_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = uload16.i64 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   llghr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
+;   llghr %r2, %r2
+;   br %r14
+
+function %sload16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = sload16.i64 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrvh %r4, 0(%r2)
+;   lghr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvh %r4, 0(%r2)
+;   lghr %r2, %r4
+;   br %r14
+
+function %sload16_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = sload16.i64 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   lghr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
+;   lghr %r2, %r2
+;   br %r14
+
+function %uload32_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = uload32.i64 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrv %r4, 0(%r2)
+;   llgfr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrv %r4, 0(%r2)
+;   llgfr %r2, %r4
+;   br %r14
+
+function %uload32_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = uload32.i64 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
+;   llgfr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrv %r2, 0(%r1)
+;   llgfr %r2, %r2
+;   br %r14
+
+function %sload32_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = sload32.i64 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrv %r4, 0(%r2)
+;   lgfr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrv %r4, 0(%r2)
+;   lgfr %r2, %r4
+;   br %r14
+
+function %sload32_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = sload32.i64 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
+;   lgfr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrv %r2, 0(%r1)
+;   lgfr %r2, %r2
+;   br %r14
+
+function %load_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i32 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrv %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrv %r2, 0(%r2)
+;   br %r14
+
+function %load_i32_sym() -> i32 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = load.i32 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrv %r2, 0(%r1)
+;   br %r14
+
+function %uload8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = uload8.i32 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llc %r2, 0(%r2)
+;   br %r14
+
+function %sload8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = sload8.i32 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lb %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lb %r2, 0(%r2)
+;   br %r14
+
+function %uload16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = uload16.i32 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrvh %r4, 0(%r2)
+;   llhr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvh %r4, 0(%r2)
+;   llhr %r2, %r4
+;   br %r14
+
+function %uload16_i32_sym() -> i32 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = uload16.i32 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   llhr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
+;   llhr %r2, %r2
+;   br %r14
+
+function %sload16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = sload16.i32 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrvh %r4, 0(%r2)
+;   lhr %r2, %r4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvh %r4, 0(%r2)
+;   lhr %r2, %r4
+;   br %r14
+
+function %sload16_i32_sym() -> i32 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = sload16.i32 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   lhr %r2, %r2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
+;   lhr %r2, %r2
+;   br %r14
+
+function %load_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = load.i16 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lrvh %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvh %r2, 0(%r2)
+;   br %r14
+
+function %load_i16_sym() -> i16 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = load.i16 aligned little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
+;   br %r14
+
+function %uload8_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = uload8.i16 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llc %r2, 0(%r2)
+;   br %r14
+
+function %sload8_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = sload8.i16 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lb %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lb %r2, 0(%r2)
+;   br %r14
+
+function %load_i8(i64) -> i8 {
+block0(v0: i64):
+  v1 = load.i8 little v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llc %r2, 0(%r2)
+;   br %r14
+

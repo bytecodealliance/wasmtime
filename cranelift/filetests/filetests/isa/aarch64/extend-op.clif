@@ -1,0 +1,537 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %f(i8) -> i64 {
+block0(v0: i8):
+  v1 = sextend.i64 v0
+  v2 = iconst.i64 42
+  v3 = iadd.i64 v2, v1
+  return v3
+}
+
+; VCode:
+; block0:
+;   sxtb x3, w0
+;   add x0, x3, #42
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxtb x3, w0
+;   add x0, x3, #0x2a
+;   ret
+
+function %f2(i8, i64) -> i64 {
+block0(v0: i8, v1: i64):
+  v2 = sextend.i64 v0
+  v3 = iadd.i64 v2, v1
+  return v3
+}
+
+; VCode:
+; block0:
+;   add x0, x1, x0, SXTB
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x0, x1, w0, sxtb
+;   ret
+
+function %i128_uextend_i64(i64) -> i128 {
+block0(v0: i64):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x1, #0
+;   ret
+
+function %i128_sextend_i64(i64) -> i128 {
+block0(v0: i64):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   asr x1, x0, #0x3f
+;   ret
+
+function %i128_uextend_i32(i32) -> i128 {
+block0(v0: i32):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   mov w0, w0
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, w0
+;   mov x1, #0
+;   ret
+
+function %i128_sextend_i32(i32) -> i128 {
+block0(v0: i32):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sxtw x0, w0
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxtw x0, w0
+;   asr x1, x0, #0x3f
+;   ret
+
+function %i128_uextend_i16(i16) -> i128 {
+block0(v0: i16):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uxth w0, w0
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w0, w0
+;   mov x1, #0
+;   ret
+
+function %i128_sextend_i16(i16) -> i128 {
+block0(v0: i16):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sxth x0, w0
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxth x0, w0
+;   asr x1, x0, #0x3f
+;   ret
+
+function %i128_uextend_i8(i8) -> i128 {
+block0(v0: i8):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uxtb w0, w0
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w0, w0
+;   mov x1, #0
+;   ret
+
+function %i128_sextend_i8(i8) -> i128 {
+block0(v0: i8):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sxtb x0, w0
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxtb x0, w0
+;   asr x1, x0, #0x3f
+;   ret
+
+function %i8x16_uextend_i16(i8x16) -> i16 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i16 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.b[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.b[1]
+;   ret
+
+function %i8x16_uextend_i32(i8x16) -> i32 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.b[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.b[1]
+;   ret
+
+function %i8x16_uextend_i64(i8x16) -> i64 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i64 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.b[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.b[1]
+;   ret
+
+function %i8x16_uextend_i128(i8x16) -> i128 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.b[1]
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.b[1]
+;   mov x1, #0
+;   ret
+
+function %i8x16_sextend_i16(i8x16) -> i16 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i16 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov w0, v0.b[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov w0, v0.b[1]
+;   ret
+
+function %i8x16_sextend_i32(i8x16) -> i32 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i32 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov w0, v0.b[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov w0, v0.b[1]
+;   ret
+
+function %i8x16_sextend_i64(i8x16) -> i64 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i64 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov x0, v0.b[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov x0, v0.b[1]
+;   ret
+
+function %i8x16_sextend_i128(i8x16) -> i128 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov x0, v0.b[1]
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov x0, v0.b[1]
+;   asr x1, x0, #0x3f
+;   ret
+
+function %i16x8_uextend_i32(i16x8) -> i32 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.h[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.h[1]
+;   ret
+
+function %i16x8_uextend_i64(i16x8) -> i64 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = uextend.i64 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.h[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.h[1]
+;   ret
+
+function %i16x8_uextend_i128(i16x8) -> i128 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   umov w0, v0.h[1]
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umov w0, v0.h[1]
+;   mov x1, #0
+;   ret
+
+function %i16x8_sextend_i32(i16x8) -> i32 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = sextend.i32 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov w0, v0.h[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov w0, v0.h[1]
+;   ret
+
+function %i16x8_sextend_i64(i16x8) -> i64 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = sextend.i64 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov x0, v0.h[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov x0, v0.h[1]
+;   ret
+
+function %i16x8_sextend_i128(i16x8) -> i128 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov x0, v0.h[1]
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov x0, v0.h[1]
+;   asr x1, x0, #0x3f
+;   ret
+
+function %i32x4_uextend_i64(i32x4) -> i64 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = uextend.i64 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   mov w0, v0.s[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, v0.s[1]
+;   ret
+
+function %i32x4_uextend_i128(i32x4) -> i128 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   mov w0, v0.s[1]
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, v0.s[1]
+;   mov x1, #0
+;   ret
+
+function %i32x4_sextend_i64(i32x4) -> i64 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = sextend.i64 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov x0, v0.s[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov x0, v0.s[1]
+;   ret
+
+function %i32x4_sextend_i128(i32x4) -> i128 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   smov x0, v0.s[1]
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   smov x0, v0.s[1]
+;   asr x1, x0, #0x3f
+;   ret
+
+function %i64x2_uextend_i128(i64x2) -> i128 {
+block0(v0: i64x2):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   mov x0, v0.d[1]
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, v0.d[1]
+;   mov x1, #0
+;   ret
+
+function %i64x2_sextend_i128(i64x2) -> i128 {
+block0(v0: i64x2):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   mov x0, v0.d[1]
+;   asr x1, x0, #63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, v0.d[1]
+;   asr x1, x0, #0x3f
+;   ret
+

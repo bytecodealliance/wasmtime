@@ -1,0 +1,71 @@
+test interpret
+test run
+target x86_64
+target x86_64 has_bmi1
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+
+function %bnot_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = bnot.i8 v0
+    return v1
+}
+; run: %bnot_i8(0) == -1
+; run: %bnot_i8(1) == -2
+
+function %bnot_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bnot.i16 v0
+    return v1
+}
+; run: %bnot_i16(0) == -1
+; run: %bnot_i16(1) == -2
+
+function %bnot_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot.i32 v0
+    return v1
+}
+; run: %bnot_i32(0) == -1
+; run: %bnot_i32(1) == -2
+
+function %bnot_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bnot.i64 v0
+    return v1
+}
+; run: %bnot_i64(0) == -1
+; run: %bnot_i64(1) == -2
+
+
+function %band_not(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = band_not.i8 v0, v1
+    return v2
+}
+
+; run: %band_not(0xFF, 0) == -1
+; run: %band_not(0x55, 0xFF) == 0
+; run: %band_not(0, 0) == 0
+
+function %bor_not(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bor_not.i8 v0, v1
+    return v2
+}
+
+; run: %bor_not(0xFF, 0) == -1
+; run: %bor_not(0x55, 0xFF) == 85
+; run: %bor_not(0, 0) == -1
+
+function %bxor_not(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bxor_not.i8 v0, v1
+    return v2
+}
+
+; run: %bxor_not(0xFF, 0) == 0
+; run: %bxor_not(0x55, 0xFF) == 85
+; run: %bxor_not(0, 0) == -1

@@ -1,0 +1,24 @@
+test compile precise-output
+set unwind_info=false
+set is_pic
+target aarch64
+
+function %f() -> i64 {
+  gv0 = symbol %my_global
+
+block0:
+  v0 = symbol_value.i64 gv0
+  return v0
+}
+
+; VCode:
+; block0:
+;   load_ext_name x0, TestCase(%my_global)+0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %my_global 0
+;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %my_global 0
+;   ret
+

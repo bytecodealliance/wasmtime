@@ -1,0 +1,54 @@
+test interpret
+test run
+target aarch64
+target x86_64
+target x86_64 has_avx
+target s390x
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %bitcast_if32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = bitcast.f32x4 v0
+  return v1
+}
+; run: %bitcast_if32x4([0 4294967295 -1 127]) == [0x0.0 -NaN:0x3fffff -NaN:0x3fffff 0x0.0000fep-126]
+
+function %bitcast_fi32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = bitcast.i32x4 v0
+  return v1
+}
+; run: %bitcast_fi32x4([0x0.0 -NaN:0x3fffff -NaN:0x3fffff 0x0.0000fep-126]) == [0 4294967295 -1 127]
+
+function %bitcast_if64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = bitcast.f64x2 v0
+  return v1
+}
+; run: %bitcast_if64x2([0 18446744073709551615]) == [0x0.0 -NaN:0x7ffffffffffff]
+; run: %bitcast_if64x2([-1 127]) == [-NaN:0x7ffffffffffff 0x0.000000000007fp-1022]
+
+function %bitcast_fi64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = bitcast.i64x2 v0
+  return v1
+}
+; run: %bitcast_fi64x2([0x0.0 -NaN:0x7ffffffffffff]) == [0 18446744073709551615]
+; run: %bitcast_fi64x2([-NaN:0x7ffffffffffff 0x0.000000000007fp-1022]) == [-1 127]
+
+function %bitcast_more_lanes_little(i64x2) -> i32x4 {
+block0(v0: i64x2):
+    v1 = bitcast.i32x4 little v0
+    return v1
+}
+; run: %bitcast_more_lanes_little(0x00000000000000000000000000000000) == 0x00000000000000000000000000000000
+; run: %bitcast_more_lanes_little(0x00000000000000ff00000000000000ff) == 0x00000000000000ff00000000000000ff
+
+function %bitcast_fewer_lanes_little(i16x8) -> i64x2 {
+block0(v0: i16x8):
+    v1 = bitcast.i64x2 little v0
+    return v1
+}
+; run: %bitcast_fewer_lanes_little(0x00000000000000000000000000000000) == 0x00000000000000000000000000000000
+; run: %bitcast_fewer_lanes_little(0x00ff0000000000000000000000000000) == 0x00ff0000000000000000000000000000

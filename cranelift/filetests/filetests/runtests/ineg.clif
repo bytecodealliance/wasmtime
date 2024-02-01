@@ -1,0 +1,55 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+
+function %ineg_i8(i8) -> i8 {
+block0(v0: i8):
+  v1 = ineg.i8 v0
+  return v1
+}
+; run: %ineg_i8(0) == 0
+; run: %ineg_i8(1) == -1
+; run: %ineg_i8(-1) == 1
+; run: %ineg_i8(2) == -2
+; run: %ineg_i8(0x80) == 0x80
+; run: %ineg_i8(0x7f) == 0x81
+
+function %ineg_i16(i16) -> i16 {
+block0(v0: i16):
+  v1 = ineg.i16 v0
+  return v1
+}
+; run: %ineg_i16(0) == 0
+; run: %ineg_i16(1) == -1
+; run: %ineg_i16(-1) == 1
+; run: %ineg_i16(2) == -2
+; run: %ineg_i16(0x8000) == 0x8000
+; run: %ineg_i16(0x7fff) == 0x8001
+
+function %ineg_i32(i32) -> i32 {
+block0(v0: i32):
+  v1 = ineg.i32 v0
+  return v1
+}
+; run: %ineg_i32(0) == 0
+; run: %ineg_i32(1) == -1
+; run: %ineg_i32(-1) == 1
+; run: %ineg_i32(2) == -2
+; run: %ineg_i32(0x80000000) == 0x80000000
+; run: %ineg_i32(0x7fffffff) == 0x80000001
+
+function %ineg_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = ineg.i64 v0
+  return v1
+}
+; run: %ineg_i64(0) == 0
+; run: %ineg_i64(1) == -1
+; run: %ineg_i64(-1) == 1
+; run: %ineg_i64(2) == -2
+; run: %ineg_i64(0x80000000_00000000) == 0x80000000_00000000
+; run: %ineg_i64(0x7fffffff_ffffffff) == 0x80000000_00000001

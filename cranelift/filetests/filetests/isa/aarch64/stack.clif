@@ -1,0 +1,925 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %stack_addr_small() -> i64 {
+ss0 = explicit_slot 8
+
+block0:
+  v0 = stack_addr.i64 ss0
+  return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x0, sp
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %stack_addr_big() -> i64 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_addr.i64 ss0
+  return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x0, sp
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x14
+;   mov x0, sp
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %stack_load_small() -> i64 {
+ss0 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i64 ss0
+  return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x1, sp
+;   ldr x0, [x1]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x1, sp
+;   ldr x0, [x1]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %stack_load_big() -> i64 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i64 ss0
+  return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x1, sp
+;   ldr x0, [x1]
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x14
+;   mov x1, sp
+;   ldr x0, [x1]
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %stack_store_small(i64) {
+ss0 = explicit_slot 8
+
+block0(v0: i64):
+  stack_store.i64 v0, ss0
+  return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x2, sp
+;   str x0, [x2]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x2, sp
+;   str x0, [x2]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %stack_store_big(i64) {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0(v0: i64):
+  stack_store.i64 v0, ss0
+  return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x2, sp
+;   str x0, [x2]
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x14
+;   mov x2, sp
+;   str x0, [x2]
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %i8_spill_slot(i8) -> i8, i64 {
+    ss0 = explicit_slot 1000
+
+block0(v0: i8):
+  v1 = iconst.i64 1
+  v2 = iconst.i64 2
+  v3 = iconst.i64 3
+  v4 = iconst.i64 4
+  v5 = iconst.i64 5
+  v6 = iconst.i64 6
+  v7 = iconst.i64 7
+  v8 = iconst.i64 8
+  v9 = iconst.i64 9
+  v10 = iconst.i64 10
+  v11 = iconst.i64 11
+  v12 = iconst.i64 12
+  v13 = iconst.i64 13
+  v14 = iconst.i64 14
+  v15 = iconst.i64 15
+  v16 = iconst.i64 16
+  v17 = iconst.i64 17
+  v18 = iconst.i64 18
+  v19 = iconst.i64 19
+  v20 = iconst.i64 20
+  v21 = iconst.i64 21
+  v22 = iconst.i64 22
+  v23 = iconst.i64 23
+  v24 = iconst.i64 24
+  v25 = iconst.i64 25
+  v26 = iconst.i64 26
+  v27 = iconst.i64 27
+  v28 = iconst.i64 28
+  v29 = iconst.i64 29
+  v30 = iconst.i64 30
+  v31 = iconst.i64 31
+  v32 = iconst.i64 32
+  v33 = iconst.i64 33
+  v34 = iconst.i64 34
+  v35 = iconst.i64 35
+  v36 = iconst.i64 36
+  v37 = iconst.i64 37
+  v38 = iconst.i64 38
+  v39 = iconst.i64 39
+  v40 = iconst.i64 30
+  v41 = iconst.i64 31
+  v42 = iconst.i64 32
+  v43 = iconst.i64 33
+  v44 = iconst.i64 34
+  v45 = iconst.i64 35
+  v46 = iconst.i64 36
+  v47 = iconst.i64 37
+  v48 = iconst.i64 38
+  v49 = iconst.i64 39
+  v50 = iconst.i64 30
+  v51 = iconst.i64 31
+  v52 = iconst.i64 32
+  v53 = iconst.i64 33
+  v54 = iconst.i64 34
+  v55 = iconst.i64 35
+  v56 = iconst.i64 36
+  v57 = iconst.i64 37
+  v58 = iconst.i64 38
+  v59 = iconst.i64 39
+  v60 = iconst.i64 30
+  v61 = iconst.i64 31
+  v62 = iconst.i64 32
+  v63 = iconst.i64 33
+  v64 = iconst.i64 34
+  v65 = iconst.i64 35
+  v66 = iconst.i64 36
+  v67 = iconst.i64 37
+  v68 = iconst.i64 38
+  v69 = iconst.i64 39
+
+  v70 = iadd.i64 v1, v2
+  v71 = iadd.i64 v3, v4
+  v72 = iadd.i64 v5, v6
+  v73 = iadd.i64 v7, v8
+  v74 = iadd.i64 v9, v10
+  v75 = iadd.i64 v11, v12
+  v76 = iadd.i64 v13, v14
+  v77 = iadd.i64 v15, v16
+  v78 = iadd.i64 v17, v18
+  v79 = iadd.i64 v19, v20
+  v80 = iadd.i64 v21, v22
+  v81 = iadd.i64 v23, v24
+  v82 = iadd.i64 v25, v26
+  v83 = iadd.i64 v27, v28
+  v84 = iadd.i64 v29, v30
+  v85 = iadd.i64 v31, v32
+  v86 = iadd.i64 v33, v34
+  v87 = iadd.i64 v35, v36
+  v88 = iadd.i64 v37, v38
+  v89 = iadd.i64 v39, v40
+  v90 = iadd.i64 v41, v42
+  v91 = iadd.i64 v43, v44
+  v92 = iadd.i64 v45, v46
+  v93 = iadd.i64 v47, v48
+  v94 = iadd.i64 v49, v50
+  v95 = iadd.i64 v51, v52
+  v96 = iadd.i64 v53, v54
+  v97 = iadd.i64 v55, v56
+  v98 = iadd.i64 v57, v58
+  v99 = iadd.i64 v59, v60
+  v100 = iadd.i64 v61, v62
+  v101 = iadd.i64 v63, v64
+  v102 = iadd.i64 v65, v66
+  v103 = iadd.i64 v67, v68
+
+  v104 = iadd.i64 v69, v70
+  v105 = iadd.i64 v71, v72
+  v106 = iadd.i64 v73, v74
+  v107 = iadd.i64 v75, v76
+  v108 = iadd.i64 v77, v78
+  v109 = iadd.i64 v79, v80
+  v110 = iadd.i64 v81, v82
+  v111 = iadd.i64 v83, v84
+  v112 = iadd.i64 v85, v86
+  v113 = iadd.i64 v87, v88
+  v114 = iadd.i64 v89, v90
+  v115 = iadd.i64 v91, v92
+  v116 = iadd.i64 v93, v94
+  v117 = iadd.i64 v95, v96
+  v118 = iadd.i64 v97, v98
+  v119 = iadd.i64 v99, v100
+  v120 = iadd.i64 v101, v102
+
+  v121 = iadd.i64 v103, v104
+  v122 = iadd.i64 v105, v106
+  v123 = iadd.i64 v107, v108
+  v124 = iadd.i64 v109, v110
+  v125 = iadd.i64 v111, v112
+  v126 = iadd.i64 v113, v114
+  v127 = iadd.i64 v115, v116
+  v128 = iadd.i64 v117, v118
+  v129 = iadd.i64 v119, v120
+
+  v130 = iadd.i64 v121, v122
+  v131 = iadd.i64 v123, v124
+  v132 = iadd.i64 v125, v126
+  v133 = iadd.i64 v127, v128
+
+  v134 = iadd.i64 v129, v130
+  v135 = iadd.i64 v131, v132
+
+  v136 = iadd.i64 v133, v134
+  v137 = iadd.i64 v135, v136
+
+  return v0, v137
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   sub sp, sp, #1216
+; block0:
+;   str x0, [sp, #1000]
+;   movz x8, #2
+;   str x8, [sp, #1008]
+;   movz x8, #4
+;   movz x9, #6
+;   movz x10, #8
+;   movz x11, #10
+;   movz x12, #12
+;   movz x13, #14
+;   movz x14, #16
+;   movz x15, #18
+;   movz x1, #20
+;   movz x2, #22
+;   movz x3, #24
+;   movz x4, #26
+;   movz x5, #28
+;   movz x6, #30
+;   movz x23, #32
+;   movz x24, #34
+;   movz x25, #36
+;   movz x26, #38
+;   movz x27, #30
+;   movz x28, #32
+;   movz x21, #34
+;   movz x19, #36
+;   movz x20, #38
+;   movz x22, #30
+;   movz x0, #32
+;   movz x7, #34
+;   str x7, [sp, #1208]
+;   movz x7, #36
+;   str x7, [sp, #1200]
+;   movz x7, #38
+;   str x7, [sp, #1192]
+;   movz x7, #30
+;   str x7, [sp, #1184]
+;   movz x7, #32
+;   str x7, [sp, #1176]
+;   movz x7, #34
+;   str x7, [sp, #1168]
+;   movz x7, #36
+;   str x7, [sp, #1160]
+;   movz x7, #38
+;   str x7, [sp, #1152]
+;   ldr x7, [sp, #1008]
+;   add x7, x7, #1
+;   str x7, [sp, #1144]
+;   add x7, x8, #3
+;   str x7, [sp, #1136]
+;   add x7, x9, #5
+;   str x7, [sp, #1128]
+;   add x7, x10, #7
+;   str x7, [sp, #1120]
+;   add x7, x11, #9
+;   str x7, [sp, #1112]
+;   add x7, x12, #11
+;   str x7, [sp, #1104]
+;   add x7, x13, #13
+;   str x7, [sp, #1096]
+;   add x7, x14, #15
+;   str x7, [sp, #1088]
+;   add x7, x15, #17
+;   str x7, [sp, #1080]
+;   add x7, x1, #19
+;   str x7, [sp, #1072]
+;   add x7, x2, #21
+;   str x7, [sp, #1064]
+;   add x7, x3, #23
+;   str x7, [sp, #1056]
+;   add x7, x4, #25
+;   str x7, [sp, #1048]
+;   add x7, x5, #27
+;   str x7, [sp, #1040]
+;   add x7, x6, #29
+;   str x7, [sp, #1032]
+;   add x7, x23, #31
+;   str x7, [sp, #1024]
+;   add x7, x24, #33
+;   str x7, [sp, #1016]
+;   add x7, x25, #35
+;   str x7, [sp, #1008]
+;   add x26, x26, #37
+;   add x27, x27, #39
+;   add x28, x28, #31
+;   add x21, x21, #33
+;   add x19, x19, #35
+;   add x20, x20, #37
+;   add x22, x22, #39
+;   add x0, x0, #31
+;   ldr x7, [sp, #1208]
+;   add x7, x7, #33
+;   ldr x9, [sp, #1200]
+;   add x8, x9, #35
+;   ldr x12, [sp, #1192]
+;   add x9, x12, #37
+;   ldr x15, [sp, #1184]
+;   add x10, x15, #39
+;   ldr x2, [sp, #1176]
+;   add x11, x2, #31
+;   ldr x5, [sp, #1168]
+;   add x12, x5, #33
+;   ldr x13, [sp, #1160]
+;   add x13, x13, #35
+;   ldr x14, [sp, #1152]
+;   add x14, x14, #37
+;   ldr x15, [sp, #1144]
+;   add x15, x15, #39
+;   ldr x1, [sp, #1136]
+;   ldr x3, [sp, #1128]
+;   add x1, x1, x3
+;   ldr x2, [sp, #1112]
+;   ldr x6, [sp, #1120]
+;   add x2, x6, x2
+;   ldr x3, [sp, #1096]
+;   ldr x4, [sp, #1104]
+;   add x3, x4, x3
+;   ldr x4, [sp, #1080]
+;   ldr x5, [sp, #1088]
+;   add x4, x5, x4
+;   ldr x5, [sp, #1064]
+;   ldr x6, [sp, #1072]
+;   add x5, x6, x5
+;   ldr x6, [sp, #1048]
+;   ldr x23, [sp, #1056]
+;   add x6, x23, x6
+;   ldr x23, [sp, #1032]
+;   ldr x24, [sp, #1040]
+;   add x23, x24, x23
+;   ldr x24, [sp, #1024]
+;   ldr x25, [sp, #1016]
+;   add x24, x24, x25
+;   ldr x25, [sp, #1008]
+;   add x25, x25, x26
+;   add x26, x27, x28
+;   add x27, x21, x19
+;   add x28, x20, x22
+;   add x7, x0, x7
+;   add x8, x8, x9
+;   add x9, x10, x11
+;   add x10, x12, x13
+;   add x11, x14, x15
+;   add x12, x1, x2
+;   add x13, x3, x4
+;   add x14, x5, x6
+;   add x15, x23, x24
+;   add x0, x25, x26
+;   add x1, x27, x28
+;   add x7, x7, x8
+;   add x8, x9, x10
+;   add x9, x11, x12
+;   add x10, x13, x14
+;   add x11, x15, x0
+;   add x7, x1, x7
+;   add x8, x8, x9
+;   add x9, x10, x11
+;   add x7, x7, x8
+;   add x1, x9, x7
+;   ldr x0, [sp, #1000]
+;   add sp, sp, #1216
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   sub sp, sp, #0x4c0
+; block1: ; offset 0x20
+;   str x0, [sp, #0x3e8]
+;   mov x8, #2
+;   str x8, [sp, #0x3f0]
+;   mov x8, #4
+;   mov x9, #6
+;   mov x10, #8
+;   mov x11, #0xa
+;   mov x12, #0xc
+;   mov x13, #0xe
+;   mov x14, #0x10
+;   mov x15, #0x12
+;   mov x1, #0x14
+;   mov x2, #0x16
+;   mov x3, #0x18
+;   mov x4, #0x1a
+;   mov x5, #0x1c
+;   mov x6, #0x1e
+;   mov x23, #0x20
+;   mov x24, #0x22
+;   mov x25, #0x24
+;   mov x26, #0x26
+;   mov x27, #0x1e
+;   mov x28, #0x20
+;   mov x21, #0x22
+;   mov x19, #0x24
+;   mov x20, #0x26
+;   mov x22, #0x1e
+;   mov x0, #0x20
+;   mov x7, #0x22
+;   str x7, [sp, #0x4b8]
+;   mov x7, #0x24
+;   str x7, [sp, #0x4b0]
+;   mov x7, #0x26
+;   str x7, [sp, #0x4a8]
+;   mov x7, #0x1e
+;   str x7, [sp, #0x4a0]
+;   mov x7, #0x20
+;   str x7, [sp, #0x498]
+;   mov x7, #0x22
+;   str x7, [sp, #0x490]
+;   mov x7, #0x24
+;   str x7, [sp, #0x488]
+;   mov x7, #0x26
+;   str x7, [sp, #0x480]
+;   ldr x7, [sp, #0x3f0]
+;   add x7, x7, #1
+;   str x7, [sp, #0x478]
+;   add x7, x8, #3
+;   str x7, [sp, #0x470]
+;   add x7, x9, #5
+;   str x7, [sp, #0x468]
+;   add x7, x10, #7
+;   str x7, [sp, #0x460]
+;   add x7, x11, #9
+;   str x7, [sp, #0x458]
+;   add x7, x12, #0xb
+;   str x7, [sp, #0x450]
+;   add x7, x13, #0xd
+;   str x7, [sp, #0x448]
+;   add x7, x14, #0xf
+;   str x7, [sp, #0x440]
+;   add x7, x15, #0x11
+;   str x7, [sp, #0x438]
+;   add x7, x1, #0x13
+;   str x7, [sp, #0x430]
+;   add x7, x2, #0x15
+;   str x7, [sp, #0x428]
+;   add x7, x3, #0x17
+;   str x7, [sp, #0x420]
+;   add x7, x4, #0x19
+;   str x7, [sp, #0x418]
+;   add x7, x5, #0x1b
+;   str x7, [sp, #0x410]
+;   add x7, x6, #0x1d
+;   str x7, [sp, #0x408]
+;   add x7, x23, #0x1f
+;   str x7, [sp, #0x400]
+;   add x7, x24, #0x21
+;   str x7, [sp, #0x3f8]
+;   add x7, x25, #0x23
+;   str x7, [sp, #0x3f0]
+;   add x26, x26, #0x25
+;   add x27, x27, #0x27
+;   add x28, x28, #0x1f
+;   add x21, x21, #0x21
+;   add x19, x19, #0x23
+;   add x20, x20, #0x25
+;   add x22, x22, #0x27
+;   add x0, x0, #0x1f
+;   ldr x7, [sp, #0x4b8]
+;   add x7, x7, #0x21
+;   ldr x9, [sp, #0x4b0]
+;   add x8, x9, #0x23
+;   ldr x12, [sp, #0x4a8]
+;   add x9, x12, #0x25
+;   ldr x15, [sp, #0x4a0]
+;   add x10, x15, #0x27
+;   ldr x2, [sp, #0x498]
+;   add x11, x2, #0x1f
+;   ldr x5, [sp, #0x490]
+;   add x12, x5, #0x21
+;   ldr x13, [sp, #0x488]
+;   add x13, x13, #0x23
+;   ldr x14, [sp, #0x480]
+;   add x14, x14, #0x25
+;   ldr x15, [sp, #0x478]
+;   add x15, x15, #0x27
+;   ldr x1, [sp, #0x470]
+;   ldr x3, [sp, #0x468]
+;   add x1, x1, x3
+;   ldr x2, [sp, #0x458]
+;   ldr x6, [sp, #0x460]
+;   add x2, x6, x2
+;   ldr x3, [sp, #0x448]
+;   ldr x4, [sp, #0x450]
+;   add x3, x4, x3
+;   ldr x4, [sp, #0x438]
+;   ldr x5, [sp, #0x440]
+;   add x4, x5, x4
+;   ldr x5, [sp, #0x428]
+;   ldr x6, [sp, #0x430]
+;   add x5, x6, x5
+;   ldr x6, [sp, #0x418]
+;   ldr x23, [sp, #0x420]
+;   add x6, x23, x6
+;   ldr x23, [sp, #0x408]
+;   ldr x24, [sp, #0x410]
+;   add x23, x24, x23
+;   ldr x24, [sp, #0x400]
+;   ldr x25, [sp, #0x3f8]
+;   add x24, x24, x25
+;   ldr x25, [sp, #0x3f0]
+;   add x25, x25, x26
+;   add x26, x27, x28
+;   add x27, x21, x19
+;   add x28, x20, x22
+;   add x7, x0, x7
+;   add x8, x8, x9
+;   add x9, x10, x11
+;   add x10, x12, x13
+;   add x11, x14, x15
+;   add x12, x1, x2
+;   add x13, x3, x4
+;   add x14, x5, x6
+;   add x15, x23, x24
+;   add x0, x25, x26
+;   add x1, x27, x28
+;   add x7, x7, x8
+;   add x8, x9, x10
+;   add x9, x11, x12
+;   add x10, x13, x14
+;   add x11, x15, x0
+;   add x7, x1, x7
+;   add x8, x8, x9
+;   add x9, x10, x11
+;   add x7, x7, x8
+;   add x1, x9, x7
+;   ldr x0, [sp, #0x3e8]
+;   add sp, sp, #0x4c0
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %i128_stack_store(i128) {
+ss0 = explicit_slot 16
+
+block0(v0: i128):
+  stack_store.i128 v0, ss0
+  return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x3, sp
+;   stp x0, x1, [x3]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x3, sp
+;   stp x0, x1, [x3]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %i128_stack_store_inst_offset(i128) {
+ss0 = explicit_slot 16
+ss1 = explicit_slot 16
+
+block0(v0: i128):
+  stack_store.i128 v0, ss1+16
+  return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #32
+; block0:
+;   add x3, sp, #32
+;   stp x0, x1, [x3]
+;   add sp, sp, #32
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x20
+; block1: ; offset 0xc
+;   add x3, sp, #0x20
+;   stp x0, x1, [x3]
+;   add sp, sp, #0x20
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %i128_stack_store_big(i128) {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0(v0: i128):
+  stack_store.i128 v0, ss0
+  return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x3, sp
+;   stp x0, x1, [x3]
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x14
+;   mov x3, sp
+;   stp x0, x1, [x3]
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %i128_stack_load() -> i128 {
+ss0 = explicit_slot 16
+
+block0:
+  v0 = stack_load.i128 ss0
+  return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x2, sp
+;   ldp x0, x1, [x2]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x2, sp
+;   ldp x0, x1, [x2]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %i128_stack_load_inst_offset() -> i128 {
+ss0 = explicit_slot 16
+ss1 = explicit_slot 16
+
+block0:
+  v0 = stack_load.i128 ss1+16
+  return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #32
+; block0:
+;   add x2, sp, #32
+;   ldp x0, x1, [x2]
+;   add sp, sp, #32
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x20
+; block1: ; offset 0xc
+;   add x2, sp, #0x20
+;   ldp x0, x1, [x2]
+;   add sp, sp, #0x20
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %i128_stack_load_big() -> i128 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i128 ss0
+  return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x2, sp
+;   ldp x0, x1, [x2]
+;   movz w16, #34480
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x14
+;   mov x2, sp
+;   ldp x0, x1, [x2]
+;   mov w16, #0x86b0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

@@ -1,0 +1,159 @@
+test compile precise-output
+target aarch64
+
+function %f1(i8x16) -> i8 {
+block0(v0: i8x16):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sshr v2.16b, v0.16b, #7
+;   movz x7, #513
+;   movk x7, x7, #2052, LSL #16
+;   movk x7, x7, #8208, LSL #32
+;   movk x7, x7, #32832, LSL #48
+;   dup v20.2d, x7
+;   and v22.16b, v2.16b, v20.16b
+;   ext v24.16b, v22.16b, v22.16b, #8
+;   zip1 v26.16b, v22.16b, v24.16b
+;   addv h28, v26.8h
+;   umov w0, v28.h[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.16b, v0.16b, #7
+;   mov x7, #0x201
+;   movk x7, #0x804, lsl #16
+;   movk x7, #0x2010, lsl #32
+;   movk x7, #0x8040, lsl #48
+;   dup v20.2d, x7
+;   and v22.16b, v2.16b, v20.16b
+;   ext v24.16b, v22.16b, v22.16b, #8
+;   zip1 v26.16b, v22.16b, v24.16b
+;   addv h28, v26.8h
+;   umov w0, v28.h[0]
+;   ret
+
+function %f2(i8x16) -> i16 {
+block0(v0: i8x16):
+  v1 = vhigh_bits.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sshr v2.16b, v0.16b, #7
+;   movz x7, #513
+;   movk x7, x7, #2052, LSL #16
+;   movk x7, x7, #8208, LSL #32
+;   movk x7, x7, #32832, LSL #48
+;   dup v20.2d, x7
+;   and v22.16b, v2.16b, v20.16b
+;   ext v24.16b, v22.16b, v22.16b, #8
+;   zip1 v26.16b, v22.16b, v24.16b
+;   addv h28, v26.8h
+;   umov w0, v28.h[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.16b, v0.16b, #7
+;   mov x7, #0x201
+;   movk x7, #0x804, lsl #16
+;   movk x7, #0x2010, lsl #32
+;   movk x7, #0x8040, lsl #48
+;   dup v20.2d, x7
+;   and v22.16b, v2.16b, v20.16b
+;   ext v24.16b, v22.16b, v22.16b, #8
+;   zip1 v26.16b, v22.16b, v24.16b
+;   addv h28, v26.8h
+;   umov w0, v28.h[0]
+;   ret
+
+function %f3(i16x8) -> i8 {
+block0(v0: i16x8):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sshr v2.8h, v0.8h, #15
+;   ldr q4, [const(0)]
+;   and v6.16b, v2.16b, v4.16b
+;   addv h16, v6.8h
+;   umov w0, v16.h[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.8h, v0.8h, #0xf
+;   ldr q4, #0x20
+;   and v6.16b, v2.16b, v4.16b
+;   addv h16, v6.8h
+;   umov w0, v16.h[0]
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x01, 0x00, 0x02, 0x00
+;   .byte 0x04, 0x00, 0x08, 0x00
+;   .byte 0x10, 0x00, 0x20, 0x00
+;   .byte 0x40, 0x00, 0x80, 0x00
+
+function %f4(i32x4) -> i8 {
+block0(v0: i32x4):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sshr v2.4s, v0.4s, #31
+;   ldr q4, [const(0)]
+;   and v6.16b, v2.16b, v4.16b
+;   addv s16, v6.4s
+;   mov w0, v16.s[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.4s, v0.4s, #0x1f
+;   ldr q4, #0x20
+;   and v6.16b, v2.16b, v4.16b
+;   addv s16, v6.4s
+;   mov w0, v16.s[0]
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x01, 0x00, 0x00, 0x00
+;   .byte 0x02, 0x00, 0x00, 0x00
+;   .byte 0x04, 0x00, 0x00, 0x00
+;   .byte 0x08, 0x00, 0x00, 0x00
+
+function %f5(i64x2) -> i8 {
+block0(v0: i64x2):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   mov x2, v0.d[1]
+;   mov x4, v0.d[0]
+;   lsr x6, x2, #63
+;   lsr x8, x4, #63
+;   add x0, x8, x6, LSL 1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x2, v0.d[1]
+;   mov x4, v0.d[0]
+;   lsr x6, x2, #0x3f
+;   lsr x8, x4, #0x3f
+;   add x0, x8, x6, lsl #1
+;   ret
+

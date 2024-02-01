@@ -1,0 +1,22 @@
+- Document the semantics of the DSL!
+
+- Clean up and factor the codegen properly.
+
+- Get rid of the expression syntax `<EXPR` in patterns; do a type-dependent
+  parse instead where we know the polarity of pattern-term args and parse
+  in-args as exprs.
+
+- Look into whether optimizations are possible:
+  - More in-depth fallibility analysis (avoid failure edges where possible)
+
+- Slightly nicer human-readable generated code
+  - Include full rule body (S-expression) in comment, not just line number
+  - Inline some expressions (no more `let val23 = 1234; ... f(val23);`)
+
+- Build inlining and simplification: inline invocations of internal
+  constructors, and eliminate ctor-etor or makevariant-matchvariant pairs.
+
+- Ideas from discussion with fitzgen
+  - Turn arg-polarity and exprs on extractors into purer "InstFormat"
+  - Emit two contexts: an immutable context for inputs and a mutable context for
+    outputs

@@ -1,0 +1,26 @@
+[package]
+name = "wiggle-test"
+version = "0.0.0"
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
+license = "Apache-2.0 WITH LLVM-exception"
+edition.workspace = true
+description = "Reusable testing components for wiggle code generator. Only intended to be used by tests in `wiggle` crate."
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+include = ["src/**/*", "LICENSE"]
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+proptest = "1.0.0"
+wiggle = { path = "..", features = ["tracing_log"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }
+env_logger = { workspace = true }

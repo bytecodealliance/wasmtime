@@ -1,0 +1,46 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 skylake
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %fmin_pseudo_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0:f32x4, v1:f32x4):
+    v2 = fcmp lt v1, v0
+    v3 = bitcast.f32x4 little v2
+    v4 = bitselect v3, v1, v0
+    return v4
+}
+; run: %fmin_pseudo_f32x4([0x1.0 NaN 0x0.1 -0x0.0], [0x2.0 0x2.0 NaN 0x0.0]) == [0x1.0 NaN 0x0.1 -0x0.0]
+
+function %fmax_pseudo_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0:f32x4, v1:f32x4):
+    v2 = fcmp lt v0, v1
+    v3 = bitcast.f32x4 little v2
+    v4 = bitselect v3, v1, v0
+    return v4
+}
+; run: %fmax_pseudo_f32x4([0x1.0 NaN 0x0.1 -0x0.0], [0x2.0 0x2.0 NaN 0x0.0]) == [0x2.0 NaN 0x0.1 -0x0.0]
+
+function %fmin_pseudo_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0:f64x2, v1:f64x2):
+    v2 = fcmp lt v1, v0
+    v3 = bitcast.f64x2 little v2
+    v4 = bitselect v3, v1, v0
+    return v4
+}
+; run: %fmin_pseudo_f64x2([0x1.0 NaN], [0x2.0 0x2.0]) == [0x1.0 NaN]
+; run: %fmin_pseudo_f64x2([0x0.1 -0x0.0], [NaN 0x0.0]) == [0x0.1 -0x0.0]
+
+function %fmax_pseudo_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0:f64x2, v1:f64x2):
+    v2 = fcmp lt v0, v1
+    v3 = bitcast.f64x2 little v2
+    v4 = bitselect v3, v1, v0
+    return v4
+}
+; run: %fmax_pseudo_f64x2([0x1.0 NaN], [0x2.0 0x2.0]) == [0x2.0 NaN]
+; run: %fmax_pseudo_f64x2([0x0.1 -0x0.0], [NaN 0x0.0]) == [0x0.1 -0x0.0]
+

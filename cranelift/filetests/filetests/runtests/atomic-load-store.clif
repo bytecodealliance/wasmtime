@@ -1,0 +1,95 @@
+test interpret
+test run
+target x86_64
+target aarch64
+target riscv64
+target riscv64 has_c has_zcb
+target s390x
+
+function %i64_atomic_store_load(i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    atomic_store.i64 v0, v1
+    v2 = atomic_load.i64 v1
+    return v2
+}
+; run: %i64_atomic_store_load(0) == 0
+; run: %i64_atomic_store_load(-1) == -1
+; run: %i64_atomic_store_load(0x00000000_FFFFFFFF) == 0x00000000_FFFFFFFF
+; run: %i64_atomic_store_load(0xFFFFFFFF_00000000) == 0xFFFFFFFF_00000000
+; run: %i64_atomic_store_load(0xFEDCBA98_76543210) == 0xFEDCBA98_76543210
+; run: %i64_atomic_store_load(0xA00A00A0_0A00A00A) == 0xA00A00A0_0A00A00A
+; run: %i64_atomic_store_load(0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
+
+
+function %i32_atomic_store_load(i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32):
+    v1 = stack_addr.i64 ss0
+    atomic_store.i32 v0, v1
+    v2 = atomic_load.i32 v1
+    return v2
+}
+; run: %i32_atomic_store_load(0) == 0
+; run: %i32_atomic_store_load(-1) == -1
+; run: %i32_atomic_store_load(0x0000FFFF) == 0x0000FFFF
+; run: %i32_atomic_store_load(0xFFFF0000) == 0xFFFF0000
+; run: %i32_atomic_store_load(0xFEDC3210) == 0xFEDC3210
+; run: %i32_atomic_store_load(0xA00AA00A) == 0xA00AA00A
+; run: %i32_atomic_store_load(0xC0FFEEEE) == 0xC0FFEEEE
+
+
+function %i16_atomic_store_load(i16) -> i16 {
+    ss0 = explicit_slot 2
+
+block0(v0: i16):
+    v1 = stack_addr.i64 ss0
+    atomic_store.i16 v0, v1
+    v2 = atomic_load.i16 v1
+    return v2
+}
+; run: %i16_atomic_store_load(0) == 0
+; run: %i16_atomic_store_load(-1) == -1
+; run: %i16_atomic_store_load(0x00FF) == 0x00FF
+; run: %i16_atomic_store_load(0xFF00) == 0xFF00
+; run: %i16_atomic_store_load(0xFE10) == 0xFE10
+; run: %i16_atomic_store_load(0xA00A) == 0xA00A
+; run: %i16_atomic_store_load(0xC0FF) == 0xC0FF
+
+
+function %i8_atomic_store_load(i8) -> i8 {
+    ss0 = explicit_slot 1
+
+block0(v0: i8):
+    v1 = stack_addr.i64 ss0
+    atomic_store.i8 v0, v1
+    v2 = atomic_load.i8 v1
+    return v2
+}
+; run: %i8_atomic_store_load(0) == 0
+; run: %i8_atomic_store_load(-1) == -1
+; run: %i8_atomic_store_load(0x0F) == 0x0F
+; run: %i8_atomic_store_load(0xF0) == 0xF0
+; run: %i8_atomic_store_load(0xAA) == 0xAA
+; run: %i8_atomic_store_load(0xC0) == 0xC0
+
+
+function %atomic_store_load_aligned(i64) -> i64 {
+    ss0 = explicit_slot 16
+
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    atomic_store.i64 aligned v0, v1
+    v2 = atomic_load.i64 aligned v1
+    return v2
+}
+; run: %atomic_store_load_aligned(0) == 0
+; run: %atomic_store_load_aligned(-1) == -1
+; run: %atomic_store_load_aligned(0x00000000_FFFFFFFF) == 0x00000000_FFFFFFFF
+; run: %atomic_store_load_aligned(0xFFFFFFFF_00000000) == 0xFFFFFFFF_00000000
+; run: %atomic_store_load_aligned(0xFEDCBA98_76543210) == 0xFEDCBA98_76543210
+; run: %atomic_store_load_aligned(0xA00A00A0_0A00A00A) == 0xA00A00A0_0A00A00A
+; run: %atomic_store_load_aligned(0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF

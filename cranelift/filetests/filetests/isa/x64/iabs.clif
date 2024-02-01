@@ -1,0 +1,119 @@
+test compile precise-output
+target x86_64
+
+function %f1(i8) -> i8 {
+block0(v0: i8):
+    v1 = iabs.i8 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negb    %al, %al
+;   cmovsl  %edi, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negb %al
+;   cmovsl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f2(i16) -> i16 {
+block0(v0: i16):
+    v1 = iabs.i16 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negw    %ax, %ax
+;   cmovsl  %edi, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negw %ax
+;   cmovsl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f3(i32) -> i32 {
+block0(v0: i32):
+    v1 = iabs.i32 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negl    %eax, %eax
+;   cmovsl  %edi, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negl %eax
+;   cmovsl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f3(i64) -> i64 {
+block0(v0: i64):
+    v1 = iabs.i64 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   negq    %rax, %rax
+;   cmovsq  %rdi, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   negq %rax
+;   cmovsq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

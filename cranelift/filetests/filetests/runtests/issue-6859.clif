@@ -1,0 +1,17 @@
+test interpret
+test run
+set opt_level=speed
+target x86_64
+target x86_64 has_avx
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+
+function %a(f32, f32) -> f32 fast {
+block0(v0: f32, v1: f32):
+    v2 = fcmp lt v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+; run: %a(0.0, NaN) == NaN

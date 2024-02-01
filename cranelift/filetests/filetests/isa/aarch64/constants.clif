@@ -1,0 +1,450 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %f() -> i8 {
+block0:
+  v0 = iconst.i8 -1
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz w0, #255
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #0xff
+;   ret
+
+function %f() -> i16 {
+block0:
+  v0 = iconst.i16 0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz w0, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #0
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #65535
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0xffff
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff0000
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #65535, LSL #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0xffff0000
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff00000000
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #65535, LSL #32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0xffff00000000
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff000000000000
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #65535, LSL #48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #-0x1000000000000
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffffffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn x0, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #-1
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffff0000
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn x0, #65535
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #-0x10000
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffff0000ffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn x0, #65535, LSL #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #-0xffff0001
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff0000ffffffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn x0, #65535, LSL #32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #-0xffff00000001
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x0000ffffffffffff
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn x0, #65535, LSL #48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0xffffffffffff
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xf34bf0a31212003a ;; random digits
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #58
+;   movk x0, x0, #4626, LSL #16
+;   movk x0, x0, #61603, LSL #32
+;   movk x0, x0, #62283, LSL #48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0x3a
+;   movk x0, #0x1212, lsl #16
+;   movk x0, #0xf0a3, lsl #32
+;   movk x0, #0xf34b, lsl #48
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x12e900001ef40000 ;; random digits with 2 clear half words
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #7924, LSL #16
+;   movk x0, x0, #4841, LSL #48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0x1ef40000
+;   movk x0, #0x12e9, lsl #48
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x12e9ffff1ef4ffff ;; random digits with 2 full half words
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn x0, #57611, LSL #16
+;   movk x0, x0, #4841, LSL #48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #-0xe10b0001
+;   movk x0, #0x12e9, lsl #48
+;   ret
+
+function %f() -> i32 {
+block0:
+  v0 = iconst.i32 -1
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn w0, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #-1
+;   ret
+
+function %f() -> i32 {
+block0:
+  v0 = iconst.i32 0xfffffff7
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn w0, #8
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #-9
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xfffffff7
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn w0, #8
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #-9
+;   ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xfffffffffffffff7
+  return v0
+}
+
+; VCode:
+; block0:
+;   movn x0, #8
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #-9
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   fmov d0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov d0, #1.00000000
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x5.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   fmov s0, #5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov s0, #5.00000000
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #16457, LSL #48
+;   fmov d0, x0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0x4049000000000000
+;   fmov d0, x0
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movz w0, #16968, LSL #16
+;   fmov s0, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w0, #0x42480000
+;   fmov s0, w0
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movi v0.2s, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.2s, #0
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   movi v0.2s, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.2s, #0
+;   ret
+
+function %f() -> f64 {
+block0:
+  v0 = f64const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   fmov d0, #-16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov d0, #-16.00000000
+;   ret
+
+function %f() -> f32 {
+block0:
+  v0 = f32const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   fmov s0, #-16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov s0, #-16.00000000
+;   ret
+

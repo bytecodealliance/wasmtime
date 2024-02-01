@@ -1,0 +1,396 @@
+test run
+target riscv64
+target riscv64 has_c has_zcb
+
+function %a(i16, f64, i32, i64, i16, i128, f32) -> i16 {
+    ss0 = explicit_slot 24
+
+block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
+    v8 = iconst.i8 0
+    v9 = iconst.i16 0
+    v10 = iconst.i32 0
+    v11 = iconst.i64 0
+    v12 = uextend.i128 v11  ; v11 = 0
+    stack_store v12, ss0
+    stack_store v11, ss0+16  ; v11 = 0
+    v55 = iconst.i32 0
+    v56 = iconst.i32 1
+    v57 = icmp eq v2, v55  ; v55 = 0
+    v58 = ishl_imm v56, 31  ; v56 = 1
+    v59 = isub v55, v56  ; v55 = 0, v56 = 1
+    v60 = icmp eq v2, v58
+    v61 = icmp eq v2, v59
+    v62 = band v60, v61
+    v63 = bor v57, v62
+    v64 = select v63, v56, v2  ; v56 = 1
+    v13 = sdiv v2, v64
+    v65 = iconst.i32 0
+    v66 = iconst.i32 1
+    v67 = icmp eq v13, v65  ; v65 = 0
+    v68 = ishl_imm v66, 31  ; v66 = 1
+    v69 = isub v65, v66  ; v65 = 0, v66 = 1
+    v70 = icmp eq v13, v68
+    v71 = icmp eq v13, v69
+    v72 = band v70, v71
+    v73 = bor v67, v72
+    v74 = select v73, v66, v13  ; v66 = 1
+    v14 = sdiv v13, v74
+    v75 = iconst.i32 0
+    v76 = iconst.i32 1
+    v77 = icmp eq v14, v75  ; v75 = 0
+    v78 = ishl_imm v76, 31  ; v76 = 1
+    v79 = isub v75, v76  ; v75 = 0, v76 = 1
+    v80 = icmp eq v14, v78
+    v81 = icmp eq v14, v79
+    v82 = band v80, v81
+    v83 = bor v77, v82
+    v84 = select v83, v76, v14  ; v76 = 1
+    v15 = sdiv v14, v84
+    v85 = iconst.i64 0
+    v86 = iconst.i64 1
+    v87 = icmp eq v3, v85  ; v85 = 0
+    v88 = ishl_imm v86, 63  ; v86 = 1
+    v89 = isub v85, v86  ; v85 = 0, v86 = 1
+    v90 = icmp eq v3, v88
+    v91 = icmp eq v3, v89
+    v92 = band v90, v91
+    v93 = bor v87, v92
+    v94 = select v93, v86, v3  ; v86 = 1
+    v16 = sdiv v3, v94
+    v95 = iconst.i32 0
+    v96 = iconst.i32 1
+    v97 = icmp eq v15, v95  ; v95 = 0
+    v98 = ishl_imm v96, 31  ; v96 = 1
+    v99 = isub v95, v96  ; v95 = 0, v96 = 1
+    v100 = icmp eq v15, v98
+    v101 = icmp eq v15, v99
+    v102 = band v100, v101
+    v103 = bor v97, v102
+    v104 = select v103, v96, v15  ; v96 = 1
+    v17 = sdiv v15, v104
+    v800 = fcmp lt v6, v6
+    v18 = select v800, v6, v6
+    v105 = iconst.i32 0
+    v106 = iconst.i32 1
+    v107 = icmp eq v17, v105  ; v105 = 0
+    v108 = ishl_imm v106, 31  ; v106 = 1
+    v109 = isub v105, v106  ; v105 = 0, v106 = 1
+    v110 = icmp eq v17, v108
+    v111 = icmp eq v17, v109
+    v112 = band v110, v111
+    v113 = bor v107, v112
+    v114 = select v113, v106, v17  ; v106 = 1
+    v19 = sdiv v17, v114
+    v115 = iconst.i32 0
+    v116 = iconst.i32 1
+    v117 = icmp eq v19, v115  ; v115 = 0
+    v118 = ishl_imm v116, 31  ; v116 = 1
+    v119 = isub v115, v116  ; v115 = 0, v116 = 1
+    v120 = icmp eq v19, v118
+    v121 = icmp eq v19, v119
+    v122 = band v120, v121
+    v123 = bor v117, v122
+    v124 = select v123, v116, v19  ; v116 = 1
+    v20 = sdiv v19, v124
+    v125 = iconst.i32 0
+    v126 = iconst.i32 1
+    v127 = icmp eq v20, v125  ; v125 = 0
+    v128 = ishl_imm v126, 31  ; v126 = 1
+    v129 = isub v125, v126  ; v125 = 0, v126 = 1
+    v130 = icmp eq v20, v128
+    v131 = icmp eq v20, v129
+    v132 = band v130, v131
+    v133 = bor v127, v132
+    v134 = select v133, v126, v20  ; v126 = 1
+    v21 = sdiv v20, v134
+    stack_store v16, ss0+4
+    v135 = iconst.i32 0
+    v136 = iconst.i32 1
+    v137 = icmp eq v21, v135  ; v135 = 0
+    v138 = ishl_imm v136, 31  ; v136 = 1
+    v139 = isub v135, v136  ; v135 = 0, v136 = 1
+    v140 = icmp eq v21, v138
+    v141 = icmp eq v21, v139
+    v142 = band v140, v141
+    v143 = bor v137, v142
+    v144 = select v143, v136, v21  ; v136 = 1
+    v22 = sdiv v21, v144
+    v145 = iconst.i32 0
+    v146 = iconst.i32 1
+    v147 = icmp eq v22, v145  ; v145 = 0
+    v148 = ishl_imm v146, 31  ; v146 = 1
+    v149 = isub v145, v146  ; v145 = 0, v146 = 1
+    v150 = icmp eq v22, v148
+    v151 = icmp eq v22, v149
+    v152 = band v150, v151
+    v153 = bor v147, v152
+    v154 = select v153, v146, v22  ; v146 = 1
+    v23 = sdiv v22, v154
+    v155 = iconst.i32 0
+    v156 = iconst.i32 1
+    v157 = icmp eq v23, v155  ; v155 = 0
+    v158 = ishl_imm v156, 31  ; v156 = 1
+    v159 = isub v155, v156  ; v155 = 0, v156 = 1
+    v160 = icmp eq v23, v158
+    v161 = icmp eq v23, v159
+    v162 = band v160, v161
+    v163 = bor v157, v162
+    v164 = select v163, v156, v23  ; v156 = 1
+    v24 = sdiv v23, v164
+    v165 = iconst.i32 0
+    v166 = iconst.i32 1
+    v167 = icmp eq v24, v165  ; v165 = 0
+    v168 = ishl_imm v166, 31  ; v166 = 1
+    v169 = isub v165, v166  ; v165 = 0, v166 = 1
+    v170 = icmp eq v24, v168
+    v171 = icmp eq v24, v169
+    v172 = band v170, v171
+    v173 = bor v167, v172
+    v174 = select v173, v166, v24  ; v166 = 1
+    v25 = sdiv v24, v174
+    v175 = iconst.i32 0
+    v176 = iconst.i32 1
+    v177 = icmp eq v25, v175  ; v175 = 0
+    v178 = ishl_imm v176, 31  ; v176 = 1
+    v179 = isub v175, v176  ; v175 = 0, v176 = 1
+    v180 = icmp eq v25, v178
+    v181 = icmp eq v25, v179
+    v182 = band v180, v181
+    v183 = bor v177, v182
+    v184 = select v183, v176, v25  ; v176 = 1
+    v26 = sdiv v25, v184
+    v185 = iconst.i32 0
+    v186 = iconst.i32 1
+    v187 = icmp eq v26, v185  ; v185 = 0
+    v188 = ishl_imm v186, 31  ; v186 = 1
+    v189 = isub v185, v186  ; v185 = 0, v186 = 1
+    v190 = icmp eq v26, v188
+    v191 = icmp eq v26, v189
+    v192 = band v190, v191
+    v193 = bor v187, v192
+    v194 = select v193, v186, v26  ; v186 = 1
+    v27 = sdiv v26, v194
+    v195 = iconst.i32 0
+    v196 = iconst.i32 1
+    v197 = icmp eq v27, v195  ; v195 = 0
+    v198 = ishl_imm v196, 31  ; v196 = 1
+    v199 = isub v195, v196  ; v195 = 0, v196 = 1
+    v200 = icmp eq v27, v198
+    v201 = icmp eq v27, v199
+    v202 = band v200, v201
+    v203 = bor v197, v202
+    v204 = select v203, v196, v27  ; v196 = 1
+    v28 = sdiv v27, v204
+    v205 = iconst.i32 0
+    v206 = iconst.i32 1
+    v207 = icmp eq v28, v205  ; v205 = 0
+    v208 = ishl_imm v206, 31  ; v206 = 1
+    v209 = isub v205, v206  ; v205 = 0, v206 = 1
+    v210 = icmp eq v28, v208
+    v211 = icmp eq v28, v209
+    v212 = band v210, v211
+    v213 = bor v207, v212
+    v214 = select v213, v206, v28  ; v206 = 1
+    v29 = sdiv v28, v214
+    v52 = nearest v1
+    v53 = fcmp ne v52, v52
+    v54 = f64const +NaN
+    v30 = select v53, v54, v52  ; v54 = +NaN
+    v215 = iconst.i32 0
+    v216 = iconst.i32 1
+    v217 = icmp eq v29, v215  ; v215 = 0
+    v218 = ishl_imm v216, 31  ; v216 = 1
+    v219 = isub v215, v216  ; v215 = 0, v216 = 1
+    v220 = icmp eq v29, v218
+    v221 = icmp eq v29, v219
+    v222 = band v220, v221
+    v223 = bor v217, v222
+    v224 = select v223, v216, v29  ; v216 = 1
+    v31 = sdiv v29, v224
+    v225 = iconst.i32 0
+    v226 = iconst.i32 1
+    v227 = icmp eq v31, v225  ; v225 = 0
+    v228 = ishl_imm v226, 31  ; v226 = 1
+    v229 = isub v225, v226  ; v225 = 0, v226 = 1
+    v230 = icmp eq v31, v228
+    v231 = icmp eq v31, v229
+    v232 = band v230, v231
+    v233 = bor v227, v232
+    v234 = select v233, v226, v31  ; v226 = 1
+    v32 = sdiv v31, v234
+    v235 = iconst.i32 0
+    v236 = iconst.i32 1
+    v237 = icmp eq v32, v235  ; v235 = 0
+    v238 = ishl_imm v236, 31  ; v236 = 1
+    v239 = isub v235, v236  ; v235 = 0, v236 = 1
+    v240 = icmp eq v32, v238
+    v241 = icmp eq v32, v239
+    v242 = band v240, v241
+    v243 = bor v237, v242
+    v244 = select v243, v236, v32  ; v236 = 1
+    v33 = sdiv v32, v244
+    v245 = iconst.i32 0
+    v246 = iconst.i32 1
+    v247 = icmp eq v33, v245  ; v245 = 0
+    v248 = ishl_imm v246, 31  ; v246 = 1
+    v249 = isub v245, v246  ; v245 = 0, v246 = 1
+    v250 = icmp eq v33, v248
+    v251 = icmp eq v33, v249
+    v252 = band v250, v251
+    v253 = bor v247, v252
+    v254 = select v253, v246, v33  ; v246 = 1
+    v34 = sdiv v33, v254
+    v801 = fcmp lt v18, v18
+    v35 = select v801, v18, v18
+    v255 = iconst.i32 0
+    v256 = iconst.i32 1
+    v257 = icmp eq v34, v255  ; v255 = 0
+    v258 = ishl_imm v256, 31  ; v256 = 1
+    v259 = isub v255, v256  ; v255 = 0, v256 = 1
+    v260 = icmp eq v34, v258
+    v261 = icmp eq v34, v259
+    v262 = band v260, v261
+    v263 = bor v257, v262
+    v264 = select v263, v256, v34  ; v256 = 1
+    v36 = sdiv v34, v264
+    v265 = iconst.i32 0
+    v266 = iconst.i32 1
+    v267 = icmp eq v36, v265  ; v265 = 0
+    v268 = ishl_imm v266, 31  ; v266 = 1
+    v269 = isub v265, v266  ; v265 = 0, v266 = 1
+    v270 = icmp eq v36, v268
+    v271 = icmp eq v36, v269
+    v272 = band v270, v271
+    v273 = bor v267, v272
+    v274 = select v273, v266, v36  ; v266 = 1
+    v37 = sdiv v36, v274
+    v275 = iconst.i32 0
+    v276 = iconst.i32 1
+    v277 = icmp eq v37, v275  ; v275 = 0
+    v278 = ishl_imm v276, 31  ; v276 = 1
+    v279 = isub v275, v276  ; v275 = 0, v276 = 1
+    v280 = icmp eq v37, v278
+    v281 = icmp eq v37, v279
+    v282 = band v280, v281
+    v283 = bor v277, v282
+    v284 = select v283, v276, v37  ; v276 = 1
+    v38 = sdiv v37, v284
+    stack_store v16, ss0+4
+    v285 = iconst.i32 0
+    v286 = iconst.i32 1
+    v287 = icmp eq v38, v285  ; v285 = 0
+    v288 = ishl_imm v286, 31  ; v286 = 1
+    v289 = isub v285, v286  ; v285 = 0, v286 = 1
+    v290 = icmp eq v38, v288
+    v291 = icmp eq v38, v289
+    v292 = band v290, v291
+    v293 = bor v287, v292
+    v294 = select v293, v286, v38  ; v286 = 1
+    v39 = sdiv v38, v294
+    v295 = iconst.i32 0
+    v296 = iconst.i32 1
+    v297 = icmp eq v39, v295  ; v295 = 0
+    v298 = ishl_imm v296, 31  ; v296 = 1
+    v299 = isub v295, v296  ; v295 = 0, v296 = 1
+    v300 = icmp eq v39, v298
+    v301 = icmp eq v39, v299
+    v302 = band v300, v301
+    v303 = bor v297, v302
+    v304 = select v303, v296, v39  ; v296 = 1
+    v40 = sdiv v39, v304
+    v41 = rotr v16, v16
+    v305 = iconst.i32 0
+    v306 = iconst.i32 1
+    v307 = icmp eq v40, v305  ; v305 = 0
+    v308 = ishl_imm v306, 31  ; v306 = 1
+    v309 = isub v305, v306  ; v305 = 0, v306 = 1
+    v310 = icmp eq v40, v308
+    v311 = icmp eq v40, v309
+    v312 = band v310, v311
+    v313 = bor v307, v312
+    v314 = select v313, v306, v40  ; v306 = 1
+    v42 = sdiv v40, v314
+    v315 = iconst.i32 0
+    v316 = iconst.i32 1
+    v317 = icmp eq v42, v315  ; v315 = 0
+    v318 = ishl_imm v316, 31  ; v316 = 1
+    v319 = isub v315, v316  ; v315 = 0, v316 = 1
+    v320 = icmp eq v42, v318
+    v321 = icmp eq v42, v319
+    v322 = band v320, v321
+    v323 = bor v317, v322
+    v324 = select v323, v316, v42  ; v316 = 1
+    v43 = sdiv v42, v324
+    v325 = iconst.i32 0
+    v326 = iconst.i32 1
+    v327 = icmp eq v43, v325  ; v325 = 0
+    v328 = ishl_imm v326, 31  ; v326 = 1
+    v329 = isub v325, v326  ; v325 = 0, v326 = 1
+    v330 = icmp eq v43, v328
+    v331 = icmp eq v43, v329
+    v332 = band v330, v331
+    v333 = bor v327, v332
+    v334 = select v333, v326, v43  ; v326 = 1
+    v44 = sdiv v43, v334
+    v335 = iconst.i32 0
+    v336 = iconst.i32 1
+    v337 = icmp eq v44, v335  ; v335 = 0
+    v338 = ishl_imm v336, 31  ; v336 = 1
+    v339 = isub v335, v336  ; v335 = 0, v336 = 1
+    v340 = icmp eq v44, v338
+    v341 = icmp eq v44, v339
+    v342 = band v340, v341
+    v343 = bor v337, v342
+    v344 = select v343, v336, v44  ; v336 = 1
+    v45 = sdiv v44, v344
+    v345 = iconst.i32 0
+    v346 = iconst.i32 1
+    v347 = icmp eq v45, v345  ; v345 = 0
+    v348 = ishl_imm v346, 31  ; v346 = 1
+    v349 = isub v345, v346  ; v345 = 0, v346 = 1
+    v350 = icmp eq v45, v348
+    v351 = icmp eq v45, v349
+    v352 = band v350, v351
+    v353 = bor v347, v352
+    v354 = select v353, v346, v45  ; v346 = 1
+    v46 = sdiv v45, v354
+    v355 = iconst.i32 0
+    v356 = iconst.i32 1
+    v357 = icmp eq v46, v355  ; v355 = 0
+    v358 = ishl_imm v356, 31  ; v356 = 1
+    v359 = isub v355, v356  ; v355 = 0, v356 = 1
+    v360 = icmp eq v46, v358
+    v361 = icmp eq v46, v359
+    v362 = band v360, v361
+    v363 = bor v357, v362
+    v364 = select v363, v356, v46  ; v356 = 1
+    v47 = sdiv v46, v364
+    v48 = bxor v5, v5
+    v365 = iconst.i32 0
+    v366 = iconst.i32 1
+    v367 = icmp eq v47, v365  ; v365 = 0
+    v368 = ishl_imm v366, 31  ; v366 = 1
+    v369 = isub v365, v366  ; v365 = 0, v366 = 1
+    v370 = icmp eq v47, v368
+    v371 = icmp eq v47, v369
+    v372 = band v370, v371
+    v373 = bor v367, v372
+    v374 = select v373, v366, v47  ; v366 = 1
+    v49 = sdiv v47, v374
+    v375 = iconst.i32 0
+    v376 = iconst.i32 1
+    v377 = icmp eq v49, v375  ; v375 = 0
+    v378 = ishl_imm v376, 31  ; v376 = 1
+    v379 = isub v375, v376  ; v375 = 0, v376 = 1
+    v380 = icmp eq v49, v378
+    v381 = icmp eq v49, v379
+    v382 = band v380, v381
+    v383 = bor v377, v382
+    v384 = select v383, v376, v49  ; v376 = 1
+    v50 = sdiv v49, v384
+    v51 = stack_addr.i64 ss0+4
+    store v30, v51+6
+    return v0
+}
+
+; run: %a(8, 0.0, 0, 0, 0, 0, 0.0) == 8

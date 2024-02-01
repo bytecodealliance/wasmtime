@@ -1,0 +1,71 @@
+test compile precise-output
+
+target aarch64
+
+function %no_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    brif v0, block1(v0), block2
+
+block1(v1: i32):
+    return v1
+
+block2:
+    v2 = iconst.i32 97
+    jump block1(v2)
+}
+
+; VCode:
+; block0:
+;   mov w5, w0
+;   cbnz x5, label1 ; b label2
+; block1:
+;   b label3
+; block2:
+;   movz w0, #97
+;   b label3
+; block3:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w5, w0
+;   cbnz x5, #0xc
+; block1: ; offset 0x8
+;   mov w0, #0x61
+; block2: ; offset 0xc
+;   ret
+
+function %cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    brif v0, block1(v0), block2
+
+block1(v1: i32):
+    return v1
+
+block2 cold:
+    v2 = iconst.i32 97
+    jump block1(v2)
+}
+
+; VCode:
+; block0:
+;   mov w5, w0
+;   cbnz x5, label1 ; b label2
+; block1:
+;   b label3
+; block3:
+;   ret
+; block2:
+;   movz w0, #97
+;   b label3
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w5, w0
+;   cbz x5, #0xc
+; block1: ; offset 0x8
+;   ret
+; block2: ; offset 0xc
+;   mov w0, #0x61
+;   b #8
+

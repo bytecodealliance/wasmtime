@@ -1,0 +1,33 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;; A test of partial redundancy: we should *not* RLE when an earlier
+;; load to the location is only in one predecessor of multiple.
+
+function %f0(i64 vmctx, i32) -> i32, i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap readonly aligned gv0+8
+    fn0 = %g(i64 vmctx)
+
+block0(v0: i64, v1: i32):
+    brif v1, block2, block1
+
+block1:
+    v2 = global_value.i64 gv1
+    v3 = load.i32 v2+64
+    jump block3(v3)
+
+block2:
+    v4 = global_value.i64 gv1
+    v5 = load.i32 v4+128
+    jump block3(v5)
+
+block3(v6: i32):
+    v7 = global_value.i64 gv1
+    v8 = load.i32 v7+64
+    ;; load should survive:
+    ; check: v8 = load.i32 v7+64
+    return v6, v8
+
+}

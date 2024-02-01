@@ -1,0 +1,50 @@
+test verifier
+
+function %test_1(i32) -> i32 tail { ; Ok
+    fn0 = %wow(i32) -> i32 tail
+    block0(v0: i32):
+        return_call fn0(v0)
+}
+
+function %test_2(i32) -> i32 fast {
+    fn0 = %wow(i32) -> i32 tail
+    block0(v0: i32):
+        return_call fn0(v0) ; error: callee's calling convention must match caller
+}
+
+function %test_3(i32) -> i32 tail {
+    fn0 = %wow(i32) -> i32 fast
+    block0(v0: i32):
+        return_call fn0(v0) ; error: calling convention `fast` does not support tail calls
+                            ; error: callee's calling convention must match caller
+}
+
+function %test_4(i32) -> i32 system_v {
+    fn0 = %wow(i32) -> i32 system_v
+    block0(v0: i32):
+        return_call fn0(v0) ; error: calling convention `system_v` does not support tail calls
+}
+
+function %test_5(i32) tail {
+    fn0 = %wow(i32) -> i32 tail
+    block0(v0: i32):
+        return_call fn0(v0) ; error: results of callee must match caller
+}
+
+function %test_6(i32) -> i32 tail {
+    fn0 = %wow(i32) tail
+    block0(v0: i32):
+        return_call fn0(v0) ; error: results of callee must match caller
+}
+
+function %test_7(i32) -> i32 tail {
+    fn0 = %wow(i32) -> i64 tail
+    block0(v0: i32):
+        return_call fn0(v0) ; error: result 0 has type i64, must match function signature of i32
+}
+
+function %test_8(i32) -> i32 tail {
+    fn0 = %wow(i32) -> i32 tail
+    block0(v0: i32):
+        return_call fn0() ; error: mismatched argument count for `return_call fn0()`: got 0, expected 1
+}

@@ -1,0 +1,31 @@
+; Test that `put_input_in_rse` doesn't try to put the input of the `iconst` into a register, which
+; would result in an out-of-bounds panic. (#2147)
+
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function u0:0() -> i8 system_v {
+
+block0:
+    v0 = iconst.i16 0xddcc
+    v1 = icmp.i16 ne v0, v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   movz w2, #56780
+;   uxth w1, w2
+;   subs wzr, w1, w2, UXTH
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w2, #0xddcc
+;   uxth w1, w2
+;   cmp w1, w2, uxth
+;   cset x0, ne
+;   ret
+

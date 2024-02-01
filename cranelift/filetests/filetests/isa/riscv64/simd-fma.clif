@@ -1,0 +1,364 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+function %fma_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = fma v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v15,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfmacc.vv v15,v11,v9 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x84, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0xd7, 0x97, 0xb4, 0xb2
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0xa7, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %fma_splat_f64x2(f64, f64x2, f64x2) -> f64x2 {
+block0(v0: f64, v1: f64x2, v2: f64x2):
+    v3 = splat.f64x2 v0
+    v4 = fma v3, v1, v2
+    return v4
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v14,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfmacc.vf v14,v10,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v14,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x07, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x57, 0xa5, 0xb2
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %fma_neg_add_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = fneg v2
+    v4 = fma v0, v1, v3
+    return v4
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v15,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfmsac.vv v15,v11,v9 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x84, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0xd7, 0x97, 0xb4, 0xba
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0xa7, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %fma_neg_add_splat_f64x2(f64, f64x2, f64x2) -> f64x2 {
+block0(v0: f64, v1: f64x2, v2: f64x2):
+    v3 = splat.f64x2 v0
+    v4 = fneg v2
+    v5 = fma v3, v1, v4
+    return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v14,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfmsac.vf v14,v10,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v14,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x07, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x57, 0xa5, 0xba
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %fma_neg_add_neg_mul_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = fneg v2
+    v4 = fneg v0
+    v5 = fma v4, v1, v3
+    return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v15,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfnmacc.vv v15,v11,v9 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x84, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0xd7, 0x97, 0xb4, 0xb6
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0xa7, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %fma_neg_add_neg_mul_splat_f64x2(f64, f64x2, f64x2) -> f64x2 {
+block0(v0: f64, v1: f64x2, v2: f64x2):
+    v3 = splat.f64x2 v0
+    v4 = fneg v3
+    v5 = fneg v2
+    v6 = fma v4, v1, v5
+    return v6
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v14,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfnmacc.vf v14,v10,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v14,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x07, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x57, 0xa5, 0xb6
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %fma_neg_mul_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v4 = fneg v0
+    v5 = fma v4, v1, v2
+    return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v15,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfnmsac.vv v15,v11,v9 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x84, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0xd7, 0x97, 0xb4, 0xbe
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0xa7, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %fma_neg_add_neg_mul_splat_f64x2(f64, f64x2, f64x2) -> f64x2 {
+block0(v0: f64, v1: f64x2, v2: f64x2):
+    v3 = splat.f64x2 v0
+    v4 = fneg v3
+    v6 = fma v4, v1, v2
+    return v6
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v14,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vfnmsac.vf v14,v10,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v14,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x07, 0x87, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x57, 0xa5, 0xbe
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

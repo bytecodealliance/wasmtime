@@ -1,0 +1,28 @@
+[package]
+name = "cranelift-interpreter"
+version = "0.105.0"
+authors = ["The Cranelift Project Developers"]
+description = "Interpret Cranelift IR"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/cranelift-interpreter"
+categories = ["no-std"]
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+cranelift-codegen = { workspace = true }
+cranelift-entity = { workspace = true }
+log = { workspace = true }
+smallvec = { workspace = true }
+thiserror = { workspace = true }
+
+[target.x86_64-pc-windows-gnu.dependencies]
+libm = "0.2.4"
+
+[dev-dependencies]
+cranelift-frontend = { workspace = true }
+cranelift-reader = { workspace = true }

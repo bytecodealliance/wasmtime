@@ -1,0 +1,247 @@
+test compile precise-output
+target s390x
+
+function %caller_be_to_be(i64x2, i32x4, i16x8, i8x16) -> i32x4 {
+    fn0 = %callee_be(i64x2, i32x4, i16x8, i8x16) -> i32x4
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+;   virtual_sp_offset_adjust 160
+; block0:
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   bras %r1, 0x16
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_be 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+
+function %caller_be_to_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 {
+    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -224
+;   virtual_sp_offset_adjust 160
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
+; block0:
+;   vpdi %v24, %v24, %v24, 4
+;   vpdi %v7, %v25, %v25, 4
+;   verllg %v25, %v7, 32
+;   vpdi %v19, %v26, %v26, 4
+;   verllg %v21, %v19, 32
+;   verllf %v26, %v21, 16
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v27, %v27, 32
+;   verllf %v29, %v27, 16
+;   verllh %v27, %v29, 8
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   vpdi %v5, %v24, %v24, 4
+;   verllg %v24, %v5, 32
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r14, %r15, 336(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xe0
+;   std %f8, 0xa0(%r15)
+;   std %f9, 0xa8(%r15)
+;   std %f10, 0xb0(%r15)
+;   std %f11, 0xb8(%r15)
+;   std %f12, 0xc0(%r15)
+;   std %f13, 0xc8(%r15)
+;   std %f14, 0xd0(%r15)
+;   std %f15, 0xd8(%r15)
+; block1: ; offset 0x2a
+;   vpdi %v24, %v24, %v24, 4
+;   vpdi %v7, %v25, %v25, 4
+;   verllg %v25, %v7, 0x20
+;   vpdi %v19, %v26, %v26, 4
+;   verllg %v21, %v19, 0x20
+;   verllf %v26, %v21, 0x10
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v27, %v27, 0x20
+;   verllf %v29, %v27, 0x10
+;   verllh %v27, %v29, 8
+;   bras %r1, 0x72
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   vpdi %v5, %v24, %v24, 4
+;   verllg %v24, %v5, 0x20
+;   ld %f8, 0xa0(%r15)
+;   ld %f9, 0xa8(%r15)
+;   ld %f10, 0xb0(%r15)
+;   ld %f11, 0xb8(%r15)
+;   ld %f12, 0xc0(%r15)
+;   ld %f13, 0xc8(%r15)
+;   ld %f14, 0xd0(%r15)
+;   ld %f15, 0xd8(%r15)
+;   lmg %r14, %r15, 0x150(%r15)
+;   br %r14
+
+function %caller_le_to_be(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v {
+    fn0 = %callee_be(i64x2, i32x4, i16x8, i8x16) -> i32x4
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -224
+;   virtual_sp_offset_adjust 160
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
+; block0:
+;   vpdi %v24, %v24, %v24, 4
+;   vpdi %v7, %v25, %v25, 4
+;   verllg %v25, %v7, 32
+;   vpdi %v19, %v26, %v26, 4
+;   verllg %v21, %v19, 32
+;   verllf %v26, %v21, 16
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v27, %v27, 32
+;   verllf %v29, %v27, 16
+;   verllh %v27, %v29, 8
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   vpdi %v5, %v24, %v24, 4
+;   verllg %v24, %v5, 32
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r14, %r15, 336(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xe0
+;   std %f8, 0xa0(%r15)
+;   std %f9, 0xa8(%r15)
+;   std %f10, 0xb0(%r15)
+;   std %f11, 0xb8(%r15)
+;   std %f12, 0xc0(%r15)
+;   std %f13, 0xc8(%r15)
+;   std %f14, 0xd0(%r15)
+;   std %f15, 0xd8(%r15)
+; block1: ; offset 0x2a
+;   vpdi %v24, %v24, %v24, 4
+;   vpdi %v7, %v25, %v25, 4
+;   verllg %v25, %v7, 0x20
+;   vpdi %v19, %v26, %v26, 4
+;   verllg %v21, %v19, 0x20
+;   verllf %v26, %v21, 0x10
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v27, %v27, 0x20
+;   verllf %v29, %v27, 0x10
+;   verllh %v27, %v29, 8
+;   bras %r1, 0x72
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_be 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   vpdi %v5, %v24, %v24, 4
+;   verllg %v24, %v5, 0x20
+;   ld %f8, 0xa0(%r15)
+;   ld %f9, 0xa8(%r15)
+;   ld %f10, 0xb0(%r15)
+;   ld %f11, 0xb8(%r15)
+;   ld %f12, 0xc0(%r15)
+;   ld %f13, 0xc8(%r15)
+;   ld %f14, 0xd0(%r15)
+;   ld %f15, 0xd8(%r15)
+;   lmg %r14, %r15, 0x150(%r15)
+;   br %r14
+
+function %caller_le_to_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v {
+    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+; VCode:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+;   virtual_sp_offset_adjust 160
+; block0:
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xa0
+; block1: ; offset 0xa
+;   bras %r1, 0x16
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
+

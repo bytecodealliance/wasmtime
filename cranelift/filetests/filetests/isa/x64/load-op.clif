@@ -1,0 +1,270 @@
+test compile precise-output
+target x86_64
+
+function %add_from_mem_u32_1(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = load.i32 v0
+  v3 = iadd.i32 v2, v1
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rax
+;   addl    %eax, 0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rax
+;   addl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_from_mem_u32_2(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = load.i32 v0
+  v3 = iadd.i32 v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rax
+;   addl    %eax, 0(%rdi), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rax
+;   addl (%rdi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_from_mem_u64_1(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v0
+  v3 = iadd.i64 v2, v1
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rax
+;   addq    %rax, 0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rax
+;   addq (%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_from_mem_u64_2(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v0
+  v3 = iadd.i64 v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rax
+;   addq    %rax, 0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rax
+;   addq (%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %add_from_mem_not_narrow(i64, i8) -> i8 {
+block0(v0: i64, v1: i8):
+  v2 = load.i8 v0
+  v3 = iadd.i8 v2, v1
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbq  0(%rdi), %rax
+;   addl    %eax, %esi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbq (%rdi), %rax ; trap: heap_oob
+;   addl %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %no_merge_if_lookback_use(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v0
+  v3 = iadd.i64 v2, v0
+  store.i64 v3, v1
+  v4 = load.i64 v3
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi), %r8
+;   lea     0(%r8,%rdi,1), %r9
+;   movq    %r9, 0(%rsi)
+;   movq    0(%r8,%rdi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %r8 ; trap: heap_oob
+;   leaq (%r8, %rdi), %r9
+;   movq %r9, (%rsi) ; trap: heap_oob
+;   movq (%r8, %rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %merge_scalar_to_vector(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = load.i32 v0
+  v2 = scalar_to_vector.i32x4 v1
+
+  jump block1
+block1:
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm0
+;   jmp     label1
+; block1:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm0 ; trap: heap_oob
+; block2: ; offset 0x8
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %cmp_mem(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i64 v0
+  v2 = icmp eq v0, v1
+  v3 = uextend.i64 v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpq    0(%rdi), %rdi
+;   setz    %dl
+;   movzbq  %dl, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq (%rdi), %rdi ; trap: heap_oob
+;   sete %dl
+;   movzbq %dl, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %cmp_mem_zero(i64) -> i8 {
+block0(v0: i64):
+  v1 = load.i64 v0
+  v2 = icmp_imm eq v1, 0
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi), %rcx
+;   testq   %rcx, %rcx
+;   setz    %al
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %rcx ; trap: heap_oob
+;   testq %rcx, %rcx
+;   sete %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

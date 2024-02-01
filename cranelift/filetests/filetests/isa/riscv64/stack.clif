@@ -1,0 +1,1105 @@
+test compile precise-output
+set unwind_info=false
+set enable_probestack=true
+target riscv64
+
+function %stack_addr_small() -> i64 {
+ss0 = explicit_slot 8
+
+block0:
+  v0 = stack_addr.i64 ss0
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   load_addr a0,0(nominal_sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+; block1: ; offset 0x14
+;   mv a0, sp
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %stack_addr_big() -> i64 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_addr.i64 ss0
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui a0,24
+;   addi a0,a0,1712
+;   call %Probestack
+;   lui t6,-24
+;   addi t6,t6,-1712
+;   add sp,sp,t6
+; block0:
+;   load_addr a0,0(nominal_sp)
+;   lui t6,24
+;   addi t6,t6,1712
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui a0, 0x18
+;   addi a0, a0, 0x6b0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
+;   jalr ra
+;   lui t6, 0xfffe8
+;   addi t6, t6, -0x6b0
+;   add sp, sp, t6
+; block1: ; offset 0x2c
+;   mv a0, sp
+;   lui t6, 0x18
+;   addi t6, t6, 0x6b0
+;   add sp, sp, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %stack_load_small() -> i64 {
+ss0 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i64 ss0
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   ld a0,0(nominal_sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+; block1: ; offset 0x14
+;   ld a0, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %stack_load_big() -> i64 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i64 ss0
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui a0,24
+;   addi a0,a0,1712
+;   call %Probestack
+;   lui t6,-24
+;   addi t6,t6,-1712
+;   add sp,sp,t6
+; block0:
+;   ld a0,0(nominal_sp)
+;   lui t6,24
+;   addi t6,t6,1712
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui a0, 0x18
+;   addi a0, a0, 0x6b0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
+;   jalr ra
+;   lui t6, 0xfffe8
+;   addi t6, t6, -0x6b0
+;   add sp, sp, t6
+; block1: ; offset 0x2c
+;   ld a0, 0(sp)
+;   lui t6, 0x18
+;   addi t6, t6, 0x6b0
+;   add sp, sp, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %stack_store_small(i64) {
+ss0 = explicit_slot 8
+
+block0(v0: i64):
+  stack_store.i64 v0, ss0
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   sd a0,0(nominal_sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+; block1: ; offset 0x14
+;   sd a0, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %stack_store_big(i64) {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0(v0: i64):
+  stack_store.i64 v0, ss0
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui a0,24
+;   addi a0,a0,1712
+;   call %Probestack
+;   lui t6,-24
+;   addi t6,t6,-1712
+;   add sp,sp,t6
+; block0:
+;   sd a0,0(nominal_sp)
+;   lui t6,24
+;   addi t6,t6,1712
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui a0, 0x18
+;   addi a0, a0, 0x6b0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
+;   jalr ra
+;   lui t6, 0xfffe8
+;   addi t6, t6, -0x6b0
+;   add sp, sp, t6
+; block1: ; offset 0x2c
+;   sd a0, 0(sp)
+;   lui t6, 0x18
+;   addi t6, t6, 0x6b0
+;   add sp, sp, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %i8_spill_slot(i8) -> i8, i64 {
+    ss0 = explicit_slot 1000
+
+block0(v0: i8):
+  v1 = iconst.i64 1
+  v2 = iconst.i64 2
+  v3 = iconst.i64 3
+  v4 = iconst.i64 4
+  v5 = iconst.i64 5
+  v6 = iconst.i64 6
+  v7 = iconst.i64 7
+  v8 = iconst.i64 8
+  v9 = iconst.i64 9
+  v10 = iconst.i64 10
+  v11 = iconst.i64 11
+  v12 = iconst.i64 12
+  v13 = iconst.i64 13
+  v14 = iconst.i64 14
+  v15 = iconst.i64 15
+  v16 = iconst.i64 16
+  v17 = iconst.i64 17
+  v18 = iconst.i64 18
+  v19 = iconst.i64 19
+  v20 = iconst.i64 20
+  v21 = iconst.i64 21
+  v22 = iconst.i64 22
+  v23 = iconst.i64 23
+  v24 = iconst.i64 24
+  v25 = iconst.i64 25
+  v26 = iconst.i64 26
+  v27 = iconst.i64 27
+  v28 = iconst.i64 28
+  v29 = iconst.i64 29
+  v30 = iconst.i64 30
+  v31 = iconst.i64 31
+  v32 = iconst.i64 32
+  v33 = iconst.i64 33
+  v34 = iconst.i64 34
+  v35 = iconst.i64 35
+  v36 = iconst.i64 36
+  v37 = iconst.i64 37
+  v38 = iconst.i64 38
+  v39 = iconst.i64 39
+  v40 = iconst.i64 30
+  v41 = iconst.i64 31
+  v42 = iconst.i64 32
+  v43 = iconst.i64 33
+  v44 = iconst.i64 34
+  v45 = iconst.i64 35
+  v46 = iconst.i64 36
+  v47 = iconst.i64 37
+  v48 = iconst.i64 38
+  v49 = iconst.i64 39
+  v50 = iconst.i64 30
+  v51 = iconst.i64 31
+  v52 = iconst.i64 32
+  v53 = iconst.i64 33
+  v54 = iconst.i64 34
+  v55 = iconst.i64 35
+  v56 = iconst.i64 36
+  v57 = iconst.i64 37
+  v58 = iconst.i64 38
+  v59 = iconst.i64 39
+  v60 = iconst.i64 30
+  v61 = iconst.i64 31
+  v62 = iconst.i64 32
+  v63 = iconst.i64 33
+  v64 = iconst.i64 34
+  v65 = iconst.i64 35
+  v66 = iconst.i64 36
+  v67 = iconst.i64 37
+  v68 = iconst.i64 38
+  v69 = iconst.i64 39
+
+  v70 = iadd.i64 v1, v2
+  v71 = iadd.i64 v3, v4
+  v72 = iadd.i64 v5, v6
+  v73 = iadd.i64 v7, v8
+  v74 = iadd.i64 v9, v10
+  v75 = iadd.i64 v11, v12
+  v76 = iadd.i64 v13, v14
+  v77 = iadd.i64 v15, v16
+  v78 = iadd.i64 v17, v18
+  v79 = iadd.i64 v19, v20
+  v80 = iadd.i64 v21, v22
+  v81 = iadd.i64 v23, v24
+  v82 = iadd.i64 v25, v26
+  v83 = iadd.i64 v27, v28
+  v84 = iadd.i64 v29, v30
+  v85 = iadd.i64 v31, v32
+  v86 = iadd.i64 v33, v34
+  v87 = iadd.i64 v35, v36
+  v88 = iadd.i64 v37, v38
+  v89 = iadd.i64 v39, v40
+  v90 = iadd.i64 v41, v42
+  v91 = iadd.i64 v43, v44
+  v92 = iadd.i64 v45, v46
+  v93 = iadd.i64 v47, v48
+  v94 = iadd.i64 v49, v50
+  v95 = iadd.i64 v51, v52
+  v96 = iadd.i64 v53, v54
+  v97 = iadd.i64 v55, v56
+  v98 = iadd.i64 v57, v58
+  v99 = iadd.i64 v59, v60
+  v100 = iadd.i64 v61, v62
+  v101 = iadd.i64 v63, v64
+  v102 = iadd.i64 v65, v66
+  v103 = iadd.i64 v67, v68
+
+  v104 = iadd.i64 v69, v70
+  v105 = iadd.i64 v71, v72
+  v106 = iadd.i64 v73, v74
+  v107 = iadd.i64 v75, v76
+  v108 = iadd.i64 v77, v78
+  v109 = iadd.i64 v79, v80
+  v110 = iadd.i64 v81, v82
+  v111 = iadd.i64 v83, v84
+  v112 = iadd.i64 v85, v86
+  v113 = iadd.i64 v87, v88
+  v114 = iadd.i64 v89, v90
+  v115 = iadd.i64 v91, v92
+  v116 = iadd.i64 v93, v94
+  v117 = iadd.i64 v95, v96
+  v118 = iadd.i64 v97, v98
+  v119 = iadd.i64 v99, v100
+  v120 = iadd.i64 v101, v102
+
+  v121 = iadd.i64 v103, v104
+  v122 = iadd.i64 v105, v106
+  v123 = iadd.i64 v107, v108
+  v124 = iadd.i64 v109, v110
+  v125 = iadd.i64 v111, v112
+  v126 = iadd.i64 v113, v114
+  v127 = iadd.i64 v115, v116
+  v128 = iadd.i64 v117, v118
+  v129 = iadd.i64 v119, v120
+
+  v130 = iadd.i64 v121, v122
+  v131 = iadd.i64 v123, v124
+  v132 = iadd.i64 v125, v126
+  v133 = iadd.i64 v127, v128
+
+  v134 = iadd.i64 v129, v130
+  v135 = iadd.i64 v131, v132
+
+  v136 = iadd.i64 v133, v134
+  v137 = iadd.i64 v135, v136
+
+  return v0, v137
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s1,-8(sp)
+;   sd s2,-16(sp)
+;   sd s3,-24(sp)
+;   sd s4,-32(sp)
+;   sd s5,-40(sp)
+;   sd s6,-48(sp)
+;   sd s7,-56(sp)
+;   sd s8,-64(sp)
+;   sd s9,-72(sp)
+;   sd s10,-80(sp)
+;   sd s11,-88(sp)
+;   addi sp,sp,-1360
+; block0:
+;   sd a0,1000(nominal_sp)
+;   li a2,2
+;   sd a2,1008(nominal_sp)
+;   li a2,4
+;   li a3,6
+;   li a4,8
+;   li a5,10
+;   li s7,12
+;   li s8,14
+;   li s9,16
+;   li s10,18
+;   li s11,20
+;   li t0,22
+;   li t1,24
+;   li t2,26
+;   li a6,28
+;   li a7,30
+;   li t3,32
+;   li t4,34
+;   li s1,36
+;   li s2,38
+;   li s3,30
+;   li s4,32
+;   li s5,34
+;   li s6,36
+;   li a0,38
+;   li a1,30
+;   sd a1,1256(nominal_sp)
+;   li a1,32
+;   sd a1,1248(nominal_sp)
+;   li a1,34
+;   sd a1,1240(nominal_sp)
+;   li a1,36
+;   sd a1,1232(nominal_sp)
+;   li a1,38
+;   sd a1,1224(nominal_sp)
+;   li a1,30
+;   sd a1,1216(nominal_sp)
+;   li a1,32
+;   sd a1,1208(nominal_sp)
+;   li a1,34
+;   sd a1,1200(nominal_sp)
+;   li a1,36
+;   sd a1,1192(nominal_sp)
+;   li a1,38
+;   sd a1,1184(nominal_sp)
+;   ld a1,1008(nominal_sp)
+;   addi a1,a1,1
+;   sd a1,1176(nominal_sp)
+;   addi a1,a2,3
+;   sd a1,1168(nominal_sp)
+;   addi a1,a3,5
+;   sd a1,1160(nominal_sp)
+;   addi a1,a4,7
+;   sd a1,1152(nominal_sp)
+;   addi a1,a5,9
+;   sd a1,1144(nominal_sp)
+;   addi a1,s7,11
+;   sd a1,1136(nominal_sp)
+;   addi a1,s8,13
+;   sd a1,1128(nominal_sp)
+;   addi a1,s9,15
+;   sd a1,1120(nominal_sp)
+;   addi a1,s10,17
+;   sd a1,1112(nominal_sp)
+;   addi a1,s11,19
+;   sd a1,1104(nominal_sp)
+;   addi a1,t0,21
+;   sd a1,1096(nominal_sp)
+;   addi a1,t1,23
+;   sd a1,1088(nominal_sp)
+;   addi a1,t2,25
+;   sd a1,1080(nominal_sp)
+;   addi a1,a6,27
+;   sd a1,1072(nominal_sp)
+;   addi a1,a7,29
+;   sd a1,1064(nominal_sp)
+;   addi a1,t3,31
+;   sd a1,1056(nominal_sp)
+;   addi a1,t4,33
+;   sd a1,1048(nominal_sp)
+;   addi a1,s1,35
+;   sd a1,1040(nominal_sp)
+;   addi a1,s2,37
+;   sd a1,1032(nominal_sp)
+;   addi a1,s3,39
+;   sd a1,1024(nominal_sp)
+;   addi a1,s4,31
+;   sd a1,1016(nominal_sp)
+;   addi a1,s5,33
+;   sd a1,1008(nominal_sp)
+;   addi s6,s6,35
+;   addi a0,a0,37
+;   ld a1,1256(nominal_sp)
+;   addi a1,a1,39
+;   ld a5,1248(nominal_sp)
+;   addi a2,a5,31
+;   ld a3,1240(nominal_sp)
+;   addi a3,a3,33
+;   ld a5,1232(nominal_sp)
+;   addi a4,a5,35
+;   ld a5,1224(nominal_sp)
+;   addi a5,a5,37
+;   ld s11,1216(nominal_sp)
+;   addi s7,s11,39
+;   ld t2,1208(nominal_sp)
+;   addi s8,t2,31
+;   ld t3,1200(nominal_sp)
+;   addi s9,t3,33
+;   ld s2,1192(nominal_sp)
+;   addi s10,s2,35
+;   ld s5,1184(nominal_sp)
+;   addi s11,s5,37
+;   ld t0,1176(nominal_sp)
+;   addi t0,t0,39
+;   ld t1,1160(nominal_sp)
+;   ld t2,1168(nominal_sp)
+;   add t1,t2,t1
+;   ld a7,1152(nominal_sp)
+;   ld t4,1144(nominal_sp)
+;   add t2,a7,t4
+;   ld s3,1136(nominal_sp)
+;   ld s5,1128(nominal_sp)
+;   add a6,s3,s5
+;   ld a7,1112(nominal_sp)
+;   ld t3,1120(nominal_sp)
+;   add a7,t3,a7
+;   ld t3,1096(nominal_sp)
+;   ld t4,1104(nominal_sp)
+;   add t3,t4,t3
+;   ld s2,1080(nominal_sp)
+;   ld t4,1088(nominal_sp)
+;   add t4,t4,s2
+;   ld s1,1064(nominal_sp)
+;   ld s5,1072(nominal_sp)
+;   add s1,s5,s1
+;   ld s2,1048(nominal_sp)
+;   ld s3,1056(nominal_sp)
+;   add s2,s3,s2
+;   ld s3,1032(nominal_sp)
+;   ld s4,1040(nominal_sp)
+;   add s3,s4,s3
+;   ld s4,1024(nominal_sp)
+;   ld s5,1016(nominal_sp)
+;   add s4,s4,s5
+;   ld s5,1008(nominal_sp)
+;   add s5,s5,s6
+;   add a1,a0,a1
+;   add a2,a2,a3
+;   add a3,a4,a5
+;   add a4,s7,s8
+;   add a5,s9,s10
+;   add a0,s11,t0
+;   add s7,t1,t2
+;   add s8,a6,a7
+;   add s9,t3,t4
+;   add s10,s1,s2
+;   add s11,s3,s4
+;   add a1,s5,a1
+;   add a2,a2,a3
+;   add a3,a4,a5
+;   add a4,a0,s7
+;   add a5,s8,s9
+;   add a0,s10,s11
+;   add a1,a1,a2
+;   add a2,a3,a4
+;   add a3,a5,a0
+;   add a1,a1,a2
+;   add a1,a3,a1
+;   ld a0,1000(nominal_sp)
+;   addi sp,sp,1360
+;   ld s1,-8(sp)
+;   ld s2,-16(sp)
+;   ld s3,-24(sp)
+;   ld s4,-32(sp)
+;   ld s5,-40(sp)
+;   ld s6,-48(sp)
+;   ld s7,-56(sp)
+;   ld s8,-64(sp)
+;   ld s9,-72(sp)
+;   ld s10,-80(sp)
+;   ld s11,-88(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s1, -8(sp)
+;   sd s2, -0x10(sp)
+;   sd s3, -0x18(sp)
+;   sd s4, -0x20(sp)
+;   sd s5, -0x28(sp)
+;   sd s6, -0x30(sp)
+;   sd s7, -0x38(sp)
+;   sd s8, -0x40(sp)
+;   sd s9, -0x48(sp)
+;   sd s10, -0x50(sp)
+;   sd s11, -0x58(sp)
+;   addi sp, sp, -0x550
+; block1: ; offset 0x40
+;   sd a0, 0x3e8(sp)
+;   addi a2, zero, 2
+;   sd a2, 0x3f0(sp)
+;   addi a2, zero, 4
+;   addi a3, zero, 6
+;   addi a4, zero, 8
+;   addi a5, zero, 0xa
+;   addi s7, zero, 0xc
+;   addi s8, zero, 0xe
+;   addi s9, zero, 0x10
+;   addi s10, zero, 0x12
+;   addi s11, zero, 0x14
+;   addi t0, zero, 0x16
+;   addi t1, zero, 0x18
+;   addi t2, zero, 0x1a
+;   addi a6, zero, 0x1c
+;   addi a7, zero, 0x1e
+;   addi t3, zero, 0x20
+;   addi t4, zero, 0x22
+;   addi s1, zero, 0x24
+;   addi s2, zero, 0x26
+;   addi s3, zero, 0x1e
+;   addi s4, zero, 0x20
+;   addi s5, zero, 0x22
+;   addi s6, zero, 0x24
+;   addi a0, zero, 0x26
+;   addi a1, zero, 0x1e
+;   sd a1, 0x4e8(sp)
+;   addi a1, zero, 0x20
+;   sd a1, 0x4e0(sp)
+;   addi a1, zero, 0x22
+;   sd a1, 0x4d8(sp)
+;   addi a1, zero, 0x24
+;   sd a1, 0x4d0(sp)
+;   addi a1, zero, 0x26
+;   sd a1, 0x4c8(sp)
+;   addi a1, zero, 0x1e
+;   sd a1, 0x4c0(sp)
+;   addi a1, zero, 0x20
+;   sd a1, 0x4b8(sp)
+;   addi a1, zero, 0x22
+;   sd a1, 0x4b0(sp)
+;   addi a1, zero, 0x24
+;   sd a1, 0x4a8(sp)
+;   addi a1, zero, 0x26
+;   sd a1, 0x4a0(sp)
+;   ld a1, 0x3f0(sp)
+;   addi a1, a1, 1
+;   sd a1, 0x498(sp)
+;   addi a1, a2, 3
+;   sd a1, 0x490(sp)
+;   addi a1, a3, 5
+;   sd a1, 0x488(sp)
+;   addi a1, a4, 7
+;   sd a1, 0x480(sp)
+;   addi a1, a5, 9
+;   sd a1, 0x478(sp)
+;   addi a1, s7, 0xb
+;   sd a1, 0x470(sp)
+;   addi a1, s8, 0xd
+;   sd a1, 0x468(sp)
+;   addi a1, s9, 0xf
+;   sd a1, 0x460(sp)
+;   addi a1, s10, 0x11
+;   sd a1, 0x458(sp)
+;   addi a1, s11, 0x13
+;   sd a1, 0x450(sp)
+;   addi a1, t0, 0x15
+;   sd a1, 0x448(sp)
+;   addi a1, t1, 0x17
+;   sd a1, 0x440(sp)
+;   addi a1, t2, 0x19
+;   sd a1, 0x438(sp)
+;   addi a1, a6, 0x1b
+;   sd a1, 0x430(sp)
+;   addi a1, a7, 0x1d
+;   sd a1, 0x428(sp)
+;   addi a1, t3, 0x1f
+;   sd a1, 0x420(sp)
+;   addi a1, t4, 0x21
+;   sd a1, 0x418(sp)
+;   addi a1, s1, 0x23
+;   sd a1, 0x410(sp)
+;   addi a1, s2, 0x25
+;   sd a1, 0x408(sp)
+;   addi a1, s3, 0x27
+;   sd a1, 0x400(sp)
+;   addi a1, s4, 0x1f
+;   sd a1, 0x3f8(sp)
+;   addi a1, s5, 0x21
+;   sd a1, 0x3f0(sp)
+;   addi s6, s6, 0x23
+;   addi a0, a0, 0x25
+;   ld a1, 0x4e8(sp)
+;   addi a1, a1, 0x27
+;   ld a5, 0x4e0(sp)
+;   addi a2, a5, 0x1f
+;   ld a3, 0x4d8(sp)
+;   addi a3, a3, 0x21
+;   ld a5, 0x4d0(sp)
+;   addi a4, a5, 0x23
+;   ld a5, 0x4c8(sp)
+;   addi a5, a5, 0x25
+;   ld s11, 0x4c0(sp)
+;   addi s7, s11, 0x27
+;   ld t2, 0x4b8(sp)
+;   addi s8, t2, 0x1f
+;   ld t3, 0x4b0(sp)
+;   addi s9, t3, 0x21
+;   ld s2, 0x4a8(sp)
+;   addi s10, s2, 0x23
+;   ld s5, 0x4a0(sp)
+;   addi s11, s5, 0x25
+;   ld t0, 0x498(sp)
+;   addi t0, t0, 0x27
+;   ld t1, 0x488(sp)
+;   ld t2, 0x490(sp)
+;   add t1, t2, t1
+;   ld a7, 0x480(sp)
+;   ld t4, 0x478(sp)
+;   add t2, a7, t4
+;   ld s3, 0x470(sp)
+;   ld s5, 0x468(sp)
+;   add a6, s3, s5
+;   ld a7, 0x458(sp)
+;   ld t3, 0x460(sp)
+;   add a7, t3, a7
+;   ld t3, 0x448(sp)
+;   ld t4, 0x450(sp)
+;   add t3, t4, t3
+;   ld s2, 0x438(sp)
+;   ld t4, 0x440(sp)
+;   add t4, t4, s2
+;   ld s1, 0x428(sp)
+;   ld s5, 0x430(sp)
+;   add s1, s5, s1
+;   ld s2, 0x418(sp)
+;   ld s3, 0x420(sp)
+;   add s2, s3, s2
+;   ld s3, 0x408(sp)
+;   ld s4, 0x410(sp)
+;   add s3, s4, s3
+;   ld s4, 0x400(sp)
+;   ld s5, 0x3f8(sp)
+;   add s4, s4, s5
+;   ld s5, 0x3f0(sp)
+;   add s5, s5, s6
+;   add a1, a0, a1
+;   add a2, a2, a3
+;   add a3, a4, a5
+;   add a4, s7, s8
+;   add a5, s9, s10
+;   add a0, s11, t0
+;   add s7, t1, t2
+;   add s8, a6, a7
+;   add s9, t3, t4
+;   add s10, s1, s2
+;   add s11, s3, s4
+;   add a1, s5, a1
+;   add a2, a2, a3
+;   add a3, a4, a5
+;   add a4, a0, s7
+;   add a5, s8, s9
+;   add a0, s10, s11
+;   add a1, a1, a2
+;   add a2, a3, a4
+;   add a3, a5, a0
+;   add a1, a1, a2
+;   add a1, a3, a1
+;   ld a0, 0x3e8(sp)
+;   addi sp, sp, 0x550
+;   ld s1, -8(sp)
+;   ld s2, -0x10(sp)
+;   ld s3, -0x18(sp)
+;   ld s4, -0x20(sp)
+;   ld s5, -0x28(sp)
+;   ld s6, -0x30(sp)
+;   ld s7, -0x38(sp)
+;   ld s8, -0x40(sp)
+;   ld s9, -0x48(sp)
+;   ld s10, -0x50(sp)
+;   ld s11, -0x58(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %i128_stack_store(i128) {
+ss0 = explicit_slot 16
+
+block0(v0: i128):
+  stack_store.i128 v0, ss0
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   sd a0,0(nominal_sp)
+;   sd a1,8(nominal_sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+; block1: ; offset 0x14
+;   sd a0, 0(sp)
+;   sd a1, 8(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %i128_stack_store_inst_offset(i128) {
+ss0 = explicit_slot 16
+ss1 = explicit_slot 16
+
+block0(v0: i128):
+  stack_store.i128 v0, ss1+16
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-32
+; block0:
+;   sd a0,32(nominal_sp)
+;   sd a1,40(nominal_sp)
+;   addi sp,sp,32
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x20
+; block1: ; offset 0x14
+;   sd a0, 0x20(sp)
+;   sd a1, 0x28(sp)
+;   addi sp, sp, 0x20
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %i128_stack_store_big(i128) {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0(v0: i128):
+  stack_store.i128 v0, ss0
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui a0,24
+;   addi a0,a0,1712
+;   call %Probestack
+;   lui t6,-24
+;   addi t6,t6,-1712
+;   add sp,sp,t6
+; block0:
+;   sd a0,0(nominal_sp)
+;   sd a1,8(nominal_sp)
+;   lui t6,24
+;   addi t6,t6,1712
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui a0, 0x18
+;   addi a0, a0, 0x6b0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
+;   jalr ra
+;   lui t6, 0xfffe8
+;   addi t6, t6, -0x6b0
+;   add sp, sp, t6
+; block1: ; offset 0x2c
+;   sd a0, 0(sp)
+;   sd a1, 8(sp)
+;   lui t6, 0x18
+;   addi t6, t6, 0x6b0
+;   add sp, sp, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %i128_stack_load() -> i128 {
+ss0 = explicit_slot 16
+
+block0:
+  v0 = stack_load.i128 ss0
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   ld a0,0(nominal_sp)
+;   ld a1,8(nominal_sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+; block1: ; offset 0x14
+;   ld a0, 0(sp)
+;   ld a1, 8(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %i128_stack_load_inst_offset() -> i128 {
+ss0 = explicit_slot 16
+ss1 = explicit_slot 16
+
+block0:
+  v0 = stack_load.i128 ss1+16
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-32
+; block0:
+;   ld a0,32(nominal_sp)
+;   ld a1,40(nominal_sp)
+;   addi sp,sp,32
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x20
+; block1: ; offset 0x14
+;   ld a0, 0x20(sp)
+;   ld a1, 0x28(sp)
+;   addi sp, sp, 0x20
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %i128_stack_load_big() -> i128 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i128 ss0
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui a0,24
+;   addi a0,a0,1712
+;   call %Probestack
+;   lui t6,-24
+;   addi t6,t6,-1712
+;   add sp,sp,t6
+; block0:
+;   ld a0,0(nominal_sp)
+;   ld a1,8(nominal_sp)
+;   lui t6,24
+;   addi t6,t6,1712
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui a0, 0x18
+;   addi a0, a0, 0x6b0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
+;   jalr ra
+;   lui t6, 0xfffe8
+;   addi t6, t6, -0x6b0
+;   add sp, sp, t6
+; block1: ; offset 0x2c
+;   ld a0, 0(sp)
+;   ld a1, 8(sp)
+;   lui t6, 0x18
+;   addi t6, t6, 0x6b0
+;   add sp, sp, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

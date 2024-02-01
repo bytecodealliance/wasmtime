@@ -1,0 +1,279 @@
+test compile precise-output
+target x86_64
+
+function %f1(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cbw %al, %al
+;   checked_srem_seq %al, %sil, %al
+;   shrq    $8, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cbtw
+;   cmpb $0xff, %sil
+;   jne 0x1d
+;   movl $0, %eax
+;   jmp 0x20
+;   idivb %sil ; trap: int_divz
+;   shrq $8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f2(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cwd %ax, %dx
+;   checked_srem_seq %ax, %dx, %si, %ax, %dx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cwtd
+;   cmpw $-1, %si
+;   jne 0x1d
+;   movl $0, %edx
+;   jmp 0x20
+;   idivw %si ; trap: int_divz
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f3(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cdq %eax, %edx
+;   checked_srem_seq %eax, %edx, %esi, %eax, %edx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cltd
+;   cmpl $-1, %esi
+;   jne 0x1b
+;   movl $0, %edx
+;   jmp 0x1d
+;   idivl %esi ; trap: int_divz
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f4(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cqo %rax, %rdx
+;   checked_srem_seq %rax, %rdx, %rsi, %rax, %rdx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cqto
+;   cmpq $-1, %rsi
+;   jne 0x1d
+;   movl $0, %edx
+;   jmp 0x20
+;   idivq %rsi ; trap: int_divz
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %i8_imm(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 17
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cbw %al, %al
+;   movl    $17, %edx
+;   idiv    %al, %dl, %al ; trap=int_divz
+;   shrq    $8, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cbtw
+;   movl $0x11, %edx
+;   idivb %dl ; trap: int_divz
+;   shrq $8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %i16_imm(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 17
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cwd %ax, %dx
+;   movl    $17, %r8d
+;   idiv    %ax, %dx, %r8w, %ax, %dx ; trap=int_divz
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cwtd
+;   movl $0x11, %r8d
+;   idivw %r8w ; trap: int_divz
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %i32_imm(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 17
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cdq %eax, %edx
+;   movl    $17, %r8d
+;   idiv    %eax, %edx, %r8d, %eax, %edx ; trap=int_divz
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cltd
+;   movl $0x11, %r8d
+;   idivl %r8d ; trap: int_divz
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %i64_imm(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 17
+  v2 = srem v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   cqo %rax, %rdx
+;   movl    $17, %r8d
+;   idiv    %rax, %rdx, %r8, %rax, %rdx ; trap=int_divz
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   cqto
+;   movl $0x11, %r8d
+;   idivq %r8 ; trap: int_divz
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

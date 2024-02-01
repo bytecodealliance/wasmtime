@@ -1,0 +1,219 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %f1() -> i64x2 {
+block0:
+  v0 = iconst.i64 281474976710657
+  v1 = splat.i64x2 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   movz x1, #1
+;   movk x1, x1, #1, LSL #48
+;   dup v0.2d, x1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x1, #1
+;   movk x1, #1, lsl #48
+;   dup v0.2d, x1
+;   ret
+
+function %f2() -> i16x8 {
+block0:
+  v0 = iconst.i32 42679
+  v1 = ireduce.i16 v0
+  v2 = splat.i16x8 v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   movz x0, #42679
+;   dup v0.8h, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0xa6b7
+;   dup v0.8h, w0
+;   ret
+
+function %f4(i32, i8x16, i8x16) -> i8x16 {
+block0(v0: i32, v1: i8x16, v2: i8x16):
+   v3 = select v0, v1, v2
+   return v3
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, wzr
+;   vcsel v0.16b, v0.16b, v1.16b, ne (if-then-else diamond)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, wzr
+;   b.ne #0x10
+;   mov v0.16b, v1.16b
+;   b #0x14
+;   mov v0.16b, v0.16b
+;   ret
+
+function %f5(i64) -> i8x16 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = splat.i8x16 v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   ld1r { v0.16b }, [x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld1r {v0.16b}, [x0]
+;   ret
+
+function %f6(i64, i64) -> i8x16, i8x16 {
+block0(v0: i64, v1: i64):
+  v2 = load.i8 v0
+  v3 = load.i8 v1
+  v4 = splat.i8x16 v2
+  v5 = splat.i8x16 v3
+  return v4, v5
+}
+
+; VCode:
+; block0:
+;   ld1r { v0.16b }, [x0]
+;   ld1r { v1.16b }, [x1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld1r {v0.16b}, [x0]
+;   ld1r {v1.16b}, [x1]
+;   ret
+
+function %f7(i64, i64) -> i8x16, i8x16 {
+block0(v0: i64, v1: i64):
+  v2 = load.i8 v0
+  v3 = load.i8 v1
+  v4 = splat.i8x16 v3
+  v5 = splat.i8x16 v2
+  return v4, v5
+}
+
+; VCode:
+; block0:
+;   ldrb w5, [x0]
+;   ld1r { v0.16b }, [x1]
+;   dup v1.16b, w5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb w5, [x0]
+;   ld1r {v0.16b}, [x1]
+;   dup v1.16b, w5
+;   ret
+
+function %f8(i64, i64) -> i8x16, i8x16 {
+block0(v0: i64, v1: i64):
+  v2 = load.i8 v0
+  v3 = splat.i8x16 v2
+  v4 = splat.i8x16 v2
+  return v3, v4
+}
+
+; VCode:
+; block0:
+;   ldrb w5, [x0]
+;   dup v0.16b, w5
+;   dup v1.16b, w5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb w5, [x0]
+;   dup v0.16b, w5
+;   dup v1.16b, w5
+;   ret
+
+function %f9() -> i32x2 {
+block0:
+  v0 = iconst.i32 4278190335
+  v1 = splat.i32x2 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   movi v0.2d, #18374687579166474495
+;   fmov d0, d0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.2d, #0xff0000ffff0000ff
+;   fmov d0, d0
+;   ret
+
+function %f10() -> i32x4 {
+block0:
+  v0 = iconst.i32 4293918720
+  v1 = splat.i32x4 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   mvni v0.4s, #15, MSL #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mvni v0.4s, #0xf, msl #16
+;   ret
+
+function %f11() -> f32x4 {
+block0:
+  v0 = f32const 0x1.5
+  v1 = splat.f32x4 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fmov v0.4s, #1.3125
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov v0.4s, #1.31250000
+;   ret
+
+
+function %load8(i64) -> i8x8 {
+block0(v0: i64):
+  v1 = load.i8x8 v0+0x800
+  return v1
+}
+
+; VCode:
+; block0:
+;   ldr d0, [x0, #2048]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr d0, [x0, #0x800]
+;   ret
+

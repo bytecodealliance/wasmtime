@@ -1,0 +1,26 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target riscv64
+target riscv64 has_c has_zcb
+
+; This is a regression test for https://github.com/bytecodealliance/wasmtime/issues/4996.
+function %issue4996() -> i128, i64 system_v {
+    block0:
+        v5 = iconst.i8 0
+        brif v5, block1, block3  ; v5 = 0
+    block1:
+        v12 = iconst.i64 0
+        v13 = uextend.i128 v12  ; v12 = 0
+        jump block5(v13)
+
+    block3:
+        v20 = iconst.i64 0
+        v21 = uextend.i128 v20  ; v20 = 0
+        jump block5(v21)
+
+    block5(v23: i128):
+        v29 = iconst.i64 0
+        return v23, v29  ; v29 = 0
+}
+; run: %issue4996() == [0,0]

@@ -1,0 +1,173 @@
+;; Test our lowerings that try to fit negated iconst values in immediates, like
+;; `x + -1 => sub x 0x1`. Currently, not working as expected for i32 and i16.
+
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+;; Result uses immediate as expected
+function %c(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v3 = iadd v0, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   sub x0, x0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sub x0, x0, #1
+;   ret
+
+;; 4294967295 is zero-extended i32 -1
+function %b(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 4294967295
+    v3 = iadd v0, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   sub w0, w0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sub w0, w0, #1
+;   ret
+
+;; 65535 is zero-extended i16 -1
+function %a(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 65535
+    v3 = iadd v0, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   sub w0, w0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sub w0, w0, #1
+;   ret
+
+;; Swapped order to trigger commutative rule
+function %c(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v3 = iadd v1, v0
+    return v3
+}
+
+; VCode:
+; block0:
+;   sub x0, x0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sub x0, x0, #1
+;   ret
+
+;; Swapped order to trigger commutative rule
+;; 4294967295 is zero-extended i32 -1
+function %b(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 4294967295
+    v3 = iadd v1, v0
+    return v3
+}
+
+; VCode:
+; block0:
+;   sub w0, w0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sub w0, w0, #1
+;   ret
+
+;; Swapped order to trigger commutative rule
+;; 65535 is zero-extended i16 -1
+function %a(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 65535
+    v3 = iadd v1, v0
+    return v3
+}
+
+; VCode:
+; block0:
+;   sub w0, w0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sub w0, w0, #1
+;   ret
+
+;; Version sub -> add
+function %c(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v3 = isub v0, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   add x0, x0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x0, x0, #1
+;   ret
+
+;; Version sub -> add
+;; 4294967295 is zero-extended i32 -1
+function %b(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 4294967295
+    v3 = isub v0, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   add w0, w0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add w0, w0, #1
+;   ret
+
+;; Version sub -> add
+;; 65535 is zero-extended i16 -1
+function %a(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 65535
+    v3 = isub v0, v1
+    return v3
+}
+
+; VCode:
+; block0:
+;   add w0, w0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add w0, w0, #1
+;   ret
+

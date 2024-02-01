@@ -1,0 +1,149 @@
+test compile precise-output
+target x86_64
+
+function %fpromote(f32) -> f64 {
+block0(v0: f32):
+    v1 = fpromote.f64 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   uninit  %xmm0
+;   xorpd   %xmm0, %xmm0, %xmm0
+;   movdqa  %xmm5, %xmm7
+;   cvtss2sd %xmm0, %xmm7, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   xorpd %xmm0, %xmm0
+;   movdqa %xmm5, %xmm7
+;   cvtss2sd %xmm7, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fpromote_load(i64, f32) -> f64 {
+    ss0 = explicit_slot 16
+
+block0(v1: i64, v2: f32):
+    v3 = stack_addr.i64 ss0
+    store.f32 v2, v3
+    v4 = load.f32 v3
+    v5 = fpromote.f64 v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r9
+;   movss   %xmm0, 0(%r9)
+;   uninit  %xmm0
+;   xorpd   %xmm0, %xmm0, %xmm0
+;   cvtss2sd %xmm0, 0(%r9), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r9
+;   movss %xmm0, (%r9) ; trap: heap_oob
+;   xorpd %xmm0, %xmm0
+;   cvtss2sd (%r9), %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fdemote(f64) -> f32 {
+block0(v0: f64):
+    v1 = fdemote.f32 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   uninit  %xmm0
+;   xorps   %xmm0, %xmm0, %xmm0
+;   movdqa  %xmm5, %xmm7
+;   cvtsd2ss %xmm0, %xmm7, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   xorps %xmm0, %xmm0
+;   movdqa %xmm5, %xmm7
+;   cvtsd2ss %xmm7, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fdemote_load(i64, f64) -> f32 {
+    ss0 = explicit_slot 16
+
+block0(v1: i64, v2: f64):
+    v3 = stack_addr.i64 ss0
+    store.f64 v2, v3
+    v4 = load.f64 v3
+    v5 = fdemote.f32 v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %r9
+;   movsd   %xmm0, 0(%r9)
+;   uninit  %xmm0
+;   xorps   %xmm0, %xmm0, %xmm0
+;   cvtsd2ss %xmm0, 0(%r9), %xmm0
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   leaq (%rsp), %r9
+;   movsd %xmm0, (%r9) ; trap: heap_oob
+;   xorps %xmm0, %xmm0
+;   cvtsd2ss (%r9), %xmm0 ; trap: heap_oob
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

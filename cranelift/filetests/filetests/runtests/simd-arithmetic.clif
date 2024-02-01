@@ -1,0 +1,111 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+
+function %sadd_sat_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = sadd_sat v0, v1
+    return v2
+}
+; run: %sadd_sat_i8x16([0x7f 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]) == [0x7f 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+function %uadd_sat_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = uadd_sat v0, v1
+    return v2
+}
+; run: %uadd_sat_i16x8([-1 0 0 0 0 0 0 0], [-1 1 1 1 1 1 1 1]) == [65535 1 1 1 1 1 1 1]
+
+function %ssub_sat_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = ssub_sat v0, v1
+    return v2
+}
+; run: %ssub_sat_i8x16([0x80 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]) == [0x80 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff]
+; Note that 0x80 == -128 and subtracting 1 from that should saturate.
+
+function %usub_sat_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = usub_sat v0, v1
+    return v2
+}
+; run: %usub_sat_i8x16([0x80 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]) == [0x7f 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+
+function %add_sub_f32x4() -> i8 {
+block0:
+    v0 = vconst.f32x4 [0x4.2 0.0 0.0 0.0]
+    v1 = vconst.f32x4 [0x1.0 0x1.0 0x1.0 0x1.0]
+    v2 = vconst.f32x4 [0x5.2 0x1.0 0x1.0 0x1.0]
+
+    v3 = fadd v0, v1
+    v4 = fcmp eq v3, v2
+
+    v6 = fsub v2, v1
+    v7 = fcmp eq v6, v0
+
+    v8 = band v4, v7
+    v9 = vall_true v8
+    return v9
+}
+; run: %add_sub_f32x4() == 1
+
+function %mul_div_f32x4() -> i8 {
+block0:
+    v0 = vconst.f32x4 [0x4.2 -0x2.1 0x2.0 0.0]
+    v1 = vconst.f32x4 [0x3.4 0x6.7 0x8.9 0xa.b]
+    v2 = vconst.f32x4 [0xd.68 -0xd.47 0x11.2 0x0.0]
+
+    v3 = fmul v0, v1
+    v4 = fcmp eq v3, v2
+
+    v6 = fdiv v2, v1
+    v7 = fcmp eq v6, v0
+
+    v8 = band v4, v7
+    v9 = vall_true v8
+    return v9
+}
+; run: %mul_div_f32x4() == 1
+
+function %sqrt_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+    v1 = sqrt v0
+    return v1
+}
+; run: %sqrt_f64x2([0x9.0 0x1.0]) == [0x3.0 0x1.0]
+
+function %fneg_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+    v1 = fneg v0
+    return v1
+}
+; run: %fneg_f64x2([0x1.0 -0x1.0]) == [-0x1.0 0x1.0]
+
+function %fneg_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+    v1 = fneg v0
+    return v1
+}
+; run: %fneg_f32x4([0x0.0 -0x0.0 -Inf Inf]) == [-0x0.0 0x0.0 Inf -Inf]
+
+function %fabs_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+    v1 = fabs v0
+    return v1
+}
+; run: %fabs_f32x4([0x0.0 -0x1.0 0x2.0 -0x3.0]) == [0x0.0 0x1.0 0x2.0 0x3.0]
+
+function %iabs(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iabs v0
+    return v1
+}
+; run: %iabs([-42 -1 0 1]) == [42 1 0 1]

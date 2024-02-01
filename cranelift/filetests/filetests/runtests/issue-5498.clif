@@ -1,0 +1,19 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+
+function %a(i16, i8) -> i16 {
+block0(v0: i16, v1: i8):
+    v2 = iconst.i16 0
+    v3 = iconst.i16 1
+
+    v4 = ishl v0, v1
+    v5 = icmp eq v4, v2
+    v6 = select v5, v3, v4
+    return v6
+}
+; run: %a(514, -1) == 1

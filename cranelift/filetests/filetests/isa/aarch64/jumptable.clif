@@ -1,0 +1,78 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %f(i32) -> i32 {
+block0(v0: i32):
+  br_table v0, block4, [block1, block2, block3]
+
+block1:
+  v1 = iconst.i32 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i32 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i32 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i32 4
+  jump block5(v4)
+
+block5(v5: i32):
+  v6 = iadd.i32 v0, v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   emit_island 44
+;   subs wzr, w0, #3
+;   b.hs label4 ; csel x11, xzr, x0, hs ; csdb ; adr x10, pc+16 ; ldrsw x11, [x10, x11, uxtw #2] ; add x10, x10, x11 ; br x10 ; jt_entries [MachLabel(3), MachLabel(2), MachLabel(1)]
+; block1:
+;   movz w5, #3
+;   b label5
+; block2:
+;   movz w5, #2
+;   b label5
+; block3:
+;   movz w5, #1
+;   b label5
+; block4:
+;   movz w5, #4
+;   b label5
+; block5:
+;   add w0, w0, w5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #3
+;   b.hs #0x44
+;   csel x11, xzr, x0, hs
+;   csdb
+;   adr x10, #0x20
+;   ldrsw x11, [x10, w11, uxtw #2]
+;   add x10, x10, x11
+;   br x10
+;   .byte 0x1c, 0x00, 0x00, 0x00
+;   .byte 0x14, 0x00, 0x00, 0x00
+;   .byte 0x0c, 0x00, 0x00, 0x00
+; block1: ; offset 0x2c
+;   mov w5, #3
+;   b #0x48
+; block2: ; offset 0x34
+;   mov w5, #2
+;   b #0x48
+; block3: ; offset 0x3c
+;   mov w5, #1
+;   b #0x48
+; block4: ; offset 0x44
+;   mov w5, #4
+; block5: ; offset 0x48
+;   add w0, w0, w5
+;   ret
+

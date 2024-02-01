@@ -1,0 +1,144 @@
+test run
+set preserve_frame_pointers=true
+target x86_64
+target aarch64
+target aarch64 sign_return_address
+target aarch64 has_pauth sign_return_address
+target riscv64
+target riscv64 has_c has_zcb
+;; target s390x
+
+;;;; Tail-Recursive Loop ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %loop(i64, i64) -> i8 tail {
+    fn0 = colocated %loop(i64, i64) -> i8 tail
+
+block0(v0: i64, v1: i64):
+    brif v0, block2, block1
+
+;; Loop counter reached zero, we're done iterating. Return a comparison of the
+;; current SP and the first loop iteration's SP.
+block1:
+    v2 = get_stack_pointer.i64
+    v3 = icmp eq v1, v2
+    return v3
+
+;; Another iteration of the loop. Decrement the loop counter and, if this was
+;; our first iteration, grab the initial SP.
+block2:
+    v4 = iadd_imm v0, -1
+    brif v1, block4(v1), block3
+
+;; Grab the initial SP.
+block3:
+    v5 = get_stack_pointer.i64
+    jump block4(v5)
+
+;; Continue the loop.
+block4(v6: i64):
+    return_call fn0(v4, v6)
+}
+
+; run: %loop(1_000_000, 0) == 1
+
+;;;; Tail-Recursive Loop With Stack Arguments ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %loop_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i8 tail {
+    fn0 = %loop_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i8 tail
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64, v11: i64, v12: i64, v13: i64, v14: i64, v15: i64, v16: i64, v17: i64, v18: i64, v19: i64, v20: i64, v21: i64, v22: i64, v23: i64, v24: i64, v25: i64):
+    brif v0, block2, block1
+
+;; Loop counter reached zero, we're done iterating. Return a comparison of the
+;; current SP and the first loop iteration's SP.
+block1:
+    v26 = get_stack_pointer.i64
+    v27 = icmp eq v25, v26
+    return v27
+
+;; Another iteration of the loop. Decrement the loop counter and, if this was
+;; our first iteration, grab the initial SP.
+block2:
+    v28 = iadd_imm v0, -1
+    brif v25, block4(v25), block3
+
+;; Grab the initial SP.
+block3:
+    v29 = get_stack_pointer.i64
+    jump block4(v29)
+
+;; Continue the loop.
+block4(v30: i64):
+    return_call fn0(v28, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v30)
+}
+
+; run: %loop_stack_args(1_000_000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == 1
+
+;;;; Mutually-Recursive Loop With Different #s of Stack Arguments ;;;;;;;;;;;;;;
+
+function %mutual_loop_1(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i8 tail {
+    fn0 = %mutual_loop_2(i64, i64) -> i8 tail
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64, v11: i64, v12: i64, v13: i64, v14: i64, v15: i64, v16: i64, v17: i64, v18: i64, v19: i64, v20: i64, v21: i64, v22: i64, v23: i64, v24: i64, v25: i64):
+    brif v0, block2, block1
+
+;; Loop counter reached zero, we're done iterating. Return a comparison of the
+;; current SP and the first loop iteration's SP.
+block1:
+    v26 = get_stack_pointer.i64
+    v27 = icmp eq v1, v26
+    return v27
+
+;; Another iteration of the loop. If this was our first iteration, grab the
+;; initial SP.
+block2:
+    brif v1, block4(v1), block3
+
+;; Grab the initial SP.
+block3:
+    v29 = get_stack_pointer.i64
+    jump block4(v29)
+
+;; Continue the loop.
+block4(v30: i64):
+    return_call fn0(v0, v30)
+}
+
+function %mutual_loop_2(i64, i64) -> i8 tail {
+    fn0 = %mutual_loop_1(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i8 tail
+
+block0(v0: i64, v1: i64):
+    v2 = iadd_imm v0, -1
+    v3 = iconst.i64 42
+    return_call fn0(v2, v1, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3)
+}
+
+; run: %mutual_loop_2(1_000_000, 0) == 1
+
+;;;; Indirect Return-Call Loop ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %indirect_main(i64) -> i8 tail {
+    sig0 = (i64) -> i8 tail
+    fn0 = %indirect_break(i64) -> i8 tail
+    fn1 = %indirect_continue(i64) -> i8 tail
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    v2 = func_addr.i64 fn1
+    v3 = select v0, v2, v1
+    return_call_indirect sig0, v3(v0)
+}
+
+function %indirect_break(i64) -> i8 tail {
+block0(v0: i64):
+    v1 = iconst.i8 42
+    return v1
+}
+
+function %indirect_continue(i64) -> i8 tail {
+    fn0 = %indirect_main(i64) -> i8 tail
+block0(v0: i64):
+    v1 = iadd_imm v0, -1
+    return_call fn0(v1)
+}
+
+; run: %indirect_main(1_000_000) == 42

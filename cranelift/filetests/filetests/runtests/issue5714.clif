@@ -1,0 +1,26 @@
+test interpret
+test run
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+
+function %a(i32 sext, f64, f32, i64 uext) -> f32, i8, i8 system_v {
+block0(v0: i32, v1: f64, v2: f32, v3: i64):
+    v12 -> v1
+    v14 -> v2
+    v16 -> v2
+    v4 = iconst.i16 0x4242
+    v5 = iconst.i64 0x0042_4242_4242_4242
+    jump block1
+
+block1:
+    v13 = fcvt_to_sint_sat.i8 v12
+    v15 -> v13
+    brif v13, block2, block1
+
+block2:
+    return v14, v15, v15
+}
+
+; run: %a(1111441986, -0x1.ffa8b425b4242p128, 0x0.00859ep-126, 0) == [0x0.00859ep-126, -128, -128]

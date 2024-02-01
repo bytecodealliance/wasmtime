@@ -1,0 +1,158 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %fn0(i8x8) -> i8 {
+block0(v0: i8x8):
+    v1 = vall_true v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uminv b2, v0.8b
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uminv b2, v0.8b
+;   mov x4, v2.d[0]
+;   cmp x4, #0
+;   cset x0, ne
+;   ret
+
+function %fn1(i8x16) -> i8 {
+block0(v0: i8x16):
+    v1 = vall_true v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uminv b2, v0.16b
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uminv b2, v0.16b
+;   mov x4, v2.d[0]
+;   cmp x4, #0
+;   cset x0, ne
+;   ret
+
+function %fn2(i16x4) -> i8 {
+block0(v0: i16x4):
+    v1 = vall_true v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uminv h2, v0.4h
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uminv h2, v0.4h
+;   mov x4, v2.d[0]
+;   cmp x4, #0
+;   cset x0, ne
+;   ret
+
+function %fn3(i16x8) -> i8 {
+block0(v0: i16x8):
+    v1 = vall_true v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uminv h2, v0.8h
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uminv h2, v0.8h
+;   mov x4, v2.d[0]
+;   cmp x4, #0
+;   cset x0, ne
+;   ret
+
+function %fn4(i32x2) -> i8 {
+block0(v0: i32x2):
+    v1 = vall_true v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   mov x2, v0.d[0]
+;   subs xzr, xzr, x2, LSR 32
+;   ccmp w2, #0, #nZcv, ne
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x2, v0.d[0]
+;   cmp xzr, x2, lsr #32
+;   ccmp w2, #0, #4, ne
+;   cset x0, ne
+;   ret
+
+function %fn5(i32x4) -> i8 {
+block0(v0: i32x4):
+    v1 = vall_true v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uminv s2, v0.4s
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uminv s2, v0.4s
+;   mov x4, v2.d[0]
+;   cmp x4, #0
+;   cset x0, ne
+;   ret
+
+function %fn6(i64x2) -> i8 {
+block0(v0: i64x2):
+    v1 = vall_true v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   cmeq v2.2d, v0.2d, #0
+;   addp v4.2d, v2.2d, v2.2d
+;   fcmp d4, d4
+;   cset x0, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmeq v2.2d, v0.2d, #0
+;   addp v4.2d, v2.2d, v2.2d
+;   fcmp d4, d4
+;   cset x0, eq
+;   ret
+

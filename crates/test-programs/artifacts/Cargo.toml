@@ -1,0 +1,15 @@
+[package]
+name = "test-programs-artifacts"
+version = "0.0.0"
+authors = ["The Wasmtime Project Developers"]
+edition.workspace = true
+publish = false
+license = "Apache-2.0 WITH LLVM-exception"
+
+[lints]
+workspace = true
+
+[build-dependencies]
+heck = { workspace = true }
+wit-component = { workspace = true }
+cargo_metadata = "0.15.3"

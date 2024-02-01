@@ -1,0 +1,169 @@
+;; rewrites for integer and floating-point arithmetic
+;; eg: `iadd`, `isub`, `ineg`, `imul`, `fadd`, `fsub`, `fmul`
+
+;; For commutative instructions, we depend on cprop.isle pushing immediates to
+;; the right, and thus only simplify patterns like `x+0`, not `0+x`.
+
+;; x+0 == x.
+(rule (simplify (iadd ty
+                      x
+                      (iconst_u ty 0)))
+      (subsume x))
+;; x-0 == x.
+(rule (simplify (isub ty
+                      x
+                      (iconst_u ty 0)))
+      (subsume x))
+;; 0-x == (ineg x).
+(rule (simplify (isub ty
+                      (iconst_u ty 0)
+                      x))
+      (ineg ty x))
+
+;; x + -y == -y + x == -(y - x) == x - y
+(rule (simplify (iadd ty x (ineg ty y)))
+      (isub ty x y))
+(rule (simplify (iadd ty (ineg ty y) x))
+      (isub ty x y))
+(rule (simplify (ineg ty (isub ty y x)))
+      (isub ty x y))
+;; x - -y == x + y
+(rule (simplify (isub ty x (ineg ty y)))
+      (iadd ty x y))
+
+;; ineg(ineg(x)) == x.
+(rule (simplify (ineg ty (ineg ty x))) (subsume x))
+
+;; ineg(x) * ineg(y) == x*y.
+(rule (simplify (imul ty (ineg ty x) (ineg ty y)))
+      (subsume (imul ty x y)))
+
+;; iabs(ineg(x)) == iabs(x).
+(rule (simplify (iabs ty (ineg ty x)))
+      (iabs ty x))
+
+;; iabs(iabs(x)) == iabs(x).
+(rule (simplify (iabs ty inner @ (iabs ty x)))
+      (subsume inner))
+
+;; x-x == 0.
+(rule (simplify (isub (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+
+;; x*1 == x.
+(rule (simplify (imul ty
+                      x
+                      (iconst_u ty 1)))
+      (subsume x))
+
+;; x*0 == 0.
+(rule (simplify (imul ty
+                      _
+                      zero @ (iconst_u ty 0)))
+      (subsume zero))
+
+;; x*-1 == ineg(x).
+(rule (simplify (imul ty x (iconst_s ty -1)))
+      (ineg ty x))
+
+;; (!x) + 1 == ineg(x)
+(rule (simplify (iadd ty (bnot ty x) (iconst_u ty 1)))
+      (ineg ty x))
+
+;; !(x - 1) == !(x + (-1)) == ineg(x)
+(rule (simplify (bnot ty (isub ty x (iconst_s ty 1))))
+      (ineg ty x))
+(rule (simplify (bnot ty (iadd ty x (iconst_s ty -1))))
+      (ineg ty x))
+
+;; x/1 == x.
+(rule (simplify (sdiv ty
+                      x
+                      (iconst_u ty 1)))
+      (subsume x))
+(rule (simplify (udiv ty
+                      x
+                      (iconst_u ty 1)))
+      (subsume x))
+
+;; TODO: strength reduction: div to shifts
+;; TODO: div/rem by constants -> magic multiplications
+
+;; x*2 == x+x.
+(rule (simplify (imul ty x (iconst_u _ 2)))
+      (iadd ty x x))
+
+;; x*c == x<<log2(c) when c is a power of two.
+;; Note that the type of `iconst` must be the same as the type of `imul`,
+;; so these rules can only fire in situations where it's safe to construct an
+;; `iconst` of that type.
+(rule (simplify (imul ty x (iconst _ (imm64_power_of_two c))))
+      (ishl ty x (iconst ty (imm64 c))))
+(rule (simplify (imul ty (iconst _ (imm64_power_of_two c)) x))
+      (ishl ty x (iconst ty (imm64 c))))
+
+;; fneg(fneg(x)) == x.
+(rule (simplify (fneg ty (fneg ty x))) (subsume x))
+
+;; If both of the multiplied arguments to an `fma` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fma ty (fneg ty x) (fneg ty y) z))
+      (fma ty x y z))
+
+;; If both of the multiplied arguments to an `fmul` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fmul ty (fneg ty x) (fneg ty y)))
+      (fmul ty x y))
+
+;; (a op (b op (c op d))) ==> ((a op b) op (c op d))
+;;
+;; and
+;;
+;; (((a op b) op c) op d) ==> ((a op b) op (c op d))
+;;
+;; where `op` is an associative operation: `iadd`, `imul`, `band`, or `bxor`.
+;;
+;; This increases instruction-level parallelism and shrinks live ranges. It also
+;; canonicalizes into the shallow-and-wide form for reassociating constants
+;; together for cprop.
+;;
+;; NB: We subsume to avoid exponential e-node blow up due to reassociating very
+;; large chains of operations.
+;;
+;; TODO: We should add `bor` rules for this as well. Unfortunately, they
+;; conflict with our `bswap` recognizing rules when we `subsume`.
+
+(rule (simplify (iadd ty a (iadd ty b (iadd ty c d))))
+      (subsume (iadd ty (iadd ty a b) (iadd ty c d))))
+(rule (simplify (iadd ty (iadd ty (iadd ty a b) c) d))
+      (subsume (iadd ty (iadd ty a b) (iadd ty c d))))
+
+(rule (simplify (imul ty a (imul ty b (imul ty c d))))
+      (subsume (imul ty (imul ty a b) (imul ty c d))))
+(rule (simplify (imul ty (imul ty (imul ty a b) c) d))
+      (subsume (imul ty (imul ty a b) (imul ty c d))))
+
+(rule (simplify (band ty a (band ty b (band ty c d))))
+      (subsume (band ty (band ty a b) (band ty c d))))
+(rule (simplify (band ty (band ty (band ty a b) c) d))
+      (subsume (band ty (band ty a b) (band ty c d))))
+
+(rule (simplify (bxor ty a (bxor ty b (bxor ty c d))))
+      (subsume (bxor ty (bxor ty a b) (bxor ty c d))))
+(rule (simplify (bxor ty (bxor ty (bxor ty a b) c) d))
+      (subsume (bxor ty (bxor ty a b) (bxor ty c d))))
+
+;; Detect people open-coding `mulhi`: (x as big * y as big) >> bits
+;; LLVM doesn't have an intrinsic for it, so you'll see it in code like
+;; <https://github.com/rust-lang/rust/blob/767453eb7ca188e991ac5568c17b984dd4893e77/library/core/src/num/mod.rs#L174-L180>
+(rule (simplify (sshr ty (imul ty (sextend _ x@(value_type half_ty))
+                                  (sextend _ y@(value_type half_ty)))
+                         (iconst_u _ k)))
+      (if-let $true (ty_equal half_ty (ty_half_width ty)))
+      (if-let $true (u64_eq k (ty_bits_u64 half_ty)))
+      (sextend ty (smulhi half_ty x y)))
+(rule (simplify (ushr ty (imul ty (uextend _ x@(value_type half_ty))
+                                  (uextend _ y@(value_type half_ty)))
+                         (iconst_u _ k)))
+      (if-let $true (ty_equal half_ty (ty_half_width ty)))
+      (if-let $true (u64_eq k (ty_bits_u64 half_ty)))
+      (uextend ty (umulhi half_ty x y)))

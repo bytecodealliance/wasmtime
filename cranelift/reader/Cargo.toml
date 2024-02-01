@@ -1,0 +1,19 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-reader"
+version = "0.105.0"
+description = "Cranelift textual IR reader"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/cranelift-reader"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cranelift-codegen = { workspace = true }
+smallvec = { workspace = true }
+target-lexicon = { workspace = true }

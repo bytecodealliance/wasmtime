@@ -1,0 +1,24 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+;; Test default (non-SpiderMonkey) ABI.
+function %f() -> i64, i64 {
+block1:
+  v0 = iconst.i64 1
+  v1 = iconst.i64 2
+  return v0, v1
+}
+
+; VCode:
+; block0:
+;   li a0,1
+;   li a1,2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, 1
+;   addi a1, zero, 2
+;   ret
+

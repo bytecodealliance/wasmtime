@@ -1,0 +1,59 @@
+test interpret
+test run
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_zbb
+target riscv64 has_c has_zcb
+target x86_64
+
+function %iabs_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iabs v0
+    return v1
+}
+; run: %iabs_i8(0) == 0
+; run: %iabs_i8(127) == 127
+; run: %iabs_i8(-127) == 127
+; run: %iabs_i8(-128) == -128
+
+function %iabs_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = iabs v0
+    return v1
+}
+; run: %iabs_i16(0) == 0
+; run: %iabs_i16(32767) == 32767
+; run: %iabs_i16(-32767) == 32767
+; run: %iabs_i16(-32768) == -32768
+
+function %iabs_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iabs v0
+    return v1
+}
+; run: %iabs_i32(0) == 0
+; run: %iabs_i32(2147483647) == 2147483647
+; run: %iabs_i32(-2147483647) == 2147483647
+; run: %iabs_i32(-2147483648) == -2147483648
+
+function %iabs_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iabs v0
+    return v1
+}
+; run: %iabs_i64(0) == 0
+; run: %iabs_i64(9223372036854775807) == 9223372036854775807
+; run: %iabs_i64(-9223372036854775807) == 9223372036854775807
+; run: %iabs_i64(-9223372036854775808) == -9223372036854775808
+
+
+; See issue #5501.
+; If iabs does not mask the high bits on the input, it can give an incorrect result.
+function %iabs_i16_mask(i16, i64) -> i16 system_v {
+block0(v0: i16, v1: i64):
+    v2 = ushr v0, v1
+    v3 = iabs v2
+    return v3
+}
+; run: %iabs_i16_mask(-24064, 16) == 24064

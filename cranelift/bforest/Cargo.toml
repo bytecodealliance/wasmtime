@@ -1,0 +1,18 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-bforest"
+version = "0.105.0"
+description = "A forest of B+-trees"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/cranelift-bforest"
+repository = "https://github.com/bytecodealliance/wasmtime"
+categories = ["no-std"]
+readme = "README.md"
+keywords = ["btree", "forest", "set", "map"]
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+cranelift-entity = { workspace = true }

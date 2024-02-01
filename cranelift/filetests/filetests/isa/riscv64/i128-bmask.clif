@@ -1,0 +1,196 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %bmask_i128_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a1,zero,a5
+;   mv a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a1, a5
+;   mv a0, a1
+;   ret
+
+function %bmask_i128_i64(i128) -> i64 {
+block0(v0: i128):
+  v1 = bmask.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
+;   ret
+
+function %bmask_i128_i32(i128) -> i32 {
+block0(v0: i128):
+  v1 = bmask.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
+;   ret
+
+function %bmask_i128_i16(i128) -> i16 {
+block0(v0: i128):
+  v1 = bmask.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
+;   ret
+
+function %bmask_i128_i8(i128) -> i8 {
+block0(v0: i128):
+  v1 = bmask.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
+;   ret
+
+function %bmask_i64_i128(i64) -> i128 {
+block0(v0: i64):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sltu a2,zero,a0
+;   sub a1,zero,a2
+;   mv a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   snez a2, a0
+;   neg a1, a2
+;   mv a0, a1
+;   ret
+
+function %bmask_i32_i128(i32) -> i128 {
+block0(v0: i32):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sext.w a2,a0
+;   sltu a4,zero,a2
+;   sub a1,zero,a4
+;   mv a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sext.w a2, a0
+;   snez a4, a2
+;   neg a1, a4
+;   mv a0, a1
+;   ret
+
+function %bmask_i16_i128(i16) -> i128 {
+block0(v0: i16):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   slli a2,a0,48
+;   srai a4,a2,48
+;   sltu a0,zero,a4
+;   sub a1,zero,a0
+;   mv a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x30
+;   srai a4, a2, 0x30
+;   snez a0, a4
+;   neg a1, a0
+;   mv a0, a1
+;   ret
+
+function %bmask_i8_i128(i8) -> i128 {
+block0(v0: i8):
+  v1 = bmask.i128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   slli a2,a0,56
+;   srai a4,a2,56
+;   sltu a0,zero,a4
+;   sub a1,zero,a0
+;   mv a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x38
+;   srai a4, a2, 0x38
+;   snez a0, a4
+;   neg a1, a0
+;   mv a0, a1
+;   ret
+

@@ -1,0 +1,152 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %uextend_i64_i128(i64) -> i128 {
+block0(v0: i64):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   li a1,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a1, zero
+;   ret
+
+function %uextend_i32_i128(i32) -> i128 {
+block0(v0: i32):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   slli a2,a0,32
+;   srli a0,a2,32
+;   li a1,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x20
+;   srli a0, a2, 0x20
+;   mv a1, zero
+;   ret
+
+function %uextend_i16_i128(i16) -> i128 {
+block0(v0: i16):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   slli a2,a0,48
+;   srli a0,a2,48
+;   li a1,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x30
+;   srli a0, a2, 0x30
+;   mv a1, zero
+;   ret
+
+function %uextend_i8_i128(i8) -> i128 {
+block0(v0: i8):
+    v1 = uextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,255
+;   li a1,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a0, a0, 0xff
+;   mv a1, zero
+;   ret
+
+function %sextend_i64_i128(i64) -> i128 {
+block0(v0: i64):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   srai a1,a0,63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   srai a1, a0, 0x3f
+;   ret
+
+function %sextend_i32_i128(i32) -> i128 {
+block0(v0: i32):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.w a0,a0
+;   srai a1,a0,63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sext.w a0, a0
+;   srai a1, a0, 0x3f
+;   ret
+
+function %sextend_i16_i128(i16) -> i128 {
+block0(v0: i16):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   slli a2,a0,48
+;   srai a0,a2,48
+;   srai a1,a0,63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x30
+;   srai a0, a2, 0x30
+;   srai a1, a0, 0x3f
+;   ret
+
+function %sextend_i8_i128(i8) -> i128 {
+block0(v0: i8):
+    v1 = sextend.i128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   slli a2,a0,56
+;   srai a0,a2,56
+;   srai a1,a0,63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x38
+;   srai a0, a2, 0x38
+;   srai a1, a0, 0x3f
+;   ret
+

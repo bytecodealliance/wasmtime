@@ -1,0 +1,40 @@
+[package]
+name = "wasmtime-cranelift"
+version.workspace = true
+authors.workspace = true
+description = "Integration between Cranelift and Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-cranelift/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+log = { workspace = true }
+wasmtime-environ = { workspace = true }
+cranelift-wasm = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["host-arch"] }
+cranelift-frontend = { workspace = true }
+cranelift-entity = { workspace = true }
+cranelift-native = { workspace = true }
+cranelift-control = { workspace = true }
+wasmtime-cranelift-shared = { workspace = true }
+wasmparser = { workspace = true }
+target-lexicon = { workspace = true }
+gimli = { workspace = true }
+object = { workspace = true, features = ['write'] }
+thiserror = { workspace = true }
+cfg-if = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true }
+
+[features]
+all-arch = ["cranelift-codegen/all-arch"]
+host-arch = ["cranelift-codegen/host-arch"]
+component-model = ["wasmtime-environ/component-model"]
+incremental-cache = ["cranelift-codegen/incremental-cache"]
+wmemcheck = []

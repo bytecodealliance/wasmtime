@@ -1,0 +1,264 @@
+test compile precise-output
+set opt_level=speed
+target x86_64
+
+function %amode_add(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    v3 = load.i64 v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi, %rsi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_add_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iadd v0, v1
+    v3 = load.i64 v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    42(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x2a(%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_add_imm_order(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iadd v1, v0
+    v3 = load.i64 v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    42(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x2a(%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_add_uext_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i32 42
+    v2 = uextend.i64 v1
+    v3 = iadd v2, v0
+    v4 = load.i64 v3
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    42(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x2a(%rdi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_reg_reg_imm(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    v3 = iconst.i64 256
+    v4 = iadd v2, v3
+    v5 = load.i64 v4+64
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    320(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x140(%rdi, %rsi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_reg_reg_imm_negative(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    v3 = iconst.i64 -1
+    v4 = iadd v2, v3
+    v5 = load.i64 v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    -1(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq -1(%rdi, %rsi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_reg_reg_imm_scaled(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 -1
+    v3 = iadd v0, v2
+    v4 = ishl_imm v1, 3
+    v5 = iadd v3, v4
+    v6 = load.i64 v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    -1(%rdi,%rsi,8), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq -1(%rdi, %rsi, 8), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_reg_reg_imm_uext_scaled(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i64 -1
+    v3 = iadd v0, v2
+    v4 = ishl_imm v1, 3
+    v5 = uextend.i64 v4
+    v6 = iadd v3, v5
+    v7 = load.i64 v6
+    return v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shll    $3, %esi, %esi
+;   movq    -1(%rdi,%rsi,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   shll $3, %esi
+;   movq -1(%rdi, %rsi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %amode_reg_reg_imm_uext_scaled_add(i64, i32, i32) -> i64 {
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = iconst.i64 -1
+    v4 = iadd v0, v3
+    v5 = iadd v1, v2
+    v6 = ishl_imm v5, 2
+    v7 = uextend.i64 v6
+    v8 = iadd v4, v7
+    v9 = load.i64 v8
+    return v9
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     0(%rsi,%rdx,1), %r8d
+;   shll    $2, %r8d, %r8d
+;   movq    -1(%rdi,%r8,1), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal (%rsi, %rdx), %r8d
+;   shll $2, %r8d
+;   movq -1(%rdi, %r8), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

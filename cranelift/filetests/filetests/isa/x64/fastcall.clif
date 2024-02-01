@@ -1,0 +1,511 @@
+test compile precise-output
+set enable_llvm_abi_extensions=true
+set unwind_info=true
+target x86_64
+
+function %f0(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v0
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %rcx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rcx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f1(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f2(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %r8, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %r8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f3(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %r9, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %r9, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f4(i64, i64, f64, i64) -> f64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: f64, v3: i64):
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movdqa  %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm2, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f5(i64, i64, f64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: f64, v3: i64):
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    %r9, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %r9, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f6(i64, i64, i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
+  return v5
+
+;; This is truly odd (because of the regalloc ordering), but it works. Note
+;; that we're spilling and using rsi, which is a callee-save in fastcall, because
+;; the regalloc order is optimized for SysV. Also note that because we copy args
+;; out of their input locations to separate vregs, we have a spurious load
+;; from [rbp+48]. Ordinarily these moves are coalesced because the dest vreg
+;; is allocated as a caller-save (volatile), but here again we allocate rsi
+;; first and so have to spill it (and consequently don't coalesce).
+;;
+;; TODO(#2704): fix regalloc's register priority ordering!
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    48(%rbp), %r8
+;   movq    56(%rbp), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x30(%rbp), %r8
+;   movq 0x38(%rbp), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f7(i128, i64, i128, i128) -> i128 windows_fastcall {
+block0(v0: i128, v1: i64, v2: i128, v3: i128):
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+; block0:
+;   movq    48(%rbp), %r8
+;   movq    56(%rbp), %rax
+;   movq    64(%rbp), %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x30(%rbp), %r8
+;   movq 0x38(%rbp), %rax
+;   movq 0x40(%rbp), %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f8(i64) -> i64 windows_fastcall {
+  sig0 = (i64, i64, f64, f64, i64, i64) -> i64 windows_fastcall
+  fn0 = %g sig0
+
+block0(v0: i64):
+  v1 = fcvt_from_sint.f64 v0
+  v2 = call fn0(v0, v0, v1, v1, v0, v0)
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
+;   subq    %rsp, $16, %rsp
+;   movq    %rdi, 0(%rsp)
+;   unwind SaveReg { clobber_offset: 0, reg: p7i }
+; block0:
+;   uninit  %xmm3
+;   xorpd   %xmm3, %xmm3, %xmm3
+;   cvtsi2sd %xmm3, %rcx, %xmm3
+;   subq    %rsp, $48, %rsp
+;   virtual_sp_offset_adjust 48
+;   movq    %rcx, 32(%rsp)
+;   movq    %rcx, 40(%rsp)
+;   movq    %rcx, %rdx
+;   load_ext_name %g+0, %rdi
+;   movq    %rdx, %rcx
+;   movdqa  %xmm3, %xmm2
+;   call    *%rdi
+;   addq    %rsp, $48, %rsp
+;   virtual_sp_offset_adjust -48
+;   movq    0(%rsp), %rdi
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+;   movq %rdi, (%rsp)
+; block1: ; offset 0xc
+;   xorpd %xmm3, %xmm3
+;   cvtsi2sdq %rcx, %xmm3
+;   subq $0x30, %rsp
+;   movq %rcx, 0x20(%rsp)
+;   movq %rcx, 0x28(%rsp)
+;   movq %rcx, %rdx
+;   movabsq $0, %rdi ; reloc_external Abs8 %g 0
+;   movq %rdx, %rcx
+;   movdqa %xmm3, %xmm2
+;   callq *%rdi
+;   addq $0x30, %rsp
+;   movq (%rsp), %rdi
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f9(i64) -> f64 windows_fastcall {
+block0(v0: i64):
+  v1 = load.f64 v0+0
+  v2 = load.f64 v0+8
+  v3 = load.f64 v0+16
+  v4 = load.f64 v0+24
+  v5 = load.f64 v0+32
+  v6 = load.f64 v0+40
+  v7 = load.f64 v0+48
+  v8 = load.f64 v0+56
+  v9 = load.f64 v0+64
+  v10 = load.f64 v0+72
+  v11 = load.f64 v0+80
+  v12 = load.f64 v0+88
+  v13 = load.f64 v0+96
+  v14 = load.f64 v0+104
+  v15 = load.f64 v0+112
+  v16 = load.f64 v0+120
+  v17 = load.f64 v0+128
+  v18 = load.f64 v0+136
+  v19 = load.f64 v0+144
+  v20 = load.f64 v0+152
+
+  v21 = fadd.f64 v1, v2
+  v22 = fadd.f64 v3, v4
+  v23 = fadd.f64 v5, v6
+  v24 = fadd.f64 v7, v8
+  v25 = fadd.f64 v9, v10
+  v26 = fadd.f64 v11, v12
+  v27 = fadd.f64 v13, v14
+  v28 = fadd.f64 v15, v16
+  v29 = fadd.f64 v17, v18
+  v30 = fadd.f64 v19, v20
+
+  v31 = fadd.f64 v21, v22
+  v32 = fadd.f64 v23, v24
+  v33 = fadd.f64 v25, v26
+  v34 = fadd.f64 v27, v28
+  v35 = fadd.f64 v29, v30
+
+  v36 = fadd.f64 v31, v32
+  v37 = fadd.f64 v33, v34
+
+  v38 = fadd.f64 v36, v37
+
+  v39 = fadd.f64 v38, v35
+
+  return v39
+}
+
+; VCode:
+;   pushq   %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq    %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 160 }
+;   subq    %rsp, $224, %rsp
+;   movdqu  %xmm6, 64(%rsp)
+;   unwind SaveReg { clobber_offset: 0, reg: p6f }
+;   movdqu  %xmm7, 80(%rsp)
+;   unwind SaveReg { clobber_offset: 16, reg: p7f }
+;   movdqu  %xmm8, 96(%rsp)
+;   unwind SaveReg { clobber_offset: 32, reg: p8f }
+;   movdqu  %xmm9, 112(%rsp)
+;   unwind SaveReg { clobber_offset: 48, reg: p9f }
+;   movdqu  %xmm10, 128(%rsp)
+;   unwind SaveReg { clobber_offset: 64, reg: p10f }
+;   movdqu  %xmm11, 144(%rsp)
+;   unwind SaveReg { clobber_offset: 80, reg: p11f }
+;   movdqu  %xmm12, 160(%rsp)
+;   unwind SaveReg { clobber_offset: 96, reg: p12f }
+;   movdqu  %xmm13, 176(%rsp)
+;   unwind SaveReg { clobber_offset: 112, reg: p13f }
+;   movdqu  %xmm14, 192(%rsp)
+;   unwind SaveReg { clobber_offset: 128, reg: p14f }
+;   movdqu  %xmm15, 208(%rsp)
+;   unwind SaveReg { clobber_offset: 144, reg: p15f }
+; block0:
+;   movsd   0(%rcx), %xmm0
+;   movsd   8(%rcx), %xmm8
+;   movdqu  %xmm8, rsp(48 + virtual offset)
+;   movsd   16(%rcx), %xmm10
+;   movdqu  %xmm10, rsp(0 + virtual offset)
+;   movsd   24(%rcx), %xmm9
+;   movdqa  %xmm9, %xmm10
+;   movsd   32(%rcx), %xmm5
+;   movsd   40(%rcx), %xmm6
+;   movdqu  %xmm6, rsp(32 + virtual offset)
+;   movsd   48(%rcx), %xmm7
+;   movsd   56(%rcx), %xmm12
+;   movdqu  %xmm12, rsp(16 + virtual offset)
+;   movsd   64(%rcx), %xmm4
+;   movsd   72(%rcx), %xmm12
+;   movsd   80(%rcx), %xmm1
+;   movsd   88(%rcx), %xmm14
+;   movsd   96(%rcx), %xmm3
+;   movsd   104(%rcx), %xmm15
+;   movsd   112(%rcx), %xmm11
+;   movsd   120(%rcx), %xmm8
+;   movsd   128(%rcx), %xmm2
+;   movsd   136(%rcx), %xmm9
+;   movsd   144(%rcx), %xmm13
+;   movdqu  rsp(48 + virtual offset), %xmm6
+;   addsd   %xmm0, %xmm6, %xmm0
+;   movdqa  %xmm10, %xmm6
+;   movdqu  rsp(0 + virtual offset), %xmm10
+;   addsd   %xmm10, %xmm6, %xmm10
+;   movdqu  rsp(32 + virtual offset), %xmm6
+;   addsd   %xmm5, %xmm6, %xmm5
+;   movdqu  rsp(16 + virtual offset), %xmm6
+;   addsd   %xmm7, %xmm6, %xmm7
+;   addsd   %xmm4, %xmm12, %xmm4
+;   addsd   %xmm1, %xmm14, %xmm1
+;   addsd   %xmm3, %xmm15, %xmm3
+;   addsd   %xmm11, %xmm8, %xmm11
+;   addsd   %xmm2, %xmm9, %xmm2
+;   addsd   %xmm13, 152(%rcx), %xmm13
+;   addsd   %xmm0, %xmm10, %xmm0
+;   addsd   %xmm5, %xmm7, %xmm5
+;   addsd   %xmm4, %xmm1, %xmm4
+;   addsd   %xmm3, %xmm11, %xmm3
+;   addsd   %xmm2, %xmm13, %xmm2
+;   addsd   %xmm0, %xmm5, %xmm0
+;   addsd   %xmm4, %xmm3, %xmm4
+;   addsd   %xmm0, %xmm4, %xmm0
+;   addsd   %xmm0, %xmm2, %xmm0
+;   movdqu  64(%rsp), %xmm6
+;   movdqu  80(%rsp), %xmm7
+;   movdqu  96(%rsp), %xmm8
+;   movdqu  112(%rsp), %xmm9
+;   movdqu  128(%rsp), %xmm10
+;   movdqu  144(%rsp), %xmm11
+;   movdqu  160(%rsp), %xmm12
+;   movdqu  176(%rsp), %xmm13
+;   movdqu  192(%rsp), %xmm14
+;   movdqu  208(%rsp), %xmm15
+;   addq    %rsp, $224, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0xe0, %rsp
+;   movdqu %xmm6, 0x40(%rsp)
+;   movdqu %xmm7, 0x50(%rsp)
+;   movdqu %xmm8, 0x60(%rsp)
+;   movdqu %xmm9, 0x70(%rsp)
+;   movdqu %xmm10, 0x80(%rsp)
+;   movdqu %xmm11, 0x90(%rsp)
+;   movdqu %xmm12, 0xa0(%rsp)
+;   movdqu %xmm13, 0xb0(%rsp)
+;   movdqu %xmm14, 0xc0(%rsp)
+;   movdqu %xmm15, 0xd0(%rsp)
+; block1: ; offset 0x61
+;   movsd (%rcx), %xmm0 ; trap: heap_oob
+;   movsd 8(%rcx), %xmm8 ; trap: heap_oob
+;   movdqu %xmm8, 0x30(%rsp)
+;   movsd 0x10(%rcx), %xmm10 ; trap: heap_oob
+;   movdqu %xmm10, (%rsp)
+;   movsd 0x18(%rcx), %xmm9 ; trap: heap_oob
+;   movdqa %xmm9, %xmm10
+;   movsd 0x20(%rcx), %xmm5 ; trap: heap_oob
+;   movsd 0x28(%rcx), %xmm6 ; trap: heap_oob
+;   movdqu %xmm6, 0x20(%rsp)
+;   movsd 0x30(%rcx), %xmm7 ; trap: heap_oob
+;   movsd 0x38(%rcx), %xmm12 ; trap: heap_oob
+;   movdqu %xmm12, 0x10(%rsp)
+;   movsd 0x40(%rcx), %xmm4 ; trap: heap_oob
+;   movsd 0x48(%rcx), %xmm12 ; trap: heap_oob
+;   movsd 0x50(%rcx), %xmm1 ; trap: heap_oob
+;   movsd 0x58(%rcx), %xmm14 ; trap: heap_oob
+;   movsd 0x60(%rcx), %xmm3 ; trap: heap_oob
+;   movsd 0x68(%rcx), %xmm15 ; trap: heap_oob
+;   movsd 0x70(%rcx), %xmm11 ; trap: heap_oob
+;   movsd 0x78(%rcx), %xmm8 ; trap: heap_oob
+;   movsd 0x80(%rcx), %xmm2 ; trap: heap_oob
+;   movsd 0x88(%rcx), %xmm9 ; trap: heap_oob
+;   movsd 0x90(%rcx), %xmm13 ; trap: heap_oob
+;   movdqu 0x30(%rsp), %xmm6
+;   addsd %xmm6, %xmm0
+;   movdqa %xmm10, %xmm6
+;   movdqu (%rsp), %xmm10
+;   addsd %xmm6, %xmm10
+;   movdqu 0x20(%rsp), %xmm6
+;   addsd %xmm6, %xmm5
+;   movdqu 0x10(%rsp), %xmm6
+;   addsd %xmm6, %xmm7
+;   addsd %xmm12, %xmm4
+;   addsd %xmm14, %xmm1
+;   addsd %xmm15, %xmm3
+;   addsd %xmm8, %xmm11
+;   addsd %xmm9, %xmm2
+;   addsd 0x98(%rcx), %xmm13 ; trap: heap_oob
+;   addsd %xmm10, %xmm0
+;   addsd %xmm7, %xmm5
+;   addsd %xmm1, %xmm4
+;   addsd %xmm11, %xmm3
+;   addsd %xmm13, %xmm2
+;   addsd %xmm5, %xmm0
+;   addsd %xmm3, %xmm4
+;   addsd %xmm4, %xmm0
+;   addsd %xmm2, %xmm0
+;   movdqu 0x40(%rsp), %xmm6
+;   movdqu 0x50(%rsp), %xmm7
+;   movdqu 0x60(%rsp), %xmm8
+;   movdqu 0x70(%rsp), %xmm9
+;   movdqu 0x80(%rsp), %xmm10
+;   movdqu 0x90(%rsp), %xmm11
+;   movdqu 0xa0(%rsp), %xmm12
+;   movdqu 0xb0(%rsp), %xmm13
+;   movdqu 0xc0(%rsp), %xmm14
+;   movdqu 0xd0(%rsp), %xmm15
+;   addq $0xe0, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

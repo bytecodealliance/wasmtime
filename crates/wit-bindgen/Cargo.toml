@@ -1,0 +1,18 @@
+[package]
+name = "wasmtime-wit-bindgen"
+version.workspace = true
+authors.workspace = true
+description = "Internal `*.wit` support for the `wasmtime` crate's macros"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-wit-bindgen/"
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+heck = { workspace = true }
+wit-parser = { workspace = true }
+indexmap = { workspace = true }

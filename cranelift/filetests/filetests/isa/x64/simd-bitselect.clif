@@ -1,0 +1,253 @@
+test compile precise-output
+target x86_64 sse41
+
+function %mask_from_icmp(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp eq v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm4
+;   pcmpeqb %xmm4, %xmm1, %xmm4
+;   movdqa  %xmm0, %xmm7
+;   movdqa  %xmm4, %xmm0
+;   movdqa  %xmm1, %xmm4
+;   pblendvb %xmm4, %xmm7, %xmm4
+;   movdqa  %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm4
+;   pcmpeqb %xmm1, %xmm4
+;   movdqa %xmm0, %xmm7
+;   movdqa %xmm4, %xmm0
+;   movdqa %xmm1, %xmm4
+;   pblendvb %xmm0, %xmm7, %xmm4
+;   movdqa %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mask_from_fcmp(f32x4, f32x4, i32x4, i32x4) -> i32x4  {
+block0(v0: f32x4, v1: f32x4, v2: i32x4, v3: i32x4):
+    v4 = fcmp eq v0, v1
+    v5 = bitselect v4, v2, v3
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpps   $0, %xmm0, %xmm1, %xmm0
+;   movdqa  %xmm3, %xmm6
+;   pblendvb %xmm6, %xmm2, %xmm6
+;   movdqa  %xmm6, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpeqps %xmm1, %xmm0
+;   movdqa %xmm3, %xmm6
+;   pblendvb %xmm0, %xmm2, %xmm6
+;   movdqa %xmm6, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %mask_casted(i8x16, i8x16, i32x4) -> i8x16 {
+block0(v0: i8x16, v1: i8x16, v2: i32x4):
+    v3 = bitcast.i8x16 little v2
+    v4 = bitselect v3, v0, v1
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pand    %xmm0, %xmm2, %xmm0
+;   movdqa  %xmm0, %xmm7
+;   pandn   %xmm2, %xmm1, %xmm2
+;   movdqa  %xmm7, %xmm1
+;   movdqa  %xmm2, %xmm0
+;   por     %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pand %xmm2, %xmm0
+;   movdqa %xmm0, %xmm7
+;   pandn %xmm1, %xmm2
+;   movdqa %xmm7, %xmm1
+;   movdqa %xmm2, %xmm0
+;   por %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %good_const_mask_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v3 = vconst.i8x16 [0 0 0xFF 0 0 0xFF 0 0 0 0 0xFF 0 0 0 0 0xFF]
+    v4 = bitselect v3, v0, v1
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   movdqu  const(0), %xmm0
+;   movdqa  %xmm5, %xmm6
+;   movdqa  %xmm1, %xmm4
+;   pblendvb %xmm4, %xmm6, %xmm4
+;   movdqa  %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   movdqu 0x20(%rip), %xmm0
+;   movdqa %xmm5, %xmm6
+;   movdqa %xmm1, %xmm4
+;   pblendvb %xmm0, %xmm6, %xmm4
+;   movdqa %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   incl (%rax)
+;   addb %bh, %bh
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   incl (%rax)
+;   addb %al, (%rax)
+;   addb %bh, %bh
+
+function %good_const_mask_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v3 = vconst.i16x8 [0x0000 0xFF00 0x0000 0x00FF 0x0000 0xFFFF 0x00FF 0xFFFF]
+    v4 = bitselect v3, v0, v1
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   movdqu  const(0), %xmm0
+;   movdqa  %xmm5, %xmm6
+;   movdqa  %xmm1, %xmm4
+;   pblendvb %xmm4, %xmm6, %xmm4
+;   movdqa  %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   movdqu 0x20(%rip), %xmm0
+;   movdqa %xmm5, %xmm6
+;   movdqa %xmm1, %xmm4
+;   pblendvb %xmm0, %xmm6, %xmm4
+;   movdqa %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %bh, %bh
+;   addb %al, (%rax)
+;   incl (%rax)
+;   addb %al, (%rax)
+
+function %bad_const_mask(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v3 = vconst.i8x16 [0 0 0xF0 0 0 0xFF 0 0 0 0 0xFF 0 0 0 0 0xFF]
+    v4 = bitselect v3, v0, v1
+    return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm7
+;   movdqu  const(0), %xmm0
+;   movdqa  %xmm7, %xmm2
+;   pand    %xmm2, %xmm0, %xmm2
+;   pandn   %xmm0, %xmm1, %xmm0
+;   por     %xmm0, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm7
+;   movdqu 0x20(%rip), %xmm0
+;   movdqa %xmm7, %xmm2
+;   pand %xmm0, %xmm2
+;   pandn %xmm1, %xmm0
+;   por %xmm2, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %dh, %al
+;   addb %al, (%rax)
+;   incl (%rax)
+;   addb %al, (%rax)
+;   addb %bh, %bh
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+

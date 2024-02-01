@@ -1,0 +1,21 @@
+test interpret
+test run
+target riscv64
+target riscv64 has_c has_zcb
+
+function %a(f32) -> i8 system_v {
+block0(v0: f32):
+    v1 = fcvt_to_sint_sat.i8 v0
+    return  v1
+}
+
+; run: %a(-0x1.000006p125) == -128
+
+
+function %b(f32) -> i16 system_v {
+block0(v0: f32):
+    v1 = fcvt_to_sint_sat.i16 v0
+    return  v1
+}
+
+; run: %b(-0x1.000006p125) == -32768

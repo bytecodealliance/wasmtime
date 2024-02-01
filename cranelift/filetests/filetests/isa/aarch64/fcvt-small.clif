@@ -1,0 +1,224 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function u0:0(i8) -> f32 {
+block0(v0: i8):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uxtb w2, w0
+;   ucvtf s0, w2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w2, w0
+;   ucvtf s0, w2
+;   ret
+
+function u0:0(i8) -> f64 {
+block0(v0: i8):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uxtb w2, w0
+;   ucvtf d0, w2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w2, w0
+;   ucvtf d0, w2
+;   ret
+
+function u0:0(i16) -> f32 {
+block0(v0: i16):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uxth w2, w0
+;   ucvtf s0, w2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w2, w0
+;   ucvtf s0, w2
+;   ret
+
+function u0:0(i16) -> f64 {
+block0(v0: i16):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   uxth w2, w0
+;   ucvtf d0, w2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w2, w0
+;   ucvtf d0, w2
+;   ret
+
+function u0:0(f32) -> i8 {
+block0(v0: f32):
+    v1 = fcvt_to_uint.i8 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s0
+;   b.vs #trap=bad_toint
+;   fmov s4, #-1
+;   fcmp s0, s4
+;   b.le #trap=int_ovf
+;   movz w8, #17280, LSL #16
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #trap=int_ovf
+;   fcvtzu w0, s0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s0
+;   b.vs #0x2c
+;   fmov s4, #-1.00000000
+;   fcmp s0, s4
+;   b.le #0x30
+;   mov w8, #0x43800000
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #0x34
+;   fcvtzu w0, s0
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+
+function u0:0(f64) -> i8 {
+block0(v0: f64):
+    v1 = fcvt_to_uint.i8 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d0
+;   b.vs #trap=bad_toint
+;   fmov d4, #-1
+;   fcmp d0, d4
+;   b.le #trap=int_ovf
+;   movz x8, #16496, LSL #48
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #trap=int_ovf
+;   fcvtzu w0, d0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d0
+;   b.vs #0x2c
+;   fmov d4, #-1.00000000
+;   fcmp d0, d4
+;   b.le #0x30
+;   mov x8, #0x4070000000000000
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #0x34
+;   fcvtzu w0, d0
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+
+function u0:0(f32) -> i16 {
+block0(v0: f32):
+    v1 = fcvt_to_uint.i16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s0
+;   b.vs #trap=bad_toint
+;   fmov s4, #-1
+;   fcmp s0, s4
+;   b.le #trap=int_ovf
+;   movz w8, #18304, LSL #16
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #trap=int_ovf
+;   fcvtzu w0, s0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s0
+;   b.vs #0x2c
+;   fmov s4, #-1.00000000
+;   fcmp s0, s4
+;   b.le #0x30
+;   mov w8, #0x47800000
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #0x34
+;   fcvtzu w0, s0
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+
+function u0:0(f64) -> i16 {
+block0(v0: f64):
+    v1 = fcvt_to_uint.i16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d0
+;   b.vs #trap=bad_toint
+;   fmov d4, #-1
+;   fcmp d0, d4
+;   b.le #trap=int_ovf
+;   movz x8, #16624, LSL #48
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #trap=int_ovf
+;   fcvtzu w0, d0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d0
+;   b.vs #0x2c
+;   fmov d4, #-1.00000000
+;   fcmp d0, d4
+;   b.le #0x30
+;   mov x8, #0x40f0000000000000
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #0x34
+;   fcvtzu w0, d0
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+

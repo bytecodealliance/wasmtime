@@ -1,0 +1,20 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-control"
+version = "0.105.0"
+description = "White-box fuzz testing framework"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+keywords = ["fuzz", "test"]
+edition.workspace = true
+
+[dependencies]
+arbitrary = { workspace = true }
+
+[features]
+
+# Turn on chaos mode.
+# Without this feature, a zero-sized dummy will be compiled
+# for the control plane.
+chaos = []

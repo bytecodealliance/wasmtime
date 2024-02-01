@@ -1,0 +1,16 @@
+test compile
+target riscv64
+
+function u1:0() system_v {
+block0:
+    v3 = iconst.i16 0
+    v5 = iconst.i64 0
+    v6 = uextend.i128 v5  ; v5 = 0
+    v13 = icmp slt v3, v3  ; v3 = 0, v3 = 0
+    v15 = select v13, v6, v6
+    v20 = select v15, v5, v5  ; v5 = 0, v5 = 0
+    v22 = ishl v13, v20
+    v58 = iconst.i8 0
+    v25 = udiv v22, v58  ; v58 = 0
+    return
+}

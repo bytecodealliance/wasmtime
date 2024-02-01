@@ -1,0 +1,18 @@
+[package]
+name = "component-macro-test-helpers"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+license = "Apache-2.0 WITH LLVM-exception"
+
+[lints]
+workspace = true
+
+[lib]
+proc-macro = true
+test = false
+doctest = false
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"

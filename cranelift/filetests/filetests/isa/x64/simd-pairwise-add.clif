@@ -1,0 +1,187 @@
+test compile precise-output
+target x86_64 ssse3
+
+function %fn1(i8x16) -> i16x8 {
+block0(v0: i8x16):
+  v1 = swiden_low v0
+  v2 = swiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm4
+;   movdqu  const(0), %xmm0
+;   movdqa  %xmm4, %xmm5
+;   pmaddubsw %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm4
+;   movdqu 0x10(%rip), %xmm0
+;   movdqa %xmm4, %xmm5
+;   pmaddubsw %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+
+function %fn2(i16x8) -> i32x4 {
+block0(v0: i16x8):
+  v1 = swiden_low v0
+  v2 = swiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pmaddwd %xmm0, const(0), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pmaddwd 0x14(%rip), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+
+function %fn3(i8x16) -> i16x8 {
+block0(v0: i8x16):
+  v1 = uwiden_low v0
+  v2 = uwiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pmaddubsw %xmm0, const(0), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pmaddubsw 0x13(%rip), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+
+function %fn4(i16x8) -> i32x4 {
+block0(v0: i16x8):
+  v1 = uwiden_low v0
+  v2 = uwiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pxor    %xmm0, const(0), %xmm0
+;   pmaddwd %xmm0, const(1), %xmm0
+;   paddd   %xmm0, const(2), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pxor 0x24(%rip), %xmm0
+;   pmaddwd 0x2c(%rip), %xmm0
+;   paddd 0x34(%rip), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb $0x80, (%rax)
+;   addb %al, -0x7fff8000(%rax)
+;   addb %al, -0x7fff8000(%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
+

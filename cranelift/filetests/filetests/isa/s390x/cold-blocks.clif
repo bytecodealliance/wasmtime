@@ -1,0 +1,71 @@
+test compile precise-output
+
+target s390x
+
+function %no_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    brif v0, block1(v0), block2
+
+block1(v1: i32):
+    return v1
+
+block2:
+    v2 = iconst.i32 97
+    jump block1(v2)
+}
+
+; VCode:
+; block0:
+;   chi %r2, 0
+;   jglh label1 ; jg label2
+; block1:
+;   jg label3
+; block2:
+;   lhi %r2, 97
+;   jg label3
+; block3:
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   chi %r2, 0
+;   jglh 0xe
+; block1: ; offset 0xa
+;   lhi %r2, 0x61
+; block2: ; offset 0xe
+;   br %r14
+
+function %cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    brif v0, block1(v0), block2
+
+block1(v1: i32):
+    return v1
+
+block2 cold:
+    v2 = iconst.i32 97
+    jump block1(v2)
+}
+
+; VCode:
+; block0:
+;   chi %r2, 0
+;   jglh label1 ; jg label2
+; block1:
+;   jg label3
+; block3:
+;   br %r14
+; block2:
+;   lhi %r2, 97
+;   jg label3
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   chi %r2, 0
+;   jgnlh 0xc
+; block1: ; offset 0xa
+;   br %r14
+; block2: ; offset 0xc
+;   lhi %r2, 0x61
+;   jg 0xa
+
