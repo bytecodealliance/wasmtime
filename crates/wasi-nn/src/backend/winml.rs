@@ -96,8 +96,13 @@ impl WinMLExecutionContext {
 
 impl BackendExecutionContext for WinMLExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
+        // TODO: Support other tensor types. Only FP32 is supported right now.
+        match tensor.tensor_type {
+            crate::wit::types::TensorType::Fp32 => {}
+            _ => unimplemented!(),
+        }
+
         let input = self.session.Model()?.InputFeatures()?.GetAt(index)?;
-        // TODO: Bind input.
         unsafe {
             let data = std::slice::from_raw_parts(
                 tensor.data.as_ptr() as *const f32,
