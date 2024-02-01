@@ -5,7 +5,7 @@ use crate::preview2::bindings::cli::{
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe;
 use crate::preview2::{
-    HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, WasiView,
+    HostInputStream, HostOutputStream, PollableAsync, StreamError, StreamResult, WasiView,
 };
 use bytes::Bytes;
 use std::io::IsTerminal;
@@ -179,7 +179,7 @@ impl HostOutputStream for OutputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for OutputStream {
+impl PollableAsync for OutputStream {
     async fn ready(&mut self) {}
 }
 

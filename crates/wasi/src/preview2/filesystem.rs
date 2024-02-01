@@ -1,6 +1,7 @@
 use crate::preview2::bindings::filesystem::types;
 use crate::preview2::{
-    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe, TrappableError,
+    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, PollableAsync, StreamError,
+    TrappableError,
 };
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
@@ -284,7 +285,7 @@ impl HostOutputStream for FileOutputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for FileOutputStream {
+impl PollableAsync for FileOutputStream {
     async fn ready(&mut self) {
         if let OutputState::Waiting(task) = &mut self.state {
             self.state = match task.await {

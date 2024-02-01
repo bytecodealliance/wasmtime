@@ -164,7 +164,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
         src: Resource<InputStream>,
         len: u64,
     ) -> StreamResult<u64> {
-        use crate::preview2::Subscribe;
+        use crate::preview2::PollableAsync;
 
         self.table().get_mut(&dest)?.ready().await;
 

@@ -98,10 +98,10 @@ pub trait Pollable: Send + 'static {
 /// Convenience trait for implementing [`Pollable`] in terms of an `async` method.
 /// If you need access to the current [`WasiView`], implement `Pollable` directly instead.
 ///
-/// There is a blanket implementation of `Pollable` for all `Subscribe`'s,
-/// so all `Subscribe` implementations are automatically `Pollable`.
+/// There is a blanket implementation of `Pollable` for all `PollableAsync`'s,
+/// so all `PollableAsync` implementations are automatically `Pollable`.
 #[async_trait::async_trait]
-pub trait Subscribe: Send + 'static {
+pub trait PollableAsync: Send + 'static {
     /// Wait for the pollable to be ready.
     ///
     /// # Cancel safety
@@ -118,13 +118,13 @@ pub trait Subscribe: Send + 'static {
     }
 }
 
-impl<T: Subscribe> Pollable for T {
+impl<T: PollableAsync> Pollable for T {
     fn ready<'a>(&'a mut self) -> Pin<Box<dyn WasiFuture<Output = ()> + Send + 'a>> {
-        Box::pin(Subscribe::ready(self))
+        Box::pin(PollableAsync::ready(self))
     }
 
     fn is_ready(&mut self, _view: &mut dyn WasiView) -> bool {
-        Subscribe::is_ready(self)
+        PollableAsync::is_ready(self)
     }
 }
 

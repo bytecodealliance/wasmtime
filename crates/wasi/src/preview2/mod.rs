@@ -45,7 +45,7 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketError, SocketResult};
-pub use self::poll::{subscribe, Pollable, PollableResource, Subscribe, WasiFuture};
+pub use self::poll::{subscribe, Pollable, PollableAsync, PollableResource, WasiFuture};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
     stderr, stdin, stdout, IsATTY, Stderr, Stdin, StdinStream, Stdout, StdoutStream,

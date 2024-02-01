@@ -23,7 +23,7 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::preview2::poll::Subscribe;
+use crate::preview2::poll::PollableAsync;
 use crate::preview2::stdio::StdinStream;
 use crate::preview2::{HostInputStream, StreamError};
 use bytes::{Bytes, BytesMut};
@@ -148,7 +148,7 @@ impl HostInputStream for Stdin {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for Stdin {
+impl PollableAsync for Stdin {
     async fn ready(&mut self) {
         let g = GlobalStdin::get();
 

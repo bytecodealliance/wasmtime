@@ -10,8 +10,8 @@ use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::preview2::{
-    self, poll_noop, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError,
-    Subscribe,
+    self, poll_noop, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, PollableAsync,
+    StreamError,
 };
 
 pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
@@ -206,7 +206,7 @@ impl HostInputStream for HostIncomingBodyStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for HostIncomingBodyStream {
+impl PollableAsync for HostIncomingBodyStream {
     async fn ready(&mut self) {
         if !self.buffer.is_empty() || self.error.is_some() {
             return;
@@ -305,7 +305,7 @@ pub enum HostFutureTrailers {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for HostFutureTrailers {
+impl PollableAsync for HostFutureTrailers {
     async fn ready(&mut self) {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
@@ -626,7 +626,7 @@ impl HostOutputStream for BodyWriteStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for BodyWriteStream {
+impl PollableAsync for BodyWriteStream {
     async fn ready(&mut self) {
         // Attempt to perform a reservation for a send. If there's capacity in
         // the channel or it's already closed then this will return immediately.

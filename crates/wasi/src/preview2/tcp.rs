@@ -2,7 +2,7 @@ use super::network::SocketAddressFamily;
 use super::{HostInputStream, HostOutputStream, StreamError};
 use crate::preview2::host::network::util;
 use crate::preview2::{
-    with_ambient_tokio_runtime, AbortOnDropJoinHandle, InputStream, OutputStream, Subscribe,
+    with_ambient_tokio_runtime, AbortOnDropJoinHandle, InputStream, OutputStream, PollableAsync,
 };
 use anyhow::{Error, Result};
 use cap_net_ext::{AddressFamily, Blocking};
@@ -126,7 +126,7 @@ impl HostInputStream for TcpReadStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for TcpReadStream {
+impl PollableAsync for TcpReadStream {
     async fn ready(&mut self) {
         if self.closed {
             return;
@@ -242,7 +242,7 @@ impl HostOutputStream for TcpWriteStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for TcpWriteStream {
+impl PollableAsync for TcpWriteStream {
     async fn ready(&mut self) {
         if let LastWrite::Waiting(task) = &mut self.last_write {
             self.last_write = match task.await {
@@ -318,7 +318,7 @@ impl TcpSocket {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for TcpSocket {
+impl PollableAsync for TcpSocket {
     async fn ready(&mut self) {
         // Some states are ready immediately.
         match self.tcp_state {

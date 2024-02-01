@@ -505,6 +505,6 @@ impl preview2::HostOutputStream for LogStream {
 }
 
 #[async_trait::async_trait]
-impl preview2::Subscribe for LogStream {
+impl preview2::PollableAsync for LogStream {
     async fn ready(&mut self) {}
 }

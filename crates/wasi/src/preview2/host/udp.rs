@@ -6,7 +6,7 @@ use crate::preview2::{
         sockets::udp,
     },
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
-    Subscribe,
+    PollableAsync,
 };
 use crate::preview2::{PollableResource, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
@@ -384,7 +384,7 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
 }
 
 #[async_trait]
-impl Subscribe for IncomingDatagramStream {
+impl PollableAsync for IncomingDatagramStream {
     async fn ready(&mut self) {
         // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
         self.inner
@@ -518,7 +518,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
 }
 
 #[async_trait]
-impl Subscribe for OutgoingDatagramStream {
+impl PollableAsync for OutgoingDatagramStream {
     async fn ready(&mut self) {
         match self.send_state {
             SendState::Idle | SendState::Permitted(_) => {}

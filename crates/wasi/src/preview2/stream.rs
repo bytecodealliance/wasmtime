@@ -1,12 +1,12 @@
 use crate::preview2::filesystem::FileInputStream;
-use crate::preview2::poll::Subscribe;
+use crate::preview2::poll::PollableAsync;
 use anyhow::Result;
 use bytes::Bytes;
 
 /// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
 /// bytestream which can be read from.
 #[async_trait::async_trait]
-pub trait HostInputStream: Subscribe {
+pub trait HostInputStream: PollableAsync {
     /// Reads up to `size` bytes, returning a buffer holding these bytes on
     /// success.
     ///
@@ -81,7 +81,7 @@ impl From<wasmtime::component::ResourceTableError> for StreamError {
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
-pub trait HostOutputStream: Subscribe {
+pub trait HostOutputStream: PollableAsync {
     /// Write bytes after obtaining a permit to write those bytes
     ///
     /// Prior to calling [`write`](Self::write) the caller must call
@@ -156,7 +156,7 @@ pub trait HostOutputStream: Subscribe {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for Box<dyn HostOutputStream> {
+impl PollableAsync for Box<dyn HostOutputStream> {
     async fn ready(&mut self) {
         (**self).ready().await
     }
@@ -168,7 +168,7 @@ pub enum InputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for InputStream {
+impl PollableAsync for InputStream {
     async fn ready(&mut self) {
         match self {
             InputStream::Host(stream) => stream.ready().await,

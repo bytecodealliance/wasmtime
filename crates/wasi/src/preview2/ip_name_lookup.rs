@@ -1,7 +1,7 @@
 use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::preview2::host::network::util;
-use crate::preview2::poll::{subscribe, PollableResource, Subscribe};
+use crate::preview2::poll::{subscribe, PollableAsync, PollableResource};
 use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
@@ -79,7 +79,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for ResolveAddressStream {
+impl PollableAsync for ResolveAddressStream {
     async fn ready(&mut self) {
         if let ResolveAddressStream::Waiting(future) = self {
             *self = ResolveAddressStream::Done(future.await.map(|v| v.into_iter()));
