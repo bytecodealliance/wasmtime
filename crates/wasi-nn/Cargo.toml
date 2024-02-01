@@ -17,10 +17,10 @@ workspace = true
 [dependencies]
 # These dependencies are necessary for the WITX-generation macros to work:
 anyhow = { workspace = true }
-wiggle = { workspace = true }
+wiggle = { workspace = true, features = ["wasmtime"] }
 
 # This dependency is necessary for the WIT-generation macros to work:
-wasmtime = { workspace = true, features = ["component-model"] }
+wasmtime = { workspace = true, features = ["component-model", "runtime"] }
 
 # These dependencies are necessary for the wasi-nn implementation:
 tracing = { workspace = true }
