@@ -23,6 +23,7 @@ mod instance;
 mod linker;
 mod memory;
 mod module;
+mod profiling;
 mod r#ref;
 mod store;
 mod table;
