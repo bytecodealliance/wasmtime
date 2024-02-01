@@ -71,7 +71,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
             Duration::from_nanos(0)
         };
         let pollable = make_pollable(duration);
-        Ok(self.table().push(PollableResource::new(pollable))?)
+        Ok(self.table().push(PollableResource::own(pollable))?)
     }
 
     fn subscribe_duration(
@@ -79,6 +79,6 @@ impl<T: WasiView> monotonic_clock::Host for T {
         duration: WasiDuration,
     ) -> anyhow::Result<Resource<PollableResource>> {
         let pollable = make_pollable(Duration::from_nanos(duration));
-        Ok(self.table().push(PollableResource::new(pollable))?)
+        Ok(self.table().push(PollableResource::own(pollable))?)
     }
 }
