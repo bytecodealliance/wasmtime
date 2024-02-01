@@ -56,7 +56,7 @@ impl BackendFromDir for WinMLBackend {
         path: &Path,
         target: ExecutionTarget,
     ) -> Result<Graph, BackendError> {
-        let model = read(&path.join("mobilenet.onnx"))?;
+        let model = read(&path.join("model.onnx"))?;
         self.load(&[&model], target)
     }
 }

@@ -97,7 +97,7 @@ fn check_winml_artifacts_are_available() -> Result<()> {
         fs::create_dir(&artifacts_dir)?;
     }
     const MODEL_URL: &str="https://github.com/onnx/models/raw/5faef4c33eba0395177850e1e31c4a6a9e634c82/vision/classification/mobilenet/model/mobilenetv2-12.onnx";
-    for (from, to) in [(MODEL_URL, "mobilenet.onnx")] {
+    for (from, to) in [(MODEL_URL, "model.onnx")] {
         let local_path = artifacts_dir.join(to);
         if !local_path.is_file() {
             download(&from, &local_path).with_context(|| "unable to retrieve test artifact")?;
