@@ -215,7 +215,7 @@ jobs:
     - run: cd crates/c-api && doxygen doxygen.conf
 
     # install mdbook, build the docs, and test the docs
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/mdbook
         key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
@@ -247,7 +247,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -322,9 +322,14 @@ jobs:
 
     # Check whether `wasmtime` cross-compiles to aarch64-linux-android
     - run: rustup target add aarch64-linux-android
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
-    - uses: actions/cache@v3
+      uses: android-actions/setup-android@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/cargo-ndk
         key: cargo-ndk-bin-${{ env.CARGO_NDK_VERSION }}
@@ -439,7 +444,7 @@ jobs:
 
     - run: cargo fetch --locked
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
@@ -557,11 +562,32 @@ jobs:
       env:
         VERSION: ${{ github.sha }}
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
 
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+
+  build-wasmtime-target-wasm32:
+    name: Build wasmtime-target-wasm32
+    needs: determine
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - run: rustup update stable && rustup default stable
+    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
+    - run: cargo build -p wasmtime --target wasm32-wasi --no-default-features --features cranelift,all-arch
+      env:
+        VERSION: ${{ github.sha }}
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
@@ -659,7 +685,7 @@ jobs:
       with:
         toolchain: nightly-2023-10-10
     - run: rustup component add rust-src miri
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/cargo-nextest
         key: cargo-nextest-bin-${{ env.CARGO_NEXTEST_VERSION }}
@@ -719,7 +745,7 @@ jobs:
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: bins-${{ matrix.build }}
         path: dist

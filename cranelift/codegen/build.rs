@@ -28,16 +28,19 @@ fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
 
+    let all_arch = env::var("CARGO_FEATURE_ALL_ARCH").is_ok();
+
     let mut isas = meta::isa::Isa::all()
         .iter()
         .cloned()
         .filter(|isa| {
             let env_key = format!("CARGO_FEATURE_{}", isa.to_string().to_uppercase());
-            env::var(env_key).is_ok()
+            all_arch || env::var(env_key).is_ok()
         })
         .collect::<Vec<_>>();
 
-    let host_isa = env::var("CARGO_FEATURE_HOST_ARCH").is_ok();
+    // Don't require host isa if under 'all-arch' feature.
+    let host_isa = env::var("CARGO_FEATURE_HOST_ARCH").is_ok() && !all_arch;
 
     if isas.is_empty() || host_isa {
         // Try to match native target.

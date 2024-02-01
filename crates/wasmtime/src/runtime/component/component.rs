@@ -1,25 +1,22 @@
 use crate::{
-    code::CodeObject, code_memory::CodeMemory, instantiate::finish_object,
-    signatures::SignatureCollection, Engine, Module, ResourcesRequired,
+    code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
+    type_registry::TypeCollection, Engine, Module, ResourcesRequired,
 };
 use anyhow::{bail, Context, Result};
-use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use std::mem;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
-    TrampolineIndex, Translator, VMComponentOffsets,
+    AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, GlobalInitializer,
+    InstantiateModule, StaticModuleIndex, TrampolineIndex, TypeComponentIndex, VMComponentOffsets,
 };
-use wasmtime_environ::{
-    CompiledModuleInfo, FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec,
-};
+
+use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
-    MmapVec, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction,
-    VMWasmCallFunction,
+    VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
 };
 
 /// A compiled WebAssembly Component.
@@ -31,6 +28,9 @@ pub struct Component {
 }
 
 struct ComponentInner {
+    /// Component type index
+    ty: TypeComponentIndex,
+
     /// Core wasm modules that the component defined internally, indexed by the
     /// compile-time-assigned `ModuleUpvarIndex`.
     static_modules: PrimaryMap<StaticModuleIndex, Module>,
@@ -46,40 +46,10 @@ struct ComponentInner {
     info: CompiledComponentInfo,
 }
 
-#[derive(Serialize, Deserialize)]
-struct CompiledComponentInfo {
-    /// Type information calculated during translation about this component.
-    component: wasmtime_environ::component::Component,
-
-    /// Where lowered function trampolines are located within the `text`
-    /// section of `code_memory`.
-    ///
-    /// These are the
-    ///
-    /// 1. Wasm-call,
-    /// 2. array-call, and
-    /// 3. native-call
-    ///
-    /// function pointers that end up in a `VMFuncRef` for each
-    /// lowering.
-    trampolines: PrimaryMap<TrampolineIndex, AllCallFunc<FunctionLoc>>,
-
-    /// The location of the wasm-to-native trampoline for the `resource.drop`
-    /// intrinsic.
-    resource_drop_wasm_to_native_trampoline: Option<FunctionLoc>,
-}
-
 pub(crate) struct AllCallFuncPointers {
     pub wasm_call: NonNull<VMWasmCallFunction>,
     pub array_call: VMArrayCallFunction,
     pub native_call: NonNull<VMNativeCallFunction>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct ComponentArtifacts {
-    info: CompiledComponentInfo,
-    types: ComponentTypes,
-    static_modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
 }
 
 impl Component {
@@ -129,7 +99,9 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
+        use crate::compile::build_component_artifacts;
         use crate::module::HashedEngineCompileEnv;
+        use wasmtime_runtime::MmapVec;
 
         engine
             .check_compatible_with_native_host()
@@ -147,8 +119,8 @@ impl Component {
 
                     // Cache miss, compute the actual artifacts
                     |(engine, wasm)| -> Result<_> {
-                        let (mmap, artifacts) = Component::build_artifacts(engine.0, wasm)?;
-                        let code = publish_mmap(mmap)?;
+                        let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
+                        let code = publish_mmap(mmap.0)?;
                         Ok((code, Some(artifacts)))
                     },
 
@@ -164,9 +136,9 @@ impl Component {
                     },
                 )?;
             } else {
-                let (mmap, artifacts) = Component::build_artifacts(engine, binary)?;
+                let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine, binary)?;
                 let artifacts = Some(artifacts);
-                let code = publish_mmap(mmap)?;
+                let code = publish_mmap(mmap.0)?;
             }
         };
 
@@ -204,72 +176,6 @@ impl Component {
         Component::from_parts(engine, code, None)
     }
 
-    /// Performs the compilation phase for a component, translating and
-    /// validating the provided wasm binary to machine code.
-    ///
-    /// This method will compile all nested core wasm binaries in addition to
-    /// any necessary extra functions required for operation with components.
-    /// The output artifact here is the serialized object file contained within
-    /// an owned mmap along with metadata about the compilation itself.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn build_artifacts(
-        engine: &Engine,
-        binary: &[u8],
-    ) -> Result<(MmapVec, ComponentArtifacts)> {
-        use crate::compiler::CompileInputs;
-
-        let tunables = &engine.config().tunables;
-        let compiler = engine.compiler();
-
-        let scope = ScopeVec::new();
-        let mut validator =
-            wasmparser::Validator::new_with_features(engine.config().features.clone());
-        let mut types = Default::default();
-        let (component, mut module_translations) =
-            Translator::new(tunables, &mut validator, &mut types, &scope)
-                .translate(binary)
-                .context("failed to parse WebAssembly module")?;
-
-        let compile_inputs = CompileInputs::for_component(
-            &types,
-            &component,
-            module_translations.iter_mut().map(|(i, translation)| {
-                let functions = mem::take(&mut translation.function_body_inputs);
-                (i, &*translation, functions)
-            }),
-        );
-        let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
-        let types = types.finish();
-        let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
-
-        let mut object = compiler.object(ObjectKind::Component)?;
-        engine.append_compiler_info(&mut object);
-        engine.append_bti(&mut object);
-
-        let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
-            object,
-            engine,
-            compiled_funcs,
-            module_translations,
-        )?;
-
-        let info = CompiledComponentInfo {
-            component: component.component,
-            trampolines: compilation_artifacts.trampolines,
-            resource_drop_wasm_to_native_trampoline: compilation_artifacts
-                .resource_drop_wasm_to_native_trampoline,
-        };
-        let artifacts = ComponentArtifacts {
-            info,
-            types,
-            static_modules: compilation_artifacts.modules,
-        };
-        object.serialize_info(&artifacts);
-
-        let mmap = finish_object(object)?;
-        Ok((mmap, artifacts))
-    }
-
     /// Final assembly step for a component from its in-memory representation.
     ///
     /// If the `artifacts` are specified as `None` here then they will be
@@ -280,6 +186,7 @@ impl Component {
         artifacts: Option<ComponentArtifacts>,
     ) -> Result<Component> {
         let ComponentArtifacts {
+            ty,
             info,
             types,
             static_modules,
@@ -299,8 +206,7 @@ impl Component {
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the
         // component and for all included core wasm modules.
-        let signatures =
-            SignatureCollection::new_for_module(engine.signatures(), types.module_types());
+        let signatures = TypeCollection::new_for_module(engine.signatures(), types.module_types());
 
         // Assemble the `CodeObject` artifact which is shared by all core wasm
         // modules as well as the final component.
@@ -317,11 +223,16 @@ impl Component {
 
         Ok(Component {
             inner: Arc::new(ComponentInner {
+                ty,
                 static_modules,
                 code,
                 info,
             }),
         })
+    }
+
+    pub(crate) fn ty(&self) -> TypeComponentIndex {
+        self.inner.ty
     }
 
     pub(crate) fn env_component(&self) -> &wasmtime_environ::component::Component {
@@ -337,7 +248,7 @@ impl Component {
         self.inner.component_types()
     }
 
-    pub(crate) fn signatures(&self) -> &SignatureCollection {
+    pub(crate) fn signatures(&self) -> &TypeCollection {
         self.inner.code.signatures()
     }
 

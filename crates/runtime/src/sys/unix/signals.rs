@@ -36,7 +36,7 @@ pub unsafe fn platform_init(macos_use_mach_ports: bool) {
     // otherwise the `machports.rs` module should be used instead.
     assert!(!macos_use_mach_ports || !cfg!(target_os = "macos"));
 
-    let register = |slot: &mut MaybeUninit<libc::sigaction>, signal: i32| {
+    let register = |slot: *mut libc::sigaction, signal: i32| {
         let mut handler: libc::sigaction = mem::zeroed();
         // The flags here are relatively careful, and they are...
         //
@@ -54,7 +54,7 @@ pub unsafe fn platform_init(macos_use_mach_ports: bool) {
         handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
         handler.sa_sigaction = trap_handler as usize;
         libc::sigemptyset(&mut handler.sa_mask);
-        if libc::sigaction(signal, &handler, slot.as_mut_ptr()) != 0 {
+        if libc::sigaction(signal, &handler, slot) != 0 {
             panic!(
                 "unable to install signal handler: {}",
                 io::Error::last_os_error(),
@@ -63,20 +63,20 @@ pub unsafe fn platform_init(macos_use_mach_ports: bool) {
     };
 
     // Allow handling OOB with signals on all architectures
-    register(&mut PREV_SIGSEGV, libc::SIGSEGV);
+    register(PREV_SIGSEGV.as_mut_ptr(), libc::SIGSEGV);
 
     // Handle `unreachable` instructions which execute `ud2` right now
-    register(&mut PREV_SIGILL, libc::SIGILL);
+    register(PREV_SIGILL.as_mut_ptr(), libc::SIGILL);
 
     // x86 and s390x use SIGFPE to report division by zero
     if cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
-        register(&mut PREV_SIGFPE, libc::SIGFPE);
+        register(PREV_SIGFPE.as_mut_ptr(), libc::SIGFPE);
     }
 
     // Sometimes we need to handle SIGBUS too:
     // - On Darwin, guard page accesses are raised as SIGBUS.
     if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
-        register(&mut PREV_SIGBUS, libc::SIGBUS);
+        register(PREV_SIGBUS.as_mut_ptr(), libc::SIGBUS);
     }
 
     // TODO(#1980): x86-32, if we support it, will also need a SIGFPE handler.
@@ -89,10 +89,10 @@ unsafe extern "C" fn trap_handler(
     context: *mut libc::c_void,
 ) {
     let previous = match signum {
-        libc::SIGSEGV => &PREV_SIGSEGV,
-        libc::SIGBUS => &PREV_SIGBUS,
-        libc::SIGFPE => &PREV_SIGFPE,
-        libc::SIGILL => &PREV_SIGILL,
+        libc::SIGSEGV => PREV_SIGSEGV.as_ptr(),
+        libc::SIGBUS => PREV_SIGBUS.as_ptr(),
+        libc::SIGFPE => PREV_SIGFPE.as_ptr(),
+        libc::SIGILL => PREV_SIGILL.as_ptr(),
         _ => panic!("unknown signal: {}", signum),
     };
     let handled = tls::with(|info| {
@@ -180,13 +180,13 @@ unsafe extern "C" fn trap_handler(
     // it. It will either crash synchronously, fix up the instruction
     // so that execution can continue and return, or trigger a crash by
     // returning the signal to it's original disposition and returning.
-    let previous = &*previous.as_ptr();
+    let previous = *previous;
     if previous.sa_flags & libc::SA_SIGINFO != 0 {
         mem::transmute::<usize, extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void)>(
             previous.sa_sigaction,
         )(signum, siginfo, context)
     } else if previous.sa_sigaction == libc::SIG_DFL || previous.sa_sigaction == libc::SIG_IGN {
-        libc::sigaction(signum, previous, ptr::null_mut());
+        libc::sigaction(signum, &previous as *const _, ptr::null_mut());
     } else {
         mem::transmute::<usize, extern "C" fn(libc::c_int)>(previous.sa_sigaction)(signum)
     }

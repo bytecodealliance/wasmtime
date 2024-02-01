@@ -13,7 +13,7 @@ publish = false
 workspace = true
 
 [lib]
-name = "wamstime_c_api"
+name = "wasmtime_c_api"
 doc = false
 test = false
 doctest = false
@@ -22,7 +22,7 @@ doctest = false
 env_logger = { workspace = true, optional = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift'] }
+wasmtime = { workspace = true, features = ['cranelift', 'runtime'] }
 wasmtime-c-api-macros = { path = "macros" }
 log = { workspace = true }
 tracing = { workspace = true }

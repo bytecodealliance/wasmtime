@@ -1,11 +1,9 @@
-//! Define the `instantiate` function, which takes a byte array containing an
-//! encoded wasm module and returns a live wasm instance. Also, define
-//! `CompiledModule` to allow compiling and instantiating to be done as separate
-//! steps.
+//! Definitions of runtime structures and metadata which are serialized into ELF
+//! with `bincode` as part of a module's compilation process.
 
 use crate::{
     obj, DefinedFuncIndex, FuncIndex, FunctionLoc, MemoryInitialization, Module, ModuleTranslation,
-    PrimaryMap, SignatureIndex, Tunables, WasmFunctionInfo,
+    PrimaryMap, Tunables, WasmFunctionInfo,
 };
 use anyhow::{bail, Result};
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
@@ -14,6 +12,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::ops::Range;
 use std::str;
+use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Secondary in-memory results of function compilation.
 #[derive(Serialize, Deserialize)]
@@ -46,7 +45,7 @@ pub struct CompiledModuleInfo {
 
     /// Metadata about wasm-to-native trampolines. Used when exposing a native
     /// callee (e.g. `Func::wrap`) to a Wasm caller. Sorted by signature index.
-    pub wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)>,
+    pub wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
 
     /// General compilation metadata.
     pub meta: Metadata,
@@ -170,7 +169,7 @@ impl<'a> ObjectBuilder<'a> {
         &mut self,
         translation: ModuleTranslation<'_>,
         funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-        wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)>,
+        wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
     ) -> Result<CompiledModuleInfo> {
         let ModuleTranslation {
             mut module,

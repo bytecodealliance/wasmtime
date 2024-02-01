@@ -29,40 +29,8 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
-use wasmtime_runtime::MmapVec;
 
 const VERSION: u8 = 0;
-
-/// Produces a blob of bytes by serializing the `engine`'s configuration data to
-/// be checked, perhaps in a different process, with the `check_compatible`
-/// method below.
-///
-/// The blob of bytes is inserted into the object file specified to become part
-/// of the final compiled artifact.
-#[cfg(any(feature = "cranelift", feature = "winch"))]
-pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
-    let section = obj.add_section(
-        obj.segment_name(StandardSegment::Data).to_vec(),
-        obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
-        SectionKind::ReadOnlyData,
-    );
-    let mut data = Vec::new();
-    data.push(VERSION);
-    let version = match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
-        ModuleVersionStrategy::Custom(c) => c,
-        ModuleVersionStrategy::None => "",
-    };
-    // This precondition is checked in Config::module_version:
-    assert!(
-        version.len() < 256,
-        "package version must be less than 256 bytes"
-    );
-    data.push(version.len() as u8);
-    data.extend_from_slice(version.as_bytes());
-    bincode::serialize_into(&mut data, &Metadata::new(engine)).unwrap();
-    obj.set_section_data(section, data, 1);
-}
 
 /// Verifies that the serialized engine in `mmap` is compatible with the
 /// `engine` provided.
@@ -72,7 +40,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
 /// provided here, notably compatible wasm features are enabled, compatible
 /// compiler options, etc. If a mismatch is found and the compilation metadata
 /// specified is incompatible then an error is returned.
-pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -> Result<()> {
+pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> Result<()> {
     // Parse the input `mmap` as an ELF file and see if the header matches the
     // Wasmtime-generated header. This includes a Wasmtime-specific `os_abi` and
     // the `e_flags` field should indicate whether `expected` matches or not.
@@ -86,7 +54,7 @@ pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -
     // structured well enough to make this easy and additionally it's not really
     // a perf issue right now so doing that is left for another day's
     // refactoring.
-    let obj = File::parse(&mmap[..]).context("failed to parse precompiled artifact as an ELF")?;
+    let obj = File::parse(mmap).context("failed to parse precompiled artifact as an ELF")?;
     let expected_e_flags = match expected {
         ObjectKind::Module => obj::EF_WASMTIME_MODULE,
         ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
@@ -144,6 +112,30 @@ pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -
     bincode::deserialize::<Metadata<'_>>(data)?.check_compatible(engine)
 }
 
+pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Metadata<'_>) {
+    let section = obj.add_section(
+        obj.segment_name(StandardSegment::Data).to_vec(),
+        obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
+        SectionKind::ReadOnlyData,
+    );
+    let mut data = Vec::new();
+    data.push(VERSION);
+    let version = match &engine.config().module_version {
+        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
+        ModuleVersionStrategy::Custom(c) => c,
+        ModuleVersionStrategy::None => "",
+    };
+    // This precondition is checked in Config::module_version:
+    assert!(
+        version.len() < 256,
+        "package version must be less than 256 bytes"
+    );
+    data.push(version.len() as u8);
+    data.extend_from_slice(version.as_bytes());
+    bincode::serialize_into(&mut data, metadata).unwrap();
+    obj.set_section_data(section, data, 1);
+}
+
 fn detect_precompiled<'data, R: object::ReadRef<'data>>(
     obj: File<'data, R>,
 ) -> Option<Precompiled> {
@@ -173,7 +165,7 @@ pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Opti
 }
 
 #[derive(Serialize, Deserialize)]
-struct Metadata<'a> {
+pub struct Metadata<'a> {
     target: String,
     #[serde(borrow)]
     shared_flags: Vec<(&'a str, FlagValue<'a>)>,
@@ -203,7 +195,7 @@ struct WasmFeatures {
 
 impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    fn new(engine: &Engine) -> Metadata<'static> {
+    pub fn new(engine: &Engine) -> Metadata<'static> {
         let wasmparser::WasmFeatures {
             reference_types,
             multi_value,
@@ -491,7 +483,16 @@ impl Metadata<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::Config;
+
+    use crate::{Config, Engine, Module, ModuleVersionStrategy, OptLevel};
+
+    use anyhow::Result;
+    use tempfile::TempDir;
+
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
 
     #[test]
     fn test_architecture_mismatch() -> Result<()> {
@@ -653,6 +654,124 @@ Caused by:
             Ok(_) => unreachable!(),
             Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly threads support but it is not enabled for the host"),
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn engine_weak_upgrades() {
+        let engine = Engine::default();
+        let weak = engine.weak();
+        weak.upgrade()
+            .expect("engine is still alive, so weak reference can upgrade");
+        drop(engine);
+        assert!(
+            weak.upgrade().is_none(),
+            "engine was dropped, so weak reference cannot upgrade"
+        );
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn cache_accounts_for_opt_level() -> Result<()> {
+        let td = TempDir::new()?;
+        let config_path = td.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            &format!(
+                "
+                    [cache]
+                    enabled = true
+                    directory = '{}'
+                ",
+                td.path().join("cache").display()
+            ),
+        )?;
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::None)
+            .cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::Speed)
+            .cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
+            .cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+
+        let mut cfg = Config::new();
+        cfg.debug_info(true).cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn precompile_compatibility_key_accounts_for_opt_level() {
+        fn hash_for_config(cfg: &Config) -> u64 {
+            let engine = Engine::new(cfg).expect("Config should be valid");
+            let mut hasher = DefaultHasher::new();
+            engine.precompile_compatibility_hash().hash(&mut hasher);
+            hasher.finish()
+        }
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::None);
+        let opt_none_hash = hash_for_config(&cfg);
+        cfg.cranelift_opt_level(OptLevel::Speed);
+        let opt_speed_hash = hash_for_config(&cfg);
+        assert_ne!(opt_none_hash, opt_speed_hash)
+    }
+
+    #[test]
+    fn precompile_compatibility_key_accounts_for_module_version_strategy() -> Result<()> {
+        fn hash_for_config(cfg: &Config) -> u64 {
+            let engine = Engine::new(cfg).expect("Config should be valid");
+            let mut hasher = DefaultHasher::new();
+            engine.precompile_compatibility_hash().hash(&mut hasher);
+            hasher.finish()
+        }
+        let mut cfg_custom_version = Config::new();
+        cfg_custom_version.module_version(ModuleVersionStrategy::Custom("1.0.1111".to_string()))?;
+        let custom_version_hash = hash_for_config(&cfg_custom_version);
+
+        let mut cfg_default_version = Config::new();
+        cfg_default_version.module_version(ModuleVersionStrategy::WasmtimeVersion)?;
+        let default_version_hash = hash_for_config(&cfg_default_version);
+
+        let mut cfg_none_version = Config::new();
+        cfg_none_version.module_version(ModuleVersionStrategy::None)?;
+        let none_version_hash = hash_for_config(&cfg_none_version);
+
+        assert_ne!(custom_version_hash, default_version_hash);
+        assert_ne!(custom_version_hash, none_version_hash);
+        assert_ne!(default_version_hash, none_version_hash);
 
         Ok(())
     }

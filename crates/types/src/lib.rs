@@ -10,9 +10,9 @@ use std::fmt;
 mod error;
 pub use error::*;
 
-/// WebAssembly value type -- equivalent of `wasmparser`'s Type.
+/// WebAssembly value type -- equivalent of `wasmparser::ValType`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum WasmType {
+pub enum WasmValType {
     /// I32 type
     I32,
     /// I64 type
@@ -27,15 +27,15 @@ pub enum WasmType {
     Ref(WasmRefType),
 }
 
-impl fmt::Display for WasmType {
+impl fmt::Display for WasmValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WasmType::I32 => write!(f, "i32"),
-            WasmType::I64 => write!(f, "i64"),
-            WasmType::F32 => write!(f, "f32"),
-            WasmType::F64 => write!(f, "f64"),
-            WasmType::V128 => write!(f, "v128"),
-            WasmType::Ref(rt) => write!(f, "{rt}"),
+            WasmValType::I32 => write!(f, "i32"),
+            WasmValType::I64 => write!(f, "i64"),
+            WasmValType::F32 => write!(f, "f32"),
+            WasmValType::F64 => write!(f, "f64"),
+            WasmValType::V128 => write!(f, "v128"),
+            WasmValType::Ref(rt) => write!(f, "{rt}"),
         }
     }
 }
@@ -79,17 +79,17 @@ impl fmt::Display for WasmRefType {
 pub enum WasmHeapType {
     Func,
     Extern,
-    // FIXME: the `SignatureIndex` payload here is not suitable given all the
+    // FIXME: the `TypeIndex` payload here is not suitable given all the
     // contexts that this type is used within. For example the Engine in
     // wasmtime hashes this index which is not appropriate because the index is
     // not globally unique.
     //
     // This probably needs to become `WasmHeapType<T>` where all of translation
-    // uses `WasmHeapType<SignatureIndex>` and all of engine-level "stuff"  uses
-    // `WasmHeapType<VMSharedSignatureIndex>`. This `<T>` would need to be
+    // uses `WasmHeapType<TypeIndex>` and all of engine-level "stuff"  uses
+    // `WasmHeapType<VMSharedTypeIndex>`. This `<T>` would need to be
     // propagated to quite a few locations though so it's left for a future
     // refactoring at this time.
-    TypedFunc(SignatureIndex),
+    TypedFunc(ModuleInternedTypeIndex),
 }
 
 impl fmt::Display for WasmHeapType {
@@ -105,26 +105,26 @@ impl fmt::Display for WasmHeapType {
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
-    params: Box<[WasmType]>,
+    params: Box<[WasmValType]>,
     externref_params_count: usize,
-    returns: Box<[WasmType]>,
+    returns: Box<[WasmValType]>,
     externref_returns_count: usize,
 }
 
 impl WasmFuncType {
     #[inline]
-    pub fn new(params: Box<[WasmType]>, returns: Box<[WasmType]>) -> Self {
+    pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
         let externref_params_count = params
             .iter()
             .filter(|p| match **p {
-                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
                 _ => false,
             })
             .count();
         let externref_returns_count = returns
             .iter()
             .filter(|r| match **r {
-                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
                 _ => false,
             })
             .count();
@@ -138,7 +138,7 @@ impl WasmFuncType {
 
     /// Function params types.
     #[inline]
-    pub fn params(&self) -> &[WasmType] {
+    pub fn params(&self) -> &[WasmValType] {
         &self.params
     }
 
@@ -150,7 +150,7 @@ impl WasmFuncType {
 
     /// Returns params types.
     #[inline]
-    pub fn returns(&self) -> &[WasmType] {
+    pub fn returns(&self) -> &[WasmValType] {
         &self.returns
     }
 
@@ -206,10 +206,19 @@ entity_impl!(GlobalIndex);
 pub struct MemoryIndex(u32);
 entity_impl!(MemoryIndex);
 
-/// Index type of a signature (imported or defined) inside the WebAssembly module.
+/// Index type of a type (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct SignatureIndex(u32);
-entity_impl!(SignatureIndex);
+pub struct TypeIndex(u32);
+entity_impl!(TypeIndex);
+
+/// Index type of a deduplicated type (imported or defined) inside a WebAssembly
+/// module.
+///
+/// Note that this is deduplicated only at the level of a WebAssembly module,
+/// not at the level of a whole store or engine.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct ModuleInternedTypeIndex(u32);
+entity_impl!(ModuleInternedTypeIndex);
 
 /// Index type of a passive data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
@@ -220,11 +229,6 @@ entity_impl!(DataIndex);
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ElemIndex(u32);
 entity_impl!(ElemIndex);
-
-/// Index type of a type inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct TypeIndex(u32);
-entity_impl!(TypeIndex);
 
 /// Index type of an event inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
@@ -291,7 +295,7 @@ pub enum EntityType {
     Table(Table),
     /// A function type where the index points to the type section and records a
     /// function signature.
-    Function(SignatureIndex),
+    Function(ModuleInternedTypeIndex),
 }
 
 impl EntityType {
@@ -328,7 +332,7 @@ impl EntityType {
     }
 
     /// Assert that this entity is a function
-    pub fn unwrap_func(&self) -> SignatureIndex {
+    pub fn unwrap_func(&self) -> ModuleInternedTypeIndex {
         match self {
             EntityType::Function(g) => *g,
             _ => panic!("not a func"),
@@ -346,7 +350,7 @@ impl EntityType {
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Global {
     /// The Wasm type of the value stored in the global.
-    pub wasm_ty: crate::WasmType,
+    pub wasm_ty: crate::WasmValType,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
 }
@@ -459,14 +463,14 @@ pub trait TypeConvert {
     }
 
     /// Converts a wasmparser value type to a wasmtime type
-    fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmType {
+    fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmValType {
         match ty {
-            wasmparser::ValType::I32 => WasmType::I32,
-            wasmparser::ValType::I64 => WasmType::I64,
-            wasmparser::ValType::F32 => WasmType::F32,
-            wasmparser::ValType::F64 => WasmType::F64,
-            wasmparser::ValType::V128 => WasmType::V128,
-            wasmparser::ValType::Ref(t) => WasmType::Ref(self.convert_ref_type(t)),
+            wasmparser::ValType::I32 => WasmValType::I32,
+            wasmparser::ValType::I64 => WasmValType::I64,
+            wasmparser::ValType::F32 => WasmValType::F32,
+            wasmparser::ValType::F64 => WasmValType::F64,
+            wasmparser::ValType::V128 => WasmValType::V128,
+            wasmparser::ValType::Ref(t) => WasmValType::Ref(self.convert_ref_type(t)),
         }
     }
 

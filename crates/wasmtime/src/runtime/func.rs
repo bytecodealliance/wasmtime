@@ -13,7 +13,7 @@ use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_runtime::{
     ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
-    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
+    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedTypeIndex,
 };
 
 /// A WebAssembly function which can be called.
@@ -510,7 +510,7 @@ impl Func {
         raw: *mut VMFuncRef,
     ) -> Option<Func> {
         let func_ref = NonNull::new(raw)?;
-        debug_assert!(func_ref.as_ref().type_index != VMSharedSignatureIndex::default());
+        debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
         let export = ExportFunction { func_ref };
         Some(Func::from_wasmtime_function(export, store))
     }
@@ -795,7 +795,7 @@ impl Func {
         (store.store_data()[self.0].ty.as_ref().unwrap(), store)
     }
 
-    pub(crate) fn sig_index(&self, data: &StoreData) -> VMSharedSignatureIndex {
+    pub(crate) fn sig_index(&self, data: &StoreData) -> VMSharedTypeIndex {
         data[self.0].sig_index()
     }
 
@@ -2235,7 +2235,7 @@ impl HostFunc {
         );
     }
 
-    pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
+    pub(crate) fn sig_index(&self) -> VMSharedTypeIndex {
         self.func_ref().type_index
     }
 
@@ -2271,7 +2271,7 @@ impl FuncData {
         self.kind.export()
     }
 
-    pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
+    pub(crate) fn sig_index(&self) -> VMSharedTypeIndex {
         unsafe { self.export().func_ref.as_ref().type_index }
     }
 }

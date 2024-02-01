@@ -1,14 +1,14 @@
 use crate::linker::DefinitionType;
-use crate::{signatures::SignatureCollection, Engine};
+use crate::{type_registry::TypeCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmHeapType,
-    WasmRefType, WasmType,
+    EntityType, Global, Memory, ModuleInternedTypeIndex, ModuleTypes, Table, WasmFuncType,
+    WasmHeapType, WasmRefType, WasmValType,
 };
-use wasmtime_runtime::VMSharedSignatureIndex;
+use wasmtime_runtime::VMSharedTypeIndex;
 
 pub struct MatchCx<'a> {
-    pub signatures: &'a SignatureCollection,
+    pub signatures: &'a TypeCollection,
     pub types: &'a ModuleTypes,
     pub engine: &'a Engine,
 }
@@ -16,10 +16,10 @@ pub struct MatchCx<'a> {
 impl MatchCx<'_> {
     pub fn vmshared_signature_index(
         &self,
-        expected: SignatureIndex,
-        actual: VMSharedSignatureIndex,
+        expected: ModuleInternedTypeIndex,
+        actual: VMSharedTypeIndex,
     ) -> Result<()> {
-        let matches = match self.signatures.shared_signature(expected) {
+        let matches = match self.signatures.shared_type(expected) {
             Some(idx) => actual == idx,
             // If our expected signature isn't registered, then there's no way
             // that `actual` can match it.
@@ -153,8 +153,8 @@ fn global_ty(expected: &Global, actual: &Global) -> Result<()> {
 
 fn table_ty(expected: &Table, actual: &Table, actual_runtime_size: Option<u32>) -> Result<()> {
     equal_ty(
-        WasmType::Ref(expected.wasm_ty),
-        WasmType::Ref(actual.wasm_ty),
+        WasmValType::Ref(expected.wasm_ty),
+        WasmValType::Ref(actual.wasm_ty),
         "table",
     )?;
     match_limits(
@@ -231,14 +231,14 @@ fn match_ref(expected: WasmRefType, actual: WasmRefType, desc: &str) -> Result<(
 
 // Checks whether actual is a subtype of expected, i.e. `actual <: expected`
 // (note the parameters are given the other way around in code).
-fn match_ty(expected: WasmType, actual: WasmType, desc: &str) -> Result<()> {
+fn match_ty(expected: WasmValType, actual: WasmValType, desc: &str) -> Result<()> {
     match (actual, expected) {
-        (WasmType::Ref(actual), WasmType::Ref(expected)) => match_ref(expected, actual, desc),
+        (WasmValType::Ref(actual), WasmValType::Ref(expected)) => match_ref(expected, actual, desc),
         (actual, expected) => equal_ty(expected, actual, desc),
     }
 }
 
-fn equal_ty(expected: WasmType, actual: WasmType, desc: &str) -> Result<()> {
+fn equal_ty(expected: WasmValType, actual: WasmValType, desc: &str) -> Result<()> {
     if expected == actual {
         return Ok(());
     }

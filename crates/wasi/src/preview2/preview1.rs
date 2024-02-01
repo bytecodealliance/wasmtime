@@ -821,17 +821,14 @@ fn first_non_empty_ciovec<'a, 'b>(
 
 // Find first non-empty buffer.
 fn first_non_empty_iovec<'a>(iovs: &types::IovecArray<'a>) -> Result<Option<GuestPtr<'a, [u8]>>> {
-    iovs.iter()
-        .map(|iov| {
-            let iov = iov?.read()?;
-            if iov.buf_len == 0 {
-                return Ok(None);
-            }
-            let slice = iov.buf.as_array(iov.buf_len);
-            Ok(Some(slice))
-        })
-        .find_map(Result::transpose)
-        .transpose()
+    for iov in iovs.iter() {
+        let iov = iov?.read()?;
+        if iov.buf_len == 0 {
+            continue;
+        }
+        return Ok(Some(iov.buf.as_array(iov.buf_len)));
+    }
+    Ok(None)
 }
 
 #[async_trait::async_trait]
@@ -1335,8 +1332,10 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 let read = blocking_mode
-                    .read(self, stream, buf.len().try_into()?)
-                    .await?;
+                    .read(self, stream.borrowed(), buf.len().try_into()?)
+                    .await;
+                streams::HostInputStream::drop(self, stream).map_err(|e| types::Error::trap(e))?;
+                let read = read?;
                 let n = read.len().try_into()?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
@@ -1393,9 +1392,10 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 let read = blocking_mode
-                    .read(self, stream, buf.len().try_into()?)
-                    .await?;
-                (buf, read)
+                    .read(self, stream.borrowed(), buf.len().try_into()?)
+                    .await;
+                streams::HostInputStream::drop(self, stream).map_err(|e| types::Error::trap(e))?;
+                (buf, read?)
             }
             Descriptor::Stdin { .. } => {
                 // NOTE: legacy implementation returns SPIPE here
@@ -1454,7 +1454,9 @@ impl<
                     })?;
                     (stream, pos)
                 };
-                let n = blocking_mode.write(self, stream, buf).await?;
+                let n = blocking_mode.write(self, stream.borrowed(), buf).await;
+                streams::HostOutputStream::drop(self, stream).map_err(|e| types::Error::trap(e))?;
+                let n = n?;
                 if append {
                     let len = self.stat(fd2).await?;
                     position.store(len.size, Ordering::Relaxed);
@@ -1507,7 +1509,9 @@ impl<
                         .context("failed to call `write-via-stream`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
-                blocking_mode.write(self, stream, buf).await?
+                let result = blocking_mode.write(self, stream.borrowed(), buf).await;
+                streams::HostOutputStream::drop(self, stream).map_err(|e| types::Error::trap(e))?;
+                result?
             }
             Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
                 // NOTE: legacy implementation returns SPIPE here

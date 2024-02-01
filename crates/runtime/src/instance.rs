@@ -13,7 +13,7 @@ use crate::vmcontext::{
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo,
-    SendSyncPtr, Store, VMFunctionBody, VMSharedSignatureIndex, WasmFault,
+    SendSyncPtr, Store, VMFunctionBody, VMSharedTypeIndex, WasmFault,
 };
 use anyhow::Error;
 use anyhow::Result;
@@ -26,11 +26,12 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr};
+use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
+    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableIndex,
+    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmValType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -690,10 +691,15 @@ impl Instance {
     /// than tracking state related to whether it's been initialized
     /// before, because resetting that state on (re)instantiation is
     /// very expensive if there are many funcrefs.
-    fn construct_func_ref(&mut self, index: FuncIndex, sig: SignatureIndex, into: *mut VMFuncRef) {
+    fn construct_func_ref(
+        &mut self,
+        index: FuncIndex,
+        sig: ModuleInternedTypeIndex,
+        into: *mut VMFuncRef,
+    ) {
         let type_index = unsafe {
-            let base: *const VMSharedSignatureIndex =
-                *self.vmctx_plus_offset_mut(self.offsets().vmctx_signature_ids_array());
+            let base: *const VMSharedTypeIndex =
+                *self.vmctx_plus_offset_mut(self.offsets().vmctx_type_ids_array());
             *base.add(sig.index())
         };
 
@@ -1119,9 +1125,9 @@ impl Instance {
         self.set_callee(None);
         self.set_store(store.as_raw());
 
-        // Initialize shared signatures
-        let signatures = self.runtime_info.signature_ids();
-        *self.vmctx_plus_offset_mut(offsets.vmctx_signature_ids_array()) = signatures.as_ptr();
+        // Initialize shared types
+        let types = self.runtime_info.type_ids();
+        *self.vmctx_plus_offset_mut(offsets.vmctx_type_ids_array()) = types.as_ptr();
 
         // Initialize the built-in functions
         *self.vmctx_plus_offset_mut(offsets.vmctx_builtin_functions()) =
@@ -1229,7 +1235,7 @@ impl Instance {
                     // count as values move between globals, everything else is just
                     // copy-able bits.
                     match wasm_ty {
-                        WasmType::Ref(WasmRefType {
+                        WasmValType::Ref(WasmRefType {
                             heap_type: WasmHeapType::Extern,
                             ..
                         }) => *(*to).as_externref_mut() = from.as_externref().clone(),
@@ -1241,7 +1247,7 @@ impl Instance {
                 }
                 GlobalInit::RefNullConst => match wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits
-                    WasmType::Ref(WasmRefType { nullable: true, .. }) => {}
+                    WasmValType::Ref(WasmRefType { nullable: true, .. }) => {}
                     ty => panic!("unsupported reference type for global: {:?}", ty),
                 },
             }
@@ -1277,7 +1283,7 @@ impl Drop for Instance {
             };
             match global.wasm_ty {
                 // For now only externref globals need to get destroyed
-                WasmType::Ref(WasmRefType {
+                WasmValType::Ref(WasmRefType {
                     heap_type: WasmHeapType::Extern,
                     ..
                 }) => {}

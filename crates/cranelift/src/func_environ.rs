@@ -15,7 +15,7 @@ use cranelift_frontend::Variable;
 use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
     MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmHeapType, WasmRefType, WasmResult,
-    WasmType,
+    WasmValType,
 };
 use std::convert::TryFrom;
 use std::mem;
@@ -870,10 +870,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
-        // details.
-        let value_masked = builder
-            .ins()
-            .band_imm(value, Imm64::from(FUNCREF_MASK as i64));
+        // details. Note that `FUNCREF_MASK` has type `usize` which may not be
+        // appropriate for the target architecture. Right now its value is
+        // always -2 so assert that part doesn't change and then thread through
+        // -2 as the immediate.
+        assert_eq!(FUNCREF_MASK as isize, -2);
+        let value_masked = builder.ins().band_imm(value, Imm64::from(-2));
 
         let null_block = builder.create_block();
         let continuation_block = builder.create_block();
@@ -1067,7 +1069,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // If necessary, check the signature.
         match self.env.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
-                let sig_id_size = self.env.offsets.size_of_vmshared_signature_index();
+                let sig_id_size = self.env.offsets.size_of_vmshared_type_index();
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
                 let vmctx = self.env.vmctx(self.builder.func);
                 let base = self.builder.ins().global_value(pointer_type, vmctx);
@@ -1080,7 +1082,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     pointer_type,
                     mem_flags,
                     base,
-                    i32::try_from(self.env.offsets.vmctx_signature_ids_array()).unwrap(),
+                    i32::try_from(self.env.offsets.vmctx_type_ids_array()).unwrap(),
                 );
                 let sig_index = self.env.module.types[ty_index].unwrap_function();
                 let offset =
@@ -1729,7 +1731,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::Ref(WasmRefType::EXTERNREF),
+            WasmValType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 
@@ -1757,7 +1759,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::Ref(WasmRefType::EXTERNREF),
+            WasmValType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 
@@ -2022,7 +2024,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // `GlobalVariable::Custom`, as that is the only kind of
             // `GlobalVariable` for which `cranelift-wasm` supports custom
             // access translation.
-            WasmType::Ref(WasmRefType {
+            WasmValType::Ref(WasmRefType {
                 heap_type: WasmHeapType::Extern,
                 ..
             }) => return Ok(GlobalVariable::Custom),
@@ -2030,14 +2032,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // Funcrefs are represented as pointers which survive for the
             // entire lifetime of the `Store` so there's no need for barriers.
             // This means that they can fall through to memory as well.
-            WasmType::Ref(WasmRefType {
+            WasmValType::Ref(WasmRefType {
                 heap_type: WasmHeapType::Func | WasmHeapType::TypedFunc(_),
                 ..
             }) => {}
 
             // Value types all live in memory so let them fall through to a
             // memory-based global.
-            WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 | WasmType::V128 => {}
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::F32
+            | WasmValType::F64
+            | WasmValType::V128 => {}
         }
 
         let (gv, offset) = self.get_global_location(func, index);

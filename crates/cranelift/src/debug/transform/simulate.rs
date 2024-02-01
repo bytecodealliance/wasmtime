@@ -12,7 +12,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime_environ::{
-    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo, WasmType,
+    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo,
+    WasmValType,
 };
 
 const PRODUCER_NAME: &str = "wasmtime";
@@ -173,10 +174,10 @@ fn resolve_var_type(
         (func_meta.locals[j].1, false)
     };
     let type_die_id = match ty {
-        WasmType::I32 => wasm_types.i32,
-        WasmType::I64 => wasm_types.i64,
-        WasmType::F32 => wasm_types.f32,
-        WasmType::F64 => wasm_types.f64,
+        WasmValType::I32 => wasm_types.i32,
+        WasmValType::I64 => wasm_types.i64,
+        WasmValType::F32 => wasm_types.f32,
+        WasmValType::F64 => wasm_types.f64,
         _ => {
             // Ignore unsupported types.
             return None;

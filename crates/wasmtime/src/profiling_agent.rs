@@ -1,8 +1,6 @@
 #[allow(unused)]
 use anyhow::{bail, Result};
 
-use crate::CodeMemory;
-
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "profiling", target_os = "linux"))] {
         mod jitdump;
@@ -50,10 +48,10 @@ cfg_if::cfg_if! {
 pub trait ProfilingAgent: Send + Sync + 'static {
     fn register_function(&self, name: &str, addr: *const u8, size: usize);
 
-    fn register_module(&self, code: &CodeMemory, custom_name: &dyn Fn(usize) -> Option<String>) {
+    fn register_module(&self, code: &[u8], custom_name: &dyn Fn(usize) -> Option<String>) {
         use object::{File, Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
 
-        let image = match File::parse(&code.mmap()[..]) {
+        let image = match File::parse(code) {
             Ok(image) => image,
             Err(_) => return,
         };
@@ -103,5 +101,5 @@ struct NullProfilerAgent;
 
 impl ProfilingAgent for NullProfilerAgent {
     fn register_function(&self, _name: &str, _addr: *const u8, _size: usize) {}
-    fn register_module(&self, _code: &CodeMemory, _custom_name: &dyn Fn(usize) -> Option<String>) {}
+    fn register_module(&self, _code: &[u8], _custom_name: &dyn Fn(usize) -> Option<String>) {}
 }

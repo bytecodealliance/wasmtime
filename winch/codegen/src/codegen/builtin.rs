@@ -7,7 +7,7 @@ use crate::{
 };
 use cranelift_codegen::ir::LibCall;
 use std::sync::Arc;
-use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmType};
+use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmValType};
 
 #[derive(Copy, Clone)]
 pub(crate) enum BuiltinType {
@@ -73,7 +73,7 @@ macro_rules! declare_function_sig {
             /// The target pointer size.
             ptr_size: u8,
             /// The target pointer type, as a WebAssembly type.
-            ptr_type: WasmType,
+            ptr_type: WasmValType,
             /// The builtin functions base relative to the VMContext.
             base: u32,
             /// F32 Ceil.
@@ -121,31 +121,31 @@ macro_rules! declare_function_sig {
                 }
             }
 
-            fn pointer(&self) -> WasmType {
+            fn pointer(&self) -> WasmValType {
                 self.ptr_type
             }
 
-            fn vmctx(&self) -> WasmType {
+            fn vmctx(&self) -> WasmValType {
                 self.pointer()
             }
 
-            fn i32(&self) -> WasmType {
-                WasmType::I32
+            fn i32(&self) -> WasmValType {
+                WasmValType::I32
             }
 
-            fn f32(&self) -> WasmType {
-                WasmType::F32
+            fn f32(&self) -> WasmValType {
+                WasmValType::F32
             }
 
-            fn f64(&self) -> WasmType {
-                WasmType::F64
+            fn f64(&self) -> WasmValType {
+                WasmValType::F64
             }
 
-            fn i64(&self) -> WasmType {
-                WasmType::I64
+            fn i64(&self) -> WasmValType {
+                WasmValType::I64
             }
 
-            fn reference(&self) -> WasmType {
+            fn reference(&self) -> WasmValType {
                 self.pointer()
             }
 

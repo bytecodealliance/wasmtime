@@ -107,7 +107,7 @@ impl SettingsCommand {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
         // Gather settings from the cranelift compiler builder
-        let mut builder = wasmtime_cranelift::builder();
+        let mut builder = wasmtime_cranelift::builder(None)?;
         if let Some(target) = &self.target {
             let target = target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?;
             builder.target(target)?;

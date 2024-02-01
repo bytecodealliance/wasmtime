@@ -4,9 +4,9 @@ use crate::module::{
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
-    GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType,
-    WasmResult, WasmType, WasmparserTypeConverter,
+    GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, TableIndex, TableInitialValue,
+    Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmValType,
+    WasmparserTypeConverter,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -20,6 +20,7 @@ use wasmparser::{
     ExternalKind, FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser,
     Payload, TypeRef, Validator, ValidatorResources,
 };
+use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'a, 'data> {
@@ -55,7 +56,7 @@ pub struct ModuleTranslation<'data> {
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and
     /// trampolines for each of these signatures are required.
-    pub exported_signatures: Vec<SignatureIndex>,
+    pub exported_signatures: Vec<ModuleInternedTypeIndex>,
 
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
@@ -152,8 +153,8 @@ pub struct WasmFileInfo {
 #[derive(Debug)]
 #[allow(missing_docs)]
 pub struct FunctionMetadata {
-    pub params: Box<[WasmType]>,
-    pub locals: Box<[(u32, WasmType)]>,
+    pub params: Box<[WasmValType]>,
+    pub locals: Box<[(u32, WasmValType)]>,
 }
 
 impl<'a, 'data> ModuleEnvironment<'a, 'data> {

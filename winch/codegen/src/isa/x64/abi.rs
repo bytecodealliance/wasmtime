@@ -5,7 +5,7 @@ use crate::{
     masm::OperandSize,
 };
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmValType};
 
 /// Helper environment to track argument-register
 /// assignment in x64.
@@ -98,8 +98,8 @@ impl ABI for X64ABI {
     }
 
     fn sig_from(
-        params: &[WasmType],
-        returns: &[WasmType],
+        params: &[WasmValType],
+        returns: &[WasmValType],
         call_conv: &CallingConvention,
     ) -> ABISig {
         assert!(call_conv.is_fastcall() || call_conv.is_systemv() || call_conv.is_default());
@@ -137,7 +137,7 @@ impl ABI for X64ABI {
         Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
     }
 
-    fn abi_results(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResults {
+    fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults {
         // Use absolute count for results given that for Winch's
         // default CallingConvention only one register is used for results
         // independent of the register class. This also aligns with how
@@ -182,14 +182,14 @@ impl ABI for X64ABI {
         Self::word_bytes()
     }
 
-    fn sizeof(ty: &WasmType) -> u32 {
+    fn sizeof(ty: &WasmValType) -> u32 {
         match ty {
-            WasmType::Ref(rt) => match rt.heap_type {
+            WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
-            WasmType::F64 | WasmType::I64 => Self::word_bytes(),
-            WasmType::F32 | WasmType::I32 => Self::word_bytes() / 2,
+            WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
+            WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
             ty => unimplemented!("Support for WasmType: {ty}"),
         }
     }
@@ -197,14 +197,14 @@ impl ABI for X64ABI {
 
 impl X64ABI {
     fn to_abi_operand(
-        wasm_arg: &WasmType,
+        wasm_arg: &WasmValType,
         stack_offset: u32,
         index_env: &mut RegIndexEnv,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> (ABIOperand, u32) {
         let (reg, ty) = match wasm_arg {
-            ty @ WasmType::Ref(rt) => match rt.heap_type {
+            ty @ WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => (
                     Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
                     ty,
@@ -212,12 +212,12 @@ impl X64ABI {
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
 
-            ty @ (WasmType::I32 | WasmType::I64) => (
+            ty @ (WasmValType::I32 | WasmValType::I64) => (
                 Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
                 ty,
             ),
 
-            ty @ (WasmType::F32 | WasmType::F64) => (
+            ty @ (WasmValType::F32 | WasmValType::F64) => (
                 Self::float_reg_for(index_env.next_fpr(), call_conv, params_or_returns),
                 ty,
             ),
@@ -333,7 +333,7 @@ mod tests {
     };
     use wasmtime_environ::{
         WasmFuncType,
-        WasmType::{self, *},
+        WasmValType::{self, *},
     };
 
     #[test]
@@ -508,7 +508,7 @@ mod tests {
     }
 
     #[cfg(test)]
-    fn match_reg_arg(abi_arg: &ABIOperand, expected_ty: WasmType, expected_reg: Reg) {
+    fn match_reg_arg(abi_arg: &ABIOperand, expected_ty: WasmValType, expected_reg: Reg) {
         match abi_arg {
             &ABIOperand::Reg { reg, ty, .. } => {
                 assert_eq!(reg, expected_reg);
@@ -519,7 +519,7 @@ mod tests {
     }
 
     #[cfg(test)]
-    fn match_stack_arg(abi_arg: &ABIOperand, expected_ty: WasmType, expected_offset: u32) {
+    fn match_stack_arg(abi_arg: &ABIOperand, expected_ty: WasmValType, expected_offset: u32) {
         match abi_arg {
             &ABIOperand::Stack { offset, ty, .. } => {
                 assert_eq!(offset, expected_offset);

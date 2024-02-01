@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift', 'wat'] }
+wasmtime = { workspace = true, features = ['cranelift', 'wat', 'runtime'] }
 wast = { workspace = true }
 log = { workspace = true }
 

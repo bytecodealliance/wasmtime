@@ -12,8 +12,8 @@ use std::str;
 use std::sync::Arc;
 use wasmtime_environ::{
     CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FinishedObject, FuncIndex,
-    FunctionLoc, FunctionName, Metadata, Module, ObjectBuilder, PrimaryMap, SignatureIndex,
-    StackMapInformation, WasmFunctionInfo,
+    FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex, ObjectBuilder,
+    PrimaryMap, StackMapInformation, WasmFunctionInfo,
 };
 use wasmtime_runtime::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 
@@ -21,7 +21,7 @@ use wasmtime_runtime::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 pub struct CompiledModule {
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-    wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)>,
+    wasm_to_native_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
     meta: Metadata,
     code_memory: Arc<CodeMemory>,
     #[cfg(feature = "debug-builtins")]
@@ -84,7 +84,7 @@ impl CompiledModule {
             let reg = wasmtime_runtime::GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
         }
-        profiler.register_module(&self.code_memory, &|addr| {
+        profiler.register_module(&self.code_memory.mmap()[..], &|addr| {
             let (idx, _) = self.func_by_text_offset(addr)?;
             let idx = self.module.func_index(idx);
             let name = self.func_name(idx)?;
@@ -193,7 +193,7 @@ impl CompiledModule {
     /// These trampolines are used for filling in
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
-    pub fn wasm_to_native_trampoline(&self, signature: SignatureIndex) -> &[u8] {
+    pub fn wasm_to_native_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
         let idx = self
             .wasm_to_native_trampolines
             .binary_search_by_key(&signature, |entry| entry.0)
@@ -364,7 +364,7 @@ pub fn finish_object(obj: ObjectBuilder<'_>) -> Result<MmapVec> {
     Ok(<MmapVecWrapper as FinishedObject>::finish_object(obj)?.0)
 }
 
-struct MmapVecWrapper(pub MmapVec);
+pub(crate) struct MmapVecWrapper(pub MmapVec);
 
 impl FinishedObject for MmapVecWrapper {
     fn finish_object(obj: ObjectBuilder<'_>) -> Result<Self> {

@@ -150,6 +150,13 @@ WASMTIME_CONFIG_PROP(void, max_wasm_stack, size_t)
 WASMTIME_CONFIG_PROP(void, wasm_threads, bool)
 
 /**
+ * \brief Configures whether the WebAssembly tail call proposal is enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_tail_call, bool)
+
+/**
  * \brief Configures whether the WebAssembly reference types proposal is
  * enabled.
  *

@@ -1,5 +1,5 @@
 #[cfg(feature = "coredump")]
-use crate::coredump::WasmCoreDump;
+use super::coredump::WasmCoreDump;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
 use anyhow::Error;

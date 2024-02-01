@@ -23,14 +23,164 @@
 //!   `Artifacts` into the ELF file.
 
 use crate::Engine;
-use anyhow::Result;
-use std::collections::{btree_map, BTreeMap, BTreeSet};
-use std::{any::Any, collections::HashMap};
-use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FuncIndex,
-    FunctionBodyData, ModuleTranslation, ModuleType, ModuleTypesBuilder, PrimaryMap,
-    SignatureIndex, StaticModuleIndex, WasmFunctionInfo,
+use anyhow::{Context, Result};
+use std::{
+    any::Any,
+    collections::{btree_map, BTreeMap, BTreeSet, HashMap},
+    mem,
 };
+#[cfg(feature = "component-model")]
+use wasmtime_environ::component::Translator;
+use wasmtime_environ::{
+    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
+    FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex, ModuleTranslation,
+    ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex,
+    WasmFunctionInfo,
+};
+
+/// Converts an input binary-encoded WebAssembly module to compilation
+/// artifacts and type information.
+///
+/// This is where compilation actually happens of WebAssembly modules and
+/// translation/parsing/validation of the binary input occurs. The binary
+/// artifact represented in the `MmapVec` returned here is an in-memory ELF
+/// file in an owned area of virtual linear memory where permissions (such
+/// as the executable bit) can be applied.
+///
+/// Additionally compilation returns an `Option` here which is always
+/// `Some`, notably compiled metadata about the module in addition to the
+/// type information found within.
+pub(crate) fn build_artifacts<T: FinishedObject>(
+    engine: &Engine,
+    wasm: &[u8],
+) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
+    let tunables = &engine.config().tunables;
+
+    // First a `ModuleEnvironment` is created which records type information
+    // about the wasm module. This is where the WebAssembly is parsed and
+    // validated. Afterwards `types` will have all the type information for
+    // this module.
+    let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
+    let parser = wasmparser::Parser::new(0);
+    let mut types = Default::default();
+    let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
+        .translate(parser, wasm)
+        .context("failed to parse WebAssembly module")?;
+    let functions = mem::take(&mut translation.function_body_inputs);
+
+    let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
+    let unlinked_compile_outputs = compile_inputs.compile(engine)?;
+    let types = types.finish();
+    let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
+
+    // Emplace all compiled functions into the object file with any other
+    // sections associated with code as well.
+    let mut object = engine.compiler().object(ObjectKind::Module)?;
+    // Insert `Engine` and type-level information into the compiled
+    // artifact so if this module is deserialized later it contains all
+    // information necessary.
+    //
+    // Note that `append_compiler_info` and `append_types` here in theory
+    // can both be skipped if this module will never get serialized.
+    // They're only used during deserialization and not during runtime for
+    // the module itself. Currently there's no need for that, however, so
+    // it's left as an exercise for later.
+    engine.append_compiler_info(&mut object);
+    engine.append_bti(&mut object);
+
+    let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+        object,
+        engine,
+        compiled_funcs,
+        std::iter::once(translation).collect(),
+    )?;
+
+    let info = compilation_artifacts.unwrap_as_module_info();
+    object.serialize_info(&(&info, &types));
+    let result = T::finish_object(object)?;
+
+    Ok((result, Some((info, types))))
+}
+
+/// Performs the compilation phase for a component, translating and
+/// validating the provided wasm binary to machine code.
+///
+/// This method will compile all nested core wasm binaries in addition to
+/// any necessary extra functions required for operation with components.
+/// The output artifact here is the serialized object file contained within
+/// an owned mmap along with metadata about the compilation itself.
+#[cfg(feature = "component-model")]
+pub(crate) fn build_component_artifacts<T: FinishedObject>(
+    engine: &Engine,
+    binary: &[u8],
+) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
+    use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
+    use wasmtime_environ::ScopeVec;
+
+    let tunables = &engine.config().tunables;
+    let compiler = engine.compiler();
+
+    let scope = ScopeVec::new();
+    let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
+    let mut types = Default::default();
+    let (component, mut module_translations) =
+        Translator::new(tunables, &mut validator, &mut types, &scope)
+            .translate(binary)
+            .context("failed to parse WebAssembly module")?;
+
+    let compile_inputs = CompileInputs::for_component(
+        &types,
+        &component,
+        module_translations.iter_mut().map(|(i, translation)| {
+            let functions = mem::take(&mut translation.function_body_inputs);
+            (i, &*translation, functions)
+        }),
+    );
+    let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
+
+    let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
+
+    let mut object = compiler.object(ObjectKind::Component)?;
+    engine.append_compiler_info(&mut object);
+    engine.append_bti(&mut object);
+
+    let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+        object,
+        engine,
+        compiled_funcs,
+        module_translations,
+    )?;
+    let (types, ty) = types.finish(
+        &compilation_artifacts.modules,
+        component
+            .component
+            .import_types
+            .iter()
+            .map(|(_, (name, ty))| (name.clone(), *ty)),
+        component
+            .component
+            .exports
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty)),
+    );
+
+    let info = CompiledComponentInfo {
+        component: component.component,
+        trampolines: compilation_artifacts.trampolines,
+        resource_drop_wasm_to_native_trampoline: compilation_artifacts
+            .resource_drop_wasm_to_native_trampoline,
+    };
+    let artifacts = ComponentArtifacts {
+        info,
+        ty,
+        types,
+        static_modules: compilation_artifacts.modules,
+    };
+    object.serialize_info(&artifacts);
+
+    let result = T::finish_object(object)?;
+    Ok((result, artifacts))
+}
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
 
@@ -39,8 +189,11 @@ type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> +
 /// Two `u32`s to align with `cranelift_codegen::ir::UserExternalName`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CompileKey {
-    // [ kind:i4 module:i28 ]
+    // The namespace field is bitpacked like:
+    //
+    //     [ kind:i3 module:i29 ]
     namespace: u32,
+
     index: u32,
 }
 
@@ -93,7 +246,7 @@ impl CompileKey {
         }
     }
 
-    fn wasm_to_native_trampoline(index: SignatureIndex) -> Self {
+    fn wasm_to_native_trampoline(index: ModuleInternedTypeIndex) -> Self {
         Self {
             namespace: Self::WASM_TO_NATIVE_TRAMPOLINE_KIND,
             index: index.as_u32(),
@@ -162,7 +315,7 @@ struct CompileOutput {
 
 /// The collection of things we need to compile for a Wasm module or component.
 #[derive(Default)]
-pub struct CompileInputs<'a> {
+struct CompileInputs<'a> {
     inputs: Vec<CompileInput<'a>>,
 }
 
@@ -172,7 +325,7 @@ impl<'a> CompileInputs<'a> {
     }
 
     /// Create the `CompileInputs` for a core Wasm module.
-    pub fn for_module(
+    fn for_module(
         types: &'a ModuleTypesBuilder,
         translation: &'a ModuleTranslation<'a>,
         functions: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'a>>,
@@ -187,7 +340,7 @@ impl<'a> CompileInputs<'a> {
 
     /// Create a `CompileInputs` for a component.
     #[cfg(feature = "component-model")]
-    pub fn for_component(
+    fn for_component(
         types: &'a wasmtime_environ::component::ComponentTypesBuilder,
         component: &'a wasmtime_environ::component::ComponentTranslation,
         module_translations: impl IntoIterator<
@@ -336,7 +489,7 @@ impl<'a> CompileInputs<'a> {
 
     /// Compile these `CompileInput`s (maybe in parallel) and return the
     /// resulting `UnlinkedCompileOutput`s.
-    pub fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs> {
+    fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs> {
         let compiler = engine.compiler();
 
         // Compile each individual input in parallel.
@@ -367,7 +520,7 @@ impl<'a> CompileInputs<'a> {
 }
 
 #[derive(Default)]
-pub struct UnlinkedCompileOutputs {
+struct UnlinkedCompileOutputs {
     // A map from kind to `CompileOutput`.
     outputs: BTreeMap<u32, Vec<CompileOutput>>,
 }
@@ -375,7 +528,7 @@ pub struct UnlinkedCompileOutputs {
 impl UnlinkedCompileOutputs {
     /// Flatten all our functions into a single list and remember each of their
     /// indices within it.
-    pub fn pre_link(self) -> (Vec<(String, Box<dyn Any + Send>)>, FunctionIndices) {
+    fn pre_link(self) -> (Vec<(String, Box<dyn Any + Send>)>, FunctionIndices) {
         // The order the functions end up within `compiled_funcs` is the order
         // that they will be laid out in the ELF file, so try and group hot and
         // cold functions together as best we can. However, because we bucket by
@@ -429,7 +582,7 @@ impl UnlinkedCompileOutputs {
 }
 
 #[derive(Default)]
-pub struct FunctionIndices {
+struct FunctionIndices {
     // A reverse map from an index in `compiled_funcs` to the
     // `StaticModuleIndex` for that function.
     compiled_func_index_to_module: HashMap<usize, StaticModuleIndex>,
@@ -444,7 +597,7 @@ pub struct FunctionIndices {
 impl FunctionIndices {
     /// Link the compiled functions together, resolving relocations, and append
     /// them to the given ELF file.
-    pub fn link_and_append_code<'a>(
+    fn link_and_append_code<'a>(
         mut self,
         mut obj: object::write::Object<'static>,
         engine: &'a Engine,
@@ -659,21 +812,21 @@ impl FunctionIndices {
 /// The artifacts necessary for finding and calling Wasm functions at runtime,
 /// to be serialized into an ELF file.
 #[derive(Default)]
-pub struct Artifacts {
-    pub modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+struct Artifacts {
+    modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
     #[cfg(feature = "component-model")]
-    pub trampolines: PrimaryMap<
+    trampolines: PrimaryMap<
         wasmtime_environ::component::TrampolineIndex,
         wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
-    pub resource_drop_wasm_to_native_trampoline: Option<wasmtime_environ::FunctionLoc>,
+    resource_drop_wasm_to_native_trampoline: Option<wasmtime_environ::FunctionLoc>,
 }
 
 impl Artifacts {
     /// Assuming this compilation was for a single core Wasm module, get the
     /// resulting `CompiledModuleInfo`.
-    pub fn unwrap_as_module_info(self) -> CompiledModuleInfo {
+    fn unwrap_as_module_info(self) -> CompiledModuleInfo {
         assert_eq!(self.modules.len(), 1);
         #[cfg(feature = "component-model")]
         assert!(self.trampolines.is_empty());

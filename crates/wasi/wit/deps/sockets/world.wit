@@ -1,4 +1,4 @@
-package wasi:sockets@0.2.0-rc-2024-01-16;
+package wasi:sockets@0.2.0;
 
 world imports {
     import instance-network;

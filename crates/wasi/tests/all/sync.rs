@@ -228,6 +228,10 @@ fn preview1_unicode_output() {
 fn preview1_file_write() {
     run(PREVIEW1_FILE_WRITE_COMPONENT, false).unwrap()
 }
+#[test_log::test]
+fn preview1_path_open_lots() {
+    run(PREVIEW1_PATH_OPEN_LOTS_COMPONENT, false).unwrap()
+}
 
 #[test_log::test]
 fn preview2_sleep() {

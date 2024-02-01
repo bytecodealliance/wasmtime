@@ -1969,8 +1969,6 @@ pub(crate) fn emit(
                 SseOpcode::Cvtpd2ps => (LegacyPrefixes::_66, 0x0F5A, 2),
                 SseOpcode::Cvtps2pd => (LegacyPrefixes::None, 0x0F5A, 2),
                 SseOpcode::Cvtdq2ps => (LegacyPrefixes::None, 0x0F5B, 2),
-                SseOpcode::Cvtss2sd => (LegacyPrefixes::_F3, 0x0F5A, 2),
-                SseOpcode::Cvtsd2ss => (LegacyPrefixes::_F2, 0x0F5A, 2),
                 SseOpcode::Cvttpd2dq => (LegacyPrefixes::_66, 0x0FE6, 2),
                 SseOpcode::Cvttps2dq => (LegacyPrefixes::_F3, 0x0F5B, 2),
                 SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F28, 2),
@@ -1998,8 +1996,6 @@ pub(crate) fn emit(
                 SseOpcode::Pmovzxdq => (LegacyPrefixes::_66, 0x0F3835, 3),
                 SseOpcode::Sqrtps => (LegacyPrefixes::None, 0x0F51, 2),
                 SseOpcode::Sqrtpd => (LegacyPrefixes::_66, 0x0F51, 2),
-                SseOpcode::Sqrtss => (LegacyPrefixes::_F3, 0x0F51, 2),
-                SseOpcode::Sqrtsd => (LegacyPrefixes::_F2, 0x0F51, 2),
                 SseOpcode::Movddup => (LegacyPrefixes::_F2, 0x0F12, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
@@ -2231,6 +2227,10 @@ pub(crate) fn emit(
                 SseOpcode::Phaddw => (LegacyPrefixes::_66, 0x0F3801, 3),
                 SseOpcode::Phaddd => (LegacyPrefixes::_66, 0x0F3802, 3),
                 SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
+                SseOpcode::Cvtss2sd => (LegacyPrefixes::_F3, 0x0F5A, 2),
+                SseOpcode::Cvtsd2ss => (LegacyPrefixes::_F2, 0x0F5A, 2),
+                SseOpcode::Sqrtss => (LegacyPrefixes::_F3, 0x0F51, 2),
+                SseOpcode::Sqrtsd => (LegacyPrefixes::_F2, 0x0F51, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -2452,6 +2452,10 @@ pub(crate) fn emit(
                 AvxOpcode::Vpunpckhqdq => (LP::_66, OM::_0F, 0x6D),
                 AvxOpcode::Vmovsd => (LP::_F2, OM::_0F, 0x10),
                 AvxOpcode::Vmovss => (LP::_F3, OM::_0F, 0x10),
+                AvxOpcode::Vcvtss2sd => (LP::_F3, OM::_0F, 0x5A),
+                AvxOpcode::Vcvtsd2ss => (LP::_F2, OM::_0F, 0x5A),
+                AvxOpcode::Vsqrtss => (LP::_F3, OM::_0F, 0x51),
+                AvxOpcode::Vsqrtsd => (LP::_F2, OM::_0F, 0x51),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()
@@ -2681,36 +2685,17 @@ pub(crate) fn emit(
                 AvxOpcode::Vbroadcastss => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x18),
                 AvxOpcode::Vmovddup => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x12),
 
-                AvxOpcode::Vcvtss2sd => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x5A),
-                AvxOpcode::Vcvtsd2ss => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x5A),
-                AvxOpcode::Vsqrtss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x51),
-                AvxOpcode::Vsqrtsd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x51),
-
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 
-            let vex = VexInstruction::new()
+            VexInstruction::new()
                 .length(VexVectorLength::V128)
                 .prefix(prefix)
                 .map(map)
                 .opcode(opcode)
                 .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src);
-
-            // These opcodes take a second operand through `vvvv` which copies
-            // the upper bits into the destination register. That's not
-            // reflected in the CLIF instruction, however, since the SSE version
-            // doesn't have this functionality. Instead just copy whatever
-            // happens to already be in the destination, which at least is what
-            // LLVM seems to do.
-            let vex = match op {
-                AvxOpcode::Vcvtss2sd
-                | AvxOpcode::Vcvtsd2ss
-                | AvxOpcode::Vsqrtss
-                | AvxOpcode::Vsqrtsd => vex.vvvv(dst.to_real_reg().unwrap().hw_enc()),
-                _ => vex,
-            };
-            vex.encode(sink);
+                .rm(src)
+                .encode(sink);
         }
 
         Inst::XmmUnaryRmRImmVex { op, src, dst, imm } => {

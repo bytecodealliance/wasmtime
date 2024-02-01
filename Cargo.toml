@@ -232,15 +232,15 @@ is-terminal = "0.4.0"
 wit-bindgen = { version = "0.15.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.119.0"
-wat = "1.0.83"
-wast = "70.0.0"
-wasmprinter = "0.2.76"
-wasm-encoder = "0.39.0"
-wasm-smith = "0.14.0"
-wasm-mutate = "0.2.44"
+wasmparser = "0.121.0"
+wat = "1.0.85"
+wast = "70.0.2"
+wasmprinter = "0.2.78"
+wasm-encoder = "0.41.0"
+wasm-smith = "0.15.1"
+wasm-mutate = "0.2.46"
 wit-parser = "0.13.1"
-wit-component = "0.19.1"
+wit-component = "0.20.1"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -326,6 +326,7 @@ default = [
   "coredump",
   "addr2line",
   "debug-builtins",
+  "component-model",
 
   # Enable some nice features of clap by default, but they come at a binary size
   # cost, so allow disabling this through disabling of our own `default`
@@ -360,7 +361,7 @@ wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hype
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",
-  "wasmtime-wast/component-model",
+  "wasmtime-wast?/component-model",
   "wasmtime-cli-flags/component-model"
 ]
 wat = ["dep:wat", "wasmtime/wat"]
