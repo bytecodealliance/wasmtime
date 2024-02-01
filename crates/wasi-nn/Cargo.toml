@@ -34,7 +34,6 @@ version = "0.52"
 features = [
     "AI_MachineLearning",
     "Storage_Streams",
-    "Foundation",
     "Foundation_Collections",
 ]
 optional = true
