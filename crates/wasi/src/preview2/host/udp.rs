@@ -8,7 +8,7 @@ use crate::preview2::{
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
     PollableAsync,
 };
-use crate::preview2::{PollableResource, SocketError, SocketResult, WasiView};
+use crate::preview2::{PollableHandle, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -287,7 +287,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     fn subscribe(
         &mut self,
         this: Resource<udp::UdpSocket>,
-    ) -> anyhow::Result<Resource<PollableResource>> {
+    ) -> anyhow::Result<Resource<PollableHandle>> {
         crate::preview2::poll::subscribe(self.table(), &this)
     }
 
@@ -367,7 +367,7 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
     fn subscribe(
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
-    ) -> anyhow::Result<Resource<PollableResource>> {
+    ) -> anyhow::Result<Resource<PollableHandle>> {
         crate::preview2::poll::subscribe(self.table(), &this)
     }
 
@@ -501,7 +501,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
     fn subscribe(
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
-    ) -> anyhow::Result<Resource<PollableResource>> {
+    ) -> anyhow::Result<Resource<PollableHandle>> {
         crate::preview2::poll::subscribe(self.table(), &this)
     }
 

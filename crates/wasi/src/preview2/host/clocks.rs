@@ -3,7 +3,7 @@ use crate::preview2::bindings::{
     clocks::wall_clock::{self, Datetime},
 };
 use crate::preview2::poll;
-use crate::preview2::{Pollable, PollableResource, WasiView};
+use crate::preview2::{Pollable, PollableHandle, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -63,7 +63,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<PollableResource>> {
+    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<PollableHandle>> {
         let clock_now = self.ctx().monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
@@ -71,14 +71,14 @@ impl<T: WasiView> monotonic_clock::Host for T {
             Duration::from_nanos(0)
         };
         let pollable = make_pollable(duration);
-        Ok(self.table().push(PollableResource::own(pollable))?)
+        Ok(self.table().push(PollableHandle::own(pollable))?)
     }
 
     fn subscribe_duration(
         &mut self,
         duration: WasiDuration,
-    ) -> anyhow::Result<Resource<PollableResource>> {
+    ) -> anyhow::Result<Resource<PollableHandle>> {
         let pollable = make_pollable(Duration::from_nanos(duration));
-        Ok(self.table().push(PollableResource::own(pollable))?)
+        Ok(self.table().push(PollableHandle::own(pollable))?)
     }
 }

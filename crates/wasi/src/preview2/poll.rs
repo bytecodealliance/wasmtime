@@ -68,7 +68,7 @@ where
     PollFn { poll_fn }
 }
 
-/// A host representation of the `wasi:io/poll.pollable` resource.
+/// A host implementation of the `wasi:io/poll.pollable` contract.
 ///
 /// A pollable is not the same thing as a Rust Future: in WASI, the same pollable
 /// may be used to repeatedly check for readiness of a given condition, e.g. if
@@ -228,21 +228,21 @@ where
     Once::Pending(Box::pin(future))
 }
 
-/// Creates a `pollable` resource which is subscribed to the provided parent `resource`.
-/// The pollable will be added as a child of `resource`.
+/// Creates a new handle which is subscribed to the pollable `parent`.
+/// The handle will be added as a child of `parent`.
 pub fn subscribe<T: Pollable>(
     table: &mut ResourceTable,
-    resource: &Resource<T>,
-) -> Result<Resource<PollableResource>> {
-    let pollable = PollableResource::child(resource);
-    Ok(table.push_child(pollable, &resource)?)
+    parent: &Resource<T>,
+) -> Result<Resource<PollableHandle>> {
+    let pollable = PollableHandle::child(parent);
+    Ok(table.push_child(pollable, &parent)?)
 }
 
 type AsPollableFn = for<'a> fn(&'a mut dyn Any) -> &'a mut dyn Pollable;
 type TargetKey = u32;
 
 /// A host representation of the `wasi:io/poll.pollable` resource.
-pub enum PollableResource {
+pub enum PollableHandle {
     Own(Box<dyn Pollable>),
     Child {
         parent_key: TargetKey,
@@ -250,7 +250,7 @@ pub enum PollableResource {
     },
 }
 
-impl PollableResource {
+impl PollableHandle {
     /// Create a new standalone pollable resource.
     pub fn own(pollable: Box<dyn Pollable>) -> Self {
         Self::Own(pollable)
@@ -267,22 +267,22 @@ impl PollableResource {
 }
 
 /// Using the term "target" to mean: where the actual Pollable implementation lives.
-/// Sometimes this is the PollableResource itself, sometimes this is a parent.
+/// Sometimes this is the PollableHandle itself, sometimes this is a parent.
 struct TargetInfo {
     key: TargetKey,
     as_pollable: AsPollableFn,
 }
 impl TargetInfo {
-    fn gather(table: &ResourceTable, resource: &Resource<PollableResource>) -> Result<Self> {
-        match table.get(&resource)? {
-            PollableResource::Own(_) => Ok(Self {
-                key: resource.rep(),
+    fn gather(table: &ResourceTable, handle: &Resource<PollableHandle>) -> Result<Self> {
+        match table.get(&handle)? {
+            PollableHandle::Own(_) => Ok(Self {
+                key: handle.rep(),
                 as_pollable: |target| match target.downcast_mut().unwrap() {
-                    PollableResource::Own(p) => p.as_mut(),
-                    PollableResource::Child { .. } => unreachable!(),
+                    PollableHandle::Own(p) => p.as_mut(),
+                    PollableHandle::Child { .. } => unreachable!(),
                 },
             }),
-            PollableResource::Child {
+            PollableHandle::Child {
                 parent_key,
                 as_pollable,
             } => Ok(Self {
@@ -305,8 +305,8 @@ struct TargetLease {
     data: Box<dyn Any + Send>,
 }
 impl TargetLease {
-    fn take(table: &mut ResourceTable, resource: &Resource<PollableResource>) -> Result<Self> {
-        Ok(TargetInfo::gather(table, resource)?.lease(table)?)
+    fn take(table: &mut ResourceTable, handle: &Resource<PollableHandle>) -> Result<Self> {
+        Ok(TargetInfo::gather(table, handle)?.lease(table)?)
     }
 
     fn restore(self, table: &mut ResourceTable) -> Result<()> {
@@ -321,7 +321,7 @@ impl TargetLease {
 
 #[async_trait::async_trait]
 impl<T: WasiView> poll::Host for T {
-    async fn poll(&mut self, pollables: Vec<Resource<PollableResource>>) -> Result<Vec<u32>> {
+    async fn poll(&mut self, pollables: Vec<Resource<PollableHandle>>) -> Result<Vec<u32>> {
         if pollables.is_empty() {
             return Err(anyhow!("empty poll list"));
         }
@@ -386,8 +386,8 @@ impl<T: WasiView> poll::Host for T {
 
 #[async_trait::async_trait]
 impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
-    async fn block(&mut self, resource: Resource<PollableResource>) -> Result<()> {
-        let mut lease = TargetLease::take(self.table(), &resource)?;
+    async fn block(&mut self, handle: Resource<PollableHandle>) -> Result<()> {
+        let mut lease = TargetLease::take(self.table(), &handle)?;
         {
             let mut future = lease.as_pollable().ready();
             let self_ref = &mut self;
@@ -396,37 +396,37 @@ impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
         lease.restore(self.table())?;
         Ok(())
     }
-    async fn ready(&mut self, resource: Resource<PollableResource>) -> Result<bool> {
-        let mut lease = TargetLease::take(self.table(), &resource)?;
+    async fn ready(&mut self, handle: Resource<PollableHandle>) -> Result<bool> {
+        let mut lease = TargetLease::take(self.table(), &handle)?;
         let is_ready = lease.as_pollable().is_ready(self);
         lease.restore(self.table())?;
         Ok(is_ready)
     }
-    fn drop(&mut self, resource: Resource<PollableResource>) -> Result<()> {
-        self.table().delete(resource)?;
+    fn drop(&mut self, handle: Resource<PollableHandle>) -> Result<()> {
+        self.table().delete(handle)?;
         Ok(())
     }
 }
 
 pub(crate) mod sync {
-    use crate::preview2::{bindings::io::poll as async_poll, in_tokio, PollableResource, WasiView};
+    use crate::preview2::{bindings::io::poll as async_poll, in_tokio, PollableHandle, WasiView};
     use anyhow::Result;
     use wasmtime::component::Resource;
 
     impl<T: WasiView> crate::preview2::bindings::sync_io::io::poll::Host for T {
-        fn poll(&mut self, pollables: Vec<Resource<PollableResource>>) -> Result<Vec<u32>> {
+        fn poll(&mut self, pollables: Vec<Resource<PollableHandle>>) -> Result<Vec<u32>> {
             in_tokio(async { async_poll::Host::poll(self, pollables).await })
         }
     }
 
     impl<T: WasiView> crate::preview2::bindings::sync_io::io::poll::HostPollable for T {
-        fn ready(&mut self, pollable: Resource<PollableResource>) -> Result<bool> {
+        fn ready(&mut self, pollable: Resource<PollableHandle>) -> Result<bool> {
             in_tokio(async { async_poll::HostPollable::ready(self, pollable).await })
         }
-        fn block(&mut self, pollable: Resource<PollableResource>) -> Result<()> {
+        fn block(&mut self, pollable: Resource<PollableHandle>) -> Result<()> {
             in_tokio(async { async_poll::HostPollable::block(self, pollable).await })
         }
-        fn drop(&mut self, pollable: Resource<PollableResource>) -> Result<()> {
+        fn drop(&mut self, pollable: Resource<PollableHandle>) -> Result<()> {
             async_poll::HostPollable::drop(self, pollable)
         }
     }

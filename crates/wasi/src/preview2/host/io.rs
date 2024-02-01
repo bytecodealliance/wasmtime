@@ -2,7 +2,7 @@ use crate::preview2::{
     bindings::io::error,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::subscribe,
-    PollableResource, StreamError, StreamResult, WasiView,
+    PollableHandle, StreamError, StreamResult, WasiView,
 };
 use wasmtime::component::Resource;
 
@@ -51,7 +51,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
     fn subscribe(
         &mut self,
         stream: Resource<OutputStream>,
-    ) -> anyhow::Result<Resource<PollableResource>> {
+    ) -> anyhow::Result<Resource<PollableHandle>> {
         subscribe(self.table(), &stream)
     }
 
@@ -225,7 +225,7 @@ impl<T: WasiView> streams::HostInputStream for T {
     fn subscribe(
         &mut self,
         stream: Resource<InputStream>,
-    ) -> anyhow::Result<Resource<PollableResource>> {
+    ) -> anyhow::Result<Resource<PollableHandle>> {
         crate::preview2::poll::subscribe(self.table(), &stream)
     }
 }
@@ -237,7 +237,7 @@ pub mod sync {
             HostOutputStream as AsyncHostOutputStream,
         },
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
-        in_tokio, PollableResource, StreamError, StreamResult, WasiView,
+        in_tokio, PollableHandle, StreamError, StreamResult, WasiView,
     };
     use wasmtime::component::Resource;
 
@@ -295,7 +295,7 @@ pub mod sync {
         fn subscribe(
             &mut self,
             stream: Resource<OutputStream>,
-        ) -> anyhow::Result<Resource<PollableResource>> {
+        ) -> anyhow::Result<Resource<PollableHandle>> {
             Ok(AsyncHostOutputStream::subscribe(self, stream)?)
         }
 
@@ -364,7 +364,7 @@ pub mod sync {
         fn subscribe(
             &mut self,
             stream: Resource<InputStream>,
-        ) -> anyhow::Result<Resource<PollableResource>> {
+        ) -> anyhow::Result<Resource<PollableHandle>> {
             AsyncHostInputStream::subscribe(self, stream)
         }
     }
