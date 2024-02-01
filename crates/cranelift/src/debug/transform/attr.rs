@@ -295,6 +295,7 @@ where
                 pending_di_refs.insert(current_scope_id, attr.name(), offset);
                 continue;
             }
+            AttributeValue::String(d) => write::AttributeValue::String(d.to_slice()?.to_vec()),
             a => bail!("Unexpected attribute: {:?}", a),
         };
         let current_scope = out_unit.get_mut(current_scope_id);
