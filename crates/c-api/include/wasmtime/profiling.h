@@ -104,7 +104,7 @@ wasmtime_guestprofiler_sample(wasmtime_guestprofiler_t *guestprofiler,
  */
 WASM_API_EXTERN /* own */ wasmtime_error_t *
 wasmtime_guestprofiler_finish(/* own */ wasmtime_guestprofiler_t *guestprofiler,
-                              wasm_byte_vec_t *out);
+                              /* own */ wasm_byte_vec_t *out);
 
 #ifdef __cplusplus
 } // extern "C"
