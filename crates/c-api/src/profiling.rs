@@ -1,7 +1,7 @@
 use crate::{wasm_byte_vec_t, wasm_name_t, wasmtime_error_t, wasmtime_module_t, wasmtime_store_t};
+use std::slice;
 use std::str::from_utf8;
 use std::time::Duration;
-use std::slice;
 use wasmtime::GuestProfiler;
 
 pub struct wasmtime_guestprofiler_t {
@@ -24,10 +24,13 @@ pub unsafe extern "C" fn wasmtime_guestprofiler_new(
     modules_len: usize,
 ) -> Box<wasmtime_guestprofiler_t> {
     let module_name = from_utf8(&module_name.as_slice()).expect("not valid utf-8");
-    let list = slice::from_raw_parts(modules, modules_len).iter()
+    let list = slice::from_raw_parts(modules, modules_len)
+        .iter()
         .map(|entry| {
             (
-                from_utf8(entry.name.as_slice()).expect("not valid utf-8").to_owned(),
+                from_utf8(entry.name.as_slice())
+                    .expect("not valid utf-8")
+                    .to_owned(),
                 entry.module.module.clone(),
             )
         })
