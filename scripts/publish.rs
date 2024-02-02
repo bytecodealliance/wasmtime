@@ -60,8 +60,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "winch-codegen",
     "wasmtime-winch",
     "wasmtime",
-    "wasmtime-c-api-macros",
-    "wasmtime-c-api-impl",
     // wasi-common/wiggle
     "wiggle",
     "wasi-common",
@@ -73,6 +71,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-nn",
     "wasmtime-wasi-threads",
     "wasmtime-wast",
+    "wasmtime-c-api-macros",
+    "wasmtime-c-api-impl",
     "wasmtime-cli-flags",
     "wasmtime-explorer",
     "wasmtime-cli",
