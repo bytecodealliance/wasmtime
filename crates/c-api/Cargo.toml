@@ -23,7 +23,7 @@ env_logger = { workspace = true, optional = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift', 'runtime'] }
-wasmtime-c-api-macros = { path = "macros" }
+wasmtime-c-api-macros = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
 
