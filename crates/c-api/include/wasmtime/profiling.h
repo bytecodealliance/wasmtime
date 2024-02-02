@@ -48,11 +48,11 @@ WASM_API_EXTERN void wasmtime_guestprofiler_delete(
  * \param modules_module modules that will appear in captured stack traces,
  *                       pointer to the first element
  *
- * \return Created profiler that is owned by the caller
+ * \return Created profiler that is owned by the caller.
  *
- * List of (#wasm_name_t*, #wasmtime_module_t*) tuples of `modules_len` length is
- * passed column-major in `modules_name` and `modules_module`.
- * This function does not take ownership of the arguments.
+ * List of (#wasm_name_t*, #wasmtime_module_t*) tuples of `modules_len` length
+ * is passed column-major in `modules_name` and `modules_module`. This function
+ * does not take ownership of the arguments.
  *
  * For more information see the Rust documentation at:
  * https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfiler.html#method.new
