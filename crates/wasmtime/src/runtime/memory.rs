@@ -732,7 +732,7 @@ impl SharedMemory {
         }
         debug_assert!(ty.maximum().is_some());
 
-        let tunables = &engine.config().tunables;
+        let tunables = engine.tunables();
         let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
         let memory = wasmtime_runtime::SharedMemory::new(plan)?;
         Ok(Self(memory, engine.clone()))

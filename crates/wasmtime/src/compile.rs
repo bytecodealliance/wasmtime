@@ -54,7 +54,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
-    let tunables = &engine.config().tunables;
+    let tunables = engine.tunables();
 
     // First a `ModuleEnvironment` is created which records type information
     // about the wasm module. This is where the WebAssembly is parsed and
@@ -117,7 +117,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
     use wasmtime_environ::ScopeVec;
 
-    let tunables = &engine.config().tunables;
+    let tunables = engine.tunables();
     let compiler = engine.compiler();
 
     let scope = ScopeVec::new();
@@ -610,7 +610,7 @@ impl FunctionIndices {
         // `symbol_ids_and_locs[i]` is the symbol ID and function location of
         // `compiled_funcs[i]`.
         let compiler = engine.compiler();
-        let tunables = &engine.config().tunables;
+        let tunables = engine.tunables();
         let symbol_ids_and_locs = compiler.append_code(
             &mut obj,
             &compiled_funcs,

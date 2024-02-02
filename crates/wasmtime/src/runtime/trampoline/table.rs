@@ -8,7 +8,7 @@ pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<Instan
     let mut module = Module::new();
     let table_plan = wasmtime_environ::TablePlan::for_table(
         table.wasmtime_table().clone(),
-        &store.engine().config().tunables,
+        store.engine().tunables(),
     );
     let table_id = module.table_plans.push(table_plan);
     // TODO: can this `exports.insert` get removed?

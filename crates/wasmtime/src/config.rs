@@ -6,7 +6,7 @@ use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use target_lexicon::Architecture;
+use target_lexicon::{Architecture, PointerWidth};
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -103,8 +103,8 @@ pub struct Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler_config: CompilerConfig,
     profiling_strategy: ProfilingStrategy,
+    tunables: ConfigTunables,
 
-    pub(crate) tunables: Tunables,
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     #[cfg(feature = "runtime")]
@@ -128,6 +128,24 @@ pub struct Config {
     pub(crate) wmemcheck: bool,
     pub(crate) coredump_on_trap: bool,
     pub(crate) macos_use_mach_ports: bool,
+}
+
+#[derive(Default, Clone)]
+struct ConfigTunables {
+    static_memory_bound: Option<u64>,
+    static_memory_offset_guard_size: Option<u64>,
+    dynamic_memory_offset_guard_size: Option<u64>,
+    dynamic_memory_growth_reserve: Option<u64>,
+    generate_native_debuginfo: Option<bool>,
+    parse_wasm_debuginfo: Option<bool>,
+    consume_fuel: Option<bool>,
+    epoch_interruption: Option<bool>,
+    static_memory_bound_is_maximum: Option<bool>,
+    guard_before_linear_memory: Option<bool>,
+    generate_address_map: Option<bool>,
+    debug_adapter_modules: Option<bool>,
+    relaxed_simd_deterministic: Option<bool>,
+    tail_callable: Option<bool>,
 }
 
 /// User-provided configuration for the compiler.
@@ -190,7 +208,7 @@ impl Config {
     /// specified.
     pub fn new() -> Self {
         let mut ret = Self {
-            tunables: Tunables::default(),
+            tunables: ConfigTunables::default(),
             #[cfg(any(feature = "cranelift", feature = "winch"))]
             compiler_config: CompilerConfig::default(),
             #[cfg(feature = "cache")]
@@ -386,7 +404,7 @@ impl Config {
     ///
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.tunables.generate_native_debuginfo = enable;
+        self.tunables.generate_native_debuginfo = Some(enable);
         self
     }
 
@@ -433,13 +451,13 @@ impl Config {
     pub fn wasm_backtrace_details(&mut self, enable: WasmBacktraceDetails) -> &mut Self {
         self.wasm_backtrace_details_env_used = false;
         self.tunables.parse_wasm_debuginfo = match enable {
-            WasmBacktraceDetails::Enable => true,
-            WasmBacktraceDetails::Disable => false,
+            WasmBacktraceDetails::Enable => Some(true),
+            WasmBacktraceDetails::Disable => Some(false),
             WasmBacktraceDetails::Environment => {
                 self.wasm_backtrace_details_env_used = true;
                 std::env::var("WASMTIME_BACKTRACE_DETAILS")
-                    .map(|s| s == "1")
-                    .unwrap_or(false)
+                    .map(|s| Some(s == "1"))
+                    .unwrap_or(Some(false))
             }
         };
         self
@@ -482,7 +500,7 @@ impl Config {
     ///
     /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
-        self.tunables.consume_fuel = enable;
+        self.tunables.consume_fuel = Some(enable);
         self
     }
 
@@ -576,7 +594,7 @@ impl Config {
     /// - [`Store::epoch_deadline_callback`](crate::Store::epoch_deadline_callback)
     /// - [`Store::epoch_deadline_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update)
     pub fn epoch_interruption(&mut self, enable: bool) -> &mut Self {
-        self.tunables.epoch_interruption = enable;
+        self.tunables.epoch_interruption = Some(enable);
         self
     }
 
@@ -667,7 +685,7 @@ impl Config {
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
         self.features.tail_call = enable;
-        self.tunables.tail_callable = enable;
+        self.tunables.tail_callable = Some(enable);
         self
     }
 
@@ -794,7 +812,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/relaxed-simd
     pub fn relaxed_simd_deterministic(&mut self, enable: bool) -> &mut Self {
-        self.tunables.relaxed_simd_deterministic = enable;
+        self.tunables.relaxed_simd_deterministic = Some(enable);
         self
     }
 
@@ -1239,7 +1257,7 @@ impl Config {
     /// `PoolingAllocatorConfig::memory_protection_keys` for details.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
         let max_pages = max_size / u64::from(wasmtime_environ::WASM_PAGE_SIZE);
-        self.tunables.static_memory_bound = max_pages;
+        self.tunables.static_memory_bound = Some(max_pages);
         self
     }
 
@@ -1255,7 +1273,7 @@ impl Config {
     /// For the difference between static and dynamic memories, see the
     /// [`Config::static_memory_maximum_size`].
     pub fn static_memory_forced(&mut self, force: bool) -> &mut Self {
-        self.tunables.static_memory_bound_is_maximum = force;
+        self.tunables.static_memory_bound_is_maximum = Some(force);
         self
     }
 
@@ -1311,7 +1329,7 @@ impl Config {
     /// than the value configured for [`Config::dynamic_memory_guard_size`].
     pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
-        self.tunables.static_memory_offset_guard_size = guard_size;
+        self.tunables.static_memory_offset_guard_size = Some(guard_size);
         self
     }
 
@@ -1344,7 +1362,7 @@ impl Config {
     /// than the value configured for [`Config::static_memory_guard_size`].
     pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
         let guard_size = round_up_to_pages(guard_size);
-        self.tunables.dynamic_memory_offset_guard_size = guard_size;
+        self.tunables.dynamic_memory_offset_guard_size = Some(guard_size);
         self
     }
 
@@ -1383,7 +1401,7 @@ impl Config {
     /// For 64-bit platforms this defaults to 2GB, and for 32-bit platforms this
     /// defaults to 1MB.
     pub fn dynamic_memory_reserved_for_growth(&mut self, reserved: u64) -> &mut Self {
-        self.tunables.dynamic_memory_growth_reserve = round_up_to_pages(reserved);
+        self.tunables.dynamic_memory_growth_reserve = Some(round_up_to_pages(reserved));
         self
     }
 
@@ -1408,7 +1426,7 @@ impl Config {
     ///
     /// This value defaults to `true`.
     pub fn guard_before_linear_memory(&mut self, guard: bool) -> &mut Self {
-        self.tunables.guard_before_linear_memory = guard;
+        self.tunables.guard_before_linear_memory = Some(guard);
         self
     }
 
@@ -1455,7 +1473,7 @@ impl Config {
     /// numbers if so configured as well (and the original wasm module has DWARF
     /// debugging information present).
     pub fn generate_address_map(&mut self, generate: bool) -> &mut Self {
-        self.tunables.generate_address_map = generate;
+        self.tunables.generate_address_map = Some(generate);
         self
     }
 
@@ -1589,7 +1607,7 @@ impl Config {
         self
     }
 
-    pub(crate) fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<Tunables> {
         if self.features.reference_types && !self.features.bulk_memory {
             bail!("feature 'reference_types' requires 'bulk_memory' to be enabled");
         }
@@ -1603,26 +1621,72 @@ impl Config {
         if self.max_wasm_stack == 0 {
             bail!("max_wasm_stack size cannot be zero");
         }
-        if self.tunables.static_memory_offset_guard_size
-            < self.tunables.dynamic_memory_offset_guard_size
-        {
-            bail!("static memory guard size cannot be smaller than dynamic memory guard size");
-        }
         #[cfg(not(feature = "wmemcheck"))]
         if self.wmemcheck {
             bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
         }
 
-        Ok(())
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        let mut tunables = Tunables::default_host();
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        let mut tunables = match &self.compiler_config.target.as_ref() {
+            Some(target) => match target.pointer_width() {
+                Ok(PointerWidth::U32) => Tunables::default_u32(),
+                Ok(PointerWidth::U64) => Tunables::default_u64(),
+                _ => bail!("unknown pointer width"),
+            },
+            None => Tunables::default_host(),
+        };
+
+        macro_rules! set_fields {
+            ($($field:ident)*) => (
+                let ConfigTunables {
+                    $($field,)*
+                } = &self.tunables;
+
+                $(
+                    if let Some(e) = $field {
+                        tunables.$field = *e;
+                    }
+                )*
+            )
+        }
+
+        set_fields! {
+            static_memory_bound
+            static_memory_offset_guard_size
+            dynamic_memory_offset_guard_size
+            dynamic_memory_growth_reserve
+            generate_native_debuginfo
+            parse_wasm_debuginfo
+            consume_fuel
+            epoch_interruption
+            static_memory_bound_is_maximum
+            guard_before_linear_memory
+            generate_address_map
+            debug_adapter_modules
+            relaxed_simd_deterministic
+            tail_callable
+        }
+
+        if tunables.static_memory_offset_guard_size < tunables.dynamic_memory_offset_guard_size {
+            bail!("static memory guard size cannot be smaller than dynamic memory guard size");
+        }
+        Ok(tunables)
     }
 
     #[cfg(feature = "runtime")]
-    pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
+    pub(crate) fn build_allocator(
+        &self,
+        tunables: &Tunables,
+    ) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
 
         #[cfg(not(feature = "async"))]
         let stack_size = 0;
+
+        let _ = tunables;
 
         match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => {
@@ -1642,8 +1706,7 @@ impl Config {
                 let mut config = config.config;
                 config.stack_size = stack_size;
                 Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(
-                    &config,
-                    &self.tunables,
+                    &config, tunables,
                 )?))
             }
         }
@@ -1660,7 +1723,10 @@ impl Config {
     }
 
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn build_compiler(mut self) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
+    pub(crate) fn build_compiler(
+        mut self,
+        tunables: &Tunables,
+    ) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
         let target = self.compiler_config.target.clone();
 
         let mut compiler = match self.compiler_config.strategy {
@@ -1767,7 +1833,7 @@ impl Config {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
-        compiler.set_tunables(self.tunables.clone())?;
+        compiler.set_tunables(tunables.clone())?;
         compiler.wmemcheck(self.compiler_config.wmemcheck);
 
         Ok((self, compiler.build()?))
@@ -1778,7 +1844,7 @@ impl Config {
     /// then are necessary.
     #[cfg(feature = "component-model")]
     pub fn debug_adapter_modules(&mut self, debug: bool) -> &mut Self {
-        self.tunables.debug_adapter_modules = debug;
+        self.tunables.debug_adapter_modules = Some(debug);
         self
     }
 
@@ -1849,7 +1915,6 @@ impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut f = f.debug_struct("Config");
         f.field("debug_info", &self.tunables.generate_native_debuginfo)
-            .field("parse_wasm_debuginfo", &self.tunables.parse_wasm_debuginfo)
             .field("wasm_threads", &self.features.threads)
             .field("wasm_reference_types", &self.features.reference_types)
             .field(
@@ -1860,27 +1925,29 @@ impl fmt::Debug for Config {
             .field("wasm_simd", &self.features.simd)
             .field("wasm_relaxed_simd", &self.features.relaxed_simd)
             .field("wasm_multi_value", &self.features.multi_value)
-            .field(
-                "static_memory_maximum_size",
-                &(u64::from(self.tunables.static_memory_bound)
-                    * u64::from(wasmtime_environ::WASM_PAGE_SIZE)),
-            )
-            .field(
-                "static_memory_guard_size",
-                &self.tunables.static_memory_offset_guard_size,
-            )
-            .field(
-                "dynamic_memory_guard_size",
-                &self.tunables.dynamic_memory_offset_guard_size,
-            )
-            .field(
-                "guard_before_linear_memory",
-                &self.tunables.guard_before_linear_memory,
-            )
             .field("parallel_compilation", &self.parallel_compilation);
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             f.field("compiler_config", &self.compiler_config);
+        }
+
+        if let Some(enable) = self.tunables.parse_wasm_debuginfo {
+            f.field("parse_wasm_debuginfo", &enable);
+        }
+        if let Some(size) = self.tunables.static_memory_bound {
+            f.field(
+                "static_memory_maximum_size",
+                &(u64::from(size) * u64::from(wasmtime_environ::WASM_PAGE_SIZE)),
+            );
+        }
+        if let Some(size) = self.tunables.static_memory_offset_guard_size {
+            f.field("static_memory_guard_size", &size);
+        }
+        if let Some(size) = self.tunables.dynamic_memory_offset_guard_size {
+            f.field("dynamic_memory_guard_size", &size);
+        }
+        if let Some(enable) = self.tunables.guard_before_linear_memory {
+            f.field("guard_before_linear_memory", &enable);
         }
         f.finish()
     }

@@ -1105,7 +1105,7 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
 
         // Hash configuration state read for compilation
         let config = self.0.config();
-        config.tunables.hash(hasher);
+        self.0.tunables().hash(hasher);
         config.features.hash(hasher);
         config.wmemcheck.hash(hasher);
 

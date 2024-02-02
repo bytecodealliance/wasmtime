@@ -1390,7 +1390,7 @@ impl StoreOpaque {
 
     pub fn get_fuel(&self) -> Result<u64> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         let injected_fuel = unsafe { *self.runtime_limits.fuel_consumed.get() };
@@ -1408,7 +1408,7 @@ impl StoreOpaque {
 
     pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         let injected_fuel = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
@@ -1423,7 +1423,7 @@ impl StoreOpaque {
 
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         anyhow::ensure!(

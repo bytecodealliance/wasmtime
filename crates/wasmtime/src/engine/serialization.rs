@@ -231,7 +231,7 @@ impl Metadata<'_> {
             target: engine.compiler().triple().to_string(),
             shared_flags: engine.compiler().flags(),
             isa_flags: engine.compiler().isa_flags(),
-            tunables: engine.config().tunables.clone(),
+            tunables: engine.tunables().clone(),
             features: WasmFeatures {
                 reference_types,
                 multi_value,
@@ -254,7 +254,7 @@ impl Metadata<'_> {
         self.check_triple(engine)?;
         self.check_shared_flags(engine)?;
         self.check_isa_flags(engine)?;
-        self.check_tunables(&engine.config().tunables)?;
+        self.check_tunables(&engine.tunables())?;
         self.check_features(&engine.config().features)?;
         Ok(())
     }

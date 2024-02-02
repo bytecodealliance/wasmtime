@@ -32,7 +32,7 @@ pub fn run(opt: &Options) -> Result<()> {
     let mut validator = Validator::new();
     let parser = WasmParser::new(0);
     let mut types = Default::default();
-    let tunables = Tunables::default();
+    let tunables = Tunables::default_host();
     let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
