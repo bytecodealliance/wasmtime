@@ -241,12 +241,6 @@ impl<'a> Elaborator<'a> {
             self.stats.elaborate_best_cost_fixpoint_iters += 1;
 
             for (value, def) in self.func.dfg.values_and_defs() {
-                // If the cost of this value is finite, then we've already found
-                // its final cost.
-                if best[value].0.is_finite() {
-                    continue;
-                }
-
                 trace!("computing best for value {:?} def {:?}", value, def);
                 let orig_best_value = best[value];
 
@@ -299,7 +293,7 @@ impl<'a> Elaborator<'a> {
         if cfg!(any(feature = "trace-log", debug_assertions)) {
             trace!("finished fixpoint loop to compute best value for each eclass");
             for value in self.func.dfg.values() {
-                debug_assert_ne!(best[value].0, Cost::infinity());
+                debug_assert!(best[value].0.is_finite());
                 debug_assert_ne!(best[value].1, Value::reserved_value());
                 trace!("-> best for eclass {:?}: {:?}", value, best[value]);
             }
