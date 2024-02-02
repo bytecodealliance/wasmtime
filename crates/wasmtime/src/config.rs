@@ -1686,6 +1686,8 @@ impl Config {
         #[cfg(not(feature = "async"))]
         let stack_size = 0;
 
+        let _ = tunables;
+
         match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => {
                 #[allow(unused_mut)]
