@@ -8,6 +8,15 @@ target riscv64
 target riscv64 has_c has_zcb
 
 
+function %smulhi_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = smulhi v0, v1
+    return v2
+}
+; run: %smulhi_i8(-2, -4) == 0
+; run: %smulhi_i8(2, -4) == -1
+; run: %smulhi_i8(255, 255) == 0
+
 function %smulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
     v2 = smulhi v0, v1

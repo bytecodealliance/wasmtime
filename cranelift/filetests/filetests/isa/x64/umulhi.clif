@@ -1,6 +1,37 @@
 test compile precise-output
 target x86_64
 
+function %umulhi_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = umulhi v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbl  %dil, %eax
+;   movzbl  %sil, %r8d
+;   imull   %eax, %r8d, %eax
+;   shrq    $8, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbl %dil, %eax
+;   movzbl %sil, %r8d
+;   imull %r8d, %eax
+;   shrq $8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
 function %f1(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
   v2 = umulhi v0, v1
