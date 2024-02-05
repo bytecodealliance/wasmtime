@@ -86,14 +86,6 @@ impl Cost {
         Cost(0)
     }
 
-    pub(crate) fn is_infinite(&self) -> bool {
-        *self == Cost::infinity()
-    }
-
-    pub(crate) fn is_finite(&self) -> bool {
-        !self.is_infinite()
-    }
-
     /// Construct a new `Cost` from the given parts.
     ///
     /// If the opcode cost is greater than or equal to the maximum representable
