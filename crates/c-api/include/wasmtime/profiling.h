@@ -85,6 +85,23 @@ wasmtime_guestprofiler_sample(wasmtime_guestprofiler_t *guestprofiler,
                               const wasmtime_store_t *store);
 
 /**
+ * \brief Add a sample to the profile, additionally specifying used CPU time.
+ *
+ * \param guestprofiler the profiler the sample is being added to
+ * \param store         store that is being used to collect the backtraces
+ * \param delta_nanos   CPU time in nanoseconds that was used by this guest
+ *                      since the previous sample
+ *
+ * This function does not take ownership of the arguments.
+ *
+ * For more information see the Rust documentation at:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfiler.html#method.sample_with_delta
+ */
+WASM_API_EXTERN void wasmtime_guestprofiler_sample_with_delta(
+    wasmtime_guestprofiler_t *guestprofiler, const wasmtime_store_t *store,
+    uint64_t delta_nanos);
+
+/**
  * \brief Writes out the captured profile.
  *
  * \param guestprofiler the profiler which is being finished and deleted

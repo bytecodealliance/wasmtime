@@ -49,6 +49,17 @@ pub extern "C" fn wasmtime_guestprofiler_sample(
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_guestprofiler_sample_with_delta(
+    guestprofiler: &mut wasmtime_guestprofiler_t,
+    store: &wasmtime_store_t,
+    delta_nanos: u64,
+) {
+    guestprofiler
+        .guest_profiler
+        .sample_with_delta(&store.store, Duration::from_nanos(delta_nanos));
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_guestprofiler_finish(
     guestprofiler: Box<wasmtime_guestprofiler_t>,
     out: &mut wasm_byte_vec_t,
