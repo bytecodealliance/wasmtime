@@ -178,6 +178,7 @@ mod tests {
         let a = Cost::new(5, 2);
         let b = Cost::new(37, 3);
         assert_eq!(a + b, Cost::new(42, 3));
+        assert_eq!(b + a, Cost::new(42, 3));
     }
 
     #[test]
@@ -185,6 +186,7 @@ mod tests {
         let a = Cost::new(5, 2);
         let b = Cost::infinity();
         assert_eq!(a + b, Cost::infinity());
+        assert_eq!(b + a, Cost::infinity());
     }
 
     #[test]
@@ -192,6 +194,7 @@ mod tests {
         let a = Cost::new(Cost::MAX_OP_COST - 10, 2);
         let b = Cost::new(11, 2);
         assert_eq!(a + b, Cost::infinity());
+        assert_eq!(b + a, Cost::infinity());
     }
 
     #[test]
@@ -200,6 +203,10 @@ mod tests {
         let b = Cost::new(10, 1);
         assert_eq!(
             Cost::of_pure_op(Opcode::Iconst, [a, b]),
+            Cost::new(21, u8::MAX)
+        );
+        assert_eq!(
+            Cost::of_pure_op(Opcode::Iconst, [b, a]),
             Cost::new(21, u8::MAX)
         );
     }
