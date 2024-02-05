@@ -74,7 +74,7 @@ impl Cost {
     const DEPTH_BITS: u8 = 8;
     const DEPTH_MASK: u32 = (1 << Self::DEPTH_BITS) - 1;
     const OP_COST_MASK: u32 = !Self::DEPTH_MASK;
-    const MAX_OP_COST: u32 = (Self::OP_COST_MASK >> Self::DEPTH_BITS) - 1;
+    const MAX_OP_COST: u32 = Self::OP_COST_MASK >> Self::DEPTH_BITS;
 
     pub(crate) fn infinity() -> Cost {
         // 2^32 - 1 is, uh, pretty close to infinite... (we use `Cost`
@@ -86,14 +86,16 @@ impl Cost {
         Cost(0)
     }
 
-    /// Construct a new finite cost from the given parts.
+    /// Construct a new `Cost` from the given parts.
     ///
-    /// The opcode cost is clamped to the maximum value representable.
-    fn new_finite(opcode_cost: u32, depth: u8) -> Cost {
-        let opcode_cost = std::cmp::min(opcode_cost, Self::MAX_OP_COST);
-        let cost = Cost((opcode_cost << Self::DEPTH_BITS) | u32::from(depth));
-        debug_assert_ne!(cost, Cost::infinity());
-        cost
+    /// If the opcode cost is greater than or equal to the maximum representable
+    /// opcode cost, then the resulting `Cost` saturates to infinity.
+    fn new(opcode_cost: u32, depth: u8) -> Cost {
+        if opcode_cost >= Self::MAX_OP_COST {
+            Self::infinity()
+        } else {
+            Cost(opcode_cost << Self::DEPTH_BITS | u32::from(depth))
+        }
     }
 
     fn depth(&self) -> u8 {
@@ -111,7 +113,7 @@ impl Cost {
     /// that satisfies `inst_predicates::is_pure_for_egraph()`.
     pub(crate) fn of_pure_op(op: Opcode, operand_costs: impl IntoIterator<Item = Self>) -> Self {
         let c = pure_op_cost(op) + operand_costs.into_iter().sum();
-        Cost::new_finite(c.op_cost(), c.depth().saturating_add(1))
+        Cost::new(c.op_cost(), c.depth().saturating_add(1))
     }
 }
 
@@ -131,12 +133,9 @@ impl std::ops::Add<Cost> for Cost {
     type Output = Cost;
 
     fn add(self, other: Cost) -> Cost {
-        let op_cost = std::cmp::min(
-            self.op_cost().saturating_add(other.op_cost()),
-            Self::MAX_OP_COST,
-        );
+        let op_cost = self.op_cost().saturating_add(other.op_cost());
         let depth = std::cmp::max(self.depth(), other.depth());
-        Cost::new_finite(op_cost, depth)
+        Cost::new(op_cost, depth)
     }
 }
 
@@ -147,11 +146,11 @@ impl std::ops::Add<Cost> for Cost {
 fn pure_op_cost(op: Opcode) -> Cost {
     match op {
         // Constants.
-        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new_finite(1, 0),
+        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new(1, 0),
 
         // Extends/reduces.
         Opcode::Uextend | Opcode::Sextend | Opcode::Ireduce | Opcode::Iconcat | Opcode::Isplit => {
-            Cost::new_finite(2, 0)
+            Cost::new(2, 0)
         }
 
         // "Simple" arithmetic.
@@ -163,9 +162,52 @@ fn pure_op_cost(op: Opcode) -> Cost {
         | Opcode::Bnot
         | Opcode::Ishl
         | Opcode::Ushr
-        | Opcode::Sshr => Cost::new_finite(3, 0),
+        | Opcode::Sshr => Cost::new(3, 0),
 
         // Everything else (pure.)
-        _ => Cost::new_finite(4, 0),
+        _ => Cost::new(4, 0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_cost() {
+        let a = Cost::new(5, 2);
+        let b = Cost::new(37, 3);
+        assert_eq!(a + b, Cost::new(42, 3));
+        assert_eq!(b + a, Cost::new(42, 3));
+    }
+
+    #[test]
+    fn add_infinity() {
+        let a = Cost::new(5, 2);
+        let b = Cost::infinity();
+        assert_eq!(a + b, Cost::infinity());
+        assert_eq!(b + a, Cost::infinity());
+    }
+
+    #[test]
+    fn op_cost_saturates_to_infinity() {
+        let a = Cost::new(Cost::MAX_OP_COST - 10, 2);
+        let b = Cost::new(11, 2);
+        assert_eq!(a + b, Cost::infinity());
+        assert_eq!(b + a, Cost::infinity());
+    }
+
+    #[test]
+    fn depth_saturates_to_max_depth() {
+        let a = Cost::new(10, u8::MAX);
+        let b = Cost::new(10, 1);
+        assert_eq!(
+            Cost::of_pure_op(Opcode::Iconst, [a, b]),
+            Cost::new(21, u8::MAX)
+        );
+        assert_eq!(
+            Cost::of_pure_op(Opcode::Iconst, [b, a]),
+            Cost::new(21, u8::MAX)
+        );
     }
 }
