@@ -32,6 +32,9 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
+wasi-common = { workspace = true, default-features = true, features = [
+  "exit",
+] }
 wasmtime-wasi = { workspace = true, default-features = true, features = [
   "exit",
 ] }

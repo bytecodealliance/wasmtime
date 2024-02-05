@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use wasi_common::sync::WasiCtxBuilder;
+use wasi_common::I32Exit;
 use wasmtime::*;
-use wasmtime_wasi::sync::WasiCtxBuilder;
-use wasmtime_wasi::I32Exit;
 
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]
@@ -708,7 +708,7 @@ fn store_with_context() -> Result<()> {
 fn wasi_imports() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
+    wasi_common::sync::add_to_linker(&mut linker, |s| s)?;
 
     let wasm = wat::parse_str(
         r#"

@@ -3,8 +3,8 @@
 // You can execute this example with `cargo run --example linking`
 
 use anyhow::Result;
+use wasi_common::sync::WasiCtxBuilder;
 use wasmtime::*;
-use wasmtime_wasi::sync::WasiCtxBuilder;
 
 fn main() -> Result<()> {
     let engine = Engine::default();
@@ -12,7 +12,7 @@ fn main() -> Result<()> {
     // First set up our linker which is going to be linking modules together. We
     // want our linker to have wasi available, so we set that up here as well.
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
+    wasi_common::sync::add_to_linker(&mut linker, |s| s)?;
 
     // Load and compile our two modules
     let linking1 = Module::from_file(&engine, "examples/linking1.wat")?;

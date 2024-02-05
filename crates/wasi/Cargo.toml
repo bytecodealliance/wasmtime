@@ -18,7 +18,7 @@ workspace = true
 wasmtime = { workspace = true }
 anyhow = { workspace = true }
 wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
-libc = { workspace = true }
+libc = { workspace = true, optional = true }
 once_cell = { workspace = true }
 log = { workspace = true }
 url = { workspace = true }
@@ -60,7 +60,7 @@ rustix = { workspace = true, features = ["event", "net"], optional = true }
 
 [features]
 default = ["preview2", "preview1-on-preview2"]
-exit = []
+exit = [ "dep:libc" ]
 preview2 = [
     'wasmtime/component-model',
     'wasmtime/async',

@@ -13,10 +13,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::preview2;
-use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -223,7 +222,13 @@ impl RunCommand {
                 // Exit the process if Wasmtime understands the error;
                 // otherwise, fall back on Rust's default error printing/return
                 // code.
-                return Err(maybe_exit_on_error(e));
+                if store.data().preview1_ctx.is_some() {
+                    return Err(wasi_common::maybe_exit_on_error(e));
+                } else if store.data().preview2_ctx.is_some() {
+                    return Err(wasmtime_wasi::maybe_exit_on_error(e));
+                } else {
+                    return Err(e);
+                }
             }
         }
 
@@ -464,7 +469,7 @@ impl RunCommand {
                 // explicit exit here with status 1 if `Err(())` is returned.
                 result.and_then(|wasm_result| match wasm_result {
                     Ok(()) => Ok(()),
-                    Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
+                    Err(()) => Err(wasmtime_wasi::preview2::I32Exit(1).into()),
                 })
             }
         };
@@ -589,7 +594,7 @@ impl RunCommand {
                         // are enabled, then use the historical preview1
                         // implementation.
                         (Some(false), _) | (None, Some(true)) => {
-                            wasmtime_wasi::add_to_linker(linker, |host| {
+                            wasi_common::sync::add_to_linker(linker, |host| {
                                 host.preview1_ctx.as_mut().unwrap()
                             })?;
                             self.set_preview1_ctx(store)?;
@@ -792,7 +797,7 @@ impl RunCommand {
 
 #[derive(Default, Clone)]
 struct Host {
-    preview1_ctx: Option<wasmtime_wasi::WasiCtx>,
+    preview1_ctx: Option<wasi_common::WasiCtx>,
 
     // The Mutex is only needed to satisfy the Sync constraint but we never
     // actually perform any locking on it as we use Mutex::get_mut for every
