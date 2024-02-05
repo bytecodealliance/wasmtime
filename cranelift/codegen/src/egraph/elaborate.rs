@@ -293,9 +293,35 @@ impl<'a> Elaborator<'a> {
         if cfg!(any(feature = "trace-log", debug_assertions)) {
             trace!("finished fixpoint loop to compute best value for each eclass");
             for value in self.func.dfg.values() {
-                debug_assert!(best[value].0.is_finite());
-                debug_assert_ne!(best[value].1, Value::reserved_value());
                 trace!("-> best for eclass {:?}: {:?}", value, best[value]);
+                debug_assert_ne!(best[value].1, Value::reserved_value());
+                // You might additionally be expecting an assert that the best
+                // cost is not infinity, however infinite cost *can* happen in
+                // practice. First, note that our cost function doesn't know
+                // about any shared structure in the dataflow graph, it only
+                // sums operand costs. (And trying to avoid that by deduping a
+                // single operation's operands is a losing game because you can
+                // always just add one indirection and go from `add(x, x)` to
+                // `add(foo(x), bar(x))` to hide the shared structure.) Given
+                // that blindness to sharing, we can make cost grow
+                // exponentially with a linear sequence of operations:
+                //
+                //     v0 = iconst.i32 1    ;; cost = 1
+                //     v1 = iadd v0, v0     ;; cost = 3 + 1 + 1
+                //     v2 = iadd v1, v1     ;; cost = 3 + 5 + 5
+                //     v3 = iadd v2, v2     ;; cost = 3 + 13 + 13
+                //     v4 = iadd v3, v3     ;; cost = 3 + 29 + 29
+                //     v5 = iadd v4, v4     ;; cost = 3 + 61 + 61
+                //     v6 = iadd v5, v5     ;; cost = 3 + 125 + 125
+                //     ;; etc...
+                //
+                // Such a chain can cause cost to saturate to infinity. How do
+                // we choose which e-node is best when there are multiple that
+                // have saturated to infinity? It doesn't matter. As long as
+                // invariant (2) for optimization rules is upheld by our rule
+                // set (see `cranelift/codegen/src/opts/README.md`) it is safe
+                // to choose *any* e-node in the e-class. At worst we will
+                // produce suboptimal code, but never an incorrectness.
             }
         }
     }
