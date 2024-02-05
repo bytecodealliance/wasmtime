@@ -23,6 +23,8 @@ mod instance;
 mod linker;
 mod memory;
 mod module;
+#[cfg(feature = "profiling")]
+mod profiling;
 mod r#ref;
 mod store;
 mod table;
