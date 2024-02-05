@@ -4,7 +4,7 @@ use anyhow::bail;
 use anyhow::Result;
 #[cfg(feature = "profiling")]
 use fxprof_processed_profile::{
-    debugid::DebugId, CategoryHandle, CpuDelta, Frame, FrameFlags, FrameInfo, LibraryInfo, Profile,
+    debugid::DebugId, CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, Profile,
     ReferenceTimestamp, Symbol, SymbolTable, Timestamp,
 };
 use std::ops::Range;
