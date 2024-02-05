@@ -639,5 +639,5 @@ version = "5.0.1+zstd.1.5.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.zstd-sys]]
-version = "2.0.1+zstd.1.5.2"
+version = "2.0.9+zstd.1.5.5"
 criteria = "safe-to-deploy"
