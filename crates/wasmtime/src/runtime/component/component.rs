@@ -37,8 +37,8 @@ use wasmtime_runtime::{
 ///   [`Component::serialize`].
 /// * A previously compiled artifact can be parsed with
 ///   [`Component::deserialize`].
-/// * No compilation happens at runtime for a component, everything is done
-///   after [`Component::new`] returns.
+/// * No compilation happens at runtime for a component — everything is done
+///   by the time [`Component::new`] returns.
 ///
 /// ## Components and `Clone`
 ///
