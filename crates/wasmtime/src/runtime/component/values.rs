@@ -13,7 +13,14 @@ use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeListIndex, VariantInfo,
 };
 
-/// Represents runtime list values
+/// Dynamic representation of `list<T>` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that `Vec<T>` is also supported for component model lists when
+/// using [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct List {
     ty: types::List,
@@ -21,7 +28,12 @@ pub struct List {
 }
 
 impl List {
-    /// Instantiate the specified type with the specified `values`.
+    /// Creates a new list with the specified type with the specified `values`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any value in `values` does not have the element
+    /// type of `ty` specified.
     pub fn new(ty: &types::List, values: Box<[Val]>) -> Result<Self> {
         let element_type = ty.ty();
         for (index, value) in values.iter().enumerate() {
@@ -60,7 +72,15 @@ impl fmt::Debug for List {
     }
 }
 
-/// Represents runtime record values
+/// Dynamic representation of `record` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that records can also be mapped to Rust `struct`s through the
+/// [`#[derive(ComponentType)]`](macro@crate::component::ComponentType) macro
+/// and using [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct Record {
     ty: types::Record,
@@ -68,7 +88,15 @@ pub struct Record {
 }
 
 impl Record {
-    /// Instantiate the specified type with the specified `values`.
+    /// Creates a new record with the specified `ty` and the `values` for fields.
+    ///
+    /// Note that the `values` specified for fields must list fields in the
+    /// same order that the `ty` lists them in.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the `values` specified are in the wrong order
+    /// field-wise or have the wrong type relative to what's specified in `ty`.
     pub fn new<'a>(
         ty: &types::Record,
         values: impl IntoIterator<Item = (&'a str, Val)>,
@@ -111,8 +139,9 @@ impl Record {
         &self.ty
     }
 
-    /// Gets the value of the specified field `name` from this record.
-    pub fn fields(&self) -> impl Iterator<Item = (&str, &Val)> {
+    /// Returns the list of fields that this struct contains with their name
+    /// and value.
+    pub fn fields(&self) -> impl ExactSizeIterator<Item = (&str, &Val)> {
         assert_eq!(self.values.len(), self.ty.fields().len());
         self.ty
             .fields()
@@ -131,7 +160,14 @@ impl fmt::Debug for Record {
     }
 }
 
-/// Represents runtime tuple values
+/// Dynamic representation of `tuple<...>` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that tuples are also mapped to Rust tuples when using
+/// [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct Tuple {
     ty: types::Tuple,
@@ -139,7 +175,13 @@ pub struct Tuple {
 }
 
 impl Tuple {
-    /// Instantiate the specified type ith the specified `values`.
+    /// Creates a new tuple with the `ty` specified and `values` for each
+    /// entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `values` does not match the `ty` specified, such as
+    /// if it has the wrong length or if any field has the wrong type.
     pub fn new(ty: &types::Tuple, values: Box<[Val]>) -> Result<Self> {
         if values.len() != ty.types().len() {
             bail!(
@@ -181,7 +223,15 @@ impl fmt::Debug for Tuple {
     }
 }
 
-/// Represents runtime variant values
+/// Dynamic representation of `variant` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that variants can also be mapped to Rust `enum`s through the
+/// [`#[derive(ComponentType)]`](macro@crate::component::ComponentType) macro
+/// and using [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct Variant {
     ty: types::Variant,
@@ -190,7 +240,18 @@ pub struct Variant {
 }
 
 impl Variant {
-    /// Instantiate the specified type with the specified case `name` and `value`.
+    /// Creates a new variant with the specified `ty` and the case `name` and
+    /// `value` provided.
+    ///
+    /// This will create a instance of a variant with the case `name` which has
+    /// the optional payload of `value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `name` doesn't match any case of `ty` or if
+    /// `value` is of the wrong type. Note that `ty` must match the payload
+    /// type exactly, in that if the case for `name` doesn't have a type then
+    /// `value` must be `None`.
     pub fn new(ty: &types::Variant, name: &str, value: Option<Val>) -> Result<Self> {
         let (discriminant, case_type) = ty
             .cases()
@@ -272,7 +333,15 @@ impl fmt::Debug for Variant {
     }
 }
 
-/// Represents runtime enum values
+/// Dynamic representation of `enum` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that enums can also be mapped to Rust `enum`s through the
+/// [`#[derive(ComponentType)]`](macro@crate::component::ComponentType) macro
+/// and using [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct Enum {
     ty: types::Enum,
@@ -280,7 +349,12 @@ pub struct Enum {
 }
 
 impl Enum {
-    /// Instantiate the specified type with the specified case `name`.
+    /// Creates a new enum value with the `ty` specified selecting the
+    /// specified variant called `name`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `name` isn't listed within `ty`.
     pub fn new(ty: &types::Enum, name: &str) -> Result<Self> {
         let discriminant = u32::try_from(
             ty.names()
@@ -328,7 +402,14 @@ impl fmt::Debug for Enum {
     }
 }
 
-/// Represents runtime option values
+/// Dynamic representation of `option<T>` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that options are also mapped to Rust `Option<T>` when using
+/// [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct OptionVal {
     ty: types::OptionType,
@@ -337,7 +418,12 @@ pub struct OptionVal {
 }
 
 impl OptionVal {
-    /// Instantiate the specified type with the specified `value`.
+    /// Creates a new value with the `ty` specified holding the payload `value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `value` is `Some` and the payload has the wrong
+    /// type for `ty`.
     pub fn new(ty: &types::OptionType, value: Option<Val>) -> Result<Self> {
         let value = value
             .map(|value| {
@@ -390,7 +476,14 @@ impl fmt::Debug for OptionVal {
     }
 }
 
-/// Represents runtime result values
+/// Dynamic representation of `result<T, E>` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that tuples are also mapped to Rust's `Result<T, E>` when using
+/// [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct ResultVal {
     ty: types::ResultType,
@@ -399,7 +492,14 @@ pub struct ResultVal {
 }
 
 impl ResultVal {
-    /// Instantiate the specified type with the specified `value`.
+    /// Creates a new `Result` from the specified `ty` and `value`.
+    ///
+    /// Note that the `value` uses `Option<Val>` for payloads to map to the
+    /// optional payload value of the component model within each variant.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the `value` payload has the wrong type for `ty`.
     pub fn new(ty: &types::ResultType, value: Result<Option<Val>, Option<Val>>) -> Result<Self> {
         Ok(Self {
             ty: ty.clone(),
@@ -459,7 +559,15 @@ impl fmt::Debug for ResultVal {
     }
 }
 
-/// Represents runtime flag values
+/// Dynamic representation of `flags` in the component model.
+///
+/// This structure is part of the dynamically-typed [`Val`] which represents
+/// all possible values in the component model. This is often used in
+/// conjunction with [`Func::call`](crate::component::Func::call).
+///
+/// Note that flags can also be mapped to Rust structures through the
+/// [`flags!`](crate::component::flags) macro and using
+/// [`TypedFunc`](crate::component::TypedFunc).
 #[derive(PartialEq, Eq, Clone)]
 pub struct Flags {
     ty: types::Flags,
@@ -468,7 +576,13 @@ pub struct Flags {
 }
 
 impl Flags {
-    /// Instantiate the specified type with the specified flag `names`.
+    /// Creates a new set of flags with the `ty` specified and the `names` as
+    /// members of the flags.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned if any of `names` aren't present within the `ty`
+    /// specified.
     pub fn new(ty: &types::Flags, names: &[&str]) -> Result<Self> {
         let map = ty
             .names()

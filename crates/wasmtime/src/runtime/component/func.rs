@@ -85,9 +85,13 @@ union ParamsAndResults<Params: Copy, Return: Copy> {
     ret: Return,
 }
 
-/// A WebAssembly component function.
-//
-// FIXME: write more docs here
+/// A WebAssembly component function which can be called.
+///
+/// This type is the dual of [`wasmtime::Func`](crate::Func) for component
+/// functions. An instance of [`Func`] represents a component function from a
+/// component [`Instance`](crate::component::Instance). Like with
+/// [`wasmtime::Func`](crate::Func) it's possible to call functions either
+/// synchronously or asynchronously and either typed or untyped.
 #[derive(Copy, Clone, Debug)]
 pub struct Func(Stored<FuncData>);
 
@@ -150,8 +154,8 @@ impl Func {
     /// The `Params` type parameter here is a tuple of the parameters to the
     /// function. A function which takes no arguments should use `()`, a
     /// function with one argument should use `(T,)`, etc. Note that all
-    /// `Params` must also implement the [`Lower`] trait since they're going tin
-    /// to wasm.
+    /// `Params` must also implement the [`Lower`] trait since they're going
+    /// into wasm.
     ///
     /// The `Return` type parameter is the return value of this function. A
     /// return value of `()` means that there's no return (similar to a Rust
@@ -163,6 +167,9 @@ impl Func {
     /// trait is implemented for built-in types to Rust such as integer
     /// primitives, floats, `Option<T>`, `Result<T, E>`, strings, `Vec<T>`, and
     /// more. As parameters you'll be passing native Rust types.
+    ///
+    /// See the documentation for [`ComponentType`] for more information about
+    /// supported types.
     ///
     /// # Errors
     ///
@@ -284,15 +291,39 @@ impl Func {
 
     /// Invokes this function with the `params` given and returns the result.
     ///
-    /// The `params` here must match the type signature of this `Func`, or this will return an error. If a trap
-    /// occurs while executing this function, then an error will also be returned.
-    // TODO: say more -- most of the docs for `TypedFunc::call` apply here, too
-    //
-    // # Panics
-    //
-    // Panics if this is called on a function in an asyncronous store. This only works
-    // with functions defined within a synchronous store. Also panics if `store`
-    // does not own this function.
+    /// The `params` provided must match the parameters that this function takes
+    /// in terms of their types and the number of parameters. Results will be
+    /// written to the `results` slice provided if the call completes
+    /// successfully. The initial types of the values in `results` are ignored
+    /// and values are overwritten to write the result. It's required that the
+    /// size of `results` exactly matches the number of results that this
+    /// function produces.
+    ///
+    /// Note that after a function is invoked the embedder needs to invoke
+    /// [`Func::post_return`] to execute any final cleanup required by the
+    /// guest. This function call is required to either call the function again
+    /// or to call another function.
+    ///
+    /// For more detailed information see the documentation of
+    /// [`TypedFunc::call`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in situations including but not limited to:
+    ///
+    /// * `params` is not the right size or if the values have the wrong type
+    /// * `results` is not the right size
+    /// * A trap occurs while executing the function
+    /// * The function calls a host function which returns an error
+    ///
+    /// See [`TypedFunc::call`] for more information in addition to
+    /// [`wasmtime::Func::call`](crate::Func::call).
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is called on a function in an asyncronous store. This
+    /// only works with functions defined within a synchronous store. Also
+    /// panics if `store` does not own this function.
     pub fn call(
         &self,
         mut store: impl AsContextMut,
@@ -309,11 +340,14 @@ impl Func {
 
     /// Exactly like [`Self::call`] except for use on async stores.
     ///
+    /// Note that after this [`Func::post_return_async`] will be used instead of
+    /// the synchronous version at [`Func::post_return`].
+    ///
     /// # Panics
     ///
-    /// Panics if this is called on a function in a synchronous store. This only works
-    /// with functions defined within an asynchronous store. Also panics if `store`
-    /// does not own this function.
+    /// Panics if this is called on a function in a synchronous store. This
+    /// only works with functions defined within an asynchronous store. Also
+    /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
@@ -539,11 +573,9 @@ impl Func {
     /// Invokes the `post-return` canonical ABI option, if specified, after a
     /// [`Func::call`] has finished.
     ///
-    /// For some more information on when to use this function see the
-    /// documentation for post-return in the [`Func::call`] method.
-    /// Otherwise though this function is a required method call after a
-    /// [`Func::call`] completes successfully. After the embedder has
-    /// finished processing the return value then this function must be invoked.
+    /// This function is a required method call after a [`Func::call`] completes
+    /// successfully. After the embedder has finished processing the return
+    /// value then this function must be invoked.
     ///
     /// # Errors
     ///
@@ -598,7 +630,6 @@ impl Func {
         store.on_fiber(|store| self.post_return_impl(store)).await?
     }
 
-    #[inline]
     fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
         let data = &mut store.0[self.0];
