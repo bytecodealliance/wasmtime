@@ -167,12 +167,10 @@
        (bxor ty (bxor ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
       (bxor ty x (bxor ty k1 k2)))
 
-(rule (simplify
-       (select ty (iconst_u _ (u64_nonzero _)) x y))
-      x)
-(rule (simplify
-       (select ty (iconst_u _ 0) x y))
-      y)
+(rule (simplify (select ty (iconst_u _ (u64_nonzero _)) x _))
+      (subsume x))
+(rule (simplify (select ty (iconst_u _ 0) _ y))
+      (subsume y))
 
 ;; Replace subtraction by a "negative" constant with addition.
 ;; Notably, this gives `x - (-1) == x + 1`, so other patterns don't have to
