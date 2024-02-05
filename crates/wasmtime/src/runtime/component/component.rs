@@ -91,7 +91,7 @@ impl Component {
     ///
     /// This function will synchronously validate the entire component,
     /// including all core modules, and then compile all components, modules,
-    /// etc, found within the provided bytes.
+    /// etc., found within the provided bytes.
     ///
     /// [WebAssembly component]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md
     ///
