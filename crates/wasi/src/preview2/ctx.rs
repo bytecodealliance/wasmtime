@@ -3,7 +3,7 @@ use crate::preview2::{
         host::{monotonic_clock, wall_clock},
         HostMonotonicClock, HostWallClock,
     },
-    filesystem::Dir,
+    filesystem::{Dir, OpenMode},
     network::{SocketAddrCheck, SocketAddrUse},
     pipe, random, stdio,
     stdio::{StdinStream, StdoutStream},
@@ -144,8 +144,17 @@ impl WasiCtxBuilder {
         file_perms: FilePerms,
         path: impl AsRef<str>,
     ) -> &mut Self {
-        self.preopens
-            .push((Dir::new(dir, perms, file_perms), path.as_ref().to_owned()));
+        let mut open_mode = OpenMode::empty();
+        if perms.contains(DirPerms::READ) {
+            open_mode |= OpenMode::READ;
+        }
+        if perms.contains(DirPerms::MUTATE) {
+            open_mode |= OpenMode::WRITE;
+        }
+        self.preopens.push((
+            Dir::new(dir, perms, file_perms, open_mode),
+            path.as_ref().to_owned(),
+        ));
         self
     }
 
