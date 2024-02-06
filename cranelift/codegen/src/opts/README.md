@@ -38,6 +38,12 @@ of it boils down to the fact that, unlike traditional e-graphs, our rules are
    place of `x` in such cases would introduce uses of `y` where it is not
    defined.
 
+   An exception to this rule is discarding constants, as they can be
+   rematerialized anywhere without introducing correctness issues. For example,
+   the (admittedly silly) rule `(select 1 x (iconst_u _)) => x` would be a good
+   candidate for not using `subsume`, as it does not discard any non-constant
+   values introduced in its LHS.
+
 3. Avoid overly general rewrites like commutativity and associativity. Instead,
    prefer targeted instances of the rewrite (for example, canonicalizing adds
    where one operand is a constant such that the constant is always the add's
