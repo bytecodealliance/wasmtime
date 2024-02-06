@@ -33,7 +33,7 @@ pub mod sync {
 )]
 pub use sync::*;
 
-#[cfg(feature = "wasi-common-deprecations")]
+#[cfg(feature = "tokio")]
 #[deprecated(
     since = "18.0.0",
     note = "The wasmtime_wasi::tokio module's functionalty has been moved to
@@ -60,13 +60,14 @@ pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
     use std::process;
     use wasmtime::Trap;
 
+    if let Some(exit) = preview2::I32Exit::process_exit_code(&e) {
+        process::exit(exit)
+    }
+
     // If a specific WASI error code was requested then that's
     // forwarded through to the process here without printing any
     // extra error information.
-    let code = e
-        .downcast_ref::<wasi_common::I32Exit>()
-        .map(|e| e.0)
-        .or_else(|| e.downcast_ref::<preview2::I32Exit>().map(|e| e.0));
+    let code = e.downcast_ref::<wasi_common::I32Exit>().map(|e| e.0);
     if let Some(exit) = code {
         // Print the error message in the usual way.
         // On Windows, exit status 3 indicates an abort (see below),
@@ -85,7 +86,7 @@ pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
 
         if cfg!(unix) {
             // On Unix, return the error code of an abort.
-            process::exit(128 + libc::SIGABRT);
+            process::exit(rustix::process::EXIT_SIGNALED_SIGABRT);
         } else if cfg!(windows) {
             // On Windows, return 3.
             // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019

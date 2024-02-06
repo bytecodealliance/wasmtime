@@ -9,6 +9,20 @@ use std::marker;
 #[derive(Debug)]
 pub struct I32Exit(pub i32);
 
+impl I32Exit {
+    pub fn process_exit_code(e: &anyhow::Error) -> Option<i32> {
+        if let Some(code) = e.downcast_ref::<Self>() {
+            if cfg!(windows) && code.0 >= 3 {
+                Some(1)
+            } else {
+                Some(code.0)
+            }
+        } else {
+            None
+        }
+    }
+}
+
 impl fmt::Display for I32Exit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Exited with i32 exit status {}", self.0)
