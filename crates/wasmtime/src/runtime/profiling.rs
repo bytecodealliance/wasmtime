@@ -128,21 +128,15 @@ impl GuestProfiler {
         }
     }
 
-    /// Add a sample to the profile. This equivalent to
-    /// [`GuestProfiler::sample_with_delta()`](crate::GuestProfiler::sample_with_delta)
-    /// but without specifying used CPU time.
-    pub fn sample(&mut self, store: impl AsContext) {
-        self.sample_with_delta(store, Duration::ZERO)
-    }
-
     /// Add a sample to the profile. This function collects a backtrace from
     /// any stack frames for allowed modules on the current stack. It should
     /// typically be called from a callback registered using
     /// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
     ///
     /// The `delta` parameter is the amount of CPU time that was used by this
-    /// guest since the previous sample.
-    pub fn sample_with_delta(&mut self, store: impl AsContext, delta: Duration) {
+    /// guest since the previous sample. It is allowed to pass `Duration::ZERO`
+    /// here if recording CPU usage information is not needed.
+    pub fn sample(&mut self, store: impl AsContext, delta: Duration) {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );

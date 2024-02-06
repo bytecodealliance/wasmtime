@@ -44,19 +44,11 @@ pub unsafe extern "C" fn wasmtime_guestprofiler_new(
 pub extern "C" fn wasmtime_guestprofiler_sample(
     guestprofiler: &mut wasmtime_guestprofiler_t,
     store: &wasmtime_store_t,
-) {
-    guestprofiler.guest_profiler.sample(&store.store);
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_guestprofiler_sample_with_delta(
-    guestprofiler: &mut wasmtime_guestprofiler_t,
-    store: &wasmtime_store_t,
     delta_nanos: u64,
 ) {
     guestprofiler
         .guest_profiler
-        .sample_with_delta(&store.store, Duration::from_nanos(delta_nanos));
+        .sample(&store.store, Duration::from_nanos(delta_nanos));
 }
 
 #[no_mangle]
