@@ -13,7 +13,6 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::preview2;
@@ -330,7 +329,7 @@ impl RunCommand {
                 .unwrap();
             Arc::get_mut(&mut profiler)
                 .expect("profiling doesn't support threads yet")
-                .sample(&store, Duration::ZERO);
+                .sample(&store, std::time::Duration::ZERO);
             store.as_context_mut().data_mut().guest_profiler = Some(profiler);
         }
 
