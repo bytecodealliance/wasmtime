@@ -1877,6 +1877,15 @@ criteria = "safe-to-deploy"
 version = "0.3.25"
 notes = "This crate shells out to the pkg-config executable, but it appears to sanitize inputs reasonably."
 
+[[audits.pkg-config]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.26 -> 0.3.29"
+notes = """
+No `unsafe` additions or anything outside of the purview of the crate in this
+change.
+"""
+
 [[audits.pretty_env_logger]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3068,6 +3077,25 @@ criteria = "safe-to-deploy"
 version = "0.6.4"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.zstd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.1+zstd.1.5.2 -> 0.13.0"
+notes = """
+No major updates to the crate here. Small updates to `unsafe` code which are
+refactorings of what was there prior.
+"""
+
+[[audits.zstd-safe]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "5.0.1+zstd.1.5.2 -> 7.0.0"
+notes = """
+Lots of new comments around methods and refactorings for updates in zstd itself.
+Does contain new unsafe code, notably an implementation of an internal trait for
+the standard library `io::Cursor` type.
+"""
+
 [[trusted.aho-corasick]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
@@ -3469,6 +3497,12 @@ criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2020-01-11"
 end = "2024-07-15"
+
+[[trusted.windows]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-01-15"
+end = "2025-01-30"
 
 [[trusted.windows-core]]
 criteria = "safe-to-deploy"

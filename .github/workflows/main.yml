@@ -247,7 +247,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -322,8 +322,13 @@ jobs:
 
     # Check whether `wasmtime` cross-compiles to aarch64-linux-android
     - run: rustup target add aarch64-linux-android
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
+      uses: android-actions/setup-android@v3
     - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/cargo-ndk
@@ -515,6 +520,19 @@ jobs:
       shell: pwsh
       if: matrix.os == 'windows-latest'
 
+    # Since MPK (PKU) is not present on some GitHub runners, we check if it is
+    # available before force-enabling it. This occasional testing is better than
+    # none at all; ideally we would test in a system-mode QEMU VM.
+    - name: Force-run with MPK enabled, if available
+      if: ${{ contains(matrix.name, 'MPK') }}
+      run: |
+        if cargo run --example mpk-available; then
+          echo "::notice::This CI run will force-enable MPK; this ensures tests conditioned with the \`WASMTIME_TEST_FORCE_MPK\` environment variable will run with MPK-protected memory pool stripes."
+          echo WASMTIME_TEST_FORCE_MPK=1 >> $GITHUB_ENV
+        else
+          echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (\`cargo run --example mpk-available\`)."
+        fi
+
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
       env:
@@ -557,7 +575,7 @@ jobs:
       env:
         VERSION: ${{ github.sha }}
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
@@ -740,7 +758,7 @@ jobs:
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: bins-${{ matrix.build }}
         path: dist

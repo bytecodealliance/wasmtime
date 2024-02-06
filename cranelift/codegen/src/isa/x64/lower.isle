@@ -4159,35 +4159,33 @@
 
 ;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (umulhi a @ (value_type $I16) b))
-      (let ((res ValueRegs (mul_hi $I16 $false a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
+;; The umulhi instruction is not available for 8-bit types, so we can extend
+;; the inputs, use the 16-bit multiply and shift the result down.
+(rule 1 (lower (umulhi a @ (value_type $I8) b))
+      (let ((a_ext Gpr (extend_to_gpr a $I16 (ExtendKind.Zero)))
+            (b_ext Gpr (extend_to_gpr b $I16 (ExtendKind.Zero)))
+            (mul Gpr (x64_mul $I16 a_ext b_ext))
+            (hi Gpr (x64_shr $I64 mul (imm8_to_imm8_gpr 8))))
         hi))
 
-(rule (lower (umulhi a @ (value_type $I32) b))
-      (let ((res ValueRegs (mul_hi $I32 $false a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
-
-(rule (lower (umulhi a @ (value_type $I64) b))
-      (let ((res ValueRegs (mul_hi $I64 $false a b))
+(rule 0 (lower (umulhi a @ (value_type ty) b))
+      (let ((res ValueRegs (mul_hi ty $false a b))
             (hi Gpr (value_regs_get_gpr res 1)))
         hi))
 
 ;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (smulhi a @ (value_type $I16) b))
-      (let ((res ValueRegs (mul_hi $I16 $true a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
+;; The smulhi instruction is not available for 8-bit types, so we can extend
+;; the inputs, use the 16-bit multiply and shift the result down.
+(rule 1 (lower (smulhi a @ (value_type $I8) b))
+      (let ((a_ext Gpr (extend_to_gpr a $I16 (ExtendKind.Sign)))
+            (b_ext Gpr (extend_to_gpr b $I16 (ExtendKind.Sign)))
+            (mul Gpr (x64_mul $I16 a_ext b_ext))
+            (hi Gpr (x64_sar $I64 mul (imm8_to_imm8_gpr 8))))
         hi))
 
-(rule (lower (smulhi a @ (value_type $I32) b))
-      (let ((res ValueRegs (mul_hi $I32 $true a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
-
-(rule (lower (smulhi a @ (value_type $I64) b))
-      (let ((res ValueRegs (mul_hi $I64 $true a b))
+(rule 0 (lower (smulhi a @ (value_type ty) b))
+      (let ((res ValueRegs (mul_hi ty $true a b))
             (hi Gpr (value_regs_get_gpr res 1)))
         hi))
 

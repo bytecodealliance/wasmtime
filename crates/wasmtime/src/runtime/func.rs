@@ -18,16 +18,15 @@ use wasmtime_runtime::{
 
 /// A WebAssembly function which can be called.
 ///
-/// This type can represent either an exported function from a WebAssembly
-/// module or a host-defined function which can be used to satisfy an import of
-/// a module. [`Func`] and can be used to both instantiate an [`Instance`] as
-/// well as be extracted from an [`Instance`].
+/// This type typically represents an exported function from a WebAssembly
+/// module instance. In this case a [`Func`] belongs to an [`Instance`] and is
+/// loaded from there. A [`Func`] may also represent a host function as well in
+/// some cases, too.
 ///
-/// [`Instance`]: crate::Instance
-///
-/// A [`Func`] "belongs" to the store that it was originally created within.
-/// Operations on a [`Func`] only work with the store it belongs to, and if
-/// another store is passed in by accident then methods will panic.
+/// Functions can be called in a few different ways, either synchronous or async
+/// and either typed or untyped (more on this below). Note that host functions
+/// are normally inserted directly into a [`Linker`](crate::Linker) rather than
+/// using this directly, but both options are available.
 ///
 /// # `Func` and `async`
 ///

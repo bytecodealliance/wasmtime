@@ -95,7 +95,7 @@ where
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
-            AttributeValue::Block(d) => write::AttributeValue::Block(d.to_slice()?.to_vec()),
+            AttributeValue::Block(d) => write::AttributeValue::Block(d.to_slice()?.into_owned()),
             AttributeValue::Udata(u) => write::AttributeValue::Udata(u),
             AttributeValue::Data1(d) => write::AttributeValue::Data1(d),
             AttributeValue::Data2(d) => write::AttributeValue::Data2(d),
@@ -295,6 +295,7 @@ where
                 pending_di_refs.insert(current_scope_id, attr.name(), offset);
                 continue;
             }
+            AttributeValue::String(d) => write::AttributeValue::String(d.to_slice()?.into_owned()),
             a => bail!("Unexpected attribute: {:?}", a),
         };
         let current_scope = out_unit.get_mut(current_scope_id);

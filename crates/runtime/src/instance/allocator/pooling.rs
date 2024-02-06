@@ -579,7 +579,7 @@ mod test {
                 &config,
                 &Tunables {
                     static_memory_bound: 1,
-                    ..Tunables::default()
+                    ..Tunables::default_host()
                 },
             )
             .map_err(|e| e.to_string())
@@ -603,7 +603,7 @@ mod test {
             async_stack_zeroing: true,
             ..PoolingInstanceAllocatorConfig::default()
         };
-        let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default())?;
+        let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default_host())?;
 
         unsafe {
             for _ in 0..255 {
@@ -637,7 +637,7 @@ mod test {
             async_stack_zeroing: false,
             ..PoolingInstanceAllocatorConfig::default()
         };
-        let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default())?;
+        let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default_host())?;
 
         unsafe {
             for i in 0..255 {

@@ -120,8 +120,8 @@ use func_refs::FuncRefs;
 /// [`Store`] it will not be deallocated until the [`Store`] itself is dropped.
 /// This makes [`Store`] unsuitable for creating an unbounded number of
 /// instances in it because [`Store`] will never release this memory. It's
-/// recommended to have a [`Store`] correspond roughly to the lifetime of a "main
-/// instance" that an embedding is interested in executing.
+/// recommended to have a [`Store`] correspond roughly to the lifetime of a
+/// "main instance" that an embedding is interested in executing.
 ///
 /// ## Type parameter `T`
 ///
@@ -158,6 +158,18 @@ use func_refs::FuncRefs;
 /// You can create a store with default configuration settings using
 /// `Store::default()`. This will create a brand new [`Engine`] with default
 /// configuration (see [`Config`](crate::Config) for more information).
+///
+/// ## Cross-store usage of items
+///
+/// In `wasmtime` wasm items such as [`Global`] and [`Memory`] "belong" to a
+/// [`Store`]. The store they belong to is the one they were created with
+/// (passed in as a parameter) or instantiated with. This store is the only
+/// store that can be used to interact with wasm items after they're created.
+///
+/// The `wasmtime` crate will panic if the [`Store`] argument passed in to these
+/// operations is incorrect. In other words it's considered a programmer error
+/// rather than a recoverable error for the wrong [`Store`] to be used when
+/// calling APIs.
 pub struct Store<T> {
     // for comments about `ManuallyDrop`, see `Store::into_data`
     inner: ManuallyDrop<Box<StoreInner<T>>>,
@@ -1390,7 +1402,7 @@ impl StoreOpaque {
 
     pub fn get_fuel(&self) -> Result<u64> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         let injected_fuel = unsafe { *self.runtime_limits.fuel_consumed.get() };
@@ -1408,7 +1420,7 @@ impl StoreOpaque {
 
     pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         let injected_fuel = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
@@ -1423,7 +1435,7 @@ impl StoreOpaque {
 
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         anyhow::ensure!(

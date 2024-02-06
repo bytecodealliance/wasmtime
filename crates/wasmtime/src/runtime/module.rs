@@ -40,14 +40,25 @@ pub use registry::{
 /// representation. Instead you'll need to create an
 /// [`Instance`](crate::Instance) to interact with the wasm module.
 ///
-/// Creating a `Module` currently involves compiling code, meaning that it can
-/// be an expensive operation. All `Module` instances are compiled according to
-/// the configuration in [`Config`], but typically they're JIT-compiled. If
-/// you'd like to instantiate a module multiple times you can do so with
-/// compiling the original wasm module only once with a single [`Module`]
-/// instance.
+/// A `Module` can be created by compiling WebAssembly code through APIs such as
+/// [`Module::new`]. This would be a JIT-style use case where code is compiled
+/// just before it's used. Alternatively a `Module` can be compiled in one
+/// process and [`Module::serialize`] can be used to save it to storage. A later
+/// call to [`Module::deserialize`] will quickly load the module to execute and
+/// does not need to compile any code, representing a more AOT-style use case.
 ///
-/// The `Module` is thread-safe and safe to share across threads.
+/// Currently a `Module` does not implement any form of tiering or dynamic
+/// optimization of compiled code. Creation of a `Module` via [`Module::new`] or
+/// related APIs will perform the entire compilation step synchronously. When
+/// finished no further compilation will happen at runtime or later during
+/// execution of WebAssembly instances for example.
+///
+/// Compilation of WebAssembly by default goes through Cranelift and is
+/// recommended to be done once-per-module. The same WebAssembly binary need not
+/// be compiled multiple times and can instead used an embedder-cached result of
+/// the first call.
+///
+/// `Module` is thread-safe and safe to share across threads.
 ///
 /// ## Modules and `Clone`
 ///
@@ -94,6 +105,25 @@ pub use registry::{
 ///
 /// // It also works with the text format!
 /// let module = Module::new(&engine, "(module (func))")?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Serializing and deserializing a module looks like:
+///
+/// ```no_run
+/// # use wasmtime::*;
+/// # fn main() -> anyhow::Result<()> {
+/// let engine = Engine::default();
+/// # let wasm_bytes: Vec<u8> = Vec::new();
+/// let module = Module::new(&engine, &wasm_bytes)?;
+/// let module_bytes = module.serialize()?;
+///
+/// // ... can save `module_bytes` to disk or other storage ...
+///
+/// // recreate the module from the serialized bytes. For the `unsafe` bits
+/// // see the documentation of `deserialize`.
+/// let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
 /// # Ok(())
 /// # }
 /// ```
@@ -157,9 +187,8 @@ impl Module {
     /// loaded into memory all at once, this API does not support streaming
     /// compilation of a module.
     ///
-    /// If the module has not been already been compiled, the WebAssembly binary will
-    /// be decoded and validated. It will also be compiled according to the
-    /// configuration of the provided `engine`.
+    /// The WebAssembly binary will be decoded and validated. It will also be
+    /// compiled according to the configuration of the provided `engine`.
     ///
     /// # Errors
     ///
@@ -302,7 +331,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        use crate::{build_artifacts, instantiate::MmapVecWrapper};
+        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
 
         engine
             .check_compatible_with_native_host()
@@ -1105,7 +1134,7 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
 
         // Hash configuration state read for compilation
         let config = self.0.config();
-        config.tunables.hash(hasher);
+        self.0.tunables().hash(hasher);
         config.features.hash(hasher);
         config.wmemcheck.hash(hasher);
 

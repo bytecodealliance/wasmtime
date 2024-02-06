@@ -22,29 +22,21 @@
 //!   functions. It is up to the caller to serialize the relevant parts of the
 //!   `Artifacts` into the ELF file.
 
+use crate::Engine;
+use anyhow::{Context, Result};
 use std::{
     any::Any,
     collections::{btree_map, BTreeMap, BTreeSet, HashMap},
     mem,
 };
-
-use anyhow::{Context, Result};
-use object::{
-    write::{Object, StandardSegment},
-    SectionKind,
-};
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    obj, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
+    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
     FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex, ModuleTranslation,
     ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex,
     WasmFunctionInfo,
 };
-
-#[cfg(feature = "component-model")]
-use crate::component_artifacts::{CompiledComponentInfo, ComponentArtifacts};
-use crate::{Engine, Metadata, ModuleVersionStrategy, VERSION};
 
 /// Converts an input binary-encoded WebAssembly module to compilation
 /// artifacts and type information.
@@ -62,7 +54,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
-    let tunables = &engine.config().tunables;
+    let tunables = engine.tunables();
 
     // First a `ModuleEnvironment` is created which records type information
     // about the wasm module. This is where the WebAssembly is parsed and
@@ -121,10 +113,11 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
-) -> Result<(T, ComponentArtifacts)> {
+) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
+    use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
     use wasmtime_environ::ScopeVec;
 
-    let tunables = &engine.config().tunables;
+    let tunables = engine.tunables();
     let compiler = engine.compiler();
 
     let scope = ScopeVec::new();
@@ -187,36 +180,6 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
 
     let result = T::finish_object(object)?;
     Ok((result, artifacts))
-}
-
-/// Produces a blob of bytes by serializing the `engine`'s configuration data to
-/// be checked, perhaps in a different process, with the `check_compatible`
-/// method below.
-///
-/// The blob of bytes is inserted into the object file specified to become part
-/// of the final compiled artifact.
-pub(crate) fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
-    let section = obj.add_section(
-        obj.segment_name(StandardSegment::Data).to_vec(),
-        obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
-        SectionKind::ReadOnlyData,
-    );
-    let mut data = Vec::new();
-    data.push(VERSION);
-    let version = match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
-        ModuleVersionStrategy::Custom(c) => c,
-        ModuleVersionStrategy::None => "",
-    };
-    // This precondition is checked in Config::module_version:
-    assert!(
-        version.len() < 256,
-        "package version must be less than 256 bytes"
-    );
-    data.push(version.len() as u8);
-    data.extend_from_slice(version.as_bytes());
-    bincode::serialize_into(&mut data, &Metadata::new(engine)).unwrap();
-    obj.set_section_data(section, data, 1);
 }
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
@@ -647,7 +610,7 @@ impl FunctionIndices {
         // `symbol_ids_and_locs[i]` is the symbol ID and function location of
         // `compiled_funcs[i]`.
         let compiler = engine.compiler();
-        let tunables = &engine.config().tunables;
+        let tunables = engine.tunables();
         let symbol_ids_and_locs = compiler.append_code(
             &mut obj,
             &compiled_funcs,

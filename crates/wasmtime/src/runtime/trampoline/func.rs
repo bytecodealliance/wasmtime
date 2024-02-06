@@ -94,10 +94,7 @@ where
             &mut obj,
         )?;
     engine.append_bti(&mut obj);
-    let obj = finish_object(wasmtime_environ::ObjectBuilder::new(
-        obj,
-        &engine.config().tunables,
-    ))?;
+    let obj = finish_object(wasmtime_environ::ObjectBuilder::new(obj, engine.tunables()))?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.

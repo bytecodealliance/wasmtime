@@ -37,12 +37,14 @@ pub const MAX_FLAT_PARAMS: usize = 16;
 /// are transferred through memory.
 pub const MAX_FLAT_RESULTS: usize = 1;
 
+mod artifacts;
 mod compiler;
 pub mod dfg;
 mod info;
 mod translate;
 mod types;
 mod vmcomponent_offsets;
+pub use self::artifacts::*;
 pub use self::compiler::*;
 pub use self::info::*;
 pub use self::translate::*;

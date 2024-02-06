@@ -194,6 +194,7 @@
 #include <wasmtime/linker.h>
 #include <wasmtime/memory.h>
 #include <wasmtime/module.h>
+#include <wasmtime/profiling.h>
 #include <wasmtime/store.h>
 #include <wasmtime/table.h>
 #include <wasmtime/trap.h>
@@ -205,11 +206,11 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "18.0.0"
+#define WASMTIME_VERSION "19.0.0"
 /**
  * \brief Wasmtime major version number.
  */
-#define WASMTIME_VERSION_MAJOR 18
+#define WASMTIME_VERSION_MAJOR 19
 /**
  * \brief Wasmtime minor version number.
  */

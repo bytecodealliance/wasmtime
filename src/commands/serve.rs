@@ -1,9 +1,9 @@
 use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
+use std::net::SocketAddr;
 use std::{
     path::PathBuf,
-    pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -65,7 +65,7 @@ pub struct ServeCommand {
 
     /// Socket address for the web server to bind to.
     #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
-    addr: std::net::SocketAddr,
+    addr: SocketAddr,
 
     /// The WebAssembly component to run.
     #[arg(value_name = "WASM", required = true)]
@@ -175,7 +175,7 @@ impl ServeCommand {
         let mut store = Store::new(engine, host);
 
         if self.run.common.wasm.timeout.is_some() {
-            store.set_epoch_deadline(1);
+            store.set_epoch_deadline(u64::from(EPOCH_PRECISION) + 1);
         }
 
         store.data_mut().limits = self.run.store_limits();
@@ -263,12 +263,25 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
 
-        let listener = tokio::net::TcpListener::bind(self.addr).await?;
+        // Tokio by default sets `SO_REUSEADDR` for listeners but that makes it
+        // a bit confusing if you run Wasmtime but forget to close a previous
+        // `serve` session. To avoid that we explicitly disable `SO_REUSEADDR`
+        // here.
+        let socket = match &self.addr {
+            SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
+            SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
+        };
+        socket.set_reuseaddr(false)?;
+        socket.bind(self.addr)?;
+        let listener = socket.listen(100)?;
 
         eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
 
         let _epoch_thread = if let Some(timeout) = self.run.common.wasm.timeout {
-            Some(EpochThread::spawn(timeout, engine.clone()))
+            Some(EpochThread::spawn(
+                timeout / EPOCH_PRECISION,
+                engine.clone(),
+            ))
         } else {
             None
         };
@@ -281,10 +294,13 @@ impl ServeCommand {
             let (stream, _) = listener.accept().await?;
             let stream = TokioIo::new(stream);
             let h = handler.clone();
-            tokio::task::spawn(async move {
+            tokio::task::spawn(async {
                 if let Err(e) = http1::Builder::new()
                     .keep_alive(true)
-                    .serve_connection(stream, h)
+                    .serve_connection(
+                        stream,
+                        hyper::service::service_fn(move |req| handle_request(h.clone(), req)),
+                    )
                     .await
                 {
                     eprintln!("error: {e:?}");
@@ -293,6 +309,12 @@ impl ServeCommand {
         }
     }
 }
+
+/// This is the number of epochs that we will observe before expiring a request handler. As
+/// instances may be started at any point within an epoch, and epochs are counted globally per
+/// engine, we expire after `EPOCH_PRECISION + 1` epochs have been observed. This gives a maximum
+/// overshoot of `timeout / EPOCH_PRECISION`, which is more desirable than expiring early.
+const EPOCH_PRECISION: u32 = 10;
 
 struct EpochThread {
     shutdown: Arc<AtomicBool>,
@@ -355,87 +377,80 @@ impl ProxyHandler {
 
 type Request = hyper::Request<hyper::body::Incoming>;
 
-impl hyper::service::Service<Request> for ProxyHandler {
-    type Response = hyper::Response<HyperOutgoingBody>;
-    type Error = anyhow::Error;
-    type Future = Pin<Box<dyn std::future::Future<Output = Result<Self::Response>> + Send>>;
+async fn handle_request(
+    ProxyHandler(inner): ProxyHandler,
+    req: Request,
+) -> Result<hyper::Response<HyperOutgoingBody>> {
+    use http_body_util::BodyExt;
 
-    fn call(&self, req: Request) -> Self::Future {
-        use http_body_util::BodyExt;
+    let (sender, receiver) = tokio::sync::oneshot::channel();
 
-        let ProxyHandler(inner) = self.clone();
+    // TODO: need to track the join handle, but don't want to block the response on it
+    tokio::task::spawn(async move {
+        let req_id = inner.next_req_id();
+        let (mut parts, body) = req.into_parts();
 
-        let (sender, receiver) = tokio::sync::oneshot::channel();
+        parts.uri = {
+            let uri_parts = parts.uri.into_parts();
 
-        // TODO: need to track the join handle, but don't want to block the response on it
-        tokio::task::spawn(async move {
-            let req_id = inner.next_req_id();
-            let (mut parts, body) = req.into_parts();
+            let scheme = uri_parts.scheme.unwrap_or(http::uri::Scheme::HTTP);
 
-            parts.uri = {
-                let uri_parts = parts.uri.into_parts();
-
-                let scheme = uri_parts.scheme.unwrap_or(http::uri::Scheme::HTTP);
-
-                let host = if let Some(val) = parts.headers.get(hyper::header::HOST) {
-                    std::str::from_utf8(val.as_bytes())
-                        .map_err(|_| http_types::ErrorCode::HttpRequestUriInvalid)?
-                } else {
-                    uri_parts
-                        .authority
-                        .as_ref()
-                        .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?
-                        .host()
-                };
-
-                let path_with_query = uri_parts
-                    .path_and_query
-                    .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?;
-
-                hyper::Uri::builder()
-                    .scheme(scheme)
-                    .authority(host)
-                    .path_and_query(path_with_query)
-                    .build()
+            let host = if let Some(val) = parts.headers.get(hyper::header::HOST) {
+                std::str::from_utf8(val.as_bytes())
                     .map_err(|_| http_types::ErrorCode::HttpRequestUriInvalid)?
+            } else {
+                uri_parts
+                    .authority
+                    .as_ref()
+                    .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?
+                    .host()
             };
 
-            let req = hyper::Request::from_parts(parts, body.map_err(hyper_response_error).boxed());
+            let path_with_query = uri_parts
+                .path_and_query
+                .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?;
 
-            log::info!(
-                "Request {req_id} handling {} to {}",
-                req.method(),
-                req.uri()
-            );
+            hyper::Uri::builder()
+                .scheme(scheme)
+                .authority(host)
+                .path_and_query(path_with_query)
+                .build()
+                .map_err(|_| http_types::ErrorCode::HttpRequestUriInvalid)?
+        };
 
-            let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
+        let req = hyper::Request::from_parts(parts, body.map_err(hyper_response_error).boxed());
 
-            let req = store.data_mut().new_incoming_request(req)?;
-            let out = store.data_mut().new_response_outparam(sender)?;
+        log::info!(
+            "Request {req_id} handling {} to {}",
+            req.method(),
+            req.uri()
+        );
 
-            let (proxy, _inst) =
-                wasmtime_wasi_http::proxy::Proxy::instantiate_pre(&mut store, &inner.instance_pre)
-                    .await?;
+        let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
 
-            if let Err(e) = proxy
-                .wasi_http_incoming_handler()
-                .call_handle(store, req, out)
-                .await
-            {
-                log::error!("[{req_id}] :: {:#?}", e);
-                return Err(e);
-            }
+        let req = store.data_mut().new_incoming_request(req)?;
+        let out = store.data_mut().new_response_outparam(sender)?;
 
-            Ok(())
-        });
+        let (proxy, _inst) =
+            wasmtime_wasi_http::proxy::Proxy::instantiate_pre(&mut store, &inner.instance_pre)
+                .await?;
 
-        Box::pin(async move {
-            match receiver.await {
-                Ok(Ok(resp)) => Ok(resp),
-                Ok(Err(e)) => Err(e.into()),
-                Err(_) => bail!("guest never invoked `response-outparam::set` method"),
-            }
-        })
+        if let Err(e) = proxy
+            .wasi_http_incoming_handler()
+            .call_handle(store, req, out)
+            .await
+        {
+            log::error!("[{req_id}] :: {:#?}", e);
+            return Err(e);
+        }
+
+        Ok(())
+    });
+
+    match receiver.await {
+        Ok(Ok(resp)) => Ok(resp),
+        Ok(Err(e)) => Err(e.into()),
+        Err(_) => bail!("guest never invoked `response-outparam::set` method"),
     }
 }
 
