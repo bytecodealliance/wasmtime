@@ -3630,7 +3630,6 @@ dependencies = [
  "futures",
  "io-extras",
  "io-lifetimes",
- "libc",
  "log",
  "once_cell",
  "rustix",

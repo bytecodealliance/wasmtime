@@ -64,7 +64,7 @@ http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["mm", "param"] }
+rustix = { workspace = true, features = ["mm", "param", "process"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests

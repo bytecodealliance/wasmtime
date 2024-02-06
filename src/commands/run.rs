@@ -225,9 +225,21 @@ impl RunCommand {
                 if store.data().preview1_ctx.is_some() {
                     return Err(wasi_common::maybe_exit_on_error(e));
                 } else if store.data().preview2_ctx.is_some() {
-                    return Err(wasmtime_wasi::maybe_exit_on_error(e));
-                } else {
+                    if let Some(exit) = preview2::I32Exit::process_exit_code(&e) {
+                        std::process::exit(exit);
+                    }
+                    if e.is::<wasmtime::Trap>() {
+                        eprintln!("Error: {e:?}");
+                        if cfg!(unix) {
+                            std::process::exit(rustix::process::EXIT_SIGNALED_SIGABRT);
+                        } else if cfg!(windows) {
+                            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+                            std::process::exit(3);
+                        }
+                    }
                     return Err(e);
+                } else {
+                    unreachable!("either preview1_ctx or preview2_ctx present")
                 }
             }
         }
