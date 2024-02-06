@@ -2,16 +2,16 @@
 
 ;; `x == x` is always true for integers; `x != x` is false. Strict
 ;; inequalities are false, and loose inequalities are true.
-(rule (simplify (eq  (ty_int ty) x x)) (iconst_u ty 1))
-(rule (simplify (ne  (ty_int ty) x x)) (iconst_u ty 0))
-(rule (simplify (ugt (ty_int ty) x x)) (iconst_u ty 0))
-(rule (simplify (uge (ty_int ty) x x)) (iconst_u ty 1))
-(rule (simplify (sgt (ty_int ty) x x)) (iconst_u ty 0))
-(rule (simplify (sge (ty_int ty) x x)) (iconst_u ty 1))
-(rule (simplify (ult (ty_int ty) x x)) (iconst_u ty 0))
-(rule (simplify (ule (ty_int ty) x x)) (iconst_u ty 1))
-(rule (simplify (slt (ty_int ty) x x)) (iconst_u ty 0))
-(rule (simplify (sle (ty_int ty) x x)) (iconst_u ty 1))
+(rule (simplify (eq  (ty_int ty) x x)) (subsume (iconst_u ty 1)))
+(rule (simplify (ne  (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (ugt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (uge (ty_int ty) x x)) (subsume (iconst_u ty 1)))
+(rule (simplify (sgt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (sge (ty_int ty) x x)) (subsume (iconst_u ty 1)))
+(rule (simplify (ult (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (ule (ty_int ty) x x)) (subsume (iconst_u ty 1)))
+(rule (simplify (slt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (sle (ty_int ty) x x)) (subsume (iconst_u ty 1)))
 
 ;; Optimize icmp-of-icmp.
 (rule (simplify (ne ty
