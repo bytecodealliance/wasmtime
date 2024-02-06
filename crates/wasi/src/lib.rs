@@ -12,6 +12,38 @@
 #[cfg(feature = "preview2")]
 pub mod preview2;
 
+#[cfg(feature = "wasi-common-deprecations")]
+#[deprecated(
+    since = "18.0.0",
+    note = "The wasmtime_wasi::sync module's functionalty has been moved to
+    wasi_common::sync. This re-export will be removed from wasmtime_wasi in
+    19.0"
+)]
+pub mod sync {
+    pub use wasi_common::sync::*;
+}
+
+#[cfg(feature = "wasi-common-deprecations")]
+#[allow(deprecated)] // Satisfy linter locally
+#[deprecated(
+    since = "18.0.0",
+    note = "The wasmtime_wasi module's root export of wasmtime_wasi::sync has
+    been moved to wasi_common::sync. This re-export will be removed from
+    wasmtime_wasi in 19.0"
+)]
+pub use sync::*;
+
+#[cfg(feature = "wasi-common-deprecations")]
+#[deprecated(
+    since = "18.0.0",
+    note = "The wasmtime_wasi::tokio module's functionalty has been moved to
+    wasi_common::tokio. This re-export will be removed from wasmtime_wasi in
+    19.0"
+)]
+pub mod tokio {
+    pub use wasi_common::tokio::*;
+}
+
 /// Exit the process with a conventional OS error code as long as Wasmtime
 /// understands the error. If the error is not an `I32Exit` or `Trap`, return
 /// the error back to the caller for it to decide what to do.
@@ -20,6 +52,10 @@ pub mod preview2;
 /// Wasmtime failures to terminate the parent process, such as in the Wasmtime
 /// CLI; this would not be suitable for use in multi-tenant embeddings.
 #[cfg(feature = "exit")]
+#[deprecated(
+    since = "18.0.0",
+    note = "This legacy functionality is migrated to the wasi-common crate, and will be removed in 19.0."
+)]
 pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
     use std::process;
     use wasmtime::Trap;
@@ -27,7 +63,10 @@ pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
     // If a specific WASI error code was requested then that's
     // forwarded through to the process here without printing any
     // extra error information.
-    let code = e.downcast_ref::<preview2::I32Exit>().map(|e| e.0);
+    let code = e
+        .downcast_ref::<wasi_common::I32Exit>()
+        .map(|e| e.0)
+        .or_else(|| e.downcast_ref::<preview2::I32Exit>().map(|e| e.0));
     if let Some(exit) = code {
         // Print the error message in the usual way.
         // On Windows, exit status 3 indicates an abort (see below),

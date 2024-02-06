@@ -38,6 +38,7 @@ bitflags = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 system-interface = { workspace = true, optional = true}
 futures = { workspace = true, optional = true }
+wasi-common = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }
@@ -59,8 +60,10 @@ windows-sys = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"], optional = true }
 
 [features]
-default = ["preview2", "preview1-on-preview2"]
-exit = [ "dep:libc" ]
+default = ["wasi-common-deprecations", "preview2", "preview1-on-preview2"]
+wasi-common-deprecations = [ "dep:wasi-common" ]
+tokio = [ "wasi-common?/tokio", "wasi-common-deprecations" ]
+exit = [ "dep:libc", "wasi-common-deprecations" ]
 preview2 = [
     'wasmtime/component-model',
     'wasmtime/async',

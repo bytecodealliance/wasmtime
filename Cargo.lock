@@ -3643,6 +3643,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "wasi-common",
  "wasmtime",
  "wiggle",
  "windows-sys 0.52.0",
