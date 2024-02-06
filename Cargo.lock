@@ -3699,7 +3699,6 @@ dependencies = [
  "rand",
  "wasi-common",
  "wasmtime",
- "wasmtime-wasi",
 ]
 
 [[package]]
