@@ -3315,7 +3315,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-c-api-macros"
-version = "0.0.0"
+version = "18.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
