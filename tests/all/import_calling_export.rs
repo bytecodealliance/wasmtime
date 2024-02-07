@@ -19,18 +19,15 @@ fn test_import_calling_export() {
     let mut store = Store::<Option<Func>>::default();
     let module = Module::new(store.engine(), WAT).expect("failed to create module");
 
-    let callback_func = Func::new(
-        &mut store,
-        FuncType::new(None, None),
-        move |mut caller, _, _| {
-            caller
-                .data()
-                .unwrap()
-                .call(&mut caller, &[], &mut [])
-                .expect("expected function not to trap");
-            Ok(())
-        },
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let callback_func = Func::new(&mut store, func_ty, move |mut caller, _, _| {
+        caller
+            .data()
+            .unwrap()
+            .call(&mut caller, &[], &mut [])
+            .expect("expected function not to trap");
+        Ok(())
+    });
 
     let imports = vec![callback_func.into()];
     let instance = Instance::new(&mut store, &module, imports.as_slice())
@@ -64,15 +61,12 @@ fn test_returns_incorrect_type() -> Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(store.engine(), WAT)?;
 
-    let callback_func = Func::new(
-        &mut store,
-        FuncType::new(None, Some(ValType::I32)),
-        |_, _, results| {
-            // Evil! Returns I64 here instead of promised in the signature I32.
-            results[0] = Val::I64(228);
-            Ok(())
-        },
-    );
+    let func_ty = FuncType::new(store.engine(), None, Some(ValType::I32));
+    let callback_func = Func::new(&mut store, func_ty, |_, _, results| {
+        // Evil! Returns I64 here instead of promised in the signature I32.
+        results[0] = Val::I64(228);
+        Ok(())
+    });
 
     let imports = vec![callback_func.into()];
     let instance = Instance::new(&mut store, &module, imports.as_slice())?;

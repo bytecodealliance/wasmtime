@@ -966,7 +966,7 @@ async fn total_stacks_limit() -> Result<()> {
     linker.func_new_async(
         "async",
         "yield",
-        FuncType::new([], []),
+        FuncType::new(&engine, [], []),
         |_caller, _params, _results| {
             Box::new(async {
                 tokio::task::yield_now().await;

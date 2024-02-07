@@ -17,7 +17,7 @@ fn test_trap_return() -> Result<()> {
     "#;
 
     let module = Module::new(store.engine(), wat)?;
-    let hello_type = FuncType::new(None, None);
+    let hello_type = FuncType::new(store.engine(), None, None);
     let hello_func = Func::new(&mut store, hello_type, |_, _, _| bail!("test 123"));
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
@@ -45,7 +45,7 @@ fn test_anyhow_error_return() -> Result<()> {
     "#;
 
     let module = Module::new(store.engine(), wat)?;
-    let hello_type = FuncType::new(None, None);
+    let hello_type = FuncType::new(store.engine(), None, None);
     let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
         Err(anyhow::Error::msg("test 1234"))
     });
@@ -83,7 +83,7 @@ fn test_trap_return_downcast() -> Result<()> {
     impl std::error::Error for MyTrap {}
 
     let module = Module::new(store.engine(), wat)?;
-    let hello_type = FuncType::new(None, None);
+    let hello_type = FuncType::new(store.engine(), None, None);
     let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
         Err(anyhow::Error::from(MyTrap))
     });
@@ -169,7 +169,7 @@ fn test_trap_through_host() -> Result<()> {
 
     let host_func_a = Func::new(
         &mut store,
-        FuncType::new(vec![], vec![]),
+        FuncType::new(&engine, vec![], vec![]),
         |mut caller, _args, _results| {
             caller
                 .get_export("b")
@@ -182,7 +182,7 @@ fn test_trap_through_host() -> Result<()> {
     );
     let host_func_b = Func::new(
         &mut store,
-        FuncType::new(vec![], vec![]),
+        FuncType::new(&engine, vec![], vec![]),
         |mut caller, _args, _results| {
             caller
                 .get_export("c")
@@ -243,7 +243,7 @@ fn test_trap_trace_cb() -> Result<()> {
         )
     "#;
 
-    let fn_type = FuncType::new(None, None);
+    let fn_type = FuncType::new(store.engine(), None, None);
     let fn_func = Func::new(&mut store, fn_type, |_, _, _| bail!("cb throw"));
 
     let module = Module::new(store.engine(), wat)?;
@@ -382,7 +382,7 @@ fn trap_start_function_import() -> Result<()> {
     )?;
 
     let module = Module::new(store.engine(), &binary)?;
-    let sig = FuncType::new(None, None);
+    let sig = FuncType::new(store.engine(), None, None);
     let func = Func::new(&mut store, sig, |_, _, _| bail!("user trap"));
     let err = Instance::new(&mut store, &module, &[func.into()]).unwrap_err();
     assert!(format!("{err:?}").contains("user trap"));
@@ -404,7 +404,7 @@ fn rust_panic_import() -> Result<()> {
     )?;
 
     let module = Module::new(store.engine(), &binary)?;
-    let sig = FuncType::new(None, None);
+    let sig = FuncType::new(store.engine(), None, None);
     let func = Func::new(&mut store, sig, |_, _, _| panic!("this is a panic"));
     let func2 = Func::wrap(&mut store, || panic!("this is another panic"));
     let instance = Instance::new(&mut store, &module, &[func.into(), func2.into()])?;
@@ -448,7 +448,7 @@ fn rust_catch_panic_import() -> Result<()> {
 
     let module = Module::new(store.engine(), &binary)?;
     let num_panics = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
-    let sig = FuncType::new(None, None);
+    let sig = FuncType::new(store.engine(), None, None);
     let panic = Func::new(&mut store, sig, {
         let num_panics = num_panics.clone();
         move |_, _, _| {
@@ -493,7 +493,7 @@ fn rust_panic_start_function() -> Result<()> {
     )?;
 
     let module = Module::new(store.engine(), &binary)?;
-    let sig = FuncType::new(None, None);
+    let sig = FuncType::new(store.engine(), None, None);
     let func = Func::new(&mut store, sig, |_, _, _| panic!("this is a panic"));
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(Instance::new(&mut store, &module, &[func.into()]));
@@ -1535,14 +1535,14 @@ fn dont_see_stale_stack_walking_registers() -> Result<()> {
 
     let host_start = Func::new(
         &mut store,
-        FuncType::new([], []),
+        FuncType::new(&engine, [], []),
         |_caller, _args, _results| Ok(()),
     );
     linker.define(&store, "", "host_start", host_start)?;
 
     let host_get_trap = Func::new(
         &mut store,
-        FuncType::new([], []),
+        FuncType::new(&engine, [], []),
         |_caller, _args, _results| Err(anyhow::anyhow!("trap!!!")),
     );
     linker.define(&store, "", "host_get_trap", host_get_trap)?;
@@ -1593,7 +1593,7 @@ fn same_module_multiple_stores() -> Result<()> {
     let stacks = Arc::new(Mutex::new(vec![]));
 
     let mut store3 = Store::new(&engine, ());
-    let f3 = Func::new(&mut store3, FuncType::new([], []), {
+    let f3 = Func::new(&mut store3, FuncType::new(&engine, [], []), {
         let stacks = stacks.clone();
         move |caller, _params, _results| {
             stacks
@@ -1609,7 +1609,7 @@ fn same_module_multiple_stores() -> Result<()> {
     let instance3 = Instance::new(&mut store3, &module, &[f3.into(), call_ref3.into()])?;
 
     let mut store2 = Store::new(&engine, store3);
-    let f2 = Func::new(&mut store2, FuncType::new([], []), {
+    let f2 = Func::new(&mut store2, FuncType::new(&engine, [], []), {
         let stacks = stacks.clone();
         move |mut caller, _params, _results| {
             stacks
@@ -1630,7 +1630,7 @@ fn same_module_multiple_stores() -> Result<()> {
     let instance2 = Instance::new(&mut store2, &module, &[f2.into(), call_ref2.into()])?;
 
     let mut store1 = Store::new(&engine, store2);
-    let f1 = Func::new(&mut store1, FuncType::new([], []), {
+    let f1 = Func::new(&mut store1, FuncType::new(&engine, [], []), {
         let stacks = stacks.clone();
         move |mut caller, _params, _results| {
             stacks

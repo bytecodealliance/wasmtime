@@ -736,9 +736,10 @@ impl Module {
     ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
         let module = self.compiled_module().module();
         let types = self.types();
+        let engine = self.engine();
         module
             .imports()
-            .map(move |(module, field, ty)| ImportType::new(module, field, ty, types))
+            .map(move |(module, field, ty)| ImportType::new(module, field, ty, types, engine))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -802,8 +803,9 @@ impl Module {
     ) -> impl ExactSizeIterator<Item = ExportType<'module>> + 'module {
         let module = self.compiled_module().module();
         let types = self.types();
+        let engine = self.engine();
         module.exports.iter().map(move |(name, entity_index)| {
-            ExportType::new(name, module.type_of(*entity_index), types)
+            ExportType::new(name, module.type_of(*entity_index), types, engine)
         })
     }
 
@@ -854,6 +856,7 @@ impl Module {
         let module = self.compiled_module().module();
         let entity_index = module.exports.get(name)?;
         Some(ExternType::from_wasmtime(
+            self.engine(),
             self.types(),
             &module.type_of(*entity_index),
         ))

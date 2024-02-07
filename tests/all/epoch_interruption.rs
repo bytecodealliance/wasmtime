@@ -21,7 +21,7 @@ fn make_env<T>(engine: &Engine) -> Linker<T> {
         .func_new(
             "",
             "bump_epoch",
-            FuncType::new(None, None),
+            FuncType::new(&engine, None, None),
             move |_caller, _params, _results| {
                 engine.increment_epoch();
                 Ok(())
@@ -418,7 +418,7 @@ async fn drop_future_on_epoch_yield() {
         .func_new(
             "",
             "oops",
-            FuncType::new(None, None),
+            FuncType::new(&engine, None, None),
             move |_caller, _params, _results| {
                 panic!("Should not have reached this point!");
             },
@@ -428,7 +428,7 @@ async fn drop_future_on_epoch_yield() {
         .func_new(
             "",
             "im_alive",
-            FuncType::new(None, None),
+            FuncType::new(&engine, None, None),
             move |_caller, _params, _results| {
                 alive_flag_clone.store(true, Ordering::Release);
                 Ok(())

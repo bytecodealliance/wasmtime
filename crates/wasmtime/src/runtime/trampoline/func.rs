@@ -1,5 +1,6 @@
 //! Support for a calling of an imported function.
 
+use crate::type_registry::RegisteredType;
 use crate::{code_memory::CodeMemory, Engine, FuncType, ValRaw};
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
@@ -12,6 +13,10 @@ struct TrampolineState<F> {
     func: F,
     #[allow(dead_code)]
     code_memory: CodeMemory,
+
+    // Need to keep our `VMSharedTypeIndex` registered in the engine.
+    #[allow(dead_code)]
+    sig: RegisteredType,
 }
 
 /// Shim to call a host-defined function that uses the array calling convention.
@@ -126,10 +131,14 @@ where
                 array_call,
                 wasm_call,
                 native_call,
-                type_index: sig,
+                type_index: sig.index(),
                 vmctx: ptr::null_mut(),
             },
-            Box::new(TrampolineState { func, code_memory }),
+            Box::new(TrampolineState {
+                func,
+                code_memory,
+                sig,
+            }),
         ))
     }
 }
