@@ -438,6 +438,13 @@ impl ComponentTypesBuilder {
     }
 
     /// Finishes this list of component types and returns the finished
+    /// structure.
+    pub fn finish_sans_reflection(mut self) -> ComponentTypes {
+        self.component_types.module_types = self.module_types.finish();
+        self.component_types
+    }
+
+    /// Finishes this list of component types and returns the finished
     /// structure and the [`TypeComponentIndex`] corresponding to top-level component
     /// with `imports` and `exports` specified.
     pub fn finish<'a>(
