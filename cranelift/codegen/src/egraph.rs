@@ -497,7 +497,7 @@ impl<'a> EgraphPass<'a> {
         let root = self.domtree_children.root();
         enum StackEntry {
             Visit(Block),
-            Pop,
+            Pop(UnionFind<Value>, CtxHashMap<(Type, InstructionData), Value>),
         }
         let mut block_stack = vec![StackEntry::Visit(root)];
         while let Some(entry) = block_stack.pop() {
@@ -505,7 +505,7 @@ impl<'a> EgraphPass<'a> {
                 StackEntry::Visit(block) => {
                     // We popped this block; push children
                     // immediately, then process this block.
-                    block_stack.push(StackEntry::Pop);
+                    block_stack.push(StackEntry::Pop(self.eclasses.clone(), gvn_map.clone()));
                     block_stack
                         .extend(self.domtree_children.children(block).map(StackEntry::Visit));
                     effectful_gvn_map.increment_depth();
@@ -579,8 +579,13 @@ impl<'a> EgraphPass<'a> {
                         }
                     }
                 }
-                StackEntry::Pop => {
+                StackEntry::Pop(eclasses, saved_gvn_map) => {
                     effectful_gvn_map.decrement_depth();
+                    // TODO: do we need to save both eclasses and gvn_map? All the tests pass
+                    // without restoring eclasses, but perhaps that's a limitation of our test
+                    // suite.
+                    self.eclasses = eclasses;
+                    gvn_map = saved_gvn_map;
                 }
             }
         }

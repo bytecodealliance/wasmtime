@@ -21,7 +21,6 @@ pub(crate) struct Elaborator<'a> {
     domtree: &'a DominatorTree,
     domtree_children: &'a DomTreeWithChildren,
     loop_analysis: &'a LoopAnalysis,
-    eclasses: &'a mut UnionFind<Value>,
     /// Map from Value that is produced by a pure Inst (and was thus
     /// not in the side-effecting skeleton) to the value produced by
     /// an elaborated inst (placed in the layout) to whose results we
@@ -137,7 +136,7 @@ impl<'a> Elaborator<'a> {
         domtree_children: &'a DomTreeWithChildren,
         loop_analysis: &'a LoopAnalysis,
         remat_values: &'a FxHashSet<Value>,
-        eclasses: &'a mut UnionFind<Value>,
+        _eclasses: &'a mut UnionFind<Value>,
         stats: &'a mut Stats,
     ) -> Self {
         let num_values = func.dfg.num_values();
@@ -149,7 +148,6 @@ impl<'a> Elaborator<'a> {
             domtree,
             domtree_children,
             loop_analysis,
-            eclasses,
             value_to_elaborated_value: ScopedHashMap::with_capacity(num_values),
             value_to_best_value,
             loop_stack: smallvec![],
@@ -325,14 +323,14 @@ impl<'a> Elaborator<'a> {
                     let value = self.func.dfg.resolve_aliases(value);
 
                     self.stats.elaborate_visit_node += 1;
-                    let canonical_value = self.eclasses.find_and_update(value);
-                    debug_assert_ne!(canonical_value, Value::reserved_value());
-                    trace!(
-                        "elaborate: value {} canonical {} before {}",
-                        value,
-                        canonical_value,
-                        before
-                    );
+                    // let canonical_value = self.eclasses.find_and_update(value);
+                    // debug_assert_ne!(canonical_value, Value::reserved_value());
+                    // trace!(
+                    //     "elaborate: value {} canonical {} before {}",
+                    //     value,
+                    //     canonical_value,
+                    //     before
+                    // );
 
                     // Get the best option; we use `value` (latest
                     // value) here so we have a full view of the
@@ -342,7 +340,8 @@ impl<'a> Elaborator<'a> {
                     trace!("elaborate: value {} -> best {}", value, best_value);
                     debug_assert_ne!(best_value, Value::reserved_value());
 
-                    if let Some(elab_val) = self.value_to_elaborated_value.get(&canonical_value) {
+                    // if let Some(elab_val) = self.value_to_elaborated_value.get(&canonical_value) {
+                    if let Some(elab_val) = self.value_to_elaborated_value.get(&best_value) {
                         // Value is available; use it.
                         trace!("elaborate: value {} -> {:?}", value, elab_val);
                         self.stats.elaborate_memoize_hit += 1;
@@ -568,15 +567,16 @@ impl<'a> Elaborator<'a> {
                                 value: new_result,
                                 in_block: insert_block,
                             };
-                            let canonical_result = self.eclasses.find_and_update(result);
+                            // let canonical_result = self.eclasses.find_and_update(result);
+                            let BestEntry(_, canonical_result) = self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
                                 canonical_result,
                                 elab_value,
                                 scope_depth,
                             );
 
-                            self.eclasses.add(new_result);
-                            self.eclasses.union(result, new_result);
+                            // self.eclasses.add(new_result);
+                            // self.eclasses.union(result, new_result);
                             self.value_to_best_value[new_result] = self.value_to_best_value[result];
 
                             trace!(
@@ -596,7 +596,8 @@ impl<'a> Elaborator<'a> {
                                 value: result,
                                 in_block: insert_block,
                             };
-                            let canonical_result = self.eclasses.find_and_update(result);
+                            // let canonical_result = self.eclasses.find_and_update(result);
+                            let BestEntry(_, canonical_result) = self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
                                 canonical_result,
                                 elab_value,
@@ -684,7 +685,8 @@ impl<'a> Elaborator<'a> {
             // map now.
             for &result in self.func.dfg.inst_results(inst) {
                 trace!(" -> result {}", result);
-                let canonical_result = self.eclasses.find_and_update(result);
+                // let canonical_result = self.eclasses.find_and_update(result);
+                let BestEntry(_, canonical_result) = self.value_to_best_value[result];
                 self.value_to_elaborated_value.insert_if_absent(
                     canonical_result,
                     ElaboratedValue {

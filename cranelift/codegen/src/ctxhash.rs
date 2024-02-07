@@ -51,6 +51,7 @@ impl<V: Eq + Hash> CtxHash<V> for NullCtx {
 /// the hashcode, for memory efficiency: in common use, `K` and `V`
 /// are often 32 bits also, and a 12-byte bucket is measurably better
 /// than a 16-byte bucket.
+#[derive(Clone)]
 struct BucketData<K, V> {
     hash: u32,
     k: K,
@@ -58,6 +59,7 @@ struct BucketData<K, V> {
 }
 
 /// A HashMap that takes external context for all operations.
+#[derive(Clone)]
 pub struct CtxHashMap<K, V> {
     raw: RawTable<BucketData<K, V>>,
 }
