@@ -29,12 +29,12 @@
        (slt ty
              (uextend $I64 x @ (value_type $I32))
              (iconst_u _ 0)))
-      (iconst_u ty 0))
+      (subsume (iconst_u ty 0)))
 (rule (simplify
        (sge ty
              (uextend $I64 x @ (value_type $I32))
              (iconst_u _ 0)))
-      (iconst_u ty 1))
+      (subsume (iconst_u ty 1)))
 
 ;; Sign-extending can't change whether a number is zero nor how it signed-compares to zero
 (rule (simplify (eq _ (sextend _ x@(value_type ty)) (iconst_s _ 0)))
@@ -77,17 +77,25 @@
 
 ;; Matches values where `ireducing` them will not actually introduce another
 ;; instruction, since other rules will collapse them with the reduction.
+(decl pure multi will_simplify_with_ireduce_rec (u8 Value) Value)
+(rule (will_simplify_with_ireduce_rec _ x@(uextend _ _)) x)
+(rule (will_simplify_with_ireduce_rec _ x@(sextend _ _)) x)
+(rule (will_simplify_with_ireduce_rec _ x@(iconst _ _)) x)
+(rule (will_simplify_with_ireduce_rec depth x@(unary_op _ _ a))
+      (if-let _ (u8_lt 0 depth))
+      (if-let _ (reducible_modular_op x))
+      (if-let _ (will_simplify_with_ireduce_rec (u8_sub depth 1) a))
+      x)
+(rule (will_simplify_with_ireduce_rec depth x@(binary_op _ _ a b))
+      (if-let _ (u8_lt 0 depth))
+      (if-let _ (reducible_modular_op x))
+      (if-let _ (will_simplify_with_ireduce_rec (u8_sub depth 1) a))
+      (if-let _ (will_simplify_with_ireduce_rec (u8_sub depth 1) b))
+      x)
+
 (decl pure multi will_simplify_with_ireduce (Value) Value)
-(rule (will_simplify_with_ireduce x@(uextend _ _)) x)
-(rule (will_simplify_with_ireduce x@(sextend _ _)) x)
-(rule (will_simplify_with_ireduce x@(iconst _ _)) x)
-(rule (will_simplify_with_ireduce x@(unary_op _ _ a))
-      (if-let _ (will_simplify_with_ireduce a))
-      x)
-(rule (will_simplify_with_ireduce x@(binary_op _ _ a b))
-      (if-let _ (will_simplify_with_ireduce a))
-      (if-let _ (will_simplify_with_ireduce b))
-      x)
+(rule (will_simplify_with_ireduce x)
+      (will_simplify_with_ireduce_rec 2 x))
 
 ;; Matches values where the high bits of the input don't affect lower bits of
 ;; the output, and thus the inputs can be reduced before the operation rather

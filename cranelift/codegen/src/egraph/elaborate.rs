@@ -7,6 +7,7 @@ use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::hash_map::Entry as HashEntry;
+use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{Block, Function, Inst, Value, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
@@ -216,46 +217,112 @@ impl<'a> Elaborator<'a> {
 
     fn compute_best_values(&mut self) {
         let best = &mut self.value_to_best_value;
-        for (value, def) in self.func.dfg.values_and_defs() {
-            trace!("computing best for value {:?} def {:?}", value, def);
-            match def {
-                ValueDef::Union(x, y) => {
-                    // Pick the best of the two options based on
-                    // min-cost. This works because each element of `best`
-                    // is a `(cost, value)` tuple; `cost` comes first so
-                    // the natural comparison works based on cost, and
-                    // breaks ties based on value number.
-                    trace!(" -> best of {:?} and {:?}", best[x], best[y]);
-                    best[value] = std::cmp::min(best[x], best[y]);
-                    trace!(" -> {:?}", best[value]);
-                }
-                ValueDef::Param(_, _) => {
-                    best[value] = BestEntry(Cost::zero(), value);
-                }
-                // If the Inst is inserted into the layout (which is,
-                // at this point, only the side-effecting skeleton),
-                // then it must be computed and thus we give it zero
-                // cost.
-                ValueDef::Result(inst, _) => {
-                    if let Some(_) = self.func.layout.inst_block(inst) {
-                        best[value] = BestEntry(Cost::zero(), value);
-                    } else {
-                        trace!(" -> value {}: result, computing cost", value);
-                        let inst_data = &self.func.dfg.insts[inst];
-                        // N.B.: at this point we know that the opcode is
-                        // pure, so `pure_op_cost`'s precondition is
-                        // satisfied.
-                        let cost = Cost::of_pure_op(
-                            inst_data.opcode(),
-                            self.func.dfg.inst_values(inst).map(|value| best[value].0),
+
+        // Do a fixpoint loop to compute the best value for each eclass.
+        //
+        // The maximum number of iterations is the length of the longest chain
+        // of `vNN -> vMM` edges in the dataflow graph where `NN < MM`, so this
+        // is *technically* quadratic, but `cranelift-frontend` won't construct
+        // any such edges. NaN canonicalization will introduce some of these
+        // edges, but they are chains of only two or three edges. So in
+        // practice, we *never* do more than a handful of iterations here unless
+        // (a) we parsed the CLIF from text and the text was funkily numbered,
+        // which we don't really care about, or (b) the CLIF producer did
+        // something weird, in which case it is their responsibility to stop
+        // doing that.
+        trace!("Entering fixpoint loop to compute the best values for each eclass");
+        let mut keep_going = true;
+        while keep_going {
+            keep_going = false;
+            trace!(
+                "fixpoint iteration {}",
+                self.stats.elaborate_best_cost_fixpoint_iters
+            );
+            self.stats.elaborate_best_cost_fixpoint_iters += 1;
+
+            for (value, def) in self.func.dfg.values_and_defs() {
+                trace!("computing best for value {:?} def {:?}", value, def);
+                let orig_best_value = best[value];
+
+                match def {
+                    ValueDef::Union(x, y) => {
+                        // Pick the best of the two options based on
+                        // min-cost. This works because each element of `best`
+                        // is a `(cost, value)` tuple; `cost` comes first so
+                        // the natural comparison works based on cost, and
+                        // breaks ties based on value number.
+                        best[value] = std::cmp::min(best[x], best[y]);
+                        trace!(
+                            " -> best of union({:?}, {:?}) = {:?}",
+                            best[x],
+                            best[y],
+                            best[value]
                         );
-                        best[value] = BestEntry(cost, value);
                     }
-                }
-            };
-            debug_assert_ne!(best[value].0, Cost::infinity());
-            debug_assert_ne!(best[value].1, Value::reserved_value());
-            trace!("best for eclass {:?}: {:?}", value, best[value]);
+                    ValueDef::Param(_, _) => {
+                        best[value] = BestEntry(Cost::zero(), value);
+                    }
+                    // If the Inst is inserted into the layout (which is,
+                    // at this point, only the side-effecting skeleton),
+                    // then it must be computed and thus we give it zero
+                    // cost.
+                    ValueDef::Result(inst, _) => {
+                        if let Some(_) = self.func.layout.inst_block(inst) {
+                            best[value] = BestEntry(Cost::zero(), value);
+                        } else {
+                            let inst_data = &self.func.dfg.insts[inst];
+                            // N.B.: at this point we know that the opcode is
+                            // pure, so `pure_op_cost`'s precondition is
+                            // satisfied.
+                            let cost = Cost::of_pure_op(
+                                inst_data.opcode(),
+                                self.func.dfg.inst_values(inst).map(|value| best[value].0),
+                            );
+                            best[value] = BestEntry(cost, value);
+                            trace!(" -> cost of value {} = {:?}", value, cost);
+                        }
+                    }
+                };
+
+                // Keep on iterating the fixpoint loop while we are finding new
+                // best values.
+                keep_going |= orig_best_value != best[value];
+            }
+        }
+
+        if cfg!(any(feature = "trace-log", debug_assertions)) {
+            trace!("finished fixpoint loop to compute best value for each eclass");
+            for value in self.func.dfg.values() {
+                trace!("-> best for eclass {:?}: {:?}", value, best[value]);
+                debug_assert_ne!(best[value].1, Value::reserved_value());
+                // You might additionally be expecting an assert that the best
+                // cost is not infinity, however infinite cost *can* happen in
+                // practice. First, note that our cost function doesn't know
+                // about any shared structure in the dataflow graph, it only
+                // sums operand costs. (And trying to avoid that by deduping a
+                // single operation's operands is a losing game because you can
+                // always just add one indirection and go from `add(x, x)` to
+                // `add(foo(x), bar(x))` to hide the shared structure.) Given
+                // that blindness to sharing, we can make cost grow
+                // exponentially with a linear sequence of operations:
+                //
+                //     v0 = iconst.i32 1    ;; cost = 1
+                //     v1 = iadd v0, v0     ;; cost = 3 + 1 + 1
+                //     v2 = iadd v1, v1     ;; cost = 3 + 5 + 5
+                //     v3 = iadd v2, v2     ;; cost = 3 + 13 + 13
+                //     v4 = iadd v3, v3     ;; cost = 3 + 29 + 29
+                //     v5 = iadd v4, v4     ;; cost = 3 + 61 + 61
+                //     v6 = iadd v5, v5     ;; cost = 3 + 125 + 125
+                //     ;; etc...
+                //
+                // Such a chain can cause cost to saturate to infinity. How do
+                // we choose which e-node is best when there are multiple that
+                // have saturated to infinity? It doesn't matter. As long as
+                // invariant (2) for optimization rules is upheld by our rule
+                // set (see `cranelift/codegen/src/opts/README.md`) it is safe
+                // to choose *any* e-node in the e-class. At worst we will
+                // produce suboptimal code, but never an incorrectness.
+            }
         }
     }
 
@@ -606,7 +673,13 @@ impl<'a> Elaborator<'a> {
                         }
                         inst
                     };
+
                     // Place the inst just before `before`.
+                    debug_assert!(
+                        is_pure_for_egraph(self.func, inst),
+                        "something has gone very wrong if we are elaborating effectful \
+                         instructions, they should have remained in the skeleton"
+                    );
                     self.func.layout.insert_inst(inst, before);
 
                     // Update the inst's arguments.
