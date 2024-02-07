@@ -29,12 +29,12 @@
        (slt ty
              (uextend $I64 x @ (value_type $I32))
              (iconst_u _ 0)))
-      (subsume (iconst_u ty 0)))
+      (iconst_u ty 0))
 (rule (simplify
        (sge ty
              (uextend $I64 x @ (value_type $I32))
              (iconst_u _ 0)))
-      (subsume (iconst_u ty 1)))
+      (iconst_u ty 1))
 
 ;; Sign-extending can't change whether a number is zero nor how it signed-compares to zero
 (rule (simplify (eq _ (sextend _ x@(value_type ty)) (iconst_s _ 0)))
