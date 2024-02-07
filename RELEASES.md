@@ -1,5 +1,20 @@
 --------------------------------------------------------------------------------
 
+## 17.0.1
+
+### Fixed
+
+* Fix an egraph elaboration fuzzbug that was allowing values with dependencies
+  that shouldn't be duplicated to be chosen in a context that would make them
+  invalid.
+  [#7859](https://github.com/bytecodealliance/wasmtime/pull/7859)
+  [#7879](https://github.com/bytecodealliance/wasmtime/pull/7879)
+* Fix an egraph rule bug that was allowing unconstrained recursion through the
+  DFG to run away on large functions.
+  [#7882](https://github.com/bytecodealliance/wasmtime/pull/7882)
+
+--------------------------------------------------------------------------------
+
 ## 17.0.0
 
 Released 2024-01-25
