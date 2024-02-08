@@ -218,8 +218,7 @@ pub(crate) mod util {
     use crate::preview2::bindings::sockets::network::ErrorCode;
     use crate::preview2::network::SocketAddressFamily;
     use crate::preview2::SocketResult;
-    use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt, UdpSocketExt};
-    use io_lifetimes::AsSocketlike;
+    use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
     use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;
     use rustix::net::sockopt;
@@ -302,16 +301,6 @@ pub(crate) mod util {
      * Syscalls wrappers with (opinionated) portability fixes.
      */
 
-    pub fn tcp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
-        // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
-        // - On Windows: call WSAStartup if not done before.
-        // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
-        //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
-
-        let listener = cap_std::net::TcpListener::new(family, blocking)?;
-        Ok(OwnedFd::from(listener))
-    }
-
     pub fn udp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
@@ -322,16 +311,6 @@ pub(crate) mod util {
         Ok(OwnedFd::from(socket))
     }
 
-    pub fn tcp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
-        rustix::net::bind(sockfd, addr).map_err(|error| match error {
-            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-            #[cfg(windows)]
-            Errno::NOBUFS => Errno::ADDRINUSE,
-            _ => error,
-        })
-    }
-
     pub fn udp_bind<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
         rustix::net::bind(sockfd, addr).map_err(|error| match error {
             // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
@@ -340,91 +319,6 @@ pub(crate) mod util {
             Errno::NOBUFS => Errno::ADDRINUSE,
             _ => error,
         })
-    }
-
-    pub fn tcp_connect<Fd: AsFd>(sockfd: Fd, addr: &SocketAddr) -> rustix::io::Result<()> {
-        rustix::net::connect(sockfd, addr).map_err(|error| match error {
-            // On POSIX, non-blocking `connect` returns `EINPROGRESS`.
-            // Windows returns `WSAEWOULDBLOCK`.
-            //
-            // This normalized error code is depended upon by: tcp.rs
-            #[cfg(windows)]
-            Errno::WOULDBLOCK => Errno::INPROGRESS,
-            _ => error,
-        })
-    }
-
-    pub fn tcp_listen<Fd: AsFd>(sockfd: Fd, backlog: Option<i32>) -> std::io::Result<()> {
-        // Delegate `listen` to cap_net_ext. That is a thin wrapper around rustix::net::listen,
-        // with a platform-dependent default value for the backlog size.
-        sockfd
-            .as_fd()
-            .as_socketlike_view::<cap_std::net::TcpListener>()
-            .listen(backlog)
-            .map_err(|error| match Errno::from_io_error(&error) {
-                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
-                // According to the docs, `listen` can return EMFILE on Windows.
-                // This is odd, because we're not trying to create a new socket
-                // or file descriptor of any kind. So we rewrite it to less
-                // surprising error code.
-                //
-                // At the time of writing, this behavior has never been experimentally
-                // observed by any of the wasmtime authors, so we're relying fully
-                // on Microsoft's documentation here.
-                #[cfg(windows)]
-                Some(Errno::MFILE) => Errno::NOBUFS.into(),
-
-                _ => error,
-            })
-    }
-
-    pub fn tcp_accept<Fd: AsFd>(
-        sockfd: Fd,
-        blocking: Blocking,
-    ) -> std::io::Result<(OwnedFd, SocketAddr)> {
-        // Delegate `accept` to cap_net_ext. They set the NONBLOCK and CLOEXEC flags
-        // for us. Either immediately as a flag to `accept`, or afterwards using
-        // ioctl or fcntl. Exact method depends on the platform.
-
-        let (client, addr) = sockfd
-            .as_fd()
-            .as_socketlike_view::<cap_std::net::TcpListener>()
-            .accept_with(blocking)
-            .map_err(|error| match Errno::from_io_error(&error) {
-                // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
-                // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
-                // > or the service provider is still processing a callback function.
-                //
-                // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
-                // because in POSIX this error is only returned by a non-blocking
-                // `connect` and wasi-sockets has a different solution for that.
-                #[cfg(windows)]
-                Some(Errno::INPROGRESS) => Errno::INTR.into(),
-
-                // Normalize Linux' non-standard behavior.
-                //
-                // From https://man7.org/linux/man-pages/man2/accept.2.html:
-                // > Linux accept() passes already-pending network errors on the
-                // > new socket as an error code from accept(). This behavior
-                // > differs from other BSD socket implementations. (...)
-                #[cfg(target_os = "linux")]
-                Some(
-                    Errno::CONNRESET
-                    | Errno::NETRESET
-                    | Errno::HOSTUNREACH
-                    | Errno::HOSTDOWN
-                    | Errno::NETDOWN
-                    | Errno::NETUNREACH
-                    | Errno::PROTO
-                    | Errno::NOPROTOOPT
-                    | Errno::NONET
-                    | Errno::OPNOTSUPP,
-                ) => Errno::CONNABORTED.into(),
-
-                _ => error,
-            })?;
-
-        Ok((client.into(), addr))
     }
 
     pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
