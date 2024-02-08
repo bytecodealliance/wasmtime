@@ -623,6 +623,8 @@ async fn recursive_async() -> Result<()> {
     let overflow = i.get_typed_func::<(), ()>(&mut store, "overflow")?;
     let normal = i.get_typed_func::<(), ()>(&mut store, "normal")?;
     let f2 = Func::wrap0_async(&mut store, move |mut caller| {
+        let normal = normal.clone();
+        let overflow = overflow.clone();
         Box::new(async move {
             // recursive async calls shouldn't immediately stack overflow...
             normal.call_async(&mut caller, ()).await?;
@@ -959,7 +961,7 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
         assert_eq!(handle.unwrap().data().downcast_ref(), Some(&val));
     })?;
     linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, _>, val: i32| {
-        let func = cx.data().unwrap();
+        let func = cx.data().clone().unwrap();
         Box::new(async move {
             func.call_async(&mut cx, (val, Some(ExternRef::new(val))))
                 .await
@@ -967,7 +969,7 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
     })?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let func: F = instance.get_typed_func(&mut store, "run")?;
-    *store.data_mut() = Some(func);
+    *store.data_mut() = Some(func.clone());
 
     func.call_async(&mut store, (5, Some(ExternRef::new(5))))
         .await?;

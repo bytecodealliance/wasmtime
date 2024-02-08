@@ -32,14 +32,15 @@ fn main() -> Result<()> {
     let elem = table
         .get(&mut store, 3)
         .unwrap() // assert in bounds
-        .unwrap_externref() // assert it's an externref table
+        .unwrap_extern() // assert it's an externref table
+        .cloned()
         .unwrap(); // assert the externref isn't null
     assert!(elem.ptr_eq(&externref));
 
     println!("Touching `externref` global...");
     let global = instance.get_global(&mut store, "global").unwrap();
     global.set(&mut store, Some(externref.clone()).into())?;
-    let global_val = global.get(&mut store).unwrap_externref().unwrap();
+    let global_val = global.get(&mut store).unwrap_externref().cloned().unwrap();
     assert!(global_val.ptr_eq(&externref));
 
     println!("Calling `externref` func...");

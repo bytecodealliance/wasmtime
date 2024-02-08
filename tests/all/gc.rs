@@ -270,7 +270,7 @@ fn global_drops_externref() -> anyhow::Result<()> {
         let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
         Global::new(
             &mut store,
-            GlobalType::new(ValType::ExternRef, Mutability::Const),
+            GlobalType::new(ValType::EXTERNREF, Mutability::Const),
             externref.into(),
         )?;
         drop(store);
@@ -320,7 +320,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
         let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
         Table::new(
             &mut store,
-            TableType::new(ValType::ExternRef, 1, None),
+            TableType::new(RefType::EXTERNREF, 1, None),
             externref.into(),
         )?;
         drop(store);
@@ -432,7 +432,7 @@ fn global_init_no_leak() -> anyhow::Result<()> {
     let externref = ExternRef::new(());
     let global = Global::new(
         &mut store,
-        GlobalType::new(ValType::ExternRef, Mutability::Const),
+        GlobalType::new(ValType::EXTERNREF, Mutability::Const),
         externref.clone().into(),
     )?;
     Instance::new(&mut store, &module, &[global.into()])?;

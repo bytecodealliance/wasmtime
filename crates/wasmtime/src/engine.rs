@@ -168,6 +168,7 @@ impl Engine {
     }
 
     /// Returns whether the engine `a` and `b` refer to the same configuration.
+    #[inline]
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
     }

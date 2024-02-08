@@ -734,19 +734,41 @@ impl Config {
         self
     }
 
-    /// Configures whether the [WebAssembly function references proposal][proposal]
-    /// will be enabled for compilation.
+    /// Configures whether the [WebAssembly function references
+    /// proposal][proposal] will be enabled for compilation.
     ///
     /// This feature gates non-nullable reference types, function reference
-    /// types, call_ref, ref.func, and non-nullable reference related instructions.
+    /// types, `call_ref`, `ref.func`, and non-nullable reference related
+    /// instructions.
     ///
-    /// Note that the function references proposal depends on the reference types proposal.
+    /// Note that the function references proposal depends on the reference
+    /// types proposal.
     ///
     /// This feature is `false` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
         self.features.function_references = enable;
+        self
+    }
+
+    /// Configures whether the [WebAssembly Garbage Collection
+    /// proposal][proposal] will be enabled for compilation.
+    ///
+    /// This feature gates `struct` and `array` type definitions and references,
+    /// the `i31ref` type, and all related instructions.
+    ///
+    /// Note that the function references proposal depends on the typed function
+    /// references proposal.
+    ///
+    /// This feature is `false` by default.
+    ///
+    /// **Warning: Wasmtime's implementation of the GC proposal is still in
+    /// progress and generally not ready for primetime.**
+    ///
+    /// [proposal]: https://github.com/WebAssembly/gc
+    pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
+        self.features.gc = enable;
         self
     }
 

@@ -1,6 +1,6 @@
 use crate::{wasm_externtype_t, wasm_limits_t, wasm_valtype_t, CExternType};
 use once_cell::unsync::OnceCell;
-use wasmtime::TableType;
+use wasmtime::{TableType, ValType};
 
 #[repr(transparent)]
 #[derive(Clone)]
@@ -53,19 +53,20 @@ impl CTableType {
 pub extern "C" fn wasm_tabletype_new(
     ty: Box<wasm_valtype_t>,
     limits: &wasm_limits_t,
-) -> Box<wasm_tabletype_t> {
-    Box::new(wasm_tabletype_t::new(TableType::new(
-        ty.ty,
+) -> Option<Box<wasm_tabletype_t>> {
+    let ty = ty.ty.as_ref()?.clone();
+    Some(Box::new(wasm_tabletype_t::new(TableType::new(
+        ty,
         limits.min,
         limits.max(),
-    )))
+    ))))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_tabletype_element(tt: &wasm_tabletype_t) -> &wasm_valtype_t {
     let tt = tt.ty();
     tt.element_cache.get_or_init(|| wasm_valtype_t {
-        ty: tt.ty.element().clone(),
+        ty: ValType::Ref(tt.ty.element().clone()),
     })
 }
 

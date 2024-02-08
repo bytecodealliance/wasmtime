@@ -531,12 +531,10 @@ fn mismatched_arguments() -> Result<()> {
         func.call(&mut store, &[], &mut []).unwrap_err().to_string(),
         "expected 1 arguments, got 0"
     );
-    assert_eq!(
-        func.call(&mut store, &[Val::F32(0)], &mut [])
-            .unwrap_err()
-            .to_string(),
-        "argument type mismatch: found f32 but expected i32",
-    );
+    let e = func.call(&mut store, &[Val::F32(0)], &mut []).unwrap_err();
+    let e = format!("{e:?}");
+    assert!(e.contains("argument type mismatch"));
+    assert!(e.contains("expected i32, found f32"));
     assert_eq!(
         func.call(&mut store, &[Val::I32(0), Val::I32(1)], &mut [])
             .unwrap_err()

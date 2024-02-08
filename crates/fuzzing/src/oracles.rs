@@ -565,9 +565,10 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
                 let nth = nth % funcs.len();
                 let f = &funcs[nth];
                 let ty = f.ty(&store);
-                let params = dummy::dummy_values(ty.params());
-                let mut results = vec![Val::I32(0); ty.results().len()];
-                let _ = f.call(store, &params, &mut results);
+                if let Ok(params) = dummy::dummy_values(ty.params()) {
+                    let mut results = vec![Val::I32(0); ty.results().len()];
+                    let _ = f.call(store, &params, &mut results);
+                }
             }
         }
     }
@@ -625,7 +626,7 @@ pub fn table_ops(
         let func_ty = FuncType::new(
             store.engine(),
             vec![],
-            vec![ValType::ExternRef, ValType::ExternRef, ValType::ExternRef],
+            vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
         );
         let func = Func::new(&mut store, func_ty, {
             let num_dropped = num_dropped.clone();
@@ -698,7 +699,7 @@ pub fn table_ops(
         let func_ty = FuncType::new(
             store.engine(),
             vec![],
-            vec![ValType::ExternRef, ValType::ExternRef, ValType::ExternRef],
+            vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
         );
         let func = Func::new(&mut store, func_ty, {
             let num_dropped = num_dropped.clone();
