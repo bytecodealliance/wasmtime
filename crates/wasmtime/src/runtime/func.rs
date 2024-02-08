@@ -504,7 +504,7 @@ impl Func {
         })
     }
 
-    pub(crate) unsafe fn from_caller_checked_func_ref(
+    pub(crate) unsafe fn from_vm_func_ref(
         store: &mut StoreOpaque,
         raw: *mut VMFuncRef,
     ) -> Option<Func> {
@@ -931,7 +931,7 @@ impl Func {
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
-        Func::from_caller_checked_func_ref(store.as_context_mut().0, raw.cast())
+        Func::from_vm_func_ref(store.as_context_mut().0, raw.cast())
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
