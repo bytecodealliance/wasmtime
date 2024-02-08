@@ -23,7 +23,7 @@ enum SavedLineProgramRow {
         epilogue_begin: bool,
         isa: u64,
     },
-    EndOfSequence(u64),
+    EndOfSequence,
 }
 
 #[derive(Debug)]
@@ -167,7 +167,7 @@ where
 
                 saved_rows = Vec::new();
                 state = ReadLineProgramState::SequenceEnded;
-                SavedLineProgramRow::EndOfSequence(row.address())
+                SavedLineProgramRow::EndOfSequence
             } else {
                 if state == ReadLineProgramState::SequenceEnded {
                     // Discard sequences for non-existent code.
