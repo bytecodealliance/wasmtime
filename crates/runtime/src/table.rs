@@ -178,7 +178,7 @@ fn wasm_to_table_type(ty: WasmRefType) -> Result<TableElementType> {
     match ty.heap_type {
         WasmHeapType::Func => Ok(TableElementType::Func),
         WasmHeapType::Extern => Ok(TableElementType::Extern),
-        WasmHeapType::TypedFunc(_) => Ok(TableElementType::Func),
+        WasmHeapType::Concrete(_) => Ok(TableElementType::Func),
     }
 }
 
