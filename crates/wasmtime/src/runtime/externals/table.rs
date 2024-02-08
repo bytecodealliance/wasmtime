@@ -151,7 +151,7 @@ impl Table {
         unsafe {
             match (*table).get(index)? {
                 runtime::TableElement::FuncRef(f) => {
-                    let func = Func::from_caller_checked_func_ref(store, f);
+                    let func = Func::from_vm_func_ref(store, f);
                     Some(Val::FuncRef(func))
                 }
                 runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),

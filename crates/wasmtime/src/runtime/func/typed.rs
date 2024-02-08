@@ -447,7 +447,7 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self {
-        Func::from_caller_checked_func_ref(store, abi)
+        Func::from_vm_func_ref(store, abi)
     }
 }
 
