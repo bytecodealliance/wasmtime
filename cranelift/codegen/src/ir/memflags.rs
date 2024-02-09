@@ -127,15 +127,16 @@ impl MemFlags {
     /// Set endianness of the memory access.
     pub fn set_endianness(&mut self, endianness: Endianness) {
         *self = self.with_endianness(endianness);
-        assert!(!(self.read(FlagBit::LittleEndian) && self.read(FlagBit::BigEndian)));
     }
 
     /// Set endianness of the memory access, returning new flags.
     pub const fn with_endianness(self, endianness: Endianness) -> Self {
-        match endianness {
+        let res = match endianness {
             Endianness::Little => self.with(FlagBit::LittleEndian),
             Endianness::Big => self.with(FlagBit::BigEndian),
-        }
+        };
+        assert!(!(res.read(FlagBit::LittleEndian) && res.read(FlagBit::BigEndian)));
+        res
     }
 
     /// Test if the `notrap` flag is set.
@@ -214,12 +215,12 @@ impl MemFlags {
     /// Set the `heap` bit. See the notes about mutual exclusion with
     /// other bits in `heap()`.
     pub fn set_heap(&mut self) {
-        assert!(!self.table() && !self.vmctx());
         *self = self.with_heap();
     }
 
     /// Set the `heap` bit, returning new flags.
     pub const fn with_heap(self) -> Self {
+        assert!(!self.table() && !self.vmctx());
         self.with(FlagBit::Heap)
     }
 
@@ -238,12 +239,12 @@ impl MemFlags {
     /// Set the `table` bit. See the notes about mutual exclusion with
     /// other bits in `table()`.
     pub fn set_table(&mut self) {
-        assert!(!self.heap() && !self.vmctx());
         *self = self.with_table();
     }
 
     /// Set the `table` bit, returning new flags.
     pub const fn with_table(self) -> Self {
+        assert!(!self.heap() && !self.vmctx());
         self.with(FlagBit::Table)
     }
 
@@ -262,12 +263,12 @@ impl MemFlags {
     /// Set the `vmctx` bit. See the notes about mutual exclusion with
     /// other bits in `vmctx()`.
     pub fn set_vmctx(&mut self) {
-        assert!(!self.heap() && !self.table());
         *self = self.with_vmctx();
     }
 
     /// Set the `vmctx` bit, returning new flags.
     pub const fn with_vmctx(self) -> Self {
+        assert!(!self.heap() && !self.table());
         self.with(FlagBit::Vmctx)
     }
 
