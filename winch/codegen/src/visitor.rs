@@ -8,7 +8,7 @@ use crate::abi::{RetArea, ABI};
 use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
-    RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
+    RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
 };
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
@@ -231,6 +231,15 @@ macro_rules! def_unsupported {
     (emit F32Store $($rest:tt)*) => {};
     (emit F64Load $($rest:tt)*) => {};
     (emit F64Store $($rest:tt)*) => {};
+    (emit I32TruncSatF32S $($rest:tt)*) => {};
+    (emit I32TruncSatF32U $($rest:tt)*) => {};
+    (emit I32TruncSatF64S $($rest:tt)*) => {};
+    (emit I32TruncSatF64U $($rest:tt)*) => {};
+    (emit I64TruncSatF32S $($rest:tt)*) => {};
+    (emit I64TruncSatF32U $($rest:tt)*) => {};
+    (emit I64TruncSatF64S $($rest:tt)*) => {};
+    (emit I64TruncSatF64U $($rest:tt)*) => {};
+
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -1162,7 +1171,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
-                masm.signed_truncate(src, dst, S32, dst_size);
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Unchecked);
             });
     }
 
@@ -1174,7 +1183,7 @@ where
             WasmValType::I32,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size);
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Unchecked);
             },
         );
     }
@@ -1184,7 +1193,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
-                masm.signed_truncate(src, dst, S64, dst_size);
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Unchecked);
             });
     }
 
@@ -1196,7 +1205,7 @@ where
             WasmValType::I32,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size);
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Unchecked);
             },
         );
     }
@@ -1206,7 +1215,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
-                masm.signed_truncate(src, dst, S32, dst_size);
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Unchecked);
             });
     }
 
@@ -1218,7 +1227,7 @@ where
             WasmValType::I64,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size);
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Unchecked);
             },
         );
     }
@@ -1228,7 +1237,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
-                masm.signed_truncate(src, dst, S64, dst_size);
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Unchecked);
             });
     }
 
@@ -1240,7 +1249,7 @@ where
             WasmValType::I64,
             RegClass::Float,
             |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size);
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Unchecked);
             },
         );
     }
@@ -1942,6 +1951,94 @@ where
 
     fn visit_f64_store(&mut self, memarg: MemArg) {
         self.emit_wasm_store(&memarg, OperandSize::S64)
+    }
+
+    fn visit_i32_trunc_sat_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i32_trunc_sat_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Checked);
+            },
+        );
+    }
+
+    fn visit_i32_trunc_sat_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i32_trunc_sat_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Checked);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_sat_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i64_trunc_sat_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Checked);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_sat_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i64_trunc_sat_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Checked);
+            },
+        );
     }
 
     wasmparser::for_each_operator!(def_unsupported);

@@ -6,7 +6,7 @@ use crate::{
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
         MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
-        StackSlot, TrapCode,
+        StackSlot, TrapCode, TruncKind,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -379,6 +379,7 @@ impl Masm for MacroAssembler {
         _dst: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
+        _kind: TruncKind,
     ) {
         todo!()
     }
@@ -390,6 +391,7 @@ impl Masm for MacroAssembler {
         _tmp_fpr: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
+        _kind: TruncKind,
     ) {
         todo!()
     }
