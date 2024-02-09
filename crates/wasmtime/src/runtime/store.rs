@@ -369,6 +369,8 @@ pub struct StoreOpaque {
     component_host_table: wasmtime_runtime::component::ResourceTable,
     #[cfg(feature = "component-model")]
     component_calls: wasmtime_runtime::component::CallContexts,
+    #[cfg(feature = "component-model")]
+    host_resource_types: Vec<crate::component::ResourceType>,
 }
 
 #[cfg(feature = "async")]
@@ -520,6 +522,8 @@ impl<T> Store<T> {
                 component_host_table: Default::default(),
                 #[cfg(feature = "component-model")]
                 component_calls: Default::default(),
+                #[cfg(feature = "component-model")]
+                host_resource_types: Vec::new(),
             },
             limiter: None,
             call_hook: None,
@@ -1627,13 +1631,18 @@ at https://bytecodealliance.org/security.
 
     #[inline]
     #[cfg(feature = "component-model")]
-    pub(crate) fn component_calls_and_host_table(
+    pub(crate) fn component_resource_state(
         &mut self,
     ) -> (
         &mut wasmtime_runtime::component::CallContexts,
         &mut wasmtime_runtime::component::ResourceTable,
+        &mut Vec<crate::component::ResourceType>,
     ) {
-        (&mut self.component_calls, &mut self.component_host_table)
+        (
+            &mut self.component_calls,
+            &mut self.component_host_table,
+            &mut self.host_resource_types,
+        )
     }
 
     #[cfg(feature = "component-model")]

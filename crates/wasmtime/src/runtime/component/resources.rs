@@ -11,7 +11,9 @@ use std::fmt;
 use std::marker;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
-use wasmtime_environ::component::{CanonicalAbiInfo, DefinedResourceIndex, InterfaceType};
+use wasmtime_environ::component::{
+    CanonicalAbiInfo, DefinedResourceIndex, InterfaceType, TypeResourceTableIndex,
+};
 use wasmtime_runtime::component::{ComponentInstance, InstanceFlags, ResourceTables};
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
 
@@ -238,14 +240,199 @@ const BORROW: u32 = u32::MAX;
 const NOT_IN_TABLE: u32 = u32::MAX - 1;
 const TAKEN: u32 = u32::MAX - 2;
 
-fn host_resource_tables(store: &mut StoreOpaque) -> ResourceTables<'_> {
-    let (calls, host_table) = store.component_calls_and_host_table();
-    ResourceTables {
-        calls,
-        host_table: Some(host_table),
-        tables: None,
+/// TODO
+pub struct HostResourceTables<'a> {
+    tables: ResourceTables<'a>,
+    host_resource_types: &'a mut Vec<ResourceType>,
+}
+
+struct UnusedHostTableSlot;
+
+impl<'a> HostResourceTables<'a> {
+    pub fn new_host(store: &'a mut StoreOpaque) -> HostResourceTables<'_> {
+        let (calls, host_table, host_resource_types) = store.component_resource_state();
+        HostResourceTables::from_parts(
+            ResourceTables {
+                host_table: Some(host_table),
+                calls,
+                tables: None,
+            },
+            host_resource_types,
+        )
+    }
+
+    pub fn from_parts(
+        tables: ResourceTables<'a>,
+        host_resource_types: &'a mut Vec<ResourceType>,
+    ) -> Self {
+        HostResourceTables {
+            tables,
+            host_resource_types,
+        }
+    }
+
+    /// Lifts an `own` resource that resides in the host's tables at the `idx`
+    /// specified into its `rep`.
+    ///
+    /// This method additionally takes an `expected` type which the resource is
+    /// expected to have. All host resources are stored into a single table so
+    /// this is used to perform a runtime check to ensure that the resource
+    /// still has the same type as when it was originally inserted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `idx` doesn't point to a valid owned resource, if
+    /// `idx` can't be lifted as an `own` (e.g. it has active borrows), or if
+    /// the resource at `idx` does not have the type `expected`.
+    pub fn host_resource_lift_own(&mut self, idx: u32, expected: ResourceType) -> Result<u32> {
+        self.validate_host_type(idx, expected)?;
+        self.tables.resource_lift_own(None, idx)
+    }
+
+    /// See [`HostResourceTables::host_resource_lift_own`].
+    pub fn host_resource_lift_borrow(&mut self, idx: u32, expected: ResourceType) -> Result<u32> {
+        self.validate_host_type(idx, expected)?;
+        self.tables.resource_lift_borrow(None, idx)
+    }
+
+    /// Lowers an `own` resource to be owned by the host.
+    ///
+    /// This returns a new index into the host's set of resource tables which
+    /// will point to the `rep` specified as well as recording that it has the
+    /// `ty` specified. The returned index is suitable for conversion into
+    /// either [`Resource`] or [`ResourceAny`].
+    pub fn host_resource_lower_own(&mut self, rep: u32, ty: ResourceType) -> u32 {
+        let idx = self.tables.resource_lower_own(None, rep);
+        self.register_host_type(idx, ty);
+        idx
+    }
+
+    /// See [`HostResourceTables::host_resource_lower_own`].
+    pub fn host_resource_lower_borrow(&mut self, rep: u32, ty: ResourceType) -> u32 {
+        let idx = self.tables.resource_lower_borrow(None, rep);
+        self.register_host_type(idx, ty);
+        idx
+    }
+
+    /// Validates that the host resource at `idx` has the `expected` type.
+    ///
+    /// If `idx` is out-of-bounds or not actively being used then this method
+    /// does not return an error. That is deferred to retun an error via the
+    /// lift/drop operation corresponding to this method to return a more
+    /// precise error.
+    fn validate_host_type(&mut self, idx: u32, expected: ResourceType) -> Result<()> {
+        let actual = usize::try_from(idx)
+            .ok()
+            .and_then(|i| self.host_resource_types.get(i).copied());
+
+        // If `idx` is out-of-bounds, or if the slot is known as being
+        // not-in-use (e.g. dropped by the host) then skip returning an error.
+        // In such a situation the operation that this is guarding will return a
+        // more precise error, such as a lift operation.
+        if let Some(actual) = actual {
+            if actual != expected && actual != ResourceType::host::<UnusedHostTableSlot>() {
+                bail!("host-owned resource is being used with the wrong type");
+            }
+        }
+        Ok(())
+    }
+
+    fn register_host_type(&mut self, idx: u32, ty: ResourceType) {
+        let idx = idx as usize;
+        match self.host_resource_types.get_mut(idx) {
+            Some(slot) => *slot = ty,
+            None => {
+                assert_eq!(idx, self.host_resource_types.len());
+                self.host_resource_types.push(ty);
+            }
+        }
+    }
+
+    /// Drops a host-owned resource from host tables.
+    ///
+    /// This method will attempt to interpret `idx` as pointing to either a
+    /// `borrow` or `own` resource with the `expected` type specified. This
+    /// method will then return the underlying `rep` if it points to an `own`
+    /// resource which can then be further processed for destruction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `idx` doesn't point to a valid resource, points to
+    /// an `own` with active borrows, or if it doesn't have the type `expected`
+    /// in the host tables.
+    pub fn host_resource_drop(&mut self, idx: u32, expected: ResourceType) -> Result<Option<u32>> {
+        self.validate_host_type(idx, expected)?;
+        let ret = self.tables.resource_drop(None, idx);
+        if ret.is_ok() {
+            self.host_resource_types[idx as usize] = ResourceType::host::<UnusedHostTableSlot>();
+        }
+        ret
+    }
+
+    /// Lowers an `own` resource into the guest, converting the `rep` specified
+    /// into a guest-local index.
+    ///
+    /// The `ty` provided is which table to put this into.
+    pub fn guest_resource_lower_own(&mut self, rep: u32, ty: TypeResourceTableIndex) -> u32 {
+        self.tables.resource_lower_own(Some(ty), rep)
+    }
+
+    /// Lowers a `borrow` resource into the guest, converting the `rep`
+    /// specified into a guest-local index.
+    ///
+    /// The `ty` provided is which table to put this into.
+    ///
+    /// Note that this cannot be used in isolation because lowering a borrow
+    /// into a guest has a special case where `rep` is returned directly if `ty`
+    /// belongs to the component being lowered into. That property must be
+    /// handled by the caller of this function.
+    pub fn guest_resource_lower_borrow(&mut self, rep: u32, ty: TypeResourceTableIndex) -> u32 {
+        self.tables.resource_lower_borrow(Some(ty), rep)
+    }
+
+    /// Lifts an `own` resource from the `idx` specified from the table `ty`.
+    ///
+    /// This will lookup the appropriate table in the guest and return the `rep`
+    /// corresponding to `idx` if it's valid.
+    pub fn guest_resource_lift_own(&mut self, idx: u32, ty: TypeResourceTableIndex) -> Result<u32> {
+        self.tables.resource_lift_own(Some(ty), idx)
+    }
+
+    /// Lifts a `borrow` resource from the `idx` specified from the table `ty`.
+    ///
+    /// This will lookup the appropriate table in the guest and return the `rep`
+    /// corresponding to `idx` if it's valid.
+    pub fn guest_resource_lift_borrow(
+        &mut self,
+        idx: u32,
+        ty: TypeResourceTableIndex,
+    ) -> Result<u32> {
+        self.tables.resource_lift_borrow(Some(ty), idx)
+    }
+
+    /// Begins a call into the component instance, starting recording of
+    /// metadata related to resource borrowing.
+    #[inline]
+    pub fn enter_call(&mut self) {
+        self.tables.enter_call()
+    }
+
+    /// Completes a call into the component instance, validating that it's ok to
+    /// complete by ensuring the are no remaining active borrows.
+    #[inline]
+    pub fn exit_call(&mut self) -> Result<()> {
+        self.tables.exit_call()
     }
 }
+
+// fn host_resource_tables(store: &mut StoreOpaque) -> ResourceTables<'_> {
+//     let (calls, host_table, _) = store.component_resource_state();
+//     ResourceTables {
+//         calls,
+//         host_table: Some(host_table),
+//         tables: None,
+//     }
+// }
 
 impl<T> Resource<T>
 where
@@ -297,6 +484,7 @@ where
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
+        let rty = ResourceType::host::<T>();
         match ty {
             InterfaceType::Own(t) => {
                 let rep = match self.state.load(Relaxed) {
@@ -323,7 +511,7 @@ where
                     // If this resource lives in a host table then try to take
                     // it out of the table, which may fail, and on success we
                     // can move the rep into the guest table.
-                    idx => cx.host_resource_lift_own(idx)?,
+                    idx => cx.host_resource_lift_own(idx, rty)?,
                 };
                 Ok(cx.guest_resource_lower_own(t, rep))
             }
@@ -345,15 +533,15 @@ where
                     //
                     // Afterwards this is the same as the `idx` case below.
                     NOT_IN_TABLE => {
-                        let idx = cx.host_resource_lower_own(self.rep);
+                        let idx = cx.host_resource_lower_own(self.rep, rty);
                         let prev = self.state.swap(idx, Relaxed);
                         assert_eq!(prev, NOT_IN_TABLE);
-                        cx.host_resource_lift_borrow(idx)?
+                        cx.host_resource_lift_borrow(idx, rty)?
                     }
 
                     // If this resource lives in a table then it needs to come
                     // out of the table with borrow-tracking employed.
-                    idx => cx.host_resource_lift_borrow(idx)?,
+                    idx => cx.host_resource_lift_borrow(idx, ResourceType::host::<T>())?,
                 };
                 Ok(cx.guest_resource_lower_borrow(t, rep))
             }
@@ -398,22 +586,38 @@ where
     }
 
     /// Attempts to convert a [`ResourceAny`] into [`Resource`].
+    ///
+    /// This method will check that `resource` has type
+    /// `ResourceType::host::<T>()` and then convert it into a typed version of
+    /// the resource.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `resource` does not have type
+    /// `ResourceType::host::<T>()`. This function may also return an error if
+    /// `resource` is no longer valid, for example it was previously converted.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if `resource` does not belong to the `store`
+    /// specified.
     pub fn try_from_resource_any(
-        ResourceAny { idx, ty, own_state }: ResourceAny,
+        resource: ResourceAny,
         mut store: impl AsContextMut,
     ) -> Result<Self> {
         let store = store.as_context_mut();
         let store_id = store.0.id();
-        let mut tables = host_resource_tables(store.0);
-        assert_eq!(ty, ResourceType::host::<T>(), "resource type mismatch");
+        let mut tables = HostResourceTables::new_host(store.0);
+        let ResourceAny { idx, ty, own_state } = resource;
+        ensure!(ty == ResourceType::host::<T>(), "resource type mismatch");
         let (state, rep) = if let Some(OwnState { store, dtor, flags }) = own_state {
             assert_eq!(store_id, store, "wrong store used to convert resource");
             assert!(dtor.is_some(), "destructor must be set");
             assert!(flags.is_none(), "flags must not be set");
-            let rep = tables.resource_lift_own(None, idx)?;
+            let rep = tables.host_resource_lift_own(idx, ty)?;
             (AtomicU32::new(NOT_IN_TABLE), rep)
         } else {
-            let rep = tables.resource_lift_borrow(None, idx)?;
+            let rep = tables.host_resource_lift_borrow(idx, ty)?;
             (AtomicU32::new(BORROW), rep)
         };
         Ok(Resource {
@@ -542,15 +746,26 @@ struct OwnState {
 
 impl ResourceAny {
     /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
-    /// `idx` is the [`ResourceImportIndex`] returned by [`Linker::resource`].
+    ///
+    /// * `resource` is the resource to convert.
+    /// * `store` is the store to place the returned resource into.
+    /// * `instance_pre` is the instance from where `idx` below was derived.
+    /// * `idx` is the [`ResourceImportIndex`] returned by [`Linker::resource`].
     ///
     /// [`Linker::resource`]: crate::component::LinkerInstance::resource
+    ///
+    /// # Errors
+    ///
+    /// This method will return an error if `idx` isn't valid for
+    /// `instance_pre` or if `resource` is not of the correct type for the
+    /// `idx` import.
     pub fn try_from_resource<T: 'static, U>(
-        Resource { rep, state, .. }: Resource<T>,
+        resource: Resource<T>,
         mut store: impl AsContextMut,
         instance_pre: &InstancePre<U>,
         idx: ResourceImportIndex,
     ) -> Result<Self> {
+        let Resource { rep, state, .. } = resource;
         let store = store.as_context_mut();
         let import = instance_pre
             .resource_import(idx)
@@ -563,11 +778,11 @@ impl ResourceAny {
         };
         ensure!(*ty == ResourceType::host::<T>(), "resource type mismatch");
 
-        let mut tables = host_resource_tables(store.0);
+        let mut tables = HostResourceTables::new_host(store.0);
         let (idx, own_state) = match state.load(Relaxed) {
-            BORROW => (tables.resource_lower_borrow(None, rep), None),
+            BORROW => (tables.host_resource_lower_borrow(rep, *ty), None),
             NOT_IN_TABLE => {
-                let idx = tables.resource_lower_own(None, rep);
+                let idx = tables.host_resource_lower_own(rep, *ty);
                 (
                     idx,
                     Some(OwnState {
@@ -656,7 +871,7 @@ impl ResourceAny {
         //
         // This could fail if the index is invalid or if this is removing an
         // `Own` entry which is currently being borrowed.
-        let rep = host_resource_tables(store.0).resource_drop(None, self.idx)?;
+        let rep = HostResourceTables::new_host(store.0).host_resource_drop(self.idx, self.ty)?;
 
         let (rep, state) = match (rep, &self.own_state) {
             (Some(rep), Some(state)) => (rep, state),
@@ -708,16 +923,16 @@ impl ResourceAny {
         match ty {
             InterfaceType::Own(t) => {
                 if cx.resource_type(t) != self.ty {
-                    bail!("mismatched resource types")
+                    bail!("mismatched resource types");
                 }
-                let rep = cx.host_resource_lift_own(self.idx)?;
+                let rep = cx.host_resource_lift_own(self.idx, self.ty)?;
                 Ok(cx.guest_resource_lower_own(t, rep))
             }
             InterfaceType::Borrow(t) => {
                 if cx.resource_type(t) != self.ty {
-                    bail!("mismatched resource types")
+                    bail!("mismatched resource types");
                 }
-                let rep = cx.host_resource_lift_borrow(self.idx)?;
+                let rep = cx.host_resource_lift_borrow(self.idx, self.ty)?;
                 Ok(cx.guest_resource_lower_borrow(t, rep))
             }
             _ => bad_type_info(),
@@ -729,7 +944,7 @@ impl ResourceAny {
             InterfaceType::Own(t) => {
                 let ty = cx.resource_type(t);
                 let (rep, dtor, flags) = cx.guest_resource_lift_own(t, index)?;
-                let idx = cx.host_resource_lower_own(rep);
+                let idx = cx.host_resource_lower_own(rep, ty);
                 Ok(ResourceAny {
                     idx,
                     ty,
@@ -743,7 +958,7 @@ impl ResourceAny {
             InterfaceType::Borrow(t) => {
                 let ty = cx.resource_type(t);
                 let rep = cx.guest_resource_lift_borrow(t, index)?;
-                let idx = cx.host_resource_lower_borrow(rep);
+                let idx = cx.host_resource_lower_borrow(rep, ty);
                 Ok(ResourceAny {
                     idx,
                     ty,

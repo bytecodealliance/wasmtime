@@ -692,7 +692,7 @@ impl Func {
             // of the component.
             flags.set_may_enter(true);
 
-            let (calls, host_table) = store.0.component_calls_and_host_table();
+            let (calls, host_table, _) = store.0.component_resource_state();
             ResourceTables {
                 calls,
                 host_table: Some(host_table),
