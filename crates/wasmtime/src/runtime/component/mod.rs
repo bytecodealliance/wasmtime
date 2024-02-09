@@ -39,7 +39,7 @@
 //! Model][Component Model] to get an overview about how to build components
 //! from various languages.
 
-#![cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
+#![cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
 
 mod component;
 mod func;

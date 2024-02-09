@@ -71,16 +71,17 @@ fn call_wasm_to_array() -> Result<()> {
     )?;
     let mut store = Store::<()>::default();
     let module = Module::new(store.engine(), &wasm)?;
-    let import_func = Func::new(
-        &mut store,
-        FuncType::new(vec![], vec![ValType::I32, ValType::I32, ValType::I32]),
-        |_, _params, results| {
-            results[0] = Val::I32(1);
-            results[1] = Val::I32(2);
-            results[2] = Val::I32(3);
-            Ok(())
-        },
+    let func_ty = FuncType::new(
+        store.engine(),
+        vec![],
+        vec![ValType::I32, ValType::I32, ValType::I32],
     );
+    let import_func = Func::new(&mut store, func_ty, |_, _params, results| {
+        results[0] = Val::I32(1);
+        results[1] = Val::I32(2);
+        results[2] = Val::I32(3);
+        Ok(())
+    });
     let instance = Instance::new(&mut store, &module, &[import_func.into()])?;
     let func = instance
         .get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")
@@ -133,19 +134,17 @@ fn call_native_to_native() -> Result<()> {
 fn call_native_to_array() -> Result<()> {
     let mut store = Store::<()>::default();
 
-    let func = Func::new(
-        &mut store,
-        FuncType::new(
-            [ValType::I32, ValType::I32, ValType::I32],
-            [ValType::I32, ValType::I32, ValType::I32],
-        ),
-        |_caller, params, results| {
-            results[0] = params[2].clone();
-            results[1] = params[0].clone();
-            results[2] = params[1].clone();
-            Ok(())
-        },
+    let func_ty = FuncType::new(
+        store.engine(),
+        [ValType::I32, ValType::I32, ValType::I32],
+        [ValType::I32, ValType::I32, ValType::I32],
     );
+    let func = Func::new(&mut store, func_ty, |_caller, params, results| {
+        results[0] = params[2].clone();
+        results[1] = params[0].clone();
+        results[2] = params[1].clone();
+        Ok(())
+    });
     let func = func.typed::<(i32, i32, i32), (i32, i32, i32)>(&store)?;
     let results = func.call(&mut store, (1, 2, 3))?;
     assert_eq!(results, (3, 1, 2));
@@ -204,19 +203,17 @@ fn call_array_to_native() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn call_array_to_array() -> Result<()> {
     let mut store = Store::<()>::default();
-    let func = Func::new(
-        &mut store,
-        FuncType::new(
-            [ValType::I32, ValType::I32, ValType::I32],
-            [ValType::I32, ValType::I32, ValType::I32],
-        ),
-        |_caller, params, results| {
-            results[0] = params[2].clone();
-            results[1] = params[0].clone();
-            results[2] = params[1].clone();
-            Ok(())
-        },
+    let func_ty = FuncType::new(
+        store.engine(),
+        [ValType::I32, ValType::I32, ValType::I32],
+        [ValType::I32, ValType::I32, ValType::I32],
     );
+    let func = Func::new(&mut store, func_ty, |_caller, params, results| {
+        results[0] = params[2].clone();
+        results[1] = params[0].clone();
+        results[2] = params[1].clone();
+        Ok(())
+    });
     let mut results = [Val::I32(0), Val::I32(0), Val::I32(0)];
     func.call(
         &mut store,
@@ -664,13 +661,13 @@ fn get_from_wrapper() {
 #[cfg_attr(miri, ignore)]
 fn get_from_signature() {
     let mut store = Store::<()>::default();
-    let ty = FuncType::new(None, None);
+    let ty = FuncType::new(store.engine(), None, None);
     let f = Func::new(&mut store, ty, |_, _, _| panic!());
     assert!(f.typed::<(), ()>(&store).is_ok());
     assert!(f.typed::<(), i32>(&store).is_err());
     assert!(f.typed::<i32, ()>(&store).is_err());
 
-    let ty = FuncType::new(Some(ValType::I32), Some(ValType::F64));
+    let ty = FuncType::new(store.engine(), Some(ValType::I32), Some(ValType::F64));
     let f = Func::new(&mut store, ty, |_, _, _| panic!());
     assert!(f.typed::<(), ()>(&store).is_err());
     assert!(f.typed::<(), i32>(&store).is_err());
@@ -820,7 +817,7 @@ fn caller_memory() -> anyhow::Result<()> {
 #[cfg_attr(miri, ignore)]
 fn func_write_nothing() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
-    let ty = FuncType::new(None, Some(ValType::I32));
+    let ty = FuncType::new(store.engine(), None, Some(ValType::I32));
     let f = Func::new(&mut store, ty, |_, _, _| Ok(()));
     let err = f.call(&mut store, &[], &mut [Val::I32(0)]).unwrap_err();
     assert!(err
@@ -902,14 +899,12 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     config.wasm_reference_types(false);
     let mut store = Store::new(&Engine::new(&config)?, ());
     Func::wrap(&mut store, |_: Option<Func>| {});
-    Func::new(
-        &mut store,
-        FuncType::new(
-            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
-            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
-        ),
-        |_, _, _| Ok(()),
+    let func_ty = FuncType::new(
+        store.engine(),
+        [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
+        [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
     );
+    Func::new(&mut store, func_ty, |_, _, _| Ok(()));
     Ok(())
 }
 
@@ -1004,7 +999,8 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     // test that `Func::new` is correct
     let canary2 = Canary::default();
     let dtor2_run = canary2.0.clone();
-    let f2 = Func::new(&mut store, FuncType::new(None, None), move |_, _, _| {
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let f2 = Func::new(&mut store, func_ty, move |_, _, _| {
         let _ = &canary2;
         bail!("")
     });

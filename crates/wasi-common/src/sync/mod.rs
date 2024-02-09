@@ -14,8 +14,6 @@
 //! `cap_std::fs::Dir`, and provides convenience methods for inheriting the
 //! parent process's stdio, args, and env.
 
-#![cfg_attr(io_lifetimes_use_std, feature(io_safety))]
-
 pub mod clocks;
 pub mod dir;
 pub mod file;

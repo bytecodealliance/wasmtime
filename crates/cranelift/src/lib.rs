@@ -174,7 +174,7 @@ fn wasm_call_signature(
 /// Returns the reference type to use for the provided wasm type.
 fn reference_type(wasm_ht: cranelift_wasm::WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht {
-        cranelift_wasm::WasmHeapType::Func | cranelift_wasm::WasmHeapType::TypedFunc(_) => {
+        cranelift_wasm::WasmHeapType::Func | cranelift_wasm::WasmHeapType::Concrete(_) => {
             pointer_type
         }
         cranelift_wasm::WasmHeapType::Extern => match pointer_type {

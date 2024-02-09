@@ -684,7 +684,7 @@ fn introspection() -> Result<()> {
 
     let component_ty = linker.substituted_component_type(&component)?;
 
-    let mut imports = component_ty.imports();
+    let mut imports = component_ty.imports(linker.engine());
     assert_eq!(imports.len(), 3);
     let (name, res_ty) = imports.next().unwrap();
     assert_eq!(name, "res");
@@ -698,24 +698,24 @@ fn introspection() -> Result<()> {
     let ComponentItem::ComponentInstance(ai_ty) = ai_ty else {
         panic!("`ai` import item of wrong type")
     };
-    assert_eq!(ai_ty.exports().len(), 0);
+    assert_eq!(ai_ty.exports(linker.engine()).len(), 0);
 
     let (name, bi_ty) = imports.next().unwrap();
     assert_eq!(name, "bi");
     let ComponentItem::ComponentInstance(bi_ty) = bi_ty else {
         panic!("`bi` import item of wrong type")
     };
-    let mut bi_exports = bi_ty.exports();
+    let mut bi_exports = bi_ty.exports(linker.engine());
     assert_eq!(bi_exports.len(), 1);
     let (name, bi_m_ty) = bi_exports.next().unwrap();
     assert_eq!(name, "m");
     let ComponentItem::Module(bi_m_ty) = bi_m_ty else {
         panic!("`bi.m` import item of wrong type")
     };
-    assert_eq!(bi_m_ty.imports().len(), 0);
-    assert_eq!(bi_m_ty.exports().len(), 0);
+    assert_eq!(bi_m_ty.imports(linker.engine()).len(), 0);
+    assert_eq!(bi_m_ty.exports(linker.engine()).len(), 0);
 
-    let mut exports = component_ty.exports();
+    let mut exports = component_ty.exports(linker.engine());
     assert_eq!(exports.len(), 11);
 
     let (name, run_ty) = exports.next().unwrap();
@@ -734,44 +734,44 @@ fn introspection() -> Result<()> {
     let ComponentItem::ComponentInstance(i_ty) = i_ty else {
         panic!("`i` export item of wrong type")
     };
-    let mut i_ty_exports = i_ty.exports();
+    let mut i_ty_exports = i_ty.exports(linker.engine());
     assert_eq!(i_ty_exports.len(), 1);
     let (name, i_i_ty) = i_ty_exports.next().unwrap();
     assert_eq!(name, "i");
     let ComponentItem::ComponentInstance(i_i_ty) = i_i_ty else {
         panic!("`i.i` import item of wrong type")
     };
-    let mut i_i_ty_exports = i_i_ty.exports();
+    let mut i_i_ty_exports = i_i_ty.exports(linker.engine());
     assert_eq!(i_i_ty_exports.len(), 1);
     let (name, i_i_m_ty) = i_i_ty_exports.next().unwrap();
     assert_eq!(name, "m");
     let ComponentItem::Module(i_i_m_ty) = i_i_m_ty else {
         panic!("`i.i.m` import item of wrong type")
     };
-    assert_eq!(i_i_m_ty.imports().len(), 0);
-    assert_eq!(i_i_m_ty.exports().len(), 0);
+    assert_eq!(i_i_m_ty.imports(linker.engine()).len(), 0);
+    assert_eq!(i_i_m_ty.exports(linker.engine()).len(), 0);
 
     let (name, r_ty) = exports.next().unwrap();
     assert_eq!(name, "r");
     let ComponentItem::ComponentInstance(r_ty) = r_ty else {
         panic!("`r` export item of wrong type")
     };
-    assert_eq!(r_ty.exports().len(), 0);
+    assert_eq!(r_ty.exports(linker.engine()).len(), 0);
 
     let (name, r2_ty) = exports.next().unwrap();
     assert_eq!(name, "r2");
     let ComponentItem::ComponentInstance(r2_ty) = r2_ty else {
         panic!("`r2` export item of wrong type")
     };
-    let mut r2_exports = r2_ty.exports();
+    let mut r2_exports = r2_ty.exports(linker.engine());
     assert_eq!(r2_exports.len(), 1);
     let (name, r2_m_ty) = r2_exports.next().unwrap();
     assert_eq!(name, "m");
     let ComponentItem::Module(r2_m_ty) = r2_m_ty else {
         panic!("`r2.m` export item of wrong type")
     };
-    assert_eq!(r2_m_ty.imports().len(), 0);
-    assert_eq!(r2_m_ty.exports().len(), 0);
+    assert_eq!(r2_m_ty.imports(linker.engine()).len(), 0);
+    assert_eq!(r2_m_ty.exports(linker.engine()).len(), 0);
 
     let (name, b_ty) = exports.next().unwrap();
     assert_eq!(name, "b");

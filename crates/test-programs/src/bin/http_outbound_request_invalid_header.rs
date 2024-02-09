@@ -28,6 +28,11 @@ fn main() {
     ));
 
     assert!(matches!(
+        hdrs.append(&"Host".to_owned(), &b"example.com".to_vec()),
+        Err(HeaderError::Forbidden)
+    ));
+
+    assert!(matches!(
         hdrs.append(
             &"custom-forbidden-header".to_owned(),
             &b"keep-alive".to_vec()

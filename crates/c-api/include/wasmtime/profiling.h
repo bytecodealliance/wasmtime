@@ -74,7 +74,11 @@ WASM_API_EXTERN /* own */ wasmtime_guestprofiler_t *wasmtime_guestprofiler_new(
  *
  * \param guestprofiler the profiler the sample is being added to
  * \param store         store that is being used to collect the backtraces
+ * \param delta_nanos   CPU time in nanoseconds that was used by this guest
+ *                      since the previous sample
  *
+ * Zero can be passed as `delta_nanos` if recording CPU usage information
+ * is not needed.
  * This function does not take ownership of the arguments.
  *
  * For more information see the Rust documentation at:
@@ -82,7 +86,8 @@ WASM_API_EXTERN /* own */ wasmtime_guestprofiler_t *wasmtime_guestprofiler_new(
  */
 WASM_API_EXTERN void
 wasmtime_guestprofiler_sample(wasmtime_guestprofiler_t *guestprofiler,
-                              const wasmtime_store_t *store);
+                              const wasmtime_store_t *store,
+                              uint64_t delta_nanos);
 
 /**
  * \brief Writes out the captured profile.

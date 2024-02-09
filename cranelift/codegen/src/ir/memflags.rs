@@ -67,27 +67,25 @@ pub struct MemFlags {
 
 impl MemFlags {
     /// Create a new empty set of flags.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { bits: 0 }
     }
 
     /// Create a set of flags representing an access from a "trusted" address, meaning it's
     /// known to be aligned and non-trapping.
-    pub fn trusted() -> Self {
-        let mut result = Self::new();
-        result.set_notrap();
-        result.set_aligned();
-        result
+    pub const fn trusted() -> Self {
+        Self::new().with_notrap().with_aligned()
     }
 
     /// Read a flag bit.
-    fn read(self, bit: FlagBit) -> bool {
+    const fn read(self, bit: FlagBit) -> bool {
         self.bits & (1 << bit as usize) != 0
     }
 
-    /// Set a flag bit.
-    fn set(&mut self, bit: FlagBit) {
-        self.bits |= 1 << bit as usize
+    /// Return a new `MemFlags` with this flag bit set.
+    const fn with(mut self, bit: FlagBit) -> Self {
+        self.bits |= 1 << bit as usize;
+        self
     }
 
     /// Set a flag bit by name.
@@ -116,7 +114,7 @@ impl MemFlags {
     /// endianness otherwise.  The native endianness has to be provided by the
     /// caller since it is not explicitly encoded in CLIF IR -- this allows a
     /// front end to create IR without having to know the target endianness.
-    pub fn endianness(self, native_endianness: Endianness) -> Endianness {
+    pub const fn endianness(self, native_endianness: Endianness) -> Endianness {
         if self.read(FlagBit::LittleEndian) {
             Endianness::Little
         } else if self.read(FlagBit::BigEndian) {
@@ -128,17 +126,17 @@ impl MemFlags {
 
     /// Set endianness of the memory access.
     pub fn set_endianness(&mut self, endianness: Endianness) {
-        match endianness {
-            Endianness::Little => self.set(FlagBit::LittleEndian),
-            Endianness::Big => self.set(FlagBit::BigEndian),
-        };
-        assert!(!(self.read(FlagBit::LittleEndian) && self.read(FlagBit::BigEndian)));
+        *self = self.with_endianness(endianness);
     }
 
     /// Set endianness of the memory access, returning new flags.
-    pub fn with_endianness(mut self, endianness: Endianness) -> Self {
-        self.set_endianness(endianness);
-        self
+    pub const fn with_endianness(self, endianness: Endianness) -> Self {
+        let res = match endianness {
+            Endianness::Little => self.with(FlagBit::LittleEndian),
+            Endianness::Big => self.with(FlagBit::BigEndian),
+        };
+        assert!(!(res.read(FlagBit::LittleEndian) && res.read(FlagBit::BigEndian)));
+        res
     }
 
     /// Test if the `notrap` flag is set.
@@ -150,19 +148,18 @@ impl MemFlags {
     /// The `notrap` flag tells Cranelift that the memory is *accessible*, which means that
     /// accesses will not trap. This makes it possible to delete an unused load or a dead store
     /// instruction.
-    pub fn notrap(self) -> bool {
+    pub const fn notrap(self) -> bool {
         self.read(FlagBit::Notrap)
     }
 
     /// Set the `notrap` flag.
     pub fn set_notrap(&mut self) {
-        self.set(FlagBit::Notrap)
+        *self = self.with_notrap();
     }
 
     /// Set the `notrap` flag, returning new flags.
-    pub fn with_notrap(mut self) -> Self {
-        self.set_notrap();
-        self
+    pub const fn with_notrap(self) -> Self {
+        self.with(FlagBit::Notrap)
     }
 
     /// Test if the `aligned` flag is set.
@@ -170,19 +167,18 @@ impl MemFlags {
     /// By default, Cranelift memory instructions work with any unaligned effective address. If the
     /// `aligned` flag is set, the instruction is permitted to trap or return a wrong result if the
     /// effective address is misaligned.
-    pub fn aligned(self) -> bool {
+    pub const fn aligned(self) -> bool {
         self.read(FlagBit::Aligned)
     }
 
     /// Set the `aligned` flag.
     pub fn set_aligned(&mut self) {
-        self.set(FlagBit::Aligned)
+        *self = self.with_aligned();
     }
 
     /// Set the `aligned` flag, returning new flags.
-    pub fn with_aligned(mut self) -> Self {
-        self.set_aligned();
-        self
+    pub const fn with_aligned(self) -> Self {
+        self.with(FlagBit::Aligned)
     }
 
     /// Test if the `readonly` flag is set.
@@ -190,19 +186,18 @@ impl MemFlags {
     /// Loads with this flag have no memory dependencies.
     /// This results in undefined behavior if the dereferenced memory is mutated at any time
     /// between when the function is called and when it is exited.
-    pub fn readonly(self) -> bool {
+    pub const fn readonly(self) -> bool {
         self.read(FlagBit::Readonly)
     }
 
     /// Set the `readonly` flag.
     pub fn set_readonly(&mut self) {
-        self.set(FlagBit::Readonly)
+        *self = self.with_readonly();
     }
 
     /// Set the `readonly` flag, returning new flags.
-    pub fn with_readonly(mut self) -> Self {
-        self.set_readonly();
-        self
+    pub const fn with_readonly(self) -> Self {
+        self.with(FlagBit::Readonly)
     }
 
     /// Test if the `heap` bit is set.
@@ -213,21 +208,20 @@ impl MemFlags {
     /// means that behavior is undefined if the same memory is also
     /// accessed by another load/store with one of the other
     /// alias-analysis bits (`table`, `vmctx`) set, or `heap` not set.
-    pub fn heap(self) -> bool {
+    pub const fn heap(self) -> bool {
         self.read(FlagBit::Heap)
     }
 
     /// Set the `heap` bit. See the notes about mutual exclusion with
     /// other bits in `heap()`.
     pub fn set_heap(&mut self) {
-        assert!(!self.table() && !self.vmctx());
-        self.set(FlagBit::Heap);
+        *self = self.with_heap();
     }
 
     /// Set the `heap` bit, returning new flags.
-    pub fn with_heap(mut self) -> Self {
-        self.set_heap();
-        self
+    pub const fn with_heap(self) -> Self {
+        assert!(!self.table() && !self.vmctx());
+        self.with(FlagBit::Heap)
     }
 
     /// Test if the `table` bit is set.
@@ -238,21 +232,20 @@ impl MemFlags {
     /// means that behavior is undefined if the same memory is also
     /// accessed by another load/store with one of the other
     /// alias-analysis bits (`heap`, `vmctx`) set, or `table` not set.
-    pub fn table(self) -> bool {
+    pub const fn table(self) -> bool {
         self.read(FlagBit::Table)
     }
 
     /// Set the `table` bit. See the notes about mutual exclusion with
     /// other bits in `table()`.
     pub fn set_table(&mut self) {
-        assert!(!self.heap() && !self.vmctx());
-        self.set(FlagBit::Table);
+        *self = self.with_table();
     }
 
     /// Set the `table` bit, returning new flags.
-    pub fn with_table(mut self) -> Self {
-        self.set_table();
-        self
+    pub const fn with_table(self) -> Self {
+        assert!(!self.heap() && !self.vmctx());
+        self.with(FlagBit::Table)
     }
 
     /// Test if the `vmctx` bit is set.
@@ -263,21 +256,20 @@ impl MemFlags {
     /// means that behavior is undefined if the same memory is also
     /// accessed by another load/store with one of the other
     /// alias-analysis bits (`heap`, `table`) set, or `vmctx` not set.
-    pub fn vmctx(self) -> bool {
+    pub const fn vmctx(self) -> bool {
         self.read(FlagBit::Vmctx)
     }
 
     /// Set the `vmctx` bit. See the notes about mutual exclusion with
     /// other bits in `vmctx()`.
     pub fn set_vmctx(&mut self) {
-        assert!(!self.heap() && !self.table());
-        self.set(FlagBit::Vmctx);
+        *self = self.with_vmctx();
     }
 
     /// Set the `vmctx` bit, returning new flags.
-    pub fn with_vmctx(mut self) -> Self {
-        self.set_vmctx();
-        self
+    pub const fn with_vmctx(self) -> Self {
+        assert!(!self.heap() && !self.table());
+        self.with(FlagBit::Vmctx)
     }
 
     /// Test if the `checked` bit is set.
@@ -291,19 +283,18 @@ impl MemFlags {
     /// `checked`-marked memory accesses are guaranteed (up to the
     /// checker's correctness) to access valid memory. This can be
     /// used to ensure memory safety and sandboxing.
-    pub fn checked(self) -> bool {
+    pub const fn checked(self) -> bool {
         self.read(FlagBit::Checked)
     }
 
     /// Set the `checked` bit.
     pub fn set_checked(&mut self) {
-        self.set(FlagBit::Checked);
+        *self = self.with_checked();
     }
 
     /// Set the `checked` bit, returning new flags.
-    pub fn with_checked(mut self) -> Self {
-        self.set_checked();
-        self
+    pub const fn with_checked(self) -> Self {
+        self.with(FlagBit::Checked)
     }
 }
 

@@ -106,7 +106,7 @@ where
     ///
     /// [`Trap`]: crate::Trap
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -190,13 +190,7 @@ where
 
     /// Purely a debug-mode assertion, not actually used in release builds.
     fn debug_typecheck(store: &StoreOpaque, func: VMSharedTypeIndex) {
-        let ty = FuncType::from_wasm_func_type(
-            store
-                .engine()
-                .signatures()
-                .lookup_type(func)
-                .expect("signature should be registered"),
-        );
+        let ty = FuncType::from_shared_type_index(store.engine(), func);
         Params::typecheck(ty.params()).expect("params should match");
         Results::typecheck(ty.results()).expect("results should match");
     }
@@ -447,7 +441,7 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self {
-        Func::from_caller_checked_func_ref(store, abi)
+        Func::from_vm_func_ref(store, abi)
     }
 }
 

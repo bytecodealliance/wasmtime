@@ -2,6 +2,9 @@ use std::fmt;
 use wasmtime_environ::{
     EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmRefType, WasmValType,
 };
+use wasmtime_runtime::VMSharedTypeIndex;
+
+use crate::{type_registry::RegisteredType, Engine};
 
 pub(crate) mod matching;
 
@@ -158,9 +161,13 @@ impl ExternType {
         (Memory(MemoryType) memory unwrap_memory)
     }
 
-    pub(crate) fn from_wasmtime(types: &ModuleTypes, ty: &EntityType) -> ExternType {
+    pub(crate) fn from_wasmtime(
+        engine: &Engine,
+        types: &ModuleTypes,
+        ty: &EntityType,
+    ) -> ExternType {
         match ty {
-            EntityType::Function(idx) => FuncType::from_wasm_func_type(types[*idx].clone()).into(),
+            EntityType::Function(idx) => FuncType::from_wasm_func_type(engine, &types[*idx]).into(),
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(ty).into(),
@@ -198,7 +205,7 @@ impl From<TableType> for ExternType {
 /// WebAssembly functions can have 0 or more parameters and results.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FuncType {
-    sig: WasmFuncType,
+    ty: RegisteredType,
 }
 
 impl FuncType {
@@ -207,35 +214,54 @@ impl FuncType {
     /// The function descriptor returned will represent a function which takes
     /// `params` as arguments and returns `results` when it is finished.
     pub fn new(
+        engine: &Engine,
         params: impl IntoIterator<Item = ValType>,
         results: impl IntoIterator<Item = ValType>,
     ) -> FuncType {
-        FuncType {
-            sig: WasmFuncType::new(
+        Self::from_wasm_func_type(
+            engine,
+            &WasmFuncType::new(
                 params.into_iter().map(|t| t.to_wasm_type()).collect(),
                 results.into_iter().map(|t| t.to_wasm_type()).collect(),
             ),
-        }
+        )
     }
 
     /// Returns the list of parameter types for this function.
     #[inline]
     pub fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
-        self.sig.params().iter().map(ValType::from_wasm_type)
+        self.ty.params().iter().map(ValType::from_wasm_type)
     }
 
     /// Returns the list of result types for this function.
     #[inline]
     pub fn results(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
-        self.sig.returns().iter().map(ValType::from_wasm_type)
+        self.ty.returns().iter().map(ValType::from_wasm_type)
+    }
+
+    pub(crate) fn type_index(&self) -> VMSharedTypeIndex {
+        self.ty.index()
     }
 
     pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
-        &self.sig
+        &self.ty
     }
 
-    pub(crate) fn from_wasm_func_type(sig: WasmFuncType) -> FuncType {
-        Self { sig }
+    pub(crate) fn into_registered_type(self) -> RegisteredType {
+        self.ty
+    }
+
+    pub(crate) fn from_wasm_func_type(engine: &Engine, ty: &WasmFuncType) -> FuncType {
+        let ty = engine.signatures().register(ty);
+        Self { ty }
+    }
+
+    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> FuncType {
+        let ty = engine.signatures().root(index).expect(
+            "VMSharedTypeIndex is not registered in the Engine. Wrong \
+             engine? Didn't root the index somewhere?",
+        );
+        Self { ty }
     }
 }
 
@@ -485,6 +511,7 @@ pub struct ImportType<'module> {
     /// The type of the import.
     ty: EntityType,
     types: &'module ModuleTypes,
+    engine: &'module Engine,
 }
 
 impl<'module> ImportType<'module> {
@@ -495,12 +522,14 @@ impl<'module> ImportType<'module> {
         name: &'module str,
         ty: EntityType,
         types: &'module ModuleTypes,
+        engine: &'module Engine,
     ) -> ImportType<'module> {
         ImportType {
             module,
             name,
             ty,
             types,
+            engine,
         }
     }
 
@@ -517,7 +546,7 @@ impl<'module> ImportType<'module> {
 
     /// Returns the expected type of this import.
     pub fn ty(&self) -> ExternType {
-        ExternType::from_wasmtime(self.types, &self.ty)
+        ExternType::from_wasmtime(self.engine, self.types, &self.ty)
     }
 }
 
@@ -547,6 +576,7 @@ pub struct ExportType<'module> {
     /// The type of the export.
     ty: EntityType,
     types: &'module ModuleTypes,
+    engine: &'module Engine,
 }
 
 impl<'module> ExportType<'module> {
@@ -556,8 +586,14 @@ impl<'module> ExportType<'module> {
         name: &'module str,
         ty: EntityType,
         types: &'module ModuleTypes,
+        engine: &'module Engine,
     ) -> ExportType<'module> {
-        ExportType { name, ty, types }
+        ExportType {
+            name,
+            ty,
+            types,
+            engine,
+        }
     }
 
     /// Returns the name by which this export is known.
@@ -567,7 +603,7 @@ impl<'module> ExportType<'module> {
 
     /// Returns the type of this export.
     pub fn ty(&self) -> ExternType {
-        ExternType::from_wasmtime(self.types, &self.ty)
+        ExternType::from_wasmtime(self.engine, self.types, &self.ty)
     }
 }
 

@@ -140,7 +140,7 @@ impl Component {
     /// # Ok(())
     /// # }
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -154,7 +154,7 @@ impl Component {
     /// This is a convenience function for reading the contents of `file` on
     /// disk and then calling [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
         match Self::new(
             engine,
@@ -185,7 +185,7 @@ impl Component {
     ///
     /// For more information on semantics and errors see [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
         use crate::compile::build_component_artifacts;
         use crate::module::HashedEngineCompileEnv;

@@ -147,11 +147,11 @@ block0(v0: i32):
 ;   shrl    $1, %eax, %eax
 ;   andl    %eax, %edx, %eax
 ;   subl    %edi, %eax, %edi
-;   movq    %rdi, %rax
-;   shrl    $4, %eax, %eax
-;   addl    %eax, %edi, %eax
-;   andl    %eax, $252645135, %eax
-;   imull   %eax, $16843009, %eax
+;   movq    %rdi, %r9
+;   shrl    $4, %r9d, %r9d
+;   addl    %r9d, %edi, %r9d
+;   andl    %r9d, $252645135, %r9d
+;   imull   %r9d, 0x1010101, %eax
 ;   shrl    $24, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -173,11 +173,11 @@ block0(v0: i32):
 ;   shrl $1, %eax
 ;   andl %edx, %eax
 ;   subl %eax, %edi
-;   movq %rdi, %rax
-;   shrl $4, %eax
-;   addl %edi, %eax
-;   andl $0xf0f0f0f, %eax
-;   imull $0x1010101, %eax, %eax
+;   movq %rdi, %r9
+;   shrl $4, %r9d
+;   addl %edi, %r9d
+;   andl $0xf0f0f0f, %r9d
+;   imull $0x1010101, %r9d, %eax
 ;   shrl $0x18, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -194,23 +194,23 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %edx
-;   movq    %rdx, %rcx
+;   movl    0(%rdi), %eax
+;   movq    %rax, %rcx
 ;   shrl    $1, %ecx, %ecx
 ;   movl    $2004318071, %r8d
 ;   andl    %ecx, %r8d, %ecx
-;   subl    %edx, %ecx, %edx
+;   subl    %eax, %ecx, %eax
 ;   shrl    $1, %ecx, %ecx
 ;   andl    %ecx, %r8d, %ecx
-;   subl    %edx, %ecx, %edx
+;   subl    %eax, %ecx, %eax
 ;   shrl    $1, %ecx, %ecx
 ;   andl    %ecx, %r8d, %ecx
-;   subl    %edx, %ecx, %edx
-;   movq    %rdx, %rax
-;   shrl    $4, %eax, %eax
-;   addl    %eax, %edx, %eax
-;   andl    %eax, $252645135, %eax
-;   imull   %eax, $16843009, %eax
+;   subl    %eax, %ecx, %eax
+;   movq    %rax, %r10
+;   shrl    $4, %r10d, %r10d
+;   addl    %r10d, %eax, %r10d
+;   andl    %r10d, $252645135, %r10d
+;   imull   %r10d, 0x1010101, %eax
 ;   shrl    $24, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -221,23 +221,23 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl (%rdi), %edx ; trap: heap_oob
-;   movq %rdx, %rcx
+;   movl (%rdi), %eax ; trap: heap_oob
+;   movq %rax, %rcx
 ;   shrl $1, %ecx
 ;   movl $0x77777777, %r8d
 ;   andl %r8d, %ecx
-;   subl %ecx, %edx
+;   subl %ecx, %eax
 ;   shrl $1, %ecx
 ;   andl %r8d, %ecx
-;   subl %ecx, %edx
+;   subl %ecx, %eax
 ;   shrl $1, %ecx
 ;   andl %r8d, %ecx
-;   subl %ecx, %edx
-;   movq %rdx, %rax
-;   shrl $4, %eax
-;   addl %edx, %eax
-;   andl $0xf0f0f0f, %eax
-;   imull $0x1010101, %eax, %eax
+;   subl %ecx, %eax
+;   movq %rax, %r10
+;   shrl $4, %r10d
+;   addl %eax, %r10d
+;   andl $0xf0f0f0f, %r10d
+;   imull $0x1010101, %r10d, %eax
 ;   shrl $0x18, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp

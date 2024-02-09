@@ -7,7 +7,7 @@ cfg_if::cfg_if! {
         pub use jitdump::new as new_jitdump;
     } else {
         pub fn new_jitdump() -> Result<Box<dyn ProfilingAgent>> {
-            if cfg!(feature = "jitdump") {
+            if cfg!(feature = "profiling") {
                 bail!("jitdump is not supported on this platform");
             } else {
                 bail!("jitdump support disabled at compile time");
@@ -35,7 +35,7 @@ cfg_if::cfg_if! {
         pub use vtune::new as new_vtune;
     } else {
         pub fn new_vtune() -> Result<Box<dyn ProfilingAgent>> {
-            if cfg!(feature = "vtune") {
+            if cfg!(feature = "profiling") {
                 bail!("VTune is not supported on this platform.");
             } else {
                 bail!("VTune support disabled at compile time.");

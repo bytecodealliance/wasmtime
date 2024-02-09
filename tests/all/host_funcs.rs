@@ -12,7 +12,7 @@ fn async_required() {
     drop(linker.func_new_async(
         "",
         "",
-        FuncType::new(None, None),
+        FuncType::new(&engine, None, None),
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     ));
 }
@@ -493,10 +493,10 @@ fn new_from_signature() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
 
-    let ty = FuncType::new(None, None);
+    let ty = FuncType::new(&engine, None, None);
     linker.func_new("", "f1", ty, |_, _, _| panic!())?;
 
-    let ty = FuncType::new(Some(ValType::I32), Some(ValType::F64));
+    let ty = FuncType::new(&engine, Some(ValType::I32), Some(ValType::F64));
     linker.func_new("", "f2", ty, |_, _, _| panic!())?;
 
     let mut store = Store::new(&engine, ());
@@ -603,7 +603,7 @@ fn call_wrapped_func() -> Result<()> {
 fn func_return_nothing() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    let ty = FuncType::new(None, Some(ValType::I32));
+    let ty = FuncType::new(&engine, None, Some(ValType::I32));
     linker.func_new("", "", ty, |_, _, _| Ok(()))?;
 
     let mut store = Store::new(&engine, ());

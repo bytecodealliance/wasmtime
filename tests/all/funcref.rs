@@ -141,14 +141,11 @@ fn func_new_returns_wrong_store() -> anyhow::Result<()> {
         let f1 = Func::wrap(&mut store1, move || {
             let _ = &set;
         });
-        let f2 = Func::new(
-            &mut store2,
-            FuncType::new(None, Some(ValType::FuncRef)),
-            move |_, _, results| {
-                results[0] = f1.clone().into();
-                Ok(())
-            },
-        );
+        let func_ty = FuncType::new(store2.engine(), None, Some(ValType::FuncRef));
+        let f2 = Func::new(&mut store2, func_ty, move |_, _, results| {
+            results[0] = f1.clone().into();
+            Ok(())
+        });
         assert!(f2.call(&mut store2, &[], &mut [Val::I32(0)]).is_err());
     }
     assert!(dropped.load(SeqCst));

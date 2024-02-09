@@ -349,7 +349,7 @@ impl RunCommand {
                 .unwrap();
             Arc::get_mut(&mut profiler)
                 .expect("profiling doesn't support threads yet")
-                .sample(&store);
+                .sample(&store, std::time::Duration::ZERO);
             store.as_context_mut().data_mut().guest_profiler = Some(profiler);
         }
 

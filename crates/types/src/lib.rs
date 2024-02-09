@@ -89,7 +89,7 @@ pub enum WasmHeapType {
     // `WasmHeapType<VMSharedTypeIndex>`. This `<T>` would need to be
     // propagated to quite a few locations though so it's left for a future
     // refactoring at this time.
-    TypedFunc(ModuleInternedTypeIndex),
+    Concrete(ModuleInternedTypeIndex),
 }
 
 impl fmt::Display for WasmHeapType {
@@ -97,7 +97,7 @@ impl fmt::Display for WasmHeapType {
         match self {
             Self::Func => write!(f, "func"),
             Self::Extern => write!(f, "extern"),
-            Self::TypedFunc(i) => write!(f, "func_sig{}", i.as_u32()),
+            Self::Concrete(i) => write!(f, "func_sig{}", i.as_u32()),
         }
     }
 }

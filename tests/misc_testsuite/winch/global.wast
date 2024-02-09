@@ -138,7 +138,18 @@
       (global.get 0) (i32.const 1)
     )
   )
+
+  (func (export "as-store-first")
+    (global.get $x) (i32.const 1) (i32.store)
+  )
+  (func (export "as-store-last")
+    (i32.const 0) (global.get $x) (i32.store)
+  )
+  (func (export "as-load-operand") (result i32)
+    (i32.load (global.get $x))
+  )
 )
+
 
 (assert_return (invoke "get-a") (i32.const -2))
 (assert_return (invoke "get-b") (i64.const -5))
@@ -192,3 +203,7 @@
 
 (assert_return (invoke "as-br_table-first") (i32.const 6))
 (assert_return (invoke "as-br_table-last") (i32.const 2))
+
+(assert_return (invoke "as-store-first"))
+(assert_return (invoke "as-store-last"))
+(assert_return (invoke "as-load-operand") (i32.const 1))

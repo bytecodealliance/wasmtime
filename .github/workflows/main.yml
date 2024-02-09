@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_MDBOOK_VERSION: 0.4.21
-      RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg nightlydoc
+      RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v4
