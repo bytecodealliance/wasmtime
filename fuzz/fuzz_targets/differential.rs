@@ -100,7 +100,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // Choose an engine that Wasmtime will be differentially executed against.
     // The chosen engine is then created, which might update `config`, and
     // returned as a trait object.
-    let lhs = u.choose(unsafe { &ALLOWED_ENGINES })?;
+    let lhs = u.choose(unsafe { &*std::ptr::addr_of!(ALLOWED_ENGINES) })?;
     let mut lhs = match engine::build(&mut u, lhs, &mut config)? {
         Some(engine) => engine,
         // The chosen engine does not have support compiled into the fuzzer,
