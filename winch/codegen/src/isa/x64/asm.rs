@@ -926,22 +926,18 @@ impl Assembler {
 
     /// Multiply immediate and register.
     pub fn mul_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
-        let imm = RegMemImm::imm(imm as u32);
-
-        self.emit(Inst::AluRmiR {
+        self.emit(Inst::IMulImm {
             size: size.into(),
-            op: AluRmiROpcode::Mul,
             src1: dst.into(),
-            src2: GprMemImm::new(imm).expect("valid immediate"),
+            src2: imm,
             dst: dst.into(),
         });
     }
 
     /// Multiply register and register.
     pub fn mul_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
+        self.emit(Inst::IMul {
             size: size.into(),
-            op: AluRmiROpcode::Mul,
             src1: dst.into(),
             src2: src.into(),
             dst: dst.into(),

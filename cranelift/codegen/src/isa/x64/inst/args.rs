@@ -818,8 +818,6 @@ pub enum AluRmiROpcode {
     Or,
     /// Bitwise exclusive OR.
     Xor,
-    /// The signless, non-extending (N x N -> N, for N in {32,64}) variant.
-    Mul,
 }
 
 impl fmt::Debug for AluRmiROpcode {
@@ -832,7 +830,6 @@ impl fmt::Debug for AluRmiROpcode {
             AluRmiROpcode::And => "and",
             AluRmiROpcode::Or => "or",
             AluRmiROpcode::Xor => "xor",
-            AluRmiROpcode::Mul => "imul",
         };
         write!(fmt, "{}", name)
     }
