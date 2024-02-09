@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn dummy_function_import() {
         let mut store = store();
-        let func_ty = FuncType::new(vec![ValType::I32], vec![ValType::I64]);
+        let func_ty = FuncType::new(store.engine(), vec![ValType::I32], vec![ValType::I64]);
         let func = dummy_func(&mut store, func_ty.clone());
         assert_eq!(func.ty(&store), func_ty);
     }

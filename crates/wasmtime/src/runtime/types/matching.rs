@@ -30,7 +30,7 @@ impl MatchCx<'_> {
         }
         let msg = "function types incompatible";
         let expected = &self.types[expected];
-        let actual = match self.engine.signatures().lookup_type(actual) {
+        let actual = match self.engine.signatures().borrow(actual) {
             Some(ty) => ty,
             None => {
                 debug_assert!(false, "all signatures should be registered");

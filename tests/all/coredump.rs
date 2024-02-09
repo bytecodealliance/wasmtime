@@ -17,7 +17,7 @@ fn coredump_attached_to_error() -> Result<()> {
     "#;
 
     let module = Module::new(store.engine(), wat)?;
-    let hello_type = FuncType::new(None, None);
+    let hello_type = FuncType::new(store.engine(), None, None);
     let hello_func = Func::new(&mut store, hello_type, |_, _, _| bail!("test 123"));
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;

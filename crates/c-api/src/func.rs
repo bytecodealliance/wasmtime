@@ -55,7 +55,7 @@ unsafe fn create_function(
         + Sync
         + 'static,
 ) -> Box<wasm_func_t> {
-    let ty = ty.ty().ty.clone();
+    let ty = ty.ty().ty(store.store.context().engine());
     let func = Func::new(
         store.store.context_mut(),
         ty,
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn wasmtime_func_new(
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
     func: &mut Func,
 ) {
-    let ty = ty.ty().ty.clone();
+    let ty = ty.ty().ty(store.engine());
     let cb = c_callback_to_rust_fn(callback, data, finalizer);
     let f = Func::new(store, ty, cb);
     *func = f;
@@ -293,7 +293,7 @@ pub unsafe extern "C" fn wasmtime_func_new_unchecked(
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
     func: &mut Func,
 ) {
-    let ty = ty.ty().ty.clone();
+    let ty = ty.ty().ty(store.engine());
     let cb = c_unchecked_callback_to_rust_fn(callback, data, finalizer);
     *func = Func::new_unchecked(store, ty, cb);
 }

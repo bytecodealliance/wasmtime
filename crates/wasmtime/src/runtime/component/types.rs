@@ -2,7 +2,7 @@
 
 use crate::component::matching::InstanceType;
 use crate::component::values::{self, Val};
-use crate::{ExternType, FuncType};
+use crate::{Engine, ExternType, FuncType};
 use anyhow::{anyhow, Result};
 use std::fmt;
 use std::mem;
@@ -799,24 +799,30 @@ impl Module {
     }
 
     /// Iterates over imports of the module
-    pub fn imports(&self) -> impl ExactSizeIterator<Item = ((&str, &str), ExternType)> {
+    pub fn imports<'a>(
+        &'a self,
+        engine: &'a Engine,
+    ) -> impl ExactSizeIterator<Item = ((&str, &str), ExternType)> + 'a {
         self.0.types[self.0.index]
             .imports
             .iter()
             .map(|((namespace, name), ty)| {
                 (
                     (namespace.as_str(), name.as_str()),
-                    ExternType::from_wasmtime(self.0.types.module_types(), ty),
+                    ExternType::from_wasmtime(engine, self.0.types.module_types(), ty),
                 )
             })
     }
 
     /// Iterates over exports of the module
-    pub fn exports(&self) -> impl ExactSizeIterator<Item = (&str, ExternType)> {
+    pub fn exports<'a>(
+        &'a self,
+        engine: &'a Engine,
+    ) -> impl ExactSizeIterator<Item = (&str, ExternType)> + 'a {
         self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
             (
                 name.as_str(),
-                ExternType::from_wasmtime(self.0.types.module_types(), ty),
+                ExternType::from_wasmtime(engine, self.0.types.module_types(), ty),
             )
         })
     }
@@ -832,35 +838,45 @@ impl Component {
     }
 
     /// Returns import associated with `name`, if such exists in the component
-    pub fn get_import(&self, name: &str) -> Option<ComponentItem> {
+    pub fn get_import(&self, engine: &Engine, name: &str) -> Option<ComponentItem> {
         self.0.types[self.0.index]
             .imports
             .get(name)
-            .map(|ty| ComponentItem::from(ty, &self.0.instance()))
+            .map(|ty| ComponentItem::from(engine, ty, &self.0.instance()))
     }
 
     /// Iterates over imports of the component
-    pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
-        self.0.types[self.0.index]
-            .imports
-            .iter()
-            .map(|(name, ty)| (name.as_str(), ComponentItem::from(ty, &self.0.instance())))
+    pub fn imports<'a>(
+        &'a self,
+        engine: &'a Engine,
+    ) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> + 'a {
+        self.0.types[self.0.index].imports.iter().map(|(name, ty)| {
+            (
+                name.as_str(),
+                ComponentItem::from(engine, ty, &self.0.instance()),
+            )
+        })
     }
 
     /// Returns export associated with `name`, if such exists in the component
-    pub fn get_export(&self, name: &str) -> Option<ComponentItem> {
+    pub fn get_export(&self, engine: &Engine, name: &str) -> Option<ComponentItem> {
         self.0.types[self.0.index]
             .exports
             .get(name)
-            .map(|ty| ComponentItem::from(ty, &self.0.instance()))
+            .map(|ty| ComponentItem::from(engine, ty, &self.0.instance()))
     }
 
     /// Iterates over exports of the component
-    pub fn exports(&self) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
-        self.0.types[self.0.index]
-            .exports
-            .iter()
-            .map(|(name, ty)| (name.as_str(), ComponentItem::from(ty, &self.0.instance())))
+    pub fn exports<'a>(
+        &'a self,
+        engine: &'a Engine,
+    ) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> + 'a {
+        self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
+            (
+                name.as_str(),
+                ComponentItem::from(engine, ty, &self.0.instance()),
+            )
+        })
     }
 }
 
@@ -874,19 +890,24 @@ impl ComponentInstance {
     }
 
     /// Returns export associated with `name`, if such exists in the component instance
-    pub fn get_export(&self, name: &str) -> Option<ComponentItem> {
+    pub fn get_export(&self, engine: &Engine, name: &str) -> Option<ComponentItem> {
         self.0.types[self.0.index]
             .exports
             .get(name)
-            .map(|ty| ComponentItem::from(ty, &self.0.instance()))
+            .map(|ty| ComponentItem::from(engine, ty, &self.0.instance()))
     }
 
     /// Iterates over exports of the component instance
-    pub fn exports(&self) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
-        self.0.types[self.0.index]
-            .exports
-            .iter()
-            .map(|(name, ty)| (name.as_str(), ComponentItem::from(ty, &self.0.instance())))
+    pub fn exports<'a>(
+        &'a self,
+        engine: &'a Engine,
+    ) -> impl ExactSizeIterator<Item = (&str, ComponentItem)> {
+        self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
+            (
+                name.as_str(),
+                ComponentItem::from(engine, ty, &self.0.instance()),
+            )
+        })
     }
 }
 
@@ -910,7 +931,7 @@ pub enum ComponentItem {
 }
 
 impl ComponentItem {
-    pub(crate) fn from(def: &TypeDef, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(engine: &Engine, def: &TypeDef, ty: &InstanceType<'_>) -> Self {
         match def {
             TypeDef::Component(idx) => Self::Component(Component::from(*idx, ty)),
             TypeDef::ComponentInstance(idx) => {
@@ -920,7 +941,7 @@ impl ComponentItem {
             TypeDef::Interface(iface_ty) => Self::Type(Type::from(iface_ty, ty)),
             TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
             TypeDef::CoreFunc(idx) => {
-                Self::CoreFunc(FuncType::from_wasm_func_type(ty.types[*idx].clone()))
+                Self::CoreFunc(FuncType::from_wasm_func_type(engine, &ty.types[*idx]))
             }
             TypeDef::Resource(idx) => Self::Resource(ty.resources[ty.types[*idx].ty]),
         }

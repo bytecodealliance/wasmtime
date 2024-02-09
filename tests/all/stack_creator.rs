@@ -135,7 +135,7 @@ async fn called_on_custom_heap_stack() -> Result<()> {
         "#,
     )?;
 
-    let ty = FuncType::new([], [ValType::I64]);
+    let ty = FuncType::new(store.engine(), [], [ValType::I64]);
     let host_func = Func::new(&mut store, ty, move |_caller, _params, results| {
         let foo = 42;
         // output an address on the stack
