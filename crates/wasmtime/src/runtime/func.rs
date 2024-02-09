@@ -285,7 +285,7 @@ macro_rules! generate_wrap_async_func {
         /// This function will panic if called with a non-asynchronous store.
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
-        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
         pub fn [<wrap $num _async>]<T, $($args,)* R>(
             store: impl AsContextMut<Data = T>,
             func: impl for<'a> Fn(Caller<'a, T>, $($args),*) -> Box<dyn Future<Output = R> + Send + 'a> + Send + Sync + 'static,
@@ -357,7 +357,7 @@ impl Func {
     ///
     /// [`Trap`]: crate::Trap
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -395,7 +395,7 @@ impl Func {
     /// the `func` provided correctly interprets the argument types provided to
     /// it, or that the results it produces will be of the correct type.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -476,7 +476,7 @@ impl Func {
     /// # }
     /// ```
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
@@ -972,7 +972,7 @@ impl Func {
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,

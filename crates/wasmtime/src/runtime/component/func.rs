@@ -349,7 +349,7 @@ impl Func {
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -614,7 +614,7 @@ impl Func {
     /// Panics if this is called on a function in a synchronous store. This
     /// only works with functions defined within an asynchronous store.
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn post_return_async<T: Send>(
         &self,
         mut store: impl AsContextMut<Data = T>,

@@ -1,4 +1,4 @@
-#![cfg_attr(nightlydoc, doc(cfg(feature = "runtime")))]
+#![cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
 
 #[macro_use]
 pub(crate) mod func;

@@ -712,7 +712,7 @@ impl<T> Store<T> {
     /// [`Store`] configured via
     /// [`Config::async_support`](crate::Config::async_support).
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn limiter_async(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
@@ -736,7 +736,7 @@ impl<T> Store<T> {
         inner.limiter = Some(ResourceLimiterInner::Async(Box::new(limiter)));
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Configures an async function that runs on calls and returns between
     /// WebAssembly and host code. For the non-async equivalent of this method,
     /// see [`Store::call_hook`].
@@ -952,7 +952,7 @@ impl<T> Store<T> {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Configures epoch-deadline expiration to yield to the async
     /// caller and the update the deadline.
     ///
@@ -1069,7 +1069,7 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.epoch_deadline_trap();
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Configures epoch-deadline expiration to yield to the async
     /// caller and the update the deadline.
     ///
