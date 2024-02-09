@@ -1,3 +1,15 @@
+//! # wasi-common
+//!
+//! This is Wasmtime's legacy implementation of WASI 0.1 (Preview 1). The
+//! Wasmtime maintainers suggest all users upgrade to the implementation
+//! of WASI 0.1 and 0.2 provided by the `wasmtime-wasi` crate. This
+//! implementation remains in the wasmtime tree because it is required to use
+//! the `wasmtime-wasi-threads` crate, an implementation of the `wasi-threads`
+//! proposal which is not compatible with WASI 0.2.
+//!
+//! In addition to integration with Wasmtime, this implementation may be used
+//! by other runtimes by disabling the `wasmtime` feature on this crate.
+//!
 //! ## The `WasiFile` and `WasiDir` traits
 //!
 //! The WASI specification only defines one `handle` type, `fd`, on which all
@@ -28,7 +40,11 @@
 //! reason about access to the local filesystem by examining what impls are
 //! linked into an application. We found that this separation of concerns also
 //! makes it pretty enjoyable to write alternative implementations, e.g. a
-//! virtual filesystem (which will land in a future PR).
+//! virtual filesystem.
+//!
+//! Implementations of the `WasiFile` and `WasiDir` traits are provided
+//! for synchronous embeddings (i.e. Config::async_support(false)) in
+//! `wasi_common::sync` and for Tokio embeddings in `wasi_common::tokio`.
 //!
 //! ## Traits for the rest of WASI's features
 //!
