@@ -91,10 +91,10 @@ pub(crate) trait ABI {
     fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults;
 
     /// Returns the number of bits in a word.
-    fn word_bits() -> u32;
+    fn word_bits() -> u8;
 
     /// Returns the number of bytes in a word.
-    fn word_bytes() -> u32 {
+    fn word_bytes() -> u8 {
         Self::word_bits() / 8
     }
 
@@ -133,10 +133,13 @@ pub(crate) trait ABI {
     fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
 
     /// The size, in bytes, of each stack slot used for stack parameter passing.
-    fn stack_slot_size() -> u32;
+    fn stack_slot_size() -> u8;
 
     /// Returns the size in bytes of the given [`WasmType`].
-    fn sizeof(ty: &WasmValType) -> u32;
+    fn sizeof(ty: &WasmValType) -> u8;
+
+    /// Returns the size in bits of the given [`WasmType`].
+    fn sizeof_bits(ty: &WasmValType) -> u8;
 }
 
 /// ABI-specific representation of function argument or result.
@@ -488,7 +491,7 @@ impl ABIParams {
             },
         );
 
-        let ptr_type = ptr_type_from_ptr_size(<A as ABI>::word_bytes() as u8);
+        let ptr_type = ptr_type_from_ptr_size(<A as ABI>::word_bytes());
         // Handle stack results by specifying an extra, implicit last argument.
         if needs_stack_results {
             let (operand, bytes) = map(&ptr_type, stack_bytes);

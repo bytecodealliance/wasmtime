@@ -50,7 +50,7 @@ impl Masm for MacroAssembler {
     }
 
     fn check_stack(&mut self) {
-        // TODO: implement when we have more complete assembler support
+        // TODO: Implement when we have more complete assembler support.
     }
 
     fn epilogue(&mut self, locals_size: u32) {
@@ -158,6 +158,10 @@ impl Masm for MacroAssembler {
         self.asm.str(src, dst, size);
     }
 
+    fn wasm_store(&mut self, _src: Reg, _dst: Self::Address, _size: OperandSize) {
+        todo!()
+    }
+
     fn call(
         &mut self,
         _stack_args_size: u32,
@@ -171,6 +175,16 @@ impl Masm for MacroAssembler {
     }
 
     fn load_ptr(&mut self, _src: Self::Address, _dst: Reg) {
+        todo!()
+    }
+
+    fn wasm_load(
+        &mut self,
+        _src: Self::Address,
+        _dst: Reg,
+        _size: OperandSize,
+        _kind: Option<ExtendKind>,
+    ) {
         todo!()
     }
 
@@ -229,6 +243,17 @@ impl Masm for MacroAssembler {
                 self.asm.add_rrr(rm, rn, rd, size);
             }
         }
+    }
+
+    fn checked_uadd(
+        &mut self,
+        _dst: Reg,
+        _lhs: Reg,
+        _rhs: RegImm,
+        _size: OperandSize,
+        _trap: TrapCode,
+    ) {
+        todo!()
     }
 
     fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
@@ -408,13 +433,13 @@ impl Masm for MacroAssembler {
 
     fn push(&mut self, reg: Reg, _size: OperandSize) -> StackSlot {
         let size = <Self::ABI as abi::ABI>::word_bytes();
-        self.reserve_stack(size);
+        self.reserve_stack(size as u32);
         let address = Address::from_shadow_sp(size as i64);
         self.asm.str(reg, address, OperandSize::S64);
 
         StackSlot {
             offset: SPOffset::from_u32(self.sp_offset),
-            size,
+            size: size as u32,
         }
     }
 
@@ -486,6 +511,10 @@ impl Masm for MacroAssembler {
     }
 
     fn jmp_table(&mut self, _targets: &[MachLabel], _index: Reg, _tmp: Reg) {
+        todo!()
+    }
+
+    fn trap(&mut self, _code: TrapCode) {
         todo!()
     }
 

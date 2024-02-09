@@ -97,6 +97,12 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         self.reg_for_class(RegClass::Int, masm)
     }
 
+    /// Convenience wrapper around `CodeGenContext::reg_for_class`, to
+    /// request the next available floating point register.
+    pub fn any_fpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
+        self.reg_for_class(RegClass::Float, masm)
+    }
+
     /// Executes the provided function, guaranteeing that the specified set of
     /// registers, if any, remain unallocatable throughout the function's
     /// execution.
@@ -215,7 +221,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                     .get_local(local.index)
                     .unwrap_or_else(|| panic!("invalid local at index = {}", local.index));
                 let addr = masm.local_address(&slot);
-                masm.load(addr, dst, slot.ty.into());
+                masm.load(addr, dst, size);
             }
             Val::Memory(mem) => {
                 let addr = masm.address_from_sp(mem.slot.offset);
@@ -268,7 +274,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         let dst = match size {
             OperandSize::S32 => TypedReg::i32(dst),
             OperandSize::S64 => TypedReg::i64(dst),
-            OperandSize::S128 => unreachable!(),
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
         self.stack.push(dst.into());
     }

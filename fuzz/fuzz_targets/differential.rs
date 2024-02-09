@@ -84,6 +84,17 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // `Cranelift`.
     if fuzz_winch {
         config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
+        // Disable the Wasm proposals not supported by Winch.
+        // Reference Types and (Function References) are not disabled entirely
+        // because certain instructions involving `funcref` are supported (all
+        // the table instructions).
+        config.module_config.config.simd_enabled = false;
+        config.module_config.config.relaxed_simd_enabled = false;
+        config.module_config.config.memory64_enabled = false;
+        config.module_config.config.gc_enabled = false;
+        config.module_config.config.threads_enabled = false;
+        config.module_config.config.tail_call_enabled = false;
+        config.module_config.config.exceptions_enabled = false;
     }
 
     // Choose an engine that Wasmtime will be differentially executed against.
@@ -284,7 +295,6 @@ fn winch_supports_module(module: &[u8]) -> bool {
 
     fn is_type_supported(ty: &ValType) -> bool {
         match ty {
-            ValType::V128 => false,
             ValType::Ref(r) => r.is_func_ref(),
             _ => true,
         }
@@ -307,166 +317,17 @@ fn winch_supports_module(module: &[u8]) -> bool {
                 let op_reader = body.get_operators_reader().unwrap();
                 for op in op_reader {
                     match op.unwrap() {
-                        I32Const { .. }
-                        | I64Const { .. }
-                        | I32Add { .. }
-                        | I64Add { .. }
-                        | I32Sub { .. }
-                        | I32Mul { .. }
-                        | I32DivS { .. }
-                        | I32DivU { .. }
-                        | I64DivS { .. }
-                        | I64DivU { .. }
-                        | I64RemU { .. }
-                        | I64RemS { .. }
-                        | I32RemU { .. }
-                        | I32RemS { .. }
-                        | I64Mul { .. }
-                        | I64Sub { .. }
-                        | I32Eq { .. }
-                        | I64Eq { .. }
-                        | I32Ne { .. }
-                        | I64Ne { .. }
-                        | I32LtS { .. }
-                        | I64LtS { .. }
-                        | I32LtU { .. }
-                        | I64LtU { .. }
-                        | I32LeS { .. }
-                        | I64LeS { .. }
-                        | I32LeU { .. }
-                        | I64LeU { .. }
-                        | I32GtS { .. }
-                        | I64GtS { .. }
-                        | I32GtU { .. }
-                        | I64GtU { .. }
-                        | I32GeS { .. }
-                        | I64GeS { .. }
-                        | I32GeU { .. }
-                        | I64GeU { .. }
-                        | I32Eqz { .. }
-                        | I64Eqz { .. }
-                        | I32And { .. }
-                        | I64And { .. }
-                        | I32Or { .. }
-                        | I64Or { .. }
-                        | I32Xor { .. }
-                        | I64Xor { .. }
-                        | I32Shl { .. }
-                        | I64Shl { .. }
-                        | I32ShrS { .. }
-                        | I64ShrS { .. }
-                        | I32ShrU { .. }
-                        | I64ShrU { .. }
-                        | I32Rotl { .. }
-                        | I64Rotl { .. }
-                        | I32Rotr { .. }
-                        | I64Rotr { .. }
-                        | I32Clz { .. }
-                        | I64Clz { .. }
-                        | I32Ctz { .. }
-                        | I64Ctz { .. }
-                        | I32Popcnt { .. }
-                        | I64Popcnt { .. }
-                        | I32WrapI64 { .. }
-                        | I64ExtendI32S { .. }
-                        | I64ExtendI32U { .. }
-                        | I32Extend8S { .. }
-                        | I32Extend16S { .. }
-                        | I64Extend8S { .. }
-                        | I64Extend16S { .. }
-                        | I64Extend32S { .. }
-                        | I32TruncF32S { .. }
-                        | I32TruncF32U { .. }
-                        | I32TruncF64S { .. }
-                        | I32TruncF64U { .. }
-                        | I64TruncF32S { .. }
-                        | I64TruncF32U { .. }
-                        | I64TruncF64S { .. }
-                        | I64TruncF64U { .. }
-                        | I32ReinterpretF32 { .. }
-                        | I64ReinterpretF64 { .. }
-                        | LocalGet { .. }
-                        | LocalSet { .. }
-                        | LocalTee { .. }
-                        | GlobalGet { .. }
-                        | GlobalSet { .. }
-                        | Call { .. }
-                        | Nop { .. }
-                        | End { .. }
-                        | If { .. }
-                        | Else { .. }
-                        | Block { .. }
-                        | Loop { .. }
-                        | Br { .. }
-                        | BrIf { .. }
-                        | BrTable { .. }
-                        | Unreachable { .. }
-                        | Return { .. }
-                        | F32Const { .. }
-                        | F64Const { .. }
-                        | F32Add { .. }
-                        | F64Add { .. }
-                        | F32Sub { .. }
-                        | F64Sub { .. }
-                        | F32Mul { .. }
-                        | F64Mul { .. }
-                        | F32Div { .. }
-                        | F64Div { .. }
-                        | F32Min { .. }
-                        | F64Min { .. }
-                        | F32Max { .. }
-                        | F64Max { .. }
-                        | F32Copysign { .. }
-                        | F64Copysign { .. }
-                        | F32Abs { .. }
-                        | F64Abs { .. }
-                        | F32Neg { .. }
-                        | F64Neg { .. }
-                        | F32Sqrt { .. }
-                        | F64Sqrt { .. }
-                        | F32Eq { .. }
-                        | F64Eq { .. }
-                        | F32Ne { .. }
-                        | F64Ne { .. }
-                        | F32Lt { .. }
-                        | F64Lt { .. }
-                        | F32Gt { .. }
-                        | F64Gt { .. }
-                        | F32Le { .. }
-                        | F64Le { .. }
-                        | F32Ge { .. }
-                        | F64Ge { .. }
-                        | F32ConvertI32S { .. }
-                        | F32ConvertI32U { .. }
-                        | F32ConvertI64S { .. }
-                        | F32ConvertI64U { .. }
-                        | F64ConvertI32S { .. }
-                        | F64ConvertI32U { .. }
-                        | F64ConvertI64S { .. }
-                        | F64ConvertI64U { .. }
-                        | F32ReinterpretI32 { .. }
-                        | F64ReinterpretI64 { .. }
-                        | F32DemoteF64 { .. }
-                        | F64PromoteF32 { .. }
-                        | CallIndirect { .. }
-                        | ElemDrop { .. }
-                        | TableCopy { .. }
-                        | TableSet { .. }
-                        | TableGet { .. }
-                        | TableFill { .. }
-                        | TableGrow { .. }
-                        | TableSize { .. }
-                        | TableInit { .. }
-                        | MemoryCopy { .. }
-                        | MemoryGrow { .. }
-                        | MemoryFill { .. }
-                        | MemoryInit { .. }
-                        | DataDrop { .. }
-                        | MemorySize { .. } => {}
-                        _ => {
+                        RefIsNull { .. }
+                        | RefNull { .. }
+                        | RefFunc { .. }
+                        | RefAsNonNull { .. }
+                        | BrOnNonNull { .. }
+                        | CallRef { .. }
+                        | BrOnNull { .. } => {
                             supported = false;
                             break 'main;
                         }
+                        _ => {}
                     }
                 }
             }
