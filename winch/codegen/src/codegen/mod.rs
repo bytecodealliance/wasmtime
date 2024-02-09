@@ -471,13 +471,8 @@ where
 
         let memory_index = MemoryIndex::from_u32(memarg.memory);
         let heap = self.env.resolve_heap(memory_index);
-        let index = self.context.pop_to_reg(self.masm, None);
-        let (index, offset) = bounds::ensure_index_and_offset(
-            self.masm,
-            Index::from_typed_reg(index),
-            memarg.offset,
-            ptr_size,
-        );
+        let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None));
+        let offset = bounds::ensure_index_and_offset(self.masm, index, memarg.offset, ptr_size);
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
 
         let addr = match heap.style {
@@ -504,7 +499,7 @@ where
                     TrapCode::HeapOutOfBounds,
                 );
 
-                let addr = bounds::check_addr(
+                let addr = bounds::load_heap_addr_checked(
                     self.masm,
                     &mut self.context,
                     ptr_size,
@@ -570,8 +565,7 @@ where
                             - offset_with_access_size =>
             {
                 let addr = self.context.any_gpr(self.masm);
-                let scratch = <M::ABI as ABI>::scratch_reg();
-                bounds::load_heap_addr(self.masm, &heap, index, offset, addr, scratch, ptr_size);
+                bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size);
                 Some(addr)
             }
 
@@ -584,7 +578,7 @@ where
             // checked that (offset + access_size) > bound, above.
             HeapStyle::Static { bound } => {
                 let bounds = Bounds::from_u64(bound);
-                let addr = bounds::check_addr(
+                let addr = bounds::load_heap_addr_checked(
                     self.masm,
                     &mut self.context,
                     ptr_size,
@@ -648,5 +642,5 @@ where
 pub fn control_index(depth: u32, control_length: usize) -> usize {
     (control_length - 1)
         .checked_sub(depth as usize)
-        .unwrap_or_else(|| panic!("exected valid control stack frame at index: {}", depth))
+        .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth))
 }

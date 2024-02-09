@@ -79,7 +79,7 @@ impl Index {
     }
 }
 
-/// Loads the bounds of the dynamic heap into the given register.
+/// Loads the bounds of the dynamic heap.
 pub(crate) fn load_dynamic_heap_bounds<M>(
     context: &mut CodeGenContext,
     masm: &mut M,
@@ -126,10 +126,10 @@ pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
     index: Index,
     offset: u64,
     ptr_size: OperandSize,
-) -> (Index, ImmOffset) {
+) -> ImmOffset {
     match u32::try_from(offset) {
         // If the immediate offset fits in a u32, then we simply return.
-        Ok(offs) => (index, ImmOffset::from_u32(offs)),
+        Ok(offs) => ImmOffset::from_u32(offs),
         // Else we adjust the index to be index = index + offset, including an
         // overflow check, and return 0 as the offset.
         Err(_) => {
@@ -141,14 +141,14 @@ pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
                 TrapCode::HeapOutOfBounds,
             );
 
-            (index, ImmOffset::from_u32(0))
+            ImmOffset::from_u32(0)
         }
     }
 }
 
 /// Performs the out-of-bounds check and returns the heap address if the access
 /// criteria is in bounds.
-pub(crate) fn check_addr<M, F>(
+pub(crate) fn load_heap_addr_checked<M, F>(
     masm: &mut M,
     context: &mut CodeGenContext,
     ptr_size: OperandSize,
@@ -166,10 +166,9 @@ where
     let cmp_kind = emit_check_condition(masm, bounds, index);
 
     masm.trapif(cmp_kind, TrapCode::HeapOutOfBounds);
-    let scratch = <M::ABI as ABI>::scratch_reg();
     let addr = context.any_gpr(masm);
 
-    load_heap_addr(masm, heap, index, offset, addr, scratch, ptr_size);
+    load_heap_addr_unchecked(masm, heap, index, offset, addr, ptr_size);
     if !enable_spectre_mitigation {
         addr
     } else {
@@ -184,14 +183,15 @@ where
     }
 }
 
-/// Load the requested heap address ino the specified destination register.
-pub(crate) fn load_heap_addr<M>(
+/// Load the requested heap address into the specified destination register.
+/// This function doesn't perform any bounds checks and assumes the caller
+/// performed the right checks.
+pub(crate) fn load_heap_addr_unchecked<M>(
     masm: &mut M,
     heap: &HeapData,
     index: Index,
     offset: ImmOffset,
     dst: Reg,
-    scratch: Reg,
     ptr_size: OperandSize,
 ) where
     M: MacroAssembler,
@@ -199,6 +199,7 @@ pub(crate) fn load_heap_addr<M>(
     let base = if let Some(offset) = heap.import_from {
         // If the WebAssembly memory is imported, load the address into
         // the scratch register.
+        let scratch = <M::ABI as ABI>::scratch_reg();
         masm.load_ptr(masm.address_at_vmctx(offset), scratch);
         scratch
     } else {

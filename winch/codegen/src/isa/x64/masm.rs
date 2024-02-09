@@ -351,11 +351,11 @@ impl Masm for MacroAssembler {
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
-        self.store_impl::<Self>(src, dst, size, self.trusted_flags);
+        self.store_impl(src, dst, size, self.trusted_flags);
     }
 
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) {
-        self.store_impl::<Self>(src.into(), dst, size, self.untrusted_flags);
+        self.store_impl(src.into(), dst, size, self.untrusted_flags);
     }
 
     fn pop(&mut self, dst: Reg, size: OperandSize) {
@@ -1213,12 +1213,9 @@ impl MacroAssembler {
     }
 
     /// A common implemenation for stack stores.
-    fn store_impl<M>(&mut self, src: RegImm, dst: Address, size: OperandSize, flags: MemFlags)
-    where
-        M: Masm,
-    {
-        let scratch = <M::ABI as ABI>::scratch_reg();
-        let float_scratch = <M::ABI as ABI>::float_scratch_reg();
+    fn store_impl(&mut self, src: RegImm, dst: Address, size: OperandSize, flags: MemFlags) {
+        let scratch = <Self as Masm>::ABI::scratch_reg();
+        let float_scratch = <Self as Masm>::ABI::float_scratch_reg();
         match src {
             RegImm::Imm(imm) => match imm {
                 I::I32(v) => self.asm.mov_im(v as i32, &dst, size, flags),

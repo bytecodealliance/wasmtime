@@ -102,11 +102,9 @@ impl Frame {
         );
 
         // Align the locals to add a slot for the VMContext pointer.
-        let ptr_size = <A as ABI>::word_bytes();
-        let vmctx_offset = align_to(
-            defined_locals_start + defined_locals.stack_size,
-            ptr_size as u32,
-        ) + (ptr_size as u32);
+        let ptr_size = <A as ABI>::word_bytes() as u32;
+        let vmctx_offset =
+            align_to(defined_locals_start + defined_locals.stack_size, ptr_size) + ptr_size;
 
         let (results_base_slot, locals_size) = if sig.params.has_retptr() {
             match sig.params.unwrap_results_area_operand() {
@@ -118,7 +116,7 @@ impl Frame {
                     align_to(vmctx_offset, <A as ABI>::stack_align().into()),
                 ),
                 ABIOperand::Reg { ty, .. } => {
-                    let offs = align_to(vmctx_offset, ptr_size as u32) + (ptr_size as u32);
+                    let offs = align_to(vmctx_offset, ptr_size) + ptr_size;
                     (
                         Some(LocalSlot::new(*ty, offs)),
                         align_to(offs, <A as ABI>::stack_align().into()),
