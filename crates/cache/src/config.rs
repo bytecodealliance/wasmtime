@@ -407,11 +407,11 @@ impl CacheConfig {
         match (entity_exists, user_custom_file) {
             (false, false) => Ok(Self::new_cache_enabled_template()),
             _ => {
-                let bytes = fs::read(&config_file).context(format!(
+                let contents = fs::read_to_string(&config_file).context(format!(
                     "failed to read config file: {}",
                     config_file.display()
                 ))?;
-                let config = toml::from_slice::<Config>(&bytes[..]).context(format!(
+                let config = toml::from_str::<Config>(&contents).context(format!(
                     "failed to parse config file: {}",
                     config_file.display()
                 ))?;
