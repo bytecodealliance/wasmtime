@@ -7,7 +7,7 @@ use super::{
 
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize,
-    RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::ABI,
@@ -1021,6 +1021,7 @@ impl Masm for MacroAssembler {
         dst: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
+        kind: TruncKind,
     ) {
         self.asm.cvt_float_to_sint_seq(
             src,
@@ -1029,6 +1030,7 @@ impl Masm for MacroAssembler {
             regs::scratch_xmm(),
             src_size,
             dst_size,
+            kind.is_checked(),
         );
     }
 
@@ -1039,6 +1041,7 @@ impl Masm for MacroAssembler {
         tmp_fpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
+        kind: TruncKind,
     ) {
         self.asm.cvt_float_to_uint_seq(
             src,
@@ -1048,6 +1051,7 @@ impl Masm for MacroAssembler {
             tmp_fpr,
             src_size,
             dst_size,
+            kind.is_checked(),
         );
     }
 
