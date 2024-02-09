@@ -31,8 +31,6 @@
 //! deps, so we will retain a sync implementation so that wasi-common users
 //! have an option of not pulling in an async runtime.
 
-#![cfg_attr(io_lifetimes_use_std, feature(io_safety))]
-
 pub mod clocks;
 pub mod dir;
 pub mod file;

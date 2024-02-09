@@ -140,7 +140,7 @@ macro_rules! generate_wrap_async_func {
         /// [`Func::wrapN_async`](crate::Func::wrap1_async).
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
-        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
         pub fn [<func_wrap $num _async>]<$($args,)* R>(
             &mut self,
             module: &str,
@@ -275,7 +275,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
@@ -311,7 +311,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_default_values(
         &mut self,
         module: &Module,
@@ -416,7 +416,7 @@ impl<T> Linker<T> {
     ///
     /// For more information see [`Linker::func_wrap`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn func_new(
         &mut self,
         module: &str,
@@ -434,7 +434,7 @@ impl<T> Linker<T> {
     ///
     /// For more information see [`Linker::func_wrap`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn func_new_unchecked(
         &mut self,
         module: &str,
@@ -452,7 +452,7 @@ impl<T> Linker<T> {
     ///
     /// For more information see [`Linker::func_wrap`].
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn func_new_async<F>(
         &mut self,
         module: &str,
@@ -754,7 +754,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn module(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -825,7 +825,7 @@ impl<T> Linker<T> {
     ///
     /// This is the same as [`Linker::module`], except for async `Store`s.
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub async fn module_async(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -1098,7 +1098,7 @@ impl<T> Linker<T> {
     /// Attempts to instantiate the `module` provided. This is the same as
     /// [`Linker::instantiate`], except for async `Store`s.
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,

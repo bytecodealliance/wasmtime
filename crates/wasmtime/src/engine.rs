@@ -481,7 +481,7 @@ impl Engine {
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
-#[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
 impl Engine {
     pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
         &*self.inner.compiler
@@ -519,7 +519,7 @@ impl Engine {
     /// Same as [`Engine::precompile_module`] except for a
     /// [`Component`](crate::component::Component)
     #[cfg(feature = "component-model")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
@@ -562,7 +562,7 @@ pub enum Precompiled {
 }
 
 #[cfg(feature = "runtime")]
-#[cfg_attr(nightlydoc, doc(cfg(feature = "runtime")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
 impl Engine {
     /// Eagerly initialize thread-local functionality shared by all [`Engine`]s.
     ///
@@ -650,7 +650,7 @@ impl Engine {
     /// compatible [`Config`]s. If this Hash matches between two [`Engine`]s then binaries
     /// from one are guaranteed to deserialize in the other.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(docsrs, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
         crate::module::HashedEngineCompileEnv(self)
     }
