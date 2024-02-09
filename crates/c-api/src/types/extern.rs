@@ -18,6 +18,17 @@ pub(crate) enum CExternType {
     Table(CTableType),
 }
 
+impl CExternType {
+    pub(crate) fn new(ty: ExternType) -> CExternType {
+        match ty {
+            ExternType::Func(f) => CExternType::Func(CFuncType::new(f)),
+            ExternType::Global(f) => CExternType::Global(CGlobalType::new(f)),
+            ExternType::Memory(f) => CExternType::Memory(CMemoryType::new(f)),
+            ExternType::Table(f) => CExternType::Table(CTableType::new(f)),
+        }
+    }
+}
+
 pub type wasm_externkind_t = u8;
 
 pub const WASM_EXTERN_FUNC: wasm_externkind_t = 0;
@@ -26,24 +37,14 @@ pub const WASM_EXTERN_TABLE: wasm_externkind_t = 2;
 pub const WASM_EXTERN_MEMORY: wasm_externkind_t = 3;
 
 impl wasm_externtype_t {
-    pub(crate) fn new(ty: ExternType) -> wasm_externtype_t {
+    pub(crate) fn from_extern_type(ty: ExternType) -> wasm_externtype_t {
         wasm_externtype_t {
-            which: match ty {
-                ExternType::Func(f) => CExternType::Func(CFuncType::new(f)),
-                ExternType::Global(f) => CExternType::Global(CGlobalType::new(f)),
-                ExternType::Memory(f) => CExternType::Memory(CMemoryType::new(f)),
-                ExternType::Table(f) => CExternType::Table(CTableType::new(f)),
-            },
+            which: CExternType::new(ty),
         }
     }
 
-    pub(crate) fn ty(&self) -> ExternType {
-        match &self.which {
-            CExternType::Func(f) => ExternType::Func(f.ty.clone()),
-            CExternType::Table(f) => ExternType::Table(f.ty.clone()),
-            CExternType::Global(f) => ExternType::Global(f.ty.clone()),
-            CExternType::Memory(f) => ExternType::Memory(f.ty.clone()),
-        }
+    pub(crate) fn from_cextern_type(ty: CExternType) -> wasm_externtype_t {
+        wasm_externtype_t { which: ty }
     }
 }
 

@@ -271,7 +271,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_async_func(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let ty = ty.ty().ty.clone();
+    let ty = ty.ty().ty(linker.linker.engine());
     let module = to_str!(module, module_len);
     let name = to_str!(name, name_len);
     let cb = c_async_callback_to_rust_fn(callback, data, finalizer);
