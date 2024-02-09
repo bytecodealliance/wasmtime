@@ -36,6 +36,11 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
             "append of forbidden header succeeded"
         );
 
+        assert!(
+            !req_hdrs.has(&"host".to_owned()),
+            "forbidden host header present in incoming request"
+        );
+
         let hdrs = bindings::wasi::http::types::Headers::new();
         let resp = bindings::wasi::http::types::OutgoingResponse::new(hdrs);
         let body = resp.body().expect("outgoing response");
