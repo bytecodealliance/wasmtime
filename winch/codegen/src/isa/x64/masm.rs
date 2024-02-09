@@ -7,7 +7,7 @@ use super::{
 
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize,
-    RegImm, RemKind, RoundingMode, ShiftKind, TrapCode,
+    RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::ABI,
@@ -24,7 +24,7 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    ir::{Endianness, MemFlags},
+    ir::MemFlags,
     isa::unwind::UnwindInst,
     isa::x64::{
         args::{ExtMode, CC},
@@ -47,10 +47,6 @@ pub(crate) struct MacroAssembler {
     shared_flags: settings::Flags,
     /// The target pointer size.
     ptr_size: OperandSize,
-    /// Flags for native loads/stores.
-    trusted_flags: MemFlags,
-    /// Flags for Wasm loads/stores.
-    untrusted_flags: MemFlags,
 }
 
 impl Masm for MacroAssembler {
@@ -114,24 +110,16 @@ impl Masm for MacroAssembler {
                 let bytes = size.bytes();
                 self.reserve_stack(bytes);
                 let sp_offset = SPOffset::from_u32(self.sp_offset);
-                self.asm.mov_rm(
-                    reg,
-                    &self.address_from_sp(sp_offset),
-                    size,
-                    self.trusted_flags,
-                );
+                self.asm
+                    .mov_rm(reg, &self.address_from_sp(sp_offset), size, TRUSTED_FLAGS);
                 bytes
             }
             (RegClass::Float, _) => {
                 let bytes = size.bytes();
                 self.reserve_stack(bytes);
                 let sp_offset = SPOffset::from_u32(self.sp_offset);
-                self.asm.xmm_mov_rm(
-                    reg,
-                    &self.address_from_sp(sp_offset),
-                    size,
-                    self.trusted_flags,
-                );
+                self.asm
+                    .xmm_mov_rm(reg, &self.address_from_sp(sp_offset), size, TRUSTED_FLAGS);
                 bytes
             }
             _ => unreachable!(),
@@ -212,7 +200,7 @@ impl Masm for MacroAssembler {
                 &self.address_at_vmctx(offset),
                 ptr_base,
                 self.ptr_size.into(),
-                self.trusted_flags,
+                TRUSTED_FLAGS,
             );
         } else {
             // Else, simply move the vmctx register into the addr register as
@@ -224,7 +212,7 @@ impl Masm for MacroAssembler {
         let bound_addr = self.address_at_reg(ptr_base, table_data.current_elems_offset);
         let bound_size = table_data.current_elements_size;
         self.asm
-            .movzx_mr(&bound_addr, bound, bound_size.into(), self.trusted_flags);
+            .movzx_mr(&bound_addr, bound, bound_size.into(), TRUSTED_FLAGS);
         self.asm.cmp_rr(bound, index, bound_size);
         self.asm.trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
 
@@ -242,7 +230,7 @@ impl Masm for MacroAssembler {
             &self.address_at_reg(ptr_base, table_data.offset),
             ptr_base,
             self.ptr_size.into(),
-            self.trusted_flags,
+            TRUSTED_FLAGS,
         );
         // Copy the value of the table base into a temporary register
         // so that we can use it later in case of a misspeculation.
@@ -270,7 +258,7 @@ impl Masm for MacroAssembler {
                 &self.address_at_vmctx(offset),
                 scratch,
                 self.ptr_size.into(),
-                self.trusted_flags,
+                TRUSTED_FLAGS,
             );
         } else {
             self.asm.mov_rr(vmctx, scratch, self.ptr_size);
@@ -281,7 +269,7 @@ impl Masm for MacroAssembler {
             &size_addr,
             size,
             table_data.current_elements_size.into(),
-            self.trusted_flags,
+            TRUSTED_FLAGS,
         );
 
         context.stack.push(TypedReg::i32(size).into());
@@ -297,7 +285,7 @@ impl Masm for MacroAssembler {
                 &self.address_at_vmctx(offset),
                 scratch,
                 self.ptr_size.into(),
-                self.trusted_flags,
+                TRUSTED_FLAGS,
             );
             scratch
         } else {
@@ -305,12 +293,8 @@ impl Masm for MacroAssembler {
         };
 
         let size_addr = Address::offset(base, heap_data.current_length_offset);
-        self.asm.movzx_mr(
-            &size_addr,
-            size_reg,
-            self.ptr_size.into(),
-            self.trusted_flags,
-        );
+        self.asm
+            .movzx_mr(&size_addr, size_reg, self.ptr_size.into(), TRUSTED_FLAGS);
         // Prepare the stack to emit a shift to get the size in pages rather
         // than in bytes.
         context
@@ -351,11 +335,11 @@ impl Masm for MacroAssembler {
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
-        self.store_impl(src, dst, size, self.trusted_flags);
+        self.store_impl(src, dst, size, TRUSTED_FLAGS);
     }
 
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) {
-        self.store_impl(src.into(), dst, size, self.untrusted_flags);
+        self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS);
     }
 
     fn pop(&mut self, dst: Reg, size: OperandSize) {
@@ -363,8 +347,7 @@ impl Masm for MacroAssembler {
         match (dst.class(), size) {
             (RegClass::Int, OperandSize::S32) => {
                 let addr = self.address_from_sp(current_sp);
-                self.asm
-                    .movzx_mr(&addr, dst, size.into(), self.trusted_flags);
+                self.asm.movzx_mr(&addr, dst, size.into(), TRUSTED_FLAGS);
                 self.free_stack(size.bytes());
             }
             (RegClass::Int, OperandSize::S64) => {
@@ -373,7 +356,7 @@ impl Masm for MacroAssembler {
             }
             (RegClass::Float, _) => {
                 let addr = self.address_from_sp(current_sp);
-                self.asm.xmm_mov_mr(&addr, dst, size, self.trusted_flags);
+                self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 self.free_stack(size.bytes());
             }
             _ => unreachable!(),
@@ -409,7 +392,7 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
-        self.load_impl::<Self>(src, dst, size, self.trusted_flags);
+        self.load_impl::<Self>(src, dst, size, TRUSTED_FLAGS);
     }
 
     fn wasm_load(
@@ -420,9 +403,9 @@ impl Masm for MacroAssembler {
         kind: Option<ExtendKind>,
     ) {
         if let Some(ext) = kind {
-            self.asm.movsx_mr(&src, dst, ext, self.untrusted_flags);
+            self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
         } else {
-            self.load_impl::<Self>(src, dst, size, self.untrusted_flags)
+            self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)
         }
     }
 
@@ -446,11 +429,11 @@ impl Masm for MacroAssembler {
                 I::I64(v) => self.asm.mov_ir(v, dst, size),
                 I::F32(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
-                    self.asm.xmm_mov_mr(&addr, dst, size, self.trusted_flags);
+                    self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 }
                 I::F64(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
-                    self.asm.xmm_mov_mr(&addr, dst, size, self.trusted_flags);
+                    self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 }
             },
         }
@@ -1152,11 +1135,6 @@ impl MacroAssembler {
         isa_flags: x64_settings::Flags,
     ) -> Self {
         let ptr_type: WasmValType = ptr_type_from_ptr_size(ptr_size.size()).into();
-        // Flags used for WebAssembly loads / stores.
-        // Untrusted by default so we don't set `no_trap`.
-        // We also ensure that the endianess is the right one for WebAssembly.
-        let mut untrusted_flags = MemFlags::new();
-        untrusted_flags.set_endianness(Endianness::Little);
 
         Self {
             sp_offset: 0,
@@ -1164,8 +1142,6 @@ impl MacroAssembler {
             flags: isa_flags,
             shared_flags,
             ptr_size: ptr_type.into(),
-            trusted_flags: MemFlags::trusted(),
-            untrusted_flags,
         }
     }
 

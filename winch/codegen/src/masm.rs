@@ -1,7 +1,10 @@
 use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::{CodeGenContext, HeapData, TableData};
 use crate::isa::reg::Reg;
-use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
+use cranelift_codegen::{
+    ir::{Endianness, LibCall, MemFlags},
+    Final, MachBufferFinalized, MachLabel,
+};
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
 
@@ -335,6 +338,14 @@ pub enum RoundingMode {
     Down,
     Zero,
 }
+
+/// Memory flags for trusted loads/stores.
+pub const TRUSTED_FLAGS: MemFlags = MemFlags::trusted();
+
+/// Flags used for WebAssembly loads / stores.
+/// Untrusted by default so we don't set `no_trap`.
+/// We also ensure that the endianess is the right one for WebAssembly.
+pub const UNTRUSTED_FLAGS: MemFlags = MemFlags::new().with_endianness(Endianness::Little);
 
 /// Generic MacroAssembler interface used by the code generation.
 ///
