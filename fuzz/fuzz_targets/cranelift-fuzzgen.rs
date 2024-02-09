@@ -346,7 +346,7 @@ fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult)
                 STATISTICS.run_result_timeout.fetch_add(1, Ordering::SeqCst);
                 return;
             }
-            RunResult::Error(_) => panic!("interpreter failed: {:?}", int_res),
+            RunResult::Error(e) => panic!("interpreter failed: {e:?}"),
         }
 
         let res = run(args);
