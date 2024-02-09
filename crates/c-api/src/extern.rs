@@ -26,7 +26,9 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_type(e: &wasm_extern_t) -> Box<wasm_externtype_t> {
-    Box::new(wasm_externtype_t::from_extern_type(e.which.ty(&e.store.context())))
+    Box::new(wasm_externtype_t::from_extern_type(
+        e.which.ty(&e.store.context()),
+    ))
 }
 
 #[no_mangle]
