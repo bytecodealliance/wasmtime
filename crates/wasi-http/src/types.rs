@@ -77,7 +77,7 @@ pub trait WasiHttpView: Send {
 
 /// Returns `true` when the header is forbidden according to this [`WasiHttpView`] implementation.
 pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName) -> bool {
-    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
+    static FORBIDDEN_HEADERS: [HeaderName; 10] = [
         hyper::header::CONNECTION,
         HeaderName::from_static("keep-alive"),
         hyper::header::PROXY_AUTHENTICATE,
@@ -86,6 +86,7 @@ pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName
         hyper::header::TE,
         hyper::header::TRANSFER_ENCODING,
         hyper::header::UPGRADE,
+        hyper::header::HOST,
         HeaderName::from_static("http2-settings"),
     ];
 
