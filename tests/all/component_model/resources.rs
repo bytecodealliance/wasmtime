@@ -188,16 +188,16 @@ fn resource_any() -> Result<()> {
         // `t` is placed at host index 0
         let (t,) = t_ctor.call(&mut store, (100,))?;
         t_ctor.post_return(&mut store)?;
-        t_dtor.call(&mut store, (t1,))?;
+        t_dtor.call(&mut store, (t,))?;
         t_dtor.post_return(&mut store)?;
 
         // `u` is also placed at host index 0 since `t` was deallocated
-        let (u,) = u_ctor.call(&mut store, (100,))?;
+        let (_u,) = u_ctor.call(&mut store, (100,))?;
         u_ctor.post_return(&mut store)?;
 
         // reuse of `t` should fail, despite it pointing to a valid resource
         assert_eq!(
-            t_dtor.call(&mut store, (t1,)).unwrap_err().to_string(),
+            t_dtor.call(&mut store, (t,)).unwrap_err().to_string(),
             "host-owned resource is being used with the wrong type"
         );
     }
