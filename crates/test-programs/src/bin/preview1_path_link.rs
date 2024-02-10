@@ -1,89 +1,82 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, config, create_file, open_scratch_directory};
 
-unsafe fn create_or_open(dir_fd: wasi::Fd, name: &str, flags: wasi::Oflags) -> wasi::Fd {
-    let file_fd = wasi::path_open(dir_fd, 0, name, flags, 0, 0, 0)
-        .unwrap_or_else(|_| panic!("opening '{}'", name));
-    assert!(
-        file_fd > libc::STDERR_FILENO as wasi::Fd,
-        "file descriptor range check",
-    );
-    file_fd
+// These are all macro-rules so the panic line number shows us where
+// things went wrong.
+
+macro_rules! filestats_assert_eq {
+    ($left:ident, $right:ident) => {
+        assert_eq!($left.dev, $right.dev, "dev should be equal");
+        assert_eq!($left.ino, $right.ino, "ino should be equal");
+        assert_eq!($left.atim, $right.atim, "atim should be equal");
+        assert_eq!($left.ctim, $right.ctim, "ctim should be equal");
+        assert_eq!($left.mtim, $right.mtim, "mtim should be equal");
+        assert_eq!($left.size, $right.size, "size should be equal");
+        assert_eq!($left.nlink, $right.nlink, "nlink should be equal");
+        assert_eq!($left.filetype, $right.filetype, "filetype should be equal");
+    };
 }
 
-unsafe fn open_link(dir_fd: wasi::Fd, name: &str) -> wasi::Fd {
-    let file_fd = wasi::path_open(dir_fd, 0, name, 0, 0, 0, 0)
-        .unwrap_or_else(|_| panic!("opening a link '{}'", name));
-    assert!(
-        file_fd > libc::STDERR_FILENO as wasi::Fd,
-        "file descriptor range check",
-    );
-    file_fd
+macro_rules! fdstats_assert_eq {
+    ($left:ident, $right:ident) => {
+        assert_eq!($left.fs_flags, $right.fs_flags, "fs_flags should be equal");
+        assert_eq!(
+            $left.fs_filetype, $right.fs_filetype,
+            "fs_filetype should be equal"
+        );
+        assert_eq!(
+            $left.fs_rights_base, $right.fs_rights_base,
+            "fs_rights_base should be equal"
+        );
+        assert_eq!(
+            $left.fs_rights_inheriting, $right.fs_rights_inheriting,
+            "fs_rights_inheriting should be equal"
+        );
+    };
 }
 
-// This is temporary until `wasi` implements `Debug` and `PartialEq` for
-// `wasi::Filestat`.
-fn filestats_assert_eq(left: wasi::Filestat, right: wasi::Filestat) {
-    assert_eq!(left.dev, right.dev, "dev should be equal");
-    assert_eq!(left.ino, right.ino, "ino should be equal");
-    assert_eq!(left.atim, right.atim, "atim should be equal");
-    assert_eq!(left.ctim, right.ctim, "ctim should be equal");
-    assert_eq!(left.mtim, right.mtim, "mtim should be equal");
-    assert_eq!(left.size, right.size, "size should be equal");
-    assert_eq!(left.nlink, right.nlink, "nlink should be equal");
-    assert_eq!(left.filetype, right.filetype, "filetype should be equal");
+macro_rules! check_rights {
+    ($orig_fd:ident, $link_fd:ident) => {
+        let orig_filestat =
+            wasi::fd_filestat_get($orig_fd).expect("reading filestat of the source");
+        let link_filestat = wasi::fd_filestat_get($link_fd).expect("reading filestat of the link");
+        filestats_assert_eq!(orig_filestat, link_filestat);
+
+        // Compare Fdstats
+        let orig_fdstat = wasi::fd_fdstat_get($orig_fd).expect("reading fdstat of the source");
+        let link_fdstat = wasi::fd_fdstat_get($link_fd).expect("reading fdstat of the link");
+        fdstats_assert_eq!(orig_fdstat, link_fdstat);
+    };
 }
-
-// This is temporary until `wasi` implements `Debug` and `PartialEq` for
-// `wasi::Fdstat`.
-fn fdstats_assert_eq(left: wasi::Fdstat, right: wasi::Fdstat) {
-    assert_eq!(left.fs_flags, right.fs_flags, "fs_flags should be equal");
-    assert_eq!(
-        left.fs_filetype, right.fs_filetype,
-        "fs_filetype should be equal"
-    );
-    assert_eq!(
-        left.fs_rights_base, right.fs_rights_base,
-        "fs_rights_base should be equal"
-    );
-    assert_eq!(
-        left.fs_rights_inheriting, right.fs_rights_inheriting,
-        "fs_rights_inheriting should be equal"
-    );
-}
-
-unsafe fn check_rights(orig_fd: wasi::Fd, link_fd: wasi::Fd) {
-    // Compare Filestats
-    let orig_filestat = wasi::fd_filestat_get(orig_fd).expect("reading filestat of the source");
-    let link_filestat = wasi::fd_filestat_get(link_fd).expect("reading filestat of the link");
-    filestats_assert_eq(orig_filestat, link_filestat);
-
-    // Compare Fdstats
-    let orig_fdstat = wasi::fd_fdstat_get(orig_fd).expect("reading fdstat of the source");
-    let link_fdstat = wasi::fd_fdstat_get(link_fd).expect("reading fdstat of the link");
-    fdstats_assert_eq(orig_fdstat, link_fdstat);
-}
-
 // Extra calls of fd_close are needed for Windows, which will not remove
 // the directory until all handles are closed.
 unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a file
-    let file_fd = create_or_open(dir_fd, "file", wasi::OFLAGS_CREAT);
+    let create_fd =
+        wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).expect("create file");
+    wasi::fd_close(create_fd).unwrap();
+
+    // Open a fresh descriptor to the file. We won't have a write right that was implied by OFLAGS_CREAT
+    // above.
+    let file_fd = wasi::path_open(dir_fd, 0, "file", 0, 0, 0, 0).expect("open file");
 
     // Create a link in the same directory and compare rights
     wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
         .expect("creating a link in the same directory");
-    let link_fd = open_link(dir_fd, "link");
-    check_rights(file_fd, link_fd);
+
+    let link_fd = wasi::path_open(dir_fd, 0, "link", 0, 0, 0, 0).expect("open link");
+
+    check_rights!(file_fd, link_fd);
     wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_unlink_file(dir_fd, "link").expect("removing a link");
 
     // Create a link in a different directory and compare rights
     wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
-    let subdir_fd = create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
+    let subdir_fd = wasi::path_open(dir_fd, 0, "subdir", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+        .expect("open subdir directory");
     wasi::path_link(dir_fd, 0, "file", subdir_fd, "link").expect("creating a link in subdirectory");
-    let link_fd = open_link(subdir_fd, "link");
-    check_rights(file_fd, link_fd);
+    let link_fd = wasi::path_open(subdir_fd, 0, "link", 0, 0, 0, 0).expect("open link in subdir");
+    check_rights!(file_fd, link_fd);
     wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_unlink_file(subdir_fd, "link").expect("removing a link");
     wasi::fd_close(subdir_fd).expect("Closing subdir_fd"); // needed for Windows
@@ -118,7 +111,8 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
 
     // Create a link to a directory
     wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
-    let subdir_fd = create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
+    let subdir_fd = wasi::path_open(dir_fd, 0, "subdir", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+        .expect("open new descriptor to subdir");
 
     assert_errno!(
         wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
