@@ -701,6 +701,15 @@ who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.7.6 -> 0.8.2"
 
+[[audits.ahash]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.2 -> 0.8.7"
+notes = """
+Shuffling of features in this update and while there are updates to `unsafe`
+code it's no different than before and the usage remains the same.
+"""
+
 [[audits.ambient-authority]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
