@@ -60,6 +60,12 @@ const array = [
     "filter": "macos-x64"
   },
   {
+    "os": "macos-14",
+    "name": "Test macOS arm64",
+    "filter": "macos-arm64"
+    "target": "aarch64-apple-darwin",
+  },
+  {
     "os": "windows-latest",
     "name": "Test Windows MSVC x86_64",
     "filter": "windows-x64"
