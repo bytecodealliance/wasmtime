@@ -62,8 +62,8 @@ const array = [
   {
     "os": "macos-14",
     "name": "Test macOS arm64",
-    "filter": "macos-arm64"
-    "target": "aarch64-apple-darwin",
+    "filter": "macos-arm64",
+    "target": "aarch64-apple-darwin"
   },
   {
     "os": "windows-latest",
