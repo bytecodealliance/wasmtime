@@ -53,6 +53,7 @@ unsafe fn test_fd_filestat_set_size_ro(dir_fd: wasi::Fd) {
     assert_errno!(
         wasi::fd_filestat_set_size(file_fd, 100)
             .expect_err("fd_filestat_set_size should error when file is opened read-only"),
+        windows => wasi::ERRNO_ACCES,
         wasi::ERRNO_INVAL
     );
 
