@@ -9,7 +9,7 @@ use crate::preview2::{
     },
     network::SocketAddressFamily,
 };
-use crate::preview2::{Pollable, SocketResult, WasiView};
+use crate::preview2::{with_ambient_tokio_runtime, Pollable, SocketResult, WasiView};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -141,7 +141,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             unreachable!();
         };
 
-        let future = TcpSocket::connect(tokio_socket, remote_address);
+        let future = tokio_socket.connect(remote_address);
 
         socket.tcp_state = TcpState::Connecting(Box::pin(future));
 
@@ -160,7 +160,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             TcpState::ConnectReady(result) => result,
             TcpState::Connecting(mut future) => {
                 let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
-                match future.as_mut().poll(&mut cx) {
+                match with_ambient_tokio_runtime(|| future.as_mut().poll(&mut cx)) {
                     Poll::Ready(result) => result,
                     Poll::Pending => {
                         socket.tcp_state = TcpState::Connecting(future);
@@ -229,7 +229,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             }
         };
 
-        match TcpSocket::listen(tokio_socket, socket.listen_backlog_size) {
+        match with_ambient_tokio_runtime(|| tokio_socket.listen(socket.listen_backlog_size)) {
             Ok(listener) => {
                 socket.tcp_state = TcpState::Listening {
                     listener,
@@ -283,7 +283,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             Some(result) => result,
             None => {
                 let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
-                match TcpSocket::poll_accept(listener, &mut cx) {
+                match with_ambient_tokio_runtime(|| listener.poll_accept(&mut cx))
+                    .map_ok(|(stream, _)| stream)
+                {
                     Poll::Ready(result) => result,
                     Poll::Pending => Err(Errno::WOULDBLOCK.into()),
                 }

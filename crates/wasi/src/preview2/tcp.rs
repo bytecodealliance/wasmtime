@@ -314,27 +314,6 @@ impl TcpSocket {
             | TcpState::Closed => Err(ErrorCode::InvalidState.into()),
         }
     }
-
-    pub(crate) fn connect(
-        socket: tokio::net::TcpSocket,
-        addr: std::net::SocketAddr,
-    ) -> impl Future<Output = io::Result<tokio::net::TcpStream>> + Send {
-        crate::preview2::spawn(socket.connect(addr))
-    }
-
-    pub(crate) fn listen(
-        socket: tokio::net::TcpSocket,
-        backlog: u32,
-    ) -> io::Result<tokio::net::TcpListener> {
-        with_ambient_tokio_runtime(|| socket.listen(backlog))
-    }
-
-    pub(crate) fn poll_accept(
-        listener: &tokio::net::TcpListener,
-        cx: &mut std::task::Context,
-    ) -> std::task::Poll<io::Result<tokio::net::TcpStream>> {
-        with_ambient_tokio_runtime(|| listener.poll_accept(cx).map_ok(|(stream, _)| stream))
-    }
 }
 
 #[async_trait::async_trait]
@@ -359,8 +338,10 @@ impl Subscribe for TcpSocket {
             } => match pending_accept {
                 Some(_) => {}
                 None => {
-                    let result =
-                        futures::future::poll_fn(|cx| TcpSocket::poll_accept(listener, cx)).await;
+                    let result = futures::future::poll_fn(|cx| {
+                        listener.poll_accept(cx).map_ok(|(stream, _)| stream)
+                    })
+                    .await;
                     *pending_accept = Some(result);
                 }
             },
