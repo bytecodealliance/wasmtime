@@ -1,6 +1,7 @@
 use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
+use std::net::SocketAddr;
 use std::{
     path::PathBuf,
     sync::{
@@ -64,7 +65,7 @@ pub struct ServeCommand {
 
     /// Socket address for the web server to bind to.
     #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
-    addr: std::net::SocketAddr,
+    addr: SocketAddr,
 
     /// The WebAssembly component to run.
     #[arg(value_name = "WASM", required = true)]
@@ -262,7 +263,17 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
 
-        let listener = tokio::net::TcpListener::bind(self.addr).await?;
+        // Tokio by default sets `SO_REUSEADDR` for listeners but that makes it
+        // a bit confusing if you run Wasmtime but forget to close a previous
+        // `serve` session. To avoid that we explicitly disable `SO_REUSEADDR`
+        // here.
+        let socket = match &self.addr {
+            SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
+            SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
+        };
+        socket.set_reuseaddr(false)?;
+        socket.bind(self.addr)?;
+        let listener = socket.listen(100)?;
 
         eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
 

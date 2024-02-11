@@ -4,7 +4,7 @@ use anyhow::bail;
 use anyhow::Result;
 #[cfg(feature = "profiling")]
 use fxprof_processed_profile::{
-    debugid::DebugId, CategoryHandle, CpuDelta, Frame, FrameFlags, FrameInfo, LibraryInfo, Profile,
+    debugid::DebugId, CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, Profile,
     ReferenceTimestamp, Symbol, SymbolTable, Timestamp,
 };
 use std::ops::Range;
@@ -132,7 +132,11 @@ impl GuestProfiler {
     /// any stack frames for allowed modules on the current stack. It should
     /// typically be called from a callback registered using
     /// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
-    pub fn sample(&mut self, store: impl AsContext) {
+    ///
+    /// The `delta` parameter is the amount of CPU time that was used by this
+    /// guest since the previous sample. It is allowed to pass `Duration::ZERO`
+    /// here if recording CPU usage information is not needed.
+    pub fn sample(&mut self, store: impl AsContext, delta: Duration) {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );
@@ -164,7 +168,7 @@ impl GuestProfiler {
             });
 
         self.profile
-            .add_sample(self.thread, now, frames, CpuDelta::ZERO, 1);
+            .add_sample(self.thread, now, frames, delta.into(), 1);
     }
 
     /// When the guest finishes running, call this function to write the

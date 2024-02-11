@@ -206,7 +206,7 @@ block0(v0: i128, v1: i128):
 ;   imulq   %rsi, %rcx, %rsi
 ;   addq    %rdx, %rsi, %rdx
 ;   movq    %rdx, %r9
-;   mul     %rax, %rcx, %rax, %rdx
+;   mulq    %rax, %rcx, %rax, %rdx
 ;   movq    %rdx, %rcx
 ;   movq    %r9, %rdx
 ;   addq    %rdx, %rcx, %rdx

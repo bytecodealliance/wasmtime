@@ -774,7 +774,7 @@ mod tests {
             &Tunables {
                 static_memory_bound: 1,
                 static_memory_offset_guard_size: 0,
-                ..Tunables::default()
+                ..Tunables::default_host()
             },
         )?;
 
@@ -808,7 +808,7 @@ mod tests {
             &Tunables {
                 static_memory_bound: 1,
                 static_memory_offset_guard_size: 0,
-                ..Tunables::default()
+                ..Tunables::default_host()
             },
         )
         .unwrap();
@@ -828,7 +828,7 @@ mod tests {
             memory_protection_keys: MpkEnabled::Enable,
             ..PoolingInstanceAllocatorConfig::default()
         };
-        let pool = MemoryPool::new(&config, &Tunables::default()).unwrap();
+        let pool = MemoryPool::new(&config, &Tunables::default_host()).unwrap();
         assert!(pool.stripes.len() >= 2);
 
         let max_memory_slots = config.limits.total_memories;

@@ -24,7 +24,7 @@ pub(crate) struct CGlobalType {
 impl wasm_globaltype_t {
     pub(crate) fn new(ty: GlobalType) -> wasm_globaltype_t {
         wasm_globaltype_t {
-            ext: wasm_externtype_t::new(ty.into()),
+            ext: wasm_externtype_t::from_extern_type(ty.into()),
         }
     }
 

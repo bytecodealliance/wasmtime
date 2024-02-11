@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::obj;
-use wasmtime_environ::{FlagValue, ObjectKind};
+use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
 
 mod serialization;
 
@@ -37,27 +37,28 @@ mod serialization;
 /// default settings.
 #[derive(Clone)]
 pub struct Engine {
-    pub(crate) inner: Arc<EngineInner>,
+    inner: Arc<EngineInner>,
 }
 
-pub(crate) struct EngineInner {
-    pub(crate) config: Config,
+struct EngineInner {
+    config: Config,
+    tunables: Tunables,
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) compiler: Box<dyn wasmtime_environ::Compiler>,
+    compiler: Box<dyn wasmtime_environ::Compiler>,
     #[cfg(feature = "runtime")]
-    pub(crate) allocator: Box<dyn wasmtime_runtime::InstanceAllocator + Send + Sync>,
+    allocator: Box<dyn wasmtime_runtime::InstanceAllocator + Send + Sync>,
     #[cfg(feature = "runtime")]
-    pub(crate) profiler: Box<dyn crate::profiling_agent::ProfilingAgent>,
+    profiler: Box<dyn crate::profiling_agent::ProfilingAgent>,
     #[cfg(feature = "runtime")]
-    pub(crate) signatures: TypeRegistry,
+    signatures: TypeRegistry,
     #[cfg(feature = "runtime")]
-    pub(crate) epoch: AtomicU64,
+    epoch: AtomicU64,
     #[cfg(feature = "runtime")]
-    pub(crate) unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator,
+    unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator,
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
-    pub(crate) compatible_with_native_host: OnceCell<Result<(), String>>,
+    compatible_with_native_host: OnceCell<Result<(), String>>,
 }
 
 impl Default for Engine {
@@ -94,17 +95,17 @@ impl Engine {
         }
 
         let config = config.clone();
-        config.validate()?;
+        let tunables = config.validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        let (config, compiler) = config.build_compiler()?;
+        let (config, compiler) = config.build_compiler(&tunables)?;
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
-                allocator: config.build_allocator()?,
+                allocator: config.build_allocator(&tunables)?,
                 #[cfg(feature = "runtime")]
                 profiler: config.build_profiler()?,
                 #[cfg(feature = "runtime")]
@@ -115,6 +116,7 @@ impl Engine {
                 unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator::new(),
                 compatible_with_native_host: OnceCell::new(),
                 config,
+                tunables,
             }),
         })
     }
@@ -159,6 +161,10 @@ impl Engine {
         EngineWeak {
             inner: Arc::downgrade(&self.inner),
         }
+    }
+
+    pub(crate) fn tunables(&self) -> &Tunables {
+        &self.inner.tunables
     }
 
     /// Returns whether the engine `a` and `b` refer to the same configuration.
@@ -475,7 +481,7 @@ impl Engine {
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
-#[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
 impl Engine {
     pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
         &*self.inner.compiler
@@ -513,7 +519,7 @@ impl Engine {
     /// Same as [`Engine::precompile_module`] except for a
     /// [`Component`](crate::component::Component)
     #[cfg(feature = "component-model")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
@@ -556,7 +562,7 @@ pub enum Precompiled {
 }
 
 #[cfg(feature = "runtime")]
-#[cfg_attr(nightlydoc, doc(cfg(feature = "runtime")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
 impl Engine {
     /// Eagerly initialize thread-local functionality shared by all [`Engine`]s.
     ///
@@ -644,7 +650,7 @@ impl Engine {
     /// compatible [`Config`]s. If this Hash matches between two [`Engine`]s then binaries
     /// from one are guaranteed to deserialize in the other.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(docsrs, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
         crate::module::HashedEngineCompileEnv(self)
     }

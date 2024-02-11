@@ -49,6 +49,12 @@ const array = [
     "rust": "msrv",
   },
   {
+    "os": "ubuntu-latest",
+    "name": "Test Linux x86_64 with MPK",
+    "filter": "linux-x64",
+    "isa": "x64"
+  },
+  {
     "os": "macos-latest",
     "name": "Test macOS x86_64",
     "filter": "macos-x64"

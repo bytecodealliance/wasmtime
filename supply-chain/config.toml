@@ -630,6 +630,14 @@ criteria = "safe-to-deploy"
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.zerocopy]]
+version = "0.7.32"
+criteria = "safe-to-deploy"
+
+[[exemptions.zerocopy-derive]]
+version = "0.7.32"
+criteria = "safe-to-deploy"
+
 [[exemptions.zstd]]
 version = "0.11.1+zstd.1.5.2"
 criteria = "safe-to-deploy"
@@ -639,5 +647,5 @@ version = "5.0.1+zstd.1.5.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.zstd-sys]]
-version = "2.0.1+zstd.1.5.2"
+version = "2.0.9+zstd.1.5.5"
 criteria = "safe-to-deploy"

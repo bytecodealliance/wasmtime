@@ -1,4 +1,5 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::type_registry::RegisteredType;
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, StoreContext,
     StoreContextMut, Val, ValRaw, ValType,
@@ -18,16 +19,15 @@ use wasmtime_runtime::{
 
 /// A WebAssembly function which can be called.
 ///
-/// This type can represent either an exported function from a WebAssembly
-/// module or a host-defined function which can be used to satisfy an import of
-/// a module. [`Func`] and can be used to both instantiate an [`Instance`] as
-/// well as be extracted from an [`Instance`].
+/// This type typically represents an exported function from a WebAssembly
+/// module instance. In this case a [`Func`] belongs to an [`Instance`] and is
+/// loaded from there. A [`Func`] may also represent a host function as well in
+/// some cases, too.
 ///
-/// [`Instance`]: crate::Instance
-///
-/// A [`Func`] "belongs" to the store that it was originally created within.
-/// Operations on a [`Func`] only work with the store it belongs to, and if
-/// another store is passed in by accident then methods will panic.
+/// Functions can be called in a few different ways, either synchronous or async
+/// and either typed or untyped (more on this below). Note that host functions
+/// are normally inserted directly into a [`Linker`](crate::Linker) rather than
+/// using this directly, but both options are available.
 ///
 /// # `Func` and `async`
 ///
@@ -148,6 +148,7 @@ use wasmtime_runtime::{
 /// // Here we need to define the type signature of our `Double` function and
 /// // then wrap it up in a `Func`
 /// let double_type = wasmtime::FuncType::new(
+///     store.engine(),
 ///     [wasmtime::ValType::I32].iter().cloned(),
 ///     [wasmtime::ValType::I32].iter().cloned(),
 /// );
@@ -284,7 +285,7 @@ macro_rules! generate_wrap_async_func {
         /// This function will panic if called with a non-asynchronous store.
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
-        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
         pub fn [<wrap $num _async>]<T, $($args,)* R>(
             store: impl AsContextMut<Data = T>,
             func: impl for<'a> Fn(Caller<'a, T>, $($args),*) -> Box<dyn Future<Output = R> + Send + 'a> + Send + Sync + 'static,
@@ -356,7 +357,7 @@ impl Func {
     ///
     /// [`Trap`]: crate::Trap
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -394,7 +395,7 @@ impl Func {
     /// the `func` provided correctly interprets the argument types provided to
     /// it, or that the results it produces will be of the correct type.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -459,6 +460,7 @@ impl Func {
     ///     // ...
     /// });
     /// let get_row_count_type = wasmtime::FuncType::new(
+    ///     &engine,
     ///     None,
     ///     Some(wasmtime::ValType::I32),
     /// );
@@ -474,7 +476,7 @@ impl Func {
     /// # }
     /// ```
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
@@ -505,7 +507,7 @@ impl Func {
         })
     }
 
-    pub(crate) unsafe fn from_caller_checked_func_ref(
+    pub(crate) unsafe fn from_vm_func_ref(
         store: &mut StoreOpaque,
         raw: *mut VMFuncRef,
     ) -> Option<Func> {
@@ -768,13 +770,7 @@ impl Func {
     /// Note that this is a somewhat expensive method since it requires taking a
     /// lock as well as cloning a type.
     fn load_ty(&self, store: &StoreOpaque) -> FuncType {
-        FuncType::from_wasm_func_type(
-            store
-                .engine()
-                .signatures()
-                .lookup_type(self.sig_index(store.store_data()))
-                .expect("signature should be registered"),
-        )
+        FuncType::from_shared_type_index(store.engine(), self.type_index(store.store_data()))
     }
 
     /// Gets a reference to the `FuncType` for this function.
@@ -795,7 +791,7 @@ impl Func {
         (store.store_data()[self.0].ty.as_ref().unwrap(), store)
     }
 
-    pub(crate) fn sig_index(&self, data: &StoreData) -> VMSharedTypeIndex {
+    pub(crate) fn type_index(&self, data: &StoreData) -> VMSharedTypeIndex {
         data[self.0].sig_index()
     }
 
@@ -932,7 +928,7 @@ impl Func {
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
-        Func::from_caller_checked_func_ref(store.as_context_mut().0, raw.cast())
+        Func::from_vm_func_ref(store.as_context_mut().0, raw.cast())
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -976,7 +972,7 @@ impl Func {
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1135,7 +1131,7 @@ impl Func {
                     // trampoline.
                     let _ = VMNativeCallHostFuncContext::from_opaque(f.as_ref().vmctx);
 
-                    let sig = self.sig_index(store.store_data());
+                    let sig = self.type_index(store.store_data());
                     module.runtime_info().wasm_to_native_trampoline(sig).expect(
                         "must have a wasm-to-native trampoline for this signature if the Wasm \
                          module is importing a function of this signature",
@@ -1489,7 +1485,7 @@ pub unsafe trait WasmRet {
     ) -> Result<Self::Abi>;
 
     #[doc(hidden)]
-    fn func_type(params: impl Iterator<Item = ValType>) -> FuncType;
+    fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType;
 
     #[doc(hidden)]
     unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi);
@@ -1521,8 +1517,8 @@ where
         Ok(<Self as WasmTy>::into_abi(self, store))
     }
 
-    fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
-        FuncType::new(params, Some(<Self as WasmTy>::valtype()))
+    fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
+        FuncType::new(engine, params, Some(<Self as WasmTy>::valtype()))
     }
 
     unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
@@ -1561,8 +1557,8 @@ where
         self.and_then(|val| val.into_abi_for_ret(store, retptr))
     }
 
-    fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
-        T::func_type(params)
+    fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
+        T::func_type(engine, params)
     }
 
     unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
@@ -1603,8 +1599,9 @@ macro_rules! impl_wasm_host_results {
                 Ok(<($($t::Abi,)*) as HostAbi>::into_abi(abi, ptr))
             }
 
-            fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
+            fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
                 FuncType::new(
+                    engine,
                     params,
                     IntoIterator::into_iter([$($t::valtype(),)*]),
                 )
@@ -1894,6 +1891,17 @@ impl<T> AsContextMut for Caller<'_, T> {
     }
 }
 
+// State stored inside a `VMNativeCallHostFuncContext`.
+struct HostFuncState<F> {
+    // The actual host function.
+    func: F,
+
+    // NB: We have to keep our `VMSharedTypeIndex` registered in the engine for
+    // as long as this function exists.
+    #[allow(dead_code)]
+    ty: RegisteredType,
+}
+
 macro_rules! impl_into_func {
     ($num:tt $($args:ident)*) => {
         // Implement for functions without a leading `&Caller` parameter,
@@ -1962,8 +1970,9 @@ macro_rules! impl_into_func {
                         // Double-check ourselves in debug mode, but we control
                         // the `Any` here so an unsafe downcast should also
                         // work.
-                        debug_assert!(state.is::<F>());
-                        let func = &*(state as *const _ as *const F);
+                        debug_assert!(state.is::<HostFuncState<F>>());
+                        let state = &*(state as *const _ as *const HostFuncState<F>);
+                        let func = &state.func;
 
                         let ret = {
                             panic::catch_unwind(AssertUnwindSafe(|| {
@@ -2046,11 +2055,11 @@ macro_rules! impl_into_func {
                 }
 
                 let ty = R::func_type(
+                    engine,
                     None::<ValType>.into_iter()
                         $(.chain(Some($args::valtype())))*
                 );
-
-                let shared_signature_id = engine.signatures().register(ty.as_wasm_func_type());
+                let type_index = ty.type_index();
 
                 let array_call = array_call_trampoline::<T, F, $($args,)* R>;
                 let native_call = NonNull::new(native_call_shim::<T, F, $($args,)* R> as *mut _).unwrap();
@@ -2061,10 +2070,13 @@ macro_rules! impl_into_func {
                             native_call,
                             array_call,
                             wasm_call: None,
-                            type_index: shared_signature_id,
+                            type_index,
                             vmctx: ptr::null_mut(),
                         },
-                        Box::new(self),
+                        Box::new(HostFuncState {
+                            func: self,
+                            ty: ty.into_registered_type(),
+                        }),
                     )
                 };
 
@@ -2253,14 +2265,6 @@ impl HostFunc {
     fn export_func(&self) -> ExportFunction {
         ExportFunction {
             func_ref: NonNull::from(self.func_ref()),
-        }
-    }
-}
-
-impl Drop for HostFunc {
-    fn drop(&mut self) {
-        unsafe {
-            self.engine.signatures().unregister(self.sig_index());
         }
     }
 }

@@ -650,13 +650,22 @@ fn instance_too_large() -> Result<()> {
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
-    let expected = "\
+    let expected = if cfg!(feature = "wmemcheck") {
+        "\
+instance allocation for this module requires 336 bytes which exceeds the \
+configured maximum of 16 bytes; breakdown of allocation requirement:
+
+ * 76.19% - 256 bytes - instance state management
+"
+    } else {
+        "\
 instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 66.67% - 160 bytes - instance state management
  * 6.67% - 16 bytes - jit store state
-";
+"
+    };
     match Module::new(&engine, "(module)") {
         Ok(_) => panic!("should have failed to compile"),
         Err(e) => assert_eq!(e.to_string(), expected),
@@ -668,13 +677,23 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
     }
     lots_of_globals.push_str(")");
 
-    let expected = "\
+    let expected = if cfg!(feature = "wmemcheck") {
+        "\
+instance allocation for this module requires 1936 bytes which exceeds the \
+configured maximum of 16 bytes; breakdown of allocation requirement:
+
+ * 13.22% - 256 bytes - instance state management
+ * 82.64% - 1600 bytes - defined globals
+"
+    } else {
+        "\
 instance allocation for this module requires 1840 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 8.70% - 160 bytes - instance state management
  * 86.96% - 1600 bytes - defined globals
-";
+"
+    };
     match Module::new(&engine, &lots_of_globals) {
         Ok(_) => panic!("should have failed to compile"),
         Err(e) => assert_eq!(e.to_string(), expected),
@@ -947,7 +966,7 @@ async fn total_stacks_limit() -> Result<()> {
     linker.func_new_async(
         "async",
         "yield",
-        FuncType::new([], []),
+        FuncType::new(&engine, [], []),
         |_caller, _params, _results| {
             Box::new(async {
                 tokio::task::yield_now().await;

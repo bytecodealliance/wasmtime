@@ -20,7 +20,7 @@ pub(crate) struct CTableType {
 impl wasm_tabletype_t {
     pub(crate) fn new(ty: TableType) -> wasm_tabletype_t {
         wasm_tabletype_t {
-            ext: wasm_externtype_t::new(ty.into()),
+            ext: wasm_externtype_t::from_extern_type(ty.into()),
         }
     }
 

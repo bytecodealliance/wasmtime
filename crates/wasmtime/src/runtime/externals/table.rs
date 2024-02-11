@@ -73,7 +73,7 @@ impl Table {
         Table::_new(store.as_context_mut().0, ty, init)
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Table::new`]. You must use this variant with
     /// [`Store`](`crate::Store`)s which have a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
@@ -151,7 +151,7 @@ impl Table {
         unsafe {
             match (*table).get(index)? {
                 runtime::TableElement::FuncRef(f) => {
-                    let func = Func::from_caller_checked_func_ref(store, f);
+                    let func = Func::from_vm_func_ref(store, f);
                     Some(Val::FuncRef(func))
                 }
                 runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
@@ -239,7 +239,7 @@ impl Table {
         }
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Table::grow`]. Required when using a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///

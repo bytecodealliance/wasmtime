@@ -32,9 +32,14 @@ fn call_wrapped_func() -> Result<(), Error> {
             assert_eq!(d, 4.0);
         },
     ));
+    let func_ty = FuncType::new(
+        store.engine(),
+        [ValType::I32, ValType::I64, ValType::F32, ValType::F64],
+        [],
+    );
     funcs.push(Func::new(
         &mut store,
-        FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
+        func_ty,
         |caller: Caller<State>, params, results| {
             verify(caller.data());
 
@@ -47,20 +52,21 @@ fn call_wrapped_func() -> Result<(), Error> {
             Ok(())
         },
     ));
+    let func_ty = FuncType::new(
+        store.engine(),
+        [ValType::I32, ValType::I64, ValType::F32, ValType::F64],
+        [],
+    );
     funcs.push(unsafe {
-        Func::new_unchecked(
-            &mut store,
-            FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
-            |caller: Caller<State>, space| {
-                verify(caller.data());
+        Func::new_unchecked(&mut store, func_ty, |caller: Caller<State>, space| {
+            verify(caller.data());
 
-                assert_eq!(space[0].get_i32(), 1i32);
-                assert_eq!(space[1].get_i64(), 2i64);
-                assert_eq!(space[2].get_f32(), 3.0f32.to_bits());
-                assert_eq!(space[3].get_f64(), 4.0f64.to_bits());
-                Ok(())
-            },
-        )
+            assert_eq!(space[0].get_i32(), 1i32);
+            assert_eq!(space[1].get_i64(), 2i64);
+            assert_eq!(space[2].get_f32(), 3.0f32.to_bits());
+            assert_eq!(space[3].get_f64(), 4.0f64.to_bits());
+            Ok(())
+        })
     });
 
     let mut n = 0;

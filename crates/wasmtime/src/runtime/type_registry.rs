@@ -3,10 +3,7 @@
 //! Helps implement fast indirect call signature checking, reference type
 //! casting, and etc.
 
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    sync::RwLock,
-};
+use std::{collections::HashMap, sync::RwLock};
 use std::{convert::TryFrom, sync::Arc};
 use wasmtime_environ::{ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, WasmFuncType};
 use wasmtime_runtime::VMSharedTypeIndex;
@@ -66,29 +63,190 @@ impl Drop for TypeCollection {
     }
 }
 
+/// A Wasm type that has been registered in the engine's `TypeRegistry`.
+///
+/// Automatically unregisters the type on drop. (If other things are keeping the
+/// type registered, it will remain registered).
+///
+/// Dereferences to its underlying `WasmFuncType`.
 #[derive(Debug)]
-struct RegistryEntry {
+pub struct RegisteredType {
+    registry: Arc<RwLock<TypeRegistryInner>>,
+    index: VMSharedTypeIndex,
+
+    // This field is not *strictly* necessary to have in this type, since we
+    // could always grab the registry's lock and look it up by index, but
+    // holding this reference should make accessing the actual type that much
+    // cheaper.
+    ty: Arc<WasmFuncType>,
+}
+
+impl Clone for RegisteredType {
+    fn clone(&self) -> Self {
+        {
+            let i = usize::try_from(self.index.bits()).unwrap();
+            let mut registry = self.registry.write().unwrap();
+            let entry = registry.entries[i].unwrap_occupied_mut();
+            entry.references += 1;
+            log::trace!(
+                "cloned registered type {:?} (references -> {})",
+                self.index,
+                entry.references
+            );
+        }
+
+        RegisteredType {
+            registry: Arc::clone(&self.registry),
+            index: self.index,
+            ty: Arc::clone(&self.ty),
+        }
+    }
+}
+
+impl Drop for RegisteredType {
+    fn drop(&mut self) {
+        self.registry
+            .write()
+            .unwrap()
+            .unregister_entry(self.index, 1);
+    }
+}
+
+impl std::ops::Deref for RegisteredType {
+    type Target = Arc<WasmFuncType>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ty
+    }
+}
+
+impl PartialEq for RegisteredType {
+    fn eq(&self, other: &Self) -> bool {
+        let eq = Arc::ptr_eq(&self.ty, &other.ty);
+
+        if cfg!(debug_assertions) {
+            if eq {
+                assert_eq!(self.index, other.index);
+                assert!(Arc::ptr_eq(&self.registry, &other.registry));
+            } else {
+                assert!(self.index != other.index || !Arc::ptr_eq(&self.registry, &other.registry));
+            }
+        }
+
+        eq
+    }
+}
+
+impl Eq for RegisteredType {}
+
+impl std::hash::Hash for RegisteredType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let ptr = Arc::as_ptr(&self.ty);
+        ptr.hash(state);
+    }
+}
+
+impl RegisteredType {
+    /// Construct a new `RegisteredType`.
+    ///
+    /// It is the caller's responsibility to ensure that the entry's reference
+    /// count has already been incremented.
+    fn new(
+        registry: Arc<RwLock<TypeRegistryInner>>,
+        index: VMSharedTypeIndex,
+        ty: Arc<WasmFuncType>,
+    ) -> Self {
+        debug_assert!({
+            let registry = registry.read().unwrap();
+            let i = usize::try_from(index.bits()).unwrap();
+            let e = registry.entries[i].as_occupied().unwrap();
+            e.references > 0
+        });
+        RegisteredType {
+            registry,
+            index,
+            ty,
+        }
+    }
+
+    /// Get this registered type's index.
+    pub fn index(&self) -> VMSharedTypeIndex {
+        self.index
+    }
+}
+
+#[derive(Debug)]
+struct OccupiedEntry {
+    ty: Arc<WasmFuncType>,
     references: usize,
-    ty: WasmFuncType,
+}
+
+#[derive(Debug)]
+enum RegistryEntry {
+    /// An occupied entry containing a registered type.
+    Occupied(OccupiedEntry),
+
+    /// A vacant entry that is additionally a link in the free list of all
+    /// vacant entries.
+    Vacant {
+        /// The next link in the free list of all vacant entries, if any.
+        next_vacant: Option<VMSharedTypeIndex>,
+    },
+}
+
+impl RegistryEntry {
+    fn is_vacant(&self) -> bool {
+        matches!(self, Self::Vacant { .. })
+    }
+
+    fn as_occupied(&self) -> Option<&OccupiedEntry> {
+        match self {
+            Self::Occupied(o) => Some(o),
+            Self::Vacant { .. } => None,
+        }
+    }
+
+    fn as_occupied_mut(&mut self) -> Option<&mut OccupiedEntry> {
+        match self {
+            Self::Occupied(o) => Some(o),
+            Self::Vacant { .. } => None,
+        }
+    }
+
+    fn unwrap_occupied_mut(&mut self) -> &mut OccupiedEntry {
+        match self {
+            Self::Occupied(o) => o,
+            Self::Vacant { .. } => panic!("unwrap_occupied_mut on vacant entry"),
+        }
+    }
+
+    fn unwrap_next_vacant(&self) -> Option<VMSharedTypeIndex> {
+        match self {
+            Self::Vacant { next_vacant } => *next_vacant,
+            Self::Occupied(_) => panic!("unwrap_next_vacant on occupied entry"),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
 struct TypeRegistryInner {
     // A map from the Wasm function type to a `VMSharedTypeIndex`, for all
     // the Wasm function types we have already registered.
-    map: HashMap<WasmFuncType, VMSharedTypeIndex>,
+    map: HashMap<Arc<WasmFuncType>, VMSharedTypeIndex>,
 
-    // A map from `VMSharedTypeIndex::bits()` to the type index's
-    // associated data, such as the underlying Wasm type.
-    entries: Vec<Option<RegistryEntry>>,
+    // A map from `VMSharedTypeIndex::bits()` to the type index's associated
+    // Wasm type.
+    entries: Vec<RegistryEntry>,
 
-    // A free list of the `VMSharedTypeIndex`es that are no longer being
-    // used by anything, and can therefore be reused.
+    // The head of the free list of the entries that are vacant and can
+    // therefore (along with their associated `VMSharedTypeIndex`) be reused.
     //
-    // This is a size optimization, and not strictly necessary for correctness:
-    // we reuse entries rather than leak them and have logical holes in our
-    // `self.entries` list.
-    free: Vec<VMSharedTypeIndex>,
+    // This is a size optimization, and arguably not strictly necessary for
+    // correctness, but is necessary to avoid unbounded memory growth: if we did
+    // not reuse entries/indices, we would have holes in our `self.entries` list
+    // and, as we load and unload new Wasm modules, `self.entries` would keep
+    // growing indefinitely.
+    first_vacant: Option<VMSharedTypeIndex>,
 }
 
 impl TypeRegistryInner {
@@ -96,58 +254,75 @@ impl TypeRegistryInner {
         &mut self,
         types: &ModuleTypes,
     ) -> PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex> {
+        log::trace!("Registering module types");
         let mut map = PrimaryMap::default();
         for (idx, ty) in types.wasm_types() {
-            let b = map.push(self.register(ty));
-            assert_eq!(idx, b);
+            let (shared_type_index, _) = self.register_raw(ty);
+            let map_idx = map.push(shared_type_index);
+            assert_eq!(idx, map_idx);
         }
         map
     }
 
-    fn register(&mut self, ty: &WasmFuncType) -> VMSharedTypeIndex {
-        let len = self.map.len();
+    /// Add a new type to this registry.
+    ///
+    /// Does not increment its reference count, that is the responsibility of
+    /// callers.
+    fn register_new(&mut self, ty: Arc<WasmFuncType>) -> VMSharedTypeIndex {
+        let (index, entry) = match self.first_vacant.take() {
+            Some(index) => {
+                let i = usize::try_from(index.bits()).unwrap();
+                let entry = &mut self.entries[i];
+                self.first_vacant = entry.unwrap_next_vacant();
+                (index, entry)
+            }
+            None => {
+                debug_assert_eq!(self.entries.len(), self.map.len());
 
-        let index = match self.map.entry(ty.clone()) {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
-                let (index, entry) = match self.free.pop() {
-                    Some(index) => (index, &mut self.entries[index.bits() as usize]),
-                    None => {
-                        // Keep `index_map`'s length under `u32::MAX` because
-                        // `u32::MAX` is reserved for `VMSharedTypeIndex`'s
-                        // default value.
-                        assert!(
-                            len < std::u32::MAX as usize,
-                            "Invariant check: index_map.len() < std::u32::MAX"
-                        );
-                        debug_assert_eq!(len, self.entries.len());
+                let len = self.entries.len();
+                let len = u32::try_from(len).unwrap();
 
-                        let index = VMSharedTypeIndex::new(u32::try_from(len).unwrap());
-                        self.entries.push(None);
+                // Keep `index_map`'s length under `u32::MAX` because
+                // `u32::MAX` is reserved for `VMSharedTypeIndex`'s
+                // default value.
+                assert!(
+                    len < std::u32::MAX,
+                    "Invariant check: self.entries.len() < std::u32::MAX"
+                );
 
-                        (index, self.entries.last_mut().unwrap())
-                    }
-                };
+                let index = VMSharedTypeIndex::new(len);
+                self.entries
+                    .push(RegistryEntry::Vacant { next_vacant: None });
 
-                // The entry should be missing for one just allocated or
-                // taken from the free list
-                assert!(entry.is_none());
-
-                *entry = Some(RegistryEntry {
-                    references: 0,
-                    ty: ty.clone(),
-                });
-
-                *e.insert(index)
+                (index, self.entries.last_mut().unwrap())
             }
         };
 
-        self.entries[index.bits() as usize]
-            .as_mut()
-            .unwrap()
-            .references += 1;
+        let old_map_entry = self.map.insert(ty.clone(), index);
+        assert!(old_map_entry.is_none());
+
+        assert!(entry.is_vacant());
+        *entry = RegistryEntry::Occupied(OccupiedEntry { ty, references: 0 });
 
         index
+    }
+
+    /// Register the given type, incrementing its reference count.
+    fn register_raw(&mut self, ty: &WasmFuncType) -> (VMSharedTypeIndex, Arc<WasmFuncType>) {
+        let index = if let Some(i) = self.map.get(ty) {
+            *i
+        } else {
+            let ty = Arc::new(ty.clone());
+            self.register_new(ty)
+        };
+
+        let i = usize::try_from(index.bits()).unwrap();
+        let entry = self.entries[i].unwrap_occupied_mut();
+        entry.references += 1;
+
+        log::trace!("registered {index:?} (references -> {})", entry.references);
+
+        (index, Arc::clone(&entry.ty))
     }
 
     fn unregister_types(&mut self, collection: &TypeCollection) {
@@ -157,23 +332,22 @@ impl TypeRegistryInner {
     }
 
     fn unregister_entry(&mut self, index: VMSharedTypeIndex, count: usize) {
-        let removed = {
-            let entry = self.entries[index.bits() as usize].as_mut().unwrap();
+        let i = usize::try_from(index.bits()).unwrap();
+        let entry = self.entries[i].unwrap_occupied_mut();
 
-            debug_assert!(entry.references >= count);
-            entry.references -= count;
+        assert!(entry.references >= count);
+        entry.references -= count;
+        log::trace!(
+            "unregistered {index:?} by {count} (references -> {})",
+            entry.references
+        );
 
-            if entry.references == 0 {
-                self.map.remove(&entry.ty);
-                self.free.push(index);
-                true
-            } else {
-                false
-            }
-        };
-
-        if removed {
-            self.entries[index.bits() as usize] = None;
+        if entry.references == 0 {
+            self.map.remove(&entry.ty);
+            self.entries[i] = RegistryEntry::Vacant {
+                next_vacant: self.first_vacant.take(),
+            };
+            self.first_vacant = Some(index);
         }
     }
 }
@@ -187,10 +361,9 @@ impl Drop for TypeRegistryInner {
             self.map.is_empty(),
             "type registry not empty: still have registered types in self.map"
         );
-        assert_eq!(
-            self.free.len(),
-            self.entries.len(),
-            "type registery not empty: not all entries in free list"
+        assert!(
+            self.entries.iter().all(|e| e.is_vacant()),
+            "type registry not empty: not all entries are vacant"
         );
     }
 }
@@ -210,27 +383,41 @@ impl TypeRegistry {
         Self(Arc::new(RwLock::new(TypeRegistryInner::default())))
     }
 
+    /// Get an owning handle to the given index's associated type.
+    ///
+    /// This will keep the type registered as long as the return value is kept
+    /// alive.
+    pub fn root(&self, index: VMSharedTypeIndex) -> Option<RegisteredType> {
+        let i = usize::try_from(index.bits()).unwrap();
+        let registry = Arc::clone(&self.0);
+        let ty = {
+            let mut inner = self.0.write().unwrap();
+            let e = inner.entries.get_mut(i)?.as_occupied_mut()?;
+            e.references += 1;
+            log::trace!("rooting {index:?} (references -> {})", e.references);
+            Arc::clone(&e.ty)
+        };
+        Some(RegisteredType::new(registry, index, ty))
+    }
+
     /// Looks up a function type from a shared type index.
-    pub fn lookup_type(&self, index: VMSharedTypeIndex) -> Option<WasmFuncType> {
-        self.0
-            .read()
-            .unwrap()
-            .entries
-            .get(index.bits() as usize)
-            .and_then(|e| e.as_ref().map(|e| &e.ty).cloned())
+    ///
+    /// This does NOT guarantee that the type remains registered while you use
+    /// the result. Use the `root` method if you need to ensure that property
+    /// and you don't have some other mechanism already keeping the type
+    /// registered.
+    pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmFuncType>> {
+        let i = usize::try_from(index.bits()).unwrap();
+        let inner = self.0.read().unwrap();
+        let e = inner.entries.get(i)?;
+        Some(e.as_occupied()?.ty.clone())
     }
 
     /// Registers a single function with the collection.
     ///
     /// Returns the shared type index for the function.
-    pub fn register(&self, ty: &WasmFuncType) -> VMSharedTypeIndex {
-        self.0.write().unwrap().register(ty)
-    }
-
-    /// Registers a single function with the collection.
-    ///
-    /// Returns the shared type index for the function.
-    pub unsafe fn unregister(&self, sig: VMSharedTypeIndex) {
-        self.0.write().unwrap().unregister_entry(sig, 1)
+    pub fn register(&self, ty: &WasmFuncType) -> RegisteredType {
+        let (index, ty) = self.0.write().unwrap().register_raw(ty);
+        RegisteredType::new(Arc::clone(&self.0), index, ty)
     }
 }

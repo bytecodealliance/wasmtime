@@ -701,6 +701,15 @@ who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.7.6 -> 0.8.2"
 
+[[audits.ahash]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.2 -> 0.8.7"
+notes = """
+Shuffling of features in this update and while there are updates to `unsafe`
+code it's no different than before and the usage remains the same.
+"""
+
 [[audits.ambient-authority]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1523,6 +1532,15 @@ criteria = "safe-to-deploy"
 delta = "0.4.1 -> 0.4.3"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.itertools]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.5 -> 0.12.1"
+notes = """
+Minimal `unsafe` usage. Few blocks that existed looked reasonable. Does what it
+says on the tin: lots of iterators.
+"""
+
 [[audits.ittapi]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -1876,6 +1894,15 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.25"
 notes = "This crate shells out to the pkg-config executable, but it appears to sanitize inputs reasonably."
+
+[[audits.pkg-config]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.26 -> 0.3.29"
+notes = """
+No `unsafe` additions or anything outside of the purview of the crate in this
+change.
+"""
 
 [[audits.pretty_env_logger]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3067,6 +3094,25 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.6.4"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.zstd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.1+zstd.1.5.2 -> 0.13.0"
+notes = """
+No major updates to the crate here. Small updates to `unsafe` code which are
+refactorings of what was there prior.
+"""
+
+[[audits.zstd-safe]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "5.0.1+zstd.1.5.2 -> 7.0.0"
+notes = """
+Lots of new comments around methods and refactorings for updates in zstd itself.
+Does contain new unsafe code, notably an implementation of an internal trait for
+the standard library `io::Cursor` type.
+"""
 
 [[trusted.aho-corasick]]
 criteria = "safe-to-deploy"

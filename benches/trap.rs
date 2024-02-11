@@ -187,7 +187,7 @@ fn bench_host_wasm_frames_traps(c: &mut Criterion) {
                     let mut store = Store::new(&engine, ());
                     let host_func = Func::new(
                         &mut store,
-                        FuncType::new(vec![ValType::I32], vec![]),
+                        FuncType::new(&engine, vec![ValType::I32], vec![]),
                         |mut caller, args, _results| {
                             let f = caller.get_export("f").unwrap();
                             let f = f.into_func().unwrap();

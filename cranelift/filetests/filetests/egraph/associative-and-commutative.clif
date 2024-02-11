@@ -79,3 +79,41 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32):
 ; nextln: v8 = bxor v4, v7
 ; check: return v8
 }
+
+;; We don't have any assertions about the result of optimizing this function,
+;; but it's a good canary for unbounded recursion in optimization rulesets. In
+;; particular, because of the shared structure in the dag, it won't be obvious
+;; to rules that are pattern matching on trees that this is actually a chain,
+;; and they will exhibit exponential behavior as a result.
+function %iadd_big_chain(i8) -> i16 {
+block0(v0: i8):
+    v1 = uextend.i32 v0
+    v2 = iconst.i32 42
+    v3 = iadd v1, v2
+    v4 = iadd v3, v3
+    v5 = iadd v4, v4
+    v6 = iadd v5, v5
+    v7 = iadd v6, v6
+    v8 = iadd v7, v7
+    v9 = iadd v8, v8
+    v10 = iadd v9, v9
+    v11 = iadd v10, v10
+    v12 = iadd v11, v11
+    v13 = iadd v12, v12
+    v14 = iadd v13, v13
+    v15 = iadd v14, v14
+    v16 = iadd v15, v15
+    v17 = iadd v16, v16
+    v18 = iadd v17, v17
+    v19 = iadd v18, v18
+    v20 = iadd v19, v19
+    v21 = iadd v20, v20
+    v22 = iadd v21, v21
+    v23 = iadd v22, v22
+    v24 = iadd v23, v23
+    v25 = iadd v24, v24
+    v26 = iadd v25, v25
+    v27 = iadd v26, v26
+    v28 = ireduce.i16 v27
+    return v28
+}
