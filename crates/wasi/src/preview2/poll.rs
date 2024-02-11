@@ -12,9 +12,6 @@ use wasmtime::component::{Resource, ResourceTable};
 
 /// For all intents and purposes this is just a regular [`Future`], except that
 /// the `poll` method has access to the current [`WasiView`].
-///
-/// There is a blanket implementation of [`WasiFuture`] for all [`Future`]'s,
-/// so all regular futures are automatically WASI futures.
 trait WasiFuture {
     /// See [Future::Output]
     type Output;
@@ -39,26 +36,10 @@ impl<F: Future> WasiFuture for F {
     }
 }
 
-/// A host implementation of the `wasi:io/poll.pollable` contract.
-///
-/// A pollable is not the same thing as a Rust Future: in WASI, the same pollable
-/// may be used to repeatedly check for readiness of a given condition, e.g. if
-/// a stream is readable or writable. So, rather than containing a Future, which
-/// can only become Ready once, a Pollable contains a way to create a Future in
-/// each call to `poll`.
+/// Internal helper trait to unify Subsribe resources and standalone Pollables.
 trait PollableInternal: Send + 'static {
-    /// Wait for the pollable to be ready.
-    ///
-    /// This can be called repeatedly as the readiness state of a pollable is
-    /// able to change many times during its lifetime.
-    ///
-    /// # Cancel safety
-    /// The implementation must make sure to only await futures that are
-    /// cancel-safe, as the returned future will most likely be canceled, even
-    /// during normal operation.
     fn ready<'a>(&'a mut self) -> Pin<Box<dyn WasiFuture<Output = ()> + Send + 'a>>;
 
-    /// Check to see if the pollable is currently ready.
     fn is_ready(&mut self, view: &mut dyn WasiView) -> bool {
         let mut future = self.ready();
         let mut cx = Context::from_waker(futures::task::noop_waker_ref());
@@ -66,14 +47,19 @@ trait PollableInternal: Send + 'static {
     }
 }
 
-/// Convenience trait for implementing [`Pollable`] in terms of an `async` method.
-/// If you need access to the current [`WasiView`], implement `Pollable` directly instead.
+/// A host implementation of the `wasi:io/poll.pollable` contract.
 ///
-/// There is a blanket implementation of `Pollable` for all `Pollable`'s,
-/// so all `Pollable` implementations are automatically `Pollable`.
+/// A pollable is not the same thing as a Rust Future: in WASI, the same pollable
+/// may be used to repeatedly check for readiness of a given condition, e.g. if
+/// a stream is readable or writable. So, rather than containing a Future, which
+/// can only become Ready once, Subscribe contains a way to create a Future in
+/// each call to `poll`.
 #[async_trait::async_trait]
 pub trait Subscribe: Send + 'static {
     /// Wait for the pollable to be ready.
+    ///
+    /// This can be called repeatedly as the readiness state of a pollable is
+    /// able to change many times during its lifetime.
     ///
     /// # Cancel safety
     /// The implementation must make sure to only await futures that are
@@ -229,7 +215,7 @@ enum PollableInner {
     },
 }
 
-/// Using the term "target" to mean: where the actual Pollable implementation lives.
+/// Using the term "target" to mean: where the actual PollableInternal implementation lives.
 /// Sometimes this is the Pollable itself, sometimes this is a parent.
 struct TargetInfo {
     key: TargetKey,
