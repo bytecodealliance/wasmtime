@@ -487,11 +487,12 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-        let view = &*socket.as_std_view()?;
-
         let duration = Duration::from_nanos(value);
+        {
+            let view = &*socket.as_std_view()?;
 
-        util::set_tcp_keepidle(view, duration)?;
+            util::set_tcp_keepidle(view, duration)?;
+        }
 
         #[cfg(target_os = "macos")]
         {
@@ -553,11 +554,13 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     fn set_hop_limit(&mut self, this: Resource<tcp::TcpSocket>, value: u8) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-        let view = &*socket.as_std_view()?;
+        {
+            let view = &*socket.as_std_view()?;
 
-        match socket.family {
-            SocketAddressFamily::Ipv4 => util::set_ip_ttl(view, value)?,
-            SocketAddressFamily::Ipv6 => util::set_ipv6_unicast_hops(view, value)?,
+            match socket.family {
+                SocketAddressFamily::Ipv4 => util::set_ip_ttl(view, value)?,
+                SocketAddressFamily::Ipv6 => util::set_ipv6_unicast_hops(view, value)?,
+            }
         }
 
         #[cfg(target_os = "macos")]
@@ -584,10 +587,12 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-        let view = &*socket.as_std_view()?;
         let value = value.try_into().unwrap_or(usize::MAX);
+        {
+            let view = &*socket.as_std_view()?;
 
-        util::set_socket_recv_buffer_size(view, value)?;
+            util::set_socket_recv_buffer_size(view, value)?;
+        }
 
         #[cfg(target_os = "macos")]
         {
@@ -613,10 +618,12 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-        let view = &*socket.as_std_view()?;
         let value = value.try_into().unwrap_or(usize::MAX);
+        {
+            let view = &*socket.as_std_view()?;
 
-        util::set_socket_send_buffer_size(view, value)?;
+            util::set_socket_send_buffer_size(view, value)?;
+        }
 
         #[cfg(target_os = "macos")]
         {
