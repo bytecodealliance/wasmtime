@@ -6,9 +6,9 @@ use crate::preview2::{
         sockets::udp,
     },
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
-    PollableAsync,
+    Subscribe,
 };
-use crate::preview2::{PollableHandle, SocketError, SocketResult, WasiView};
+use crate::preview2::{Pollable, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -284,10 +284,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         Ok(())
     }
 
-    fn subscribe(
-        &mut self,
-        this: Resource<udp::UdpSocket>,
-    ) -> anyhow::Result<Resource<PollableHandle>> {
+    fn subscribe(&mut self, this: Resource<udp::UdpSocket>) -> anyhow::Result<Resource<Pollable>> {
         crate::preview2::poll::subscribe(self.table(), &this)
     }
 
@@ -367,7 +364,7 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
     fn subscribe(
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
-    ) -> anyhow::Result<Resource<PollableHandle>> {
+    ) -> anyhow::Result<Resource<Pollable>> {
         crate::preview2::poll::subscribe(self.table(), &this)
     }
 
@@ -384,7 +381,7 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
 }
 
 #[async_trait]
-impl PollableAsync for IncomingDatagramStream {
+impl Subscribe for IncomingDatagramStream {
     async fn ready(&mut self) {
         // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
         self.inner
@@ -501,7 +498,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
     fn subscribe(
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
-    ) -> anyhow::Result<Resource<PollableHandle>> {
+    ) -> anyhow::Result<Resource<Pollable>> {
         crate::preview2::poll::subscribe(self.table(), &this)
     }
 
@@ -518,7 +515,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
 }
 
 #[async_trait]
-impl PollableAsync for OutgoingDatagramStream {
+impl Subscribe for OutgoingDatagramStream {
     async fn ready(&mut self) {
         match self.send_state {
             SendState::Idle | SendState::Permitted(_) => {}

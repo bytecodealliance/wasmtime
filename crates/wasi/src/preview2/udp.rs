@@ -1,5 +1,5 @@
 use crate::preview2::host::network::util;
-use crate::preview2::poll::PollableAsync;
+use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking};
@@ -49,7 +49,7 @@ pub struct UdpSocket {
 }
 
 #[async_trait]
-impl PollableAsync for UdpSocket {
+impl Subscribe for UdpSocket {
     async fn ready(&mut self) {
         // None of the socket-level operations block natively
     }

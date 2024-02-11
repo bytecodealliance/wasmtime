@@ -9,7 +9,7 @@ use crate::preview2::{
     },
     network::SocketAddressFamily,
 };
-use crate::preview2::{PollableHandle, SocketResult, WasiView};
+use crate::preview2::{Pollable, SocketResult, WasiView};
 use cap_net_ext::Blocking;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
@@ -559,10 +559,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(())
     }
 
-    fn subscribe(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-    ) -> anyhow::Result<Resource<PollableHandle>> {
+    fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
         crate::preview2::poll::subscribe(self.table(), &this)
     }
 

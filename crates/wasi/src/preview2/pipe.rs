@@ -7,7 +7,7 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::preview2::poll::PollableAsync;
+use crate::preview2::poll::Subscribe;
 use crate::preview2::{HostInputStream, HostOutputStream, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -48,7 +48,7 @@ impl HostInputStream for MemoryInputPipe {
 }
 
 #[async_trait::async_trait]
-impl PollableAsync for MemoryInputPipe {
+impl Subscribe for MemoryInputPipe {
     async fn ready(&mut self) {}
 }
 
@@ -103,7 +103,7 @@ impl HostOutputStream for MemoryOutputPipe {
 }
 
 #[async_trait::async_trait]
-impl PollableAsync for MemoryOutputPipe {
+impl Subscribe for MemoryOutputPipe {
     async fn ready(&mut self) {}
 }
 
@@ -192,7 +192,7 @@ impl HostInputStream for AsyncReadStream {
     }
 }
 #[async_trait::async_trait]
-impl PollableAsync for AsyncReadStream {
+impl Subscribe for AsyncReadStream {
     async fn ready(&mut self) {
         if self.buffer.is_some() || self.closed {
             return;
@@ -226,7 +226,7 @@ impl HostOutputStream for SinkOutputStream {
 }
 
 #[async_trait::async_trait]
-impl PollableAsync for SinkOutputStream {
+impl Subscribe for SinkOutputStream {
     async fn ready(&mut self) {}
 }
 
@@ -242,7 +242,7 @@ impl HostInputStream for ClosedInputStream {
 }
 
 #[async_trait::async_trait]
-impl PollableAsync for ClosedInputStream {
+impl Subscribe for ClosedInputStream {
     async fn ready(&mut self) {}
 }
 
@@ -264,7 +264,7 @@ impl HostOutputStream for ClosedOutputStream {
 }
 
 #[async_trait::async_trait]
-impl PollableAsync for ClosedOutputStream {
+impl Subscribe for ClosedOutputStream {
     async fn ready(&mut self) {}
 }
 

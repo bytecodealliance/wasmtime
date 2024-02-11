@@ -1,6 +1,6 @@
 use std::io::{BufRead, Write};
 use std::process::Command;
-use wasmtime_wasi::preview2::{HostInputStream, PollableAsync};
+use wasmtime_wasi::preview2::{HostInputStream, Subscribe};
 
 const VAR_NAME: &str = "__CHILD_PROCESS";
 

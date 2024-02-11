@@ -3,7 +3,7 @@ use crate::preview2::bindings::{
     clocks::wall_clock::{self, Datetime},
 };
 use crate::preview2::poll;
-use crate::preview2::{Pollable, PollableHandle, WasiView};
+use crate::preview2::{Pollable, PollableInternal, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -40,7 +40,7 @@ impl<T: WasiView> wall_clock::Host for T {
     }
 }
 
-fn make_pollable(duration: tokio::time::Duration) -> Box<dyn Pollable> {
+fn make_pollable(duration: tokio::time::Duration) -> Box<dyn PollableInternal> {
     if duration.is_zero() {
         Box::new(poll::ready())
     } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
@@ -63,7 +63,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<PollableHandle>> {
+    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<Pollable>> {
         let clock_now = self.ctx().monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
@@ -71,14 +71,11 @@ impl<T: WasiView> monotonic_clock::Host for T {
             Duration::from_nanos(0)
         };
         let pollable = make_pollable(duration);
-        Ok(self.table().push(PollableHandle::own(pollable))?)
+        Ok(self.table().push(Pollable::own(pollable))?)
     }
 
-    fn subscribe_duration(
-        &mut self,
-        duration: WasiDuration,
-    ) -> anyhow::Result<Resource<PollableHandle>> {
+    fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
         let pollable = make_pollable(Duration::from_nanos(duration));
-        Ok(self.table().push(PollableHandle::own(pollable))?)
+        Ok(self.table().push(Pollable::own(pollable))?)
     }
 }

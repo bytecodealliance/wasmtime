@@ -1,4 +1,4 @@
-use crate::preview2::{HostOutputStream, PollableAsync, StreamError};
+use crate::preview2::{HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
@@ -196,7 +196,7 @@ impl HostOutputStream for AsyncWriteStream {
     }
 }
 #[async_trait::async_trait]
-impl PollableAsync for AsyncWriteStream {
+impl Subscribe for AsyncWriteStream {
     async fn ready(&mut self) {
         self.worker.ready().await;
     }
