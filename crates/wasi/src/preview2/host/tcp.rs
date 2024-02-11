@@ -57,22 +57,24 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             util::set_tcp_reuseaddr(&tokio_socket, reuse_addr)?;
 
             // Perform the OS bind call.
-            tokio_socket.bind(local_address).map_err(|error| match Errno::from_io_error(&error) {
-                // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-                // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-                //
-                // The most common reasons for this error should have already
-                // been handled by our own validation slightly higher up in this
-                // function. This error mapping is here just in case there is
-                // an edge case we didn't catch.
-                Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
+            tokio_socket.bind(local_address).map_err(|error| {
+                match Errno::from_io_error(&error) {
+                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+                    //
+                    // The most common reasons for this error should have already
+                    // been handled by our own validation slightly higher up in this
+                    // function. This error mapping is here just in case there is
+                    // an edge case we didn't catch.
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
 
-                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-                // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-                #[cfg(windows)]
-                Some(Errno::NOBUFS) => ErrorCode::AddressInUse,
+                    // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+                    // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                    #[cfg(windows)]
+                    Some(Errno::NOBUFS) => ErrorCode::AddressInUse,
 
-                _ => ErrorCode::from(error),
+                    _ => ErrorCode::from(error),
+                }
             })?;
         }
 

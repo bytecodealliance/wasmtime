@@ -1,5 +1,7 @@
 use super::network::SocketAddressFamily;
-use super::{with_ambient_tokio_runtime, HostInputStream, HostOutputStream, SocketResult, StreamError};
+use super::{
+    with_ambient_tokio_runtime, HostInputStream, HostOutputStream, SocketResult, StreamError,
+};
 use crate::preview2::{AbortOnDropJoinHandle, Subscribe};
 use anyhow::{Error, Result};
 use cap_net_ext::AddressFamily;
@@ -313,15 +315,24 @@ impl TcpSocket {
         }
     }
 
-    pub(crate) fn connect(socket: tokio::net::TcpSocket, addr: std::net::SocketAddr) -> impl Future<Output = io::Result<tokio::net::TcpStream>> + Send {
+    pub(crate) fn connect(
+        socket: tokio::net::TcpSocket,
+        addr: std::net::SocketAddr,
+    ) -> impl Future<Output = io::Result<tokio::net::TcpStream>> + Send {
         crate::preview2::spawn(socket.connect(addr))
     }
 
-    pub(crate) fn listen(socket: tokio::net::TcpSocket, backlog: u32) -> io::Result<tokio::net::TcpListener> {
+    pub(crate) fn listen(
+        socket: tokio::net::TcpSocket,
+        backlog: u32,
+    ) -> io::Result<tokio::net::TcpListener> {
         with_ambient_tokio_runtime(|| socket.listen(backlog))
     }
 
-    pub(crate) fn poll_accept(listener: &tokio::net::TcpListener, cx: &mut std::task::Context) -> std::task::Poll<io::Result<tokio::net::TcpStream>> {
+    pub(crate) fn poll_accept(
+        listener: &tokio::net::TcpListener,
+        cx: &mut std::task::Context,
+    ) -> std::task::Poll<io::Result<tokio::net::TcpStream>> {
         with_ambient_tokio_runtime(|| listener.poll_accept(cx).map_ok(|(stream, _)| stream))
     }
 }
@@ -348,7 +359,8 @@ impl Subscribe for TcpSocket {
             } => match pending_accept {
                 Some(_) => {}
                 None => {
-                    let result = futures::future::poll_fn(|cx| TcpSocket::poll_accept(listener, cx)).await;
+                    let result =
+                        futures::future::poll_fn(|cx| TcpSocket::poll_accept(listener, cx)).await;
                     *pending_accept = Some(result);
                 }
             },
