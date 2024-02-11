@@ -3,7 +3,7 @@ use crate::preview2::bindings::{
     clocks::wall_clock::{self, Datetime},
 };
 use crate::preview2::poll;
-use crate::preview2::{Pollable, PollableInternal, WasiView};
+use crate::preview2::{Pollable, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -40,17 +40,15 @@ impl<T: WasiView> wall_clock::Host for T {
     }
 }
 
-fn make_pollable(duration: tokio::time::Duration) -> Box<dyn PollableInternal> {
+fn make_pollable(duration: tokio::time::Duration) -> Pollable {
     if duration.is_zero() {
-        Box::new(poll::ready())
+        poll::ready()
     } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
-        Box::new(poll::once(async move {
-            tokio::time::sleep_until(deadline).await
-        }))
+        poll::once(async move { tokio::time::sleep_until(deadline).await })
     } else {
         // If the user specifies a time so far in the future we can't
         // represent it, wait forever rather than trap.
-        Box::new(poll::pending())
+        poll::pending()
     }
 }
 
@@ -71,11 +69,11 @@ impl<T: WasiView> monotonic_clock::Host for T {
             Duration::from_nanos(0)
         };
         let pollable = make_pollable(duration);
-        Ok(self.table().push(Pollable::own(pollable))?)
+        Ok(self.table().push(pollable)?)
     }
 
     fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
         let pollable = make_pollable(Duration::from_nanos(duration));
-        Ok(self.table().push(Pollable::own(pollable))?)
+        Ok(self.table().push(pollable)?)
     }
 }

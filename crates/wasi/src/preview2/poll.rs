@@ -15,7 +15,7 @@ use wasmtime::component::{Resource, ResourceTable};
 ///
 /// There is a blanket implementation of [`WasiFuture`] for all [`Future`]'s,
 /// so all regular futures are automatically WASI futures.
-pub trait WasiFuture {
+trait WasiFuture {
     /// See [Future::Output]
     type Output;
 
@@ -39,35 +39,6 @@ impl<F: Future> WasiFuture for F {
     }
 }
 
-/// Create a WASI future that wraps a function returning [`Poll`]. Polling the
-/// pollable delegates to the wrapped function.
-///
-/// Similar to [std::future::poll_fn].
-pub fn poll_fn<T, F>(poll_fn: F) -> impl WasiFuture<Output = T>
-where
-    F: FnMut(&mut Context<'_>, &mut dyn WasiView) -> Poll<T> + Send,
-{
-    struct PollFn<F> {
-        poll_fn: F,
-    }
-
-    impl<T, F> WasiFuture for PollFn<F>
-    where
-        F: FnMut(&mut Context<'_>, &mut dyn WasiView) -> Poll<T> + Send,
-    {
-        type Output = T;
-
-        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>, view: &mut dyn WasiView) -> Poll<T> {
-            // The following code is adapted from [std::future::poll_fn]:
-
-            // SAFETY: We are not moving out of the pinned field.
-            (unsafe { &mut self.get_unchecked_mut().poll_fn })(cx, view)
-        }
-    }
-
-    PollFn { poll_fn }
-}
-
 /// A host implementation of the `wasi:io/poll.pollable` contract.
 ///
 /// A pollable is not the same thing as a Rust Future: in WASI, the same pollable
@@ -75,7 +46,7 @@ where
 /// a stream is readable or writable. So, rather than containing a Future, which
 /// can only become Ready once, a Pollable contains a way to create a Future in
 /// each call to `poll`.
-pub trait PollableInternal: Send + 'static {
+trait PollableInternal: Send + 'static {
     /// Wait for the pollable to be ready.
     ///
     /// This can be called repeatedly as the readiness state of a pollable is
@@ -129,18 +100,18 @@ impl<T: Subscribe> PollableInternal for T {
 }
 
 /// Create a pollable that is always ready.
-pub fn ready() -> impl PollableInternal {
+pub fn ready() -> Pollable {
     poll_ready_fn(|_, _| Poll::Ready(()))
 }
 
 /// Create a pollable that is never ready.
-pub fn pending() -> impl PollableInternal {
+pub fn pending() -> Pollable {
     poll_ready_fn(|_, _| Poll::Pending)
 }
 
 /// Create an ad-hoc Pollable implementation from a closure. The closure will be
 /// called repeatedly, even after it has already returned [Poll::Ready] before.
-pub fn poll_ready_fn<F>(poll_ready_fn: F) -> impl PollableInternal
+pub fn poll_ready_fn<F>(poll_ready_fn: F) -> Pollable
 where
     F: FnMut(&mut Context<'_>, &mut dyn WasiView) -> Poll<()> + Send + 'static,
 {
@@ -175,14 +146,14 @@ where
         }
     }
 
-    PollReadyFn { poll_ready_fn }
+    Pollable(PollableInner::Own(Box::new(PollReadyFn { poll_ready_fn })))
 }
 
 /// Create a pollable that initially starts out as pending and transitions to
 /// ready once the future resolves. After that the pollable will always be ready.
-pub fn once<F>(future: F) -> impl PollableInternal
+pub fn once<F>(future: F) -> Pollable
 where
-    F: WasiFuture<Output = ()> + Send + 'static,
+    F: Future<Output = ()> + Send + 'static,
 {
     enum Once<F> {
         Pending(Pin<Box<F>>),
@@ -190,7 +161,7 @@ where
     }
     impl<F> PollableInternal for Once<F>
     where
-        F: WasiFuture<Output = ()> + Send + 'static,
+        F: Future<Output = ()> + Send + 'static,
     {
         fn ready<'a>(&'a mut self) -> Pin<Box<dyn WasiFuture<Output = ()> + Send + 'a>> {
             Box::pin(OnceFuture { pollable: self })
@@ -203,20 +174,20 @@ where
 
     impl<F> WasiFuture for OnceFuture<'_, F>
     where
-        F: WasiFuture<Output = ()> + Send + 'static,
+        F: Future<Output = ()> + Send + 'static,
     {
         type Output = ();
 
         fn poll(
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
-            view: &mut dyn WasiView,
+            _view: &mut dyn WasiView,
         ) -> Poll<()> {
             let Once::Pending(future) = &mut self.pollable else {
                 return Poll::Ready(());
             };
 
-            let Poll::Ready(()) = future.as_mut().poll(cx, view) else {
+            let Poll::Ready(()) = future.as_mut().poll(cx) else {
                 return Poll::Pending;
             };
 
@@ -225,16 +196,22 @@ where
         }
     }
 
-    Once::Pending(Box::pin(future))
+    Pollable(PollableInner::Own(Box::new(Once::Pending(Box::pin(
+        future,
+    )))))
 }
 
 /// Creates a new handle which is subscribed to the pollable `parent`.
 /// The handle will be added as a child of `parent`.
-pub fn subscribe<T: PollableInternal>(
+pub fn subscribe<T: Subscribe>(
     table: &mut ResourceTable,
     parent: &Resource<T>,
 ) -> Result<Resource<Pollable>> {
-    let pollable = Pollable::child(parent);
+    let pollable = Pollable(PollableInner::Child {
+        parent_key: parent.rep(),
+        as_pollable: |target| target.downcast_mut::<T>().unwrap(),
+    });
+
     Ok(table.push_child(pollable, &parent)?)
 }
 
@@ -242,28 +219,14 @@ type AsPollableFn = for<'a> fn(&'a mut dyn Any) -> &'a mut dyn PollableInternal;
 type TargetKey = u32;
 
 /// A host representation of the `wasi:io/poll.pollable` resource.
-pub enum Pollable {
+pub struct Pollable(PollableInner);
+
+enum PollableInner {
     Own(Box<dyn PollableInternal>),
     Child {
         parent_key: TargetKey,
         as_pollable: AsPollableFn,
     },
-}
-
-impl Pollable {
-    /// Create a new standalone pollable resource.
-    pub fn own(pollable: Box<dyn PollableInternal>) -> Self {
-        Self::Own(pollable)
-    }
-
-    /// Create a new pollable handle that delegates to its parent's Pollable
-    /// implementation.
-    pub fn child<P: PollableInternal>(parent: &Resource<P>) -> Self {
-        Self::Child {
-            parent_key: parent.rep(),
-            as_pollable: |target| target.downcast_mut::<P>().unwrap(),
-        }
-    }
 }
 
 /// Using the term "target" to mean: where the actual Pollable implementation lives.
@@ -274,15 +237,15 @@ struct TargetInfo {
 }
 impl TargetInfo {
     fn gather(table: &ResourceTable, handle: &Resource<Pollable>) -> Result<Self> {
-        match table.get(&handle)? {
-            Pollable::Own(_) => Ok(Self {
+        match &table.get(&handle)?.0 {
+            PollableInner::Own(_) => Ok(Self {
                 key: handle.rep(),
-                as_pollable: |target| match target.downcast_mut().unwrap() {
-                    Pollable::Own(p) => p.as_mut(),
-                    Pollable::Child { .. } => unreachable!(),
+                as_pollable: |target| match &mut target.downcast_mut::<Pollable>().unwrap().0 {
+                    PollableInner::Own(p) => p.as_mut(),
+                    PollableInner::Child { .. } => unreachable!(),
                 },
             }),
-            Pollable::Child {
+            PollableInner::Child {
                 parent_key,
                 as_pollable,
             } => Ok(Self {
