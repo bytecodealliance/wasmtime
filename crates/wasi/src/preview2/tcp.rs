@@ -1,17 +1,21 @@
 use super::network::SocketAddressFamily;
-use super::{HostInputStream, HostOutputStream, StreamError};
-use crate::preview2::host::network::util;
-use crate::preview2::{
-    with_ambient_tokio_runtime, AbortOnDropJoinHandle, InputStream, OutputStream, Subscribe,
+use super::{
+    with_ambient_tokio_runtime, HostInputStream, HostOutputStream, SocketResult, StreamError,
 };
+use crate::preview2::{AbortOnDropJoinHandle, Subscribe};
 use anyhow::{Error, Result};
-use cap_net_ext::{AddressFamily, Blocking};
-use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
+use cap_net_ext::AddressFamily;
+use futures::Future;
+use io_lifetimes::views::SocketlikeView;
+use io_lifetimes::AsSocketlike;
 use rustix::net::sockopt;
 use std::io;
 use std::mem;
+use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::Interest;
+
+/// Value taken from rust std library.
+const DEFAULT_BACKLOG: u32 = 128;
 
 /// The state of a TCP socket.
 ///
@@ -19,32 +23,34 @@ use tokio::io::Interest;
 /// activities of binding, listening, accepting, and connecting.
 pub(crate) enum TcpState {
     /// The initial state for a newly-created socket.
-    Default,
+    Default(tokio::net::TcpSocket),
 
     /// Binding started via `start_bind`.
-    BindStarted,
+    BindStarted(tokio::net::TcpSocket),
 
     /// Binding finished via `finish_bind`. The socket has an address but
     /// is not yet listening for connections.
-    Bound,
+    Bound(tokio::net::TcpSocket),
 
     /// Listening started via `listen_start`.
-    ListenStarted,
+    ListenStarted(tokio::net::TcpSocket),
 
     /// The socket is now listening and waiting for an incoming connection.
-    Listening,
+    Listening {
+        listener: tokio::net::TcpListener,
+        pending_accept: Option<io::Result<tokio::net::TcpStream>>,
+    },
 
     /// An outgoing connection is started via `start_connect`.
-    Connecting,
+    Connecting(Pin<Box<dyn Future<Output = io::Result<tokio::net::TcpStream>> + Send>>),
 
     /// An outgoing connection is ready to be established.
-    ConnectReady,
-
-    /// An outgoing connection was attempted but failed.
-    ConnectFailed,
+    ConnectReady(io::Result<tokio::net::TcpStream>),
 
     /// An outgoing connection has been established.
-    Connected,
+    Connected(Arc<tokio::net::TcpStream>),
+
+    Closed,
 }
 
 /// A host TCP socket, plus associated bookkeeping.
@@ -52,15 +58,11 @@ pub(crate) enum TcpState {
 /// The inner state is wrapped in an Arc because the same underlying socket is
 /// used for implementing the stream types.
 pub struct TcpSocket {
-    /// The part of a `TcpSocket` which is reference-counted so that we
-    /// can pass it to async tasks.
-    pub(crate) inner: Arc<tokio::net::TcpStream>,
-
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: TcpState,
 
-    /// The desired listen queue size. Set to None to use the system's default.
-    pub(crate) listen_backlog_size: Option<i32>,
+    /// The desired listen queue size.
+    pub(crate) listen_backlog_size: u32,
 
     pub(crate) family: SocketAddressFamily,
 
@@ -83,7 +85,7 @@ pub(crate) struct TcpReadStream {
 }
 
 impl TcpReadStream {
-    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             closed: false,
@@ -259,34 +261,28 @@ impl Subscribe for TcpWriteStream {
 impl TcpSocket {
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
-        // Create a new host socket and set it to non-blocking, which is needed
-        // by our async implementation.
-        let fd = util::tcp_socket(family, Blocking::No)?;
+        with_ambient_tokio_runtime(|| {
+            let (socket, family) = match family {
+                AddressFamily::Ipv4 => {
+                    let socket = tokio::net::TcpSocket::new_v4()?;
+                    (socket, SocketAddressFamily::Ipv4)
+                }
+                AddressFamily::Ipv6 => {
+                    let socket = tokio::net::TcpSocket::new_v6()?;
+                    sockopt::set_ipv6_v6only(&socket, true)?;
+                    (socket, SocketAddressFamily::Ipv6)
+                }
+            };
 
-        let socket_address_family = match family {
-            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
-            AddressFamily::Ipv6 => {
-                sockopt::set_ipv6_v6only(&fd, true)?;
-                SocketAddressFamily::Ipv6
-            }
-        };
-
-        Self::from_fd(fd, socket_address_family)
+            Self::from_state(TcpState::Default(socket), family)
+        })
     }
 
     /// Create a `TcpSocket` from an existing socket.
-    ///
-    /// The socket must be in non-blocking mode.
-    pub(crate) fn from_fd(
-        fd: rustix::fd::OwnedFd,
-        family: SocketAddressFamily,
-    ) -> io::Result<Self> {
-        let stream = Self::setup_tokio_tcp_stream(fd)?;
-
+    pub(crate) fn from_state(state: TcpState, family: SocketAddressFamily) -> io::Result<Self> {
         Ok(Self {
-            inner: Arc::new(stream),
-            tcp_state: TcpState::Default,
-            listen_backlog_size: None,
+            tcp_state: state,
+            listen_backlog_size: DEFAULT_BACKLOG,
             family,
             #[cfg(target_os = "macos")]
             receive_buffer_size: None,
@@ -299,37 +295,56 @@ impl TcpSocket {
         })
     }
 
-    fn setup_tokio_tcp_stream(fd: rustix::fd::OwnedFd) -> io::Result<tokio::net::TcpStream> {
-        let std_stream =
-            unsafe { std::net::TcpStream::from_raw_socketlike(fd.into_raw_socketlike()) };
-        with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))
-    }
+    pub(crate) fn as_std_view(&self) -> SocketResult<SocketlikeView<'_, std::net::TcpStream>> {
+        use crate::preview2::bindings::sockets::network::ErrorCode;
 
-    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        &self.inner
-    }
+        match &self.tcp_state {
+            TcpState::Default(socket) | TcpState::Bound(socket) => {
+                Ok(socket.as_socketlike_view::<std::net::TcpStream>())
+            }
+            TcpState::Connected(stream) => Ok(stream.as_socketlike_view::<std::net::TcpStream>()),
+            TcpState::Listening { listener, .. } => {
+                Ok(listener.as_socketlike_view::<std::net::TcpStream>())
+            }
 
-    /// Create the input/output stream pair for a tcp socket.
-    pub fn as_split(&self) -> (InputStream, OutputStream) {
-        let input = Box::new(TcpReadStream::new(self.inner.clone()));
-        let output = Box::new(TcpWriteStream::new(self.inner.clone()));
-        (InputStream::Host(input), output)
+            TcpState::BindStarted(..)
+            | TcpState::ListenStarted(..)
+            | TcpState::Connecting(..)
+            | TcpState::ConnectReady(..)
+            | TcpState::Closed => Err(ErrorCode::InvalidState.into()),
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Subscribe for TcpSocket {
     async fn ready(&mut self) {
-        // Some states are ready immediately.
-        match self.tcp_state {
-            TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => return,
-            _ => {}
+        match &mut self.tcp_state {
+            TcpState::Default(..)
+            | TcpState::BindStarted(..)
+            | TcpState::Bound(..)
+            | TcpState::ListenStarted(..)
+            | TcpState::ConnectReady(..)
+            | TcpState::Closed
+            | TcpState::Connected(..) => {
+                // No async operation in progress.
+            }
+            TcpState::Connecting(future) => {
+                self.tcp_state = TcpState::ConnectReady(future.as_mut().await);
+            }
+            TcpState::Listening {
+                listener,
+                pending_accept,
+            } => match pending_accept {
+                Some(_) => {}
+                None => {
+                    let result = futures::future::poll_fn(|cx| {
+                        listener.poll_accept(cx).map_ok(|(stream, _)| stream)
+                    })
+                    .await;
+                    *pending_accept = Some(result);
+                }
+            },
         }
-
-        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-        self.inner
-            .ready(Interest::READABLE | Interest::WRITABLE)
-            .await
-            .unwrap();
     }
 }
