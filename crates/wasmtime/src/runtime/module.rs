@@ -517,7 +517,7 @@ impl Module {
         // Note that the unsafety here should be ok since the `trampolines`
         // field should only point to valid trampoline function pointers
         // within the text section.
-        let signatures = TypeCollection::new_for_module(engine.signatures(), &types);
+        let signatures = TypeCollection::new_for_module(engine, &types);
 
         // Package up all our data into a `CodeObject` and delegate to the final
         // step of module compilation.

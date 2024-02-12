@@ -123,7 +123,7 @@ where
     let native_call = text[native_call_range.start as usize..].as_ptr() as *mut _;
     let native_call = NonNull::new(native_call).unwrap();
 
-    let sig = engine.signatures().register(ft.as_wasm_func_type());
+    let sig = ft.clone().into_registered_type();
 
     unsafe {
         Ok(VMArrayCallHostFuncContext::new(

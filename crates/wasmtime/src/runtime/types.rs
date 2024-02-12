@@ -252,13 +252,13 @@ impl FuncType {
     }
 
     pub(crate) fn from_wasm_func_type(engine: &Engine, ty: &WasmFuncType) -> FuncType {
-        let ty = engine.signatures().register(ty);
+        let ty = RegisteredType::new(engine, ty);
         Self { ty }
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> FuncType {
-        let ty = engine.signatures().root(index).expect(
-            "VMSharedTypeIndex is not registered in the Engine. Wrong \
+        let ty = RegisteredType::root(engine, index).expect(
+            "VMSharedTypeIndex is not registered in the Engine! Wrong \
              engine? Didn't root the index somewhere?",
         );
         Self { ty }
