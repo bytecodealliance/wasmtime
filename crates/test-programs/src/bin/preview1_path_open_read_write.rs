@@ -34,6 +34,7 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
         wasi::fd_write(f_readonly, &[ciovec])
             .err()
             .expect("read of writeonly fails"),
+        windows => wasi::ERRNO_PERM,
         wasi::ERRNO_BADF
     );
 
