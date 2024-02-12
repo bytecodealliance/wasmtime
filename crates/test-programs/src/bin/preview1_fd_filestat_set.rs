@@ -132,14 +132,18 @@ fn main() {
     };
 
     // Run the tests.
-    //
+
     unsafe { test_fd_filestat_set_size_rw(dir_fd) }
     unsafe { test_fd_filestat_set_size_ro(dir_fd) }
-    //
+
     // The fd_filestat_set_times function should behave the same whether the file
     // descriptor is open for read-only or read-write, because the underlying
     // permissions of the file determine whether or not the filestat can be
     // set or not, not than the open mode.
-    unsafe { test_fd_filestat_set_times(dir_fd, wasi::RIGHTS_FD_READ) }
+    if test_programs::preview1::config().support_dangling_filesystem() {
+        // Guarding to run on non-windows filesystems. Windows rejects set-times on read-only
+        // files.
+        unsafe { test_fd_filestat_set_times(dir_fd, wasi::RIGHTS_FD_READ) }
+    }
     unsafe { test_fd_filestat_set_times(dir_fd, wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE) }
 }
