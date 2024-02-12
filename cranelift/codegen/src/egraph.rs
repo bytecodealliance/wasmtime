@@ -619,7 +619,6 @@ impl<'a> EgraphPass<'a> {
             &self.domtree_children,
             self.loop_analysis,
             &mut self.remat_values,
-            &mut self.eclasses,
             &mut self.stats,
         );
         elaborator.elaborate();
