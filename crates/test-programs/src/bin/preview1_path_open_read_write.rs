@@ -30,11 +30,14 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
         buf: write_buffer.as_ptr(),
         buf_len: write_buffer.len(),
     };
+    // PERM is only the failure on windows under wasmtime-wasi. wasi-common
+    // fails on windows with BADF, so we cant use the `windows =>` syntax
+    // because that doesnt support alternatives like the agnostic syntax does.
     assert_errno!(
         wasi::fd_write(f_readonly, &[ciovec])
             .err()
             .expect("read of writeonly fails"),
-        windows => wasi::ERRNO_PERM,
+        wasi::ERRNO_PERM,
         wasi::ERRNO_BADF
     );
 
