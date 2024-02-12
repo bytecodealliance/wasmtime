@@ -38,6 +38,7 @@ async-trait = { workspace = true, optional = true }
 system-interface = { workspace = true, optional = true}
 futures = { workspace = true, optional = true }
 wasi-common = { workspace = true, optional = true, features = ["sync"] }
+cfg-if = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }
@@ -59,7 +60,7 @@ rustix = { workspace = true, features = ["event", "net"], optional = true }
 default = ["wasi-common-deprecations", "preview2", "preview1-on-preview2"]
 wasi-common-deprecations = [ "dep:wasi-common" ]
 tokio = [ "wasi-common?/tokio", "wasi-common-deprecations" ]
-exit = [ "wasi-common-deprecations" ]
+exit = [ "wasi-common-deprecations", "dep:cfg-if" ]
 preview2 = [
     'wasmtime/component-model',
     'wasmtime/async',

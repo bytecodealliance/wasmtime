@@ -58,6 +58,7 @@ humantime = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }
+cfg-if = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }

@@ -87,13 +87,15 @@ pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
     if e.is::<Trap>() {
         eprintln!("Error: {:?}", e);
 
-        if cfg!(unix) {
-            // On Unix, return the error code of an abort.
-            process::exit(rustix::process::EXIT_SIGNALED_SIGABRT);
-        } else if cfg!(windows) {
-            // On Windows, return 3.
-            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
-            process::exit(3);
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                // On Unix, return the error code of an abort.
+                process::exit(rustix::process::EXIT_SIGNALED_SIGABRT);
+            } else if #[cfg(windows)] {
+                // On Windows, return 3.
+                // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+                process::exit(3);
+            }
         }
     }
 

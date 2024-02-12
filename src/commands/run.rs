@@ -233,11 +233,13 @@ impl RunCommand {
                     }
                     if e.is::<wasmtime::Trap>() {
                         eprintln!("Error: {e:?}");
-                        if cfg!(unix) {
-                            std::process::exit(rustix::process::EXIT_SIGNALED_SIGABRT);
-                        } else if cfg!(windows) {
-                            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
-                            std::process::exit(3);
+                        cfg_if::cfg_if! {
+                            if #[cfg(unix)] {
+                                std::process::exit(rustix::process::EXIT_SIGNALED_SIGABRT);
+                            } else if #[cfg(windows)] {
+                                // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+                                std::process::exit(3);
+                            }
                         }
                     }
                     return Err(e);
