@@ -1,4 +1,5 @@
 use crate::component::matching::InstanceType;
+use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::ResourceType;
 use crate::store::{StoreId, StoreOpaque};
 use crate::StoreContextMut;
@@ -278,7 +279,7 @@ impl<'a, T> LowerContext<'a, T> {
     ///
     /// The `ty` provided is which table to put this into.
     pub fn guest_resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        self.resource_tables().resource_lower_own(Some(ty), rep)
+        self.resource_tables().guest_resource_lower_own(rep, ty)
     }
 
     /// Lowers a `borrow` resource into the guest, converting the `rep` to a
@@ -298,19 +299,19 @@ impl<'a, T> LowerContext<'a, T> {
         if unsafe { (*self.instance).resource_owned_by_own_instance(ty) } {
             return rep;
         }
-        self.resource_tables().resource_lower_borrow(Some(ty), rep)
+        self.resource_tables().guest_resource_lower_borrow(rep, ty)
     }
 
     /// Lifts a host-owned `own` resource at the `idx` specified into the
     /// representation of that resource.
-    pub fn host_resource_lift_own(&mut self, idx: u32) -> Result<u32> {
-        self.resource_tables().resource_lift_own(None, idx)
+    pub fn host_resource_lift_own(&mut self, idx: HostResourceIndex) -> Result<u32> {
+        self.resource_tables().host_resource_lift_own(idx)
     }
 
     /// Lifts a host-owned `borrow` resource at the `idx` specified into the
     /// representation of that resource.
-    pub fn host_resource_lift_borrow(&mut self, idx: u32) -> Result<u32> {
-        self.resource_tables().resource_lift_borrow(None, idx)
+    pub fn host_resource_lift_borrow(&mut self, idx: HostResourceIndex) -> Result<u32> {
+        self.resource_tables().host_resource_lift_borrow(idx)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
@@ -318,8 +319,8 @@ impl<'a, T> LowerContext<'a, T> {
     ///
     /// Note that this is a special case for `Resource<T>`. Most of the time a
     /// host value shouldn't be lowered with a lowering context.
-    pub fn host_resource_lower_own(&mut self, rep: u32) -> u32 {
-        self.resource_tables().resource_lower_own(None, rep)
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> HostResourceIndex {
+        self.resource_tables().host_resource_lower_own(rep)
     }
 
     /// Returns the underlying resource type for the `ty` table specified.
@@ -335,26 +336,27 @@ impl<'a, T> LowerContext<'a, T> {
         InstanceType::new(unsafe { &*self.instance })
     }
 
-    fn resource_tables(&mut self) -> ResourceTables<'_> {
-        let (calls, host_table) = self.store.0.component_calls_and_host_table();
-        ResourceTables {
-            host_table: Some(host_table),
-            calls,
-            // Note that the unsafety here should be valid given the contract of
-            // `LowerContext::new`.
-            tables: Some(unsafe { (*self.instance).component_resource_tables() }),
-        }
+    fn resource_tables(&mut self) -> HostResourceTables<'_> {
+        let (calls, host_table, host_resource_data) = self.store.0.component_resource_state();
+        HostResourceTables::from_parts(
+            ResourceTables {
+                host_table: Some(host_table),
+                calls,
+                // Note that the unsafety here should be valid given the contract of
+                // `LowerContext::new`.
+                tables: Some(unsafe { (*self.instance).component_resource_tables() }),
+            },
+            host_resource_data,
+        )
     }
 
-    /// Begins a call into the component instance, starting recording of
-    /// metadata related to resource borrowing.
+    /// See [`HostResourceTables::enter_call`].
     #[inline]
     pub fn enter_call(&mut self) {
         self.resource_tables().enter_call()
     }
 
-    /// Completes a call into the component instance, validating that it's ok to
-    /// complete by ensuring the are no remaining active borrows.
+    /// See [`HostResourceTables::exit_call`].
     #[inline]
     pub fn exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
@@ -379,6 +381,7 @@ pub struct LiftContext<'a> {
     instance: *mut ComponentInstance,
 
     host_table: &'a mut ResourceTable,
+    host_resource_data: &'a mut HostResourceData,
 
     calls: &'a mut CallContexts,
 }
@@ -404,8 +407,8 @@ impl<'a> LiftContext<'a> {
         // so it's hacked around a bit. This unsafe pointer cast could be fixed
         // with more methods in more places, but it doesn't seem worth doing it
         // at this time.
-        let (calls, host_table) =
-            (&mut *(store as *mut StoreOpaque)).component_calls_and_host_table();
+        let (calls, host_table, host_resource_data) =
+            (&mut *(store as *mut StoreOpaque)).component_resource_state();
         let memory = options.memory.map(|_| options.memory(store));
 
         LiftContext {
@@ -415,6 +418,7 @@ impl<'a> LiftContext<'a> {
             instance,
             calls,
             host_table,
+            host_resource_data,
         }
     }
 
@@ -450,7 +454,7 @@ impl<'a> LiftContext<'a> {
         ty: TypeResourceTableIndex,
         idx: u32,
     ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
-        let idx = self.resource_tables().resource_lift_own(Some(ty), idx)?;
+        let idx = self.resource_tables().guest_resource_lift_own(idx, ty)?;
         // Note that the unsafety here should be valid given the contract of
         // `LiftContext::new`.
         let (dtor, flags) = unsafe { (*self.instance).dtor_and_flags(ty) };
@@ -463,19 +467,19 @@ impl<'a> LiftContext<'a> {
         ty: TypeResourceTableIndex,
         idx: u32,
     ) -> Result<u32> {
-        self.resource_tables().resource_lift_borrow(Some(ty), idx)
+        self.resource_tables().guest_resource_lift_borrow(idx, ty)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
     /// inserted at.
-    pub fn host_resource_lower_own(&mut self, rep: u32) -> u32 {
-        self.resource_tables().resource_lower_own(None, rep)
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> HostResourceIndex {
+        self.resource_tables().host_resource_lower_own(rep)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
     /// inserted at.
-    pub fn host_resource_lower_borrow(&mut self, rep: u32) -> u32 {
-        self.resource_tables().resource_lower_borrow(None, rep)
+    pub fn host_resource_lower_borrow(&mut self, rep: u32) -> HostResourceIndex {
+        self.resource_tables().host_resource_lower_borrow(rep)
     }
 
     /// Returns the underlying type of the resource table specified by `ty`.
@@ -491,23 +495,26 @@ impl<'a> LiftContext<'a> {
         InstanceType::new(unsafe { &*self.instance })
     }
 
-    fn resource_tables(&mut self) -> ResourceTables<'_> {
-        ResourceTables {
-            host_table: Some(self.host_table),
-            calls: self.calls,
-            // Note that the unsafety here should be valid given the contract of
-            // `LiftContext::new`.
-            tables: Some(unsafe { (*self.instance).component_resource_tables() }),
-        }
+    fn resource_tables(&mut self) -> HostResourceTables<'_> {
+        HostResourceTables::from_parts(
+            ResourceTables {
+                host_table: Some(self.host_table),
+                calls: self.calls,
+                // Note that the unsafety here should be valid given the contract of
+                // `LiftContext::new`.
+                tables: Some(unsafe { (*self.instance).component_resource_tables() }),
+            },
+            self.host_resource_data,
+        )
     }
 
-    /// Same as `LowerContext::enter_call`
+    /// See [`HostResourceTables::enter_call`].
     #[inline]
     pub fn enter_call(&mut self) {
         self.resource_tables().enter_call()
     }
 
-    /// Same as `LiftContext::enter_call`
+    /// See [`HostResourceTables::exit_call`].
     #[inline]
     pub fn exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()

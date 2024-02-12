@@ -63,6 +63,8 @@ pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};
 pub use self::values::{Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Val, Variant};
 
+pub(crate) use self::resources::HostResourceData;
+
 // These items are expected to be used by an eventual
 // `#[derive(ComponentType)]`, they are not part of Wasmtime's API stability
 // guarantees
