@@ -1,5 +1,5 @@
 use crate::component::matching::InstanceType;
-use crate::component::resources::HostResourceTables;
+use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::ResourceType;
 use crate::store::{StoreId, StoreOpaque};
 use crate::StoreContextMut;
@@ -304,15 +304,14 @@ impl<'a, T> LowerContext<'a, T> {
 
     /// Lifts a host-owned `own` resource at the `idx` specified into the
     /// representation of that resource.
-    pub fn host_resource_lift_own(&mut self, idx: u32, expected: ResourceType) -> Result<u32> {
-        self.resource_tables().host_resource_lift_own(idx, expected)
+    pub fn host_resource_lift_own(&mut self, idx: HostResourceIndex) -> Result<u32> {
+        self.resource_tables().host_resource_lift_own(idx)
     }
 
     /// Lifts a host-owned `borrow` resource at the `idx` specified into the
     /// representation of that resource.
-    pub fn host_resource_lift_borrow(&mut self, idx: u32, expected: ResourceType) -> Result<u32> {
-        self.resource_tables()
-            .host_resource_lift_borrow(idx, expected)
+    pub fn host_resource_lift_borrow(&mut self, idx: HostResourceIndex) -> Result<u32> {
+        self.resource_tables().host_resource_lift_borrow(idx)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
@@ -320,8 +319,8 @@ impl<'a, T> LowerContext<'a, T> {
     ///
     /// Note that this is a special case for `Resource<T>`. Most of the time a
     /// host value shouldn't be lowered with a lowering context.
-    pub fn host_resource_lower_own(&mut self, rep: u32, ty: ResourceType) -> u32 {
-        self.resource_tables().host_resource_lower_own(rep, ty)
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> HostResourceIndex {
+        self.resource_tables().host_resource_lower_own(rep)
     }
 
     /// Returns the underlying resource type for the `ty` table specified.
@@ -338,7 +337,7 @@ impl<'a, T> LowerContext<'a, T> {
     }
 
     fn resource_tables(&mut self) -> HostResourceTables<'_> {
-        let (calls, host_table, host_resource_types) = self.store.0.component_resource_state();
+        let (calls, host_table, host_resource_data) = self.store.0.component_resource_state();
         HostResourceTables::from_parts(
             ResourceTables {
                 host_table: Some(host_table),
@@ -347,7 +346,7 @@ impl<'a, T> LowerContext<'a, T> {
                 // `LowerContext::new`.
                 tables: Some(unsafe { (*self.instance).component_resource_tables() }),
             },
-            host_resource_types,
+            host_resource_data,
         )
     }
 
@@ -382,7 +381,7 @@ pub struct LiftContext<'a> {
     instance: *mut ComponentInstance,
 
     host_table: &'a mut ResourceTable,
-    host_resource_types: &'a mut Vec<ResourceType>,
+    host_resource_data: &'a mut HostResourceData,
 
     calls: &'a mut CallContexts,
 }
@@ -408,7 +407,7 @@ impl<'a> LiftContext<'a> {
         // so it's hacked around a bit. This unsafe pointer cast could be fixed
         // with more methods in more places, but it doesn't seem worth doing it
         // at this time.
-        let (calls, host_table, host_resource_types) =
+        let (calls, host_table, host_resource_data) =
             (&mut *(store as *mut StoreOpaque)).component_resource_state();
         let memory = options.memory.map(|_| options.memory(store));
 
@@ -419,7 +418,7 @@ impl<'a> LiftContext<'a> {
             instance,
             calls,
             host_table,
-            host_resource_types,
+            host_resource_data,
         }
     }
 
@@ -473,14 +472,14 @@ impl<'a> LiftContext<'a> {
 
     /// Lowers a resource into the host-owned table, returning the index it was
     /// inserted at.
-    pub fn host_resource_lower_own(&mut self, rep: u32, ty: ResourceType) -> u32 {
-        self.resource_tables().host_resource_lower_own(rep, ty)
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> HostResourceIndex {
+        self.resource_tables().host_resource_lower_own(rep)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
     /// inserted at.
-    pub fn host_resource_lower_borrow(&mut self, rep: u32, ty: ResourceType) -> u32 {
-        self.resource_tables().host_resource_lower_borrow(rep, ty)
+    pub fn host_resource_lower_borrow(&mut self, rep: u32) -> HostResourceIndex {
+        self.resource_tables().host_resource_lower_borrow(rep)
     }
 
     /// Returns the underlying type of the resource table specified by `ty`.
@@ -505,7 +504,7 @@ impl<'a> LiftContext<'a> {
                 // `LiftContext::new`.
                 tables: Some(unsafe { (*self.instance).component_resource_tables() }),
             },
-            self.host_resource_types,
+            self.host_resource_data,
         )
     }
 
