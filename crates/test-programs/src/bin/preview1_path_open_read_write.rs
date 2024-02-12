@@ -57,10 +57,12 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
         "writeonly has write right"
     );
 
+    // See above for description of PERM
     assert_errno!(
         wasi::fd_read(f_writeonly, &[iovec])
             .err()
             .expect("read of writeonly fails"),
+        wasi::ERRNO_PERM,
         wasi::ERRNO_BADF
     );
     let bytes_written = wasi::fd_write(f_writeonly, &[ciovec]).expect("write to writeonly");
