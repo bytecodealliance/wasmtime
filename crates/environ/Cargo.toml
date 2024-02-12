@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 bincode = "1.2.1"
-cpp_demangle = { version = "0.3.2", optional = true }
+cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true }
 wasmtime-types = { workspace = true }
 wasmparser = { workspace = true }

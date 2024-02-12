@@ -780,8 +780,7 @@ fn write_bytes<'a>(
 ) -> Result<GuestPtr<'a, u8>, types::Error> {
     // NOTE: legacy implementation always returns Inval errno
 
-    let buf = buf.as_ref();
-    let len = buf.len().try_into()?;
+    let len = u32::try_from(buf.len())?;
 
     let ptr = ptr.borrow();
     ptr.as_array(len).copy_from_slice(buf)?;

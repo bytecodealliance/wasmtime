@@ -12,4 +12,4 @@ workspace = true
 [build-dependencies]
 heck = { workspace = true }
 wit-component = { workspace = true }
-cargo_metadata = "0.15.3"
+cargo_metadata = "0.18.1"
