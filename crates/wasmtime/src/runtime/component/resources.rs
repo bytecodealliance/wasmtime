@@ -336,10 +336,11 @@ impl HostResourceIndex {
     }
 
     fn index(&self) -> u32 {
-        self.0 as u32
+        u32::try_from(self.0 & 0xffffffff).unwrap()
     }
+
     fn gen(&self) -> u32 {
-        (self.0 >> 32) as u32
+        u32::try_from(self.0 >> 32).unwrap()
     }
 }
 
