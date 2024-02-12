@@ -97,7 +97,7 @@ tokio = [
     "wiggle/wasmtime_async",
     "dep:tokio",
 ]
-exit = [ "dep:libc" ]
+exit = [ "wasmtime", "dep:libc" ]
 
 [[test]]
 name = "all"
