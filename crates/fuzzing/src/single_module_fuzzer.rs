@@ -95,8 +95,8 @@ macro_rules! single_module_fuzzer {
 /// module.
 pub fn execute<'a, T, U>(
     input: &'a [u8],
-    run: fn(&[u8], bool, T, &mut Unstructured<'a>) -> Result<U>,
-    gen_module: fn(&mut T, &mut Unstructured<'a>) -> Result<Vec<u8>>,
+    run: fn(&[u8], KnownValid, T, &mut Unstructured<'a>) -> Result<U>,
+    gen_module: fn(&mut T, &mut Unstructured<'a>) -> Result<(Vec<u8>, KnownValid)>,
 ) -> Result<U>
 where
     T: Arbitrary<'a>,
@@ -113,12 +113,29 @@ where
     };
     let mut u = Unstructured::new(fuzz_data);
     let mut config = u.arbitrary()?;
-    let generated = gen_module(&mut config, &mut u)?;
+    let (generated, known_valid) = gen_module(&mut config, &mut u)?;
     let module = module_in_input.unwrap_or(&generated);
     if let Ok(file) = std::env::var("WRITE_FUZZ_INPUT_TO") {
         std::fs::write(file, encode_module(&module, &fuzz_data)).unwrap();
     }
-    run(module, module_in_input.is_none(), config, &mut u)
+    let known_valid = if module_in_input.is_some() {
+        KnownValid::No
+    } else {
+        known_valid
+    };
+    run(module, known_valid, config, &mut u)
+}
+
+/// Used as part of `execute` above to determine whether a module is known to
+/// be valid ahead of time.
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum KnownValid {
+    /// This module is known to be valid so it should assert compilation
+    /// succeeds for example.
+    Yes,
+    /// This module is not known to be valid and it may not compile
+    /// successfully. Note that it's also not known to compile unsuccessfully.
+    No,
 }
 
 const SECTION_NAME: &str = "wasmtime-fuzz-input";
@@ -133,7 +150,7 @@ pub fn mutate<T>(
     data: &mut [u8],
     mut size: usize,
     max_size: usize,
-    gen_module: fn(&mut T, &mut Unstructured<'_>) -> Result<Vec<u8>>,
+    gen_module: fn(&mut T, &mut Unstructured<'_>) -> Result<(Vec<u8>, KnownValid)>,
     mutate: fn(&mut [u8], usize, usize) -> usize,
 ) -> usize
 where
@@ -170,7 +187,7 @@ where
         .arbitrary()
         .and_then(|mut config| gen_module(&mut config, &mut u))
     {
-        Ok(module) => {
+        Ok((module, _known_valid)) => {
             let module = encode_module(&module, &data[..new_size]);
 
             if module.len() < max_size {
