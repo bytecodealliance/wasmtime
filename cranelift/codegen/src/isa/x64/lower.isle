@@ -3417,6 +3417,45 @@
 (rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
       (cvt_u64_to_float_seq ty val))
 
+;; Base case of u64x2 being converted to f64x2. No native instruction for this
+;; is available so it's emulated through a series of instructions that exploit
+;; the binary representation of 64-bit floats. This sequence of instructions is
+;; copied from LLVM and my understanding of the general idea is to roughly:
+;;
+;; * For each bullet below operate in parallel on the left and right lanes.
+;; * Move the low 32 bits of the input into one register and the upper
+;;   32-bits into a different register, where both have all 0s for the upper
+;;   32-bits. (e.g. split the 64-bit input into two locations)
+;; * For the low bits, create `1.<twenty-zeros><low32>p52` via bit tricks.
+;; * For the high bits, create `1.<twenty-zeros><high32>p84` via bit tricks.
+;; * Create the constant `1.0p84 + 1.0p52`
+;; * Add the two high halves and subtract the constant.
+;;
+;; Apply some math and this should produce the same result as the native
+;; conversion.
+;;
+;; As for the bit tricks a float is represented where the low 53 bits are the
+;; decimal of the float, basically:
+;;
+;;  f = 1.<fraction> ^ (<exponent> - 1023)
+;;
+;; where `<fraction>` is the low 53 bits. By placing the 32-bit halves from
+;; the original integer into the low 53 bits and setting the exponent right it
+;; means that each 32-bit half can become part of a 64-bit floating point
+;; number. The final step in combining via float arithmetic will chop off the
+;; leading `1.` at the start of the float that we constructed, one for the low
+;; half and one for the upper half.
+(rule -1 (lower (has_type $F64X2 (fcvt_from_uint val @ (value_type $I64X2))))
+  (let ((low32_mask XmmMem (emit_u128_le_const 0x00000000ffffffff_00000000ffffffff))
+        (float_1p52 XmmMem (emit_u128_le_const 0x4330000000000000_4330000000000000))
+        (float_1p84 XmmMem (emit_u128_le_const 0x4530000000000000_4530000000000000))
+        (float_1p84_plus_1p52 XmmMem (emit_u128_le_const 0x4530000000100000_4530000000100000))
+        (low32 Xmm (x64_pand val low32_mask))
+        (low32_as_float Xmm (x64_por low32 float_1p52))
+        (high32 Xmm (x64_psrlq val (xmi_imm 32)))
+        (high32_as_float Xmm (x64_por high32 float_1p84)))
+    (x64_addpd low32_as_float (x64_subpd high32_as_float float_1p84_plus_1p52))))
+
 ;; Algorithm uses unpcklps to help create a float that is equivalent
 ;; 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent
 ;; every value of the mantissa represents a corresponding uint32 number.

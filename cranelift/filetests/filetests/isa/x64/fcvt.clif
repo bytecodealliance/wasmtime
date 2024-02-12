@@ -1146,3 +1146,53 @@ block0(v0: f32x4):
 ;   popq %rbp
 ;   retq
 
+function %u64x2_to_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_uint.f64x2 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm7
+;   pand    %xmm7, const(0), %xmm7
+;   movdqa  %xmm7, %xmm1
+;   por     %xmm1, const(1), %xmm1
+;   movdqa  %xmm1, %xmm7
+;   psrlq   %xmm0, $32, %xmm0
+;   por     %xmm0, const(2), %xmm0
+;   subpd   %xmm0, const(3), %xmm0
+;   movdqa  %xmm0, %xmm1
+;   movdqa  %xmm7, %xmm0
+;   addpd   %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm7
+;   pand 0x40(%rip), %xmm7
+;   movdqa %xmm7, %xmm1
+;   por 0x44(%rip), %xmm1
+;   movdqa %xmm1, %xmm7
+;   psrlq $0x20, %xmm0
+;   por 0x43(%rip), %xmm0
+;   subpd 0x4b(%rip), %xmm0
+;   movdqa %xmm0, %xmm1
+;   movdqa %xmm7, %xmm0
+;   addpd %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
