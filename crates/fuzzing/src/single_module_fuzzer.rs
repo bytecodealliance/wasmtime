@@ -128,7 +128,7 @@ where
 
 /// Used as part of `execute` above to determine whether a module is known to
 /// be valid ahead of time.
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum KnownValid {
     /// This module is known to be valid so it should assert compilation
     /// succeeds for example.
@@ -312,10 +312,10 @@ mod tests {
             let run2 = run_config::<(u32, u32)>;
 
             if let Ok((module, known_valid)) = execute(&buf[..seed_size], run1, gen) {
-                assert!(known_valid);
+                assert_eq!(known_valid, KnownValid::Yes);
                 let new_size = mutate(&mut buf, seed_size, max_size, gen, noop_mutate);
                 if let Ok((module2, known_valid)) = execute(&buf[..new_size], run2, gen) {
-                    assert!(!known_valid);
+                    assert_eq!(known_valid, KnownValid::No);
                     compares += 1;
                     if module != module2 {
                         panic!("modules differ");
@@ -330,21 +330,24 @@ mod tests {
 
         fn run_config<T>(
             data: &[u8],
-            known_valid: bool,
+            known_valid: KnownValid,
             _: T,
             _: &mut Unstructured<'_>,
-        ) -> Result<(Vec<u8>, bool)>
+        ) -> Result<(Vec<u8>, KnownValid)>
         where
             T: for<'a> Arbitrary<'a>,
         {
             Ok((data.to_vec(), known_valid))
         }
 
-        fn gen<T>(_: &mut T, u: &mut Unstructured<'_>) -> Result<Vec<u8>>
+        fn gen<T>(_: &mut T, u: &mut Unstructured<'_>) -> Result<(Vec<u8>, KnownValid)>
         where
             T: for<'a> Arbitrary<'a>,
         {
-            Ok(u.arbitrary::<wasm_smith::Module>()?.to_bytes())
+            Ok((
+                u.arbitrary::<wasm_smith::Module>()?.to_bytes(),
+                KnownValid::Yes,
+            ))
         }
 
         fn noop_mutate(_buf: &mut [u8], size: usize, _new_size: usize) -> usize {
