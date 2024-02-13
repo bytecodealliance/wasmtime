@@ -9,7 +9,7 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
-include = ["src/**/*", "WASI/phases/**/*", "README.md", "LICENSE", "build.rs"]
+include = ["src/**/*", "tests/**/*", "WASI/phases/**/*", "README.md", "LICENSE", "build.rs"]
 build = "build.rs"
 
 # This doesn't actually link to a native library, but it allows us to set env
@@ -24,18 +24,33 @@ workspace = true
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 wiggle = { workspace = true }
-wasmtime = { workspace = true, optional = true }
 tracing = { workspace = true }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 bitflags = { workspace = true }
 log = { workspace = true }
 
+# Optional, enabled by wasmtime feature:
+wasmtime = { workspace = true, optional = true, features = ['runtime'] }
+# Optional, enabled by sync feature:
+cap-fs-ext = { workspace = true, optional = true }
+cap-time-ext = { workspace = true, optional = true }
+fs-set-times = { workspace = true, optional = true }
+system-interface = { workspace = true, features = ["cap_std_impls"], optional = true }
+io-lifetimes = { workspace = true, optional = true }
+# Optional, enabled by tokio feature:
+tokio = { workspace = true, features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"], optional = true }
+
+# Optional, enabled by exit feature:
+libc = { workspace = true, optional = true }
+
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["fs"] }
+rustix = { workspace = true, features = ["fs", "event"] }
 
 [target.'cfg(windows)'.dependencies]
+once_cell = { workspace = true }
 io-extras = { workspace = true }
+rustix = { workspace = true, features = ["net"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true
@@ -48,13 +63,12 @@ features = [
 tempfile = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift', 'async'] }
-wasmtime-wasi = { path = '../wasi', features = ['sync', 'tokio'] }
+wasmtime = { workspace = true, features = ['cranelift', 'async', 'runtime'] }
 test-programs-artifacts = { workspace = true }
 tokio = { workspace = true, features = ['macros', 'rt-multi-thread'] }
 
 [features]
-default = ["trace_log", "wasmtime"]
+default = ["trace_log", "wasmtime", "sync"]
 # This feature enables the `tracing` logs in the calls to target the `log`
 # ecosystem of backends (e.g. `env_logger`. Disable this if you want to use
 # `tracing-subscriber`.
@@ -63,4 +77,28 @@ trace_log = [ "wiggle/tracing_log", "tracing/log" ]
 # crate if they want the snapshots to have metadata available.
 wiggle_metadata = ["wiggle/wiggle_metadata"]
 # This feature enables integration with wasmtime.
-wasmtime = ["dep:wasmtime", "wiggle/wasmtime"]
+wasmtime = [
+    "dep:wasmtime",
+    "wiggle/wasmtime",
+]
+# This feature enables an implementation of the Wasi traits for a
+# synchronous wasmtime embedding.
+sync = [
+    "wasmtime",
+    "dep:cap-fs-ext",
+    "dep:cap-time-ext",
+    "dep:fs-set-times",
+    "dep:system-interface",
+    "dep:io-lifetimes",
+]
+tokio = [
+    "sync",
+    "wasmtime/async",
+    "wiggle/wasmtime_async",
+    "dep:tokio",
+]
+exit = [ "wasmtime", "dep:libc" ]
+
+[[test]]
+name = "all"
+required-features = ["wasmtime", "sync", "tokio"]

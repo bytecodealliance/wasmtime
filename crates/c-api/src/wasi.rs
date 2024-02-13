@@ -9,8 +9,8 @@ use std::fs::File;
 use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 use std::slice;
-use wasi_common::pipe::ReadPipe;
-use wasmtime_wasi::{
+use wasi_common::{
+    pipe::ReadPipe,
     sync::{Dir, TcpListener, WasiCtxBuilder},
     WasiCtx,
 };
@@ -100,7 +100,7 @@ impl wasi_config_t {
             }
             WasiConfigReadPipe::File(file) => {
                 let file = cap_std::fs::File::from_std(file);
-                let file = wasi_cap_std_sync::file::File::from_cap_std(file);
+                let file = wasi_common::sync::file::File::from_cap_std(file);
                 builder.stdin(Box::new(file));
             }
             WasiConfigReadPipe::Bytes(binary) => {
@@ -115,7 +115,7 @@ impl wasi_config_t {
             }
             WasiConfigWritePipe::File(file) => {
                 let file = cap_std::fs::File::from_std(file);
-                let file = wasi_cap_std_sync::file::File::from_cap_std(file);
+                let file = wasi_common::sync::file::File::from_cap_std(file);
                 builder.stdout(Box::new(file));
             }
         };
@@ -126,7 +126,7 @@ impl wasi_config_t {
             }
             WasiConfigWritePipe::File(file) => {
                 let file = cap_std::fs::File::from_std(file);
-                let file = wasi_cap_std_sync::file::File::from_cap_std(file);
+                let file = wasi_common::sync::file::File::from_cap_std(file);
                 builder.stderr(Box::new(file));
             }
         };

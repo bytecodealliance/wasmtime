@@ -1,17 +1,17 @@
-use crate::{block_on_dummy_executor, file::File};
-use std::any::Any;
-use std::path::PathBuf;
-use wasi_common::{
+use crate::tokio::{block_on_dummy_executor, file::File};
+use crate::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, Filestat, OFlags},
     Error, ErrorExt,
 };
+use std::any::Any;
+use std::path::PathBuf;
 
-pub struct Dir(wasi_cap_std_sync::dir::Dir);
+pub struct Dir(crate::sync::dir::Dir);
 
 impl Dir {
     pub fn from_cap_std(dir: cap_std::fs::Dir) -> Self {
-        Dir(wasi_cap_std_sync::dir::Dir::from_cap_std(dir))
+        Dir(crate::sync::dir::Dir::from_cap_std(dir))
     }
 }
 
@@ -28,17 +28,17 @@ impl WasiDir for Dir {
         read: bool,
         write: bool,
         fdflags: FdFlags,
-    ) -> Result<wasi_common::dir::OpenResult, Error> {
+    ) -> Result<crate::dir::OpenResult, Error> {
         let f = block_on_dummy_executor(move || async move {
             self.0
                 .open_file_(symlink_follow, path, oflags, read, write, fdflags)
         })?;
         match f {
-            wasi_cap_std_sync::dir::OpenResult::File(f) => Ok(wasi_common::dir::OpenResult::File(
-                Box::new(File::from_inner(f)),
-            )),
-            wasi_cap_std_sync::dir::OpenResult::Dir(d) => {
-                Ok(wasi_common::dir::OpenResult::Dir(Box::new(Dir(d))))
+            crate::sync::dir::OpenResult::File(f) => {
+                Ok(crate::dir::OpenResult::File(Box::new(File::from_inner(f))))
+            }
+            crate::sync::dir::OpenResult::Dir(d) => {
+                Ok(crate::dir::OpenResult::Dir(Box::new(Dir(d))))
             }
         }
     }
@@ -116,8 +116,8 @@ impl WasiDir for Dir {
     async fn set_times(
         &self,
         path: &str,
-        atime: Option<wasi_common::SystemTimeSpec>,
-        mtime: Option<wasi_common::SystemTimeSpec>,
+        atime: Option<crate::SystemTimeSpec>,
+        mtime: Option<crate::SystemTimeSpec>,
         follow_symlinks: bool,
     ) -> Result<(), Error> {
         block_on_dummy_executor(move || self.0.set_times(path, atime, mtime, follow_symlinks))
@@ -127,8 +127,8 @@ impl WasiDir for Dir {
 #[cfg(test)]
 mod test {
     use super::Dir;
+    use crate::file::{FdFlags, OFlags};
     use cap_std::ambient_authority;
-    use wasi_common::file::{FdFlags, OFlags};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn scratch_dir() {
@@ -139,7 +139,7 @@ mod test {
         let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
-        wasi_common::WasiDir::open_file(
+        crate::WasiDir::open_file(
             &preopen_dir,
             false,
             ".",
@@ -156,9 +156,9 @@ mod test {
     #[cfg(not(windows))]
     #[tokio::test(flavor = "multi_thread")]
     async fn readdir() {
+        use crate::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
+        use crate::file::{FdFlags, FileType, OFlags};
         use std::collections::HashMap;
-        use wasi_common::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
-        use wasi_common::file::{FdFlags, FileType, OFlags};
 
         async fn readdir_into_map(dir: &dyn WasiDir) -> HashMap<String, ReaddirEntity> {
             let mut out = HashMap::new();

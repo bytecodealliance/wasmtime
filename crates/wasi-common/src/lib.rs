@@ -1,3 +1,15 @@
+//! # wasi-common
+//!
+//! This is Wasmtime's legacy implementation of WASI 0.1 (Preview 1). The
+//! Wasmtime maintainers suggest all users upgrade to the implementation
+//! of WASI 0.1 and 0.2 provided by the `wasmtime-wasi` crate. This
+//! implementation remains in the wasmtime tree because it is required to use
+//! the `wasmtime-wasi-threads` crate, an implementation of the `wasi-threads`
+//! proposal which is not compatible with WASI 0.2.
+//!
+//! In addition to integration with Wasmtime, this implementation may be used
+//! by other runtimes by disabling the `wasmtime` feature on this crate.
+//!
 //! ## The `WasiFile` and `WasiDir` traits
 //!
 //! The WASI specification only defines one `handle` type, `fd`, on which all
@@ -28,7 +40,11 @@
 //! reason about access to the local filesystem by examining what impls are
 //! linked into an application. We found that this separation of concerns also
 //! makes it pretty enjoyable to write alternative implementations, e.g. a
-//! virtual filesystem (which will land in a future PR).
+//! virtual filesystem.
+//!
+//! Implementations of the `WasiFile` and `WasiDir` traits are provided
+//! for synchronous embeddings (i.e. Config::async_support(false)) in
+//! `wasi_common::sync` and for Tokio embeddings in `wasi_common::tokio`.
 //!
 //! ## Traits for the rest of WASI's features
 //!
@@ -63,7 +79,11 @@ pub mod random;
 pub mod sched;
 pub mod snapshots;
 mod string_array;
+#[cfg(feature = "sync")]
+pub mod sync;
 pub mod table;
+#[cfg(feature = "tokio")]
+pub mod tokio;
 
 pub use cap_rand::RngCore;
 pub use clocks::{SystemTimeSpec, WasiClocks, WasiMonotonicClock, WasiSystemClock};
@@ -74,3 +94,100 @@ pub use file::WasiFile;
 pub use sched::{Poll, WasiSched};
 pub use string_array::{StringArray, StringArrayError};
 pub use table::Table;
+
+// The only difference between these definitions for sync vs async is whether
+// the wasmtime::Funcs generated are async (& therefore need an async Store and an executor to run)
+// or whether they have an internal "dummy executor" that expects the implementation of all
+// the async funcs to poll to Ready immediately.
+#[cfg(feature = "wasmtime")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! define_wasi {
+    ($async_mode:tt $($bounds:tt)*) => {
+
+    use wasmtime::Linker;
+
+    pub fn add_to_linker<T, U>(
+        linker: &mut Linker<T>,
+        get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    ) -> anyhow::Result<()>
+        where U: Send
+                + crate::snapshots::preview_0::wasi_unstable::WasiUnstable
+                + crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1,
+            $($bounds)*
+    {
+        snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker, get_cx)?;
+        snapshots::preview_0::add_wasi_unstable_to_linker(linker, get_cx)?;
+        Ok(())
+    }
+
+    pub mod snapshots {
+        pub mod preview_1 {
+            wiggle::wasmtime_integration!({
+                // The wiggle code to integrate with lives here:
+                target: crate::snapshots::preview_1,
+                // This must be the same witx document as used above. This should be ensured by
+                // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
+                witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
+                errors: { errno => trappable Error },
+                $async_mode: *
+            });
+        }
+        pub mod preview_0 {
+            wiggle::wasmtime_integration!({
+                // The wiggle code to integrate with lives here:
+                target: crate::snapshots::preview_0,
+                // This must be the same witx document as used above. This should be ensured by
+                // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
+                witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
+                errors: { errno => trappable Error },
+                $async_mode: *
+            });
+        }
+    }
+}}
+
+/// Exit the process with a conventional OS error code as long as Wasmtime
+/// understands the error. If the error is not an `I32Exit` or `Trap`, return
+/// the error back to the caller for it to decide what to do.
+///
+/// Note: this function is designed for usage where it is acceptable for
+/// Wasmtime failures to terminate the parent process, such as in the Wasmtime
+/// CLI; this would not be suitable for use in multi-tenant embeddings.
+#[cfg(feature = "exit")]
+pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
+    use std::process;
+    use wasmtime::Trap;
+
+    // If a specific WASI error code was requested then that's
+    // forwarded through to the process here without printing any
+    // extra error information.
+    let code = e.downcast_ref::<crate::I32Exit>().map(|e| e.0);
+    if let Some(exit) = code {
+        // Print the error message in the usual way.
+        // On Windows, exit status 3 indicates an abort (see below),
+        // so return 1 indicating a non-zero status to avoid ambiguity.
+        if cfg!(windows) && exit >= 3 {
+            process::exit(1);
+        }
+        process::exit(exit);
+    }
+
+    // If the program exited because of a trap, return an error code
+    // to the outside environment indicating a more severe problem
+    // than a simple failure.
+    if e.is::<Trap>() {
+        eprintln!("Error: {:?}", e);
+
+        if cfg!(unix) {
+            // On Unix, return the error code of an abort.
+            process::exit(128 + libc::SIGABRT);
+        } else if cfg!(windows) {
+            // On Windows, return 3.
+            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+            process::exit(3);
+        }
+    }
+
+    e
+}

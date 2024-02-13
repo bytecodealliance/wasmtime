@@ -317,18 +317,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cap-tempfile"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29d0d2d91fc0da2e0d811289a0d3518b8aba8a122fc0014f702feb3967fbe857"
-dependencies = [
- "cap-std",
- "rand",
- "rustix",
- "uuid",
-]
-
-[[package]]
 name = "cap-time-ext"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2868,9 +2856,6 @@ name = "uuid"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
-dependencies = [
- "getrandom",
-]
 
 [[package]]
 name = "v8"
@@ -2941,11 +2926,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
-name = "wasi-cap-std-sync"
+name = "wasi-common"
 version = "18.0.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "bitflags 2.4.1",
  "cap-fs-ext",
  "cap-rand",
  "cap-std",
@@ -2953,26 +2938,11 @@ dependencies = [
  "fs-set-times",
  "io-extras",
  "io-lifetimes",
+ "libc",
+ "log",
  "once_cell",
  "rustix",
  "system-interface",
- "tempfile",
- "tracing",
- "wasi-common",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "wasi-common"
-version = "18.0.0"
-dependencies = [
- "anyhow",
- "bitflags 2.4.1",
- "cap-rand",
- "cap-std",
- "io-extras",
- "log",
- "rustix",
  "tempfile",
  "test-log",
  "test-programs-artifacts",
@@ -2981,7 +2951,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wasmtime",
- "wasmtime-wasi",
  "wiggle",
  "windows-sys 0.52.0",
 ]
@@ -3004,23 +2973,6 @@ dependencies = [
  "wasi",
  "wasm-encoder 0.41.0",
  "wit-bindgen",
-]
-
-[[package]]
-name = "wasi-tokio"
-version = "18.0.0"
-dependencies = [
- "anyhow",
- "cap-std",
- "cap-tempfile",
- "io-extras",
- "io-lifetimes",
- "rustix",
- "tempfile",
- "tokio",
- "wasi-cap-std-sync",
- "wasi-common",
- "wiggle",
 ]
 
 [[package]]
@@ -3245,7 +3197,7 @@ dependencies = [
  "serde_json",
  "target-lexicon",
  "tempfile",
- "wasi-cap-std-sync",
+ "wasi-common",
  "wasm-encoder 0.41.0",
  "wasmparser 0.121.0",
  "wasmtime-cache",
@@ -3257,7 +3209,6 @@ dependencies = [
  "wasmtime-jit-debug",
  "wasmtime-jit-icache-coherence",
  "wasmtime-runtime",
- "wasmtime-wasi",
  "wasmtime-winch",
  "wat",
  "windows-sys 0.52.0",
@@ -3279,10 +3230,9 @@ dependencies = [
  "clap",
  "shuffling-allocator",
  "target-lexicon",
- "wasi-cap-std-sync",
+ "wasi-common",
  "wasmtime",
  "wasmtime-cli-flags",
- "wasmtime-wasi",
  "wasmtime-wasi-nn",
  "wat",
 ]
@@ -3305,7 +3255,6 @@ dependencies = [
  "log",
  "once_cell",
  "tracing",
- "wasi-cap-std-sync",
  "wasi-common",
  "wasmtime",
  "wasmtime-c-api-macros",
@@ -3352,6 +3301,7 @@ dependencies = [
  "bstr",
  "bytes",
  "bytesize",
+ "cfg-if",
  "clap",
  "component-macro-test",
  "component-test-util",
@@ -3379,6 +3329,7 @@ dependencies = [
  "tokio",
  "tracing",
  "walkdir",
+ "wasi-common",
  "wasmparser 0.121.0",
  "wasmtime",
  "wasmtime-cache",
@@ -3676,11 +3627,11 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "cap-time-ext",
+ "cfg-if",
  "fs-set-times",
  "futures",
  "io-extras",
  "io-lifetimes",
- "libc",
  "log",
  "once_cell",
  "rustix",
@@ -3693,9 +3644,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "wasi-cap-std-sync",
  "wasi-common",
- "wasi-tokio",
  "wasmtime",
  "wiggle",
  "windows-sys 0.52.0",
@@ -3738,8 +3687,8 @@ dependencies = [
  "thiserror",
  "tracing",
  "walkdir",
+ "wasi-common",
  "wasmtime",
- "wasmtime-wasi",
  "wiggle",
 ]
 
@@ -3752,7 +3701,6 @@ dependencies = [
  "rand",
  "wasi-common",
  "wasmtime",
- "wasmtime-wasi",
 ]
 
 [[package]]

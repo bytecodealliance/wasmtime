@@ -67,20 +67,40 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct OpenMode: usize {
+        const READ = 0b1;
+        const WRITE = 0b10;
+    }
+}
+
 pub struct File {
+    /// The operating system File this struct is mediating access to.
+    ///
     /// Wrapped in an Arc because the same underlying file is used for
-    /// implementing the stream types. Also needed for [`spawn_blocking`].
+    /// implementing the stream types. A copy is also needed for
+    /// [`spawn_blocking`].
     ///
     /// [`spawn_blocking`]: Self::spawn_blocking
     pub file: Arc<cap_std::fs::File>,
+    /// Permissions to enforce on access to the file. These permissions are
+    /// specified by a user of the `crate::preview2::WasiCtxBuilder`, and are
+    /// enforced prior to any enforced by the underlying operating system.
     pub perms: FilePerms,
+    /// The mode the file was opened under: bits for reading, and writing.
+    /// Required to correctly report the DescriptorFlags, because cap-std
+    /// doesn't presently provide a cross-platform equivelant of reading the
+    /// oflags back out using fcntl.
+    pub open_mode: OpenMode,
 }
 
 impl File {
-    pub fn new(file: cap_std::fs::File, perms: FilePerms) -> Self {
+    pub fn new(file: cap_std::fs::File, perms: FilePerms, open_mode: OpenMode) -> Self {
         Self {
             file: Arc::new(file),
             perms,
+            open_mode,
         }
     }
 
@@ -106,17 +126,41 @@ bitflags::bitflags! {
 
 #[derive(Clone)]
 pub struct Dir {
+    /// The operating system file descriptor this struct is mediating access
+    /// to.
+    ///
+    /// Wrapped in an Arc because a copy is needed for [`spawn_blocking`].
+    ///
+    /// [`spawn_blocking`]: Self::spawn_blocking
     pub dir: Arc<cap_std::fs::Dir>,
+    /// Permissions to enforce on access to this directory. These permissions
+    /// are specified by a user of the `crate::preview2::WasiCtxBuilder`, and
+    /// are enforced prior to any enforced by the underlying operating system.
+    ///
+    /// These permissions are also enforced on any directories opened under
+    /// this directory.
     pub perms: DirPerms,
+    /// Permissions to enforce on any files opened under this directory.
     pub file_perms: FilePerms,
+    /// The mode the directory was opened under: bits for reading, and writing.
+    /// Required to correctly report the DescriptorFlags, because cap-std
+    /// doesn't presently provide a cross-platform equivelant of reading the
+    /// oflags back out using fcntl.
+    pub open_mode: OpenMode,
 }
 
 impl Dir {
-    pub fn new(dir: cap_std::fs::Dir, perms: DirPerms, file_perms: FilePerms) -> Self {
+    pub fn new(
+        dir: cap_std::fs::Dir,
+        perms: DirPerms,
+        file_perms: FilePerms,
+        open_mode: OpenMode,
+    ) -> Self {
         Dir {
             dir: Arc::new(dir),
             perms,
             file_perms,
+            open_mode,
         }
     }
 

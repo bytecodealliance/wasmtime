@@ -327,7 +327,7 @@
 //!
 //! ```no_run
 //! # use wasmtime::*;
-//! use wasmtime_wasi::sync::WasiCtxBuilder;
+//! use wasi_common::sync::WasiCtxBuilder;
 //!
 //! # fn main() -> wasmtime::Result<()> {
 //! // Compile our module and create a `Linker` which has WASI functions defined
@@ -335,7 +335,7 @@
 //! let engine = Engine::default();
 //! let module = Module::from_file(&engine, "foo.wasm")?;
 //! let mut linker = Linker::new(&engine);
-//! wasmtime_wasi::add_to_linker(&mut linker, |cx| cx)?;
+//! wasi_common::sync::add_to_linker(&mut linker, |cx| cx)?;
 //!
 //! // Configure and create a `WasiCtx`, which WASI functions need access to
 //! // through the host state of the store (which in this case is the host state

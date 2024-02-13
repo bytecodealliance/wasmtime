@@ -45,7 +45,3 @@ tokio = { workspace = true, features = ['macros'] }
 futures = { workspace = true, default-features = false, features = ['alloc'] }
 sha2 = "0.10.2"
 base64 = "0.21.0"
-
-[features]
-default = ["sync"]
-sync = ["wasmtime-wasi/sync"]
