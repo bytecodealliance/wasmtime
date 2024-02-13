@@ -166,15 +166,9 @@ fn parse_source(
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
     let mut parse = |resolve: &mut Resolve, path: &Path| -> anyhow::Result<_> {
-        if path.is_dir() {
-            let (pkg, sources) = resolve.push_dir(path)?;
-            files = sources;
-            Ok(pkg)
-        } else {
-            let pkg = UnresolvedPackage::parse_file(path)?;
-            files.extend(pkg.source_files().map(|s| s.to_owned()));
-            resolve.push(pkg)
-        }
+        let (pkg, sources) = resolve.push_path(path)?;
+        files.extend(sources);
+        Ok(pkg)
     };
 
     let path_pkg = if let Some(path) = path {
