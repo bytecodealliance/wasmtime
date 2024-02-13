@@ -38,6 +38,11 @@ pub(crate) struct Elaborator<'a> {
     /// is already placed in the Layout. If so, we duplicate, and
     /// insert non-identity mappings from the original inst's results
     /// to the cloned inst's results.
+    ///
+    /// Note that as values may refer to unions that represent a subset
+    /// of a larger eclass, it's not valid to walk towards the root of a
+    /// union tree: doing so would potentially equate values that fall
+    /// on different branches of the dominator tree.
     value_to_elaborated_value: ScopedHashMap<Value, ElaboratedValue>,
     /// Map from Value to the best (lowest-cost) Value in its eclass
     /// (tree of union value-nodes).
