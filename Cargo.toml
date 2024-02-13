@@ -55,7 +55,9 @@ humantime = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }
-tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
+futures-util = { version = "*", optional = true }
+tokio = { workspace = true, optional = true, features = [ "fs", "signal", "macros" ] }
+tokio-util = { version = "*", optional = true }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
@@ -371,7 +373,7 @@ parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
 logging = ["wasmtime-cli-flags/logging"]
 demangle = ["wasmtime/demangle"]
 cranelift = ["wasmtime-cli-flags/cranelift", "dep:wasmtime-cranelift"]
-profiling = ["wasmtime/profiling"]
+profiling = ["wasmtime/profiling", "dep:futures-util", "dep:hyper", "dep:tokio-util"]
 coredump = ["wasmtime-cli-flags/coredump"]
 addr2line = ["wasmtime/addr2line"]
 debug-builtins = ["wasmtime/debug-builtins"]
