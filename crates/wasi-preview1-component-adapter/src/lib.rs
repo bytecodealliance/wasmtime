@@ -908,6 +908,13 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
         return ERRNO_BADF;
     }
 
+    // For the proxy adapter don't return `ERRNO_NOTSUP` through below, instead
+    // always return `ERRNO_BADF` which is the indicator that prestats aren't
+    // available.
+    if cfg!(feature = "proxy") {
+        return ERRNO_BADF;
+    }
+
     cfg_filesystem_available! {
         State::with(|state| {
             let ds = state.descriptors();
