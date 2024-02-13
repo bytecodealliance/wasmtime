@@ -4144,6 +4144,8 @@ dependencies = [
 [[package]]
 name = "wit-bindgen"
 version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5408d742fcdf418b766f23b2393f0f4d9b10b72b7cd96d9525626943593e8cc0"
 dependencies = [
  "bitflags 2.4.1",
  "wit-bindgen-rust-macro",
@@ -4152,6 +4154,8 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-core"
 version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7146725463d08ccf9c6c5357a7a6c1fff96185d95d6e84e7c75c92e5b1273c93"
 dependencies = [
  "anyhow",
  "wit-parser",
@@ -4160,6 +4164,8 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-rust"
 version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb5fefcf93ff2ea03c8fe9b9db2caee3096103c0e3cd62ed54f6f9493aa6b405"
 dependencies = [
  "anyhow",
  "heck",
@@ -4170,7 +4176,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen-rust-macro"
-version = "0.18.0"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce4059a1adc671e4457f457cb638ed2f766a1a462bb7daa3b638c6fb1fda156e"
 dependencies = [
  "anyhow",
  "proc-macro2",

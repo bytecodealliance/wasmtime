@@ -1304,6 +1304,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wit-bindgen-rust-macro]]
+version = "0.18.1"
+when = "2024-02-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wit-component]]
 version = "0.20.1"
 when = "2024-01-29"
