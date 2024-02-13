@@ -2,10 +2,10 @@ use anyhow::Error;
 use std::sync::Arc;
 use tokio::time::Duration;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-// For this example we want to use the async version of wasmtime_wasi.
+// For this example we want to use the async version of wasi_common.
 // Notably, this version of wasi uses a scheduler that will async yield
 // when sleeping in `poll_oneoff`.
-use wasmtime_wasi::{tokio::WasiCtxBuilder, WasiCtx};
+use wasi_common::{tokio::WasiCtxBuilder, WasiCtx};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -61,7 +61,7 @@ impl Environment {
         // adds WASI functions to the linker, notably the async versions built
         // on tokio.
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::tokio::add_to_linker(&mut linker, |cx| cx)?;
+        wasi_common::tokio::add_to_linker(&mut linker, |cx| cx)?;
 
         Ok(Self {
             engine,

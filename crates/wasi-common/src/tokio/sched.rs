@@ -8,12 +8,12 @@ mod windows;
 #[cfg(windows)]
 pub use windows::poll_oneoff;
 
-use wasi_common::{
+use crate::{
     sched::{Duration, Poll, WasiSched},
     Error,
 };
 
-pub fn sched_ctx() -> Box<dyn wasi_common::WasiSched> {
+pub fn sched_ctx() -> Box<dyn crate::WasiSched> {
     struct AsyncSched;
 
     #[wiggle::async_trait]

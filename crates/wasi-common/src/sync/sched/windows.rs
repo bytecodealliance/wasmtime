@@ -8,13 +8,13 @@
 // We suspect there are bugs in this scheduler, however, we have not
 // taken the time to improve it. See bug #2880.
 
+use crate::sched::subscription::{RwEventFlags, Subscription};
+use crate::{file::WasiFile, sched::Poll, Error, ErrorExt};
 use once_cell::sync::Lazy;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
-use wasi_common::sched::subscription::{RwEventFlags, Subscription};
-use wasi_common::{file::WasiFile, sched::Poll, Error, ErrorExt};
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     poll_oneoff_(poll, wasi_file_is_stdin).await
@@ -122,7 +122,7 @@ pub async fn poll_oneoff_<'a>(
 }
 
 pub fn wasi_file_is_stdin(f: &dyn WasiFile) -> bool {
-    f.as_any().is::<crate::stdio::Stdin>()
+    f.as_any().is::<crate::sync::stdio::Stdin>()
 }
 
 enum PollState {

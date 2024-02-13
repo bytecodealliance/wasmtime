@@ -3,9 +3,9 @@
 use anyhow::Result;
 use std::path::Path;
 use test_programs_artifacts::*;
+use wasi_common::sync::{Dir, WasiCtxBuilder};
+use wasi_common::WasiCtx;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::sync::{Dir, WasiCtxBuilder};
-use wasmtime_wasi::WasiCtx;
 use wasmtime_wasi_nn::{backend, testing, InMemoryRegistry, WasiNnCtx};
 
 const PREOPENED_DIR_NAME: &str = "fixture";
@@ -20,7 +20,7 @@ fn run(path: &str, preload_model: bool) -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
     wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi_nn)?;
-    wasmtime_wasi::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi)?;
+    wasi_common::sync::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi)?;
     let module = Module::from_file(&engine, path)?;
     let mut store = Store::new(&engine, Ctx::new(&testing::artifacts_dir(), preload_model)?);
     let instance = linker.instantiate(&mut store, &module)?;

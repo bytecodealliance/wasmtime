@@ -1,14 +1,14 @@
-use crate::file::{filetype_from, File};
+use crate::sync::file::{filetype_from, File};
+use crate::{
+    dir::{ReaddirCursor, ReaddirEntity, WasiDir},
+    file::{FdFlags, FileType, Filestat, OFlags},
+    Error, ErrorExt,
+};
 use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, OpenOptionsMaybeDirExt, SystemTimeSpec};
 use cap_std::fs;
 use std::any::Any;
 use std::path::{Path, PathBuf};
 use system_interface::fs::GetSetFdFlags;
-use wasi_common::{
-    dir::{ReaddirCursor, ReaddirEntity, WasiDir},
-    file::{FdFlags, FileType, Filestat, OFlags},
-    Error, ErrorExt,
-};
 
 pub struct Dir(fs::Dir);
 
@@ -71,9 +71,7 @@ impl Dir {
         // ideally OpenOptions would just support this though:
         // https://github.com/bytecodealliance/cap-std/issues/146
         if fdflags.intersects(
-            wasi_common::file::FdFlags::DSYNC
-                | wasi_common::file::FdFlags::SYNC
-                | wasi_common::file::FdFlags::RSYNC,
+            crate::file::FdFlags::DSYNC | crate::file::FdFlags::SYNC | crate::file::FdFlags::RSYNC,
         ) {
             return Err(Error::not_supported().context("SYNC family of FdFlags"));
         }
@@ -96,7 +94,7 @@ impl Dir {
             Err(Error::not_dir().context("expected directory but got file"))
         } else {
             // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
-            if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
+            if fdflags.contains(crate::file::FdFlags::NONBLOCK) {
                 let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
                 f.set_fd_flags(set_fd_flags)?;
             }
@@ -122,7 +120,7 @@ impl Dir {
     }
 }
 
-#[async_trait::async_trait]
+#[wiggle::async_trait]
 impl WasiDir for Dir {
     fn as_any(&self) -> &dyn Any {
         self
@@ -135,11 +133,11 @@ impl WasiDir for Dir {
         read: bool,
         write: bool,
         fdflags: FdFlags,
-    ) -> Result<wasi_common::dir::OpenResult, Error> {
+    ) -> Result<crate::dir::OpenResult, Error> {
         let f = self.open_file_(symlink_follow, path, oflags, read, write, fdflags)?;
         match f {
-            OpenResult::File(f) => Ok(wasi_common::dir::OpenResult::File(Box::new(f))),
-            OpenResult::Dir(d) => Ok(wasi_common::dir::OpenResult::Dir(Box::new(d))),
+            OpenResult::File(f) => Ok(crate::dir::OpenResult::File(Box::new(f))),
+            OpenResult::Dir(d) => Ok(crate::dir::OpenResult::Dir(Box::new(d))),
         }
     }
 
@@ -307,8 +305,8 @@ impl WasiDir for Dir {
     async fn set_times(
         &self,
         path: &str,
-        atime: Option<wasi_common::SystemTimeSpec>,
-        mtime: Option<wasi_common::SystemTimeSpec>,
+        atime: Option<crate::SystemTimeSpec>,
+        mtime: Option<crate::SystemTimeSpec>,
         follow_symlinks: bool,
     ) -> Result<(), Error> {
         if follow_symlinks {
@@ -328,10 +326,10 @@ impl WasiDir for Dir {
     }
 }
 
-fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemTimeSpec> {
+fn convert_systimespec(t: Option<crate::SystemTimeSpec>) -> Option<SystemTimeSpec> {
     match t {
-        Some(wasi_common::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t)),
-        Some(wasi_common::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
+        Some(crate::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t)),
+        Some(crate::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
         None => None,
     }
 }
@@ -339,8 +337,8 @@ fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemT
 #[cfg(test)]
 mod test {
     use super::Dir;
+    use crate::file::{FdFlags, OFlags};
     use cap_std::ambient_authority;
-    use wasi_common::file::{FdFlags, OFlags};
     #[test]
     fn scratch_dir() {
         let tempdir = tempfile::Builder::new()
@@ -350,7 +348,7 @@ mod test {
         let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
-        run(wasi_common::WasiDir::open_file(
+        run(crate::WasiDir::open_file(
             &preopen_dir,
             false,
             ".",
@@ -366,9 +364,9 @@ mod test {
     #[cfg(not(windows))]
     #[test]
     fn readdir() {
+        use crate::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
+        use crate::file::{FdFlags, FileType, OFlags};
         use std::collections::HashMap;
-        use wasi_common::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
-        use wasi_common::file::{FdFlags, FileType, OFlags};
 
         fn readdir_into_map(dir: &dyn WasiDir) -> HashMap<String, ReaddirEntity> {
             let mut out = HashMap::new();

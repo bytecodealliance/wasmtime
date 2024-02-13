@@ -76,13 +76,7 @@ audit-as-crates-io = true
 [policy.isle-fuzz]
 criteria = "safe-to-run"
 
-[policy.wasi-cap-std-sync]
-audit-as-crates-io = true
-
 [policy.wasi-common]
-audit-as-crates-io = true
-
-[policy.wasi-tokio]
 audit-as-crates-io = true
 
 [policy.wasmtime]

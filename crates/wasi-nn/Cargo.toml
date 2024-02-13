@@ -33,5 +33,5 @@ walkdir = { workspace = true }
 [dev-dependencies]
 cap-std = { workspace = true }
 test-programs-artifacts = { workspace = true }
-wasmtime-wasi = { workspace = true, features = ["sync"] }
+wasi-common = { workspace = true, features = ["sync"] }
 wasmtime = { workspace = true, features = ["cranelift"] }
