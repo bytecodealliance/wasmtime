@@ -4,8 +4,9 @@ use crate::preview2::bindings::filesystem::types::{
     self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
 };
 use crate::preview2::bindings::io::streams::{InputStream, OutputStream};
-use crate::preview2::filesystem::{Descriptor, Dir, File, ReaddirIterator};
-use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
+use crate::preview2::filesystem::{
+    Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
+};
 use crate::preview2::{DirPerms, FilePerms, FsError, FsResult, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
@@ -130,10 +131,10 @@ impl<T: WasiView> HostDescriptor for T {
             Descriptor::File(f) => {
                 let flags = f.spawn_blocking(|f| f.get_fd_flags()).await?;
                 let mut flags = get_from_fdflags(flags);
-                if f.perms.contains(FilePerms::READ) {
+                if f.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
                 }
-                if f.perms.contains(FilePerms::WRITE) {
+                if f.open_mode.contains(OpenMode::WRITE) {
                     flags |= DescriptorFlags::WRITE;
                 }
                 Ok(flags)
@@ -141,10 +142,10 @@ impl<T: WasiView> HostDescriptor for T {
             Descriptor::Dir(d) => {
                 let flags = d.spawn_blocking(|d| d.get_fd_flags()).await?;
                 let mut flags = get_from_fdflags(flags);
-                if d.perms.contains(DirPerms::READ) {
+                if d.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
                 }
-                if d.perms.contains(DirPerms::MUTATE) {
+                if d.open_mode.contains(OpenMode::WRITE) {
                     flags |= DescriptorFlags::MUTATE_DIRECTORY;
                 }
                 Ok(flags)
@@ -507,28 +508,40 @@ impl<T: WasiView> HostDescriptor for T {
             }
         }
 
+        // Track whether we are creating file, for permission check:
+        let mut create = false;
+        // Track open mode, for permission check and recording in created descriptor:
+        let mut open_mode = OpenMode::empty();
+        // Construct the OpenOptions to give the OS:
         let mut opts = cap_std::fs::OpenOptions::new();
         opts.maybe_dir(true);
 
-        if oflags.contains(OpenFlags::CREATE | OpenFlags::EXCLUSIVE) {
-            opts.create_new(true);
+        if oflags.contains(OpenFlags::CREATE) {
+            if oflags.contains(OpenFlags::EXCLUSIVE) {
+                opts.create_new(true);
+            } else {
+                opts.create(true);
+            }
+            create = true;
             opts.write(true);
-        } else if oflags.contains(OpenFlags::CREATE) {
-            opts.create(true);
-            opts.write(true);
+            open_mode |= OpenMode::WRITE;
         }
+
         if oflags.contains(OpenFlags::TRUNCATE) {
             opts.truncate(true);
         }
         if flags.contains(DescriptorFlags::READ) {
             opts.read(true);
+            open_mode |= OpenMode::READ;
         }
         if flags.contains(DescriptorFlags::WRITE) {
             opts.write(true);
+            open_mode |= OpenMode::WRITE;
         } else {
             // If not opened write, open read. This way the OS lets us open
             // the file, but we can use perms to reject use of the file later.
             opts.read(true);
+            open_mode |= OpenMode::READ;
         }
         if symlink_follow(path_flags) {
             opts.follow(FollowSymlinks::Yes);
@@ -538,8 +551,8 @@ impl<T: WasiView> HostDescriptor for T {
 
         // These flags are not yet supported in cap-std:
         if flags.contains(DescriptorFlags::FILE_INTEGRITY_SYNC)
-            | flags.contains(DescriptorFlags::DATA_INTEGRITY_SYNC)
-            | flags.contains(DescriptorFlags::REQUESTED_WRITE_SYNC)
+            || flags.contains(DescriptorFlags::DATA_INTEGRITY_SYNC)
+            || flags.contains(DescriptorFlags::REQUESTED_WRITE_SYNC)
         {
             Err(ErrorCode::Unsupported)?;
         }
@@ -551,6 +564,15 @@ impl<T: WasiView> HostDescriptor for T {
             {
                 Err(ErrorCode::Invalid)?;
             }
+        }
+
+        // Now enforce this WasiCtx's permissions before letting the OS have
+        // its shot:
+        if !d.perms.contains(DirPerms::MUTATE) && create {
+            Err(ErrorCode::NotPermitted)?;
+        }
+        if !d.file_perms.contains(FilePerms::WRITE) && open_mode.contains(OpenMode::WRITE) {
+            Err(ErrorCode::NotPermitted)?;
         }
 
         // Represents each possible outcome from the spawn_blocking operation.
@@ -582,14 +604,16 @@ impl<T: WasiView> HostDescriptor for T {
             .await?;
 
         match opened {
-            OpenResult::Dir(dir) => {
-                Ok(table.push(Descriptor::Dir(Dir::new(dir, d.perms, d.file_perms)))?)
-            }
-
-            OpenResult::File(file) => Ok(table.push(Descriptor::File(File::new(
-                file,
-                mask_file_perms(d.file_perms, flags),
+            OpenResult::Dir(dir) => Ok(table.push(Descriptor::Dir(Dir::new(
+                dir,
+                d.perms,
+                d.file_perms,
+                open_mode,
             )))?),
+
+            OpenResult::File(file) => {
+                Ok(table.push(Descriptor::File(File::new(file, d.file_perms, open_mode)))?)
+            }
 
             OpenResult::NotDir => Err(ErrorCode::NotDirectory.into()),
         }
@@ -1038,18 +1062,6 @@ fn descriptorstat_from(meta: cap_std::fs::Metadata) -> types::DescriptorStat {
 
 fn symlink_follow(path_flags: types::PathFlags) -> bool {
     path_flags.contains(types::PathFlags::SYMLINK_FOLLOW)
-}
-
-fn mask_file_perms(p: FilePerms, flags: types::DescriptorFlags) -> FilePerms {
-    use types::DescriptorFlags;
-    let mut out = FilePerms::empty();
-    if p.contains(FilePerms::READ) && flags.contains(DescriptorFlags::READ) {
-        out |= FilePerms::READ;
-    }
-    if p.contains(FilePerms::WRITE) && flags.contains(DescriptorFlags::WRITE) {
-        out |= FilePerms::WRITE;
-    }
-    out
 }
 
 #[cfg(test)]
