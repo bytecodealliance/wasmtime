@@ -12,7 +12,6 @@ use crate::ir::{Block, Function, Inst, Value, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
-use crate::unionfind::UnionFind;
 use alloc::vec::Vec;
 use cranelift_entity::{packed_option::ReservedValue, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
@@ -22,7 +21,6 @@ pub(crate) struct Elaborator<'a> {
     domtree: &'a DominatorTree,
     domtree_children: &'a DomTreeWithChildren,
     loop_analysis: &'a LoopAnalysis,
-    eclasses: &'a mut UnionFind<Value>,
     /// Map from Value that is produced by a pure Inst (and was thus
     /// not in the side-effecting skeleton) to the value produced by
     /// an elaborated inst (placed in the layout) to whose results we
@@ -40,6 +38,11 @@ pub(crate) struct Elaborator<'a> {
     /// is already placed in the Layout. If so, we duplicate, and
     /// insert non-identity mappings from the original inst's results
     /// to the cloned inst's results.
+    ///
+    /// Note that as values may refer to unions that represent a subset
+    /// of a larger eclass, it's not valid to walk towards the root of a
+    /// union tree: doing so would potentially equate values that fall
+    /// on different branches of the dominator tree.
     value_to_elaborated_value: ScopedHashMap<Value, ElaboratedValue>,
     /// Map from Value to the best (lowest-cost) Value in its eclass
     /// (tree of union value-nodes).
@@ -138,7 +141,6 @@ impl<'a> Elaborator<'a> {
         domtree_children: &'a DomTreeWithChildren,
         loop_analysis: &'a LoopAnalysis,
         remat_values: &'a FxHashSet<Value>,
-        eclasses: &'a mut UnionFind<Value>,
         stats: &'a mut Stats,
     ) -> Self {
         let num_values = func.dfg.num_values();
@@ -150,7 +152,6 @@ impl<'a> Elaborator<'a> {
             domtree,
             domtree_children,
             loop_analysis,
-            eclasses,
             value_to_elaborated_value: ScopedHashMap::with_capacity(num_values),
             value_to_best_value,
             loop_stack: smallvec![],
@@ -392,14 +393,6 @@ impl<'a> Elaborator<'a> {
                     let value = self.func.dfg.resolve_aliases(value);
 
                     self.stats.elaborate_visit_node += 1;
-                    let canonical_value = self.eclasses.find_and_update(value);
-                    debug_assert_ne!(canonical_value, Value::reserved_value());
-                    trace!(
-                        "elaborate: value {} canonical {} before {}",
-                        value,
-                        canonical_value,
-                        before
-                    );
 
                     // Get the best option; we use `value` (latest
                     // value) here so we have a full view of the
@@ -409,7 +402,7 @@ impl<'a> Elaborator<'a> {
                     trace!("elaborate: value {} -> best {}", value, best_value);
                     debug_assert_ne!(best_value, Value::reserved_value());
 
-                    if let Some(elab_val) = self.value_to_elaborated_value.get(&canonical_value) {
+                    if let Some(elab_val) = self.value_to_elaborated_value.get(&best_value) {
                         // Value is available; use it.
                         trace!("elaborate: value {} -> {:?}", value, elab_val);
                         self.stats.elaborate_memoize_hit += 1;
@@ -635,16 +628,14 @@ impl<'a> Elaborator<'a> {
                                 value: new_result,
                                 in_block: insert_block,
                             };
-                            let canonical_result = self.eclasses.find_and_update(result);
+                            let best_result = self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
-                                canonical_result,
+                                best_result.1,
                                 elab_value,
                                 scope_depth,
                             );
 
-                            self.eclasses.add(new_result);
-                            self.eclasses.union(result, new_result);
-                            self.value_to_best_value[new_result] = self.value_to_best_value[result];
+                            self.value_to_best_value[new_result] = best_result;
 
                             trace!(
                                 " -> cloned inst has new result {} for orig {}",
@@ -663,9 +654,9 @@ impl<'a> Elaborator<'a> {
                                 value: result,
                                 in_block: insert_block,
                             };
-                            let canonical_result = self.eclasses.find_and_update(result);
+                            let best_result = self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
-                                canonical_result,
+                                best_result.1,
                                 elab_value,
                                 scope_depth,
                             );
@@ -675,7 +666,7 @@ impl<'a> Elaborator<'a> {
                     };
 
                     // Place the inst just before `before`.
-                    debug_assert!(
+                    assert!(
                         is_pure_for_egraph(self.func, inst),
                         "something has gone very wrong if we are elaborating effectful \
                          instructions, they should have remained in the skeleton"
@@ -757,9 +748,9 @@ impl<'a> Elaborator<'a> {
             // map now.
             for &result in self.func.dfg.inst_results(inst) {
                 trace!(" -> result {}", result);
-                let canonical_result = self.eclasses.find_and_update(result);
+                let best_result = self.value_to_best_value[result];
                 self.value_to_elaborated_value.insert_if_absent(
-                    canonical_result,
+                    best_result.1,
                     ElaboratedValue {
                         in_block: block,
                         value: result,
