@@ -487,9 +487,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-fs-ext]]
+version = "3.0.0"
+when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-net-ext]]
 version = "2.0.1"
 when = "2024-01-02"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-net-ext]]
+version = "3.0.0"
+when = "2024-01-11"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -501,9 +515,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-primitives]]
+version = "3.0.0"
+when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-rand]]
 version = "2.0.1"
 when = "2024-01-02"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-rand]]
+version = "3.0.0"
+when = "2024-01-11"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -515,9 +543,9 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
-[[publisher.cap-tempfile]]
-version = "2.0.1"
-when = "2024-01-02"
+[[publisher.cap-std]]
+version = "3.0.0"
+when = "2024-01-11"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -525,6 +553,13 @@ user-name = "Dan Gohman"
 [[publisher.cap-time-ext]]
 version = "2.0.1"
 when = "2024-01-02"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-time-ext]]
+version = "3.0.0"
+when = "2024-01-11"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -743,6 +778,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.io-lifetimes]]
+version = "2.0.3"
+when = "2023-12-01"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.is-terminal]]
 version = "0.4.10"
 when = "2023-12-28"
@@ -848,6 +890,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.rustix]]
+version = "0.38.31"
+when = "2024-02-01"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.ryu]]
 version = "1.0.9"
 when = "2021-12-12"
@@ -924,9 +973,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.system-interface]]
+version = "0.27.1"
+when = "2024-02-13"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.target-lexicon]]
 version = "0.12.12"
 when = "2023-10-19"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.target-lexicon]]
+version = "0.12.13"
+when = "2024-01-02"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1001,19 +1064,7 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
-[[publisher.wasi-cap-std-sync]]
-version = "17.0.0"
-when = "2024-01-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
 [[publisher.wasi-common]]
-version = "17.0.0"
-when = "2024-01-25"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasi-tokio]]
 version = "17.0.0"
 when = "2024-01-25"
 user-id = 73222
