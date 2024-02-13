@@ -142,9 +142,9 @@ use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
+use wasi_common::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 use wasmtime::{Engine, Instance, Linker, Module, Store};
 use wasmtime_cli_flags::CommonOptions;
-use wasmtime_wasi::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -304,20 +304,20 @@ pub extern "C" fn wasm_bench_create(
                 let stdout = std::fs::File::create(&stdout_path)
                     .with_context(|| format!("failed to create {}", stdout_path.display()))?;
                 let stdout = cap_std::fs::File::from_std(stdout);
-                let stdout = wasi_cap_std_sync::file::File::from_cap_std(stdout);
+                let stdout = wasi_common::sync::file::File::from_cap_std(stdout);
                 cx.stdout(Box::new(stdout));
 
                 let stderr = std::fs::File::create(&stderr_path)
                     .with_context(|| format!("failed to create {}", stderr_path.display()))?;
                 let stderr = cap_std::fs::File::from_std(stderr);
-                let stderr = wasi_cap_std_sync::file::File::from_cap_std(stderr);
+                let stderr = wasi_common::sync::file::File::from_cap_std(stderr);
                 cx.stderr(Box::new(stderr));
 
                 if let Some(stdin_path) = &stdin_path {
                     let stdin = std::fs::File::open(stdin_path)
                         .with_context(|| format!("failed to open {}", stdin_path.display()))?;
                     let stdin = cap_std::fs::File::from_std(stdin);
-                    let stdin = wasi_cap_std_sync::file::File::from_cap_std(stdin);
+                    let stdin = wasi_common::sync::file::File::from_cap_std(stdin);
                     cx.stdin(Box::new(stdin));
                 }
 
@@ -460,7 +460,7 @@ impl BenchState {
         let fuel = options.wasm.fuel;
 
         if options.wasi.common != Some(false) {
-            wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
+            wasi_common::sync::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
         }
 
         #[cfg(feature = "wasi-nn")]

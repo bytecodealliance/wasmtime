@@ -1,3 +1,7 @@
+use crate::{
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
+    Error, ErrorExt,
+};
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
 use io_lifetimes::AsFilelike;
@@ -8,10 +12,6 @@ use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},
     io::{IoExt, ReadReady},
 };
-use wasi_common::{
-    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
-    Error, ErrorExt,
-};
 
 pub struct File(cap_std::fs::File);
 
@@ -21,7 +21,7 @@ impl File {
     }
 }
 
-#[async_trait::async_trait]
+#[wiggle::async_trait]
 impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
@@ -52,9 +52,7 @@ impl WasiFile for File {
     }
     async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
         if fdflags.intersects(
-            wasi_common::file::FdFlags::DSYNC
-                | wasi_common::file::FdFlags::SYNC
-                | wasi_common::file::FdFlags::RSYNC,
+            crate::file::FdFlags::DSYNC | crate::file::FdFlags::SYNC | crate::file::FdFlags::RSYNC,
         ) {
             return Err(Error::invalid_argument().context("cannot set DSYNC, SYNC, or RSYNC flag"));
         }
@@ -85,8 +83,8 @@ impl WasiFile for File {
     }
     async fn set_times(
         &self,
-        atime: Option<wasi_common::SystemTimeSpec>,
-        mtime: Option<wasi_common::SystemTimeSpec>,
+        atime: Option<crate::SystemTimeSpec>,
+        mtime: Option<crate::SystemTimeSpec>,
     ) -> Result<(), Error> {
         self.0
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
@@ -186,33 +184,29 @@ impl AsFd for File {
     }
 }
 
-pub(crate) fn convert_systimespec(
-    t: Option<wasi_common::SystemTimeSpec>,
-) -> Option<SystemTimeSpec> {
+pub(crate) fn convert_systimespec(t: Option<crate::SystemTimeSpec>) -> Option<SystemTimeSpec> {
     match t {
-        Some(wasi_common::SystemTimeSpec::Absolute(t)) => {
-            Some(SystemTimeSpec::Absolute(t.into_std()))
-        }
-        Some(wasi_common::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
+        Some(crate::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t.into_std())),
+        Some(crate::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
         None => None,
     }
 }
 
-pub(crate) fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::FdFlags {
+pub(crate) fn to_sysif_fdflags(f: crate::file::FdFlags) -> system_interface::fs::FdFlags {
     let mut out = system_interface::fs::FdFlags::empty();
-    if f.contains(wasi_common::file::FdFlags::APPEND) {
+    if f.contains(crate::file::FdFlags::APPEND) {
         out |= system_interface::fs::FdFlags::APPEND;
     }
-    if f.contains(wasi_common::file::FdFlags::DSYNC) {
+    if f.contains(crate::file::FdFlags::DSYNC) {
         out |= system_interface::fs::FdFlags::DSYNC;
     }
-    if f.contains(wasi_common::file::FdFlags::NONBLOCK) {
+    if f.contains(crate::file::FdFlags::NONBLOCK) {
         out |= system_interface::fs::FdFlags::NONBLOCK;
     }
-    if f.contains(wasi_common::file::FdFlags::RSYNC) {
+    if f.contains(crate::file::FdFlags::RSYNC) {
         out |= system_interface::fs::FdFlags::RSYNC;
     }
-    if f.contains(wasi_common::file::FdFlags::SYNC) {
+    if f.contains(crate::file::FdFlags::SYNC) {
         out |= system_interface::fs::FdFlags::SYNC;
     }
     out
@@ -221,23 +215,23 @@ pub(crate) fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interfac
 /// Return the file-descriptor flags for a given file-like object.
 ///
 /// This returns the flags needed to implement [`WasiFile::get_fdflags`].
-pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common::file::FdFlags> {
+pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<crate::file::FdFlags> {
     let f = f.as_filelike().get_fd_flags()?;
-    let mut out = wasi_common::file::FdFlags::empty();
+    let mut out = crate::file::FdFlags::empty();
     if f.contains(system_interface::fs::FdFlags::APPEND) {
-        out |= wasi_common::file::FdFlags::APPEND;
+        out |= crate::file::FdFlags::APPEND;
     }
     if f.contains(system_interface::fs::FdFlags::DSYNC) {
-        out |= wasi_common::file::FdFlags::DSYNC;
+        out |= crate::file::FdFlags::DSYNC;
     }
     if f.contains(system_interface::fs::FdFlags::NONBLOCK) {
-        out |= wasi_common::file::FdFlags::NONBLOCK;
+        out |= crate::file::FdFlags::NONBLOCK;
     }
     if f.contains(system_interface::fs::FdFlags::RSYNC) {
-        out |= wasi_common::file::FdFlags::RSYNC;
+        out |= crate::file::FdFlags::RSYNC;
     }
     if f.contains(system_interface::fs::FdFlags::SYNC) {
-        out |= wasi_common::file::FdFlags::SYNC;
+        out |= crate::file::FdFlags::SYNC;
     }
     Ok(out)
 }

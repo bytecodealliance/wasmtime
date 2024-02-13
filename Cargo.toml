@@ -32,6 +32,9 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
+wasi-common = { workspace = true, default-features = true, features = [
+  "exit",
+] }
 wasmtime-wasi = { workspace = true, default-features = true, features = [
   "exit",
 ] }
@@ -55,13 +58,14 @@ humantime = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }
+cfg-if = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["mm", "param"] }
+rustix = { workspace = true, features = ["mm", "param", "process"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
@@ -181,8 +185,6 @@ wiggle = { path = "crates/wiggle", version = "=19.0.0", default-features = false
 wiggle-macro = { path = "crates/wiggle/macro", version = "=19.0.0" }
 wiggle-generate = { path = "crates/wiggle/generate", version = "=19.0.0" }
 wasi-common = { path = "crates/wasi-common", version = "=19.0.0", default-features = false }
-wasi-tokio = { path = "crates/wasi-common/tokio", version = "=19.0.0" }
-wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=19.0.0" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=19.0.0" }
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=19.0.0" }
@@ -358,7 +360,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
-wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper", "wasmtime-wasi-http?/sync"]
+wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
   "wasmtime/component-model",

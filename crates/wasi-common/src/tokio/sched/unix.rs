@@ -1,13 +1,13 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll as FPoll};
-use wasi_common::{
+use crate::{
     sched::{
         subscription::{RwEventFlags, Subscription},
         Poll,
     },
     Error,
 };
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll as FPoll};
 
 struct FirstReady<'a, T>(Vec<Pin<Box<dyn Future<Output = T> + Send + 'a>>>);
 

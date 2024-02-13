@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store, ValType};
-use wasmtime_wasi::maybe_exit_on_error;
 
 // This name is a function export designated by the wasi-threads specification:
 // https://github.com/WebAssembly/wasi-threads/#detailed-design-discussion
@@ -82,7 +81,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                     Ok(_) => log::trace!("exiting thread id = {} normally", wasi_thread_id),
                     Err(e) => {
                         log::trace!("exiting thread id = {} due to error", wasi_thread_id);
-                        let e = maybe_exit_on_error(e);
+                        let e = wasi_common::maybe_exit_on_error(e);
                         eprintln!("Error: {:?}", e);
                         std::process::exit(1);
                     }

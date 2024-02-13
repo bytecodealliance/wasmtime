@@ -1,8 +1,8 @@
+use crate::sched::subscription::{RwEventFlags, Subscription};
+use crate::{sched::Poll, Error, ErrorExt};
 use cap_std::time::Duration;
 use rustix::event::{PollFd, PollFlags};
 use std::convert::TryInto;
-use wasi_common::sched::subscription::{RwEventFlags, Subscription};
-use wasi_common::{sched::Poll, Error, ErrorExt};
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     if poll.is_empty() {

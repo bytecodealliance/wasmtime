@@ -8,12 +8,12 @@ pub mod windows;
 #[cfg(windows)]
 pub use windows::poll_oneoff;
 
-use std::thread;
-use std::time::Duration;
-use wasi_common::{
+use crate::{
     sched::{Poll, WasiSched},
     Error,
 };
+use std::thread;
+use std::time::Duration;
 
 pub struct SyncSched {}
 impl SyncSched {
@@ -21,7 +21,7 @@ impl SyncSched {
         Self {}
     }
 }
-#[async_trait::async_trait]
+#[wiggle::async_trait]
 impl WasiSched for SyncSched {
     async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
         poll_oneoff(poll).await
