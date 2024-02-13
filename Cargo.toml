@@ -218,19 +218,18 @@ byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-arra
 regalloc2 = "0.9.3"
 
 # cap-std family:
-target-lexicon = { version = "0.12.12", default-features = false, features = ["std"] }
-cap-std = "2.0.0"
-cap-rand = { version = "2.0.0", features = ["small_rng"] }
-cap-fs-ext = "2.0.0"
-cap-net-ext = "2.0.0"
-cap-time-ext = "2.0.0"
-cap-tempfile = "2.0.0"
-fs-set-times = "0.20.0"
-system-interface = { version = "0.26.0", features = ["cap_std_impls"] }
-io-lifetimes = { version = "2.0.2", default-features = false }
-io-extras = "0.18.0"
-rustix = "0.38.21"
-is-terminal = "0.4.0"
+target-lexicon = { version = "0.12.13", default-features = false, features = ["std"] }
+cap-std = "3.0.0"
+cap-rand = { version = "3.0.0", features = ["small_rng"] }
+cap-fs-ext = "3.0.0"
+cap-net-ext = "3.0.0"
+cap-time-ext = "3.0.0"
+cap-tempfile = "3.0.0"
+fs-set-times = "0.20.1"
+system-interface = { version = "0.27.1", features = ["cap_std_impls"] }
+io-lifetimes = { version = "2.0.3", default-features = false }
+io-extras = "0.18.1"
+rustix = "0.38.31"
 # wit-bindgen:
 wit-bindgen = { version = "0.17.0", default-features = false }
 
