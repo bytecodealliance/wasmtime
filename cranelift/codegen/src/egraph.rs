@@ -67,7 +67,7 @@ pub struct EgraphPass<'a> {
     pub(crate) stats: Stats,
     /// Union-find that maps all members of a Union tree (eclass) back
     /// to the *oldest* (lowest-numbered) `Value`.
-    eclasses: UnionFind<Value>,
+    pub(crate) eclasses: UnionFind<Value>,
 }
 
 // The maximum number of rewrites we will take from a single call into ISLE.
@@ -109,7 +109,7 @@ impl NewOrExistingInst {
             NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
                 let ty = dfg.ctrl_typevar(*inst);
-                (ty, dfg.insts[*inst].clone())
+                (ty, dfg.insts[*inst])
             }
         }
     }
@@ -195,15 +195,17 @@ where
             };
 
             let opt_value = self.optimize_pure_enode(inst);
+
+            for &argument in self.func.dfg.inst_args(inst) {
+                self.eclasses.pin_index(argument);
+            }
+
             let gvn_context = GVNContext {
                 union_find: self.eclasses,
                 value_lists: &self.func.dfg.value_lists,
             };
-            self.gvn_map.insert(
-                (ty, self.func.dfg.insts[inst].clone()),
-                opt_value,
-                &gvn_context,
-            );
+            self.gvn_map
+                .insert((ty, self.func.dfg.insts[inst]), opt_value, &gvn_context);
             self.value_to_opt_value[result] = opt_value;
             opt_value
         }
@@ -434,6 +436,7 @@ impl<'a> EgraphPass<'a> {
             }
         }
         trace!("stats: {:#?}", self.stats);
+        trace!("pinned_union_count: {}", self.eclasses.pinned_union_count);
         self.elaborate();
     }
 

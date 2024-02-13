@@ -232,18 +232,18 @@ io-extras = "0.18.0"
 rustix = "0.38.21"
 is-terminal = "0.4.0"
 # wit-bindgen:
-wit-bindgen = { version = "0.15.0", default-features = false }
+wit-bindgen = { version = "0.17.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.121.0"
-wat = "1.0.85"
-wast = "70.0.2"
-wasmprinter = "0.2.78"
-wasm-encoder = "0.41.0"
-wasm-smith = "0.15.1"
-wasm-mutate = "0.2.46"
-wit-parser = "0.13.1"
-wit-component = "0.20.1"
+wasmparser = "0.121.2"
+wat = "1.0.88"
+wast = "71.0.1"
+wasmprinter = "0.2.80"
+wasm-encoder = "0.41.2"
+wasm-smith = "0.16.1"
+wasm-mutate = "0.2.48"
+wit-parser = "0.14.0"
+wit-component = "0.21.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -264,7 +264,7 @@ thiserror = "1.0.43"
 async-trait = "0.1.71"
 heck = "0.4"
 similar = "2.1.0"
-toml = "0.5.9"
+toml = "0.8.10"
 # serde and serde_derive must have the same version
 serde = "1.0.188"
 serde_derive = "1.0.188"

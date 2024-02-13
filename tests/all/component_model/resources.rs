@@ -137,44 +137,70 @@ fn resource_any() -> Result<()> {
         "#,
     )?;
 
-    let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let i = linker.instantiate(&mut store, &c)?;
-    let t = i.get_resource(&mut store, "t").unwrap();
-    let u = i.get_resource(&mut store, "u").unwrap();
+    {
+        let mut store = Store::new(&engine, ());
+        let i = linker.instantiate(&mut store, &c)?;
+        let t = i.get_resource(&mut store, "t").unwrap();
+        let u = i.get_resource(&mut store, "u").unwrap();
 
-    assert_ne!(t, u);
+        assert_ne!(t, u);
 
-    let t_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]t")?;
-    let u_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]u")?;
-    let t_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-t")?;
-    let u_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-u")?;
+        let t_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]t")?;
+        let u_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]u")?;
+        let t_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-t")?;
+        let u_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-u")?;
 
-    let (t1,) = t_ctor.call(&mut store, (100,))?;
-    t_ctor.post_return(&mut store)?;
-    let (t2,) = t_ctor.call(&mut store, (200,))?;
-    t_ctor.post_return(&mut store)?;
-    let (u1,) = u_ctor.call(&mut store, (300,))?;
-    u_ctor.post_return(&mut store)?;
-    let (u2,) = u_ctor.call(&mut store, (400,))?;
-    u_ctor.post_return(&mut store)?;
+        let (t1,) = t_ctor.call(&mut store, (100,))?;
+        t_ctor.post_return(&mut store)?;
+        let (t2,) = t_ctor.call(&mut store, (200,))?;
+        t_ctor.post_return(&mut store)?;
+        let (u1,) = u_ctor.call(&mut store, (300,))?;
+        u_ctor.post_return(&mut store)?;
+        let (u2,) = u_ctor.call(&mut store, (400,))?;
+        u_ctor.post_return(&mut store)?;
 
-    assert_eq!(t1.ty(), t);
-    assert_eq!(t2.ty(), t);
-    assert_eq!(u1.ty(), u);
-    assert_eq!(u2.ty(), u);
+        assert_eq!(t1.ty(), t);
+        assert_eq!(t2.ty(), t);
+        assert_eq!(u1.ty(), u);
+        assert_eq!(u2.ty(), u);
 
-    u_dtor.call(&mut store, (u2,))?;
-    u_dtor.post_return(&mut store)?;
+        u_dtor.call(&mut store, (u2,))?;
+        u_dtor.post_return(&mut store)?;
 
-    u_dtor.call(&mut store, (u1,))?;
-    u_dtor.post_return(&mut store)?;
+        u_dtor.call(&mut store, (u1,))?;
+        u_dtor.post_return(&mut store)?;
 
-    t_dtor.call(&mut store, (t1,))?;
-    t_dtor.post_return(&mut store)?;
+        t_dtor.call(&mut store, (t1,))?;
+        t_dtor.post_return(&mut store)?;
 
-    t_dtor.call(&mut store, (t2,))?;
-    t_dtor.post_return(&mut store)?;
+        t_dtor.call(&mut store, (t2,))?;
+        t_dtor.post_return(&mut store)?;
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let i = linker.instantiate(&mut store, &c)?;
+        let t_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]t")?;
+        let u_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]u")?;
+        let t_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-t")?;
+
+        // `t` is placed at host index 0
+        let (t,) = t_ctor.call(&mut store, (100,))?;
+        t_ctor.post_return(&mut store)?;
+        t_dtor.call(&mut store, (t,))?;
+        t_dtor.post_return(&mut store)?;
+
+        // `u` is also placed at host index 0 since `t` was deallocated
+        let (_u,) = u_ctor.call(&mut store, (100,))?;
+        u_ctor.post_return(&mut store)?;
+
+        // reuse of `t` should fail, despite it pointing to a valid resource
+        assert_eq!(
+            t_dtor.call(&mut store, (t,)).unwrap_err().to_string(),
+            "host-owned resource is being used with the wrong type"
+        );
+    }
 
     Ok(())
 }

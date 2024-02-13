@@ -21,6 +21,7 @@ mod stacks;
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
 use crate::generators::{self, DiffValue, DiffValueType};
+use crate::single_module_fuzzer::KnownValid;
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
@@ -135,7 +136,12 @@ pub enum Timeout {
 /// panic or segfault or anything else that can be detected "passively".
 ///
 /// The engine will be configured using provided config.
-pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, timeout: Timeout) {
+pub fn instantiate(
+    wasm: &[u8],
+    known_valid: KnownValid,
+    config: &generators::Config,
+    timeout: Timeout,
+) {
     let mut store = config.to_store();
 
     let module = match compile_module(store.engine(), wasm, known_valid, config) {
@@ -193,7 +199,7 @@ pub enum Command {
 /// The modules are expected to *not* have start functions as no timeouts are configured.
 pub fn instantiate_many(
     modules: &[Vec<u8>],
-    known_valid: bool,
+    known_valid: KnownValid,
     config: &generators::Config,
     commands: &[Command],
 ) {
@@ -246,13 +252,13 @@ pub fn instantiate_many(
 fn compile_module(
     engine: &Engine,
     bytes: &[u8],
-    known_valid: bool,
+    known_valid: KnownValid,
     config: &generators::Config,
 ) -> Option<Module> {
     log_wasm(bytes);
     match config.compile(engine, bytes) {
         Ok(module) => Some(module),
-        Err(_) if !known_valid => None,
+        Err(_) if known_valid == KnownValid::No => None,
         Err(e) => {
             if let generators::InstanceAllocationStrategy::Pooling(c) = &config.wasmtime.strategy {
                 // When using the pooling allocator, accept failures to compile
@@ -602,7 +608,7 @@ pub fn table_ops(
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
-        let module = match compile_module(store.engine(), &wasm, false, &fuzz_config) {
+        let module = match compile_module(store.engine(), &wasm, KnownValid::No, &fuzz_config) {
             Some(m) => m,
             None => return 0,
         };

@@ -15,9 +15,9 @@ fn test_cache_init() {
     let config_content = format!(
         "[cache]\n\
          enabled = true\n\
-         directory = {}\n\
+         directory = '{}'\n\
          baseline-compression-level = {}\n",
-        toml::to_string_pretty(&format!("{}", cache_dir.display())).unwrap(),
+        cache_dir.display(),
         baseline_compression_level,
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
@@ -47,7 +47,7 @@ fn test_write_read_cache() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          baseline-compression-level = 3\n",
         cache_dir
     );

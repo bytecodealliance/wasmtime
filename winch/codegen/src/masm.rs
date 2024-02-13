@@ -39,6 +39,25 @@ pub(crate) enum MemMoveDirection {
     LowToHigh,
 }
 
+/// Classifies how to treat float-to-int conversions.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum TruncKind {
+    /// Saturating conversion. If the source value is greater than the maximum
+    /// value of the destination type, the result is clamped to the
+    /// destination maximum value.
+    Checked,
+    /// An exception is raised if the source value is greater than the maximum
+    /// value of the destination type.
+    Unchecked,
+}
+
+impl TruncKind {
+    /// Returns true if the truncation kind is checked.
+    pub(crate) fn is_checked(&self) -> bool {
+        *self == TruncKind::Checked
+    }
+}
+
 /// Representation of the stack pointer offset.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Default)]
 pub struct SPOffset(u32);
@@ -676,7 +695,14 @@ pub(crate) trait MacroAssembler {
 
     /// Emits one or more instructions to perform a signed truncation of a
     /// float into an integer.
-    fn signed_truncate(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize);
+    fn signed_truncate(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
+    );
 
     /// Emits one or more instructions to perform an unsigned truncation of a
     /// float into an integer.
@@ -687,6 +713,7 @@ pub(crate) trait MacroAssembler {
         tmp_fpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
+        kind: TruncKind,
     );
 
     /// Emits one or more instructions to perform a signed convert of an

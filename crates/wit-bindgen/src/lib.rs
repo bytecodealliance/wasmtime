@@ -185,7 +185,7 @@ impl Wasmtime {
                 let pkgname = &resolve.packages[iface.package.unwrap()].name;
                 path.push(pkgname.namespace.to_snake_case());
                 path.push(self.name_package_module(resolve, iface.package.unwrap()));
-                path.push(iface.name.as_ref().unwrap().to_snake_case());
+                path.push(to_rust_ident(iface.name.as_ref().unwrap()));
             }
         }
         let entry = if let Some(remapped_path) = self.lookup_replacement(resolve, name, None) {
@@ -440,7 +440,7 @@ impl Wasmtime {
                 }
 
                 let module = &gen.src[..];
-                let snake = iface_name.to_snake_case();
+                let snake = to_rust_ident(iface_name);
 
                 let module = format!(
                     "

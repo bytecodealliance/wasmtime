@@ -86,12 +86,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "compile-maybe-invalid"
-path = "fuzz_targets/compile-maybe-invalid.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "cranelift-fuzzgen"
 path = "fuzz_targets/cranelift-fuzzgen.rs"
 test = false

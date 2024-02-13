@@ -214,7 +214,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         if testsuite == "spec_testsuite" {
             let denylist = [
                 "br_table",
-                "conversions",
                 "global",
                 "table_fill",
                 "table_get",

@@ -19,10 +19,7 @@ pub fn test_prolog() -> (TempDir, PathBuf, PathBuf) {
 macro_rules! load_config {
     ($config_path:ident, $content_fmt:expr, $cache_dir:ident) => {{
         let config_path = &$config_path;
-        let content = format!(
-            $content_fmt,
-            cache_dir = toml::to_string_pretty(&format!("{}", $cache_dir.display())).unwrap()
-        );
+        let content = format!($content_fmt, cache_dir = $cache_dir.display());
         fs::write(config_path, content).expect("Failed to write test config file");
         CacheConfig::from_file(Some(config_path)).unwrap()
     }};
@@ -31,10 +28,7 @@ macro_rules! load_config {
 macro_rules! bad_config {
     ($config_path:ident, $content_fmt:expr, $cache_dir:ident) => {{
         let config_path = &$config_path;
-        let content = format!(
-            $content_fmt,
-            cache_dir = toml::to_string_pretty(&format!("{}", $cache_dir.display())).unwrap()
-        );
+        let content = format!($content_fmt, cache_dir = $cache_dir.display());
         fs::write(config_path, content).expect("Failed to write test config file");
         assert!(CacheConfig::from_file(Some(config_path)).is_err());
     }};
@@ -60,7 +54,7 @@ fn test_unrecognized_settings() {
         "unrecognized-setting = 42\n\
          [cache]\n\
          enabled = true\n\
-         directory = {cache_dir}",
+         directory = '{cache_dir}'",
         cd
     );
 
@@ -68,7 +62,7 @@ fn test_unrecognized_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          unrecognized-setting = 42",
         cd
     );
@@ -81,7 +75,7 @@ fn test_all_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
          optimized-compression-level = 20\n\
@@ -102,7 +96,7 @@ fn test_all_settings() {
         // added some white spaces
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size  = ' 16\t'\n\
          baseline-compression-level = 3\n\
          optimized-compression-level =\t 20\n\
@@ -151,7 +145,7 @@ fn test_compression_level_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          baseline-compression-level = 1\n\
          optimized-compression-level = 21",
         cd
@@ -164,7 +158,7 @@ fn test_compression_level_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          baseline-compression-level = -1\n\
          optimized-compression-level = 21",
         cd
@@ -174,7 +168,7 @@ fn test_compression_level_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          baseline-compression-level = 15\n\
          optimized-compression-level = 10",
         cd
@@ -188,7 +182,7 @@ fn test_si_prefix_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '42'\n\
          optimized-compression-usage-counter-threshold = '4K'\n\
          file-count-soft-limit = '3M'",
@@ -203,7 +197,7 @@ fn test_si_prefix_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '2K'\n\
          optimized-compression-usage-counter-threshold = '4444T'\n\
          file-count-soft-limit = '1P'",
@@ -222,7 +216,7 @@ fn test_si_prefix_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '2g'",
         cd
     );
@@ -231,7 +225,7 @@ fn test_si_prefix_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          file-count-soft-limit = 1",
         cd
     );
@@ -240,7 +234,7 @@ fn test_si_prefix_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          file-count-soft-limit = '-31337'",
         cd
     );
@@ -249,7 +243,7 @@ fn test_si_prefix_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          file-count-soft-limit = '3.14M'",
         cd
     );
@@ -262,7 +256,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '76'",
         cd
     );
@@ -273,7 +267,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '42 Mi'",
         cd
     );
@@ -284,7 +278,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '2 Gi'",
         cd
     );
@@ -295,7 +289,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '31337 Ti'",
         cd
     );
@@ -306,7 +300,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '7 Pi'",
         cd
     );
@@ -317,7 +311,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '7M'",
         cd
     );
@@ -329,7 +323,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '7 mi'",
         cd
     );
@@ -338,7 +332,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = 1",
         cd
     );
@@ -347,7 +341,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '-31337'",
         cd
     );
@@ -356,7 +350,7 @@ fn test_disk_space_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '3.14Ki'",
         cd
     );
@@ -369,7 +363,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          cleanup-interval = '100s'\n\
          optimizing-compression-task-timeout = '3m'\n\
          allowed-clock-drift-for-files-from-future = '4h'",
@@ -390,7 +384,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          cleanup-interval = '2d'\n\
          optimizing-compression-task-timeout = '333 m'",
         cd
@@ -410,7 +404,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '333'",
         cd
     );
@@ -419,7 +413,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = 333",
         cd
     );
@@ -428,7 +422,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '10 M'",
         cd
     );
@@ -437,7 +431,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '10 min'",
         cd
     );
@@ -446,7 +440,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '-10s'",
         cd
     );
@@ -455,7 +449,7 @@ fn test_duration_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '1.5m'",
         cd
     );
@@ -468,7 +462,7 @@ fn test_percent_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          file-count-limit-percent-if-deleting = '62%'\n\
          files-total-size-limit-percent-if-deleting = '23 %'",
         cd
@@ -482,7 +476,7 @@ fn test_percent_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '23'",
         cd
     );
@@ -491,7 +485,7 @@ fn test_percent_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '22.5%'",
         cd
     );
@@ -500,7 +494,7 @@ fn test_percent_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '0.5'",
         cd
     );
@@ -509,7 +503,7 @@ fn test_percent_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '-1%'",
         cd
     );
@@ -518,7 +512,7 @@ fn test_percent_settings() {
         cp,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '101%'",
         cd
     );

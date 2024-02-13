@@ -3,10 +3,13 @@
 //! Helps implement fast indirect call signature checking, reference type
 //! casting, and etc.
 
+use std::fmt::Debug;
 use std::{collections::HashMap, sync::RwLock};
 use std::{convert::TryFrom, sync::Arc};
 use wasmtime_environ::{ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, WasmFuncType};
 use wasmtime_runtime::VMSharedTypeIndex;
+
+use crate::Engine;
 
 /// Represents a collection of shared types.
 ///
@@ -14,21 +17,35 @@ use wasmtime_runtime::VMSharedTypeIndex;
 ///
 /// The collection will unregister any contained types with the registry
 /// when dropped.
-#[derive(Debug)]
 pub struct TypeCollection {
-    registry: Arc<RwLock<TypeRegistryInner>>,
+    engine: Engine,
     types: PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
     reverse_types: HashMap<VMSharedTypeIndex, ModuleInternedTypeIndex>,
 }
 
+impl Debug for TypeCollection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TypeCollection {
+            engine: _,
+            types,
+            reverse_types: _,
+        } = self;
+        f.debug_struct("TypeCollection")
+            .field("types", types)
+            .finish_non_exhaustive()
+    }
+}
+
 impl TypeCollection {
     /// Creates a type collection for a module given the module's types.
-    pub fn new_for_module(registry: &TypeRegistry, types: &ModuleTypes) -> Self {
+    pub fn new_for_module(engine: &Engine, types: &ModuleTypes) -> Self {
+        let engine = engine.clone();
+        let registry = engine.signatures();
         let types = registry.0.write().unwrap().register_for_module(types);
         let reverse_types = types.iter().map(|(k, v)| (*v, k)).collect();
 
         Self {
-            registry: registry.0.clone(),
+            engine,
             types,
             reverse_types,
         }
@@ -58,20 +75,26 @@ impl TypeCollection {
 impl Drop for TypeCollection {
     fn drop(&mut self) {
         if !self.types.is_empty() {
-            self.registry.write().unwrap().unregister_types(self);
+            self.engine
+                .signatures()
+                .0
+                .write()
+                .unwrap()
+                .unregister_types(self);
         }
     }
 }
 
 /// A Wasm type that has been registered in the engine's `TypeRegistry`.
 ///
-/// Automatically unregisters the type on drop. (If other things are keeping the
-/// type registered, it will remain registered).
+/// Prevents its associated type from being unregistered while it is alive.
+///
+/// Automatically unregisters the type on drop. (Unless other `RegisteredTypes`
+/// are keeping the type registered).
 ///
 /// Dereferences to its underlying `WasmFuncType`.
-#[derive(Debug)]
 pub struct RegisteredType {
-    registry: Arc<RwLock<TypeRegistryInner>>,
+    engine: Engine,
     index: VMSharedTypeIndex,
 
     // This field is not *strictly* necessary to have in this type, since we
@@ -81,11 +104,25 @@ pub struct RegisteredType {
     ty: Arc<WasmFuncType>,
 }
 
+impl Debug for RegisteredType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let RegisteredType {
+            engine: _,
+            index,
+            ty,
+        } = self;
+        f.debug_struct("RegisteredType")
+            .field("index", index)
+            .field("ty", ty)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Clone for RegisteredType {
     fn clone(&self) -> Self {
         {
             let i = usize::try_from(self.index.bits()).unwrap();
-            let mut registry = self.registry.write().unwrap();
+            let mut registry = self.engine.signatures().0.write().unwrap();
             let entry = registry.entries[i].unwrap_occupied_mut();
             entry.references += 1;
             log::trace!(
@@ -96,7 +133,7 @@ impl Clone for RegisteredType {
         }
 
         RegisteredType {
-            registry: Arc::clone(&self.registry),
+            engine: self.engine.clone(),
             index: self.index,
             ty: Arc::clone(&self.ty),
         }
@@ -105,7 +142,9 @@ impl Clone for RegisteredType {
 
 impl Drop for RegisteredType {
     fn drop(&mut self) {
-        self.registry
+        self.engine
+            .signatures()
+            .0
             .write()
             .unwrap()
             .unregister_entry(self.index, 1);
@@ -127,9 +166,9 @@ impl PartialEq for RegisteredType {
         if cfg!(debug_assertions) {
             if eq {
                 assert_eq!(self.index, other.index);
-                assert!(Arc::ptr_eq(&self.registry, &other.registry));
+                assert!(Engine::same(&self.engine, &other.engine));
             } else {
-                assert!(self.index != other.index || !Arc::ptr_eq(&self.registry, &other.registry));
+                assert!(self.index != other.index || !Engine::same(&self.engine, &other.engine));
             }
         }
 
@@ -147,26 +186,44 @@ impl std::hash::Hash for RegisteredType {
 }
 
 impl RegisteredType {
+    /// Constructs a new `RegisteredType`, registering the given type with the
+    /// engine's `TypeRegistry`.
+    pub fn new(engine: &Engine, ty: &WasmFuncType) -> RegisteredType {
+        let (index, ty) = engine.signatures().0.write().unwrap().register_raw(ty);
+        RegisteredType::from_parts(engine.clone(), index, ty)
+    }
+
+    /// Create an owning handle to the given index's associated type.
+    ///
+    /// This will prevent the associated type from being unregistered as long as
+    /// the returned `RegisteredType` is kept alive.
+    ///
+    /// Returns `None` if `index` is not registered in the given engine's
+    /// registry.
+    pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
+        let i = usize::try_from(index.bits()).unwrap();
+        let ty = {
+            let mut inner = engine.signatures().0.write().unwrap();
+            let e = inner.entries.get_mut(i)?.as_occupied_mut()?;
+            e.references += 1;
+            log::trace!("rooting {index:?} (references -> {})", e.references);
+            Arc::clone(&e.ty)
+        };
+        Some(RegisteredType::from_parts(engine.clone(), index, ty))
+    }
+
     /// Construct a new `RegisteredType`.
     ///
     /// It is the caller's responsibility to ensure that the entry's reference
     /// count has already been incremented.
-    fn new(
-        registry: Arc<RwLock<TypeRegistryInner>>,
-        index: VMSharedTypeIndex,
-        ty: Arc<WasmFuncType>,
-    ) -> Self {
+    fn from_parts(engine: Engine, index: VMSharedTypeIndex, ty: Arc<WasmFuncType>) -> Self {
         debug_assert!({
-            let registry = registry.read().unwrap();
+            let registry = engine.signatures().0.read().unwrap();
             let i = usize::try_from(index.bits()).unwrap();
             let e = registry.entries[i].as_occupied().unwrap();
             e.references > 0
         });
-        RegisteredType {
-            registry,
-            index,
-            ty,
-        }
+        RegisteredType { engine, index, ty }
     }
 
     /// Get this registered type's index.
@@ -375,49 +432,24 @@ impl Drop for TypeRegistryInner {
 /// types, shared by all instances, so that call sites can just do an
 /// index comparison.
 #[derive(Debug)]
-pub struct TypeRegistry(Arc<RwLock<TypeRegistryInner>>);
+pub struct TypeRegistry(RwLock<TypeRegistryInner>);
 
 impl TypeRegistry {
     /// Creates a new shared type registry.
     pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(TypeRegistryInner::default())))
-    }
-
-    /// Get an owning handle to the given index's associated type.
-    ///
-    /// This will keep the type registered as long as the return value is kept
-    /// alive.
-    pub fn root(&self, index: VMSharedTypeIndex) -> Option<RegisteredType> {
-        let i = usize::try_from(index.bits()).unwrap();
-        let registry = Arc::clone(&self.0);
-        let ty = {
-            let mut inner = self.0.write().unwrap();
-            let e = inner.entries.get_mut(i)?.as_occupied_mut()?;
-            e.references += 1;
-            log::trace!("rooting {index:?} (references -> {})", e.references);
-            Arc::clone(&e.ty)
-        };
-        Some(RegisteredType::new(registry, index, ty))
+        Self(RwLock::new(TypeRegistryInner::default()))
     }
 
     /// Looks up a function type from a shared type index.
     ///
-    /// This does NOT guarantee that the type remains registered while you use
-    /// the result. Use the `root` method if you need to ensure that property
-    /// and you don't have some other mechanism already keeping the type
-    /// registered.
+    /// This does *NOT* prevent the type from being unregistered while you are
+    /// still using the resulting value! Use the `RegisteredType::root`
+    /// constructor if you need to ensure that property and you don't have some
+    /// other mechanism already keeping the type registered.
     pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmFuncType>> {
         let i = usize::try_from(index.bits()).unwrap();
         let inner = self.0.read().unwrap();
         let e = inner.entries.get(i)?;
         Some(e.as_occupied()?.ty.clone())
-    }
-
-    /// Registers a single function with the collection.
-    ///
-    /// Returns the shared type index for the function.
-    pub fn register(&self, ty: &WasmFuncType) -> RegisteredType {
-        let (index, ty) = self.0.write().unwrap().register_raw(ty);
-        RegisteredType::new(Arc::clone(&self.0), index, ty)
     }
 }

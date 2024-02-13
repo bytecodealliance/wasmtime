@@ -514,7 +514,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
     - name: CPU information
       run: sysctl hw
-      if: matrix.os == 'macos-latest'
+      if: contains(matrix.os, 'macos')
     - name: CPU information
       run: wmic cpu list /format:list
       shell: pwsh

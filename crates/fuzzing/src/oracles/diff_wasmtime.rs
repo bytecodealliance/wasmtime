@@ -4,6 +4,7 @@ use crate::generators::{self, DiffValue, DiffValueType, WasmtimeConfig};
 use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
+use crate::single_module_fuzzer::KnownValid;
 use anyhow::{Context, Error, Result};
 use arbitrary::Unstructured;
 use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, Val};
@@ -36,7 +37,7 @@ impl DiffEngine for WasmtimeEngine {
 
     fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         let store = self.config.to_store();
-        let module = compile_module(store.engine(), wasm, true, &self.config).unwrap();
+        let module = compile_module(store.engine(), wasm, KnownValid::Yes, &self.config).unwrap();
         let instance = WasmtimeInstance::new(store, module)?;
         Ok(Box::new(instance))
     }

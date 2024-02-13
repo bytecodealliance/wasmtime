@@ -615,11 +615,12 @@ impl Assembler {
         tmp_xmm: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
+        saturating: bool,
     ) {
         self.emit(Inst::CvtFloatToSintSeq {
             dst_size: dst_size.into(),
             src_size: src_size.into(),
-            is_saturating: false,
+            is_saturating: saturating,
             src: src.into(),
             dst: dst.into(),
             tmp_gpr: tmp_gpr.into(),
@@ -637,11 +638,12 @@ impl Assembler {
         tmp_xmm2: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
+        saturating: bool,
     ) {
         self.emit(Inst::CvtFloatToUintSeq {
             dst_size: dst_size.into(),
             src_size: src_size.into(),
-            is_saturating: false,
+            is_saturating: saturating,
             src: src.into(),
             dst: dst.into(),
             tmp_gpr: tmp_gpr.into(),
