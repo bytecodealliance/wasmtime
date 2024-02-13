@@ -1,4 +1,0 @@
-interface run {
-  /// Run the program.
-  run: func() -> result;
-}

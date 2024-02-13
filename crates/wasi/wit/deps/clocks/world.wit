@@ -1,6 +1,0 @@
-package wasi:clocks@0.2.0;
-
-world imports {
-    import monotonic-clock;
-    import wall-clock;
-}

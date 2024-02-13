@@ -52,13 +52,16 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
     }
     let mut contents = src.parse::<TokenStream>().unwrap();
 
-    // Include a dummy `include_str!` for any files we read so rustc knows that
+    // Include a dummy `include_bytes!` for any files we read so rustc knows that
     // we depend on the contents of those files.
     for file in input.files.iter() {
         contents.extend(
-            format!("const _: &str = include_str!(r#\"{}\"#);\n", file.display())
-                .parse::<TokenStream>()
-                .unwrap(),
+            format!(
+                "const _: &[u8] = include_bytes!(r#\"{}\"#);\n",
+                file.display()
+            )
+            .parse::<TokenStream>()
+            .unwrap(),
         );
     }
 

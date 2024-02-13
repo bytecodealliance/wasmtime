@@ -9,7 +9,7 @@ pub mod types_impl;
 
 pub mod bindings {
     wasmtime::component::bindgen!({
-        path: "wit",
+        path: "wasi-http@0.2.0.wasm",
         interfaces: "
             import wasi:http/incoming-handler@0.2.0;
             import wasi:http/outgoing-handler@0.2.0;

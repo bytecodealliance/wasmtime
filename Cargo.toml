@@ -231,7 +231,8 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
 rustix = "0.38.31"
 # wit-bindgen:
-wit-bindgen = { version = "0.17.0", default-features = false }
+#wit-bindgen = { version = "0.18.0", default-features = false }
+wit-bindgen = { path = '../wit-bindgen/crates/guest-rust', default-features = false }
 
 # wasm-tools family:
 wasmparser = "0.121.2"

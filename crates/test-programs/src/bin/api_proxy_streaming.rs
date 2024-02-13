@@ -10,7 +10,6 @@ mod bindings {
     use super::Handler;
 
     wit_bindgen::generate!({
-        path: "../wasi-http/wit",
         world: "wasi:http/proxy",
         exports: {
             "wasi:http/incoming-handler": Handler,

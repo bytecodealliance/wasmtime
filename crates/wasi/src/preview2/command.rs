@@ -1,6 +1,7 @@
 use crate::preview2::WasiView;
 
 wasmtime::component::bindgen!({
+    path: "wasi-cli@0.2.0.wasm",
     world: "wasi:cli/command",
     tracing: true,
     async: true,
@@ -61,6 +62,7 @@ pub mod sync {
     use crate::preview2::WasiView;
 
     wasmtime::component::bindgen!({
+        path: "wasi-cli@0.2.0.wasm",
         world: "wasi:cli/command",
         tracing: true,
         async: false,

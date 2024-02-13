@@ -124,6 +124,7 @@ fn api_proxy() {}
 fn api_proxy_streaming() {}
 
 wasmtime::component::bindgen!({
+    path: "../test-programs/wit",
     world: "test-reactor",
     async: true,
     with: {

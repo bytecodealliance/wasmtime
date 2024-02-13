@@ -67,7 +67,7 @@ pub mod bindings {
             use crate::preview2::{FsError, StreamError};
 
             wasmtime::component::bindgen!({
-                path: "wit",
+                path: "wasi-cli@0.2.0.wasm",
                 interfaces: "
                     import wasi:io/poll@0.2.0;
                     import wasi:io/streams@0.2.0;
@@ -93,7 +93,7 @@ pub mod bindings {
     }
 
     wasmtime::component::bindgen!({
-        path: "wit",
+        path: "wasi-cli@0.2.0.wasm",
         world: "wasi:cli/imports",
         tracing: true,
         async: {

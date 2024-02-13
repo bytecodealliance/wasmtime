@@ -1227,9 +1227,37 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wit-bindgen]]
+version = "0.17.1"
+when = "2024-02-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen]]
+version = "0.18.0"
+when = "2024-02-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wit-bindgen-core]]
 version = "0.17.0"
 when = "2024-02-05"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen-core]]
+version = "0.17.1"
+when = "2024-02-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen-core]]
+version = "0.18.0"
+when = "2024-02-13"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1241,9 +1269,37 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wit-bindgen-rust]]
+version = "0.17.1"
+when = "2024-02-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen-rust]]
+version = "0.18.0"
+when = "2024-02-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wit-bindgen-rust-macro]]
 version = "0.17.0"
 when = "2024-02-05"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen-rust-macro]]
+version = "0.17.1"
+when = "2024-02-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen-rust-macro]]
+version = "0.18.0"
+when = "2024-02-13"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
