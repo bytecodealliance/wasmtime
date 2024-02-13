@@ -174,20 +174,20 @@ async fn run_wasi_http(
             use http_body_util::BodyExt;
             let (parts, body) = resp.into_parts();
             let collected = BodyExt::collect(body).await?;
-            Ok(hyper::Response::from_parts(parts, collected))
+            Some(Ok(hyper::Response::from_parts(parts, collected)))
         }
+        Ok(Err(e)) => Some(Err(e)),
 
-        Ok(Err(e)) => Err(e),
-
-        // This happens if the wasm never calls `set-response-outparam`
-        Err(e) => panic!("Failed to receive a response: {e:?}"),
+        // Fall through below to the `resp.expect(...)` which will hopefully
+        // return a more specific error from `handle.await`.
+        Err(_) => None,
     };
 
-    // Now that the response has been processed, we can wait on the wasm to finish without
-    // deadlocking.
+    // Now that the response has been processed, we can wait on the wasm to
+    // finish without deadlocking.
     handle.await.context("Component execution")?;
 
-    Ok(resp)
+    Ok(resp.expect("wasm never called set-response-outparam"))
 }
 
 #[test_log::test(tokio::test)]
