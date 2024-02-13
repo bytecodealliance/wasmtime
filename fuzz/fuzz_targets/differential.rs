@@ -5,8 +5,6 @@ use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
-use wasmparser::ValType;
-use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
@@ -24,10 +22,8 @@ static SETUP: Once = Once::new();
 // - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
 // - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
 // - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
-// - FUZZ_WINCH=1 cargo +nightly fuzz run ...
 static mut ALLOWED_ENGINES: Vec<&str> = vec![];
 static mut ALLOWED_MODULES: Vec<&str> = vec![];
-static mut FUZZ_WINCH: bool = false;
 
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
@@ -42,22 +38,16 @@ fuzz_target!(|data: &[u8]| {
         // environment variables.
         let allowed_engines = build_allowed_env_list(
             parse_env_list("ALLOWED_ENGINES"),
-            &["wasmtime", "wasmi", "spec", "v8"],
+            &["wasmtime", "wasmi", "spec", "v8", "winch"],
         );
         let allowed_modules = build_allowed_env_list(
             parse_env_list("ALLOWED_MODULES"),
             &["wasm-smith", "single-inst"],
         );
 
-        let fuzz_winch = match std::env::var("FUZZ_WINCH").map(|v| v == "1") {
-            Ok(v) => v,
-            _ => false,
-        };
-
         unsafe {
             ALLOWED_ENGINES = allowed_engines;
             ALLOWED_MODULES = allowed_modules;
-            FUZZ_WINCH = fuzz_winch;
         }
     });
 
@@ -70,7 +60,6 @@ fn execute_one(data: &[u8]) -> Result<()> {
     STATS.bump_attempts();
 
     let mut u = Unstructured::new(data);
-    let fuzz_winch = unsafe { FUZZ_WINCH };
 
     // Generate a Wasmtime and module configuration and update its settings
     // initially to be suitable for differential execution where the generated
@@ -78,24 +67,6 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // refined below.
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
-
-    // When fuzzing Winch, explicitly override the compiler strategy, which by
-    // default its arbitrary implementation unconditionally returns
-    // `Cranelift`.
-    if fuzz_winch {
-        config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
-        // Disable the Wasm proposals not supported by Winch.
-        // Reference Types and (Function References) are not disabled entirely
-        // because certain instructions involving `funcref` are supported (all
-        // the table instructions).
-        config.module_config.config.simd_enabled = false;
-        config.module_config.config.relaxed_simd_enabled = false;
-        config.module_config.config.memory64_enabled = false;
-        config.module_config.config.gc_enabled = false;
-        config.module_config.config.threads_enabled = false;
-        config.module_config.config.tail_call_enabled = false;
-        config.module_config.config.exceptions_enabled = false;
-    }
 
     // Choose an engine that Wasmtime will be differentially executed against.
     // The chosen engine is then created, which might update `config`, and
@@ -129,10 +100,6 @@ fn execute_one(data: &[u8]) -> Result<()> {
         "single-inst" => build_single_inst_module(&mut u, &config)?,
         _ => unreachable!(),
     };
-
-    if fuzz_winch && !winch_supports_module(&wasm) {
-        return Ok(());
-    }
 
     log_wasm(&wasm);
 
@@ -218,6 +185,7 @@ struct RuntimeStats {
     v8: AtomicUsize,
     spec: AtomicUsize,
     wasmtime: AtomicUsize,
+    winch: AtomicUsize,
 
     // Counters for which style of module is chosen
     wasm_smith_modules: AtomicUsize,
@@ -234,6 +202,7 @@ impl RuntimeStats {
             v8: AtomicUsize::new(0),
             spec: AtomicUsize::new(0),
             wasmtime: AtomicUsize::new(0),
+            winch: AtomicUsize::new(0),
             wasm_smith_modules: AtomicUsize::new(0),
             single_instruction_modules: AtomicUsize::new(0),
         }
@@ -256,13 +225,15 @@ impl RuntimeStats {
         let spec = self.spec.load(SeqCst);
         let wasmi = self.wasmi.load(SeqCst);
         let wasmtime = self.wasmtime.load(SeqCst);
-        let total = v8 + spec + wasmi + wasmtime;
+        let winch = self.winch.load(SeqCst);
+        let total = v8 + spec + wasmi + wasmtime + winch;
         println!(
-            "\twasmi: {:.02}%, spec: {:.02}%, wasmtime: {:.02}%, v8: {:.02}%",
+            "\twasmi: {:.02}%, spec: {:.02}%, wasmtime: {:.02}%, v8: {:.02}%, winch: {:.02}%",
             wasmi as f64 / total as f64 * 100f64,
             spec as f64 / total as f64 * 100f64,
             wasmtime as f64 / total as f64 * 100f64,
             v8 as f64 / total as f64 * 100f64,
+            winch as f64 / total as f64 * 100f64,
         );
 
         let wasm_smith = self.wasm_smith_modules.load(SeqCst);
@@ -281,90 +252,8 @@ impl RuntimeStats {
             "wasmtime" => self.wasmtime.fetch_add(1, SeqCst),
             "spec" => self.spec.fetch_add(1, SeqCst),
             "v8" => self.v8.fetch_add(1, SeqCst),
+            "winch" => self.winch.fetch_add(1, SeqCst),
             _ => return,
         };
     }
-}
-
-// Returns true if the module only contains operators supported by
-// Winch. Winch's x86_64 target has broader support for Wasm operators
-// than the aarch64 target. This list assumes fuzzing on the x86_64
-// target.
-fn winch_supports_module(module: &[u8]) -> bool {
-    use wasmparser::{Operator::*, Parser, Payload};
-
-    fn is_type_supported(ty: &ValType) -> bool {
-        match ty {
-            ValType::Ref(r) => r.is_func_ref(),
-            _ => true,
-        }
-    }
-
-    let mut supported = true;
-    let mut parser = Parser::new(0).parse_all(module);
-
-    'main: while let Some(payload) = parser.next() {
-        match payload.unwrap() {
-            Payload::CodeSectionEntry(body) => {
-                let local_reader = body.get_locals_reader().unwrap();
-                for local in local_reader {
-                    let (_, ty) = local.unwrap();
-                    if !is_type_supported(&ty) {
-                        supported = false;
-                        break 'main;
-                    }
-                }
-                let op_reader = body.get_operators_reader().unwrap();
-                for op in op_reader {
-                    match op.unwrap() {
-                        RefIsNull { .. }
-                        | RefNull { .. }
-                        | RefFunc { .. }
-                        | RefAsNonNull { .. }
-                        | BrOnNonNull { .. }
-                        | CallRef { .. }
-                        | BrOnNull { .. } => {
-                            supported = false;
-                            break 'main;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Payload::TypeSection(section) => {
-                for ty in section.into_iter_err_on_gc_types() {
-                    if let Ok(t) = ty {
-                        for p in t.params().iter().chain(t.results()) {
-                            if !is_type_supported(p) {
-                                supported = false;
-                                break 'main;
-                            }
-                        }
-                    } else {
-                        supported = false;
-                        break 'main;
-                    }
-                }
-            }
-            Payload::GlobalSection(section) => {
-                for global in section {
-                    if !is_type_supported(&global.unwrap().ty.content_type) {
-                        supported = false;
-                        break 'main;
-                    }
-                }
-            }
-            Payload::TableSection(section) => {
-                for t in section {
-                    if !t.unwrap().ty.element_type.is_func_ref() {
-                        supported = false;
-                        break 'main;
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    supported
 }

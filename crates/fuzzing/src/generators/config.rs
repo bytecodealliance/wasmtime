@@ -316,6 +316,21 @@ impl Config {
         std::fs::write(&file, module.serialize().unwrap()).unwrap();
         unsafe { Ok(Module::deserialize_file(engine, &file).unwrap()) }
     }
+
+    /// Winch doesn't support the same set of wasm proposal as Cranelift at
+    /// this time, so if winch is selected be sure to disable wasm proposals
+    /// in `Config` to ensure that Winch can compile the module that
+    /// wasm-smith generates.
+    pub fn disable_unimplemented_winch_proposals(&mut self) {
+        self.module_config.config.simd_enabled = false;
+        self.module_config.config.relaxed_simd_enabled = false;
+        self.module_config.config.memory64_enabled = false;
+        self.module_config.config.gc_enabled = false;
+        self.module_config.config.threads_enabled = false;
+        self.module_config.config.tail_call_enabled = false;
+        self.module_config.config.exceptions_enabled = false;
+        self.module_config.config.reference_types_enabled = false;
+    }
 }
 
 impl<'a> Arbitrary<'a> for Config {
@@ -324,6 +339,10 @@ impl<'a> Arbitrary<'a> for Config {
             wasmtime: u.arbitrary()?,
             module_config: u.arbitrary()?,
         };
+
+        if let CompilerStrategy::Winch = config.wasmtime.compiler_strategy {
+            config.disable_unimplemented_winch_proposals();
+        }
 
         // This is pulled from `u` by default via `wasm-smith`, but Wasmtime
         // doesn't implement this yet, so forcibly always disable it.
@@ -470,12 +489,11 @@ impl CompilerStrategy {
     }
 }
 
-// Unconditionally return `Cranelift` given that Winch is not ready to be
-// enabled by default in all the fuzzing targets. Each fuzzing target is
-// expected to explicitly override the strategy as needed. Currently only the
-// differential target overrides the compiler strategy.
 impl Arbitrary<'_> for CompilerStrategy {
     fn arbitrary(_: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        // NB: Winch isn't selected here yet as it doesn't yet implement all the
+        // compiler features for things such as trampolines, so it's only used
+        // on fuzz targets that don't need those trampolines.
         Ok(Self::Cranelift)
     }
 }
