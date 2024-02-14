@@ -128,6 +128,55 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
+unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
+    let path = "file2";
+    let file_fd = wasi::path_open(
+        dir_fd,
+        0,
+        path,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("opening a file");
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
+
+    // Perform a 0-sized pwrite at an offset beyond the end of the file. Unix
+    // semantics should pop out where nothing is actually written and the size
+    // of the file isn't modified.
+    assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);
+    let ciovec = wasi::Ciovec {
+        buf: [].as_ptr(),
+        buf_len: 0,
+    };
+    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 2");
+    assert_eq!(n, 0);
+
+    assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);
+    let stat = wasi::fd_filestat_get(file_fd).unwrap();
+    assert_eq!(stat.size, 0);
+
+    // Now write a single byte and make sure it actually works
+    let buf = [0];
+    let ciovec = wasi::Ciovec {
+        buf: buf.as_ptr(),
+        buf_len: buf.len(),
+    };
+    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 2");
+    assert_eq!(n, 1);
+
+    assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);
+    let stat = wasi::fd_filestat_get(file_fd).unwrap();
+    assert_eq!(stat.size, 51);
+
+    wasi::fd_close(file_fd).expect("closing a file");
+    wasi::path_unlink_file(dir_fd, path).expect("removing a file");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -148,5 +197,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_file_pread_pwrite(dir_fd) }
+    unsafe {
+        test_file_pread_pwrite(dir_fd);
+        test_file_pwrite_and_file_pos(dir_fd);
+    }
 }

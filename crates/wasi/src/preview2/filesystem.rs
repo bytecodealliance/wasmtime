@@ -272,6 +272,10 @@ impl HostOutputStream for FileOutputStream {
             }
         }
 
+        if buf.is_empty() {
+            return Ok(());
+        }
+
         let f = Arc::clone(&self.file);
         let m = self.mode;
         let task = spawn_blocking(move || match m {
