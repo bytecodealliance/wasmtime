@@ -982,7 +982,7 @@ impl<'a> From<&'a std::io::Error> for ErrorCode {
         match from_raw_os_error(err.raw_os_error()) {
             Some(errno) => errno,
             None => {
-                log::debug!("unknown raw os error: {err}");
+                tracing::debug!("unknown raw os error: {err}");
                 match err.kind() {
                     std::io::ErrorKind::NotFound => ErrorCode::NoEntry,
                     std::io::ErrorKind::PermissionDenied => ErrorCode::NotPermitted,

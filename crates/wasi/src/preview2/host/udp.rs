@@ -139,7 +139,9 @@ impl<T: WasiView> udp::HostUdpSocket for T {
                 |error| match error {
                     Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // See `bind` implementation.
                     Errno::INPROGRESS => {
-                        log::debug!("UDP connect returned EINPROGRESS, which should never happen");
+                        tracing::debug!(
+                            "UDP connect returned EINPROGRESS, which should never happen"
+                        );
                         ErrorCode::Unknown
                     }
                     _ => ErrorCode::from(error),

@@ -17,8 +17,7 @@ workspace = true
 [dependencies]
 wasmtime = { workspace = true, features = ["component-model", "async", "runtime"] }
 anyhow = { workspace = true }
-wiggle = { workspace = true, optional = true }
-
+wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
 tokio = { workspace = true,  features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net"] }
 bytes = { workspace = true }
 thiserror = { workspace = true }
@@ -34,6 +33,8 @@ bitflags = { workspace = true }
 async-trait = { workspace = true }
 system-interface = { workspace = true}
 futures = { workspace = true }
+url = { workspace = true }
+once_cell = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }

@@ -559,7 +559,7 @@ impl From<StreamError> for types::Error {
             StreamError::LastOperationFailed(e) => match e.downcast::<std::io::Error>() {
                 Ok(err) => filesystem::ErrorCode::from(err).into(),
                 Err(e) => {
-                    log::debug!("dropping error {e:?}");
+                    tracing::debug!("dropping error {e:?}");
                     types::Errno::Io.into()
                 }
             },

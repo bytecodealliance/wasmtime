@@ -47,7 +47,7 @@ impl From<io::Error> for ErrorCode {
             std::io::ErrorKind::WouldBlock => ErrorCode::WouldBlock,
 
             _ => {
-                log::debug!("unknown I/O error: {value}");
+                tracing::debug!("unknown I/O error: {value}");
                 ErrorCode::Unknown
             }
         }
@@ -98,7 +98,7 @@ impl From<Errno> for ErrorCode {
 
             // FYI, EINPROGRESS should have already been handled by connect.
             _ => {
-                log::debug!("unknown I/O error: {value}");
+                tracing::debug!("unknown I/O error: {value}");
                 ErrorCode::Unknown
             }
         }
