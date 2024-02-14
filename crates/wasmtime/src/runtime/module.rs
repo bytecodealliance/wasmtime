@@ -981,8 +981,8 @@ impl Module {
     ///
     /// It is not safe to modify the memory in this range, nor is it safe to
     /// modify the protections of memory in this range.
-    pub fn image_range(&self) -> Range<usize> {
-        self.compiled_module().image_range()
+    pub fn image_range(&self) -> Range<*const u8> {
+        self.compiled_module().mmap().image_range()
     }
 
     /// Force initialization of copy-on-write images to happen here-and-now

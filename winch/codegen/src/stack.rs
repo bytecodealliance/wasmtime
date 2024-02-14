@@ -1,4 +1,5 @@
 use crate::{isa::reg::Reg, masm::StackSlot};
+use smallvec::SmallVec;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::WasmValType;
 
@@ -260,7 +261,8 @@ impl Val {
 /// The shadow stack used for compilation.
 #[derive(Default, Debug)]
 pub(crate) struct Stack {
-    inner: Vec<Val>,
+    // NB: The 64 is chosen arbitrarily. We can adjust as we see fit.
+    inner: SmallVec<[Val; 64]>,
 }
 
 impl Stack {
@@ -294,15 +296,13 @@ impl Stack {
     }
 
     /// Inserts many values at the given index.
-    pub fn insert_many(&mut self, at: usize, values: impl IntoIterator<Item = Val>) {
+    pub fn insert_many(&mut self, at: usize, values: &[Val]) {
         debug_assert!(at <= self.len());
-        // If last, simply extend.
-        if at == self.inner.len() {
-            self.inner.extend(values);
+
+        if at == self.len() {
+            self.inner.extend_from_slice(values);
         } else {
-            let mut tail = self.inner.split_off(at);
-            self.inner.extend(values);
-            self.inner.append(&mut tail);
+            self.inner.insert_from_slice(at, values);
         }
     }
 
@@ -375,12 +375,12 @@ impl Stack {
     }
 
     /// Get a mutable reference to the inner stack representation.
-    pub fn inner_mut(&mut self) -> &mut Vec<Val> {
+    pub fn inner_mut(&mut self) -> &mut SmallVec<[Val; 64]> {
         &mut self.inner
     }
 
     /// Get a reference to the inner stack representation.
-    pub fn inner(&self) -> &Vec<Val> {
+    pub fn inner(&self) -> &SmallVec<[Val; 64]> {
         &self.inner
     }
 

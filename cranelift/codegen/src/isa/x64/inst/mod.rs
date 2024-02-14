@@ -41,8 +41,6 @@ pub struct CallInfo {
     pub defs: CallRetList,
     /// Registers clobbered by this call, as per its calling convention.
     pub clobbers: PRegSet,
-    /// The opcode of this call.
-    pub opcode: Opcode,
     /// The number of bytes that the callee will pop from the stack for the
     /// caller, if any. (Used for popping stack arguments with the `tail`
     /// calling convention.)
@@ -556,14 +554,14 @@ impl Inst {
     ) -> Inst {
         Inst::CallKnown {
             dest,
-            info: Box::new(CallInfo {
+            opcode,
+            info: Some(Box::new(CallInfo {
                 uses,
                 defs,
                 clobbers,
-                opcode,
                 callee_pop_size,
                 callee_conv,
-            }),
+            })),
         }
     }
 
@@ -579,14 +577,14 @@ impl Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
             dest,
-            info: Box::new(CallInfo {
+            opcode,
+            info: Some(Box::new(CallInfo {
                 uses,
                 defs,
                 clobbers,
-                opcode,
                 callee_pop_size,
                 callee_conv,
-            }),
+            })),
         }
     }
 
@@ -2348,11 +2346,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_early_def(*tmp);
         }
 
-        Inst::CallKnown { dest, ref info, .. } => {
+        Inst::CallKnown { dest, info, .. } => {
             // Probestack is special and is only inserted after
             // regalloc, so we do not need to represent its ABI to the
             // register allocator. Assert that we don't alter that
             // arrangement.
+            let info = info.as_ref().expect("CallInfo is expected in this path");
             debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
@@ -2363,7 +2362,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(info.clobbers);
         }
 
-        Inst::CallUnknown { ref info, dest, .. } => {
+        Inst::CallUnknown { info, dest, .. } => {
+            let info = info.as_ref().expect("CallInfo is expected in this path");
             match dest {
                 RegMem::Reg { reg } if info.callee_conv == CallConv::Tail => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):

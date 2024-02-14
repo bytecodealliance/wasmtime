@@ -88,7 +88,7 @@ where
     }
 
     /// Emit an array-to-wasm trampoline.
-    pub fn emit_array_to_wasm(&mut self, ty: &WasmFuncType, callee_index: FuncIndex) -> Result<()> {
+    pub fn emit_array_to_wasm(mut self, ty: &WasmFuncType, callee_index: FuncIndex) -> Result<()> {
         let array_sig = self.array_sig();
         let wasm_sig = self.wasm_sig(ty);
 
@@ -190,11 +190,7 @@ where
     }
 
     /// Emit a native-to-wasm trampoline.
-    pub fn emit_native_to_wasm(
-        &mut self,
-        ty: &WasmFuncType,
-        callee_index: FuncIndex,
-    ) -> Result<()> {
+    pub fn emit_native_to_wasm(mut self, ty: &WasmFuncType, callee_index: FuncIndex) -> Result<()> {
         let native_sig = self.native_sig(&ty);
         let wasm_sig = self.wasm_sig(&ty);
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
@@ -365,7 +361,7 @@ where
     }
 
     /// Emit a wasm-to-native trampoline.
-    pub fn emit_wasm_to_native(&mut self, ty: &WasmFuncType) -> Result<()> {
+    pub fn emit_wasm_to_native(mut self, ty: &WasmFuncType) -> Result<()> {
         let mut params = self.callee_and_caller_vmctx_types();
         params.extend_from_slice(ty.params());
 
@@ -698,6 +694,7 @@ where
     /// The trampoline's prologue.
     fn prologue(&mut self) {
         self.masm.prologue();
+        self.masm.save_clobbers(&[]);
     }
 
     /// Similar to [Trampoline::prologue], but saves
@@ -705,11 +702,7 @@ where
     fn prologue_with_callee_saved(&mut self) {
         self.masm.prologue();
         // Save any callee-saved registers.
-        let mut off = 0;
-        for (r, s) in &self.callee_saved_regs {
-            let slot = self.masm.save(off, *r, *s);
-            off += slot.size;
-        }
+        self.masm.save_clobbers(&self.callee_saved_regs);
     }
 
     /// Similar to [Trampoline::epilogue], but restores
@@ -718,9 +711,7 @@ where
         // Free the stack space allocated by pushing the trampoline arguments.
         self.masm.free_stack(arg_size);
         // Restore the callee-saved registers.
-        for (r, s) in self.callee_saved_regs.iter().rev() {
-            self.masm.pop(*r, *s);
-        }
+        self.masm.restore_clobbers(&self.callee_saved_regs);
         self.masm.epilogue(0);
     }
 
@@ -728,6 +719,7 @@ where
     fn epilogue(&mut self, arg_size: u32) {
         // Free the stack space allocated by pushing the trampoline arguments.
         self.masm.free_stack(arg_size);
+        self.masm.restore_clobbers(&[]);
         self.masm.epilogue(0);
     }
 }

@@ -33,7 +33,11 @@ use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 
-type BoxCallInfo = Box<CallInfo>;
+/// Type representing out-of-line data for calls. This type optional because the
+/// call instruction is also used by Winch to emit calls, but the
+/// `Box<CallInfo>` field is not used, it's only used by Cranelift. By making it
+/// optional, we reduce the number of heap allocations in Winch.
+type BoxCallInfo = Option<Box<CallInfo>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecArgPair = Vec<ArgPair>;
 

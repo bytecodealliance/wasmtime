@@ -186,8 +186,8 @@ pub extern "C" fn wasmtime_module_serialize(
 #[no_mangle]
 pub extern "C" fn wasmtime_module_image_range(
     module: &wasmtime_module_t,
-    start: &mut usize,
-    end: &mut usize,
+    start: &mut *const u8,
+    end: &mut *const u8,
 ) {
     let range = module.module.image_range();
     *start = range.start;

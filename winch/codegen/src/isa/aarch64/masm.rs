@@ -1,7 +1,7 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv, HeapData, TableData},
     isa::reg::Reg,
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
@@ -328,11 +328,13 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn float_round(
+    fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
         &mut self,
         _mode: RoundingMode,
+        _env: &mut FuncEnv<Self::Ptr>,
         _context: &mut CodeGenContext,
         _size: OperandSize,
+        _fallback: F,
     ) {
         todo!();
     }

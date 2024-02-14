@@ -18,16 +18,15 @@ use cranelift_codegen::{
                 ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, CC,
             },
-            settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
+            settings as x64_settings, EmitInfo, EmitState, Inst,
         },
-        CallConv,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
     VCodeConstantData, VCodeConstants, Writable,
 };
 
 use super::address::Address;
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 
 // Conversions between winch-codegen x64 types and cranelift-codegen x64 types.
 
@@ -1246,14 +1245,8 @@ impl Assembler {
     pub fn call_with_reg(&mut self, callee: Reg) {
         self.emit(Inst::CallUnknown {
             dest: RegMem::reg(callee.into()),
-            info: Box::new(CallInfo {
-                uses: smallvec![],
-                defs: smallvec![],
-                clobbers: Default::default(),
-                opcode: Opcode::Call,
-                callee_pop_size: 0,
-                callee_conv: CallConv::SystemV,
-            }),
+            opcode: Opcode::Call,
+            info: None,
         });
     }
 
@@ -1262,14 +1255,8 @@ impl Assembler {
         let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
         self.emit(Inst::CallKnown {
             dest,
-            info: Box::new(CallInfo {
-                uses: smallvec![],
-                defs: smallvec![],
-                clobbers: Default::default(),
-                opcode: Opcode::Call,
-                callee_pop_size: 0,
-                callee_conv: CallConv::SystemV,
-            }),
+            opcode: Opcode::Call,
+            info: None,
         });
     }
 
@@ -1278,14 +1265,8 @@ impl Assembler {
         let dest = ExternalName::LibCall(lib);
         self.emit(Inst::CallKnown {
             dest,
-            info: Box::new(CallInfo {
-                uses: smallvec![],
-                defs: smallvec![],
-                clobbers: Default::default(),
-                opcode: Opcode::Call,
-                callee_pop_size: 0,
-                callee_conv: CallConv::SystemV,
-            }),
+            opcode: Opcode::Call,
+            info: None,
         });
     }
 

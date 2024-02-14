@@ -1,5 +1,5 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{CodeGenContext, HeapData, TableData};
+use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
     ir::{Endianness, LibCall, MemFlags},
@@ -397,6 +397,23 @@ pub(crate) trait MacroAssembler {
     /// Emit the function prologue.
     fn prologue(&mut self);
 
+    /// Save all the given clobbered registers to the stack. By default this is the same as pushing
+    /// the registers, however it's present in the [`MacroAssembler`] trait to ensure that it's
+    /// possible to add unwind info for register saves in backends.
+    fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        for &(reg, size) in clobbers {
+            self.push(reg, size);
+        }
+    }
+
+    /// Restore all clobbered registers, assumed to be passed in the same order as to
+    /// [`save_clobbers`].
+    fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        for &(reg, size) in clobbers.iter().rev() {
+            self.pop(reg, size);
+        }
+    }
+
     /// Emit a stack check.
     fn check_stack(&mut self);
 
@@ -603,7 +620,14 @@ pub(crate) trait MacroAssembler {
     fn float_neg(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a floating point floor operation.
-    fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize);
+    fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
+        &mut self,
+        mode: RoundingMode,
+        env: &mut FuncEnv<Self::Ptr>,
+        context: &mut CodeGenContext,
+        size: OperandSize,
+        fallback: F,
+    );
 
     /// Perform a floating point square root operation.
     fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize);
@@ -841,12 +865,5 @@ pub(crate) trait MacroAssembler {
         if bytes > 0 {
             self.free_stack(bytes);
         }
-    }
-
-    /// Save the value of this register to the stack. By default this is the same as pushing the
-    /// register, however it's present in the [`MacroAssembler`] trait to ensure that it's possible
-    /// to add unwind info for register saves in backends.
-    fn save(&mut self, _off: u32, src: Reg, size: OperandSize) -> StackSlot {
-        self.push(src, size)
     }
 }

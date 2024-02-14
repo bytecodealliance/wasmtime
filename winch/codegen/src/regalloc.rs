@@ -54,7 +54,7 @@ impl RegAlloc {
             spill(self);
             self.regset
                 .reg(named)
-                .expect(&format!("register {:?} to be available", named))
+                .unwrap_or_else(|| panic!("Exepected register {:?} to be available", named))
         })
     }
 

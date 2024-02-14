@@ -244,7 +244,7 @@ impl Config {
             force_memory_init_memfd: false,
             wmemcheck: false,
             coredump_on_trap: false,
-            macos_use_mach_ports: true,
+            macos_use_mach_ports: !cfg!(miri),
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {

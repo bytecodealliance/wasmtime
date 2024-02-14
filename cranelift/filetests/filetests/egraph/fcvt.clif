@@ -1,0 +1,43 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %u32_ext_to_f32(i32) -> f32 {
+block0(v0: i32):
+  v1 = uextend.i64 v0
+  v2 = fcvt_from_uint.f32 v1
+  return v2
+
+  ; check: v3 = fcvt_from_uint.f32 v0
+  ; check: return v3
+}
+
+function %u32_ext_to_f64(i32) -> f64 {
+block0(v0: i32):
+  v1 = uextend.i64 v0
+  v2 = fcvt_from_uint.f64 v1
+  return v2
+
+  ; check: v3 = fcvt_from_uint.f64 v0
+  ; check: return v3
+}
+
+function %i32_ext_to_f32(i32) -> f32 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  v2 = fcvt_from_sint.f32 v1
+  return v2
+
+  ; check: v3 = fcvt_from_sint.f32 v0
+  ; check: return v3
+}
+
+function %i32_ext_to_f64(i32) -> f64 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  v2 = fcvt_from_sint.f64 v1
+  return v2
+
+  ; check: v3 = fcvt_from_sint.f64 v0
+  ; check: return v3
+}
