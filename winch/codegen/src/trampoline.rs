@@ -723,6 +723,7 @@ where
     fn epilogue(&mut self, arg_size: u32) {
         // Free the stack space allocated by pushing the trampoline arguments.
         self.masm.free_stack(arg_size);
+        debug_assert!(self.callee_saved_regs.is_empty());
         self.masm.restore_clobbers(&[]);
         self.masm.epilogue(0);
     }
