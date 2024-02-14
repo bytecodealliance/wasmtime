@@ -7,7 +7,6 @@ use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use anyhow::{Error, Result};
 use object::write::WritableBuffer;
 use std::convert::TryFrom;
-use std::ops::Range;
 use std::str;
 use std::sync::Arc;
 use wasmtime_environ::{
