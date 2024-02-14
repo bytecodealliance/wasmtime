@@ -698,6 +698,7 @@ where
     /// The trampoline's prologue.
     fn prologue(&mut self) {
         self.masm.prologue();
+        self.masm.save_clobbers(&[]);
     }
 
     /// Similar to [Trampoline::prologue], but saves
@@ -705,11 +706,7 @@ where
     fn prologue_with_callee_saved(&mut self) {
         self.masm.prologue();
         // Save any callee-saved registers.
-        let mut off = 0;
-        for (r, s) in &self.callee_saved_regs {
-            let slot = self.masm.save(off, *r, *s);
-            off += slot.size;
-        }
+        self.masm.save_clobbers(&self.callee_saved_regs);
     }
 
     /// Similar to [Trampoline::epilogue], but restores
@@ -718,9 +715,7 @@ where
         // Free the stack space allocated by pushing the trampoline arguments.
         self.masm.free_stack(arg_size);
         // Restore the callee-saved registers.
-        for (r, s) in self.callee_saved_regs.iter().rev() {
-            self.masm.pop(*r, *s);
-        }
+        self.masm.restore_clobbers(&self.callee_saved_regs);
         self.masm.epilogue(0);
     }
 
@@ -728,6 +723,7 @@ where
     fn epilogue(&mut self, arg_size: u32) {
         // Free the stack space allocated by pushing the trampoline arguments.
         self.masm.free_stack(arg_size);
+        self.masm.restore_clobbers(&[]);
         self.masm.epilogue(0);
     }
 }

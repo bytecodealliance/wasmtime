@@ -91,6 +91,10 @@ where
         // of the stack pointer. This assumes that no writes to the stack occur in `reserve_stack`.
         self.masm.check_stack();
 
+        // We don't have any callee save registers in the winch calling convention, but
+        // `save_clobbers` does some useful work for setting up unwinding state.
+        self.masm.save_clobbers(&[]);
+
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
         self.control_frames.push(ControlStackFrame::block(
@@ -309,6 +313,7 @@ where
             self.masm.reset_stack_pointer(base);
         }
         debug_assert_eq!(self.context.stack.len(), 0);
+        self.masm.restore_clobbers(&[]);
         self.masm.epilogue(self.context.frame.locals_size);
         Ok(())
     }
