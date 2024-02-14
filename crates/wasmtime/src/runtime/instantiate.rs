@@ -7,7 +7,6 @@ use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use anyhow::{Error, Result};
 use object::write::WritableBuffer;
 use std::convert::TryFrom;
-use std::ops::Range;
 use std::str;
 use std::sync::Arc;
 use wasmtime_environ::{
@@ -318,14 +317,6 @@ impl CompiledModule {
     /// return `None`.
     pub fn has_address_map(&self) -> bool {
         !self.code_memory.address_map_data().is_empty()
-    }
-
-    /// Returns the bounds, in host memory, of where this module's compiled
-    /// image resides.
-    pub fn image_range(&self) -> Range<usize> {
-        let base = self.mmap().as_ptr() as usize;
-        let len = self.mmap().len();
-        base..base + len
     }
 }
 
