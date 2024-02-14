@@ -1609,11 +1609,7 @@ pub(crate) fn emit(
             inst.emit(&[], sink, info, state);
         }
 
-        Inst::CallKnown {
-            dest,
-            info: call_info,
-            ..
-        } => {
+        Inst::CallKnown { dest, opcode, info } => {
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
             }
@@ -1622,12 +1618,14 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &dest, -4);
             sink.put4(0);
-            if call_info.opcode.is_call() {
-                sink.add_call_site(call_info.opcode);
+            if opcode.is_call() {
+                sink.add_call_site(*opcode);
             }
 
-            let callee_pop_size = i64::from(call_info.callee_pop_size);
-            state.adjust_virtual_sp_offset(-callee_pop_size);
+            if let Some(call_info) = info {
+                let callee_pop_size = i64::from(call_info.callee_pop_size);
+                state.adjust_virtual_sp_offset(-callee_pop_size);
+            }
         }
 
         Inst::ReturnCallKnown {
@@ -1683,11 +1681,7 @@ pub(crate) fn emit(
             sink.add_call_site(ir::Opcode::ReturnCallIndirect);
         }
 
-        Inst::CallUnknown {
-            dest,
-            info: call_info,
-            ..
-        } => {
+        Inst::CallUnknown { dest, opcode, info } => {
             let dest = dest.with_allocs(allocs);
 
             let start_offset = sink.cur_offset();
@@ -1722,12 +1716,14 @@ pub(crate) fn emit(
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
             }
-            if call_info.opcode.is_call() {
-                sink.add_call_site(call_info.opcode);
+            if opcode.is_call() {
+                sink.add_call_site(*opcode);
             }
 
-            let callee_pop_size = i64::from(call_info.callee_pop_size);
-            state.adjust_virtual_sp_offset(-callee_pop_size);
+            if let Some(call_info) = info {
+                let callee_pop_size = i64::from(call_info.callee_pop_size);
+                state.adjust_virtual_sp_offset(-callee_pop_size);
+            }
         }
 
         Inst::Args { .. } => {}

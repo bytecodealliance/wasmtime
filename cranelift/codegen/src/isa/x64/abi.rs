@@ -506,17 +506,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::rax()),
         ));
         insts.push(Inst::CallKnown {
+            opcode: Opcode::Call,
             dest: ExternalName::LibCall(LibCall::Probestack),
-            info: Box::new(CallInfo {
+            info: Some(Box::new(CallInfo {
                 // No need to include arg here: we are post-regalloc
                 // so no constraints will be seen anyway.
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::Call,
                 callee_pop_size: 0,
                 callee_conv: CallConv::Probestack,
-            }),
+            })),
         });
     }
 
