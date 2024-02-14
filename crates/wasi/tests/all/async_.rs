@@ -1,7 +1,7 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::preview2::command::{add_to_linker, Command};
+use wasmtime_wasi::command::{add_to_linker, Command};
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
