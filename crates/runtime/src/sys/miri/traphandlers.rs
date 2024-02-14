@@ -40,3 +40,7 @@ pub type SignalHandler<'a> = dyn Fn() + Send + Sync + 'a;
 pub fn platform_init(_macos_use_mach_ports: bool) {}
 
 pub fn lazy_per_thread_init() {}
+
+pub fn using_mach_ports() -> bool {
+    false
+}
