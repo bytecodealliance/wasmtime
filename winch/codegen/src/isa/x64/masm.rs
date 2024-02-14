@@ -68,16 +68,6 @@ impl Masm for MacroAssembler {
 
         self.asm
             .mov_rr(stack_pointer, frame_pointer, OperandSize::S64);
-
-        if self.shared_flags.unwind_info() {
-            self.asm.emit_unwind_inst(UnwindInst::DefineNewFrame {
-                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
-
-                // Clobbers appear directly after the RET and FP if they're present. As we just
-                // pushed the frame pointer, the offset to the clobbers will be `0`.
-                offset_downward_to_clobbers: 0,
-            })
-        }
     }
 
     fn check_stack(&mut self) {
@@ -96,6 +86,73 @@ impl Masm for MacroAssembler {
 
         self.asm.cmp_rr(regs::rsp(), scratch, self.ptr_size);
         self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
+    }
+
+    fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        let int_bytes: u32 = Self::ABI::word_bytes().try_into().unwrap();
+        let float_bytes = int_bytes * 2;
+
+        // Determine how much space we need for the clobbers
+        let clobbered_size = align_to(
+            clobbers
+                .iter()
+                .fold(0u32, |total, (reg, _)| match reg.class() {
+                    RegClass::Int => total + int_bytes,
+                    RegClass::Float => align_to(total, float_bytes) + float_bytes,
+                    RegClass::Vector => unimplemented!(),
+                }),
+            16,
+        );
+
+        // Emit unwind info.
+        if self.shared_flags.unwind_info() {
+            self.asm.emit_unwind_inst(UnwindInst::DefineNewFrame {
+                offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
+                offset_downward_to_clobbers: clobbered_size,
+            })
+        }
+
+        self.reserve_stack(clobbered_size);
+
+        let mut off = 0;
+        for &(reg, size) in clobbers {
+            // Align the current offset
+            off = align_to(off, size.bytes());
+
+            // Emit the store
+            let addr = self.address_at_sp(SPOffset::from_u32(off));
+            self.store(RegImm::Reg(reg), addr, size);
+
+            // Emit unwinding info, if necessary
+            if self.shared_flags.unwind_info() {
+                self.asm.emit_unwind_inst(UnwindInst::SaveReg {
+                    clobber_offset: off,
+                    reg: reg.into(),
+                });
+            }
+
+            // Increment the offset
+            off += size.bytes();
+        }
+
+        debug_assert_eq!(align_to(off, float_bytes), clobbered_size);
+    }
+
+    fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        let mut off = 0;
+        for &(reg, size) in clobbers {
+            // Align the current offset
+            off = align_to(off, size.bytes());
+
+            // Emit the load
+            let addr = self.address_at_sp(SPOffset::from_u32(off));
+            self.load(addr, reg, size);
+
+            // Increment the offset
+            off += size.bytes();
+        }
+
+        self.free_stack(align_to(off, 16));
     }
 
     fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
@@ -129,19 +186,6 @@ impl Masm for MacroAssembler {
             offset: SPOffset::from_u32(self.sp_offset),
             size: bytes,
         }
-    }
-
-    fn save(&mut self, clobber_offset: u32, reg: Reg, size: OperandSize) -> StackSlot {
-        let slot = self.push(reg, size);
-
-        if self.shared_flags.unwind_info() {
-            self.asm.emit_unwind_inst(UnwindInst::SaveReg {
-                clobber_offset,
-                reg: reg.into(),
-            });
-        }
-
-        slot
     }
 
     fn reserve_stack(&mut self, bytes: u32) {
@@ -751,9 +795,8 @@ impl Masm for MacroAssembler {
     fn epilogue(&mut self, locals_size: u32) {
         assert_eq!(self.sp_offset, locals_size);
 
-        let rsp = rsp();
         if locals_size > 0 {
-            self.asm.add_ir(locals_size as i32, rsp, OperandSize::S64);
+            self.free_stack(locals_size);
         }
         self.asm.pop_r(rbp());
         self.asm.ret();

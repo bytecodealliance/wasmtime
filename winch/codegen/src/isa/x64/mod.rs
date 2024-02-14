@@ -153,7 +153,7 @@ impl TargetIsa for X64 {
         );
         let call_conv = self.wasmtime_call_conv();
 
-        let mut trampoline = Trampoline::new(
+        let trampoline = Trampoline::new(
             &mut masm,
             regs::scratch(),
             regs::argv(),

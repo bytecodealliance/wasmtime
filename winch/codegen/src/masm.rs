@@ -397,6 +397,23 @@ pub(crate) trait MacroAssembler {
     /// Emit the function prologue.
     fn prologue(&mut self);
 
+    /// Save all the given clobbered registers to the stack. By default this is the same as pushing
+    /// the registers, however it's present in the [`MacroAssembler`] trait to ensure that it's
+    /// possible to add unwind info for register saves in backends.
+    fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        for &(reg, size) in clobbers {
+            self.push(reg, size);
+        }
+    }
+
+    /// Restore all clobbered registers, assumed to be passed in the same order as to
+    /// [`save_clobbers`].
+    fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        for &(reg, size) in clobbers.iter().rev() {
+            self.pop(reg, size);
+        }
+    }
+
     /// Emit a stack check.
     fn check_stack(&mut self);
 
@@ -848,12 +865,5 @@ pub(crate) trait MacroAssembler {
         if bytes > 0 {
             self.free_stack(bytes);
         }
-    }
-
-    /// Save the value of this register to the stack. By default this is the same as pushing the
-    /// register, however it's present in the [`MacroAssembler`] trait to ensure that it's possible
-    /// to add unwind info for register saves in backends.
-    fn save(&mut self, _off: u32, src: Reg, size: OperandSize) -> StackSlot {
-        self.push(src, size)
     }
 }
