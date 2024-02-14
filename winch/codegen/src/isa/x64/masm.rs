@@ -89,13 +89,16 @@ impl Masm for MacroAssembler {
     }
 
     fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        let int_bytes: u32 = Self::ABI::word_bytes().try_into().unwrap();
+        let float_bytes = int_bytes * 2;
+
         // Determine how much space we need for the clobbers
         let clobbered_size = align_to(
             clobbers
                 .iter()
                 .fold(0u32, |total, (reg, _)| match reg.class() {
-                    RegClass::Int => total + 8,
-                    RegClass::Float => align_to(total, 16) + 16,
+                    RegClass::Int => total + int_bytes,
+                    RegClass::Float => align_to(total, float_bytes) + float_bytes,
                     RegClass::Vector => unimplemented!(),
                 }),
             16,
@@ -132,7 +135,7 @@ impl Masm for MacroAssembler {
             off += size.bytes();
         }
 
-        // debug_assert_eq!(align_to(off, 16), clobbered_size);
+        debug_assert_eq!(align_to(off, float_bytes), clobbered_size);
     }
 
     fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
