@@ -87,9 +87,9 @@ pub(crate) enum Callee<'a> {
     Builtin(BuiltinFunction),
 }
 
-impl<'a> Callee<'a> {
+impl Callee<'_> {
     /// Returns the [ABISig] of the [Callee].
-    pub(crate) fn sig(&'a self) -> &'a ABISig {
+    pub(crate) fn sig(&self) -> &ABISig {
         match self {
             Self::Local(info) | Self::Import(info) => &info.sig,
             Self::FuncRef(sig) => sig,

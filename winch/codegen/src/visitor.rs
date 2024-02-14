@@ -453,7 +453,7 @@ where
     }
 
     fn visit_f32_floor(&mut self) {
-        self.masm.float_round::<_>(
+        self.masm.float_round(
             RoundingMode::Down,
             &mut self.env,
             &mut self.context,
