@@ -1,6 +1,6 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime_wasi::preview2::command::sync::Command;
+use wasmtime_wasi::command::sync::Command;
 
 foreach_http!(assert_test_exists);
 
