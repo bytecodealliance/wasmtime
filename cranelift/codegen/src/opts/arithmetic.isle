@@ -170,7 +170,7 @@
 
 ;; Cranelift's `fcvt_from_{u,s}int` instructions are polymorphic over the input
 ;; type so remove any unnecessary `uextend` or `sextend` to give backends
-;; the chance to convert from the smallest integral type to the a float. This
+;; the chance to convert from the smallest integral type to the float. This
 ;; can help lowerings on x64 for example which has a less efficient u64-to-float
 ;; conversion than other bit widths.
 (rule (simplify (fcvt_from_uint ty (uextend _ val)))
