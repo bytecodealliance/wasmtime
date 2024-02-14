@@ -4,9 +4,7 @@ use crate::bindings::cli::{
 };
 use crate::bindings::io::streams;
 use crate::pipe;
-use crate::{
-    HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, WasiView,
-};
+use crate::{HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, WasiView};
 use bytes::Bytes;
 use std::io::IsTerminal;
 use wasmtime::component::Resource;

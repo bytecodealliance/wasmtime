@@ -48,14 +48,12 @@ impl<T: WasiView> HostResolveAddressStream for T {
         let stream: &mut ResolveAddressStream = self.table().get_mut(&resource)?;
         loop {
             match stream {
-                ResolveAddressStream::Waiting(future) => {
-                    match crate::poll_noop(Pin::new(future)) {
-                        Some(result) => {
-                            *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
-                        }
-                        None => return Err(ErrorCode::WouldBlock.into()),
+                ResolveAddressStream::Waiting(future) => match crate::poll_noop(Pin::new(future)) {
+                    Some(result) => {
+                        *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
                     }
-                }
+                    None => return Err(ErrorCode::WouldBlock.into()),
+                },
                 ResolveAddressStream::Done(slot @ Err(_)) => {
                     mem::replace(slot, Ok(Vec::new().into_iter()))?;
                     unreachable!();
