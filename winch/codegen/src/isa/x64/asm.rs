@@ -22,7 +22,7 @@ use cranelift_codegen::{
         },
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    VCodeConstantData, VCodeConstants, Writable,
+    RelocDistance, VCodeConstantData, VCodeConstants, Writable,
 };
 
 use super::address::Address;
@@ -1261,13 +1261,23 @@ impl Assembler {
     }
 
     /// Emit a call to a well-known libcall.
-    pub fn call_with_lib(&mut self, lib: LibCall) {
+    pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg) {
         let dest = ExternalName::LibCall(lib);
-        self.emit(Inst::CallKnown {
-            dest,
-            opcode: Opcode::Call,
-            info: None,
+
+        // `use_colocated_libcalls` is never `true` from within Wasmtime,
+        // so always require loading the libcall to a register and use
+        // a `Far` relocation distance to ensure the right relocation when
+        // emitting to binary.
+        //
+        // See [wasmtime::engine::Engine::check_compatible_with_shared_flag] and
+        // [wasmtime_cranelift_shared::obj::ModuleTextBuilder::apend_func]
+        self.emit(Inst::LoadExtName {
+            dst: Writable::from_reg(dst.into()),
+            name: Box::new(dest),
+            offset: 0,
+            distance: RelocDistance::Far,
         });
+        self.call_with_reg(dst);
     }
 
     /// Emits a conditional jump to the given label.
