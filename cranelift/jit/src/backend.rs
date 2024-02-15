@@ -851,7 +851,11 @@ impl Module for JITModule {
         } = data;
 
         let size = init.size();
-        let ptr = if decl.writable {
+        let ptr = if size == 0 {
+            // Return a correctly aligned non-null pointer to avoid UB in write_bytes and
+            // copy_nonoverlapping.
+            usize::try_from(align.unwrap_or(WRITABLE_DATA_ALIGNMENT)).unwrap() as *mut u8
+        } else if decl.writable {
             self.memory
                 .writable
                 .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
@@ -868,6 +872,17 @@ impl Module for JITModule {
                     err: e,
                 })?
         };
+
+        if ptr.is_null() {
+            // FIXME pass a Layout to allocate and only compute the layout once.
+            std::alloc::handle_alloc_error(
+                std::alloc::Layout::from_size_align(
+                    size,
+                    align.unwrap_or(READONLY_DATA_ALIGNMENT).try_into().unwrap(),
+                )
+                .unwrap(),
+            );
+        }
 
         match *init {
             Init::Uninitialized => {
