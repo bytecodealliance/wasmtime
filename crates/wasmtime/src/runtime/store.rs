@@ -1402,6 +1402,7 @@ impl StoreOpaque {
         Some(AsyncCx {
             current_suspend: self.async_state.current_suspend.get(),
             current_poll_cx: poll_cx_box_ptr,
+            track_pkey_context_switch: mpk::is_supported() && self.pkey.is_some(),
         })
     }
 
@@ -1939,6 +1940,7 @@ impl<T> StoreContextMut<'_, T> {
 pub struct AsyncCx {
     current_suspend: *mut *const wasmtime_fiber::Suspend<Result<()>, (), Result<()>>,
     current_poll_cx: *mut *mut Context<'static>,
+    track_pkey_context_switch: bool,
 }
 
 #[cfg(feature = "async")]
@@ -2003,10 +2005,17 @@ impl AsyncCx {
             // other fibers while it is suspended, we save and restore it once
             // once execution resumes. Note that when MPK is not supported,
             // these are noops.
-            let previous_mask = mpk::current_mask();
-            mpk::allow(ProtectionMask::all());
+            let previous_mask = if self.track_pkey_context_switch {
+                let previous_mask = mpk::current_mask();
+                mpk::allow(ProtectionMask::all());
+                previous_mask
+            } else {
+                ProtectionMask::all()
+            };
             (*suspend).suspend(())?;
-            mpk::allow(previous_mask);
+            if self.track_pkey_context_switch {
+                mpk::allow(previous_mask);
+            }
         }
     }
 }
