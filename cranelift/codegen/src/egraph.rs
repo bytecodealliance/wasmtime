@@ -497,7 +497,7 @@ impl<'a> EgraphPass<'a> {
 
         // In domtree preorder, visit blocks. (TODO: factor out an
         // iterator from this and elaborator.)
-        let root = self.domtree_children.root();
+        let root = cursor.layout().entry_block().unwrap();
         enum StackEntry {
             Visit(Block),
             Pop,

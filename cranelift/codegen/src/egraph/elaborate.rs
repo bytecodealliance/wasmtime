@@ -763,9 +763,8 @@ impl<'a> Elaborator<'a> {
     }
 
     fn elaborate_domtree(&mut self, domtree: &DomTreeWithChildren) {
-        let root = domtree.root();
         self.block_stack.push(BlockStackEntry::Elaborate {
-            block: root,
+            block: self.func.layout.entry_block().unwrap(),
             idom: None,
         });
 

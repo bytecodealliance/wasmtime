@@ -9,7 +9,6 @@ use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 /// rather than parent pointers.
 pub(crate) struct DomTreeWithChildren {
     nodes: SecondaryMap<Block, DomTreeNode>,
-    root: Block,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -40,13 +39,7 @@ impl DomTreeWithChildren {
             nodes[idom].children = block.into();
         }
 
-        let root = func.layout.entry_block().unwrap();
-
-        Self { nodes, root }
-    }
-
-    pub(crate) fn root(&self) -> Block {
-        self.root
+        Self { nodes }
     }
 
     pub(crate) fn children<'a>(&'a self, block: Block) -> DomTreeChildIter<'a> {
