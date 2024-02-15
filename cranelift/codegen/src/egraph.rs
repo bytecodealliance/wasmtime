@@ -3,8 +3,7 @@
 use crate::alias_analysis::{AliasAnalysis, LastStores};
 use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
-use crate::dominator_tree::DominatorTree;
-use crate::egraph::domtree::DomTreeWithChildren;
+use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::egraph::elaborate::Elaborator;
 use crate::fx::FxHashSet;
 use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
@@ -22,7 +21,6 @@ use smallvec::SmallVec;
 use std::hash::Hasher;
 
 mod cost;
-mod domtree;
 mod elaborate;
 
 /// Pass over a Function that does the whole aegraph thing.
@@ -53,7 +51,7 @@ pub struct EgraphPass<'a> {
     /// "Domtree with children": like `domtree`, but with an explicit
     /// list of children, complementing the parent pointers stored
     /// in `domtree`.
-    domtree_children: DomTreeWithChildren,
+    domtree_children: DominatorTreePreorder,
     /// Loop analysis results, used for built-in LICM during
     /// elaboration.
     loop_analysis: &'a LoopAnalysis,
@@ -406,7 +404,8 @@ impl<'a> EgraphPass<'a> {
         alias_analysis: &'a mut AliasAnalysis<'a>,
     ) -> Self {
         let num_values = func.dfg.num_values();
-        let domtree_children = DomTreeWithChildren::new(func, domtree);
+        let mut domtree_children = DominatorTreePreorder::new();
+        domtree_children.compute(domtree, &func.layout);
         Self {
             func,
             domtree,

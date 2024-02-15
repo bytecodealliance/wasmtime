@@ -2,9 +2,8 @@
 //! in CFG nodes.
 
 use super::cost::Cost;
-use super::domtree::DomTreeWithChildren;
 use super::Stats;
-use crate::dominator_tree::DominatorTree;
+use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::hash_map::Entry as HashEntry;
 use crate::inst_predicates::is_pure_for_egraph;
@@ -19,7 +18,7 @@ use smallvec::{smallvec, SmallVec};
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
     domtree: &'a DominatorTree,
-    domtree_children: &'a DomTreeWithChildren,
+    domtree_children: &'a DominatorTreePreorder,
     loop_analysis: &'a LoopAnalysis,
     /// Map from Value that is produced by a pure Inst (and was thus
     /// not in the side-effecting skeleton) to the value produced by
@@ -138,7 +137,7 @@ impl<'a> Elaborator<'a> {
     pub(crate) fn new(
         func: &'a mut Function,
         domtree: &'a DominatorTree,
-        domtree_children: &'a DomTreeWithChildren,
+        domtree_children: &'a DominatorTreePreorder,
         loop_analysis: &'a LoopAnalysis,
         remat_values: &'a FxHashSet<Value>,
         stats: &'a mut Stats,
@@ -762,7 +761,7 @@ impl<'a> Elaborator<'a> {
         }
     }
 
-    fn elaborate_domtree(&mut self, domtree: &DomTreeWithChildren) {
+    fn elaborate_domtree(&mut self, domtree: &DominatorTreePreorder) {
         self.block_stack.push(BlockStackEntry::Elaborate {
             block: self.func.layout.entry_block().unwrap(),
             idom: None,
