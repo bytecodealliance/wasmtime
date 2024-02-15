@@ -694,6 +694,7 @@ where
     /// The trampoline's prologue.
     fn prologue(&mut self) {
         self.masm.prologue();
+        // TODO: emit a stack check
         self.masm.save_clobbers(&[]);
     }
 
@@ -701,6 +702,7 @@ where
     /// callee-saved registers.
     fn prologue_with_callee_saved(&mut self) {
         self.masm.prologue();
+        // TODO: emit a stack check
         // Save any callee-saved registers.
         self.masm.save_clobbers(&self.callee_saved_regs);
     }

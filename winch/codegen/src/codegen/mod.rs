@@ -85,15 +85,18 @@ where
 
     fn emit_start(&mut self) -> Result<()> {
         self.masm.prologue();
-        self.masm.reserve_stack(self.context.frame.locals_size);
 
-        // Check for stack overflow after reserving space, so that we get the most up-to-date view
-        // of the stack pointer. This assumes that no writes to the stack occur in `reserve_stack`.
+        // Stack overflow checks must occur during the function prologue to ensure that unwinding
+        // will not assume they're user-handlable exceptions. As the `save_clobbers` call below
+        // marks the end of the prologue for unwinding annotations, we make the stack check here.
         self.masm.check_stack();
 
         // We don't have any callee save registers in the winch calling convention, but
-        // `save_clobbers` does some useful work for setting up unwinding state.
+        // `save_clobbers` does some useful work for setting up unwinding state, and marks the end
+        // of the function prologue as far as the windows unwind annotation is concerend.
         self.masm.save_clobbers(&[]);
+
+        self.masm.reserve_stack(self.context.frame.locals_size);
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
