@@ -1,5 +1,5 @@
 use crate::preview2::{bindings::io::poll, WasiView};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::any::Any;
 use std::collections::HashMap;
 use std::future::Future;
@@ -67,6 +67,10 @@ where
 impl<T: WasiView> poll::Host for T {
     async fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
         type ReadylistIndex = u32;
+
+        if pollables.is_empty() {
+            return Err(anyhow!("empty poll list"));
+        }
 
         let table = self.table();
 
