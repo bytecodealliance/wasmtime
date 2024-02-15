@@ -1615,14 +1615,15 @@ fn call_wasm_passing_subtype_func_param() -> anyhow::Result<()> {
             (module
                 (type $ty (func (result funcref)))
                 (func (export "f") (param (ref null $ty)) (result funcref)
-                    local.get 0
-
                     ;; Return null if the funcref is null.
+                    ref.null func
                     local.get 0
                     ref.is_null
                     br_if 0
+                    drop
 
                     ;; Otherwise, call it.
+                    local.get 0
                     call_ref $ty
                 )
             )
