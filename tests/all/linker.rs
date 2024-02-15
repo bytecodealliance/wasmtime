@@ -523,6 +523,7 @@ fn linker_instantiate_with_concrete_func_refs() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn linker_defines_func_subtype() -> Result<()> {
     let mut config = Config::new();
+    config.wasm_function_references(true);
     config.wasm_gc(true);
     let engine = Engine::new(&config)?;
 
@@ -604,6 +605,7 @@ fn linker_defines_global_subtype_const_ok() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn linker_defines_global_subtype_const_err() -> Result<()> {
     let mut config = Config::new();
+    config.wasm_function_references(true);
     config.wasm_gc(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
