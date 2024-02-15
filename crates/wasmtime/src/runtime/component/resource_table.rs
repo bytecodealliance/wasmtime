@@ -1,6 +1,6 @@
 use super::Resource;
-use std::any::Any;
-use std::collections::{BTreeSet, HashMap};
+use std::any::{Any, TypeId};
+use std::collections::BTreeSet;
 
 #[derive(Debug)]
 /// Errors returned by operations on `ResourceTable`
@@ -14,6 +14,11 @@ pub enum ResourceTableError {
     /// Resource cannot be deleted because child resources exist in the table. Consult wit docs for
     /// the particular resource to see which methods may return child resources.
     HasChildren,
+    /// Resource has been temporarily taken from the table.
+    Taken,
+    /// Resource is not taken. This can happen when attempting to restore a resource
+    /// that has already been restored, or was never taken in the first place.
+    NotTaken,
 }
 
 impl std::fmt::Display for ResourceTableError {
@@ -23,6 +28,8 @@ impl std::fmt::Display for ResourceTableError {
             Self::NotPresent => write!(f, "resource not present"),
             Self::WrongType => write!(f, "resource is of another type"),
             Self::HasChildren => write!(f, "resource has children"),
+            Self::Taken => write!(f, "resource is taken"),
+            Self::NotTaken => write!(f, "resource is not taken"),
         }
     }
 }
@@ -57,6 +64,32 @@ impl Entry {
     }
 }
 
+#[derive(Debug)]
+enum Slot {
+    /// The resource is present in the table, ready for use.
+    Present(Box<dyn Any + Send>),
+    /// The resource is temporarily taken out for external mutation.
+    /// To ensure we're getting back the same type of resource as the one we've
+    /// handed out, we remember the TypeId of the data and validate it on restore.
+    Taken(TypeId),
+}
+
+impl Slot {
+    fn get(&self) -> Result<&(dyn Any + Send + 'static), ResourceTableError> {
+        match self {
+            Slot::Present(data) => Ok(data.as_ref()),
+            Slot::Taken(_) => Err(ResourceTableError::Taken),
+        }
+    }
+
+    fn get_mut(&mut self) -> Result<&mut (dyn Any + Send + 'static), ResourceTableError> {
+        match self {
+            Slot::Present(data) => Ok(data.as_mut()),
+            Slot::Taken(_) => Err(ResourceTableError::Taken),
+        }
+    }
+}
+
 /// This structure tracks parent and child relationships for a given table entry.
 ///
 /// Parents and children are referred to by table index. We maintain the
@@ -68,8 +101,8 @@ impl Entry {
 /// * an entry with children may not be deleted.
 #[derive(Debug)]
 struct TableEntry {
-    /// The entry in the table, as a boxed dynamically-typed object
-    entry: Box<dyn Any + Send>,
+    /// The entry in the table.
+    slot: Slot,
     /// The index of the parent of this entry, if it has one.
     parent: Option<u32>,
     /// The indicies of any children of this entry.
@@ -79,7 +112,7 @@ struct TableEntry {
 impl TableEntry {
     fn new(entry: Box<dyn Any + Send>, parent: Option<u32>) -> Self {
         Self {
-            entry,
+            slot: Slot::Present(entry),
             parent,
             children: BTreeSet::new(),
         }
@@ -231,7 +264,7 @@ impl ResourceTable {
 
     fn get_(&self, key: u32) -> Result<&dyn Any, ResourceTableError> {
         let r = self.occupied(key)?;
-        Ok(&*r.entry)
+        Ok(r.slot.get()?)
     }
 
     /// Get an mutable reference to a resource of a given type at a given
@@ -248,7 +281,7 @@ impl ResourceTable {
     /// Returns the raw `Any` at the `key` index provided.
     pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, ResourceTableError> {
         let r = self.occupied_mut(key)?;
-        Ok(&mut *r.entry)
+        Ok(r.slot.get_mut()?)
     }
 
     /// Same as `delete`, but typed
@@ -257,17 +290,19 @@ impl ResourceTable {
         T: Any,
     {
         debug_assert!(resource.owned());
-        let entry = self.delete_entry(resource.rep())?;
-        match entry.entry.downcast() {
+        let data = self.delete_entry(resource.rep())?;
+        match data.downcast() {
             Ok(t) => Ok(*t),
             Err(_e) => Err(ResourceTableError::WrongType),
         }
     }
 
-    fn delete_entry(&mut self, key: u32) -> Result<TableEntry, ResourceTableError> {
-        if !self.occupied(key)?.children.is_empty() {
+    fn delete_entry(&mut self, key: u32) -> Result<Box<dyn Any + Send>, ResourceTableError> {
+        let entry = self.occupied_mut(key)?;
+        if !entry.children.is_empty() {
             return Err(ResourceTableError::HasChildren);
         }
+        let data = self.take_any(key)?;
         let e = self.free_entry(key as usize);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
@@ -277,39 +312,111 @@ impl ResourceTable {
                 .expect("missing parent")
                 .remove_child(key);
         }
-        Ok(e)
+        Ok(data)
     }
 
-    /// Zip the values of the map with mutable references to table entries corresponding to each
-    /// key. As the keys in the [HashMap] are unique, this iterator can give mutable references
-    /// with the same lifetime as the mutable reference to the [ResourceTable].
-    pub fn iter_entries<'a, T>(
-        &'a mut self,
-        map: HashMap<u32, T>,
-    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, ResourceTableError>, T)> {
-        map.into_iter().map(move |(k, v)| {
-            let item = self
-                .occupied_mut(k)
-                .map(|e| Box::as_mut(&mut e.entry))
-                // Safety: extending the lifetime of the mutable reference.
-                .map(|item| unsafe { &mut *(item as *mut dyn Any) });
-            (item, v)
-        })
-    }
-
-    /// Iterate over all children belonging to the provided parent
+    /// Iterate over all children belonging to the provided parent.
+    /// This returns an iterator of results, because some children may be taken.
     pub fn iter_children<T>(
         &self,
         parent: &Resource<T>,
-    ) -> Result<impl Iterator<Item = &(dyn Any + Send)>, ResourceTableError>
+    ) -> Result<
+        impl Iterator<Item = Result<&(dyn Any + Send), ResourceTableError>>,
+        ResourceTableError,
+    >
     where
         T: 'static,
     {
         let parent_entry = self.occupied(parent.rep())?;
         Ok(parent_entry.children.iter().map(|child_index| {
             let child = self.occupied(*child_index).expect("missing child");
-            child.entry.as_ref()
+            child.slot.get()
         }))
+    }
+
+    /// Temporarily take the resource out of the table.
+    ///
+    /// This is an advanced operation to allow mutating resources independent of
+    /// the table's mutable reference lifetime. For simple access to the resource,
+    /// try [ResourceTable::get_mut] instead.
+    ///
+    /// Unlike deleting the resource and pushing it back in, this method retains
+    /// the resource's index in the table and the parent/children relationships.
+    ///
+    /// While a resource is taken out, any attempt to access that resource's
+    /// index through the table returns [ResourceTableError::Taken]. It's the
+    /// caller's responsibility to put the resource back in using [ResourceTable::restore].
+    pub fn take<T>(&mut self, resource: &Resource<T>) -> Result<Box<T>, ResourceTableError>
+    where
+        T: Any + Send + 'static,
+    {
+        match self.take_any(resource.rep())?.downcast() {
+            Ok(data) => Ok(data),
+            Err(data) => {
+                self.restore_any(resource.rep(), data)
+                    .expect("resource was just taken");
+                Err(ResourceTableError::WrongType)
+            }
+        }
+    }
+
+    /// Put the resource back into the table.
+    pub fn restore<T>(
+        &mut self,
+        resource: &Resource<T>,
+        data: Box<T>,
+    ) -> Result<(), ResourceTableError>
+    where
+        T: Any + Send + 'static,
+    {
+        self.restore_any(resource.rep(), data)
+    }
+
+    /// Temporarily take the resource out of the table.
+    ///
+    /// This is an advanced operation to allow mutating resources independent of
+    /// the table's mutable reference lifetime. For simple access to the resource,
+    /// try [ResourceTable::get_any_mut] instead.
+    ///
+    /// Unlike deleting the resource and pushing it back in, this method retains
+    /// the resource's index in the table and the parent/children relationships.
+    ///
+    /// While a resource is taken out, any attempt to access that resource's
+    /// index through the table returns [ResourceTableError::Taken]. It's the
+    /// caller's responsibility to put the resource back in using [ResourceTable::restore_any].
+    pub fn take_any(
+        &mut self,
+        key: u32,
+    ) -> Result<Box<dyn Any + Send + 'static>, ResourceTableError> {
+        let entry = self.occupied_mut(key)?;
+
+        let replacement: Slot = match &entry.slot {
+            Slot::Present(data) => Slot::Taken(data.as_ref().type_id()),
+            Slot::Taken(_) => return Err(ResourceTableError::Taken),
+        };
+        match std::mem::replace(&mut entry.slot, replacement) {
+            Slot::Present(data) => Ok(data),
+            Slot::Taken(_) => unreachable!(),
+        }
+    }
+
+    /// Put the resource back into the table.
+    pub fn restore_any(
+        &mut self,
+        key: u32,
+        data: Box<dyn Any + Send + 'static>,
+    ) -> Result<(), ResourceTableError> {
+        let entry = self.occupied_mut(key)?;
+
+        let replacement = match &entry.slot {
+            Slot::Taken(id) if *id == data.as_ref().type_id() => Slot::Present(data),
+            Slot::Taken(_) => return Err(ResourceTableError::WrongType),
+            Slot::Present(_) => return Err(ResourceTableError::NotTaken),
+        };
+        match std::mem::replace(&mut entry.slot, replacement) {
+            Slot::Taken(_) => Ok(()),
+            Slot::Present(_) => unreachable!(),
+        }
     }
 }
 
@@ -320,7 +427,7 @@ impl Default for ResourceTable {
 }
 
 #[test]
-pub fn test_free_list() {
+fn test_free_list() {
     let mut table = ResourceTable::new();
 
     let x = table.push(()).unwrap();
@@ -347,4 +454,25 @@ pub fn test_free_list() {
     // As the free list is empty, this entry will have a new id.
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 2);
+}
+
+#[test]
+fn test_take_restore() {
+    let mut table = ResourceTable::new();
+    let a_u32: Resource<u32> = table.push(42).unwrap();
+    let a_f64: Resource<f64> = Resource::new_borrow(a_u32.rep());
+
+    table.take(&a_u32).unwrap();
+
+    assert!(matches!(table.get(&a_f64), Err(ResourceTableError::Taken)));
+
+    assert!(matches!(
+        table.restore(&a_f64, Box::new(42f64)),
+        Err(ResourceTableError::WrongType)
+    ));
+    table.restore(&a_u32, Box::new(42u32)).unwrap();
+    assert!(matches!(
+        table.restore(&a_u32, Box::new(42u32)),
+        Err(ResourceTableError::NotTaken)
+    ));
 }

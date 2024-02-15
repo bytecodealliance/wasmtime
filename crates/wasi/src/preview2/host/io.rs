@@ -49,7 +49,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
     }
 
     fn subscribe(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<Resource<Pollable>> {
-        subscribe(self.table(), stream)
+        subscribe(self.table(), &stream)
     }
 
     async fn blocking_write_and_flush(
@@ -220,7 +220,7 @@ impl<T: WasiView> streams::HostInputStream for T {
     }
 
     fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table(), stream)
+        crate::preview2::poll::subscribe(self.table(), &stream)
     }
 }
 
@@ -230,9 +230,8 @@ pub mod sync {
             self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
             HostOutputStream as AsyncHostOutputStream,
         },
-        bindings::sync_io::io::poll::Pollable,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
-        in_tokio, StreamError, StreamResult, WasiView,
+        in_tokio, Pollable, StreamError, StreamResult, WasiView,
     };
     use wasmtime::component::Resource;
 

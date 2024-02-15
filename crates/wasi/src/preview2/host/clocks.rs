@@ -1,10 +1,8 @@
-#![allow(unused_variables)]
-
 use crate::preview2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use crate::preview2::poll::{subscribe, Subscribe};
+use crate::preview2::poll;
 use crate::preview2::{Pollable, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
@@ -42,23 +40,16 @@ impl<T: WasiView> wall_clock::Host for T {
     }
 }
 
-fn subscribe_to_duration(
-    table: &mut wasmtime::component::ResourceTable,
-    duration: tokio::time::Duration,
-) -> anyhow::Result<Resource<Pollable>> {
-    let sleep = if duration.is_zero() {
-        table.push(Deadline::Past)?
+fn make_pollable(duration: tokio::time::Duration) -> Pollable {
+    if duration.is_zero() {
+        poll::ready()
     } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
-        // NB: this resource created here is not actually exposed to wasm, it's
-        // only an internal implementation detail used to match the signature
-        // expected by `subscribe`.
-        table.push(Deadline::Instant(deadline))?
+        poll::once(async move { tokio::time::sleep_until(deadline).await })
     } else {
         // If the user specifies a time so far in the future we can't
         // represent it, wait forever rather than trap.
-        table.push(Deadline::Never)?
-    };
-    subscribe(table, sleep)
+        poll::pending()
+    }
 }
 
 impl<T: WasiView> monotonic_clock::Host for T {
@@ -77,27 +68,12 @@ impl<T: WasiView> monotonic_clock::Host for T {
         } else {
             Duration::from_nanos(0)
         };
-        subscribe_to_duration(&mut self.table(), duration)
+        let pollable = make_pollable(duration);
+        Ok(self.table().push(pollable)?)
     }
 
     fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
-        subscribe_to_duration(&mut self.table(), Duration::from_nanos(duration))
-    }
-}
-
-enum Deadline {
-    Past,
-    Instant(tokio::time::Instant),
-    Never,
-}
-
-#[async_trait::async_trait]
-impl Subscribe for Deadline {
-    async fn ready(&mut self) {
-        match self {
-            Deadline::Past => {}
-            Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
-            Deadline::Never => std::future::pending().await,
-        }
+        let pollable = make_pollable(Duration::from_nanos(duration));
+        Ok(self.table().push(pollable)?)
     }
 }

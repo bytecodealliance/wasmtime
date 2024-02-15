@@ -98,12 +98,14 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     )> {
         let table = self.table();
 
-        let has_active_streams = table
-            .iter_children(&this)?
-            .any(|c| c.is::<IncomingDatagramStream>() || c.is::<OutgoingDatagramStream>());
+        for child_result in table.iter_children(&this)? {
+            let Ok(child) = child_result else {
+                return Err(SocketError::trap(anyhow!("UDP stream taken.")));
+            };
 
-        if has_active_streams {
-            return Err(SocketError::trap(anyhow!("UDP streams not dropped yet")));
+            if child.is::<IncomingDatagramStream>() || child.is::<OutgoingDatagramStream>() {
+                return Err(SocketError::trap(anyhow!("UDP streams not dropped yet")));
+            }
         }
 
         let socket = table.get_mut(&this)?;
@@ -283,7 +285,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     }
 
     fn subscribe(&mut self, this: Resource<udp::UdpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table(), this)
+        crate::preview2::poll::subscribe(self.table(), &this)
     }
 
     fn drop(&mut self, this: Resource<udp::UdpSocket>) -> Result<(), anyhow::Error> {
@@ -363,7 +365,7 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table(), this)
+        crate::preview2::poll::subscribe(self.table(), &this)
     }
 
     fn drop(&mut self, this: Resource<udp::IncomingDatagramStream>) -> Result<(), anyhow::Error> {
@@ -497,7 +499,7 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
-        crate::preview2::poll::subscribe(self.table(), this)
+        crate::preview2::poll::subscribe(self.table(), &this)
     }
 
     fn drop(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> Result<(), anyhow::Error> {

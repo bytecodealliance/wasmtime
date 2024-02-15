@@ -3667,6 +3667,7 @@ dependencies = [
  "log",
  "once_cell",
  "rustix",
+ "smallvec",
  "system-interface",
  "tempfile",
  "test-log",

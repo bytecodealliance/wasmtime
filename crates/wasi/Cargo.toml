@@ -35,6 +35,7 @@ io-lifetimes = { workspace = true, optional = true }
 fs-set-times = { workspace = true, optional = true }
 bitflags = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
+smallvec = { workspace = true }
 system-interface = { workspace = true, optional = true}
 futures = { workspace = true, optional = true }
 wasi-common = { workspace = true, optional = true, features = ["sync"] }
