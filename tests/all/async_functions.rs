@@ -389,6 +389,84 @@ async fn async_host_func_with_pooling_stacks() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn async_mpk_protection() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    // Construct a pool with MPK protection enabled; note that the MPK
+    // protection is configured in `small_pool_config`.
+    let mut pooling = crate::small_pool_config();
+    pooling
+        .total_memories(10)
+        .total_stacks(2)
+        .memory_pages(1)
+        .table_elements(0);
+    let mut config = Config::new();
+    config.async_support(true);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));
+    config.static_memory_maximum_size(1 << 26);
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+
+    // Craft a module that loops for several iterations and checks whether it
+    // has access to its memory range (0x0-0x10000).
+    const WAT: &str = "
+    (module
+        (func $start
+            (local $i i32)
+            (local.set $i (i32.const 3))
+            (loop $cont
+                (drop (i32.load (i32.const 0)))
+                (drop (i32.load (i32.const 0xfffc)))
+                (br_if $cont (local.tee $i (i32.sub (local.get $i) (i32.const 1))))))
+        (memory 1)
+        (start $start))
+    ";
+
+    // Start two instances of the module in separate fibers, `a` and `b`.
+    async fn run_instance(engine: &Engine, name: &str) -> Instance {
+        let mut store = Store::new(&engine, ());
+        store.set_epoch_deadline(0);
+        store.epoch_deadline_async_yield_and_update(0);
+        let module = Module::new(store.engine(), WAT).unwrap();
+        println!("[{name}] building instance");
+        Instance::new_async(&mut store, &module, &[]).await.unwrap()
+    }
+    let mut a = Box::pin(run_instance(&engine, "a"));
+    let mut b = Box::pin(run_instance(&engine, "b"));
+
+    // Alternately poll each instance until completion. This should exercise
+    // fiber suspensions requiring the `Store` to appropriately save and restore
+    // the PKRU context between suspensions (see `AsyncCx::block_on`).
+    for i in 0..10 {
+        if i % 2 == 0 {
+            match PollOnce::new(a).await {
+                Ok(_) => {
+                    println!("[a] done");
+                    break;
+                }
+                Err(a_) => {
+                    println!("[a] not done");
+                    a = a_;
+                }
+            }
+        } else {
+            match PollOnce::new(b).await {
+                Ok(_) => {
+                    println!("[b] done");
+                    break;
+                }
+                Err(b_) => {
+                    println!("[b] not done");
+                    b = b_;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// This will execute the `future` provided to completion and each invocation of
 /// `poll` for the future will be executed on a separate thread.
 pub async fn execute_across_threads<F>(future: F) -> F::Output
