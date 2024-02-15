@@ -213,3 +213,27 @@ fn libcall_function() {
 
     module.finalize_definitions().unwrap();
 }
+
+// This used to cause UB. See https://github.com/bytecodealliance/wasmtime/issues/7918.
+#[test]
+fn empty_data_object() {
+    let mut flag_builder = settings::builder();
+    flag_builder.set("use_colocated_libcalls", "false").unwrap();
+    // FIXME set back to true once the x64 backend supports it.
+    flag_builder.set("is_pic", "false").unwrap();
+    let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
+        panic!("host machine is not supported: {}", msg);
+    });
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
+
+    let data_id = module
+        .declare_data("empty", Linkage::Export, false, false)
+        .unwrap();
+
+    let mut data = DataDescription::new();
+    data.define(Box::new([]));
+    module.define_data(data_id, &data).unwrap();
+}
