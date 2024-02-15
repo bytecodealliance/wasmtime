@@ -34,10 +34,10 @@ cfg_if::cfg_if! {
         mod enabled;
         mod pkru;
         mod sys;
-        pub use enabled::{allow, is_supported, keys, ProtectionKey, ProtectionMask};
+        pub use enabled::{allow, current_mask, is_supported, keys, ProtectionKey, ProtectionMask};
     } else {
         mod disabled;
-        pub use disabled::{allow, is_supported, keys, ProtectionKey, ProtectionMask};
+        pub use disabled::{allow, current_mask, is_supported, keys, ProtectionKey, ProtectionMask};
     }
 }
 
