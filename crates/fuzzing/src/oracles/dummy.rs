@@ -118,7 +118,6 @@ mod tests {
         let func_ty = FuncType::new(store.engine(), vec![ValType::I32], vec![ValType::I64]);
         let func = dummy_func(&mut store, func_ty.clone()).unwrap();
         let actual_ty = func.ty(&store);
-        assert!(actual_ty.matches(store.engine(), &func_ty));
-        assert!(func_ty.matches(store.engine(), &actual_ty));
+        assert!(FuncType::eq(&actual_ty, &func_ty));
     }
 }

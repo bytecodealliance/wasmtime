@@ -169,17 +169,16 @@ impl ValType {
     ///
     /// # Panics
     ///
-    /// Panics if either type is associated with a different engine.
-    pub fn matches(&self, engine: &Engine, other: &ValType) -> bool {
-        assert!(self.comes_from_same_engine(engine));
-        assert!(other.comes_from_same_engine(engine));
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &ValType) -> bool {
         match (self, other) {
             (Self::I32, Self::I32) => true,
             (Self::I64, Self::I64) => true,
             (Self::F32, Self::F32) => true,
             (Self::F64, Self::F64) => true,
             (Self::V128, Self::V128) => true,
-            (Self::Ref(a), Self::Ref(b)) => a.matches(engine, b),
+            (Self::Ref(a), Self::Ref(b)) => a.matches(b),
             (Self::I32, _)
             | (Self::I64, _)
             | (Self::F32, _)
@@ -197,15 +196,15 @@ impl ValType {
     /// # Panics
     ///
     /// Panics if either type is associated with a different engine.
-    pub fn eq(engine: &Engine, a: &Self, b: &Self) -> bool {
-        a.matches(engine, b) && b.matches(engine, a)
+    pub fn eq(a: &Self, b: &Self) -> bool {
+        a.matches(b) && b.matches(a)
     }
 
     pub(crate) fn ensure_matches(&self, engine: &Engine, other: &ValType) -> Result<()> {
         if !self.comes_from_same_engine(engine) || !other.comes_from_same_engine(engine) {
             bail!("type used with wrong engine");
         }
-        if self.matches(engine, other) {
+        if self.matches(other) {
             Ok(())
         } else {
             bail!("type mismatch: expected {other}, found {self}")
@@ -318,14 +317,13 @@ impl RefType {
     ///
     /// # Panics
     ///
-    /// Panics if either type is associated with a different engine.
-    pub fn matches(&self, engine: &Engine, other: &RefType) -> bool {
-        assert!(self.comes_from_same_engine(engine));
-        assert!(other.comes_from_same_engine(engine));
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &RefType) -> bool {
         if self.is_nullable() && !other.is_nullable() {
             return false;
         }
-        self.heap_type().matches(engine, other.heap_type())
+        self.heap_type().matches(other.heap_type())
     }
 
     /// Is reference type `a` precisely equal to reference type `b`?
@@ -336,15 +334,15 @@ impl RefType {
     /// # Panics
     ///
     /// Panics if either type is associated with a different engine.
-    pub fn eq(engine: &Engine, a: &RefType, b: &RefType) -> bool {
-        a.matches(engine, b) && b.matches(engine, a)
+    pub fn eq(a: &RefType, b: &RefType) -> bool {
+        a.matches(b) && b.matches(a)
     }
 
     pub(crate) fn ensure_matches(&self, engine: &Engine, other: &RefType) -> Result<()> {
         if !self.comes_from_same_engine(engine) || !other.comes_from_same_engine(engine) {
             bail!("type used with wrong engine");
         }
-        if self.matches(engine, other) {
+        if self.matches(other) {
             Ok(())
         } else {
             bail!("type mismatch: expected {other}, found {self}")
@@ -484,10 +482,9 @@ impl HeapType {
     ///
     /// # Panics
     ///
-    /// Panics if either type is associated with a different engine.
-    pub fn matches(&self, engine: &Engine, other: &HeapType) -> bool {
-        assert!(self.comes_from_same_engine(engine));
-        assert!(other.comes_from_same_engine(engine));
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &HeapType) -> bool {
         match (self, other) {
             (HeapType::Extern, HeapType::Extern) => true,
             (HeapType::Extern, _) => false,
@@ -496,7 +493,7 @@ impl HeapType {
             (HeapType::NoFunc, _) => false,
 
             (HeapType::Concrete(_), HeapType::Func) => true,
-            (HeapType::Concrete(a), HeapType::Concrete(b)) => a.matches(engine, b),
+            (HeapType::Concrete(a), HeapType::Concrete(b)) => a.matches(b),
             (HeapType::Concrete(_), _) => false,
 
             (HeapType::Func, HeapType::Func) => true,
@@ -511,16 +508,17 @@ impl HeapType {
     ///
     /// # Panics
     ///
-    /// Panics if either type is associated with a different engine.
-    pub fn eq(engine: &Engine, a: &HeapType, b: &HeapType) -> bool {
-        a.matches(engine, b) && b.matches(engine, a)
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &HeapType, b: &HeapType) -> bool {
+        a.matches(b) && b.matches(a)
     }
 
     pub(crate) fn ensure_matches(&self, engine: &Engine, other: &HeapType) -> Result<()> {
         if !self.comes_from_same_engine(engine) || !other.comes_from_same_engine(engine) {
             bail!("type used with wrong engine");
         }
-        if self.matches(engine, other) {
+        if self.matches(other) {
             Ok(())
         } else {
             bail!("type mismatch: expected {other}, found {self}");
@@ -758,10 +756,10 @@ impl FuncType {
     ///
     /// # Panics
     ///
-    /// Panics if either type is associated with a different engine.
-    pub fn matches(&self, engine: &Engine, other: &FuncType) -> bool {
-        assert!(self.comes_from_same_engine(engine));
-        assert!(other.comes_from_same_engine(engine));
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &FuncType) -> bool {
+        assert!(self.comes_from_same_engine(other.engine()));
         self.params().len() == other.params().len()
             && self.results().len() == other.results().len()
             // Params are contravariant and results are covariant. For more
@@ -770,11 +768,11 @@ impl FuncType {
             && self
                 .params()
                 .zip(other.params())
-                .all(|(a, b)| b.matches(engine, &a))
+                .all(|(a, b)| b.matches(&a))
             && self
                 .results()
                 .zip(other.results())
-                .all(|(a, b)| a.matches(engine, &b))
+                .all(|(a, b)| a.matches(&b))
     }
 
     /// Is function type `a` precisely equal to function type `b`?
@@ -785,8 +783,8 @@ impl FuncType {
     /// # Panics
     ///
     /// Panics if either type is associated with a different engine.
-    pub fn eq(engine: &Engine, a: &FuncType, b: &FuncType) -> bool {
-        a.matches(engine, b) && b.matches(engine, a)
+    pub fn eq(a: &FuncType, b: &FuncType) -> bool {
+        a.matches(b) && b.matches(a)
     }
 
     pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {

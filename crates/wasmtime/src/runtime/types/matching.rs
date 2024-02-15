@@ -36,7 +36,7 @@ impl MatchCx<'_> {
             Some(expected) => {
                 let expected = FuncType::from_shared_type_index(self.engine, expected);
                 let actual = FuncType::from_shared_type_index(self.engine, actual);
-                actual.matches(self.engine, &expected)
+                actual.matches(&expected)
             }
         };
         if matches {

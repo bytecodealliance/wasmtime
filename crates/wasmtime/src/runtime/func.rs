@@ -887,7 +887,7 @@ impl Func {
 
     pub(crate) fn _matches_ty(&self, store: &StoreOpaque, func_ty: &FuncType) -> bool {
         let actual_ty = self.load_ty(store);
-        actual_ty.matches(store.engine(), func_ty)
+        actual_ty.matches(func_ty)
     }
 
     pub(crate) fn ensure_matches_ty(&self, store: &StoreOpaque, func_ty: &FuncType) -> Result<()> {

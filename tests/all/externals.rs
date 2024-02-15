@@ -203,8 +203,7 @@ fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
 
     global.set(&mut store, Val::FuncRef(Some(f.clone())))?;
     let f2 = global.get(&mut store).unwrap_funcref().cloned().unwrap();
-    assert!(f.ty(&store).matches(store.engine(), &f2.ty(&store)));
-    assert!(f2.ty(&store).matches(store.engine(), &f.ty(&store)));
+    assert!(FuncType::eq(&f.ty(&store), &f2.ty(&store)));
 
     // Initialize with a non-null funcref.
 
@@ -214,8 +213,7 @@ fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
         Val::FuncRef(Some(f.clone())),
     )?;
     let f2 = global.get(&mut store).unwrap_funcref().cloned().unwrap();
-    assert!(f.ty(&store).matches(store.engine(), &f2.ty(&store)));
-    assert!(f2.ty(&store).matches(store.engine(), &f.ty(&store)));
+    assert!(FuncType::eq(&f.ty(&store), &f2.ty(&store)));
 
     Ok(())
 }

@@ -31,12 +31,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();
-        assert!(func
-            .ty(&store)
-            .matches(store.engine(), &result_func.ty(&store)));
-        assert!(result_func
-            .ty(&store)
-            .matches(store.engine(), &func.ty(&store)));
+        assert!(FuncType::eq(&func.ty(&store), &result_func.ty(&store)));
     }
 
     // Pass in a null funcref.
@@ -62,12 +57,10 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();
-        assert!(other_instance_func
-            .ty(&store)
-            .matches(store.engine(), &result_func.ty(&store)));
-        assert!(result_func
-            .ty(&store)
-            .matches(store.engine(), &other_instance_func.ty(&store)));
+        assert!(FuncType::eq(
+            &other_instance_func.ty(&store),
+            &result_func.ty(&store),
+        ));
     }
 
     // Passing in a `funcref` from another store fails.
