@@ -392,7 +392,7 @@ harness = false
 
 [[example]]
 name = "tokio"
-required-features = ["wasmtime-wasi/tokio"]
+required-features = ["wasi-common/tokio"]
 
 [[bench]]
 name = "instantiation"
