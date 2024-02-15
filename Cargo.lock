@@ -3290,7 +3290,6 @@ dependencies = [
  "wasi-common",
  "wasmtime",
  "wasmtime-c-api-macros",
- "wasmtime-wasi",
  "wat",
 ]
 

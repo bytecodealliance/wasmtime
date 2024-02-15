@@ -31,7 +31,6 @@ tracing = { workspace = true }
 wat = { workspace = true, optional = true }
 
 # Optional dependencies for the `wasi` feature
-wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 cap-std = { workspace = true, optional = true }
 wasi-common = { workspace = true, optional = true, features = ["sync"] }
 
@@ -43,7 +42,7 @@ async = ['wasmtime/async', 'futures']
 profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
-wasi = ['wasmtime-wasi', 'cap-std', 'wasi-common']
+wasi = ['cap-std', 'wasi-common']
 logging = ['dep:env_logger']
 disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 coredump = ["wasmtime/coredump"]
