@@ -30,15 +30,20 @@ use cranelift_codegen::{
         args::{ExtMode, CC},
         settings as x64_settings,
     },
-    settings, Final, MachBufferFinalized, MachLabel,
+    settings, Final, MachBufferFinalized, MachLabel, PatchRegion,
 };
 
+use smallvec::SmallVec;
 use wasmtime_environ::{PtrSize, WasmValType, WASM_PAGE_SIZE};
 
 /// x64 MacroAssembler.
 pub(crate) struct MacroAssembler {
     /// Stack pointer offset.
     sp_offset: u32,
+    /// Stack high-water mark.
+    sp_max: u32,
+    /// Regions where the addition of the used stack must be fixed up
+    stack_max_use_regions: SmallVec<[PatchRegion; 2]>,
     /// Low level assembler.
     asm: Assembler,
     /// ISA flags.
@@ -83,6 +88,8 @@ impl Masm for MacroAssembler {
             Address::offset(scratch, ptr_size.vmruntime_limits_stack_limit().into()),
             scratch,
         );
+
+        self.add_stack_max(scratch);
 
         self.asm.cmp_rr(regs::rsp(), scratch, self.ptr_size);
         self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
@@ -802,7 +809,11 @@ impl Masm for MacroAssembler {
         self.asm.ret();
     }
 
-    fn finalize(self) -> MachBufferFinalized<Final> {
+    fn finalize(mut self) -> MachBufferFinalized<Final> {
+        for region in std::mem::take(&mut self.stack_max_use_regions) {
+            self.update_stack_max(region);
+        }
+
         self.asm.finalize()
     }
 
@@ -1163,6 +1174,8 @@ impl MacroAssembler {
 
         Self {
             sp_offset: 0,
+            sp_max: 0,
+            stack_max_use_regions: SmallVec::new(),
             asm: Assembler::new(shared_flags.clone(), isa_flags.clone()),
             flags: isa_flags,
             shared_flags,
@@ -1170,8 +1183,31 @@ impl MacroAssembler {
         }
     }
 
+    /// Add the maximum stack used to a register, recording an obligation to update the
+    /// add-with-immediate instruction emitted to use the real stack max when the masm is being
+    /// finalized.
+    fn add_stack_max(&mut self, reg: Reg) {
+        let open = self.asm.buffer_mut().start_patchable();
+        // NOTE: we write out a value that is not encodable as an imm8, to ensure that we pick the
+        // variation of the x64 add instruction that supports imm32
+        self.asm.add_ir(-129, reg, OperandSize::S64);
+        let region = self.asm.buffer_mut().end_patchable(open);
+        self.stack_max_use_regions.push(region);
+    }
+
+    /// Overwrite a use of add-with-immediate in the machinst buffer, replacing the immediate with
+    /// the real stack size.
+    fn update_stack_max(&mut self, region: PatchRegion) {
+        let bytes = region.patch(self.asm.buffer_mut());
+        debug_assert_eq!(bytes.len(), 7);
+        debug_assert_eq!(bytes[0], 0x49);
+        debug_assert_eq!(bytes[1], 0x81);
+        bytes[3..].copy_from_slice(self.sp_max.to_le_bytes().as_slice());
+    }
+
     fn increment_sp(&mut self, bytes: u32) {
         self.sp_offset += bytes;
+        self.sp_max = self.sp_max.max(self.sp_offset);
     }
 
     fn decrement_sp(&mut self, bytes: u32) {
