@@ -570,17 +570,17 @@ unsafe impl WasmTy for NoFunc {
 
     #[inline]
     fn compatible_with_store(&self, _store: &StoreOpaque) -> bool {
-        unreachable!("NoFunc is uninhabited")
+        match self._inner {}
     }
 
     #[inline]
     fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
-        unreachable!("NoFunc is uninhabited")
+        match self._inner {}
     }
 
     #[inline]
     fn is_externref(&self) -> bool {
-        unreachable!("NoFunc is uninhabited")
+        match self._inner {}
     }
 
     #[inline]
