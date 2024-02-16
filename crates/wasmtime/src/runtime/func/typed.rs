@@ -900,11 +900,20 @@ macro_rules! impl_wasm_params {
                     if !$t.compatible_with_store(_store) {
                         bail!("attempt to pass cross-`Store` value to Wasm as function argument");
                     }
-                    if let ValType::Ref(r) = _params.next().unwrap() {
+
+                    let param_ty = _params.next().unwrap();
+                    // Check `T::valtype().is_ref()` rather than
+                    // `param_ty.is_ref()` since LLVM should be able to boil the
+                    // former away to a constant, but not necessarily the
+                    // latter, and then completely remove these checks for
+                    // non-reference types.
+                    if $t::valtype().is_ref() {
+                        let r = param_ty.as_ref().unwrap();
                         if let Some(c) = r.heap_type().as_concrete() {
                             $t.dynamic_concrete_type_check(_store, r.is_nullable(), c)?;
                         }
                     }
+
                     let $t = $t.into_abi(_store);
                 )*
                 Ok(($($t,)*))
