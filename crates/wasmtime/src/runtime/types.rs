@@ -120,6 +120,11 @@ impl ValType {
         matches!(self, ValType::F64)
     }
 
+    /// Is this the `v128` type?
+    pub fn is_v128(&self) -> bool {
+        matches!(self, ValType::V128)
+    }
+
     /// Returns true if `ValType` is any kind of reference type.
     pub fn is_ref(&self) -> bool {
         matches!(self, ValType::Ref(_))
