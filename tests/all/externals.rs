@@ -418,3 +418,70 @@ fn read_write_memory_via_api() {
     let res = mem.write(&mut store, usize::MAX, &mut buffer);
     assert!(res.is_err());
 }
+
+#[test]
+fn new_global_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    // a <: b <: c
+
+    let a_ty = FuncType::new(&engine, None, Some(ValType::NULLFUNCREF));
+    let a = Func::new(
+        &mut store,
+        a_ty.clone(),
+        |_caller, _args, _results| unreachable!(),
+    );
+
+    let b_ty = FuncType::new(
+        &engine,
+        None,
+        Some(ValType::Ref(RefType::new(
+            true,
+            HeapType::Concrete(FuncType::new(&engine, None, None)),
+        ))),
+    );
+    let b = Func::new(
+        &mut store,
+        b_ty.clone(),
+        |_caller, _args, _results| unreachable!(),
+    );
+
+    let c_ty = FuncType::new(&engine, None, Some(ValType::FUNCREF));
+    let c = Func::new(
+        &mut store,
+        c_ty.clone(),
+        |_caller, _args, _results| unreachable!(),
+    );
+
+    for (global_ty, a_expected, b_expected, c_expected) in [
+        // a <: a, b </: a, c </: a
+        (a_ty, true, false, false),
+        // a <: b, b <: b, c </: a
+        (b_ty, true, true, false),
+        // a <: c, b <: c, c <: c
+        (c_ty, true, true, true),
+    ] {
+        for (val, expected) in [
+            (a.clone(), a_expected),
+            (b.clone(), b_expected),
+            (c.clone(), c_expected),
+        ] {
+            for mutability in [Mutability::Var, Mutability::Const] {
+                match Global::new(
+                    &mut store,
+                    GlobalType::new(
+                        RefType::new(true, global_ty.clone().into()).into(),
+                        mutability,
+                    ),
+                    val.into(),
+                ) {
+                    Ok(_) if expected => {}
+                    Ok(_) => panic!("should have got type mismatch, but didn't"),
+                    Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
+                    Err(e) => panic!("should have created global, but got error: {e:?}"),
+                }
+            }
+        }
+    }
+}

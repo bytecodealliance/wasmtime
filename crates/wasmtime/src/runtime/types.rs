@@ -419,6 +419,13 @@ impl Display for HeapType {
     }
 }
 
+impl From<FuncType> for HeapType {
+    #[inline]
+    fn from(f: FuncType) -> Self {
+        HeapType::Concrete(f)
+    }
+}
+
 impl HeapType {
     /// Is this the abstract `extern` heap type?
     pub fn is_extern(&self) -> bool {
