@@ -233,6 +233,7 @@ impl Instance {
     /// and that it's valid to acquire `&mut Instance` at this time. For example
     /// this can't be called twice on the same `VMContext` to get two active
     /// pointers to the same `Instance`.
+    #[inline]
     pub unsafe fn from_vmctx<R>(vmctx: *mut VMContext, f: impl FnOnce(&mut Instance) -> R) -> R {
         let ptr = vmctx
             .cast::<u8>()

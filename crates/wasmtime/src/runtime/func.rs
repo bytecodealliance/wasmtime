@@ -1076,22 +1076,30 @@ impl Func {
     #[inline]
     pub(crate) fn vm_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
         let func_data = &mut store.store_data_mut()[self.0];
+        let func_ref = func_data.export().func_ref;
+        if unsafe { func_ref.as_ref().wasm_call.is_some() } {
+            return func_ref;
+        }
+
         if let Some(in_store) = func_data.in_store_func_ref {
             in_store.as_non_null()
         } else {
-            let func_ref = func_data.export().func_ref;
             unsafe {
-                if func_ref.as_ref().wasm_call.is_none() {
-                    let func_ref = store.func_refs().push(func_ref.as_ref().clone());
-                    store.store_data_mut()[self.0].in_store_func_ref =
-                        Some(SendSyncPtr::new(func_ref));
-                    store.fill_func_refs();
-                    func_ref
-                } else {
-                    func_ref
-                }
+                // Move this uncommon/slow path out of line.
+                self.copy_func_ref_into_store_and_fill(store, func_ref)
             }
         }
+    }
+
+    unsafe fn copy_func_ref_into_store_and_fill(
+        &self,
+        store: &mut StoreOpaque,
+        func_ref: NonNull<VMFuncRef>,
+    ) -> NonNull<VMFuncRef> {
+        let func_ref = store.func_refs().push(func_ref.as_ref().clone());
+        store.store_data_mut()[self.0].in_store_func_ref = Some(SendSyncPtr::new(func_ref));
+        store.fill_func_refs();
+        func_ref
     }
 
     pub(crate) unsafe fn from_wasmtime_function(
