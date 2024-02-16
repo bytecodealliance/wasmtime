@@ -326,11 +326,13 @@ mod call_thread_state {
             self.prev.get()
         }
 
+        #[inline]
         pub(crate) unsafe fn push(&self) {
             assert!(self.prev.get().is_null());
             self.prev.set(tls::raw::replace(self));
         }
 
+        #[inline]
         pub(crate) unsafe fn pop(&self) {
             let prev = self.prev.replace(ptr::null());
             let head = tls::raw::replace(prev);
@@ -346,6 +348,7 @@ enum UnwindReason {
 }
 
 impl CallThreadState {
+    #[inline]
     fn with(
         mut self,
         closure: impl FnOnce(&CallThreadState) -> i32,

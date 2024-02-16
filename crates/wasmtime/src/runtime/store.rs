@@ -401,6 +401,7 @@ impl<T> AutoAssertNoGc<T>
 where
     T: std::ops::DerefMut<Target = StoreOpaque>,
 {
+    #[inline]
     pub fn new(mut store: T) -> Self {
         let _ = &mut store;
         #[cfg(debug_assertions)]
@@ -1097,7 +1098,16 @@ impl<T> StoreInner<T> {
         &mut self.data
     }
 
+    #[inline]
     pub fn call_hook(&mut self, s: CallHook) -> Result<()> {
+        if self.inner.pkey.is_none() && self.call_hook.is_none() {
+            Ok(())
+        } else {
+            self.call_hook_slow_path(s)
+        }
+    }
+
+    fn call_hook_slow_path(&mut self, s: CallHook) -> Result<()> {
         if let Some(pkey) = &self.inner.pkey {
             let allocator = self.engine().allocator();
             match s {
@@ -1402,7 +1412,7 @@ impl StoreOpaque {
         Some(AsyncCx {
             current_suspend: self.async_state.current_suspend.get(),
             current_poll_cx: poll_cx_box_ptr,
-            track_pkey_context_switch: mpk::is_supported() && self.pkey.is_some(),
+            track_pkey_context_switch: self.pkey.is_some(),
         })
     }
 
