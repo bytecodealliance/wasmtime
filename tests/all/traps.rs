@@ -314,9 +314,12 @@ error while executing at wasm backtrace:
     0:   0x23 - m!die
     1:   0x27 - m!<wasm function 1>
     2:   0x2c - m!foo
-    3:   0x31 - m!<wasm function 3>"
+    3:   0x31 - m!<wasm function 3>
+
+Caused by:
+    wasm trap: wasm `unreachable` instruction executed\
+"
     ));
-    assert!(e.contains("wasm trap: wasm `unreachable` instruction executed"));
     Ok(())
 }
 
@@ -357,9 +360,12 @@ error while executing at wasm backtrace:
     2:   0x2c - a!foo
     3:   0x31 - a!<wasm function 3>
     4:   0x29 - b!middle
-    5:   0x2e - b!<wasm function 2>"
+    5:   0x2e - b!<wasm function 2>
+
+Caused by:
+    wasm trap: wasm `unreachable` instruction executed\
+"
     ));
-    assert!(e.contains("wasm trap: wasm `unreachable` instruction executed"));
     Ok(())
 }
 
@@ -525,10 +531,12 @@ fn mismatched_arguments() -> Result<()> {
         func.call(&mut store, &[], &mut []).unwrap_err().to_string(),
         "expected 1 arguments, got 0"
     );
-    let e = func.call(&mut store, &[Val::F32(0)], &mut []).unwrap_err();
-    let e = format!("{e:?}");
-    assert!(e.contains("argument type mismatch"));
-    assert!(e.contains("found f32 but expected i32"));
+    assert_eq!(
+        func.call(&mut store, &[Val::F32(0)], &mut [])
+            .unwrap_err()
+            .to_string(),
+        "argument type mismatch: found f32 but expected i32",
+    );
     assert_eq!(
         func.call(&mut store, &[Val::I32(0), Val::I32(1)], &mut [])
             .unwrap_err()
@@ -593,9 +601,12 @@ error while executing at wasm backtrace:
     0:   0x1d - m!die
     1:   0x21 - m!<wasm function 1>
     2:   0x26 - m!foo
-    3:   0x2b - m!start"
+    3:   0x2b - m!start
+
+Caused by:
+    wasm trap: wasm `unreachable` instruction executed\
+"
     ));
-    assert!(e.contains("wasm trap: wasm `unreachable` instruction executed"));
     Ok(())
 }
 
@@ -789,6 +800,15 @@ fn no_hint_even_with_dwarf_info() -> Result<()> {
     )?;
     let trap = Instance::new(&mut store, &module, &[]).unwrap_err();
     let trap = format!("{trap:?}");
+    assert!(trap.contains(
+        "\
+error while executing at wasm backtrace:
+    0:   0x1a - <unknown>!start
+
+Caused by:
+    wasm trap: wasm `unreachable` instruction executed\
+"
+    ));
     assert!(!trap.contains("WASM_BACKTRACE_DETAILS"));
     Ok(())
 }
@@ -814,7 +834,15 @@ fn hint_with_dwarf_info() -> Result<()> {
     )?;
     let trap = Instance::new(&mut store, &module, &[]).unwrap_err();
     let trap = format!("{trap:?}");
-    assert!(trap.contains("WASMTIME_BACKTRACE_DETAILS"));
+    assert!(trap.contains(
+        "\
+error while executing at wasm backtrace:
+    0:   0x1a - <unknown>!start
+note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information
+
+Caused by:
+    wasm trap: wasm `unreachable` instruction executed"
+    ));
     Ok(())
 }
 
