@@ -3552,11 +3552,59 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
 end = "2024-07-14"
 
+[[trusted.wasm-encoder]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
+[[trusted.wasm-metadata]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
+[[trusted.wasm-mutate]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
+[[trusted.wasm-smith]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
+[[trusted.wasmparser]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
+[[trusted.wasmprinter]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
 [[trusted.wasmtime-wmemcheck]]
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-09-20"
 end = "2024-09-27"
+
+[[trusted.wast]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
+[[trusted.wat]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
 
 [[trusted.winapi-util]]
 criteria = "safe-to-deploy"
@@ -3642,8 +3690,20 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-08-20"
 end = "2024-07-14"
 
+[[trusted.wit-component]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
+
 [[trusted.wit-parser]]
 criteria = "safe-to-deploy"
 user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2023-10-12"
 end = "2024-10-17"
+
+[[trusted.wit-parser]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2025-02-16"
