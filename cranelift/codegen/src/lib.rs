@@ -59,8 +59,8 @@ pub use crate::machinst::buffer::{
 };
 pub use crate::machinst::{
     CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
-    MachInstEmitState, MachLabel, RealReg, Reg, TextSectionBuilder, VCodeConstantData,
-    VCodeConstants, Writable,
+    MachInstEmitState, MachLabel, RealReg, Reg, RelocDistance, TextSectionBuilder,
+    VCodeConstantData, VCodeConstants, Writable,
 };
 
 mod alias_analysis;
