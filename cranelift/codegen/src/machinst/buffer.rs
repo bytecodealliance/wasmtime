@@ -414,10 +414,18 @@ pub enum StackMapExtent {
     StartedAtOffset(CodeOffset),
 }
 
-/// An open patch region represents the beginning of an editable region
+/// Represents the beginning of an editable region in the [`MachBuffer`], while code emission is
+/// still occurring. An [`OpenPatchRegion`] is closed by [`MachBuffer::end_patchable`], consuming
+/// the [`OpenPatchRegion`] token in the process.
 pub struct OpenPatchRegion(usize);
 
-/// A patchable region in the [`MachBuffer`].
+/// A region in the [`MachBuffer`] code buffer that can be edited prior to finalization. An example
+/// of where you might want to use this is for patching instructions that mention constants that
+/// won't be known until later: [`MachBuffer::start_patchable`] can be used to begin the patchable
+/// region, instructions can be emitted with placeholder constants, and the [`PatchRegion`] token
+/// can be produced by [`MachBuffer::end_patchable`]. Once the values of those constants are known,
+/// the [`PatchRegion::patch`] function can be used to get a mutable buffer to the instruction
+/// bytes, and the constants uses can be updated directly.
 pub struct PatchRegion {
     range: std::ops::Range<usize>,
 }
@@ -539,8 +547,6 @@ impl<I: VCodeInst> MachBuffer<I> {
     ///
     /// 1. It must not introduce any instructions that could be chomped
     ///    (branches are an example of this)
-    /// 2. Additional calls to `start_patchable` must not occur, as we require
-    ///    that patchable regions do not overlap.
     pub fn start_patchable(&mut self) -> OpenPatchRegion {
         assert!(!self.open_patchable, "Patchable regions may not be nested");
         self.open_patchable = true;
@@ -750,6 +756,10 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Additional requirement: no labels may be bound between `start` and `end`
     /// (exclusive on both ends).
     pub fn add_uncond_branch(&mut self, start: CodeOffset, end: CodeOffset, target: MachLabel) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction inserted within a patchable region"
+        );
         assert!(self.cur_offset() == start);
         debug_assert!(end > start);
         assert!(!self.pending_fixup_records.is_empty());
@@ -781,6 +791,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         target: MachLabel,
         inverted: &[u8],
     ) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction inserted within a patchable region"
+        );
         assert!(self.cur_offset() == start);
         debug_assert!(end > start);
         assert!(!self.pending_fixup_records.is_empty());
