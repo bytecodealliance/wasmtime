@@ -9,10 +9,14 @@ pub use wasmtime_runtime::ValRaw;
 
 /// Possible runtime values that a WebAssembly module can either consume or
 /// produce.
+///
+/// Note that we inline the `enum Ref { ... }` variants into `enum Val { ... }`
+/// here as a size optimization.
 #[derive(Debug, Clone)]
 pub enum Val {
     // NB: the ordering here is intended to match the ordering in
     // `ValType` to improve codegen when learning the type of a value.
+    //
     /// A 32-bit integer.
     I32(i32),
 
@@ -34,10 +38,6 @@ pub enum Val {
     /// A 128-bit number.
     V128(V128),
 
-    // NB: We inline the `enum Ref { ... }` variants into `enum Val { ... }`
-    // here for performance and as a size optimization. This removes 8 bytes of
-    // additional enum discriminant from `Val`.
-    //
     /// A function reference.
     FuncRef(Option<Func>),
 
