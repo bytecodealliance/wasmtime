@@ -44,8 +44,6 @@ mod elaborate;
 pub struct EgraphPass<'a> {
     /// The function we're operating on.
     func: &'a mut Function,
-    /// Dominator tree, used for elaboration pass.
-    domtree: &'a DominatorTree,
     /// Alias analysis, used during optimization.
     alias_analysis: &'a mut AliasAnalysis<'a>,
     /// "Domtree with children": like `domtree`, but with an explicit
@@ -408,7 +406,6 @@ impl<'a> EgraphPass<'a> {
         domtree_children.compute(domtree, &func.layout);
         Self {
             func,
-            domtree,
             domtree_children,
             loop_analysis,
             alias_analysis,
@@ -614,7 +611,6 @@ impl<'a> EgraphPass<'a> {
     fn elaborate(&mut self) {
         let mut elaborator = Elaborator::new(
             self.func,
-            self.domtree,
             &self.domtree_children,
             self.loop_analysis,
             &mut self.remat_values,

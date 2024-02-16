@@ -3,7 +3,7 @@
 
 use super::cost::Cost;
 use super::Stats;
-use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
+use crate::dominator_tree::DominatorTreePreorder;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::hash_map::Entry as HashEntry;
 use crate::inst_predicates::is_pure_for_egraph;
@@ -17,7 +17,6 @@ use smallvec::{smallvec, SmallVec};
 
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
-    domtree: &'a DominatorTree,
     domtree_children: &'a DominatorTreePreorder,
     loop_analysis: &'a LoopAnalysis,
     /// Map from Value that is produced by a pure Inst (and was thus
@@ -136,7 +135,6 @@ enum BlockStackEntry {
 impl<'a> Elaborator<'a> {
     pub(crate) fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTree,
         domtree_children: &'a DominatorTreePreorder,
         loop_analysis: &'a LoopAnalysis,
         remat_values: &'a FxHashSet<Value>,
@@ -148,7 +146,6 @@ impl<'a> Elaborator<'a> {
         value_to_best_value.resize(num_values);
         Self {
             func,
-            domtree,
             domtree_children,
             loop_analysis,
             value_to_elaborated_value: ScopedHashMap::with_capacity(num_values),
@@ -556,11 +553,9 @@ impl<'a> Elaborator<'a> {
                             let data = &self.loop_stack[loop_hoist_level];
                             // `data.hoist_block` should dominate `before`'s block.
                             let before_block = self.func.layout.inst_block(before).unwrap();
-                            debug_assert!(self.domtree.dominates(
-                                data.hoist_block,
-                                before_block,
-                                &self.func.layout
-                            ));
+                            debug_assert!(self
+                                .domtree_children
+                                .dominates(data.hoist_block, before_block));
                             // Determine the instruction at which we
                             // insert in `data.hoist_block`.
                             let before = self.func.layout.last_inst(data.hoist_block).unwrap();
