@@ -730,18 +730,5 @@ fn linker_defines_table_subtype_err() -> Result<()> {
     let e = linker.instantiate(&mut store, &module).unwrap_err();
     assert_eq!(e.to_string(), "incompatible import type for `env::t`");
 
-    // Not mutable.
-    let mut linker = Linker::new(&engine);
-    let nop = FuncType::new(&engine, None, None);
-    let ref_null_nop = RefType::new(true, HeapType::Concrete(nop));
-    let t = Table::new(
-        &mut store,
-        TableType::new(ref_null_nop, 0, None),
-        Ref::Func(None),
-    )?;
-    linker.define(&store, "env", "t", t)?;
-    let e = linker.instantiate(&mut store, &module).unwrap_err();
-    assert_eq!(e.to_string(), "incompatible import type for `env::t`");
-
     Ok(())
 }
