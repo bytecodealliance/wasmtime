@@ -292,10 +292,13 @@ impl Table {
 
         let dst_ty = dst_table.ty(&store);
         let src_ty = src_table.ty(&store);
-        dst_ty
+        src_ty
             .element()
-            .ensure_matches(store.engine(), src_ty.element())
-            .context("tables do not have the same element type")?;
+            .ensure_matches(store.engine(), dst_ty.element())
+            .context(
+                "type mismatch: source table's element type does not match \
+                 destination table's element type",
+            )?;
 
         let dst_table = dst_table.wasmtime_table(store, std::iter::empty());
         let src_range = src_index..(src_index.checked_add(len).unwrap_or(u32::MAX));

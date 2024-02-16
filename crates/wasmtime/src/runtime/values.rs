@@ -520,6 +520,12 @@ impl Ref {
         }
     }
 
+    /// Is this a non-null reference?
+    #[inline]
+    pub fn is_non_null(&self) -> bool {
+        !self.is_null()
+    }
+
     /// Is this an `extern` reference?
     #[inline]
     pub fn is_extern(&self) -> bool {
@@ -670,7 +676,7 @@ impl Ref {
         ty: &RefType,
     ) -> Result<TableElement> {
         self.ensure_matches_ty(store, &ty)
-            .context("value does not match table element type")?;
+            .context("type mismatch: value does not match table element type")?;
         match (self, ty.heap_type()) {
             (Ref::Func(None), HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_)) => {
                 assert!(ty.is_nullable());

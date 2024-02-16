@@ -73,8 +73,9 @@ impl Global {
     }
 
     fn _new(store: &mut StoreOpaque, ty: GlobalType, val: Val) -> Result<Global> {
-        val.ensure_matches_ty(store, ty.content())
-            .context("type mismatch: initial value provided does not match the type of this global")?;
+        val.ensure_matches_ty(store, ty.content()).context(
+            "type mismatch: initial value provided does not match the type of this global",
+        )?;
         unsafe {
             let wasmtime_export = generate_global_export(store, ty, val);
             Ok(Global::from_wasmtime_global(wasmtime_export, store))

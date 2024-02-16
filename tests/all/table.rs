@@ -23,7 +23,7 @@ fn fill_wrong() {
             .fill(&mut store, 0, Ref::Extern(None), 1)
             .map_err(|e| e.to_string())
             .unwrap_err(),
-        "value does not match table element type"
+        "type mismatch: value does not match table element type"
     );
 
     let ty = TableType::new(RefType::EXTERNREF, 1, None);
@@ -33,7 +33,7 @@ fn fill_wrong() {
             .fill(&mut store, 0, Ref::Func(None), 1)
             .map_err(|e| e.to_string())
             .unwrap_err(),
-        "value does not match table element type"
+        "type mismatch: value does not match table element type"
     );
 }
 
@@ -48,7 +48,7 @@ fn copy_wrong() {
         Table::copy(&mut store, &table1, 0, &table2, 0, 1)
             .map_err(|e| e.to_string())
             .unwrap_err(),
-        "tables do not have the same element type"
+        "type mismatch: source table's element type does not match destination table's element type"
     );
 }
 

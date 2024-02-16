@@ -419,16 +419,19 @@ fn read_write_memory_via_api() {
     assert!(res.is_err());
 }
 
-#[test]
-fn new_global_subtyping() {
-    let engine = Engine::default();
-    let mut store = Store::new(&engine, ());
-
-    // a <: b <: c
+// Returns (a, b, c) pairs of function type and function such that
+//
+//     a <: b <: c
+//
+// The functions will panic if actually called.
+fn dummy_funcs_and_subtypes(
+    store: &mut Store<()>,
+) -> (FuncType, Func, FuncType, Func, FuncType, Func) {
+    let engine = store.engine().clone();
 
     let a_ty = FuncType::new(&engine, None, Some(ValType::NULLFUNCREF));
     let a = Func::new(
-        &mut store,
+        &mut *store,
         a_ty.clone(),
         |_caller, _args, _results| unreachable!(),
     );
@@ -442,17 +445,27 @@ fn new_global_subtyping() {
         ))),
     );
     let b = Func::new(
-        &mut store,
+        &mut *store,
         b_ty.clone(),
         |_caller, _args, _results| unreachable!(),
     );
 
     let c_ty = FuncType::new(&engine, None, Some(ValType::FUNCREF));
     let c = Func::new(
-        &mut store,
+        &mut *store,
         c_ty.clone(),
         |_caller, _args, _results| unreachable!(),
     );
+
+    (a_ty, a, b_ty, b, c_ty, c)
+}
+
+#[test]
+fn new_global_func_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
 
     for (global_ty, a_expected, b_expected, c_expected) in [
         // a <: a, b </: a, c </: a
@@ -480,6 +493,215 @@ fn new_global_subtyping() {
                     Ok(_) => panic!("should have got type mismatch, but didn't"),
                     Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
                     Err(e) => panic!("should have created global, but got error: {e:?}"),
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn new_table_func_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
+
+    for (table_ty, a_expected, b_expected, c_expected) in [
+        // a <: a, b </: a, c </: a
+        (a_ty, true, false, false),
+        // a <: b, b <: b, c </: a
+        (b_ty, true, true, false),
+        // a <: c, b <: c, c <: c
+        (c_ty, true, true, true),
+    ] {
+        for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
+            match Table::new(
+                &mut store,
+                TableType::new(RefType::new(true, table_ty.clone().into()), 0, None),
+                val.into(),
+            ) {
+                Ok(_) if expected => {}
+                Ok(_) => panic!("should have got type mismatch, but didn't"),
+                Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
+                Err(e) => panic!("should have created table, but got error: {e:?}"),
+            }
+        }
+    }
+}
+
+#[test]
+fn table_set_func_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
+
+    for (table_ty, a_expected, b_expected, c_expected) in [
+        // a <: a, b </: a, c </: a
+        (a_ty, true, false, false),
+        // a <: b, b <: b, c </: a
+        (b_ty, true, true, false),
+        // a <: c, b <: c, c <: c
+        (c_ty, true, true, true),
+    ] {
+        let table = Table::new(
+            &mut store,
+            TableType::new(RefType::new(true, table_ty.clone().into()), 3, None),
+            Ref::Func(None),
+        )
+        .unwrap();
+
+        let mut i = 0;
+        for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
+            assert!(table.get(&mut store, i).expect("in bounds").is_null());
+
+            match table.set(&mut store, i, val.into()) {
+                Ok(_) if expected => {}
+                Ok(_) => panic!("should have got type mismatch, but didn't"),
+                Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
+                Err(e) => panic!("should have set table element, but got error: {e:?}"),
+            }
+
+            if expected {
+                assert!(table.get(&mut store, i).expect("in bounds").is_non_null());
+            }
+
+            i += 1;
+        }
+    }
+}
+
+#[test]
+fn table_grow_func_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
+
+    for (table_ty, a_expected, b_expected, c_expected) in [
+        // a <: a, b </: a, c </: a
+        (a_ty, true, false, false),
+        // a <: b, b <: b, c </: a
+        (b_ty, true, true, false),
+        // a <: c, b <: c, c <: c
+        (c_ty, true, true, true),
+    ] {
+        let table = Table::new(
+            &mut store,
+            TableType::new(RefType::new(true, table_ty.clone().into()), 3, None),
+            Ref::Func(None),
+        )
+        .unwrap();
+
+        for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
+            let orig_size = table.size(&store);
+
+            match table.grow(&mut store, 10, val.into()) {
+                Ok(_) if expected => {}
+                Ok(_) => panic!("should have got type mismatch, but didn't"),
+                Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
+                Err(e) => panic!("should have done table grow, but got error: {e:?}"),
+            }
+
+            if expected {
+                let new_size = table.size(&store);
+                assert_eq!(new_size, orig_size + 10);
+                for i in orig_size..new_size {
+                    assert!(table.get(&mut store, i).expect("in bounds").is_non_null());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn table_fill_func_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
+
+    for (table_ty, a_expected, b_expected, c_expected) in [
+        // a <: a, b </: a, c </: a
+        (a_ty, true, false, false),
+        // a <: b, b <: b, c </: a
+        (b_ty, true, true, false),
+        // a <: c, b <: c, c <: c
+        (c_ty, true, true, true),
+    ] {
+        for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
+            let table = Table::new(
+                &mut store,
+                TableType::new(RefType::new(true, table_ty.clone().into()), 10, None),
+                Ref::Func(None),
+            )
+            .unwrap();
+
+            match table.fill(&mut store, 3, val.into(), 4) {
+                Ok(_) if expected => {}
+                Ok(_) => panic!("should have got type mismatch, but didn't"),
+                Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
+                Err(e) => panic!("should have done table fill, but got error: {e:?}"),
+            }
+
+            if expected {
+                for i in 3..7 {
+                    assert!(table.get(&mut store, i).expect("in bounds").is_non_null());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn table_copy_func_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
+
+    for (table_ty, a_expected, b_expected, c_expected) in [
+        // a <: a, b </: a, c </: a
+        (a_ty.clone(), true, false, false),
+        // a <: b, b <: b, c </: a
+        (b_ty.clone(), true, true, false),
+        // a <: c, b <: c, c <: c
+        (c_ty.clone(), true, true, true),
+    ] {
+        let dest_table = Table::new(
+            &mut store,
+            TableType::new(RefType::new(true, table_ty.clone().into()), 10, None),
+            Ref::Func(None),
+        )
+        .unwrap();
+
+        for (val, src_ty, expected) in [
+            (a, a_ty.clone(), a_expected),
+            (b, b_ty.clone(), b_expected),
+            (c, c_ty.clone(), c_expected),
+        ] {
+            dest_table.fill(&mut store, 0, Ref::Func(None), 10).unwrap();
+
+            let src_table = Table::new(
+                &mut store,
+                TableType::new(RefType::new(true, src_ty.into()), 10, None),
+                val.into(),
+            )
+            .unwrap();
+
+            match Table::copy(&mut store, &dest_table, 2, &src_table, 3, 5) {
+                Ok(_) if expected => {}
+                Ok(_) => panic!("should have got type mismatch, but didn't"),
+                Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
+                Err(e) => panic!("should have done table copy, but got error: {e:?}"),
+            }
+
+            if expected {
+                for i in 2..7 {
+                    assert!(dest_table
+                        .get(&mut store, i)
+                        .expect("in bounds")
+                        .is_non_null());
                 }
             }
         }
