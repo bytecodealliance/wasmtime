@@ -765,6 +765,13 @@ impl FuncType {
     /// other.
     pub fn matches(&self, other: &FuncType) -> bool {
         assert!(self.comes_from_same_engine(other.engine()));
+
+        // Avoid matching on structure for subtyping checks when we have
+        // precisely the same type.
+        if self.type_index() == other.type_index() {
+            return true;
+        }
+
         self.params().len() == other.params().len()
             && self.results().len() == other.results().len()
             // Params are contravariant and results are covariant. For more
@@ -787,9 +794,11 @@ impl FuncType {
     ///
     /// # Panics
     ///
-    /// Panics if either type is associated with a different engine.
+    /// Panics if either type is associated with a different engine from the
+    /// other.
     pub fn eq(a: &FuncType, b: &FuncType) -> bool {
-        a.matches(b) && b.matches(a)
+        assert!(a.comes_from_same_engine(b.engine()));
+        a.type_index() == b.type_index()
     }
 
     pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {

@@ -34,9 +34,13 @@ impl MatchCx<'_> {
             // that `actual` can match it.
             None => false,
             Some(expected) => {
-                let expected = FuncType::from_shared_type_index(self.engine, expected);
-                let actual = FuncType::from_shared_type_index(self.engine, actual);
-                actual.matches(&expected)
+                // Avoid matching on structure for subtyping checks when we have
+                // precisely the same type.
+                expected == actual || {
+                    let expected = FuncType::from_shared_type_index(self.engine, expected);
+                    let actual = FuncType::from_shared_type_index(self.engine, actual);
+                    actual.matches(&expected)
+                }
             }
         };
         if matches {
