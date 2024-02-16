@@ -500,6 +500,42 @@ fn new_global_func_subtyping() {
 }
 
 #[test]
+fn global_set_func_subtyping() {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let (a_ty, a, b_ty, b, c_ty, c) = dummy_funcs_and_subtypes(&mut store);
+
+    for (global_ty, a_expected, b_expected, c_expected) in [
+        // a <: a, b </: a, c </: a
+        (a_ty, true, false, false),
+        // a <: b, b <: b, c </: a
+        (b_ty, true, true, false),
+        // a <: c, b <: c, c <: c
+        (c_ty, true, true, true),
+    ] {
+        let global = Global::new(
+            &mut store,
+            GlobalType::new(
+                RefType::new(true, global_ty.clone().into()).into(),
+                Mutability::Var,
+            ),
+            Val::null_func_ref(),
+        )
+        .unwrap();
+
+        for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
+            match global.set(&mut store, val.into()) {
+                Ok(_) if expected => {}
+                Ok(_) => panic!("should have got type mismatch, but didn't"),
+                Err(e) if !expected => assert!(e.to_string().contains("type mismatch")),
+                Err(e) => panic!("should have set global, but got error: {e:?}"),
+            }
+        }
+    }
+}
+
+#[test]
 fn new_table_func_subtyping() {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());

@@ -149,7 +149,7 @@ impl Global {
             bail!("immutable global cannot be set");
         }
         val.ensure_matches_ty(store, global_ty.content())
-            .context("attempt to set global to value of wrong type")?;
+            .context("type mismatch: attempt to set global to value of wrong type")?;
         unsafe {
             let definition = &mut *store[self.0].definition;
             match val {
