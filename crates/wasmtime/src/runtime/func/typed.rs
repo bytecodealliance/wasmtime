@@ -176,7 +176,7 @@ where
             // the Wasm frame and they get referenced from the stack maps.
             let mut store = AutoAssertNoGc::new(&mut **store.as_context_mut().0);
 
-            params.into_abi(&mut store, ty.params())?
+            params.into_abi(&mut store, ty)?
         };
 
         // Try to capture only a single variable (a tuple) in the closure below.
@@ -793,11 +793,7 @@ pub unsafe trait WasmParams: Send {
     fn externrefs_count(&self) -> usize;
 
     #[doc(hidden)]
-    fn into_abi(
-        self,
-        store: &mut StoreOpaque,
-        params: impl ExactSizeIterator<Item = crate::ValType>,
-    ) -> Result<Self::Abi>;
+    fn into_abi(self, store: &mut StoreOpaque, func_ty: &FuncType) -> Result<Self::Abi>;
 
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
@@ -830,12 +826,8 @@ where
     }
 
     #[inline]
-    fn into_abi(
-        self,
-        store: &mut StoreOpaque,
-        params: impl ExactSizeIterator<Item = crate::ValType>,
-    ) -> Result<Self::Abi> {
-        <(T,) as WasmParams>::into_abi((self,), store, params)
+    fn into_abi(self, store: &mut StoreOpaque, func_ty: &FuncType) -> Result<Self::Abi> {
+        <(T,) as WasmParams>::into_abi((self,), store, func_ty)
     }
 
     unsafe fn invoke<R: WasmResults>(
@@ -893,28 +885,27 @@ macro_rules! impl_wasm_params {
             fn into_abi(
                 self,
                 _store: &mut StoreOpaque,
-                mut _params: impl ExactSizeIterator<Item = ValType>,
+                _func_ty: &FuncType,
             ) -> Result<Self::Abi> {
                 let ($($t,)*) = self;
+
+                let mut _i = 0;
                 $(
                     if !$t.compatible_with_store(_store) {
                         bail!("attempt to pass cross-`Store` value to Wasm as function argument");
                     }
 
-                    let param_ty = _params.next().unwrap();
-                    // Check `T::valtype().is_ref()` rather than
-                    // `param_ty.is_ref()` since LLVM should be able to boil the
-                    // former away to a constant, but not necessarily the
-                    // latter, and then completely remove these checks for
-                    // non-reference types.
                     if $t::valtype().is_ref() {
-                        let r = param_ty.as_ref().unwrap();
+                        let p = _func_ty.param(_i).unwrap();
+                        let r = p.unwrap_ref();
                         if let Some(c) = r.heap_type().as_concrete() {
                             $t.dynamic_concrete_type_check(_store, r.is_nullable(), c)?;
                         }
                     }
 
                     let $t = $t.into_abi(_store);
+
+                    _i += 1;
                 )*
                 Ok(($($t,)*))
             }

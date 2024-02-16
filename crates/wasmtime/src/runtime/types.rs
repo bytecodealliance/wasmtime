@@ -93,6 +93,7 @@ impl ValType {
 
     /// Returns true if `ValType` matches any of the numeric types. (e.g. `I32`,
     /// `I64`, `F32`, `F64`).
+    #[inline]
     pub fn is_num(&self) -> bool {
         match self {
             ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 => true,
@@ -101,36 +102,43 @@ impl ValType {
     }
 
     /// Is this the `i32` type?
+    #[inline]
     pub fn is_i32(&self) -> bool {
         matches!(self, ValType::I32)
     }
 
     /// Is this the `i64` type?
+    #[inline]
     pub fn is_i64(&self) -> bool {
         matches!(self, ValType::I64)
     }
 
     /// Is this the `f32` type?
+    #[inline]
     pub fn is_f32(&self) -> bool {
         matches!(self, ValType::F32)
     }
 
     /// Is this the `f64` type?
+    #[inline]
     pub fn is_f64(&self) -> bool {
         matches!(self, ValType::F64)
     }
 
     /// Is this the `v128` type?
+    #[inline]
     pub fn is_v128(&self) -> bool {
         matches!(self, ValType::V128)
     }
 
     /// Returns true if `ValType` is any kind of reference type.
+    #[inline]
     pub fn is_ref(&self) -> bool {
         matches!(self, ValType::Ref(_))
     }
 
     /// Is this the `funcref` (aka `(ref null func)`) type?
+    #[inline]
     pub fn is_funcref(&self) -> bool {
         matches!(
             self,
@@ -142,6 +150,7 @@ impl ValType {
     }
 
     /// Is this the `externref` (aka `(ref null extern)`) type?
+    #[inline]
     pub fn is_externref(&self) -> bool {
         matches!(
             self,
@@ -154,6 +163,7 @@ impl ValType {
 
     /// Get the underlying reference type, if this value type is a reference
     /// type.
+    #[inline]
     pub fn as_ref(&self) -> Option<&RefType> {
         match self {
             ValType::Ref(r) => Some(r),
@@ -163,6 +173,7 @@ impl ValType {
 
     /// Get the underlying reference type, panicking if this value type is not a
     /// reference type.
+    #[inline]
     pub fn unwrap_ref(&self) -> &RefType {
         self.as_ref()
             .expect("ValType::unwrap_ref on a non-reference type")
@@ -234,6 +245,7 @@ impl ValType {
         }
     }
 
+    #[inline]
     pub(crate) fn from_wasm_type(engine: &Engine, ty: &WasmValType) -> Self {
         match ty {
             WasmValType::I32 => Self::I32,
@@ -742,6 +754,17 @@ impl FuncType {
         self.registered_type.engine()
     }
 
+    /// Get the `i`th parameter type.
+    ///
+    /// Returns `None` if `i` is out of bounds.
+    pub fn param(&self, i: usize) -> Option<ValType> {
+        let engine = self.engine();
+        self.registered_type
+            .params()
+            .get(i)
+            .map(|ty| ValType::from_wasm_type(engine, ty))
+    }
+
     /// Returns the list of parameter types for this function.
     #[inline]
     pub fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
@@ -749,6 +772,17 @@ impl FuncType {
         self.registered_type
             .params()
             .iter()
+            .map(|ty| ValType::from_wasm_type(engine, ty))
+    }
+
+    /// Get the `i`th result type.
+    ///
+    /// Returns `None` if `i` is out of bounds.
+    pub fn result(&self, i: usize) -> Option<ValType> {
+        let engine = self.engine();
+        self.registered_type
+            .returns()
+            .get(i)
             .map(|ty| ValType::from_wasm_type(engine, ty))
     }
 
