@@ -17,7 +17,7 @@ use smallvec::{smallvec, SmallVec};
 
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
-    domtree_children: &'a DominatorTreePreorder,
+    domtree: &'a DominatorTreePreorder,
     loop_analysis: &'a LoopAnalysis,
     /// Map from Value that is produced by a pure Inst (and was thus
     /// not in the side-effecting skeleton) to the value produced by
@@ -135,7 +135,7 @@ enum BlockStackEntry {
 impl<'a> Elaborator<'a> {
     pub(crate) fn new(
         func: &'a mut Function,
-        domtree_children: &'a DominatorTreePreorder,
+        domtree: &'a DominatorTreePreorder,
         loop_analysis: &'a LoopAnalysis,
         remat_values: &'a FxHashSet<Value>,
         stats: &'a mut Stats,
@@ -146,7 +146,7 @@ impl<'a> Elaborator<'a> {
         value_to_best_value.resize(num_values);
         Self {
             func,
-            domtree_children,
+            domtree,
             loop_analysis,
             value_to_elaborated_value: ScopedHashMap::with_capacity(num_values),
             value_to_best_value,
@@ -553,9 +553,7 @@ impl<'a> Elaborator<'a> {
                             let data = &self.loop_stack[loop_hoist_level];
                             // `data.hoist_block` should dominate `before`'s block.
                             let before_block = self.func.layout.inst_block(before).unwrap();
-                            debug_assert!(self
-                                .domtree_children
-                                .dominates(data.hoist_block, before_block));
+                            debug_assert!(self.domtree.dominates(data.hoist_block, before_block));
                             // Determine the instruction at which we
                             // insert in `data.hoist_block`.
                             let before = self.func.layout.last_inst(data.hoist_block).unwrap();
@@ -801,7 +799,7 @@ impl<'a> Elaborator<'a> {
         self.stats.elaborate_func += 1;
         self.stats.elaborate_func_pre_insts += self.func.dfg.num_insts() as u64;
         self.compute_best_values();
-        self.elaborate_domtree(&self.domtree_children);
+        self.elaborate_domtree(&self.domtree);
         self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }
 }

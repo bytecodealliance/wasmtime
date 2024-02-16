@@ -44,12 +44,12 @@ mod elaborate;
 pub struct EgraphPass<'a> {
     /// The function we're operating on.
     func: &'a mut Function,
+    /// Dominator tree for the CFG, used to visit blocks in pre-order
+    /// so we see value definitions before their uses, and also used for
+    /// O(1) dominance checks.
+    domtree: DominatorTreePreorder,
     /// Alias analysis, used during optimization.
     alias_analysis: &'a mut AliasAnalysis<'a>,
-    /// "Domtree with children": like `domtree`, but with an explicit
-    /// list of children, complementing the parent pointers stored
-    /// in `domtree`.
-    domtree_children: DominatorTreePreorder,
     /// Loop analysis results, used for built-in LICM during
     /// elaboration.
     loop_analysis: &'a LoopAnalysis,
@@ -397,16 +397,16 @@ impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTree,
+        raw_domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
         alias_analysis: &'a mut AliasAnalysis<'a>,
     ) -> Self {
         let num_values = func.dfg.num_values();
-        let mut domtree_children = DominatorTreePreorder::new();
-        domtree_children.compute(domtree, &func.layout);
+        let mut domtree = DominatorTreePreorder::new();
+        domtree.compute(raw_domtree, &func.layout);
         Self {
             func,
-            domtree_children,
+            domtree,
             loop_analysis,
             alias_analysis,
             stats: Stats::default(),
@@ -505,8 +505,7 @@ impl<'a> EgraphPass<'a> {
                     // We popped this block; push children
                     // immediately, then process this block.
                     block_stack.push(StackEntry::Pop);
-                    block_stack
-                        .extend(self.domtree_children.children(block).map(StackEntry::Visit));
+                    block_stack.extend(self.domtree.children(block).map(StackEntry::Visit));
                     effectful_gvn_map.increment_depth();
 
                     trace!("Processing block {}", block);
@@ -611,7 +610,7 @@ impl<'a> EgraphPass<'a> {
     fn elaborate(&mut self) {
         let mut elaborator = Elaborator::new(
             self.func,
-            &self.domtree_children,
+            &self.domtree,
             self.loop_analysis,
             &mut self.remat_values,
             &mut self.stats,
