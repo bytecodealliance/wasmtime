@@ -89,13 +89,13 @@ impl NoFunc {
     }
 
     /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
-    /// [`wasmtime::Ref`].
+    /// [`Ref`].
     pub fn null_ref() -> Ref {
         Ref::Func(None)
     }
 
     /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
-    /// [`wasmtime::Val`].
+    /// [`Val`].
     pub fn null_val() -> Val {
         Val::FuncRef(None)
     }

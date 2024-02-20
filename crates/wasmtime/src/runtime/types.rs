@@ -32,10 +32,10 @@ pub enum Mutability {
 /// `ValType` does not implement `Eq`, because reference types have a subtyping
 /// relationship, and so 99.99% of the time you actually want to check whether
 /// one type matches (i.e. is a subtype of) another type. You can use the
-/// [`ValType::matches`] and [`Val::matches_ty`] methods to perform these types
-/// of checks. If, however, you are in that 0.01% scenario where you need to
-/// check precise equality between types, you can use the [`ValType::eq`]
-/// method.
+/// [`ValType::matches`] and [`Val::matches_ty`][crate::Val::matches_ty] methods
+/// to perform these types of checks. If, however, you are in that 0.01%
+/// scenario where you need to check precise equality between types, you can use
+/// the [`ValType::eq`] method.
 #[derive(Clone, Hash)]
 pub enum ValType {
     // NB: the ordering of variants here is intended to match the ordering in
@@ -265,10 +265,10 @@ impl ValType {
 /// `RefType` does not implement `Eq`, because reference types have a subtyping
 /// relationship, and so 99.99% of the time you actually want to check whether
 /// one type matches (i.e. is a subtype of) another type. You can use the
-/// [`RefType::matches`] and [`Ref::matches_ty`] methods to perform these types
-/// of checks. If, however, you are in that 0.01% scenario where you need to
-/// check precise equality between types, you can use the [`RefType::eq`]
-/// method.
+/// [`RefType::matches`] and [`Ref::matches_ty`][crate::Ref::matches_ty] methods
+/// to perform these types of checks. If, however, you are in that 0.01%
+/// scenario where you need to check precise equality between types, you can use
+/// the [`RefType::eq`] method.
 #[derive(Clone, Hash)]
 pub struct RefType {
     is_nullable: bool,
@@ -392,10 +392,9 @@ impl RefType {
 /// `HeapType` does not implement `Eq`, because heap types have a subtyping
 /// relationship, and so 99.99% of the time you actually want to check whether
 /// one type matches (i.e. is a subtype of) another type. You can use the
-/// [`HeapType::matches`] and [`Ref::matches_ty`] methods to perform these types
-/// of checks. If, however, you are in that 0.01% scenario where you need to
-/// check precise equality between types, you can use the [`HeapType::eq`]
-/// method.
+/// [`HeapType::matches`] method to perform these types of checks. If, however,
+/// you are in that 0.01% scenario where you need to check precise equality
+/// between types, you can use the [`HeapType::eq`] method.
 #[derive(Debug, Clone, Hash)]
 pub enum HeapType {
     /// The `extern` heap type represents external host data.
@@ -684,10 +683,10 @@ impl From<TableType> for ExternType {
 /// `FuncType` does not implement `Eq`, because reference types have a subtyping
 /// relationship, and so 99.99% of the time you actually want to check whether
 /// one type matches (i.e. is a subtype of) another type. You can use the
-/// [`FuncType::matches`] and [`Val::matches_ty`] methods to perform these types
-/// of checks. If, however, you are in that 0.01% scenario where you need to
-/// check precise equality between types, you can use the [`FuncType::eq`]
-/// method.
+/// [`FuncType::matches`] and [`Func::matches_ty`][crate::Func::matches_ty]
+/// methods to perform these types of checks. If, however, you are in that 0.01%
+/// scenario where you need to check precise equality between types, you can use
+/// the [`FuncType::eq`] method.
 #[derive(Debug, Clone, Hash)]
 pub struct FuncType {
     registered_type: RegisteredType,
