@@ -316,10 +316,19 @@ impl<T> Linker<T> {
         &mut self,
         module: &Module,
     ) -> anyhow::Result<()> {
+        use crate::HeapType;
+
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
                 if let ExternType::Func(func_ty) = import_err.ty() {
                     let result_tys: Vec<_> = func_ty.results().collect();
+
+                    for ty in &result_tys {
+                        if ty.as_ref().map_or(false, |r| !r.is_nullable()) {
+                            bail!("no default value exists for type `{ty}`")
+                        }
+                    }
+
                     self.func_new(
                         import.module(),
                         import.name(),
@@ -332,8 +341,15 @@ impl<T> Linker<T> {
                                     ValType::F32 => Val::F32(0.0_f32.to_bits()),
                                     ValType::F64 => Val::F64(0.0_f64.to_bits()),
                                     ValType::V128 => Val::V128(0_u128.into()),
-                                    ValType::FuncRef => Val::FuncRef(None),
-                                    ValType::ExternRef => Val::ExternRef(None),
+                                    ValType::Ref(r) => {
+                                        debug_assert!(r.is_nullable());
+                                        match r.heap_type() {
+                                            HeapType::Func
+                                            | HeapType::Concrete(_)
+                                            | HeapType::NoFunc => Val::null_func_ref(),
+                                            HeapType::Extern => Val::null_extern_ref(),
+                                        }
+                                    }
                                 };
                             }
                             Ok(())
@@ -415,6 +431,11 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with the same engine
+    /// as this linker.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn func_new(
@@ -424,6 +445,7 @@ impl<T> Linker<T> {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
+        assert!(ty.comes_from_same_engine(self.engine()));
         let func = HostFunc::new(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
@@ -433,6 +455,11 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new_unchecked`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with the same engine
+    /// as this linker.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn func_new_unchecked(
@@ -442,6 +469,7 @@ impl<T> Linker<T> {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
+        assert!(ty.comes_from_same_engine(self.engine()));
         let func = HostFunc::new_unchecked(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
@@ -451,6 +479,16 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new_async`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
+    ///
+    /// # Panics
+    ///
+    /// This method panics in the following situations:
+    ///
+    /// * This linker is not associated with an [async
+    ///   config](crate::Config::async_support).
+    ///
+    /// * If the given function type is not associated with the same engine as
+    ///   this linker.
     #[cfg(all(feature = "async", feature = "cranelift"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn func_new_async<F>(
@@ -474,6 +512,7 @@ impl<T> Linker<T> {
             self.engine.config().async_support,
             "cannot use `func_new_async` without enabling async support in the config"
         );
+        assert!(ty.comes_from_same_engine(self.engine()));
         self.func_new(module, name, ty, move |mut caller, params, results| {
             let async_cx = caller
                 .store

@@ -304,14 +304,14 @@ fn table_limit() -> Result<()> {
         assert_eq!(table.size(&store), i);
         assert_eq!(
             table
-                .grow(&mut store, 1, Val::FuncRef(None))
+                .grow(&mut store, 1, Ref::Func(None))
                 .expect("table should grow"),
             i
         );
     }
 
     assert_eq!(table.size(&store), TABLE_ELEMENTS);
-    assert!(table.grow(&mut store, 1, Val::FuncRef(None)).is_err());
+    assert!(table.grow(&mut store, 1, Ref::Func(None)).is_err());
 
     Ok(())
 }
@@ -349,7 +349,7 @@ fn table_init() -> Result<()> {
     for i in 0..5 {
         let v = table.get(&mut store, i).expect("table should have entry");
         let f = v
-            .funcref()
+            .as_func()
             .expect("expected funcref")
             .expect("expected non-null value");
         assert_eq!(f.ty(&store).params().len(), i as usize);
@@ -359,7 +359,7 @@ fn table_init() -> Result<()> {
         table
             .get(&mut store, 5)
             .expect("table should have entry")
-            .funcref()
+            .as_func()
             .expect("expected funcref")
             .is_none(),
         "funcref should be null"
@@ -396,11 +396,11 @@ fn table_zeroed() -> Result<()> {
 
         for i in 0..10 {
             match table.get(&mut store, i).unwrap() {
-                Val::FuncRef(r) => assert!(r.is_none()),
+                Ref::Func(r) => assert!(r.is_none()),
                 _ => panic!("expected a funcref"),
             }
             table
-                .set(&mut store, i, Val::FuncRef(Some(f.clone())))
+                .set(&mut store, i, Ref::Func(Some(f.clone())))
                 .unwrap();
         }
     }

@@ -195,10 +195,9 @@ fn bench_host_to_wasm<Params, Results>(
                     .call_unchecked(&mut *store, space.as_mut_ptr(), space.len())
                     .unwrap();
                 for (i, expected) in results.iter().enumerate() {
-                    assert_vals_eq(
-                        expected,
-                        &Val::from_raw(&mut *store, space[i], expected.ty()),
-                    );
+                    let ty = expected.ty(&store);
+                    let actual = Val::from_raw(&mut *store, space[i], ty);
+                    assert_vals_eq(expected, &actual);
                 }
             })
         },

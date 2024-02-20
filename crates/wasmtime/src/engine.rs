@@ -168,6 +168,7 @@ impl Engine {
     }
 
     /// Returns whether the engine `a` and `b` refer to the same configuration.
+    #[inline]
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
@@ -290,8 +291,9 @@ impl Engine {
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
 
-            // If reference types are enabled this must be enabled, otherwise
-            // this setting can have any value.
+            // If reference types (or anything that depends on reference types,
+            // like typed function references and GC) are enabled this must be
+            // enabled, otherwise this setting can have any value.
             "enable_safepoints" => {
                 if self.config().features.reference_types {
                     *value == FlagValue::Bool(true)

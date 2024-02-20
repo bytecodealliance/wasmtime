@@ -95,6 +95,15 @@ unsafe impl WasmTy for V128 {
         true
     }
 
+    fn dynamic_concrete_type_check(
+        &self,
+        _: &StoreOpaque,
+        _: bool,
+        _: &crate::FuncType,
+    ) -> anyhow::Result<()> {
+        unreachable!()
+    }
+
     #[inline]
     fn is_externref(&self) -> bool {
         false

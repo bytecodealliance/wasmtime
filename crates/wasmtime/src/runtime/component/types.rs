@@ -940,9 +940,10 @@ impl ComponentItem {
             TypeDef::ComponentFunc(idx) => Self::ComponentFunc(ComponentFunc::from(*idx, ty)),
             TypeDef::Interface(iface_ty) => Self::Type(Type::from(iface_ty, ty)),
             TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
-            TypeDef::CoreFunc(idx) => {
-                Self::CoreFunc(FuncType::from_wasm_func_type(engine, &ty.types[*idx]))
-            }
+            TypeDef::CoreFunc(idx) => Self::CoreFunc(FuncType::from_wasm_func_type(
+                engine,
+                ty.types[*idx].clone(),
+            )),
             TypeDef::Resource(idx) => Self::Resource(ty.resources[ty.types[*idx].ty]),
         }
     }

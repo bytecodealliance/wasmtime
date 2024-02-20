@@ -1,5 +1,6 @@
 use crate::linker::DefinitionType;
 use crate::{type_registry::TypeCollection, Engine};
+use crate::{FuncType, Module};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
     EntityType, Global, Memory, ModuleInternedTypeIndex, ModuleTypes, Table, WasmFuncType,
@@ -8,22 +9,39 @@ use wasmtime_environ::{
 use wasmtime_runtime::VMSharedTypeIndex;
 
 pub struct MatchCx<'a> {
-    pub signatures: &'a TypeCollection,
-    pub types: &'a ModuleTypes,
-    pub engine: &'a Engine,
+    signatures: &'a TypeCollection,
+    types: &'a ModuleTypes,
+    engine: &'a Engine,
 }
 
 impl MatchCx<'_> {
-    pub fn vmshared_signature_index(
+    /// Construct a new matching context for the given module.
+    pub fn new(module: &Module) -> MatchCx<'_> {
+        MatchCx {
+            signatures: module.signatures(),
+            types: module.types(),
+            engine: module.engine(),
+        }
+    }
+
+    fn type_reference(
         &self,
         expected: ModuleInternedTypeIndex,
         actual: VMSharedTypeIndex,
     ) -> Result<()> {
         let matches = match self.signatures.shared_type(expected) {
-            Some(idx) => actual == idx,
             // If our expected signature isn't registered, then there's no way
             // that `actual` can match it.
             None => false,
+            Some(expected) => {
+                // Avoid matching on structure for subtyping checks when we have
+                // precisely the same type.
+                expected == actual || {
+                    let expected = FuncType::from_shared_type_index(self.engine, expected);
+                    let actual = FuncType::from_shared_type_index(self.engine, actual);
+                    actual.matches(&expected)
+                }
+            }
         };
         if matches {
             return Ok(());
@@ -32,10 +50,7 @@ impl MatchCx<'_> {
         let expected = &self.types[expected];
         let actual = match self.engine.signatures().borrow(actual) {
             Some(ty) => ty,
-            None => {
-                debug_assert!(false, "all signatures should be registered");
-                bail!("{}", msg);
-            }
+            None => panic!("{actual:?} is not registered"),
         };
 
         Err(func_ty_mismatch(msg, expected, &actual))
@@ -61,7 +76,7 @@ impl MatchCx<'_> {
                 _ => bail!("expected memory, but found {}", actual.desc()),
             },
             EntityType::Function(expected) => match actual {
-                DefinitionType::Func(actual) => self.vmshared_signature_index(*expected, *actual),
+                DefinitionType::Func(actual) => self.type_reference(*expected, *actual),
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
             EntityType::Tag(_) => unimplemented!(),
@@ -193,17 +208,24 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
 }
 
 fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Result<()> {
+    use WasmHeapType as H;
     let result = match (actual, expected) {
-        (WasmHeapType::Concrete(actual), WasmHeapType::Concrete(expected)) => {
+        (H::Concrete(actual), H::Concrete(expected)) => {
             // TODO(dhil): we need either canonicalised types or a context here.
             actual == expected
         }
-        (WasmHeapType::Concrete(_), WasmHeapType::Func)
-        | (WasmHeapType::Func, WasmHeapType::Func)
-        | (WasmHeapType::Extern, WasmHeapType::Extern) => true,
-        (WasmHeapType::Func, _) | (WasmHeapType::Extern, _) | (WasmHeapType::Concrete(_), _) => {
-            false
-        }
+
+        (H::NoFunc, H::NoFunc) => true,
+        (_, H::NoFunc) => false,
+
+        (H::NoFunc, H::Concrete(_)) => true,
+        (_, H::Concrete(_)) => false,
+
+        (H::NoFunc | H::Concrete(_) | H::Func, H::Func) => true,
+        (_, H::Func) => false,
+
+        (H::Extern, H::Extern) => true,
+        (_, H::Extern) => false,
     };
     if result {
         Ok(())

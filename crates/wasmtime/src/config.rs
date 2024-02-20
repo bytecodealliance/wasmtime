@@ -734,19 +734,41 @@ impl Config {
         self
     }
 
-    /// Configures whether the [WebAssembly function references proposal][proposal]
-    /// will be enabled for compilation.
+    /// Configures whether the [WebAssembly function references
+    /// proposal][proposal] will be enabled for compilation.
     ///
     /// This feature gates non-nullable reference types, function reference
-    /// types, call_ref, ref.func, and non-nullable reference related instructions.
+    /// types, `call_ref`, `ref.func`, and non-nullable reference related
+    /// instructions.
     ///
-    /// Note that the function references proposal depends on the reference types proposal.
+    /// Note that the function references proposal depends on the reference
+    /// types proposal.
     ///
     /// This feature is `false` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
         self.features.function_references = enable;
+        self
+    }
+
+    /// Configures whether the [WebAssembly Garbage Collection
+    /// proposal][proposal] will be enabled for compilation.
+    ///
+    /// This feature gates `struct` and `array` type definitions and references,
+    /// the `i31ref` type, and all related instructions.
+    ///
+    /// Note that the function references proposal depends on the typed function
+    /// references proposal.
+    ///
+    /// This feature is `false` by default.
+    ///
+    /// **Warning: Wasmtime's implementation of the GC proposal is still in
+    /// progress and generally not ready for primetime.**
+    ///
+    /// [proposal]: https://github.com/WebAssembly/gc
+    pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
+        self.features.gc = enable;
         self
     }
 
@@ -1616,6 +1638,12 @@ impl Config {
         if self.features.threads && !self.features.bulk_memory {
             bail!("feature 'threads' requires 'bulk_memory' to be enabled");
         }
+        if self.features.function_references && !self.features.reference_types {
+            bail!("feature 'function_references' requires 'reference_types' to be enabled");
+        }
+        if self.features.gc && !self.features.function_references {
+            bail!("feature 'gc' requires 'function_references' to be enabled");
+        }
         #[cfg(feature = "async")]
         if self.async_support && self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
@@ -1923,6 +1951,7 @@ impl fmt::Debug for Config {
                 "wasm_function_references",
                 &self.features.function_references,
             )
+            .field("wasm_gc", &self.features.gc)
             .field("wasm_bulk_memory", &self.features.bulk_memory)
             .field("wasm_simd", &self.features.simd)
             .field("wasm_relaxed_simd", &self.features.relaxed_simd)

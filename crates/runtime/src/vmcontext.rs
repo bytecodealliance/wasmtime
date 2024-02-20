@@ -1007,7 +1007,7 @@ pub union ValRaw {
     /// This value is always stored in a little-endian format.
     v128: u128,
 
-    /// A WebAssembly `funcref` value.
+    /// A WebAssembly `funcref` value (or one of its subtypes).
     ///
     /// The payload here is a pointer which is runtime-defined. This is one of
     /// the main points of unsafety about the `ValRaw` type as the validity of
@@ -1017,7 +1017,7 @@ pub union ValRaw {
     /// This value is always stored in a little-endian format.
     funcref: *mut c_void,
 
-    /// A WebAssembly `externref` value.
+    /// A WebAssembly `externref` value (or one of its subtypes).
     ///
     /// The payload here is a pointer which is runtime-defined. This is one of
     /// the main points of unsafety about the `ValRaw` type as the validity of

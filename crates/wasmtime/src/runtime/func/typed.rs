@@ -1,9 +1,13 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, ValRaw, ValType};
-use anyhow::{bail, Result};
+use crate::{
+    AsContext, AsContextMut, Engine, ExternRef, Func, FuncType, HeapType, NoFunc, RefType,
+    StoreContextMut, ValRaw, ValType,
+};
+use anyhow::{bail, Context, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
+use std::os::raw::c_void;
 use std::ptr::{self, NonNull};
 use wasmtime_runtime::{
     VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedTypeIndex,
@@ -17,17 +21,19 @@ use wasmtime_runtime::{
 ///
 /// This structure is created via [`Func::typed`] or [`TypedFunc::new_unchecked`].
 /// For more documentation about this see those methods.
-#[repr(transparent)] // here for the C API
 pub struct TypedFunc<Params, Results> {
     _a: marker::PhantomData<fn(Params) -> Results>,
+    ty: FuncType,
     func: Func,
 }
 
-impl<Params, Results> Copy for TypedFunc<Params, Results> {}
-
 impl<Params, Results> Clone for TypedFunc<Params, Results> {
     fn clone(&self) -> TypedFunc<Params, Results> {
-        *self
+        Self {
+            _a: marker::PhantomData,
+            ty: self.ty.clone(),
+            func: self.func,
+        }
     }
 }
 
@@ -48,9 +54,19 @@ where
     /// This function only safe to call if `typed` would otherwise return `Ok`
     /// for the same `Params` and `Results` specified. If `typed` would return
     /// an error then the returned `TypedFunc` is memory unsafe to invoke.
-    pub unsafe fn new_unchecked(func: Func) -> TypedFunc<Params, Results> {
+    pub unsafe fn new_unchecked(store: impl AsContext, func: Func) -> TypedFunc<Params, Results> {
+        let store = store.as_context().0;
+        Self::_new_unchecked(store, func)
+    }
+
+    pub(crate) unsafe fn _new_unchecked(
+        store: &StoreOpaque,
+        func: Func,
+    ) -> TypedFunc<Params, Results> {
+        let ty = func.load_ty(store);
         TypedFunc {
             _a: marker::PhantomData,
+            ty,
             func,
         }
     }
@@ -85,7 +101,7 @@ where
             "must use `call_async` with async stores"
         );
         let func = self.func.vm_func_ref(store.0);
-        unsafe { Self::call_raw(&mut store, func, params) }
+        unsafe { Self::call_raw(&mut store, &self.ty, func, params) }
     }
 
     /// Invokes this WebAssembly function with the specified parameters.
@@ -123,13 +139,14 @@ where
         store
             .on_fiber(|store| {
                 let func = self.func.vm_func_ref(store.0);
-                unsafe { Self::call_raw(store, func, params) }
+                unsafe { Self::call_raw(store, &self.ty, func, params) }
             })
             .await?
     }
 
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
+        ty: &FuncType,
         func: ptr::NonNull<VMFuncRef>,
         params: Params,
     ) -> Result<Results> {
@@ -159,12 +176,7 @@ where
             // the Wasm frame and they get referenced from the stack maps.
             let mut store = AutoAssertNoGc::new(&mut **store.as_context_mut().0);
 
-            match params.into_abi(&mut store) {
-                Some(abi) => abi,
-                None => {
-                    bail!("attempt to pass cross-`Store` value to Wasm as function argument")
-                }
-            }
+            params.into_abi(&mut store, ty)?
         };
 
         // Try to capture only a single variable (a tuple) in the closure below.
@@ -191,9 +203,18 @@ where
     /// Purely a debug-mode assertion, not actually used in release builds.
     fn debug_typecheck(store: &StoreOpaque, func: VMSharedTypeIndex) {
         let ty = FuncType::from_shared_type_index(store.engine(), func);
-        Params::typecheck(ty.params()).expect("params should match");
-        Results::typecheck(ty.results()).expect("results should match");
+        Params::typecheck(store.engine(), ty.params(), TypeCheckPosition::Param)
+            .expect("params should match");
+        Results::typecheck(store.engine(), ty.results(), TypeCheckPosition::Result)
+            .expect("results should match");
     }
+}
+
+#[doc(hidden)]
+#[derive(Copy, Clone)]
+pub enum TypeCheckPosition {
+    Param,
+    Result,
 }
 
 /// A trait implemented for types which can be arguments and results for
@@ -205,29 +226,107 @@ where
 ///
 /// For more information see [`Func::wrap`] and [`Func::typed`]
 pub unsafe trait WasmTy: Send {
+    // The raw ABI type that values of this type can be converted to and passed
+    // to Wasm, or given from Wasm and converted back from.
     #[doc(hidden)]
     type Abi: Copy;
+
+    // Do a "static" (aka at time of `func.typed::<P, R>()`) ahead-of-time type
+    // check for this type at the given position. You probably don't need to
+    // override this trait method.
     #[doc(hidden)]
     #[inline]
-    fn typecheck(ty: crate::ValType) -> Result<()> {
-        if ty == Self::valtype() {
-            Ok(())
-        } else {
-            bail!("expected {} found {}", Self::valtype(), ty)
+    fn typecheck(engine: &Engine, actual: ValType, position: TypeCheckPosition) -> Result<()> {
+        let expected = Self::valtype();
+        debug_assert!(expected.comes_from_same_engine(engine));
+        debug_assert!(actual.comes_from_same_engine(engine));
+        match position {
+            // The caller is expecting to receive a `T` and the callee is
+            // actually returning a `U`, so ensure that `U <: T`.
+            TypeCheckPosition::Result => actual.ensure_matches(engine, &expected),
+            // The caller is expecting to pass a `T` and the callee is expecting
+            // to receive a `U`, so ensure that `T <: U`.
+            TypeCheckPosition::Param => match (expected.as_ref(), actual.as_ref()) {
+                // ... except that this technically-correct check would overly
+                // restrict the usefulness of our typed function APIs for the
+                // specific case of concrete reference types. Let's work through
+                // an example.
+                //
+                // Consider functions that take a `(ref param $some_func_type)`
+                // parameter:
+                //
+                // * We cannot have a static `wasmtime::SomeFuncTypeRef` type
+                //   that implements `WasmTy` specifically for `(ref null
+                //   $some_func_type)` because Wasm modules, and their types,
+                //   are loaded dynamically at runtime.
+                //
+                // * Therefore the embedder's only option for `T <: (ref null
+                //   $some_func_type)` is `T = (ref null nofunc)` aka
+                //   `Option<wasmtime::NoFunc>`.
+                //
+                // * But that static type means they can *only* pass in the null
+                //   function reference as an argument to the typed function.
+                //   This is way too restrictive! For ergonomics, we want them
+                //   to be able to pass in a `wasmtime::Func` whose type is
+                //   `$some_func_type`!
+                //
+                // To lift this constraint and enable better ergonomics for
+                // embedders, we allow `top(T) <: top(U)` -- i.e. they are part
+                // of the same type hierarchy and a dynamic cast could possibly
+                // succeed -- for the specific case of concrete heap type
+                // parameters, and fall back to dynamic type checks on the
+                // arguments passed to each invocation, as necessary.
+                (Some(expected_ref), Some(actual_ref)) if actual_ref.heap_type().is_concrete() => {
+                    expected_ref
+                        .heap_type()
+                        .top(engine)
+                        .ensure_matches(engine, &actual_ref.heap_type().top(engine))
+                }
+                _ => expected.ensure_matches(engine, &actual),
+            },
         }
     }
+
+    // The value type that this Type represents.
     #[doc(hidden)]
     fn valtype() -> ValType;
+
+    // Dynamic checks that this value is being used with the correct store
+    // context.
     #[doc(hidden)]
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool;
+
+    // Dynamic checks that `self <: actual` for concrete type arguments. See the
+    // comment above in `WasmTy::typecheck`.
+    //
+    // Only ever called for concrete reference type arguments, so any type which
+    // is not in a type hierarchy with concrete reference types can implement
+    // this with `unreachable!()`.
+    #[doc(hidden)]
+    fn dynamic_concrete_type_check(
+        &self,
+        store: &StoreOpaque,
+        nullable: bool,
+        actual: &FuncType,
+    ) -> Result<()>;
+
+    // Is this an externref?
     #[doc(hidden)]
     fn is_externref(&self) -> bool;
+
+    // Construct a `Self::Abi` from the given `ValRaw`.
     #[doc(hidden)]
     unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi;
+
+    // Stuff our given `Self::Abi` into a `ValRaw`.
     #[doc(hidden)]
     unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw);
+
+    // Convert `self` into `Self::Abi`.
     #[doc(hidden)]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi;
+
+    // Convert back from `Self::Abi` into `Self`.
     #[doc(hidden)]
     unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self;
 }
@@ -243,6 +342,10 @@ macro_rules! integers {
             #[inline]
             fn compatible_with_store(&self, _: &StoreOpaque) -> bool {
                 true
+            }
+            #[inline]
+            fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+                unreachable!()
             }
             #[inline]
             fn is_externref(&self) -> bool {
@@ -288,6 +391,10 @@ macro_rules! floats {
                 true
             }
             #[inline]
+            fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+                unreachable!()
+            }
+            #[inline]
             fn is_externref(&self) -> bool {
                 false
             }
@@ -316,17 +423,105 @@ floats! {
     f64/u64/get_f64 => F64
 }
 
-unsafe impl WasmTy for Option<ExternRef> {
-    type Abi = *mut u8;
+unsafe impl WasmTy for ExternRef {
+    type Abi = NonNull<u8>;
 
     #[inline]
     fn valtype() -> ValType {
-        ValType::ExternRef
+        ValType::Ref(RefType::new(false, HeapType::Extern))
     }
 
     #[inline]
     fn compatible_with_store(&self, _store: &StoreOpaque) -> bool {
         true
+    }
+
+    #[inline]
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+        unreachable!()
+    }
+
+    #[inline]
+    fn is_externref(&self) -> bool {
+        true
+    }
+
+    #[inline]
+    unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
+        let p = (*raw).get_externref().cast::<u8>();
+        debug_assert!(!p.is_null());
+        NonNull::new_unchecked(p)
+    }
+
+    #[inline]
+    unsafe fn abi_into_raw(abi: NonNull<u8>, raw: *mut ValRaw) {
+        *raw = ValRaw::externref(abi.cast::<c_void>().as_ptr());
+    }
+
+    #[inline]
+    fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
+        let abi = self.inner.as_raw();
+        unsafe {
+            // NB: We _must not_ trigger a GC when passing refs from host
+            // code into Wasm (e.g. returned from a host function or passed
+            // as arguments to a Wasm function). After insertion into the
+            // table, this reference is no longer rooted. If multiple
+            // references are being sent from the host into Wasm and we
+            // allowed GCs during insertion, then the following events could
+            // happen:
+            //
+            // * Reference A is inserted into the activations
+            //   table. This does not trigger a GC, but does fill the table
+            //   to capacity.
+            //
+            // * The caller's reference to A is removed. Now the only
+            //   reference to A is from the activations table.
+            //
+            // * Reference B is inserted into the activations table. Because
+            //   the table is at capacity, a GC is triggered.
+            //
+            // * A is reclaimed because the only reference keeping it alive
+            //   was the activation table's reference (it isn't inside any
+            //   Wasm frames on the stack yet, so stack scanning and stack
+            //   maps don't increment its reference count).
+            //
+            // * We transfer control to Wasm, giving it A and B. Wasm uses
+            //   A. That's a use after free.
+            //
+            // In conclusion, to prevent uses after free, we cannot GC
+            // during this insertion.
+            let mut store = AutoAssertNoGc::new(store);
+            store.insert_vmexternref_without_gc(self.inner);
+
+            debug_assert!(!abi.is_null());
+            NonNull::new_unchecked(abi)
+        }
+    }
+
+    #[inline]
+    unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
+        ExternRef {
+            inner: wasmtime_runtime::VMExternRef::clone_from_raw(abi.as_ptr()),
+        }
+    }
+}
+
+unsafe impl WasmTy for Option<ExternRef> {
+    type Abi = *mut u8;
+
+    #[inline]
+    fn valtype() -> ValType {
+        ValType::EXTERNREF
+    }
+
+    #[inline]
+    fn compatible_with_store(&self, _store: &StoreOpaque) -> bool {
+        true
+    }
+
+    #[inline]
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+        unreachable!()
     }
 
     #[inline]
@@ -347,40 +542,7 @@ unsafe impl WasmTy for Option<ExternRef> {
     #[inline]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
         if let Some(x) = self {
-            let abi = x.inner.as_raw();
-            unsafe {
-                // NB: We _must not_ trigger a GC when passing refs from host
-                // code into Wasm (e.g. returned from a host function or passed
-                // as arguments to a Wasm function). After insertion into the
-                // table, this reference is no longer rooted. If multiple
-                // references are being sent from the host into Wasm and we
-                // allowed GCs during insertion, then the following events could
-                // happen:
-                //
-                // * Reference A is inserted into the activations
-                //   table. This does not trigger a GC, but does fill the table
-                //   to capacity.
-                //
-                // * The caller's reference to A is removed. Now the only
-                //   reference to A is from the activations table.
-                //
-                // * Reference B is inserted into the activations table. Because
-                //   the table is at capacity, a GC is triggered.
-                //
-                // * A is reclaimed because the only reference keeping it alive
-                //   was the activation table's reference (it isn't inside any
-                //   Wasm frames on the stack yet, so stack scanning and stack
-                //   maps don't increment its reference count).
-                //
-                // * We transfer control to Wasm, giving it A and B. Wasm uses
-                //   A. That's a use after free.
-                //
-                // In conclusion, to prevent uses after free, we cannot GC
-                // during this insertion.
-                let mut store = AutoAssertNoGc::new(store);
-                store.insert_vmexternref_without_gc(x.inner);
-            }
-            abi
+            <ExternRef as WasmTy>::into_abi(x, store).as_ptr()
         } else {
             ptr::null_mut()
         }
@@ -398,12 +560,162 @@ unsafe impl WasmTy for Option<ExternRef> {
     }
 }
 
+unsafe impl WasmTy for NoFunc {
+    type Abi = NoFunc;
+
+    #[inline]
+    fn valtype() -> ValType {
+        ValType::Ref(RefType::new(false, HeapType::NoFunc))
+    }
+
+    #[inline]
+    fn compatible_with_store(&self, _store: &StoreOpaque) -> bool {
+        match self._inner {}
+    }
+
+    #[inline]
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+        match self._inner {}
+    }
+
+    #[inline]
+    fn is_externref(&self) -> bool {
+        match self._inner {}
+    }
+
+    #[inline]
+    unsafe fn abi_from_raw(_raw: *mut ValRaw) -> Self::Abi {
+        unreachable!("NoFunc is uninhabited")
+    }
+
+    #[inline]
+    unsafe fn abi_into_raw(_abi: Self::Abi, _raw: *mut ValRaw) {
+        unreachable!("NoFunc is uninhabited")
+    }
+
+    #[inline]
+    fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
+        unreachable!("NoFunc is uninhabited")
+    }
+
+    #[inline]
+    unsafe fn from_abi(_abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
+        unreachable!("NoFunc is uninhabited")
+    }
+}
+
+unsafe impl WasmTy for Option<NoFunc> {
+    type Abi = *mut NoFunc;
+
+    #[inline]
+    fn valtype() -> ValType {
+        ValType::Ref(RefType::new(true, HeapType::NoFunc))
+    }
+
+    #[inline]
+    fn compatible_with_store(&self, _store: &StoreOpaque) -> bool {
+        true
+    }
+
+    #[inline]
+    fn dynamic_concrete_type_check(
+        &self,
+        _: &StoreOpaque,
+        nullable: bool,
+        func_ty: &FuncType,
+    ) -> Result<()> {
+        if nullable {
+            // `(ref null nofunc) <: (ref null $f)` for all function types `$f`.
+            Ok(())
+        } else {
+            bail!("argument type mismatch: expected (ref {func_ty}), found null reference")
+        }
+    }
+
+    #[inline]
+    fn is_externref(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    unsafe fn abi_from_raw(_raw: *mut ValRaw) -> Self::Abi {
+        ptr::null_mut()
+    }
+
+    #[inline]
+    unsafe fn abi_into_raw(_abi: Self::Abi, raw: *mut ValRaw) {
+        *raw = ValRaw::funcref(ptr::null_mut());
+    }
+
+    #[inline]
+    fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
+        ptr::null_mut()
+    }
+
+    #[inline]
+    unsafe fn from_abi(_abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
+        None
+    }
+}
+
+unsafe impl WasmTy for Func {
+    type Abi = NonNull<wasmtime_runtime::VMFuncRef>;
+
+    #[inline]
+    fn valtype() -> ValType {
+        ValType::Ref(RefType::new(false, HeapType::Func))
+    }
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, store: &StoreOpaque) -> bool {
+        store.store_data().contains(self.0)
+    }
+
+    #[inline]
+    fn dynamic_concrete_type_check(
+        &self,
+        store: &StoreOpaque,
+        _nullable: bool,
+        actual: &FuncType,
+    ) -> Result<()> {
+        self.ensure_matches_ty(store, actual)
+            .context("argument type mismatch for reference to concrete type")
+    }
+
+    #[inline]
+    fn is_externref(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
+        let p = (*raw).get_funcref();
+        debug_assert!(!p.is_null());
+        NonNull::new_unchecked(p.cast::<wasmtime_runtime::VMFuncRef>())
+    }
+
+    #[inline]
+    unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw) {
+        *raw = ValRaw::funcref(abi.cast::<c_void>().as_ptr());
+    }
+
+    #[inline]
+    fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
+        self.vm_func_ref(store)
+    }
+
+    #[inline]
+    unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self {
+        Func::from_vm_func_ref(store, abi.as_ptr()).unwrap()
+    }
+}
+
 unsafe impl WasmTy for Option<Func> {
     type Abi = *mut wasmtime_runtime::VMFuncRef;
 
     #[inline]
     fn valtype() -> ValType {
-        ValType::FuncRef
+        ValType::FUNCREF
     }
 
     #[inline]
@@ -412,6 +724,22 @@ unsafe impl WasmTy for Option<Func> {
             store.store_data().contains(f.0)
         } else {
             true
+        }
+    }
+
+    fn dynamic_concrete_type_check(
+        &self,
+        store: &StoreOpaque,
+        nullable: bool,
+        func_ty: &FuncType,
+    ) -> Result<()> {
+        if let Some(f) = self {
+            f.ensure_matches_ty(store, func_ty)
+                .context("argument type mismatch for reference to concrete type")
+        } else if nullable {
+            Ok(())
+        } else {
+            bail!("argument type mismatch: expected (ref {func_ty}), found null reference")
         }
     }
 
@@ -455,13 +783,17 @@ pub unsafe trait WasmParams: Send {
     type Abi: Copy;
 
     #[doc(hidden)]
-    fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()>;
+    fn typecheck(
+        engine: &Engine,
+        params: impl ExactSizeIterator<Item = crate::ValType>,
+        position: TypeCheckPosition,
+    ) -> Result<()>;
 
     #[doc(hidden)]
     fn externrefs_count(&self) -> usize;
 
     #[doc(hidden)]
-    fn into_abi(self, store: &mut StoreOpaque) -> Option<Self::Abi>;
+    fn into_abi(self, store: &mut StoreOpaque, func_ty: &FuncType) -> Result<Self::Abi>;
 
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
@@ -480,8 +812,12 @@ where
 {
     type Abi = <(T,) as WasmParams>::Abi;
 
-    fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()> {
-        <(T,) as WasmParams>::typecheck(params)
+    fn typecheck(
+        engine: &Engine,
+        params: impl ExactSizeIterator<Item = crate::ValType>,
+        position: TypeCheckPosition,
+    ) -> Result<()> {
+        <(T,) as WasmParams>::typecheck(engine, params, position)
     }
 
     #[inline]
@@ -490,8 +826,8 @@ where
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque) -> Option<Self::Abi> {
-        <(T,) as WasmParams>::into_abi((self,), store)
+    fn into_abi(self, store: &mut StoreOpaque, func_ty: &FuncType) -> Result<Self::Abi> {
+        <(T,) as WasmParams>::into_abi((self,), store, func_ty)
     }
 
     unsafe fn invoke<R: WasmResults>(
@@ -510,14 +846,18 @@ macro_rules! impl_wasm_params {
         unsafe impl<$($t: WasmTy,)*> WasmParams for ($($t,)*) {
             type Abi = ($($t::Abi,)*);
 
-            fn typecheck(mut params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()> {
+            fn typecheck(
+                _engine: &Engine,
+                mut params: impl ExactSizeIterator<Item = crate::ValType>,
+                _position: TypeCheckPosition,
+            ) -> Result<()> {
                 let mut _n = 0;
 
                 $(
                     match params.next() {
                         Some(t) => {
                             _n += 1;
-                            $t::typecheck(t)?
+                            $t::typecheck(_engine, t, _position)?
                         },
                         None => bail!("expected {} types, found {}", $n, params.len() + _n),
                     }
@@ -542,16 +882,32 @@ macro_rules! impl_wasm_params {
 
 
             #[inline]
-            fn into_abi(self, _store: &mut StoreOpaque) -> Option<Self::Abi> {
+            fn into_abi(
+                self,
+                _store: &mut StoreOpaque,
+                _func_ty: &FuncType,
+            ) -> Result<Self::Abi> {
                 let ($($t,)*) = self;
+
+                let mut _i = 0;
                 $(
-                    let $t = if $t.compatible_with_store(_store) {
-                        $t.into_abi(_store)
-                    } else {
-                        return None;
-                    };
+                    if !$t.compatible_with_store(_store) {
+                        bail!("attempt to pass cross-`Store` value to Wasm as function argument");
+                    }
+
+                    if $t::valtype().is_ref() {
+                        let p = _func_ty.param(_i).unwrap();
+                        let r = p.unwrap_ref();
+                        if let Some(c) = r.heap_type().as_concrete() {
+                            $t.dynamic_concrete_type_check(_store, r.is_nullable(), c)?;
+                        }
+                    }
+
+                    let $t = $t.into_abi(_store);
+
+                    _i += 1;
                 )*
-                Some(($($t,)*))
+                Ok(($($t,)*))
             }
 
             unsafe fn invoke<R: WasmResults>(
@@ -589,13 +945,10 @@ for_each_function_signature!(impl_wasm_params);
 
 /// A trait used for [`Func::typed`] and with [`TypedFunc`] to represent the set of
 /// results for wasm functions.
-///
-/// This is currently only implemented for `()` and for bare types that can be
-/// returned. This is not yet implemented for tuples because a multi-value
-/// `TypedFunc` is not currently supported.
 pub unsafe trait WasmResults: WasmParams {
     #[doc(hidden)]
     type ResultAbi: HostAbi;
+
     #[doc(hidden)]
     unsafe fn from_abi(store: &mut StoreOpaque, abi: Self::ResultAbi) -> Self;
 }

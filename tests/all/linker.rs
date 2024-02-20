@@ -79,12 +79,12 @@ fn link_twice_bad() -> Result<()> {
     assert!(linker.define(&mut store, "m", "", memory.clone()).is_err());
 
     // tables
-    let ty = TableType::new(ValType::FuncRef, 1, None);
-    let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
+    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let table = Table::new(&mut store, ty, Ref::Func(None))?;
     linker.define(&mut store, "t", "", table.clone())?;
     assert!(linker.define(&mut store, "t", "", table.clone()).is_err());
-    let ty = TableType::new(ValType::FuncRef, 2, None);
-    let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
+    let ty = TableType::new(RefType::FUNCREF, 2, None);
+    let table = Table::new(&mut store, ty, Ref::Func(None))?;
     assert!(linker.define(&mut store, "t", "", table.clone()).is_err());
     Ok(())
 }
@@ -433,6 +433,302 @@ fn test_default_value_unknown_import() -> Result<()> {
     assert_eq!(results[0].i64(), Some(0));
     assert_eq!(results[1].f32(), Some(0.0));
     assert!(results[2].externref().unwrap().is_none());
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_instantiate_with_concrete_func_refs() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $a (func (result i32)))
+                (type $b (func (result (ref null $a))))
+                (type $c (func (result (ref null $b))))
+
+                (import "env" "f" (func $f (result (ref null $c))))
+
+                (func (export "g") (result funcref)
+                    call $f
+                )
+            )
+        "#,
+    )?;
+
+    let a = FuncType::new(&engine, None, Some(ValType::I32));
+    let ref_null_a = ValType::from(RefType::new(true, HeapType::Concrete(a.clone())));
+
+    let b = FuncType::new(&engine, None, Some(ref_null_a));
+    let ref_null_b = ValType::from(RefType::new(true, HeapType::Concrete(b.clone())));
+
+    let c = FuncType::new(&engine, None, Some(ref_null_b));
+    let ref_null_c = ValType::from(RefType::new(true, HeapType::Concrete(c.clone())));
+
+    let mut store = Store::new(&engine, ());
+    let a_func = Func::new(&mut store, a, |_caller, _args, results| {
+        results[0] = Val::I32(0x1234_5678);
+        Ok(())
+    });
+
+    let b_func = Func::new(&mut store, b, move |_caller, _args, results| {
+        results[0] = Val::FuncRef(Some(a_func.clone()));
+        Ok(())
+    });
+
+    let c_func = Func::new(&mut store, c, move |_caller, _args, results| {
+        results[0] = Val::FuncRef(Some(b_func.clone()));
+        Ok(())
+    });
+
+    let mut linker = Linker::new(&engine);
+    linker.func_new(
+        "env",
+        "f",
+        FuncType::new(&engine, None, Some(ref_null_c)),
+        move |_caller, _args, results| {
+            results[0] = Val::FuncRef(Some(c_func.clone()));
+            Ok(())
+        },
+    )?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    let g = instance.get_typed_func::<(), Option<Func>>(&mut store, "g")?;
+
+    let c = g.call(&mut store, ())?;
+    let c = c.expect("func ref c is non null");
+    let c = c.typed::<(), Option<Func>>(&mut store)?;
+
+    let b = c.call(&mut store, ())?;
+    let b = b.expect("func ref b is non null");
+    let b = b.typed::<(), Option<Func>>(&mut store)?;
+
+    let a = b.call(&mut store, ())?;
+    let a = a.expect("func ref a is non null");
+    let a = a.typed::<(), u32>(&mut store)?;
+
+    let x = a.call(&mut store, ())?;
+    assert_eq!(x, 0x1234_5678);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_func_subtype() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    let engine = Engine::new(&config)?;
+
+    let mut linker = Linker::new(&engine);
+    linker.func_new(
+        "env",
+        "f",
+        FuncType::new(&engine, Some(ValType::FUNCREF), None),
+        |_caller, _args, _results| Ok(()),
+    )?;
+    linker.func_new(
+        "env",
+        "g",
+        FuncType::new(&engine, None, Some(ValType::NULLFUNCREF)),
+        |_caller, _args, _results| Ok(()),
+    )?;
+    let nop_ty = FuncType::new(&engine, None, None);
+    let ref_null_nop = ValType::from(RefType::new(true, HeapType::Concrete(nop_ty)));
+    linker.func_new(
+        "env",
+        "h",
+        FuncType::new(&engine, Some(ref_null_nop.clone()), Some(ref_null_nop)),
+        |_caller, _args, _results| Ok(()),
+    )?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                ;; wasm's declared nullfuncref <: f's actual funcref
+                (import "env" "f" (func (param nullfuncref)))
+
+                ;; g's actual nullfuncref <: wasm's declared funcref
+                (import "env" "g" (func (result funcref)))
+
+                ;; wasm's declared nullfuncref param <: h's actual (ref null $nop) param, and
+                ;; h's actual (ref null $nop) result <: wasm's declared funcref result
+                (import "env" "h" (func (param nullfuncref) (result funcref)))
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let _ = linker.instantiate(&mut store, &module)?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_global_subtype_const_ok() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "env" "g" (global funcref))
+            )
+        "#,
+    )?;
+
+    let g = Global::new(
+        &mut store,
+        GlobalType::new(ValType::NULLFUNCREF, Mutability::Const),
+        Val::FuncRef(None),
+    )?;
+    linker.define(&store, "env", "g", g)?;
+
+    let _ = linker.instantiate(&mut store, &module)?;
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_global_subtype_const_err() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "env" "g" (global nullfuncref))
+            )
+        "#,
+    )?;
+
+    // funcref </: nullfuncref
+    let g = Global::new(
+        &mut store,
+        GlobalType::new(ValType::FUNCREF, Mutability::Const),
+        Val::FuncRef(None),
+    )?;
+    linker.define(&store, "env", "g", g)?;
+
+    let e = linker.instantiate(&mut store, &module).unwrap_err();
+    assert_eq!(e.to_string(), "incompatible import type for `env::g`");
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_global_subtype_mut_err() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $nop (func))
+                (import "env" "g" (global (mut (ref null $nop))))
+            )
+        "#,
+    )?;
+
+    // Supertype, not precise type.
+    let mut linker = Linker::new(&engine);
+    let g = Global::new(
+        &mut store,
+        GlobalType::new(ValType::FUNCREF, Mutability::Var),
+        Val::FuncRef(None),
+    )?;
+    linker.define(&store, "env", "g", g)?;
+    let e = linker.instantiate(&mut store, &module).unwrap_err();
+    assert_eq!(e.to_string(), "incompatible import type for `env::g`");
+
+    // Subtype, not precise type.
+    let mut linker = Linker::new(&engine);
+    let g = Global::new(
+        &mut store,
+        GlobalType::new(ValType::NULLFUNCREF, Mutability::Var),
+        Val::FuncRef(None),
+    )?;
+    linker.define(&store, "env", "g", g)?;
+    let e = linker.instantiate(&mut store, &module).unwrap_err();
+    assert_eq!(e.to_string(), "incompatible import type for `env::g`");
+
+    // Not mutable.
+    let mut linker = Linker::new(&engine);
+    let nop = FuncType::new(&engine, None, None);
+    let ref_null_nop = ValType::from(RefType::new(true, HeapType::Concrete(nop)));
+    let g = Global::new(
+        &mut store,
+        GlobalType::new(ref_null_nop, Mutability::Const),
+        Val::FuncRef(None),
+    )?;
+    linker.define(&store, "env", "g", g)?;
+    let e = linker.instantiate(&mut store, &module).unwrap_err();
+    assert_eq!(e.to_string(), "incompatible import type for `env::g`");
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_table_subtype_err() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $nop (func))
+                (import "env" "t" (table 0 (ref null $nop)))
+            )
+        "#,
+    )?;
+
+    // Supertype, not precise type.
+    let mut linker = Linker::new(&engine);
+    let t = Table::new(
+        &mut store,
+        TableType::new(RefType::FUNCREF, 0, None),
+        Ref::Func(None),
+    )?;
+    linker.define(&store, "env", "t", t)?;
+    let e = linker.instantiate(&mut store, &module).unwrap_err();
+    assert_eq!(e.to_string(), "incompatible import type for `env::t`");
+
+    // Subtype, not precise type.
+    let mut linker = Linker::new(&engine);
+    let t = Table::new(
+        &mut store,
+        TableType::new(RefType::NULLFUNCREF, 0, None),
+        Ref::Func(None),
+    )?;
+    linker.define(&store, "env", "t", t)?;
+    let e = linker.instantiate(&mut store, &module).unwrap_err();
+    assert_eq!(e.to_string(), "incompatible import type for `env::t`");
 
     Ok(())
 }

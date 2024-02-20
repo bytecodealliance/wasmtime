@@ -809,8 +809,8 @@ impl<T> InstancePre<T> {
                 Definition::HostFunc(f) => {
                     host_funcs += 1;
                     if f.func_ref().wasm_call.is_none() {
-                        // `f` needs its `VMFuncRef::wasm_call`
-                        // patched with a Wasm-to-native trampoline.
+                        // `f` needs its `VMFuncRef::wasm_call` patched with a
+                        // Wasm-to-native trampoline.
                         debug_assert!(matches!(f.host_ctx(), crate::HostContext::Native(_)));
                         func_refs.push(VMFuncRef {
                             wasm_call: module
@@ -972,11 +972,7 @@ fn typecheck<I>(
     if expected != imports.len() {
         bail!("expected {} imports, found {}", expected, imports.len());
     }
-    let cx = matching::MatchCx {
-        signatures: module.signatures(),
-        types: module.types(),
-        engine: module.engine(),
-    };
+    let cx = matching::MatchCx::new(module);
     for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {
         check(&cx, &expected_ty, actual)
             .with_context(|| format!("incompatible import type for `{name}::{field}`"))?;

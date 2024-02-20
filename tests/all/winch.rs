@@ -86,7 +86,7 @@ fn array_to_wasm() -> Result<()> {
     let constant = instance
         .get_func(&mut store, "42")
         .ok_or(anyhow::anyhow!("test function not found"))?;
-    let mut returns = vec![Val::null(); 1];
+    let mut returns = vec![Val::null_func_ref(); 1];
     constant.call(&mut store, &[], &mut returns)?;
 
     assert_eq!(returns.len(), 1);
@@ -95,7 +95,7 @@ fn array_to_wasm() -> Result<()> {
     let sum = instance
         .get_func(&mut store, "sum10")
         .ok_or(anyhow::anyhow!("sum10 function not found"))?;
-    let mut returns = vec![Val::null(); 1];
+    let mut returns = vec![Val::null_func_ref(); 1];
     let args = vec![Val::I32(1); 10];
     sum.call(&mut store, &args, &mut returns)?;
 

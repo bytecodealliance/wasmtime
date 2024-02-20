@@ -249,7 +249,7 @@ fn call_indirect_native_from_wasm_import_global() -> Result<()> {
     let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
     let global = Global::new(
         &mut store,
-        GlobalType::new(ValType::FuncRef, Mutability::Const),
+        GlobalType::new(ValType::FUNCREF, Mutability::Const),
         Val::FuncRef(Some(func)),
     )?;
     let instance = Instance::new(&mut store, &module, &[global.into()])?;
@@ -278,8 +278,8 @@ fn call_indirect_native_from_wasm_import_table() -> Result<()> {
     let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
     let table = Table::new(
         &mut store,
-        TableType::new(ValType::FuncRef, 1, Some(1)),
-        Val::FuncRef(Some(func)),
+        TableType::new(RefType::FUNCREF, 1, Some(1)),
+        Ref::Func(Some(func)),
     )?;
     let instance = Instance::new(&mut store, &module, &[table.into()])?;
     let func = instance.get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")?;
@@ -385,16 +385,24 @@ fn func_constructors() {
     Func::wrap(&mut store, || -> i64 { 0 });
     Func::wrap(&mut store, || -> f32 { 0.0 });
     Func::wrap(&mut store, || -> f64 { 0.0 });
+    Func::wrap(&mut store, || -> ExternRef { loop {} });
     Func::wrap(&mut store, || -> Option<ExternRef> { None });
+    Func::wrap(&mut store, || -> Func { loop {} });
     Func::wrap(&mut store, || -> Option<Func> { None });
+    Func::wrap(&mut store, || -> NoFunc { loop {} });
+    Func::wrap(&mut store, || -> Option<NoFunc> { None });
 
     Func::wrap(&mut store, || -> Result<()> { loop {} });
     Func::wrap(&mut store, || -> Result<i32> { loop {} });
     Func::wrap(&mut store, || -> Result<i64> { loop {} });
     Func::wrap(&mut store, || -> Result<f32> { loop {} });
     Func::wrap(&mut store, || -> Result<f64> { loop {} });
+    Func::wrap(&mut store, || -> Result<ExternRef> { loop {} });
     Func::wrap(&mut store, || -> Result<Option<ExternRef>> { loop {} });
+    Func::wrap(&mut store, || -> Result<Func> { loop {} });
     Func::wrap(&mut store, || -> Result<Option<Func>> { loop {} });
+    Func::wrap(&mut store, || -> Result<NoFunc> { loop {} });
+    Func::wrap(&mut store, || -> Result<Option<NoFunc>> { loop {} });
 }
 
 #[test]
@@ -452,24 +460,28 @@ fn signatures_match() {
     let mut store = Store::<()>::default();
 
     let f = Func::wrap(&mut store, || {});
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 0);
 
     let f = Func::wrap(&mut store, || -> i32 { loop {} });
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I32]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_i32());
 
     let f = Func::wrap(&mut store, || -> i64 { loop {} });
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I64]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_i64());
 
     let f = Func::wrap(&mut store, || -> f32 { loop {} });
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F32]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f32());
 
     let f = Func::wrap(&mut store, || -> f64 { loop {} });
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
 
     let f = Func::wrap(
         &mut store,
@@ -477,19 +489,18 @@ fn signatures_match() {
             loop {}
         },
     );
-    assert_eq!(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        &[
-            ValType::F32,
-            ValType::F64,
-            ValType::I32,
-            ValType::I64,
-            ValType::I32,
-            ValType::ExternRef,
-            ValType::FuncRef,
-        ]
-    );
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+
+    assert_eq!(f.ty(&store).params().len(), 7);
+    assert!(f.ty(&store).params().nth(0).unwrap().is_f32());
+    assert!(f.ty(&store).params().nth(1).unwrap().is_f64());
+    assert!(f.ty(&store).params().nth(2).unwrap().is_i32());
+    assert!(f.ty(&store).params().nth(3).unwrap().is_i64());
+    assert!(f.ty(&store).params().nth(4).unwrap().is_i32());
+    assert!(f.ty(&store).params().nth(5).unwrap().is_externref());
+    assert!(f.ty(&store).params().nth(6).unwrap().is_funcref());
+
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
 }
 
 #[test]
@@ -901,8 +912,8 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     Func::wrap(&mut store, |_: Option<Func>| {});
     let func_ty = FuncType::new(
         store.engine(),
-        [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
-        [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
+        [ValType::FUNCREF, ValType::EXTERNREF].iter().cloned(),
+        [ValType::FUNCREF, ValType::EXTERNREF].iter().cloned(),
     );
     Func::new(&mut store, func_ty, |_, _, _| Ok(()));
     Ok(())
@@ -1398,7 +1409,7 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
         ],
         &mut results,
     )?;
-    assert_my_externref(results[0].unwrap_externref().as_ref());
+    assert_my_externref(results[0].unwrap_externref());
     assert!(results[1].unwrap_funcref().is_none());
 
     // funcref=Some, externref=Some
@@ -1413,8 +1424,331 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
         ],
         &mut results,
     )?;
-    assert_my_externref(results[0].unwrap_externref().as_ref());
+    assert_my_externref(results[0].unwrap_externref());
     assert_my_funcref(&mut store, results[1].unwrap_funcref())?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn typed_concrete_param() -> anyhow::Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $t (func))
+                (func (export "f") (param (ref null $t)))
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let nop = Func::new(
+        &mut store,
+        FuncType::new(&engine, None, None),
+        |_caller, _params, _results| Ok(()),
+    );
+
+    let f = instance.get_func(&mut store, "f").unwrap();
+
+    // Can type with a subtype, which should avoid all dynamic type checks after
+    // successful construction.
+    let a = f.typed::<Option<NoFunc>, ()>(&store)?;
+    a.call(&mut store, None)?;
+    // NB: Cannot call with Some(_) as `NoFunc` is uninhabited.
+
+    // Can call `typed` with a supertype, falling back to dynamic type checks on
+    // each call.
+    let a = f.typed::<Option<Func>, ()>(&store)?;
+    a.call(&mut store, None)?;
+    a.call(&mut store, Some(nop.clone()))?;
+    let e = a.call(&mut store, Some(f.clone())).expect_err(
+        "should return an error because while we did pass an instance of \
+         `Option<Func>`, it was not an instance of `(ref null $t)`",
+    );
+    let e = format!("{e:?}");
+    assert!(e.contains("argument type mismatch for reference to concrete type"));
+    assert!(e.contains(
+        "type mismatch: expected (type (func)), \
+         found (type (func (param (ref null (concrete VMSharedTypeIndex(0))))))"
+    ));
+
+    // And dynamic checks also work with a non-nullable super type.
+    let a = f.typed::<Func, ()>(&store)?;
+    a.call(&mut store, nop.clone())?;
+    let e = a.call(&mut store, f.clone()).expect_err(
+        "should return an error because while we did pass an instance of \
+         `Func`, it was not an instance of `(ref null $t)`",
+    );
+    let e = format!("{e:?}");
+    assert!(e.contains("argument type mismatch for reference to concrete type"));
+    assert!(e.contains(
+        "type mismatch: expected (type (func)), \
+         found (type (func (param (ref null (concrete VMSharedTypeIndex(0))))))"
+    ));
+
+    // Calling `typed` with a type that is not a supertype nor a subtype fails
+    // the initial type check.
+    let e = f.typed::<Option<ExternRef>, ()>(&store).err().unwrap();
+    let e = format!("{e:?}");
+    assert!(e.contains("type mismatch with parameters"));
+    assert!(e.contains("type mismatch: expected func, found extern"));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn typed_concrete_result() -> anyhow::Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $t (func))
+                (func $nop)
+                (elem declare func $nop)
+                (func (export "f") (result (ref $t))
+                    ref.func $nop
+                )
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let f = instance.get_func(&mut store, "f").unwrap();
+
+    // Can type `f` with a supertype of the declared result type, and we get the
+    // expected return value.
+    let a = f.typed::<(), Func>(&store)?;
+    let g = a.call(&mut store, ())?;
+    g.typed::<(), ()>(&store)?.call(&mut store, ())?;
+
+    // Also works with a nullable supertype.
+    let a = f.typed::<(), Option<Func>>(&store)?;
+    let g = a.call(&mut store, ())?;
+    g.unwrap().typed::<(), ()>(&store)?.call(&mut store, ())?;
+
+    // But we can't claim that `f` returns a particular subtype of its actual
+    // return type.
+    let e = f.typed::<(), NoFunc>(&store).err().unwrap();
+    let e = format!("{e:?}");
+    assert!(e.contains("type mismatch with results"));
+    assert!(e.contains(
+        "type mismatch: expected (ref nofunc), found (ref (concrete VMSharedTypeIndex(0)))"
+    ));
+
+    // Nor some unrelated type that it is neither a subtype or supertype of.
+    let e = f.typed::<(), ExternRef>(&store).err().unwrap();
+    let e = format!("{e:?}");
+    assert!(e.contains("type mismatch with results"));
+    assert!(e.contains(
+        "type mismatch: expected (ref extern), found (ref (concrete VMSharedTypeIndex(0)))"
+    ));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn wrap_subtype_param() -> anyhow::Result<()> {
+    let mut store = Store::<()>::default();
+    let f = Func::wrap(&mut store, |_caller: Caller<'_, ()>, _: Option<Func>| {
+        // No-op.
+    });
+
+    // Precise type.
+    let a = f.typed::<Option<Func>, ()>(&store)?;
+    a.call(&mut store, None)?;
+    a.call(&mut store, Some(f.clone()))?;
+
+    // Subtype via heap type.
+    let a = f.typed::<Option<NoFunc>, ()>(&store)?;
+    a.call(&mut store, None)?;
+
+    // Subtype via non-null.
+    let a = f.typed::<Func, ()>(&store)?;
+    a.call(&mut store, f.clone())?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn wrap_supertype_result() -> anyhow::Result<()> {
+    let mut store = Store::<()>::default();
+    let f = Func::wrap(&mut store, |_caller: Caller<'_, ()>| -> NoFunc {
+        unreachable!()
+    });
+
+    // Precise type.
+    let _ = f.typed::<(), NoFunc>(&store)?;
+
+    // Supertype via heap type.
+    let _ = f.typed::<(), Func>(&store)?;
+
+    // Supertype via nullability.
+    let _ = f.typed::<(), Option<NoFunc>>(&store)?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_wasm_passing_subtype_func_param() -> anyhow::Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $ty (func (result funcref)))
+                (func (export "f") (param (ref null $ty)) (result funcref)
+                    ;; Return null if the funcref is null.
+                    ref.null func
+                    local.get 0
+                    ref.is_null
+                    br_if 0
+                    drop
+
+                    ;; Otherwise, call it.
+                    local.get 0
+                    call_ref $ty
+                )
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_func(&mut store, "f").unwrap();
+
+    let g_ty = FuncType::new(&engine, None, Some(ValType::I32));
+    let g = Func::new(&mut store, g_ty.clone(), |_caller, _params, results| {
+        results[0] = Val::I32(0x1234_5678);
+        Ok(())
+    });
+
+    // h's type is a subtype of the Wasm-defined `$ty`:
+    //
+    //     (func (result (ref null g_ty))) <: (func (result funcref))
+    let h_ty = FuncType::new(
+        &engine,
+        None,
+        Some(ValType::Ref(RefType::new(true, HeapType::Concrete(g_ty)))),
+    );
+    let h = Func::new(&mut store, h_ty, move |_caller, _params, results| {
+        results[0] = Val::FuncRef(Some(g.clone()));
+        Ok(())
+    });
+
+    // Array call, passing in a subtype of the expected parameter.
+
+    let mut results = vec![Val::I32(0)];
+    f.call(&mut store, &[Val::null_func_ref()], &mut results)?;
+    assert!(results[0].unwrap_func_ref().is_none());
+
+    f.call(&mut store, &[h.clone().into()], &mut results)?;
+    let g = results[0].clone();
+    let g = g.unwrap_func_ref().unwrap();
+    g.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0].unwrap_i32(), 0x1234_5678);
+
+    // Native call, passing in a subtype of the expected parameter.
+
+    let f = f.typed::<Option<Func>, Option<Func>>(&store)?;
+    let r = f.call(&mut store, None)?;
+    assert!(r.is_none());
+
+    let g = f.call(&mut store, Some(h))?;
+    let g = g.unwrap().typed::<(), u32>(&mut store)?;
+    let x = g.call(&mut store, ())?;
+    assert_eq!(x, 0x1234_5678);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_wasm_getting_subtype_func_return() -> anyhow::Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $ty (func (result funcref)))
+
+                (func $a (result i32)
+                    i32.const 0x12345678
+                )
+
+                (func $b (result funcref)
+                    ref.func $a
+                )
+
+                (elem declare func $a $b)
+
+                ;; Returns a `(ref null nofunc)` if called with `0`, otherwise
+                ;; returns `(ref null $ty)`, both of which are subtypes of
+                ;; `funcref`.
+                (func (export "f") (param i32) (result funcref)
+                    block
+                        local.get 0
+                        br_if 0
+                        ref.null nofunc
+                        return
+                    end
+                    ref.func $b
+                )
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_func(&mut store, "f").unwrap();
+
+    // Array call, receiving a subtype of the expected result.
+
+    let mut results = vec![Val::I32(0)];
+    f.call(&mut store, &[Val::I32(0)], &mut results)?;
+    assert!(results[0].unwrap_func_ref().is_none());
+
+    f.call(&mut store, &[Val::I32(1)], &mut results)?;
+    let b = results[0].clone();
+    let b = b.unwrap_func_ref().unwrap();
+    b.call(&mut store, &[], &mut results)?;
+    let a = results[0].clone();
+    let a = a.unwrap_func_ref().unwrap();
+    a.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0].unwrap_i32(), 0x1234_5678);
+
+    // Native call, receiving a subtype of the expected result.
+
+    let f = f.typed::<u32, Option<Func>>(&store)?;
+    let r = f.call(&mut store, 0)?;
+    assert!(r.is_none());
+
+    let b = f.call(&mut store, 1)?;
+    let b = b.unwrap().typed::<(), Option<Func>>(&store)?;
+    let a = b.call(&mut store, ())?;
+    let a = a.unwrap().typed::<(), u32>(&store)?;
+    let x = a.call(&mut store, ())?;
+    assert_eq!(x, 0x1234_5678);
 
     Ok(())
 }
