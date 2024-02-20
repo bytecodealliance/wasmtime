@@ -1,7 +1,7 @@
 use super::{
     abi::X64ABI,
     address::Address,
-    asm::Assembler,
+    asm::{Assembler, PatchableAddToReg},
     regs::{self, rbp, rsp},
 };
 
@@ -30,7 +30,7 @@ use cranelift_codegen::{
         args::{ExtMode, CC},
         settings as x64_settings,
     },
-    settings, Final, MachBufferFinalized, MachLabel, PatchRegion,
+    settings, Final, MachBufferFinalized, MachLabel,
 };
 
 use smallvec::SmallVec;
@@ -43,7 +43,7 @@ pub(crate) struct MacroAssembler {
     /// Stack high-water mark.
     sp_max: u32,
     /// Regions where the addition of the used stack must be fixed up
-    stack_max_use_regions: SmallVec<[PatchRegion; 2]>,
+    stack_max_use_regions: SmallVec<[PatchableAddToReg; 2]>,
     /// Low level assembler.
     asm: Assembler,
     /// ISA flags.
@@ -811,7 +811,7 @@ impl Masm for MacroAssembler {
 
     fn finalize(mut self) -> MachBufferFinalized<Final> {
         for region in std::mem::take(&mut self.stack_max_use_regions) {
-            self.update_stack_max(region);
+            region.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
         }
 
         self.asm.finalize()
@@ -1187,22 +1187,8 @@ impl MacroAssembler {
     /// add-with-immediate instruction emitted to use the real stack max when the masm is being
     /// finalized.
     fn add_stack_max(&mut self, reg: Reg) {
-        let open = self.asm.buffer_mut().start_patchable();
-        // NOTE: we write out a value that is not encodable as an imm8, to ensure that we pick the
-        // variation of the x64 add instruction that supports imm32
-        self.asm.add_ir(-129, reg, OperandSize::S64);
-        let region = self.asm.buffer_mut().end_patchable(open);
-        self.stack_max_use_regions.push(region);
-    }
-
-    /// Overwrite a use of add-with-immediate in the machinst buffer, replacing the immediate with
-    /// the real stack size.
-    fn update_stack_max(&mut self, region: PatchRegion) {
-        let bytes = region.patch(self.asm.buffer_mut());
-        debug_assert_eq!(bytes.len(), 7);
-        debug_assert_eq!(bytes[0], 0x49);
-        debug_assert_eq!(bytes[1], 0x81);
-        bytes[3..].copy_from_slice(self.sp_max.to_le_bytes().as_slice());
+        let patch = PatchableAddToReg::new(reg, OperandSize::S64, self.asm.buffer_mut());
+        self.stack_max_use_regions.push(patch);
     }
 
     fn increment_sp(&mut self, bytes: u32) {

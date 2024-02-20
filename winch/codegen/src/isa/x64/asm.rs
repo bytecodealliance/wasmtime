@@ -22,7 +22,7 @@ use cranelift_codegen::{
         },
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    RelocDistance, VCodeConstantData, VCodeConstants, Writable,
+    PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
 };
 
 use super::address::Address;
@@ -1338,5 +1338,138 @@ impl Assembler {
             dst: dst.into(),
             size: size.into(),
         });
+    }
+}
+
+/// A small bit field to record a REX prefix specification:
+/// - bit 0 set to 1 indicates REX.W must be 0 (cleared).
+/// - bit 1 set to 1 indicates the REX prefix must always be emitted.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+struct RexFlags(u8);
+
+impl RexFlags {
+    /// By default, set the W field, and don't always emit.
+    fn set_w() -> Self {
+        Self(0)
+    }
+    /// Creates a new RexPrefix for which the REX.W bit will be cleared.
+    fn clear_w() -> Self {
+        Self(1)
+    }
+
+    fn must_clear_w(&self) -> bool {
+        (self.0 & 1) != 0
+    }
+
+    fn must_always_emit(&self) -> bool {
+        (self.0 & 2) != 0
+    }
+
+    fn emit_two_op(
+        &self,
+        sink: &mut SmallVec<impl smallvec::Array<Item = u8>>,
+        enc_g: u8,
+        enc_e: u8,
+    ) {
+        let w = if self.must_clear_w() { 0 } else { 1 };
+        let r = (enc_g >> 3) & 1;
+        let x = 0;
+        let b = (enc_e >> 3) & 1;
+        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        if rex != 0x40 || self.must_always_emit() {
+            sink.push(rex);
+        }
+    }
+}
+
+impl From<OperandSize> for RexFlags {
+    fn from(other: OperandSize) -> Self {
+        match other {
+            OperandSize::S64 => RexFlags::set_w(),
+            _ => RexFlags::clear_w(),
+        }
+    }
+}
+/// Encode the ModR/M byte.
+fn encode_modrm(m0d: u8, enc_reg_g: u8, rm_e: u8) -> u8 {
+    debug_assert!(m0d < 4);
+    debug_assert!(enc_reg_g < 8);
+    debug_assert!(rm_e < 8);
+    ((m0d & 3) << 6) | ((enc_reg_g & 7) << 3) | (rm_e & 7)
+}
+
+/// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,
+/// but the immediate is not yet known. Currently, this implementation expects a 32-bit immediate,
+/// so 8 and 16 bit operand sizes are not supported.
+pub(crate) struct PatchableAddToReg {
+    /// The region to be patched in the [`MachBuffer`]. It must contain a valid add instruction
+    /// sequence, accepting a 32-bit immediate.
+    region: PatchRegion,
+
+    /// The offset into the patchable region where the patchable constant begins.
+    constant_offset: usize,
+}
+
+impl PatchableAddToReg {
+    /// Create a new [`PatchableAddToReg`] by capturing a region in the output buffer where the
+    /// add-with-immediate occurs. The [`MachBuffer`] will have and add-with-immediate instruction
+    /// present in that region, though it will add `0` until the `::finalize` method is called.
+    ///
+    /// Currently this implementation expects to be able to patch a 32-bit immediate, which means
+    /// that 8 and 16-bit addition cannot be supported.
+    pub(crate) fn new(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) -> Self {
+        let prefix = Self::add_inst_bytes(reg, size);
+        let constant_offset = prefix.len();
+
+        let open = buf.start_patchable();
+        buf.put_data(&prefix);
+        buf.put4(0);
+        let region = buf.end_patchable(open);
+
+        Self {
+            region,
+            constant_offset,
+        }
+    }
+
+    /// Generate the prefix of the add instruction (rex byte (depending on register use), opcode,
+    /// and register reference).
+    fn add_inst_bytes(reg: Reg, size: OperandSize) -> SmallVec<[u8; 3]> {
+        let mut buf = SmallVec::new();
+
+        match size {
+            OperandSize::S32 | OperandSize::S64 => {}
+            _ => {
+                panic!(
+                    "{}-bit addition is not supported, please see the comment on PatchableAddToReg::new",
+                    size.num_bits(),
+                )
+            }
+        }
+
+        let enc_g = 0;
+
+        debug_assert!(reg.is_int());
+        let enc_e = u8::try_from(reg.hw_enc()).unwrap();
+
+        RexFlags::from(size).emit_two_op(&mut buf, enc_g, enc_e);
+
+        // the opcode for an add
+        buf.push(0x81);
+
+        // the modrm byte
+        buf.push(encode_modrm(0b11, enc_g & 7, enc_e & 7));
+
+        buf
+    }
+
+    /// Patch the [`MachBuffer`] with the known constant to be added to the register. The final
+    /// value is passed in as an i32, but the instruction encoding is fixed when
+    /// [`PatchableAddToReg::new`] is called.
+    pub(crate) fn finalize(self, val: i32, buffer: &mut MachBuffer<Inst>) {
+        let slice = self.region.patch(buffer);
+        debug_assert_eq!(slice.len(), self.constant_offset + 4);
+        slice[self.constant_offset..].copy_from_slice(val.to_le_bytes().as_slice());
     }
 }
