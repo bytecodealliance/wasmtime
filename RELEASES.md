@@ -54,8 +54,9 @@ Unreleased.
 
 * Support for the old `wasi-common` crate and the original implementation of
   "WASIp1" aka "preview1" is being deprecated in the `wasmtime-wasi` crate.
-  Users should migrate to the "WASIp2" aka "preview2"-based APIs as in the next
-  release the `wasi-common`-based reexports of `wasmtime-wasi` will be deleted.
+  Users should migrate to the  `wasmtime_wasi::preview2` implementation, which
+  supports both WASIp1 and WASIp2, as in the next release the
+  `wasi-common`-based reexports of `wasmtime-wasi` will be deleted.
   [#7881](https://github.com/bytecodealliance/wasmtime/pull/7881)
 
 --------------------------------------------------------------------------------
