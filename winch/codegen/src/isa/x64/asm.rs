@@ -18,11 +18,12 @@ use cranelift_codegen::{
                 ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, CC,
             },
+            encoding::rex::{encode_modrm, RexFlags},
             settings as x64_settings, EmitInfo, EmitState, Inst,
         },
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    RelocDistance, VCodeConstantData, VCodeConstants, Writable,
+    PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
 };
 
 use super::address::Address;
@@ -1338,5 +1339,80 @@ impl Assembler {
             dst: dst.into(),
             size: size.into(),
         });
+    }
+}
+
+/// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,
+/// but the immediate is not yet known. Currently, this implementation expects a 32-bit immediate,
+/// so 8 and 16 bit operand sizes are not supported.
+pub(crate) struct PatchableAddToReg {
+    /// The region to be patched in the [`MachBuffer`]. It must contain a valid add instruction
+    /// sequence, accepting a 32-bit immediate.
+    region: PatchRegion,
+
+    /// The offset into the patchable region where the patchable constant begins.
+    constant_offset: usize,
+}
+
+impl PatchableAddToReg {
+    /// Create a new [`PatchableAddToReg`] by capturing a region in the output buffer where the
+    /// add-with-immediate occurs. The [`MachBuffer`] will have and add-with-immediate instruction
+    /// present in that region, though it will add `0` until the `::finalize` method is called.
+    ///
+    /// Currently this implementation expects to be able to patch a 32-bit immediate, which means
+    /// that 8 and 16-bit addition cannot be supported.
+    pub(crate) fn new(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) -> Self {
+        let open = buf.start_patchable();
+
+        // Emit the opcode and register use for the add instruction.
+        let start = buf.cur_offset();
+        Self::add_inst_bytes(reg, size, buf);
+        let constant_offset = usize::try_from(buf.cur_offset() - start).unwrap();
+
+        // Emit a placeholder for the 32-bit immediate.
+        buf.put4(0);
+
+        let region = buf.end_patchable(open);
+
+        Self {
+            region,
+            constant_offset,
+        }
+    }
+
+    /// Generate the prefix of the add instruction (rex byte (depending on register use), opcode,
+    /// and register reference).
+    fn add_inst_bytes(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) {
+        match size {
+            OperandSize::S32 | OperandSize::S64 => {}
+            _ => {
+                panic!(
+                    "{}-bit addition is not supported, please see the comment on PatchableAddToReg::new",
+                    size.num_bits(),
+                )
+            }
+        }
+
+        let enc_g = 0;
+
+        debug_assert!(reg.is_int());
+        let enc_e = u8::try_from(reg.hw_enc()).unwrap();
+
+        RexFlags::from(args::OperandSize::from(size)).emit_two_op(buf, enc_g, enc_e);
+
+        // the opcode for an add
+        buf.put1(0x81);
+
+        // the modrm byte
+        buf.put1(encode_modrm(0b11, enc_g & 7, enc_e & 7));
+    }
+
+    /// Patch the [`MachBuffer`] with the known constant to be added to the register. The final
+    /// value is passed in as an i32, but the instruction encoding is fixed when
+    /// [`PatchableAddToReg::new`] is called.
+    pub(crate) fn finalize(self, val: i32, buffer: &mut MachBuffer<Inst>) {
+        let slice = self.region.patch(buffer);
+        debug_assert_eq!(slice.len(), self.constant_offset + 4);
+        slice[self.constant_offset..].copy_from_slice(val.to_le_bytes().as_slice());
     }
 }

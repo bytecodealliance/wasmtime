@@ -1,7 +1,7 @@
 use super::{
     abi::X64ABI,
     address::Address,
-    asm::Assembler,
+    asm::{Assembler, PatchableAddToReg},
     regs::{self, rbp, rsp},
 };
 
@@ -39,6 +39,13 @@ use wasmtime_environ::{PtrSize, WasmValType, WASM_PAGE_SIZE};
 pub(crate) struct MacroAssembler {
     /// Stack pointer offset.
     sp_offset: u32,
+    /// This value represents the maximum stack size seen while compiling the function. While the
+    /// function is still being compiled its value will not be valid (the stack will grow and
+    /// shrink as space is reserved and freed during compilation), but once all instructions have
+    /// been seen this value will be the maximum stack usage seen.
+    sp_max: u32,
+    /// Add instructions that are used to add the constant stack max to a register.
+    stack_max_use_add: Option<PatchableAddToReg>,
     /// Low level assembler.
     asm: Assembler,
     /// ISA flags.
@@ -83,6 +90,8 @@ impl Masm for MacroAssembler {
             Address::offset(scratch, ptr_size.vmruntime_limits_stack_limit().into()),
             scratch,
         );
+
+        self.add_stack_max(scratch);
 
         self.asm.cmp_rr(regs::rsp(), scratch, self.ptr_size);
         self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
@@ -802,7 +811,11 @@ impl Masm for MacroAssembler {
         self.asm.ret();
     }
 
-    fn finalize(self) -> MachBufferFinalized<Final> {
+    fn finalize(mut self) -> MachBufferFinalized<Final> {
+        if let Some(patch) = self.stack_max_use_add {
+            patch.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
+        }
+
         self.asm.finalize()
     }
 
@@ -1163,6 +1176,8 @@ impl MacroAssembler {
 
         Self {
             sp_offset: 0,
+            sp_max: 0,
+            stack_max_use_add: None,
             asm: Assembler::new(shared_flags.clone(), isa_flags.clone()),
             flags: isa_flags,
             shared_flags,
@@ -1170,8 +1185,22 @@ impl MacroAssembler {
         }
     }
 
+    /// Add the maximum stack used to a register, recording an obligation to update the
+    /// add-with-immediate instruction emitted to use the real stack max when the masm is being
+    /// finalized.
+    fn add_stack_max(&mut self, reg: Reg) {
+        assert!(self.stack_max_use_add.is_none());
+        let patch = PatchableAddToReg::new(reg, OperandSize::S64, self.asm.buffer_mut());
+        self.stack_max_use_add.replace(patch);
+    }
+
     fn increment_sp(&mut self, bytes: u32) {
         self.sp_offset += bytes;
+
+        // NOTE: we use `max` here to track the largest stack allocation in `sp_max`. Once we have
+        // seen the entire function, this value will represent the maximum size for the stack
+        // frame.
+        self.sp_max = self.sp_max.max(self.sp_offset);
     }
 
     fn decrement_sp(&mut self, bytes: u32) {

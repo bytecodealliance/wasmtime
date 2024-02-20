@@ -739,12 +739,13 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec10             	sub	rsp, 0x10
 ;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f87dc800100         	ja	0x180f4
-;;   18:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
+;;      	 0f87e0800100         	ja	0x180fb
+;;   1b:	 4883ec10             	sub	rsp, 0x10
+;;      	 897c240c             	mov	dword ptr [rsp + 0xc], edi
 ;;      	 4c893424             	mov	qword ptr [rsp], r14
 ;;      	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;      	 b927600000           	mov	ecx, 0x6027
@@ -754,7 +755,7 @@
 ;;      	 49630c83             	movsxd	rcx, dword ptr [r11 + rax*4]
 ;;      	 4901cb               	add	r11, rcx
 ;;      	 41ffe3               	jmp	r11
-;;   3f:	 a0800100aa800100a0   	
+;;   46:	 a0800100aa800100a0   	
 ;; 				movabs	al, byte ptr [0xa0000180aa000180]
 ;;      	 800100               	add	byte ptr [rcx], 0
 ;;      	 aa                   	stosb	byte ptr [rdi], al
@@ -31525,9 +31526,9 @@
 ;;      	 aa                   	stosb	byte ptr [rdi], al
 ;;      	 800100               	add	byte ptr [rcx], 0
 ;;      	 b800000000           	mov	eax, 0
-;;      	 e905000000           	jmp	0x180ee
-;; 180e9:	 b801000000           	mov	eax, 1
+;;      	 e905000000           	jmp	0x180f5
+;; 180f0:	 b801000000           	mov	eax, 1
 ;;      	 4883c410             	add	rsp, 0x10
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;; 180f4:	 0f0b                 	ud2	
+;; 180fb:	 0f0b                 	ud2	
