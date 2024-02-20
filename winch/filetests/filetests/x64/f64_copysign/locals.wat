@@ -18,18 +18,19 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec18             	sub	rsp, 0x18
 ;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f8765000000         	ja	0x7d
-;;   18:	 4531db               	xor	r11d, r11d
+;;      	 0f8769000000         	ja	0x84
+;;   1b:	 4883ec18             	sub	rsp, 0x18
+;;      	 4531db               	xor	r11d, r11d
 ;;      	 4c895c2410           	mov	qword ptr [rsp + 0x10], r11
 ;;      	 4c895c2408           	mov	qword ptr [rsp + 8], r11
 ;;      	 4c893424             	mov	qword ptr [rsp], r14
-;;      	 f20f10054f000000     	movsd	xmm0, qword ptr [rip + 0x4f]
+;;      	 f20f100550000000     	movsd	xmm0, qword ptr [rip + 0x50]
 ;;      	 f20f11442410         	movsd	qword ptr [rsp + 0x10], xmm0
-;;      	 f20f100549000000     	movsd	xmm0, qword ptr [rip + 0x49]
+;;      	 f20f10054a000000     	movsd	xmm0, qword ptr [rip + 0x4a]
 ;;      	 f20f11442408         	movsd	qword ptr [rsp + 8], xmm0
 ;;      	 f20f10442408         	movsd	xmm0, qword ptr [rsp + 8]
 ;;      	 f20f104c2410         	movsd	xmm1, qword ptr [rsp + 0x10]
@@ -44,10 +45,5 @@
 ;;      	 4883c418             	add	rsp, 0x18
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   7d:	 0f0b                 	ud2	
-;;   7f:	 009a99999999         	add	byte ptr [rdx - 0x66666667], bl
-;;   85:	 99                   	cdq	
-;;   86:	 f1                   	int1	
-;;   87:	 bf9a999999           	mov	edi, 0x9999999a
-;;   8c:	 99                   	cdq	
-;;   8d:	 99                   	cdq	
+;;   84:	 0f0b                 	ud2	
+;;   86:	 0000                 	add	byte ptr [rax], al

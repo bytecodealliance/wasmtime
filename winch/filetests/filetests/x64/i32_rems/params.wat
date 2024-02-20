@@ -9,24 +9,25 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec10             	sub	rsp, 0x10
 ;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f8732000000         	ja	0x4a
-;;   18:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
+;;      	 0f8736000000         	ja	0x51
+;;   1b:	 4883ec10             	sub	rsp, 0x10
+;;      	 897c240c             	mov	dword ptr [rsp + 0xc], edi
 ;;      	 89742408             	mov	dword ptr [rsp + 8], esi
 ;;      	 4c893424             	mov	qword ptr [rsp], r14
 ;;      	 8b4c2408             	mov	ecx, dword ptr [rsp + 8]
 ;;      	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;      	 99                   	cdq	
 ;;      	 83f9ff               	cmp	ecx, -1
-;;      	 0f850a000000         	jne	0x40
-;;   36:	 ba00000000           	mov	edx, 0
-;;      	 e902000000           	jmp	0x42
-;;   40:	 f7f9                 	idiv	ecx
+;;      	 0f850a000000         	jne	0x47
+;;   3d:	 ba00000000           	mov	edx, 0
+;;      	 e902000000           	jmp	0x49
+;;   47:	 f7f9                 	idiv	ecx
 ;;      	 89d0                 	mov	eax, edx
 ;;      	 4883c410             	add	rsp, 0x10
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   4a:	 0f0b                 	ud2	
+;;   51:	 0f0b                 	ud2	
