@@ -2,7 +2,7 @@
 
 ## 18.0.0
 
-Unreleased.
+Released 2024-02-20.
 
 ### Added
 
