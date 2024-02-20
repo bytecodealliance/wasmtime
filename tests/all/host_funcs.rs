@@ -154,59 +154,62 @@ fn signatures_match() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 0);
 
     let f = linker
         .get(&mut store, "", "f2")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I32]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_i32());
 
     let f = linker
         .get(&mut store, "", "f3")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I64]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_i64());
 
     let f = linker
         .get(&mut store, "", "f4")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F32]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f32());
 
     let f = linker
         .get(&mut store, "", "f5")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
 
     let f = linker
         .get(&mut store, "", "f6")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        &[
-            ValType::F32,
-            ValType::F64,
-            ValType::I32,
-            ValType::I64,
-            ValType::I32,
-            ValType::ExternRef,
-            ValType::FuncRef,
-        ]
-    );
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+
+    assert_eq!(f.ty(&store).params().len(), 7);
+    assert!(f.ty(&store).params().nth(0).unwrap().is_f32());
+    assert!(f.ty(&store).params().nth(1).unwrap().is_f64());
+    assert!(f.ty(&store).params().nth(2).unwrap().is_i32());
+    assert!(f.ty(&store).params().nth(3).unwrap().is_i64());
+    assert!(f.ty(&store).params().nth(4).unwrap().is_i32());
+    assert!(f.ty(&store).params().nth(5).unwrap().is_externref());
+    assert!(f.ty(&store).params().nth(6).unwrap().is_funcref());
+
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
 
     Ok(())
 }

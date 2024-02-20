@@ -298,6 +298,18 @@ fn preview2_stream_pollable_traps() {
     )
 }
 #[test_log::test]
+fn preview2_pollable_correct() {
+    run(PREVIEW2_POLLABLE_CORRECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_pollable_traps() {
+    let e = run(PREVIEW2_POLLABLE_TRAPS_COMPONENT, false).unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "empty poll list"
+    )
+}
+#[test_log::test]
 fn preview2_adapter_badfd() {
     run(PREVIEW2_ADAPTER_BADFD_COMPONENT, false).unwrap()
 }

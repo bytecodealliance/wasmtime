@@ -52,17 +52,17 @@ fn test_limits() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ]) {
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
 
         assert_eq!(
             table
-                .grow(&mut store, 1, Val::FuncRef(None))
+                .grow(&mut store, 1, Ref::Func(None))
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
             "failed to grow table by `1`"
@@ -163,18 +163,18 @@ async fn test_limits_async() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new_async(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )
         .await?,
     ]) {
-        table.grow_async(&mut store, 2, Val::FuncRef(None)).await?;
-        table.grow_async(&mut store, 1, Val::FuncRef(None)).await?;
-        table.grow_async(&mut store, 2, Val::FuncRef(None)).await?;
+        table.grow_async(&mut store, 2, Ref::Func(None)).await?;
+        table.grow_async(&mut store, 1, Ref::Func(None)).await?;
+        table.grow_async(&mut store, 2, Ref::Func(None)).await?;
 
         assert_eq!(
             table
-                .grow_async(&mut store, 1, Val::FuncRef(None))
+                .grow_async(&mut store, 1, Ref::Func(None))
                 .await
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
@@ -226,14 +226,14 @@ fn test_limits_memory_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ]) {
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
     }
 
     Ok(())
@@ -300,17 +300,17 @@ fn test_limits_table_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ]) {
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
 
         assert_eq!(
             table
-                .grow(&mut store, 1, Val::FuncRef(None))
+                .grow(&mut store, 1, Ref::Func(None))
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
             "failed to grow table by `1`"
@@ -338,8 +338,8 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 
     match Table::new(
         &mut store,
-        TableType::new(ValType::FuncRef, 99, None),
-        Val::FuncRef(None),
+        TableType::new(RefType::FUNCREF, 99, None),
+        Ref::Func(None),
     ) {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
@@ -675,9 +675,9 @@ fn test_custom_table_limiter() -> Result<()> {
     let table = instance.get_table(&mut store, "t").unwrap();
 
     // Grow the table by 10 elements
-    table.grow(&mut store, 3, Val::FuncRef(None))?;
-    table.grow(&mut store, 5, Val::FuncRef(None))?;
-    table.grow(&mut store, 2, Val::FuncRef(None))?;
+    table.grow(&mut store, 3, Ref::Func(None))?;
+    table.grow(&mut store, 5, Ref::Func(None))?;
+    table.grow(&mut store, 2, Ref::Func(None))?;
 
     assert!(!store.data().limit_exceeded);
 
@@ -687,7 +687,7 @@ fn test_custom_table_limiter() -> Result<()> {
     // Try to grow the memory again
     assert_eq!(
         table
-            .grow(&mut store, 1, Val::FuncRef(None))
+            .grow(&mut store, 1, Ref::Func(None))
             .map_err(|e| e.to_string())
             .unwrap_err(),
         "failed to grow table by `1`"
@@ -785,7 +785,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
 
     let table = instance.get_table(&mut store, "t").unwrap();
     // Grow the table 10 elements
-    table.grow(&mut store, 10, Val::FuncRef(None))?;
+    table.grow(&mut store, 10, Ref::Func(None))?;
 
     assert!(store.data().table_error.is_none());
     assert_eq!(store.data().table_current, 0);
@@ -795,7 +795,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     // The ResourceLimiter will permit this, but the grow will fail.
     assert_eq!(
         table
-            .grow(&mut store, 1, Val::FuncRef(None))
+            .grow(&mut store, 1, Ref::Func(None))
             .unwrap_err()
             .to_string(),
         "failed to grow table by `1`"
@@ -901,7 +901,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
 
     let table = instance.get_table(&mut store, "t").unwrap();
     // Grow the table 10 elements
-    table.grow_async(&mut store, 10, Val::FuncRef(None)).await?;
+    table.grow_async(&mut store, 10, Ref::Func(None)).await?;
 
     assert!(store.data().table_error.is_none());
     assert_eq!(store.data().table_current, 0);
@@ -911,7 +911,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     // The ResourceLimiter will permit this, but the grow will fail.
     assert_eq!(
         table
-            .grow_async(&mut store, 1, Val::FuncRef(None))
+            .grow_async(&mut store, 1, Ref::Func(None))
             .await
             .unwrap_err()
             .to_string(),
@@ -1031,7 +1031,7 @@ fn panic_in_table_limiter() {
     let table = instance.get_table(&mut store, "t").unwrap();
 
     // Grow the table, which should panic
-    table.grow(&mut store, 3, Val::FuncRef(None)).unwrap();
+    table.grow(&mut store, 3, Ref::Func(None)).unwrap();
 }
 
 #[tokio::test]
@@ -1104,7 +1104,7 @@ async fn panic_in_async_table_limiter() {
 
     // Grow the table, which should panic
     table
-        .grow_async(&mut store, 3, Val::FuncRef(None))
+        .grow_async(&mut store, 3, Ref::Func(None))
         .await
         .unwrap();
 }
@@ -1149,12 +1149,12 @@ fn growth_trap() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ] {
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        assert!(table.grow(&mut store, 1, Val::FuncRef(None)).is_err());
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        assert!(table.grow(&mut store, 1, Ref::Func(None)).is_err());
     }
 
     let mut store = Store::new(&engine, store.data().clone());

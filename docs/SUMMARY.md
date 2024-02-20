@@ -48,6 +48,7 @@
   - [Platform Support](./stability-platform-support.md)
 - [Security](security.md)
   - [Disclosure Policy](./security-disclosure.md)
+  - [What is considered a security bug?](./security-what-is-considered-a-security-vulnerability.md)
 - [Contributing](contributing.md)
   - [Architecture](./contributing-architecture.md)
   - [Building](./contributing-building.md)

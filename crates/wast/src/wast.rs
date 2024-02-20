@@ -178,7 +178,7 @@ where
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut results = vec![Val::null(); func.ty(&self.store).results().len()];
+                let mut results = vec![Val::null_func_ref(); func.ty(&self.store).results().len()];
                 Ok(match func.call(&mut self.store, &values, &mut results) {
                     Ok(()) => Outcome::Ok(Results::Core(results.into())),
                     Err(e) => Outcome::Trap(e),

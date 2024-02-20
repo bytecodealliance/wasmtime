@@ -119,3 +119,8 @@ unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a mut [T
         std::slice::from_raw_parts_mut(ptr, len)
     }
 }
+
+pub(crate) fn abort(name: &str) -> ! {
+    eprintln!("`{}` is not implemented", name);
+    std::process::abort();
+}

@@ -1,5 +1,5 @@
 use crate::store::StoreOpaque;
-use crate::{GlobalType, Mutability, Val};
+use crate::{GlobalType, HeapType, Mutability, Val};
 use std::ptr;
 use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
@@ -16,12 +16,14 @@ impl Drop for VMHostGlobalContext {
             | crate::ValType::I64
             | crate::ValType::F32
             | crate::ValType::F64
-            | crate::ValType::V128
-            | crate::ValType::FuncRef => {
+            | crate::ValType::V128 => {
                 // Nothing to drop.
             }
-            crate::ValType::ExternRef => unsafe {
-                ptr::drop_in_place(self.global.as_externref_mut())
+            crate::ValType::Ref(r) => match r.heap_type() {
+                HeapType::Extern => unsafe { ptr::drop_in_place(self.global.as_externref_mut()) },
+                HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => {
+                    // Nothing to drop.
+                }
             },
         }
     }
@@ -54,9 +56,11 @@ pub fn generate_global_export(
             Val::V128(x) => *global.as_u128_mut() = x.into(),
             Val::FuncRef(f) => {
                 *global.as_func_ref_mut() =
-                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr())
+                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr());
             }
-            Val::ExternRef(x) => *global.as_externref_mut() = x.map(|x| x.inner),
+            Val::ExternRef(x) => {
+                *global.as_externref_mut() = x.map(|x| x.inner);
+            }
         }
         global
     };

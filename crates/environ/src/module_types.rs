@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::ops::Index;
 use wasmparser::types::CoreTypeId;
 use wasmparser::UnpackedIndex;
-use wasmtime_types::{ModuleInternedTypeIndex, TypeIndex};
+use wasmtime_types::{EngineOrModuleTypeIndex, ModuleInternedTypeIndex, TypeIndex};
 
 /// All types used in a core wasm module.
 ///
@@ -106,13 +106,15 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
         match index {
             UnpackedIndex::Id(id) => {
                 let signature = self.types.wasmparser_to_wasmtime[&id];
-                WasmHeapType::Concrete(signature)
+                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(signature))
             }
             UnpackedIndex::RecGroup(_) => unreachable!(),
             UnpackedIndex::Module(i) => {
                 let i = TypeIndex::from_u32(i);
                 match self.module.types[i] {
-                    ModuleType::Function(sig) => WasmHeapType::Concrete(sig),
+                    ModuleType::Function(sig) => {
+                        WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(sig))
+                    }
                 }
             }
         }

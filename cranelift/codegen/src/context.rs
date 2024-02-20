@@ -141,7 +141,7 @@ impl Context {
 
         self.verify_if(isa)?;
 
-        self.optimize(isa)?;
+        self.optimize(isa, ctrl_plane)?;
 
         isa.compile_function(&self.func, &self.domtree, self.want_disasm, ctrl_plane)
     }
@@ -151,7 +151,11 @@ impl Context {
     /// allocation.
     ///
     /// Public only for testing purposes.
-    pub fn optimize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+    pub fn optimize(
+        &mut self,
+        isa: &dyn TargetIsa,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<()> {
         log::debug!(
             "Number of CLIF instructions to optimize: {}",
             self.func.dfg.num_insts()
@@ -185,7 +189,7 @@ impl Context {
         self.remove_constant_phis(isa)?;
 
         if opt_level != OptLevel::None {
-            self.egraph_pass(isa)?;
+            self.egraph_pass(isa, ctrl_plane)?;
         }
 
         Ok(())
@@ -347,7 +351,11 @@ impl Context {
     }
 
     /// Run optimizations via the egraph infrastructure.
-    pub fn egraph_pass<'a, FOI>(&mut self, fisa: FOI) -> CodegenResult<()>
+    pub fn egraph_pass<'a, FOI>(
+        &mut self,
+        fisa: FOI,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<()>
     where
         FOI: Into<FlagsOrIsa<'a>>,
     {
@@ -364,6 +372,7 @@ impl Context {
             &self.domtree,
             &self.loop_analysis,
             &mut alias_analysis,
+            ctrl_plane,
         );
         pass.run();
         log::debug!("egraph stats: {:?}", pass.stats);

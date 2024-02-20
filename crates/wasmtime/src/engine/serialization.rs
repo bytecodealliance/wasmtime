@@ -191,6 +191,7 @@ struct WasmFeatures {
     relaxed_simd: bool,
     extended_const: bool,
     function_references: bool,
+    gc: bool,
 }
 
 impl Metadata<'_> {
@@ -223,7 +224,6 @@ impl Metadata<'_> {
         } = engine.config().features;
 
         assert!(!memory_control);
-        assert!(!gc);
         assert!(!component_model_values);
         assert!(!component_model_nested_names);
 
@@ -246,6 +246,7 @@ impl Metadata<'_> {
                 relaxed_simd,
                 extended_const,
                 function_references,
+                gc,
             },
         }
     }
@@ -420,6 +421,7 @@ impl Metadata<'_> {
             relaxed_simd,
             extended_const,
             function_references,
+            gc,
         } = self.features;
 
         Self::check_bool(
@@ -475,6 +477,7 @@ impl Metadata<'_> {
             other.function_references,
             "WebAssembly function-references support",
         )?;
+        Self::check_bool(gc, other.gc, "WebAssembly garbage collection support")?;
 
         Ok(())
     }

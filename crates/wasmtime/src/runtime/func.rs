@@ -1,8 +1,8 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
 use crate::{
-    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, StoreContext,
-    StoreContextMut, Val, ValRaw, ValType,
+    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, Ref,
+    StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Error, Result};
 use std::ffi::c_void;
@@ -16,6 +16,90 @@ use wasmtime_runtime::{
     ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
     VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedTypeIndex,
 };
+
+/// A reference to the abstract `nofunc` heap value.
+///
+/// The are no instances of `(ref nofunc)`: it is an uninhabited type.
+///
+/// There is precisely one instance of `(ref null nofunc)`, aka `nullfuncref`:
+/// the null reference.
+///
+/// This `NoFunc` Rust type's sole purpose is for use with [`Func::wrap`]- and
+/// [`Func::typed`]-style APIs for statically typing a function as taking or
+/// returning a `(ref null nofunc)` (aka `Option<NoFunc>`) which is always
+/// `None`.
+///
+/// # Example
+///
+/// ```
+/// # use wasmtime::*;
+/// # fn _foo() -> Result<()> {
+/// let mut config = Config::new();
+/// config.wasm_function_references(true);
+/// let engine = Engine::new(&config)?;
+///
+/// let module = Module::new(
+///     &engine,
+///     r#"
+///         (module
+///             (func (export "f") (param (ref null nofunc))
+///                 ;; If the reference is null, return.
+///                 local.get 0
+///                 ref.is_null nofunc
+///                 br_if 0
+///
+///                 ;; If the reference was not null (which is impossible)
+///                 ;; then raise a trap.
+///                 unreachable
+///             )
+///         )
+///     "#,
+/// )?;
+///
+/// let mut store = Store::new(&engine, ());
+/// let instance = Instance::new(&mut store, &module, &[])?;
+/// let f = instance.get_func(&mut store, "f").unwrap();
+///
+/// // We can cast a `(ref null nofunc)`-taking function into a typed function that
+/// // takes an `Option<NoFunc>` via the `Func::typed` method.
+/// let f = f.typed::<Option<NoFunc>, ()>(&store)?;
+///
+/// // We can call the typed function, passing the null `nofunc` reference.
+/// let result = f.call(&mut store, NoFunc::null());
+///
+/// // The function should not have trapped, because the reference we gave it was
+/// // null (as it had to be, since `NoFunc` is uninhabited).
+/// assert!(result.is_ok());
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NoFunc {
+    _inner: Uninhabited,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Uninhabited {}
+
+impl NoFunc {
+    /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference.
+    #[inline]
+    pub fn null() -> Option<NoFunc> {
+        None
+    }
+
+    /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
+    /// [`Ref`].
+    pub fn null_ref() -> Ref {
+        Ref::Func(None)
+    }
+
+    /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
+    /// [`Val`].
+    pub fn null_val() -> Val {
+        Val::FuncRef(None)
+    }
+}
 
 /// A WebAssembly function which can be called.
 ///
@@ -356,6 +440,11 @@ impl Func {
     /// documentation.
     ///
     /// [`Trap`]: crate::Trap
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with this store's
+    /// engine.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new<T>(
@@ -363,6 +452,7 @@ impl Func {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
+        assert!(ty.comes_from_same_engine(store.as_context().engine()));
         let ty_clone = ty.clone();
         unsafe {
             Func::new_unchecked(store, ty, move |caller, values| {
@@ -394,6 +484,11 @@ impl Func {
     /// This function is not safe because it's not known at compile time that
     /// the `func` provided correctly interprets the argument types provided to
     /// it, or that the results it produces will be of the correct type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with this store's
+    /// engine.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn new_unchecked<T>(
@@ -401,6 +496,7 @@ impl Func {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
+        assert!(ty.comes_from_same_engine(store.as_context().engine()));
         let store = store.as_context_mut().0;
         let host = HostFunc::new_unchecked(store.engine(), ty, func);
         host.into_func(store)
@@ -425,6 +521,9 @@ impl Func {
     ///
     /// This function will panic if `store` is not associated with an [async
     /// config](crate::Config::async_support).
+    ///
+    /// Panics if the given function type is not associated with this store's
+    /// engine.
     ///
     /// # Errors
     ///
@@ -492,6 +591,7 @@ impl Func {
             store.as_context().async_support(),
             "cannot use `new_async` without enabling async support in the config"
         );
+        assert!(ty.comes_from_same_engine(store.as_context().engine()));
         Func::new(store, ty, move |mut caller, params, results| {
             let async_cx = caller
                 .store
@@ -524,17 +624,21 @@ impl Func {
     /// function being called is known statically so the type signature can
     /// be inferred. Rust types will map to WebAssembly types as follows:
     ///
-    /// | Rust Argument Type  | WebAssembly Type |
-    /// |---------------------|------------------|
-    /// | `i32`               | `i32`            |
-    /// | `u32`               | `i32`            |
-    /// | `i64`               | `i64`            |
-    /// | `u64`               | `i64`            |
-    /// | `f32`               | `f32`            |
-    /// | `f64`               | `f64`            |
-    /// | (not supported)     | `v128`           |
-    /// | `Option<Func>`      | `funcref`        |
-    /// | `Option<ExternRef>` | `externref`      |
+    /// | Rust Argument Type                | WebAssembly Type                      |
+    /// |-----------------------------------|---------------------------------------|
+    /// | `i32`                             | `i32`                                 |
+    /// | `u32`                             | `i32`                                 |
+    /// | `i64`                             | `i64`                                 |
+    /// | `u64`                             | `i64`                                 |
+    /// | `f32`                             | `f32`                                 |
+    /// | `f64`                             | `f64`                                 |
+    /// | `V128` on x86-64 and aarch64 only | `v128`                                |
+    /// | `Option<Func>`                    | `funcref` aka `(ref null func)`       |
+    /// | `Func`                            | `(ref func)`                          |
+    /// | `Option<Nofunc>`                  | `nullfuncref` aka `(ref null nofunc)` |
+    /// | `NoFunc`                          | `(ref nofunc)`                        |
+    /// | `Option<ExternRef>`               | `externref` aka `(ref null extern)`   |
+    /// | `ExternRef`                       | `(ref extern)`                        |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
@@ -769,8 +873,33 @@ impl Func {
     ///
     /// Note that this is a somewhat expensive method since it requires taking a
     /// lock as well as cloning a type.
-    fn load_ty(&self, store: &StoreOpaque) -> FuncType {
+    pub(crate) fn load_ty(&self, store: &StoreOpaque) -> FuncType {
+        assert!(self.comes_from_same_store(store));
         FuncType::from_shared_type_index(store.engine(), self.type_index(store.store_data()))
+    }
+
+    /// Does this function match the given type?
+    ///
+    /// That is, is this function's type a subtype of the given type?
+    pub fn matches_ty(&self, store: impl AsContext, func_ty: &FuncType) -> bool {
+        self._matches_ty(store.as_context().0, func_ty)
+    }
+
+    pub(crate) fn _matches_ty(&self, store: &StoreOpaque, func_ty: &FuncType) -> bool {
+        let actual_ty = self.load_ty(store);
+        actual_ty.matches(func_ty)
+    }
+
+    pub(crate) fn ensure_matches_ty(&self, store: &StoreOpaque, func_ty: &FuncType) -> Result<()> {
+        if !self.comes_from_same_store(store) {
+            bail!("function used with wrong store");
+        }
+        if self._matches_ty(store, func_ty) {
+            Ok(())
+        } else {
+            let actual_ty = self.load_ty(store);
+            bail!("type mismatch: expected {func_ty}, found {actual_ty}")
+        }
     }
 
     /// Gets a reference to the `FuncType` for this function.
@@ -1020,13 +1149,8 @@ impl Func {
             );
         }
         for (ty, arg) in ty.params().zip(params) {
-            if arg.ty() != ty {
-                bail!(
-                    "argument type mismatch: found {} but expected {}",
-                    arg.ty(),
-                    ty
-                );
-            }
+            arg.ensure_matches_ty(opaque, &ty)
+                .context("argument type mismatch")?;
             if !arg.comes_from_same_store(opaque) {
                 bail!("cross-`Store` values are not currently supported");
             }
@@ -1076,22 +1200,30 @@ impl Func {
     #[inline]
     pub(crate) fn vm_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
         let func_data = &mut store.store_data_mut()[self.0];
+        let func_ref = func_data.export().func_ref;
+        if unsafe { func_ref.as_ref().wasm_call.is_some() } {
+            return func_ref;
+        }
+
         if let Some(in_store) = func_data.in_store_func_ref {
             in_store.as_non_null()
         } else {
-            let func_ref = func_data.export().func_ref;
             unsafe {
-                if func_ref.as_ref().wasm_call.is_none() {
-                    let func_ref = store.func_refs().push(func_ref.as_ref().clone());
-                    store.store_data_mut()[self.0].in_store_func_ref =
-                        Some(SendSyncPtr::new(func_ref));
-                    store.fill_func_refs();
-                    func_ref
-                } else {
-                    func_ref
-                }
+                // Move this uncommon/slow path out of line.
+                self.copy_func_ref_into_store_and_fill(store, func_ref)
             }
         }
+    }
+
+    unsafe fn copy_func_ref_into_store_and_fill(
+        &self,
+        store: &mut StoreOpaque,
+        func_ref: NonNull<VMFuncRef>,
+    ) -> NonNull<VMFuncRef> {
+        let func_ref = store.func_refs().push(func_ref.as_ref().clone());
+        store.store_data_mut()[self.0].in_store_func_ref = Some(SendSyncPtr::new(func_ref));
+        store.fill_func_refs();
+        func_ref
     }
 
     pub(crate) unsafe fn from_wasmtime_function(
@@ -1171,7 +1303,7 @@ impl Func {
             val_vec.push(unsafe { Val::from_raw(&mut caller.store, values_vec[i], ty) })
         }
 
-        val_vec.extend((0..ty.results().len()).map(|_| Val::null()));
+        val_vec.extend((0..ty.results().len()).map(|_| Val::null_func_ref()));
         let (params, results) = val_vec.split_at_mut(nparams);
         func(caller.sub_caller(), params, results)?;
 
@@ -1191,12 +1323,8 @@ impl Func {
         // produces the wrong number, wrong types, or wrong stores of
         // values, and we need to catch that here.
         for (i, (ret, ty)) in results.iter().zip(ty.results()).enumerate() {
-            if ret.ty() != ty {
-                bail!("function attempted to return an incompatible value");
-            }
-            if !ret.comes_from_same_store(caller.store.0) {
-                bail!("cross-`Store` values are not currently supported");
-            }
+            ret.ensure_matches_ty(caller.store.0, &ty)
+                .context("function attempted to return an incompatible value")?;
             unsafe {
                 values_vec[i] = ret.to_raw(&mut caller.store);
             }
@@ -1235,19 +1363,27 @@ impl Func {
     /// function. This behaves the same way as `Params`, but just for the
     /// results of the function.
     ///
+    /// # Translating Between WebAssembly and Rust Types
+    ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
-    /// | WebAssembly | Rust                |
-    /// |-------------|---------------------|
-    /// | `i32`       | `i32` or `u32`      |
-    /// | `i64`       | `i64` or `u64`      |
-    /// | `f32`       | `f32`               |
-    /// | `f64`       | `f64`               |
-    /// | `externref` | `Option<ExternRef>` |
-    /// | `funcref`   | `Option<Func>`      |
-    /// | `v128`      | not supported       |
+    /// | WebAssembly                           | Rust                                  |
+    /// |---------------------------------------|---------------------------------------|
+    /// | `i32`                                 | `i32` or `u32`                        |
+    /// | `i64`                                 | `i64` or `u64`                        |
+    /// | `f32`                                 | `f32`                                 |
+    /// | `f64`                                 | `f64`                                 |
+    /// | `externref` aka `(ref null extern)`   | `Option<ExternRef>`                   |
+    /// | `(ref extern)`                        | `ExternRef`                           |
+    /// | `funcref` aka `(ref null func)`       | `Option<Func>`                        |
+    /// | `(ref func)`                          | `Func`                                |
+    /// | `(ref null <func type index>)`        | `Option<Func>`                        |
+    /// | `(ref <func type index>)`             | `Func`                                |
+    /// | `nullfuncref` aka `(ref null nofunc)` | `Option<NoFunc>`                      |
+    /// | `(ref nofunc)`                        | `NoFunc`                              |
+    /// | `v128`                                | `V128` on `x86-64` and `aarch64` only |
     ///
-    /// (note that this mapping is the same as that of [`Func::wrap`]).
+    /// (Note that this mapping is the same as that of [`Func::wrap`]).
     ///
     /// Note that once the [`TypedFunc`] return value is acquired you'll use either
     /// [`TypedFunc::call`] or [`TypedFunc::call_async`] as necessary to actually invoke
@@ -1258,6 +1394,39 @@ impl Func {
     /// [`Instance::get_typed_func`](crate::Instance::get_typed_func) to
     /// directly get a typed function value from an
     /// [`Instance`](crate::Instance).
+    ///
+    /// ## Subtyping
+    ///
+    /// For result types, you can always use a supertype of the WebAssembly
+    /// function's actual declared result type. For example, if the WebAssembly
+    /// function was declared with type `(func (result nullfuncref))` you could
+    /// successfully call `f.typed::<(), Option<Func>>()` because `Option<Func>`
+    /// corresponds to `funcref`, which is a supertype of `nullfuncref`.
+    ///
+    /// For parameter types, you can always use a subtype of the WebAssembly
+    /// function's actual declared parameter type. For example, if the
+    /// WebAssembly function was declared with type `(func (param (ref null
+    /// func)))` you could successfully call `f.typed::<Func, ()>()` because
+    /// `Func` corresponds to `(ref func)`, which is a subtype of `(ref null
+    /// func)`.
+    ///
+    /// Additionally, for functions which take a reference to a concrete type as
+    /// a parameter, you can also use the concrete type's supertype. Consider a
+    /// WebAssembly function that takes a reference to a function with a
+    /// concrete type: `(ref null <func type index>)`. In this scenario, there
+    /// is no static `wasmtime::Foo` Rust type that corresponds to that
+    /// particular Wasm-defined concrete reference type because Wasm modules are
+    /// loaded dynamically at runtime. You *could* do `f.typed::<Option<NoFunc>,
+    /// ()>()`, and while that is correctly typed and valid, it is often overly
+    /// restrictive. The only value you could call the resulting typed function
+    /// with is the null function reference, but we'd like to call it with
+    /// non-null function references that happen to be of the correct
+    /// type. Therefore, `f.typed<Option<Func>, ()>()` is also allowed in this
+    /// case, even though `Option<Func>` represents `(ref null func)` which is
+    /// the supertype, not subtype, of `(ref null <func type index>)`. This does
+    /// imply some minimal dynamic type checks in this case, but it is supported
+    /// for better ergonomics, to enable passing non-null references into the
+    /// function.
     ///
     /// # Errors
     ///
@@ -1325,13 +1494,16 @@ impl Func {
         Results: WasmResults,
     {
         // Type-check that the params/results are all valid
-        let ty = self.ty(store);
-        Params::typecheck(ty.params()).context("type mismatch with parameters")?;
-        Results::typecheck(ty.results()).context("type mismatch with results")?;
+        let store = store.as_context().0;
+        let ty = self.load_ty(store);
+        Params::typecheck(store.engine(), ty.params(), TypeCheckPosition::Param)
+            .context("type mismatch with parameters")?;
+        Results::typecheck(store.engine(), ty.results(), TypeCheckPosition::Result)
+            .context("type mismatch with results")?;
 
         // and then we can construct the typed version of this function
         // (unsafely), which should be safe since we just did the type check above.
-        unsafe { Ok(TypedFunc::new_unchecked(*self)) }
+        unsafe { Ok(TypedFunc::_new_unchecked(store, *self)) }
     }
 
     /// Get a stable hash key for this function.
@@ -2126,12 +2298,18 @@ pub(crate) struct HostFunc {
 
 impl HostFunc {
     /// Analog of [`Func::new`]
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with the given
+    /// engine.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
+        assert!(ty.comes_from_same_engine(engine));
         let ty_clone = ty.clone();
         unsafe {
             HostFunc::new_unchecked(engine, ty, move |caller, values| {
@@ -2141,12 +2319,18 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::new_unchecked`]
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with the given
+    /// engine.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
+        assert!(ty.comes_from_same_engine(engine));
         let func = move |caller_vmctx, values: &mut [ValRaw]| {
             Caller::<T>::with(caller_vmctx, |mut caller| {
                 caller.store.0.call_hook(CallHook::CallingHost)?;

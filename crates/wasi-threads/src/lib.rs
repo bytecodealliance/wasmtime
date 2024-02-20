@@ -7,7 +7,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 use std::thread;
-use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store, ValType};
+use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store};
 
 // This name is a function export designated by the wasi-threads specification:
 // https://github.com/WebAssembly/wasi-threads/#detailed-design-discussion
@@ -171,9 +171,13 @@ fn has_entry_point(module: &Module) -> bool {
 
 /// Check if the entry function has the correct signature `(i32, i32) -> ()`.
 fn has_correct_signature(module: &Module) -> bool {
-    use ValType::*;
     match module.get_export(WASI_ENTRY_POINT) {
-        Some(ExternType::Func(ty)) => ty.params().eq([I32, I32]) && ty.results().len() == 0,
+        Some(ExternType::Func(ty)) => {
+            ty.params().len() == 2
+                && ty.params().nth(0).unwrap().is_i32()
+                && ty.params().nth(1).unwrap().is_i32()
+                && ty.results().len() == 0
+        }
         _ => false,
     }
 }

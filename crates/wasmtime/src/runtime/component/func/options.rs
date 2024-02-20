@@ -2,7 +2,7 @@ use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::ResourceType;
 use crate::store::{StoreId, StoreOpaque};
-use crate::StoreContextMut;
+use crate::{FuncType, StoreContextMut};
 use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -86,12 +86,16 @@ impl Options {
         self.store_id.assert_belongs_to(store.0.id());
 
         let realloc = self.realloc.unwrap();
+        let realloc_ty = FuncType::from_shared_type_index(store.engine(), unsafe {
+            realloc.as_ref().type_index
+        });
 
         // Invoke the wasm malloc function using its raw and statically known
         // signature.
         let result = unsafe {
             crate::TypedFunc::<(u32, u32, u32, u32), u32>::call_raw(
                 store,
+                &realloc_ty,
                 realloc,
                 (
                     u32::try_from(old)?,

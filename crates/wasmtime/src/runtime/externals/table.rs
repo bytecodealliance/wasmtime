@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_table_export;
-use crate::{AsContext, AsContextMut, ExternRef, Func, TableType, Val};
-use anyhow::{anyhow, bail, Result};
+use crate::{AsContext, AsContextMut, ExternRef, Func, Ref, TableType};
+use anyhow::{anyhow, bail, Context, Result};
 use wasmtime_runtime::{self as runtime};
 
 /// A WebAssembly `table`, or an array of values.
@@ -51,8 +51,8 @@ impl Table {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let ty = TableType::new(ValType::FuncRef, 2, None);
-    /// let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
+    /// let ty = TableType::new(RefType::FUNCREF, 2, None);
+    /// let table = Table::new(&mut store, ty, Ref::Func(None))?;
     ///
     /// let module = Module::new(
     ///     &engine,
@@ -69,7 +69,7 @@ impl Table {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(mut store: impl AsContextMut, ty: TableType, init: Val) -> Result<Table> {
+    pub fn new(mut store: impl AsContextMut, ty: TableType, init: Ref) -> Result<Table> {
         Table::_new(store.as_context_mut().0, ty, init)
     }
 
@@ -86,7 +86,7 @@ impl Table {
     pub async fn new_async<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: TableType,
-        init: Val,
+        init: Ref,
     ) -> Result<Table>
     where
         T: Send,
@@ -101,7 +101,7 @@ impl Table {
             .await?
     }
 
-    fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
+    fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
         let wasmtime_export = generate_table_export(store, &ty)?;
         let init = init.into_table_element(store, ty.element())?;
         unsafe {
@@ -121,7 +121,7 @@ impl Table {
     pub fn ty(&self, store: impl AsContext) -> TableType {
         let store = store.as_context();
         let ty = &store[self.0].table.table;
-        TableType::from_wasmtime_table(ty)
+        TableType::from_wasmtime_table(store.engine(), ty)
     }
 
     fn wasmtime_table(
@@ -145,18 +145,19 @@ impl Table {
     /// # Panics
     ///
     /// Panics if `store` does not own this table.
-    pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Val> {
+    pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Ref> {
         let store = store.as_context_mut().0;
         let table = self.wasmtime_table(store, std::iter::once(index));
         unsafe {
             match (*table).get(index)? {
                 runtime::TableElement::FuncRef(f) => {
                     let func = Func::from_vm_func_ref(store, f);
-                    Some(Val::FuncRef(func))
+                    Some(func.into())
                 }
-                runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
+                runtime::TableElement::ExternRef(None) => Some(Ref::Extern(None)),
                 runtime::TableElement::ExternRef(Some(x)) => {
-                    Some(Val::ExternRef(Some(ExternRef { inner: x })))
+                    let x = ExternRef { inner: x };
+                    Some(x.into())
                 }
                 runtime::TableElement::UninitFunc => {
                     unreachable!("lazy init above should have converted UninitFunc")
@@ -176,10 +177,10 @@ impl Table {
     /// # Panics
     ///
     /// Panics if `store` does not own this table.
-    pub fn set(&self, mut store: impl AsContextMut, index: u32, val: Val) -> Result<()> {
+    pub fn set(&self, mut store: impl AsContextMut, index: u32, val: Ref) -> Result<()> {
         let store = store.as_context_mut().0;
-        let ty = self.ty(&store).element().clone();
-        let val = val.into_table_element(store, ty)?;
+        let ty = self.ty(&store);
+        let val = val.into_table_element(store, ty.element())?;
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             (*table)
@@ -222,10 +223,10 @@ impl Table {
     /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`)).
     /// When using an async resource limiter, use [`Table::grow_async`]
     /// instead.
-    pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
+    pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Ref) -> Result<u32> {
         let store = store.as_context_mut().0;
-        let ty = self.ty(&store).element().clone();
-        let init = init.into_table_element(store, ty)?;
+        let ty = self.ty(&store);
+        let init = init.into_table_element(store, ty.element())?;
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             match (*table).grow(delta, init, store)? {
@@ -252,7 +253,7 @@ impl Table {
         &self,
         mut store: impl AsContextMut<Data = T>,
         delta: u32,
-        init: Val,
+        init: Ref,
     ) -> Result<u32>
     where
         T: Send,
@@ -273,7 +274,8 @@ impl Table {
     /// # Errors
     ///
     /// Returns an error if the range is out of bounds of either the source or
-    /// destination tables.
+    /// destination tables, or if the source table's element type does not match
+    /// the destination table's element type.
     ///
     /// # Panics
     ///
@@ -287,9 +289,16 @@ impl Table {
         len: u32,
     ) -> Result<()> {
         let store = store.as_context_mut().0;
-        if dst_table.ty(&store).element() != src_table.ty(&store).element() {
-            bail!("tables do not have the same element type");
-        }
+
+        let dst_ty = dst_table.ty(&store);
+        let src_ty = src_table.ty(&store);
+        src_ty
+            .element()
+            .ensure_matches(store.engine(), dst_ty.element())
+            .context(
+                "type mismatch: source table's element type does not match \
+                 destination table's element type",
+            )?;
 
         let dst_table = dst_table.wasmtime_table(store, std::iter::empty());
         let src_range = src_index..(src_index.checked_add(len).unwrap_or(u32::MAX));
@@ -316,10 +325,10 @@ impl Table {
     /// # Panics
     ///
     /// Panics if `store` does not own either `dst_table` or `src_table`.
-    pub fn fill(&self, mut store: impl AsContextMut, dst: u32, val: Val, len: u32) -> Result<()> {
+    pub fn fill(&self, mut store: impl AsContextMut, dst: u32, val: Ref, len: u32) -> Result<()> {
         let store = store.as_context_mut().0;
-        let ty = self.ty(&store).element().clone();
-        let val = val.into_table_element(store, ty)?;
+        let ty = self.ty(&store);
+        let val = val.into_table_element(store, ty.element())?;
 
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
@@ -384,11 +393,11 @@ mod tests {
         let t2 = instance.get_table(&mut store, "t").unwrap();
 
         // That said, they really point to the same table.
-        assert!(t1.get(&mut store, 0).unwrap().unwrap_externref().is_none());
-        assert!(t2.get(&mut store, 0).unwrap().unwrap_externref().is_none());
-        t1.set(&mut store, 0, Val::ExternRef(Some(ExternRef::new(42))))?;
-        assert!(t1.get(&mut store, 0).unwrap().unwrap_externref().is_some());
-        assert!(t2.get(&mut store, 0).unwrap().unwrap_externref().is_some());
+        assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_none());
+        assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_none());
+        t1.set(&mut store, 0, Ref::Extern(Some(ExternRef::new(42))))?;
+        assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_some());
+        assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_some());
 
         // And therefore their hash keys are the same.
         assert!(t1.hash_key(&store.as_context().0) == t2.hash_key(&store.as_context().0));

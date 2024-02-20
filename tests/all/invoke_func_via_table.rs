@@ -24,8 +24,7 @@ fn test_invoke_func_via_table() -> Result<()> {
         .unwrap()
         .get(&mut store, 0)
         .unwrap()
-        .funcref()
-        .unwrap()
+        .unwrap_func()
         .unwrap()
         .clone();
     let mut results = [Val::I32(0)];

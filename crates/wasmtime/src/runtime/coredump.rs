@@ -1,8 +1,8 @@
 use std::{collections::HashMap, fmt};
 
 use crate::{
-    store::StoreOpaque, AsContextMut, FrameInfo, Global, Instance, Memory, Module, StoreContextMut,
-    Val, ValType, WasmBacktrace,
+    store::StoreOpaque, AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module,
+    StoreContextMut, Val, ValType, WasmBacktrace,
 };
 
 /// Representation of a core dump of a WebAssembly module
@@ -167,8 +167,16 @@ impl WasmCoreDump {
                     ValType::F32 => wasm_encoder::ValType::F32,
                     ValType::F64 => wasm_encoder::ValType::F64,
                     ValType::V128 => wasm_encoder::ValType::V128,
-                    ValType::FuncRef => wasm_encoder::ValType::FUNCREF,
-                    ValType::ExternRef => wasm_encoder::ValType::EXTERNREF,
+                    ValType::Ref(r) => match r.heap_type() {
+                        HeapType::Extern => wasm_encoder::ValType::EXTERNREF,
+
+                        // We encode all function references as null in the core
+                        // dump, so choose the common super type of all the
+                        // actual function reference types.
+                        HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => {
+                            wasm_encoder::ValType::FUNCREF
+                        }
+                    },
                 };
                 let init = match g.get(&mut store) {
                     Val::I32(x) => wasm_encoder::ConstExpr::i32_const(x),

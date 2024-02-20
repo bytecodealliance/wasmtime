@@ -508,13 +508,9 @@ impl<'a> Instantiator<'a> {
 
         let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
         let ty = DefinitionType::from(store, &val);
-        crate::types::matching::MatchCx {
-            engine: store.engine(),
-            signatures: module.signatures(),
-            types: module.types(),
-        }
-        .definition(&expected, &ty)
-        .expect("unexpected typecheck failure");
+        crate::types::matching::MatchCx::new(module)
+            .definition(&expected, &ty)
+            .expect("unexpected typecheck failure");
     }
 }
 

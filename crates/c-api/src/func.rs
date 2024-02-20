@@ -122,7 +122,7 @@ pub(crate) fn translate_args<'a>(
     let num_args = args.len();
     dst.reserve(args.len() + results_size);
     dst.extend(args);
-    dst.extend((0..results_size).map(|_| Val::null()));
+    dst.extend((0..results_size).map(|_| Val::null_func_ref()));
     let (a, b) = dst.split_at_mut(num_args);
     (a, b)
 }

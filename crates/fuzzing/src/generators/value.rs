@@ -2,6 +2,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use std::hash::Hash;
+use wasmtime::HeapType;
 
 /// A value passed to and from evaluation. Note that reference types are not
 /// (yet) supported.
@@ -290,8 +291,11 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
             F32 => Ok(Self::F32),
             F64 => Ok(Self::F64),
             V128 => Ok(Self::V128),
-            FuncRef => Ok(Self::FuncRef),
-            ExternRef => Ok(Self::ExternRef),
+            Ref(r) => match (r.is_nullable(), r.heap_type()) {
+                (true, HeapType::Func) => Ok(Self::FuncRef),
+                (true, HeapType::Extern) => Ok(Self::ExternRef),
+                _ => Err("non-funcref and non-externref reference types are not suported yet"),
+            },
         }
     }
 }

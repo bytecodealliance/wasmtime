@@ -535,7 +535,7 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let mut results = vec![Val::null(); ty.results().len()];
+        let mut results = vec![Val::null_func_ref(); ty.results().len()];
         let invoke_res = func
             .call(&mut *store, &values, &mut results)
             .with_context(|| {
@@ -563,9 +563,11 @@ impl RunCommand {
                 Val::I64(i) => println!("{}", i),
                 Val::F32(f) => println!("{}", f32::from_bits(f)),
                 Val::F64(f) => println!("{}", f64::from_bits(f)),
-                Val::ExternRef(_) => println!("<externref>"),
-                Val::FuncRef(_) => println!("<funcref>"),
                 Val::V128(i) => println!("{}", i.as_u128()),
+                Val::ExternRef(None) => println!("<null externref>"),
+                Val::ExternRef(Some(_)) => println!("<externref>"),
+                Val::FuncRef(None) => println!("<null funcref>"),
+                Val::FuncRef(Some(_)) => println!("<funcref>"),
             }
         }
 

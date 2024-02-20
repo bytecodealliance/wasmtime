@@ -11,32 +11,34 @@
 
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec08             	sub	rsp, 8
 ;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c308000000       	add	r11, 8
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f870a000000         	ja	0x22
-;;   18:	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 0f870e000000         	ja	0x29
+;;   1b:	 4883ec08             	sub	rsp, 8
+;;      	 4c893424             	mov	qword ptr [rsp], r14
 ;;      	 4883c408             	add	rsp, 8
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   22:	 0f0b                 	ud2	
+;;   29:	 0f0b                 	ud2	
 ;;
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec10             	sub	rsp, 0x10
 ;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c320000000       	add	r11, 0x20
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f8779000000         	ja	0x91
-;;   18:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
+;;      	 0f877d000000         	ja	0x98
+;;   1b:	 4883ec10             	sub	rsp, 0x10
+;;      	 897c240c             	mov	dword ptr [rsp + 0xc], edi
 ;;      	 4c893424             	mov	qword ptr [rsp], r14
 ;;      	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
 ;;      	 4c89f2               	mov	rdx, r14
 ;;      	 8b5a50               	mov	ebx, dword ptr [rdx + 0x50]
 ;;      	 39d9                 	cmp	ecx, ebx
-;;      	 0f8361000000         	jae	0x93
-;;   32:	 4189cb               	mov	r11d, ecx
+;;      	 0f8361000000         	jae	0x9a
+;;   39:	 4189cb               	mov	r11d, ecx
 ;;      	 4d6bdb08             	imul	r11, r11, 8
 ;;      	 488b5248             	mov	rdx, qword ptr [rdx + 0x48]
 ;;      	 4889d6               	mov	rsi, rdx
@@ -45,8 +47,8 @@
 ;;      	 480f43d6             	cmovae	rdx, rsi
 ;;      	 488b02               	mov	rax, qword ptr [rdx]
 ;;      	 4885c0               	test	rax, rax
-;;      	 0f8532000000         	jne	0x87
-;;   55:	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
+;;      	 0f8532000000         	jne	0x8e
+;;   5c:	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
 ;;      	 498b5b48             	mov	rbx, qword ptr [r11 + 0x48]
 ;;      	 4156                 	push	r14
 ;;      	 4883ec04             	sub	rsp, 4
@@ -58,10 +60,10 @@
 ;;      	 ffd3                 	call	rbx
 ;;      	 4883c404             	add	rsp, 4
 ;;      	 4883c40c             	add	rsp, 0xc
-;;      	 e904000000           	jmp	0x8b
-;;   87:	 4883e0fe             	and	rax, 0xfffffffffffffffe
+;;      	 e904000000           	jmp	0x92
+;;   8e:	 4883e0fe             	and	rax, 0xfffffffffffffffe
 ;;      	 4883c410             	add	rsp, 0x10
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   91:	 0f0b                 	ud2	
-;;   93:	 0f0b                 	ud2	
+;;   98:	 0f0b                 	ud2	
+;;   9a:	 0f0b                 	ud2	
