@@ -33,7 +33,6 @@ use cranelift_codegen::{
     settings, Final, MachBufferFinalized, MachLabel,
 };
 
-use smallvec::SmallVec;
 use wasmtime_environ::{PtrSize, WasmValType, WASM_PAGE_SIZE};
 
 /// x64 MacroAssembler.
@@ -42,8 +41,8 @@ pub(crate) struct MacroAssembler {
     sp_offset: u32,
     /// Stack high-water mark.
     sp_max: u32,
-    /// Regions where the addition of the used stack must be fixed up
-    stack_max_use_regions: SmallVec<[PatchableAddToReg; 2]>,
+    /// Add instructions that are used to add the constant stack max to a register.
+    stack_max_use_add: Option<PatchableAddToReg>,
     /// Low level assembler.
     asm: Assembler,
     /// ISA flags.
@@ -810,8 +809,8 @@ impl Masm for MacroAssembler {
     }
 
     fn finalize(mut self) -> MachBufferFinalized<Final> {
-        for region in std::mem::take(&mut self.stack_max_use_regions) {
-            region.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
+        if let Some(patch) = self.stack_max_use_add {
+            patch.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
         }
 
         self.asm.finalize()
@@ -1175,7 +1174,7 @@ impl MacroAssembler {
         Self {
             sp_offset: 0,
             sp_max: 0,
-            stack_max_use_regions: SmallVec::new(),
+            stack_max_use_add: None,
             asm: Assembler::new(shared_flags.clone(), isa_flags.clone()),
             flags: isa_flags,
             shared_flags,
@@ -1187,8 +1186,9 @@ impl MacroAssembler {
     /// add-with-immediate instruction emitted to use the real stack max when the masm is being
     /// finalized.
     fn add_stack_max(&mut self, reg: Reg) {
+        assert!(self.stack_max_use_add.is_none());
         let patch = PatchableAddToReg::new(reg, OperandSize::S64, self.asm.buffer_mut());
-        self.stack_max_use_regions.push(patch);
+        self.stack_max_use_add.replace(patch);
     }
 
     fn increment_sp(&mut self, bytes: u32) {
