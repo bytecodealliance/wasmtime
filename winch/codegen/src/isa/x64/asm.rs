@@ -18,6 +18,7 @@ use cranelift_codegen::{
                 ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, CC,
             },
+            encoding::rex::{encode_modrm, RexFlags},
             settings as x64_settings, EmitInfo, EmitState, Inst,
         },
     },
@@ -1341,64 +1342,6 @@ impl Assembler {
     }
 }
 
-/// A small bit field to record a REX prefix specification:
-/// - bit 0 set to 1 indicates REX.W must be 0 (cleared).
-/// - bit 1 set to 1 indicates the REX prefix must always be emitted.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-struct RexFlags(u8);
-
-impl RexFlags {
-    /// By default, set the W field, and don't always emit.
-    fn set_w() -> Self {
-        Self(0)
-    }
-    /// Creates a new RexPrefix for which the REX.W bit will be cleared.
-    fn clear_w() -> Self {
-        Self(1)
-    }
-
-    fn must_clear_w(&self) -> bool {
-        (self.0 & 1) != 0
-    }
-
-    fn must_always_emit(&self) -> bool {
-        (self.0 & 2) != 0
-    }
-
-    fn emit_two_op(
-        &self,
-        sink: &mut SmallVec<impl smallvec::Array<Item = u8>>,
-        enc_g: u8,
-        enc_e: u8,
-    ) {
-        let w = if self.must_clear_w() { 0 } else { 1 };
-        let r = (enc_g >> 3) & 1;
-        let x = 0;
-        let b = (enc_e >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.push(rex);
-        }
-    }
-}
-
-impl From<OperandSize> for RexFlags {
-    fn from(other: OperandSize) -> Self {
-        match other {
-            OperandSize::S64 => RexFlags::set_w(),
-            _ => RexFlags::clear_w(),
-        }
-    }
-}
-/// Encode the ModR/M byte.
-fn encode_modrm(m0d: u8, enc_reg_g: u8, rm_e: u8) -> u8 {
-    debug_assert!(m0d < 4);
-    debug_assert!(enc_reg_g < 8);
-    debug_assert!(rm_e < 8);
-    ((m0d & 3) << 6) | ((enc_reg_g & 7) << 3) | (rm_e & 7)
-}
-
 /// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,
 /// but the immediate is not yet known. Currently, this implementation expects a 32-bit immediate,
 /// so 8 and 16 bit operand sizes are not supported.
@@ -1419,12 +1362,16 @@ impl PatchableAddToReg {
     /// Currently this implementation expects to be able to patch a 32-bit immediate, which means
     /// that 8 and 16-bit addition cannot be supported.
     pub(crate) fn new(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) -> Self {
-        let prefix = Self::add_inst_bytes(reg, size);
-        let constant_offset = prefix.len();
-
         let open = buf.start_patchable();
-        buf.put_data(&prefix);
+
+        // Emit the opcode and register use for the add instruction.
+        let start = buf.cur_offset();
+        Self::add_inst_bytes(reg, size, buf);
+        let constant_offset = usize::try_from(buf.cur_offset() - start).unwrap();
+
+        // Emit a placeholder for the 32-bit immediate.
         buf.put4(0);
+
         let region = buf.end_patchable(open);
 
         Self {
@@ -1435,9 +1382,7 @@ impl PatchableAddToReg {
 
     /// Generate the prefix of the add instruction (rex byte (depending on register use), opcode,
     /// and register reference).
-    fn add_inst_bytes(reg: Reg, size: OperandSize) -> SmallVec<[u8; 3]> {
-        let mut buf = SmallVec::new();
-
+    fn add_inst_bytes(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) {
         match size {
             OperandSize::S32 | OperandSize::S64 => {}
             _ => {
@@ -1453,15 +1398,13 @@ impl PatchableAddToReg {
         debug_assert!(reg.is_int());
         let enc_e = u8::try_from(reg.hw_enc()).unwrap();
 
-        RexFlags::from(size).emit_two_op(&mut buf, enc_g, enc_e);
+        RexFlags::from(args::OperandSize::from(size)).emit_two_op(buf, enc_g, enc_e);
 
         // the opcode for an add
-        buf.push(0x81);
+        buf.put1(0x81);
 
         // the modrm byte
-        buf.push(encode_modrm(0b11, enc_g & 7, enc_e & 7));
-
-        buf
+        buf.put1(encode_modrm(0b11, enc_g & 7, enc_e & 7));
     }
 
     /// Patch the [`MachBuffer`] with the known constant to be added to the register. The final
