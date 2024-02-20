@@ -10,6 +10,18 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 18.0.1
+
+Released 2024-02-20.
+
+### Fixed
+
+* Fixed a mistake in the CI release process that caused the crates.io
+  publication of the 18.0.0 release to not succeed.
+  [#7966](https://github.com/bytecodealliance/wasmtime/pull/7966)
+
+--------------------------------------------------------------------------------
+
 ## 18.0.0
 
 Released 2024-02-20
