@@ -39,7 +39,10 @@ use wasmtime_environ::{PtrSize, WasmValType, WASM_PAGE_SIZE};
 pub(crate) struct MacroAssembler {
     /// Stack pointer offset.
     sp_offset: u32,
-    /// Stack high-water mark.
+    /// This value represents the maximum stack size seen while compiling the function. While the
+    /// function is still being compiled its value will not be valid (the stack will grow and
+    /// shrink as space is reserved and freed during compilstion), but once all instructions have
+    /// been seen this value will be the maximum stack usage seen.
     sp_max: u32,
     /// Add instructions that are used to add the constant stack max to a register.
     stack_max_use_add: Option<PatchableAddToReg>,
@@ -1193,6 +1196,10 @@ impl MacroAssembler {
 
     fn increment_sp(&mut self, bytes: u32) {
         self.sp_offset += bytes;
+
+        // NOTE: we use `max` here to track the largest stack allocation in `sp_max`. Once we have
+        // seen the entire function, this value will represent the maximum size for the stack
+        // frame.
         self.sp_max = self.sp_max.max(self.sp_offset);
     }
 
