@@ -502,6 +502,11 @@ impl ComponentInstance {
         self.runtime_info.component_types()
     }
 
+    /// Get the canonical ABI's `realloc` function's runtime type.
+    pub fn realloc_func_ty(&self) -> &Arc<dyn std::any::Any + Send + Sync> {
+        self.runtime_info.realloc_func_type()
+    }
+
     /// Returns a reference to the resource type information as a `dyn Any`.
     ///
     /// Wasmtime is the one which then downcasts this to the appropriate type.
@@ -850,6 +855,10 @@ impl InstanceFlags {
 pub trait ComponentRuntimeInfo: Send + Sync + 'static {
     /// Returns the type information about the compiled component.
     fn component(&self) -> &Component;
+
     /// Returns a handle to the tables of type information for this component.
     fn component_types(&self) -> &Arc<ComponentTypes>;
+
+    /// Get the `wasmtime::FuncType` for the canonical ABI's `realloc` function.
+    fn realloc_func_type(&self) -> &Arc<dyn std::any::Any + Send + Sync>;
 }

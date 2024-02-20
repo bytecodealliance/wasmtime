@@ -2,6 +2,7 @@ use crate::{
     code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
     type_registry::TypeCollection, Engine, Module, ResourcesRequired,
 };
+use crate::{FuncType, ValType};
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::mem;
@@ -73,6 +74,11 @@ struct ComponentInner {
 
     /// Metadata produced during compilation.
     info: CompiledComponentInfo,
+
+    /// A cached handle to the `wasmtime::FuncType` for the canonical ABI's
+    /// `realloc`, to avoid the need to look up types in the registry and take
+    /// locks when calling `realloc` via `TypedFunc::call_raw`.
+    realloc_func_type: Arc<dyn std::any::Any + Send + Sync>,
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -323,12 +329,19 @@ impl Component {
             .map(|(_, info)| Module::from_parts_raw(engine, code.clone(), info, false))
             .collect::<Result<_>>()?;
 
+        let realloc_func_type = Arc::new(FuncType::new(
+            engine,
+            [ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+            [ValType::I32],
+        )) as _;
+
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 ty,
                 static_modules,
                 code,
                 info,
+                realloc_func_type,
             }),
         })
     }
@@ -534,6 +547,10 @@ impl ComponentRuntimeInfo for ComponentInner {
             // variant, so this shouldn't be possible.
             crate::code::Types::Module(_) => unreachable!(),
         }
+    }
+
+    fn realloc_func_type(&self) -> &Arc<dyn std::any::Any + Send + Sync> {
+        &self.realloc_func_type
     }
 }
 

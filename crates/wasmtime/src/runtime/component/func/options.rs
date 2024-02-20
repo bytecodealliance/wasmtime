@@ -78,6 +78,7 @@ impl Options {
     fn realloc<'a, T>(
         &self,
         store: &'a mut StoreContextMut<'_, T>,
+        realloc_ty: &FuncType,
         old: usize,
         old_size: usize,
         old_align: u32,
@@ -86,16 +87,13 @@ impl Options {
         self.store_id.assert_belongs_to(store.0.id());
 
         let realloc = self.realloc.unwrap();
-        let realloc_ty = FuncType::from_shared_type_index(store.engine(), unsafe {
-            realloc.as_ref().type_index
-        });
 
         // Invoke the wasm malloc function using its raw and statically known
         // signature.
         let result = unsafe {
             crate::TypedFunc::<(u32, u32, u32, u32), u32>::call_raw(
                 store,
-                &realloc_ty,
+                realloc_ty,
                 realloc,
                 (
                     u32::try_from(old)?,
@@ -247,8 +245,17 @@ impl<'a, T> LowerContext<'a, T> {
         old_align: u32,
         new_size: usize,
     ) -> Result<usize> {
+        let realloc_func_ty = Arc::clone(unsafe { (*self.instance).realloc_func_ty() });
+        let realloc_func_ty = realloc_func_ty.downcast_ref::<FuncType>().unwrap();
         self.options
-            .realloc(&mut self.store, old, old_size, old_align, new_size)
+            .realloc(
+                &mut self.store,
+                &realloc_func_ty,
+                old,
+                old_size,
+                old_align,
+                new_size,
+            )
             .map(|(_, ptr)| ptr)
     }
 
