@@ -709,7 +709,20 @@ mod tests {
     fn size_of_val() {
         // Try to keep tabs on the size of `Val` and make sure we don't grow its
         // size.
-        assert_eq!(std::mem::size_of::<Val>(), 32);
+        assert_eq!(
+            std::mem::size_of::<Val>(),
+            if cfg!(any(
+                target_arch = "x86_64",
+                target_arch = "aarch64",
+                target_arch = "riscv64"
+            )) {
+                32
+            } else if cfg!(target_arch = "s390x") {
+                24
+            } else {
+                panic!("unsupported architecture")
+            }
+        );
     }
 
     #[test]
