@@ -10,6 +10,7 @@
 use crate::subtest::{check_precise_output, run_filecheck, Context, SubTest};
 use anyhow::Result;
 use cranelift_codegen::ir;
+use cranelift_control::ControlPlane;
 use cranelift_reader::{TestCommand, TestOption};
 use std::borrow::Cow;
 
@@ -53,7 +54,7 @@ impl SubTest for TestOptimize {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx
-            .optimize(isa)
+            .optimize(isa, &mut ControlPlane::default())
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
         let clif = format!("{:?}", comp_ctx.func);

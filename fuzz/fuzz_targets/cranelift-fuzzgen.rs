@@ -236,12 +236,14 @@ impl TestCase {
     }
 
     fn to_optimized(&self) -> Self {
+        let mut ctrl_planes = self.ctrl_planes.clone();
         let optimized_functions: Vec<Function> = self
             .functions
             .iter()
-            .map(|func| {
+            .zip(ctrl_planes.iter_mut())
+            .map(|(func, ctrl_plane)| {
                 let mut ctx = Context::for_function(func.clone());
-                ctx.optimize(self.isa.as_ref()).unwrap();
+                ctx.optimize(self.isa.as_ref(), ctrl_plane).unwrap();
                 ctx.func
             })
             .collect();
@@ -249,7 +251,7 @@ impl TestCase {
         TestCase {
             isa: self.isa.clone(),
             functions: optimized_functions,
-            ctrl_planes: self.ctrl_planes.clone(),
+            ctrl_planes,
             inputs: self.inputs.clone(),
             compare_against_host: false,
         }
