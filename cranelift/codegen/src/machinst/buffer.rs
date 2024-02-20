@@ -542,11 +542,12 @@ impl<I: VCodeInst> MachBuffer<I> {
         // Post-invariant: as for `put1()`.
     }
 
-    /// Begin a region of patchable code. There are some requirements for the
-    /// code that is emitted:
-    ///
-    /// 1. It must not introduce any instructions that could be chomped
-    ///    (branches are an example of this)
+    /// Begin a region of patchable code. There is one requirement for the
+    /// code that is emitted: It must not introduce any instructions that
+    /// could be chomped (branches are an example of this). In other words,
+    /// you must not call [`MachBuffer::add_cond_branch`] or
+    /// [`MachBuffer::add_uncond_branch`] between calls to this method and
+    /// [`MachBuffer::end_patchable`].
     pub fn start_patchable(&mut self) -> OpenPatchRegion {
         assert!(!self.open_patchable, "Patchable regions may not be nested");
         self.open_patchable = true;
@@ -554,11 +555,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// End a region of patchable code, yielding a [`PatchRegion`] value that
-    /// can be consumed later to produce a one-off mutable slice to the associated
-    /// region of the data buffer.
+    /// can be consumed later to produce a one-off mutable slice to the
+    /// associated region of the data buffer.
     pub fn end_patchable(&mut self, open: OpenPatchRegion) -> PatchRegion {
-        // No need to assert the state of `open_patchable` here, as we take ownership
-        // of the only `OpenPatchable` value.
+        // No need to assert the state of `open_patchable` here, as we take
+        // ownership of the only `OpenPatchable` value.
         self.open_patchable = false;
         let end = usize::try_from(self.cur_offset()).unwrap();
         PatchRegion { range: open.0..end }
