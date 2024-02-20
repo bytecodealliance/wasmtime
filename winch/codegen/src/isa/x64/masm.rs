@@ -41,7 +41,7 @@ pub(crate) struct MacroAssembler {
     sp_offset: u32,
     /// This value represents the maximum stack size seen while compiling the function. While the
     /// function is still being compiled its value will not be valid (the stack will grow and
-    /// shrink as space is reserved and freed during compilstion), but once all instructions have
+    /// shrink as space is reserved and freed during compilation), but once all instructions have
     /// been seen this value will be the maximum stack usage seen.
     sp_max: u32,
     /// Add instructions that are used to add the constant stack max to a register.
