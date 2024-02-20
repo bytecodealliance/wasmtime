@@ -29,6 +29,7 @@ default = [
   'async',
   'coredump',
   'addr2line',
+  'demangle',
 ]
 async = ['wasmtime-c-api/async']
 profiling = ["wasmtime-c-api/profiling"]
@@ -39,4 +40,5 @@ logging = ['wasmtime-c-api/logging']
 disable-logging = ["wasmtime-c-api/disable-logging"]
 coredump = ["wasmtime-c-api/coredump"]
 addr2line = ["wasmtime-c-api/addr2line"]
+demangle = ["wasmtime-c-api/demangle"]
 wat = ["wasmtime-c-api/wat"]
