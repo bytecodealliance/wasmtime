@@ -29,11 +29,6 @@ pub(crate) fn clamp_range(
     from_bits: u16,
     fact: Option<Fact>,
 ) -> PccResult<Fact> {
-    let max = if from_bits == 64 {
-        u64::MAX
-    } else {
-        (1u64 << from_bits) - 1
-    };
     trace!(
         "clamp_range: fact {:?} from {} to {}",
         fact,
@@ -43,11 +38,7 @@ pub(crate) fn clamp_range(
     Ok(fact
         .and_then(|f| ctx.uextend(&f, from_bits, to_bits))
         .unwrap_or_else(|| {
-            let result = Fact::Range {
-                bit_width: to_bits,
-                min: 0,
-                max,
-            };
+            let result = Fact::max_range_for_width_extended(from_bits, to_bits);
             trace!(" -> clamping to {:?}", result);
             result
         }))

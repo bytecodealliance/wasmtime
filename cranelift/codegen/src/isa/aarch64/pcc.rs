@@ -128,7 +128,7 @@ pub(crate) fn check(
                 ctx,
                 64,
                 size.bits().into(),
-                ctx.offset(&rn, size.bits().into(), imm12),
+                rn.offset(size.bits().into(), imm12),
             )
         }),
         Inst::AluRRImm12 {
@@ -143,7 +143,7 @@ pub(crate) fn check(
                 ctx,
                 64,
                 size.bits().into(),
-                ctx.offset(&rn, size.bits().into(), -imm12),
+                rn.offset(size.bits().into(), -imm12),
             )
         }),
         Inst::AluRRR {
@@ -153,12 +153,12 @@ pub(crate) fn check(
             rn,
             rm,
         } => check_binop(ctx, vcode, 64, rd, rn, rm, |rn, rm| {
-            if let Some(k) = rm.as_const(64) {
+            if let Some(k) = rm.as_const() {
                 clamp_range(
                     ctx,
                     64,
                     size.bits().into(),
-                    ctx.offset(rn, size.bits().into(), -(k as i64)),
+                    rn.offset(size.bits().into(), -(i64::try_from(k).unwrap())),
                 )
             } else {
                 clamp_range(ctx, 64, size.bits().into(), None)
@@ -298,7 +298,8 @@ pub(crate) fn check(
 
         Inst::MovK { rd, rn, imm, .. } => {
             let input = get_fact_or_default(vcode, rn, 64);
-            if let Some(input_constant) = input.as_const(64) {
+            if let Some(input_constant) = input.as_const() {
+                let input_constant = u64::try_from(input_constant).unwrap();
                 let constant = u64::from(imm.bits) << (imm.shift * 16);
                 let constant = input_constant | constant;
                 check_constant(ctx, vcode, rd, 64, constant)
@@ -346,9 +347,9 @@ pub(crate) fn check(
                     _ => unreachable!(),
                 };
                 let rm = ctx.apply_inequality(&rm, &cmp_rhs, &cmp_lhs, rhs_kind);
-                let union = ctx.union(&rn, &rm);
+                let union = Fact::union(&rn, &rm);
                 // Union the two facts.
-                clamp_range(ctx, 64, 64, union)
+                clamp_range(ctx, 64, 64, Some(union))
             })
         }
 
@@ -475,7 +476,7 @@ fn check_addr<'a>(
         }
         &AMode::Unscaled { rn, simm9 } => {
             let rn = get_fact_or_default(vcode, rn, 64);
-            let sum = fail_if_missing(ctx.offset(&rn, 64, simm9.value.into()))?;
+            let sum = fail_if_missing(rn.offset(64, simm9.value.into()))?;
             check(&sum, ty)
         }
         &AMode::UnsignedOffset { rn, uimm12 } => {
@@ -490,7 +491,7 @@ fn check_addr<'a>(
             // This `unwrap()` will always succeed because the value
             // will always be positive and much smaller than
             // `i64::MAX` (see above).
-            let sum = fail_if_missing(ctx.offset(&rn, 64, i64::try_from(offset).unwrap()))?;
+            let sum = fail_if_missing(rn.offset(64, i64::try_from(offset).unwrap()))?;
             check(&sum, ty)
         }
         &AMode::Label { .. } | &AMode::Const { .. } => {
@@ -500,7 +501,7 @@ fn check_addr<'a>(
         }
         &AMode::RegOffset { rn, off, .. } => {
             let rn = get_fact_or_default(vcode, rn, 64);
-            let sum = fail_if_missing(ctx.offset(&rn, 64, off))?;
+            let sum = fail_if_missing(rn.offset(64, off))?;
             check(&sum, ty)
         }
         &AMode::SPOffset { .. }

@@ -93,7 +93,7 @@ pub(crate) fn check(
                     src1.to_reg(),
                     |src1| {
                         let simm32: i64 = simm32.into();
-                        clamp_range(ctx, 64, bits, ctx.offset(src1, bits, simm32))
+                        clamp_range(ctx, 64, bits, src1.offset(bits, simm32))
                     },
                 )
             }
@@ -124,7 +124,7 @@ pub(crate) fn check(
                     src1.to_reg(),
                     |src1| {
                         let simm32: i64 = simm32.into();
-                        clamp_range(ctx, 64, bits, ctx.offset(src1, bits, -simm32))
+                        clamp_range(ctx, 64, bits, src1.offset(bits, -simm32))
                     },
                 )
             }
@@ -508,8 +508,8 @@ pub(crate) fn check(
                     };
                     let in_false =
                         ctx.apply_inequality(&in_false, &cmp_rhs, &cmp_lhs, in_false_kind);
-                    let union = ctx.union(&in_true, &in_false);
-                    clamp_range(ctx, 64, 64, union)
+                    let union = Fact::union(&in_true, &in_false);
+                    clamp_range(ctx, 64, 64, Some(union))
                 })
             }
             _ => undefined_result(ctx, vcode, dst, 64, 64),

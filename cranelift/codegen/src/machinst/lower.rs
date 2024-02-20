@@ -1432,11 +1432,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         if self.flags.enable_pcc() {
             self.vregs.set_fact_if_missing(
                 reg.to_virtual_reg().unwrap(),
-                Fact::Range {
-                    bit_width,
-                    min,
-                    max,
-                },
+                Fact::static_value_two_ended_range(bit_width, min, max),
             );
         }
     }

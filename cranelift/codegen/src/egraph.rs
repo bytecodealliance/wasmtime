@@ -347,6 +347,7 @@ where
                     let orig_result = *o.get();
                     // Hit in GVN map -- reuse value.
                     self.value_to_opt_value[result] = orig_result;
+                    self.func.dfg.merge_facts(orig_result, result);
                     self.eclasses.union(orig_result, result);
                     trace!(" -> merges result {} to {}", result, orig_result);
                     true
