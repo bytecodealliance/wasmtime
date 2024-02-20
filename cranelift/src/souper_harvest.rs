@@ -1,5 +1,6 @@
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::Context;
 use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::DummyEnvironment;
@@ -133,7 +134,7 @@ pub fn run(options: &Options) -> Result<()> {
             let mut ctx = Context::new();
             ctx.func = func;
 
-            ctx.optimize(fisa.isa.unwrap())
+            ctx.optimize(fisa.isa.unwrap(), &mut ControlPlane::default())
                 .context("failed to run optimizations")?;
 
             ctx.souper_harvest(send)

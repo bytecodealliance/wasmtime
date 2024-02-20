@@ -12,6 +12,7 @@ use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 use cranelift_entity::{packed_option::ReservedValue, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
 
@@ -64,6 +65,9 @@ pub(crate) struct Elaborator<'a> {
     /// Stats for various events during egraph processing, to help
     /// with optimization of this infrastructure.
     stats: &'a mut Stats,
+    /// Chaos-mode control-plane so we can test that we still get
+    /// correct results when our heuristics make bad decisions.
+    ctrl_plane: &'a mut ControlPlane,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,6 +143,7 @@ impl<'a> Elaborator<'a> {
         loop_analysis: &'a LoopAnalysis,
         remat_values: &'a FxHashSet<Value>,
         stats: &'a mut Stats,
+        ctrl_plane: &'a mut ControlPlane,
     ) -> Self {
         let num_values = func.dfg.num_values();
         let mut value_to_best_value =
@@ -158,6 +163,7 @@ impl<'a> Elaborator<'a> {
             block_stack: vec![],
             remat_copies: FxHashMap::default(),
             stats,
+            ctrl_plane,
         }
     }
 
@@ -215,6 +221,14 @@ impl<'a> Elaborator<'a> {
     fn compute_best_values(&mut self) {
         let best = &mut self.value_to_best_value;
 
+        // We can't make random decisions inside the fixpoint loop below because
+        // that could cause values to change on every iteration of the loop,
+        // which would make the loop never terminate. So in chaos testing
+        // mode we need a form of making suboptimal decisions that is fully
+        // deterministic. We choose to simply make the worst decision we know
+        // how to do instead of the best.
+        let use_worst = self.ctrl_plane.get_decision();
+
         // Do a fixpoint loop to compute the best value for each eclass.
         //
         // The maximum number of iterations is the length of the longest chain
@@ -227,7 +241,14 @@ impl<'a> Elaborator<'a> {
         // which we don't really care about, or (b) the CLIF producer did
         // something weird, in which case it is their responsibility to stop
         // doing that.
-        trace!("Entering fixpoint loop to compute the best values for each eclass");
+        trace!(
+            "Entering fixpoint loop to compute the {} values for each eclass",
+            if use_worst {
+                "worst (chaos mode)"
+            } else {
+                "best"
+            }
+        );
         let mut keep_going = true;
         while keep_going {
             keep_going = false;
@@ -248,7 +269,17 @@ impl<'a> Elaborator<'a> {
                         // is a `(cost, value)` tuple; `cost` comes first so
                         // the natural comparison works based on cost, and
                         // breaks ties based on value number.
-                        best[value] = std::cmp::min(best[x], best[y]);
+                        best[value] = if use_worst {
+                            if best[x].1.is_reserved_value() {
+                                best[y]
+                            } else if best[y].1.is_reserved_value() {
+                                best[x]
+                            } else {
+                                std::cmp::max(best[x], best[y])
+                            }
+                        } else {
+                            std::cmp::min(best[x], best[y])
+                        };
                         trace!(
                             " -> best of union({:?}, {:?}) = {:?}",
                             best[x],
@@ -776,7 +807,7 @@ impl<'a> Elaborator<'a> {
                     // traversal so we do this after processing this
                     // block above.
                     let block_stack_end = self.block_stack.len();
-                    for child in domtree.children(block) {
+                    for child in self.ctrl_plane.shuffled(domtree.children(block)) {
                         self.block_stack.push(BlockStackEntry::Elaborate {
                             block: child,
                             idom: Some(block),
