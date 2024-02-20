@@ -1404,7 +1404,13 @@ impl<'a> FactContext<'a> {
 
             // If the claim is a definition of a value, we can say
             // that the output has a range of exactly that value.
-            Fact::Def { value } => Some(Fact::value(to_width, *value)),
+            Fact::Def { value } => Some(Fact::Range {
+                bit_width: to_width,
+                range: ValueRange::exact_with_max(
+                    Expr::value(*value),
+                    Expr::constant(max_value_for_width(from_width)),
+                ),
+            }),
 
             // Otherwise, we can at least claim that the value is
             // within the range of `from_width`.
