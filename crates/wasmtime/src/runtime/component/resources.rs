@@ -397,15 +397,15 @@ impl<'a> HostResourceTables<'a> {
     /// will point to the `rep` specified as well as recording that it has the
     /// `ty` specified. The returned index is suitable for conversion into
     /// either [`Resource`] or [`ResourceAny`].
-    pub fn host_resource_lower_own(&mut self, rep: u32) -> HostResourceIndex {
-        let idx = self.tables.resource_lower_own(None, rep);
-        self.new_host_index(idx)
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> Result<HostResourceIndex> {
+        let idx = self.tables.resource_lower_own(None, rep)?;
+        Ok(self.new_host_index(idx))
     }
 
     /// See [`HostResourceTables::host_resource_lower_own`].
-    pub fn host_resource_lower_borrow(&mut self, rep: u32) -> HostResourceIndex {
-        let idx = self.tables.resource_lower_borrow(None, rep);
-        self.new_host_index(idx)
+    pub fn host_resource_lower_borrow(&mut self, rep: u32) -> Result<HostResourceIndex> {
+        let idx = self.tables.resource_lower_borrow(None, rep)?;
+        Ok(self.new_host_index(idx))
     }
 
     /// Validates that `idx` is still valid for the host tables, notably
@@ -453,6 +453,12 @@ impl<'a> HostResourceTables<'a> {
         match list.get_mut(idx as usize) {
             Some(slot) => *slot = gen,
             None => {
+                // Resource handles start at 1, not zero, so push two elements
+                // for the first resource handle.
+                if list.is_empty() {
+                    assert_eq!(idx, 1);
+                    list.push(0);
+                }
                 assert_eq!(idx as usize, list.len());
                 list.push(gen);
             }
@@ -482,7 +488,11 @@ impl<'a> HostResourceTables<'a> {
     /// into a guest-local index.
     ///
     /// The `ty` provided is which table to put this into.
-    pub fn guest_resource_lower_own(&mut self, rep: u32, ty: TypeResourceTableIndex) -> u32 {
+    pub fn guest_resource_lower_own(
+        &mut self,
+        rep: u32,
+        ty: TypeResourceTableIndex,
+    ) -> Result<u32> {
         self.tables.resource_lower_own(Some(ty), rep)
     }
 
@@ -495,7 +505,11 @@ impl<'a> HostResourceTables<'a> {
     /// into a guest has a special case where `rep` is returned directly if `ty`
     /// belongs to the component being lowered into. That property must be
     /// handled by the caller of this function.
-    pub fn guest_resource_lower_borrow(&mut self, rep: u32, ty: TypeResourceTableIndex) -> u32 {
+    pub fn guest_resource_lower_borrow(
+        &mut self,
+        rep: u32,
+        ty: TypeResourceTableIndex,
+    ) -> Result<u32> {
         self.tables.resource_lower_borrow(Some(ty), rep)
     }
 
@@ -612,7 +626,7 @@ where
                     // can move the rep into the guest table.
                     ResourceState::Index(idx) => cx.host_resource_lift_own(idx)?,
                 };
-                Ok(cx.guest_resource_lower_own(t, rep))
+                cx.guest_resource_lower_own(t, rep)
             }
             InterfaceType::Borrow(t) => {
                 let rep = match self.state.get() {
@@ -632,7 +646,7 @@ where
                     //
                     // Afterwards this is the same as the `idx` case below.
                     ResourceState::NotInTable => {
-                        let idx = cx.host_resource_lower_own(self.rep);
+                        let idx = cx.host_resource_lower_own(self.rep)?;
                         let prev = self.state.swap(ResourceState::Index(idx));
                         assert_eq!(prev, ResourceState::NotInTable);
                         cx.host_resource_lift_borrow(idx)?
@@ -642,7 +656,7 @@ where
                     // out of the table with borrow-tracking employed.
                     ResourceState::Index(idx) => cx.host_resource_lift_borrow(idx)?,
                 };
-                Ok(cx.guest_resource_lower_borrow(t, rep))
+                cx.guest_resource_lower_borrow(t, rep)
             }
             _ => bad_type_info(),
         }
@@ -879,9 +893,9 @@ impl ResourceAny {
 
         let mut tables = HostResourceTables::new_host(store.0);
         let (idx, own_state) = match state.get() {
-            ResourceState::Borrow => (tables.host_resource_lower_borrow(rep), None),
+            ResourceState::Borrow => (tables.host_resource_lower_borrow(rep)?, None),
             ResourceState::NotInTable => {
-                let idx = tables.host_resource_lower_own(rep);
+                let idx = tables.host_resource_lower_own(rep)?;
                 (
                     idx,
                     Some(OwnState {
@@ -1025,14 +1039,14 @@ impl ResourceAny {
                     bail!("mismatched resource types");
                 }
                 let rep = cx.host_resource_lift_own(self.idx)?;
-                Ok(cx.guest_resource_lower_own(t, rep))
+                cx.guest_resource_lower_own(t, rep)
             }
             InterfaceType::Borrow(t) => {
                 if cx.resource_type(t) != self.ty {
                     bail!("mismatched resource types");
                 }
                 let rep = cx.host_resource_lift_borrow(self.idx)?;
-                Ok(cx.guest_resource_lower_borrow(t, rep))
+                cx.guest_resource_lower_borrow(t, rep)
             }
             _ => bad_type_info(),
         }
@@ -1043,7 +1057,7 @@ impl ResourceAny {
             InterfaceType::Own(t) => {
                 let ty = cx.resource_type(t);
                 let (rep, dtor, flags) = cx.guest_resource_lift_own(t, index)?;
-                let idx = cx.host_resource_lower_own(rep);
+                let idx = cx.host_resource_lower_own(rep)?;
                 Ok(ResourceAny {
                     idx,
                     ty,
@@ -1057,7 +1071,7 @@ impl ResourceAny {
             InterfaceType::Borrow(t) => {
                 let ty = cx.resource_type(t);
                 let rep = cx.guest_resource_lift_borrow(t, index)?;
-                let idx = cx.host_resource_lower_borrow(rep);
+                let idx = cx.host_resource_lower_borrow(rep)?;
                 Ok(ResourceAny {
                     idx,
                     ty,

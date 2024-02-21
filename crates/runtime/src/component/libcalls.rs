@@ -519,9 +519,7 @@ fn inflate_latin1_bytes(dst: &mut [u16], latin1_bytes_so_far: usize) -> &mut [u1
 
 unsafe fn resource_new32(vmctx: *mut VMComponentContext, resource: u32, rep: u32) -> Result<u32> {
     let resource = TypeResourceTableIndex::from_u32(resource);
-    Ok(ComponentInstance::from_vmctx(vmctx, |instance| {
-        instance.resource_new32(resource, rep)
-    }))
+    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_new32(resource, rep))
 }
 
 unsafe fn resource_rep32(vmctx: *mut VMComponentContext, resource: u32, idx: u32) -> Result<u32> {

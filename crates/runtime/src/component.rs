@@ -531,7 +531,7 @@ impl ComponentInstance {
 
     /// Implementation of the `resource.new` intrinsic for `i32`
     /// representations.
-    pub fn resource_new32(&mut self, resource: TypeResourceTableIndex, rep: u32) -> u32 {
+    pub fn resource_new32(&mut self, resource: TypeResourceTableIndex, rep: u32) -> Result<u32> {
         self.resource_tables().resource_new(Some(resource), rep)
     }
 
@@ -600,7 +600,7 @@ impl ComponentInstance {
     ) -> Result<u32> {
         let mut tables = self.resource_tables();
         let rep = tables.resource_lift_own(Some(src), idx)?;
-        Ok(tables.resource_lower_own(Some(dst), rep))
+        tables.resource_lower_own(Some(dst), rep)
     }
 
     pub(crate) fn resource_transfer_borrow(
@@ -623,7 +623,7 @@ impl ComponentInstance {
         if dst_owns_resource {
             return Ok(rep);
         }
-        Ok(tables.resource_lower_borrow(Some(dst), rep))
+        tables.resource_lower_borrow(Some(dst), rep)
     }
 
     pub(crate) fn resource_enter_call(&mut self) {
