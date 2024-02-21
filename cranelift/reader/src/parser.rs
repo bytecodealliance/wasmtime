@@ -12,7 +12,7 @@ use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact, ValueRange};
+use cranelift_codegen::ir::pcc::{Expr, Fact, ValueRange};
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -2312,68 +2312,59 @@ impl<'a> Parser<'a> {
     // Parse a dynamic expression used in some kinds of PCC facts.
     //
     // expr ::= base-expr
-    //        | base-expr + uimm64  // but in-range for imm64
-    //        | base-expr - uimm64  // but in-range for imm64
-    //        | imm64
+    //        | base-expr + uimm64
+    //        | base-expr - uimm64
+    //        | uimm64
+    //        | "max"
+    // base-expr ::= GlobalValue(base) | Value(base)
     fn parse_expr(&mut self) -> ParseResult<Expr> {
-        if let Some(Token::Integer(_)) = self.token() {
-            let offset: i64 = self
-                .match_imm64("expected imm64 for dynamic expression")?
-                .into();
-            let offset = i128::from(offset);
-            Ok(Expr {
-                base: BaseExpr::None,
-                offset,
-            })
-        } else {
-            let base = self.parse_base_expr()?;
-            match self.token() {
-                Some(Token::Plus) => {
-                    self.consume();
-                    let offset: u64 = self
-                        .match_uimm64(
-                            "expected uimm64 in imm64 range for offset in dynamic expression",
-                        )?
-                        .into();
-                    let offset: i64 = i64::try_from(offset).map_err(|_| {
-                        self.error("integer offset in dynamic expression is out of range")
-                    })?;
-                    let offset = i128::from(offset);
-                    Ok(Expr { base, offset })
-                }
-                Some(Token::Integer(x)) if x.starts_with("-") => {
-                    let offset: i64 = self
-                        .match_imm64("expected an imm64 range for offset in dynamic expression")?
-                        .into();
-                    let offset = i128::from(offset);
-                    Ok(Expr { base, offset })
-                }
-                _ => Ok(Expr { base, offset: 0 }),
+        match self.token() {
+            Some(Token::Integer(_)) => {
+                let offset: u64 = self
+                    .match_uimm64("expected uimm64 for dynamic expression")?
+                    .into();
+                Ok(Expr::constant(offset))
             }
+            Some(Token::Value(_)) => {
+                let value = self.match_value("expected value")?;
+                let offset: i128 = self.parse_expr_offset()?;
+                Ok(Expr::value_offset(value, offset))
+            }
+            Some(Token::GlobalValue(_)) => {
+                let gv = self.match_gv("expected global value")?;
+                let offset: i128 = self.parse_expr_offset()?;
+                Ok(Expr::global_value_offset(gv, offset.into()))
+            }
+            Some(Token::Identifier("max")) => Ok(Expr::max_value()),
+            _ => Err(self.error("unexpected token")),
         }
     }
 
-    // Parse the base part of a dynamic expression, used in some PCC facts.
+    // Parse the offset part of a dynamic expression, used in some PCC facts.
     //
-    // base-expr ::= GlobalValue(base)
-    //             | Value(base)
-    //             | "max"
-    //             | (epsilon)
-    fn parse_base_expr(&mut self) -> ParseResult<BaseExpr> {
+    // expr-offset ::= "+" uimm64 | "-" uimm64 | (epsilon)
+    fn parse_expr_offset(&mut self) -> ParseResult<i128> {
         match self.token() {
-            Some(Token::Identifier("max")) => {
+            Some(Token::Plus) => {
                 self.consume();
-                Ok(BaseExpr::Max)
+                Ok(i128::from(u64::from(self.match_uimm64(
+                    "expected imm64 for value offset in expression",
+                )?)))
             }
-            Some(Token::GlobalValue(..)) => {
-                let gv = self.match_gv("expected global value")?;
-                Ok(BaseExpr::GlobalValue(gv))
+            Some(Token::Minus) => {
+                self.consume();
+                Ok(-i128::from(u64::from(self.match_uimm64(
+                    "expected imm64 for value offset in expression",
+                )?)))
             }
-            Some(Token::Value(..)) => {
-                let value = self.match_value("expected value")?;
-                Ok(BaseExpr::Value(value))
+            Some(Token::Integer(s)) if s.starts_with("+") || s.starts_with("-") => {
+                let value: i128 = s
+                    .parse()
+                    .map_err(|_| self.error("unable to parse integer constant"))?;
+                self.consume();
+                Ok(value)
             }
-            _ => Ok(BaseExpr::None),
+            _ => Ok(0),
         }
     }
 

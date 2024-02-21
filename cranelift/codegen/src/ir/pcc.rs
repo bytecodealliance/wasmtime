@@ -196,7 +196,7 @@ pub enum Fact {
     },
 
     /// A definition of a value to be used as a symbol in
-    /// BaseExprs. There can only be one of these per value number.
+    /// Exprs. There can only be one of these per value number.
     ///
     /// Note that this differs from a `DynamicRange` specifying that
     /// some value in the program is the same as `value`. A `def(v1)`
@@ -232,108 +232,76 @@ pub enum Fact {
 }
 
 /// A bound expression.
+///
+/// An expression consists of an (optional) symbolic base -- an SSA
+/// value or a GlobalValue -- and a static offset.
+///
+/// Note that `Expr` obeys structural equality -- that is, two `Expr`s
+/// represent actually-equal program values if the `Expr`s themselves
+/// are structurally equal, and conversely, if they are not
+/// structurally equal, then we *cannot prove* equality. There is no
+/// such thing as an "unsimplified" form of an expression that is
+/// statically equal but structurally unequal.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Expr {
-    /// The dynamic (base) part.
-    pub base: BaseExpr,
-    /// The static (offset) part.
-    pub offset: i128,
-}
-
-/// The base part of a bound expression.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub enum BaseExpr {
-    /// No dynamic part (i.e., zero).
-    None,
-    /// A global value.
-    GlobalValue(ir::GlobalValue),
-    /// An SSA Value as a symbolic value. This can be referenced in
-    /// facts even after we've lowered out of SSA: it becomes simply
-    /// some symbolic value.
-    Value(ir::Value),
+pub enum Expr {
+    /// A concrete static value in the range of a `u64`.
+    Absolute(u64),
+    /// An offset from an SSA value as a symbolic value. This can be
+    /// referenced in facts even after we've lowered out of SSA -- it
+    /// becomes an arbitrary symbolic base. The offset is an `i128`
+    /// because it may be negative, but also must carry teh full range
+    /// of a `u64` (e.g. if we add an `Absolute`).
+    Value(ir::Value, i128),
+    /// An offset from a GlobalValue as a symbolic value, as `Value`
+    /// is for SSA values.
+    GlobalValue(ir::GlobalValue, i128),
     /// Top of the address space. This is "saturating": the offset
     /// doesn't matter.
     Max,
 }
 
-impl BaseExpr {
-    /// Is one base less than or equal to another? (We can't always
-    /// know; in such cases, returns `false`.)
-    fn le(lhs: &BaseExpr, rhs: &BaseExpr) -> bool {
-        // (i) reflexivity; (ii) 0 <= x for all (unsigned) x; (iii) x <= max for all x.
-        lhs == rhs || *lhs == BaseExpr::None || *rhs == BaseExpr::Max
-    }
-}
-
 impl Expr {
     /// Constant value.
     pub const fn constant(value: u64) -> Self {
-        Expr {
-            base: BaseExpr::None,
-            // Safety: `i128::from(u64)` is not const, but this will never overflow.
-            offset: value as i128,
-        }
-    }
-
-    /// Constant value, full 128-bit width.
-    pub const fn constant128(value: i128) -> Self {
-        Expr {
-            base: BaseExpr::None,
-            offset: value,
-        }
+        Expr::Absolute(value)
     }
 
     /// Maximum (saturated) value.
     pub const fn max_value() -> Self {
-        Expr {
-            base: BaseExpr::Max,
-            offset: 0,
-        }
+        Expr::Max
     }
 
     /// The value of an SSA value.
     pub const fn value(value: ir::Value) -> Self {
-        Expr {
-            base: BaseExpr::Value(value),
-            offset: 0,
-        }
+        Expr::Value(value, 0)
     }
 
     /// The value of an SSA value plus some offset.
     pub const fn value_offset(value: ir::Value, offset: i128) -> Self {
-        Expr {
-            base: BaseExpr::Value(value),
-            offset,
-        }
+        Expr::Value(value, offset)
     }
 
     /// The value of a global value.
     pub const fn global_value(gv: ir::GlobalValue) -> Self {
-        Expr {
-            base: BaseExpr::GlobalValue(gv),
-            offset: 0,
-        }
+        Expr::GlobalValue(gv, 0)
     }
 
     /// The value of a global value plus some offset.
     pub const fn global_value_offset(gv: ir::GlobalValue, offset: i128) -> Self {
-        Expr {
-            base: BaseExpr::GlobalValue(gv),
-            offset,
-        }
+        Expr::GlobalValue(gv, offset)
     }
 
     /// Is one expression definitely less than or equal to another?
     /// (We can't always know; in such cases, returns `false`.)
     fn le(lhs: &Expr, rhs: &Expr) -> bool {
-        let result = if rhs.base == BaseExpr::Max {
-            true
-        } else if lhs == &Expr::constant(0) && rhs.base != BaseExpr::None {
-            true
-        } else {
-            BaseExpr::le(&lhs.base, &rhs.base) && lhs.offset <= rhs.offset
+        let result = match (lhs, rhs) {
+            (_, Expr::Max) => true,
+            (Expr::Absolute(0), _) => true,
+            (Expr::Absolute(x), Expr::Absolute(y)) => x <= y,
+            (Expr::Value(v1, x), Expr::Value(v2, y)) if v1 == v2 => x <= y,
+            (Expr::GlobalValue(gv1, x), Expr::GlobalValue(gv2, y)) if gv1 == gv2 => x <= y,
+            _ => false,
         };
         trace!("Expr::le: {lhs:?} {rhs:?} -> {result}");
         result
@@ -341,29 +309,27 @@ impl Expr {
 
     /// Add one expression to another.
     fn add(lhs: &Expr, rhs: &Expr) -> Expr {
-        let Some(offset) = lhs.offset.checked_add(rhs.offset) else {
-            return Expr::max_value();
-        };
-        let result = if lhs.base == rhs.base {
-            Expr {
-                base: lhs.base.clone(),
-                offset,
+        let result = match (lhs, rhs) {
+            (Expr::Max, _) | (_, Expr::Max) => Expr::Max,
+            (Expr::Absolute(x), Expr::Absolute(y)) => {
+                x.checked_add(*y).map(Expr::Absolute).unwrap_or(Expr::Max)
             }
-        } else if lhs.base == BaseExpr::None {
-            Expr {
-                base: rhs.base.clone(),
-                offset,
+            (Expr::Value(v1, x), Expr::Value(v2, y)) if v1 == v2 => x
+                .checked_add(*y)
+                .map(|sum| Expr::Value(*v1, sum))
+                .unwrap_or(Expr::Max),
+            (Expr::GlobalValue(gv1, x), Expr::GlobalValue(gv2, y)) if gv1 == gv2 => x
+                .checked_add(*y)
+                .map(|sum| Expr::GlobalValue(*gv1, sum))
+                .unwrap_or(Expr::Max),
+            (Expr::Value(v, x), Expr::Absolute(off)) | (Expr::Absolute(off), Expr::Value(v, x)) => {
+                Expr::Value(*v, *x + i128::from(*off))
             }
-        } else if rhs.base == BaseExpr::None {
-            Expr {
-                base: lhs.base.clone(),
-                offset,
+            (Expr::GlobalValue(gv, x), Expr::Absolute(off))
+            | (Expr::Absolute(off), Expr::GlobalValue(gv, x)) => {
+                Expr::GlobalValue(*gv, *x + i128::from(*off))
             }
-        } else {
-            Expr {
-                base: BaseExpr::Max,
-                offset: 0,
-            }
+            _ => Expr::Max,
         };
         trace!("Expr::add: {lhs:?} + {rhs:?} -> {result:?}");
         result
@@ -371,102 +337,90 @@ impl Expr {
 
     /// Add a static offset to an expression.
     pub fn offset(lhs: &Expr, rhs: i64) -> Option<Expr> {
-        let offset = lhs.offset.checked_add(rhs.into())?;
-        Some(Expr {
-            base: lhs.base.clone(),
-            offset,
-        })
+        match lhs {
+            Expr::Absolute(x) => Some(Expr::Absolute(
+                u64::try_from(i128::from(*x) + i128::from(rhs)).ok()?,
+            )),
+            Expr::Value(v, x) => Some(Expr::Value(*v, *x + i128::from(rhs))),
+            Expr::GlobalValue(gv, x) => Some(Expr::GlobalValue(*gv, *x + i128::from(rhs))),
+            Expr::Max => Some(Expr::Max),
+        }
     }
 
     /// Determine if we can know the difference between two expressions.
     pub fn difference(lhs: &Expr, rhs: &Expr) -> Option<i64> {
-        match (lhs.base, rhs.base) {
-            (BaseExpr::Max, _) | (_, BaseExpr::Max) => None,
-            (a, b) if a == b => i64::try_from(lhs.offset.checked_sub(rhs.offset)?).ok(),
+        match (lhs, rhs) {
+            (Expr::Max, _) | (_, Expr::Max) => None,
+            (Expr::Absolute(x), Expr::Absolute(y)) => {
+                i64::try_from(*x).ok()?.checked_sub(i64::try_from(*y).ok()?)
+            }
+            (Expr::Value(v1, x), Expr::Value(v2, y)) if v1 == v2 => {
+                i64::try_from(x.checked_sub(*y)?).ok()
+            }
+            (Expr::GlobalValue(gv1, x), Expr::GlobalValue(gv2, y)) if gv1 == gv2 => {
+                i64::try_from(x.checked_sub(*y)?).ok()
+            }
             _ => None,
-        }
-    }
-
-    /// Is this Expr a BaseExpr with no offset? Return it if so.
-    pub fn without_offset(&self) -> Option<&BaseExpr> {
-        if self.offset == 0 {
-            Some(&self.base)
-        } else {
-            None
         }
     }
 
     /// Multiply an expression by a constant, if possible.
     fn scale(&self, factor: u32) -> Option<Expr> {
-        let offset = self.offset.checked_mul(i128::from(factor))?;
-        match self.base {
-            BaseExpr::None => Some(Expr {
-                base: BaseExpr::None,
-                offset,
-            }),
-            BaseExpr::Max => Some(Expr {
-                base: BaseExpr::Max,
-                offset: 0,
-            }),
+        match self {
+            Expr::Absolute(x) => Some(Expr::Absolute(x.checked_mul(u64::from(factor))?)),
+            Expr::Max => Some(Expr::Max),
             _ => None,
         }
     }
 
     /// Multiply an expression by a constant, rounding downward if we
     /// must approximate.
+    ///
+    /// This is necessary to compute new lower bounds when scaling a range.
     fn scale_downward(&self, factor: u32) -> Expr {
         self.scale(factor).unwrap_or(Expr::constant(0))
     }
 
     /// Multiply an expression by a constant, rounding upward if we
     /// must approximate.
+    ///
+    /// This is necessary to compute new upper bounds when scaling a range.
     fn scale_upward(&self, factor: u32) -> Expr {
         self.scale(factor).unwrap_or(Expr::max_value())
     }
 
     /// Is this Expr an integer constant?
     fn as_const(&self) -> Option<i128> {
-        match self.base {
-            BaseExpr::None => Some(self.offset),
+        match self {
+            Expr::Absolute(x) => Some(i128::from(*x)),
             _ => None,
-        }
-    }
-}
-
-impl fmt::Display for BaseExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            BaseExpr::None => Ok(()),
-            BaseExpr::Max => write!(f, "max"),
-            BaseExpr::GlobalValue(gv) => write!(f, "{gv}"),
-            BaseExpr::Value(value) => write!(f, "{value}"),
-        }
-    }
-}
-
-impl BaseExpr {
-    /// Does this dynamic_expression take an offset?
-    pub fn is_some(&self) -> bool {
-        match self {
-            BaseExpr::None => false,
-            _ => true,
         }
     }
 }
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.base)?;
-        match self.offset {
-            offset if offset > 0 && self.base.is_some() => write!(f, "+{offset:#x}"),
-            offset if offset > 0 => write!(f, "{offset:#x}"),
-            offset if offset < 0 => {
-                let negative_offset = -i128::from(offset); // upcast to support i64::MIN.
-                write!(f, "-{negative_offset:#x}")
+        match self {
+            Expr::Absolute(x) => write!(f, "{x:#x}"),
+            Expr::Value(v, off) => {
+                if *off > 0 {
+                    write!(f, "{v}+{off:#x}")
+                } else if *off == 0 {
+                    write!(f, "{v}")
+                } else {
+                    write!(f, "{v}-{neg:#x}", neg = -off)
+                }
             }
-            0 if self.base.is_some() => Ok(()),
-            0 => write!(f, "0"),
-            _ => unreachable!(),
+            Expr::GlobalValue(gv, off) => {
+                if *off >= 0 {
+                    write!(f, "{gv}+{off:#x}")
+                } else if *off == 0 {
+                    write!(f, "{gv}")
+                } else {
+                    write!(f, "{gv}-{neg:#x}", neg = -off)
+                }
+            }
+            Expr::Max => write!(f, "max"),
         }
     }
 }
