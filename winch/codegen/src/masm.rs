@@ -264,15 +264,11 @@ impl Imm {
     }
 
     /// Create a new F32 immediate.
-    // Temporary until support for f32.const is added.
-    #[allow(dead_code)]
     pub fn f32(bits: u32) -> Self {
         Self::F32(bits)
     }
 
     /// Create a new F64 immediate.
-    // Temporary until support for f64.const is added.
-    #[allow(dead_code)]
     pub fn f64(bits: u64) -> Self {
         Self::F64(bits)
     }
@@ -283,6 +279,80 @@ impl Imm {
             Self::I32(v) => Some(*v as i32),
             Self::I64(v) => i32::try_from(*v as i64).ok(),
             _ => None,
+        }
+    }
+}
+
+/// The location of the [VMcontext] used for function calls.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum VMContextLoc {
+    /// Dynamic, stored in the given register.
+    Reg(Reg),
+    /// The pinned [VMContext] register.
+    Pinned,
+}
+
+/// Out-of-band special purpose arguments used for function call emission.
+///
+/// We cannot rely on the value stack for these values given that inserting
+/// register or memory values at arbitrary locations of the value stack has the
+/// potential to break the stack ordering principle, which states that older
+/// values must always precede newer values, effectively simulating the order of
+/// values in the machine stack.
+/// The [ContextArgs] are meant to be resolved at every callsite; in some cases
+/// it might be possible to construct it early on, but given that it might
+/// contain allocatable registers, it's preferred to construct it in
+/// [FnCall::emit].
+#[derive(Clone, Debug)]
+pub(crate) enum ContextArgs {
+    /// No context arguments required. This is used for libcalls that don't
+    /// require any special context arguments. For example builtin functions
+    /// that perform float calculations.
+    None,
+    /// A single context argument is required; the current pinned [VMcontext]
+    /// register must be passed as the first argument of the function call.
+    VMContext([VMContextLoc; 1]),
+    /// The callee and caller context arguments are required. In this case, the
+    /// callee context argument is usually stored into an allocatable register
+    /// and the caller is always the current pinned [VMContext] pointer.
+    CalleeAndCallerVMContext([VMContextLoc; 2]),
+}
+
+impl ContextArgs {
+    /// Construct an empty [ContextArgs].
+    pub fn none() -> Self {
+        Self::None
+    }
+
+    /// Construct a [ContextArgs] declaring the usage of the pinned [VMContext]
+    /// register as both the caller and callee context arguments.
+    pub fn pinned_callee_and_caller_vmctx() -> Self {
+        Self::CalleeAndCallerVMContext([VMContextLoc::Pinned, VMContextLoc::Pinned])
+    }
+
+    /// Construct a [ContextArgs] that declares the usage of the pinned
+    /// [VMContext] register as the only context argument.
+    pub fn pinned_vmctx() -> Self {
+        Self::VMContext([VMContextLoc::Pinned])
+    }
+
+    /// Construct a [ContextArgs] that declares a dynamic callee context and the
+    /// pinned [VMContext] register as the context arguments.
+    pub fn with_callee_and_pinned_caller(callee_vmctx: Reg) -> Self {
+        Self::CalleeAndCallerVMContext([VMContextLoc::Reg(callee_vmctx), VMContextLoc::Pinned])
+    }
+
+    /// Get the length of the [ContextArgs].
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    /// Get a slice of the context arguments.
+    pub fn as_slice(&self) -> &[VMContextLoc] {
+        match self {
+            Self::None => &[],
+            Self::VMContext(a) => a.as_slice(),
+            Self::CalleeAndCallerVMContext(a) => a.as_slice(),
         }
     }
 }

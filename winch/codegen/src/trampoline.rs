@@ -10,7 +10,7 @@
 // and VM context type should be derived from the ABI's pointer size. This is
 // going to be relevant once 32-bit architectures are supported.
 use crate::{
-    abi::{ABIOperand, ABIParams, ABISig, RetArea, ABI},
+    abi::{array_sig, native_sig, wasm_sig, ABIOperand, ABIParams, ABISig, RetArea, ABI},
     codegen::ptr_type_from_ptr_size,
     isa::CallingConvention,
     masm::{CalleeKind, MacroAssembler, OperandSize, RegImm, SPOffset},
@@ -89,8 +89,8 @@ where
 
     /// Emit an array-to-wasm trampoline.
     pub fn emit_array_to_wasm(mut self, ty: &WasmFuncType, callee_index: FuncIndex) -> Result<()> {
-        let array_sig = self.array_sig();
-        let wasm_sig = self.wasm_sig(ty);
+        let array_sig = array_sig::<M::ABI>(&self.call_conv);
+        let wasm_sig: ABISig = wasm_sig::<M::ABI>(&ty);
 
         let val_ptr = array_sig
             .params
@@ -100,19 +100,20 @@ where
 
         self.prologue_with_callee_saved();
 
-        // Get the VM context pointer and move it to the designated pinned
-        // register.
+        // Assign the caller and caller VMContext arguments.
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&array_sig.params)?;
-
+        let (dst_callee_vmctx, dst_caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params)?;
+        self.masm
+            .mov(vmctx.into(), dst_callee_vmctx, self.pointer_type.into());
         self.masm.mov(
-            vmctx.into(),
-            <M::ABI as ABI>::vmctx_reg().into(),
-            OperandSize::S64,
+            caller_vmctx.into(),
+            dst_caller_vmctx,
+            self.pointer_type.into(),
         );
 
         let ret_area = self.make_ret_area(&wasm_sig);
-        let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
-        let (offsets, spill_size) = self.spill(array_sig.params());
+        let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(vmctx);
+        let (offsets, spill_size) = self.spill(&array_sig.params()[2..]);
 
         // Call the function that was passed into the trampoline.
         let allocated_stack = self.masm.call(wasm_sig.params_stack_size(), |masm| {
@@ -144,7 +145,7 @@ where
 
         // Move the val ptr back into the scratch register so we can
         // load the return values.
-        let val_ptr_offset = offsets[2];
+        let val_ptr_offset = offsets[0];
         self.masm
             .load_ptr(self.masm.address_from_sp(val_ptr_offset), self.scratch_reg);
 
@@ -191,19 +192,13 @@ where
 
     /// Emit a native-to-wasm trampoline.
     pub fn emit_native_to_wasm(mut self, ty: &WasmFuncType, callee_index: FuncIndex) -> Result<()> {
-        let native_sig = self.native_sig(&ty);
-        let wasm_sig = self.wasm_sig(&ty);
-        let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
+        let native_sig = native_sig::<M::ABI>(&ty, &self.call_conv);
+        let wasm_sig = wasm_sig::<M::ABI>(&ty);
+        let (vmctx, _) = Self::callee_and_caller_vmctx(&native_sig.params)?;
 
         self.prologue_with_callee_saved();
-        // Move the VM context pointer to the designated pinned register.
-        self.masm.mov(
-            vmctx.into(),
-            <M::ABI as ABI>::vmctx_reg().into(),
-            OperandSize::S64,
-        );
 
-        let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
+        let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(vmctx);
         let ret_area = self.make_ret_area(&wasm_sig);
         let (offsets, spill_size) = self.spill(native_sig.params());
 
@@ -221,8 +216,8 @@ where
             Self::assign_args(
                 masm,
                 &wasm_sig.params_without_retptr(),
-                &native_sig.params_without_retptr()[2..],
-                &offsets[2..],
+                &native_sig.params_without_retptr(),
+                &offsets,
                 self.scratch_reg,
             );
             Self::load_retptr(masm, ret_area.as_ref(), &wasm_sig);
@@ -362,12 +357,8 @@ where
 
     /// Emit a wasm-to-native trampoline.
     pub fn emit_wasm_to_native(mut self, ty: &WasmFuncType) -> Result<()> {
-        let mut params = self.callee_and_caller_vmctx_types();
-        params.extend_from_slice(ty.params());
-
-        let wasm_ty = WasmFuncType::new(params.into_boxed_slice(), ty.returns().into());
-        let wasm_sig = self.wasm_sig(&wasm_ty);
-        let native_sig = self.native_sig(ty);
+        let wasm_sig = wasm_sig::<M::ABI>(&ty);
+        let native_sig = native_sig::<M::ABI>(ty, &self.call_conv);
 
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params).unwrap();
         let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
@@ -490,68 +481,6 @@ where
             );
     }
 
-    /// Get the type of the caller and callee VM contexts.
-    fn callee_and_caller_vmctx_types(&self) -> SmallVec<[WasmValType; 2]> {
-        std::iter::repeat(self.pointer_type).take(2).collect()
-    }
-
-    /// Returns an [ABISig] for the array calling convention.
-    /// The signature looks like:
-    /// ```ignore
-    /// unsafe extern "C" fn(
-    ///     callee_vmctx: *mut VMOpaqueContext,
-    ///     caller_vmctx: *mut VMOpaqueContext,
-    ///     values_ptr: *mut ValRaw,
-    ///     values_len: usize,
-    /// )
-    /// ```
-    fn array_sig(&self) -> ABISig {
-        let mut params = self.callee_and_caller_vmctx_types();
-        params.extend_from_slice(&[self.pointer_type, self.pointer_type]);
-        <M::ABI as ABI>::sig_from(&params, &[], self.call_conv)
-    }
-
-    /// Returns an [ABISig] that follows a variation of the system's
-    /// calling convention.
-    /// The main difference between the flavor of the returned signature
-    /// and the vanilla signature is how multiple values are returned.
-    /// Multiple returns are handled following Wasmtime's expectations:
-    /// * A single value is returned via a register according to the calling
-    ///   convention.
-    /// * More than one values are returned via a return pointer.
-    /// These variations look like:
-    ///
-    /// Single return value.
-    ///
-    /// ```ignore
-    /// unsafe extern "C" fn(
-    ///     callee_vmctx: *mut VMOpaqueContext,
-    ///     caller_vmctx: *mut VMOpaqueContext,
-    ///     // rest of paramters
-    /// ) -> // single result
-    /// ```
-    ///
-    /// Multiple return values.
-    ///
-    /// ```ignore
-    /// unsafe extern "C" fn(
-    ///     callee_vmctx: *mut VMOpaqueContext,
-    ///     caller_vmctx: *mut VMOpaqueContext,
-    ///     // rest of parameters
-    ///     retptr: *mut (), // 2+ results
-    /// ) -> // first result
-    /// ```
-    fn native_sig(&self, ty: &WasmFuncType) -> ABISig {
-        let mut params = self.callee_and_caller_vmctx_types();
-        params.extend_from_slice(ty.params());
-        <M::ABI as ABI>::sig_from(&params, ty.returns(), self.call_conv)
-    }
-
-    /// Returns an [ABISig] using the Winch's default calling convention.
-    fn wasm_sig(&self, ty: &WasmFuncType) -> ABISig {
-        <M::ABI as ABI>::sig(ty, &CallingConvention::Default)
-    }
-
     /// Returns the register pair containing the callee and caller VM context pointers.
     fn callee_and_caller_vmctx(params: &ABIParams) -> Result<(Reg, Reg)> {
         let vmctx = params
@@ -567,11 +496,9 @@ where
 
     /// Returns the address of the VM context runtime limits
     /// field.
-    fn vmctx_runtime_limits_addr(&mut self, caller_vmctx: Reg) -> M::Address {
-        self.masm.address_at_reg(
-            caller_vmctx,
-            self.pointer_size.vmcontext_runtime_limits().into(),
-        )
+    fn vmctx_runtime_limits_addr(&mut self, vmctx: Reg) -> M::Address {
+        self.masm
+            .address_at_reg(vmctx, self.pointer_size.vmcontext_runtime_limits().into())
     }
 
     /// Performs a spill of the given operands.
@@ -601,6 +528,9 @@ where
         callee_sig
             .params_without_retptr()
             .iter()
+            // Skip the first two arguments, which are the callee and caller
+            // VMContext pointers.
+            .skip(2)
             .enumerate()
             .for_each(|(i, param)| {
                 let value_offset = (i * VALUE_SIZE) as u32;

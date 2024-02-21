@@ -18,31 +18,33 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
+;;      	 4989fe               	mov	r14, rdi
 ;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4981c318000000       	add	r11, 0x18
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f8758000000         	ja	0x73
-;;   1b:	 4883ec10             	sub	rsp, 0x10
-;;      	 48c744240800000000   	
-;; 				mov	qword ptr [rsp + 8], 0
-;;      	 4c893424             	mov	qword ptr [rsp], r14
+;;      	 0f875b000000         	ja	0x79
+;;   1e:	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
 ;;      	 f30f100544000000     	movss	xmm0, dword ptr [rip + 0x44]
-;;      	 f30f1144240c         	movss	dword ptr [rsp + 0xc], xmm0
+;;      	 f30f11442404         	movss	dword ptr [rsp + 4], xmm0
 ;;      	 f30f10053e000000     	movss	xmm0, dword ptr [rip + 0x3e]
-;;      	 f30f11442408         	movss	dword ptr [rsp + 8], xmm0
-;;      	 f30f10442408         	movss	xmm0, dword ptr [rsp + 8]
-;;      	 f30f104c240c         	movss	xmm1, dword ptr [rsp + 0xc]
+;;      	 f30f110424           	movss	dword ptr [rsp], xmm0
+;;      	 f30f100424           	movss	xmm0, dword ptr [rsp]
+;;      	 f30f104c2404         	movss	xmm1, dword ptr [rsp + 4]
 ;;      	 0f2ec8               	ucomiss	xmm1, xmm0
 ;;      	 b800000000           	mov	eax, 0
 ;;      	 400f94c0             	sete	al
 ;;      	 41bb00000000         	mov	r11d, 0
 ;;      	 410f9bc3             	setnp	r11b
 ;;      	 4421d8               	and	eax, r11d
-;;      	 4883c410             	add	rsp, 0x10
+;;      	 4883c418             	add	rsp, 0x18
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   73:	 0f0b                 	ud2	
-;;   75:	 0000                 	add	byte ptr [rax], al
-;;   77:	 00cd                 	add	ch, cl
-;;   79:	 cc                   	int3	
+;;   79:	 0f0b                 	ud2	
+;;   7b:	 0000                 	add	byte ptr [rax], al
+;;   7d:	 0000                 	add	byte ptr [rax], al
+;;   7f:	 00cd                 	add	ch, cl
+;;   81:	 cc                   	int3	
