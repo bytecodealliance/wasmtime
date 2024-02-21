@@ -110,7 +110,7 @@ impl Frame {
         // Handle the results base slot for multi value returns.
         let (results_base_slot, locals_size) = if sig.params.has_retptr() {
             match sig.params.unwrap_results_area_operand() {
-                // If the results operand is a stack argument, ensure the the
+                // If the results operand is a stack argument, ensure the
                 // offset is correctly calculated, that is, that it includes the
                 // argument base offset.
                 // In this case, the locals size, remains untouched as we don't

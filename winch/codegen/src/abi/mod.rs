@@ -119,7 +119,7 @@ pub(crate) fn array_sig<A: ABI>(call_conv: &CallingConvention) -> ABISig {
 /// unsafe extern "C" fn(
 ///     callee_vmctx: *mut VMOpaqueContext,
 ///     caller_vmctx: *mut VMOpaqueContext,
-///     // rest of paramters
+///     // rest of parameters
 /// ) -> // single result
 /// ```
 ///
