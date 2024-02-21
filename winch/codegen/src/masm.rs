@@ -292,6 +292,9 @@ pub(crate) enum VMContextLoc {
     Pinned,
 }
 
+/// The maximum number of context arguments currently used across the compiler.
+pub(crate) const MAX_CONTEXT_ARGS: usize = 2;
+
 /// Out-of-band special purpose arguments used for function call emission.
 ///
 /// We cannot rely on the value stack for these values given that inserting
@@ -315,7 +318,7 @@ pub(crate) enum ContextArgs {
     /// The callee and caller context arguments are required. In this case, the
     /// callee context argument is usually stored into an allocatable register
     /// and the caller is always the current pinned [VMContext] pointer.
-    CalleeAndCallerVMContext([VMContextLoc; 2]),
+    CalleeAndCallerVMContext([VMContextLoc; MAX_CONTEXT_ARGS]),
 }
 
 impl ContextArgs {

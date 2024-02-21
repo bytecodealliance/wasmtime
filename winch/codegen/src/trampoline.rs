@@ -13,7 +13,7 @@ use crate::{
     abi::{array_sig, native_sig, wasm_sig, ABIOperand, ABIParams, ABISig, RetArea, ABI},
     codegen::ptr_type_from_ptr_size,
     isa::CallingConvention,
-    masm::{CalleeKind, MacroAssembler, OperandSize, RegImm, SPOffset},
+    masm::{CalleeKind, MacroAssembler, OperandSize, RegImm, SPOffset, MAX_CONTEXT_ARGS},
     reg::Reg,
 };
 use anyhow::{anyhow, Result};
@@ -528,9 +528,7 @@ where
         callee_sig
             .params_without_retptr()
             .iter()
-            // Skip the first two arguments, which are the callee and caller
-            // VMContext pointers.
-            .skip(2)
+            .skip(MAX_CONTEXT_ARGS)
             .enumerate()
             .for_each(|(i, param)| {
                 let value_offset = (i * VALUE_SIZE) as u32;
