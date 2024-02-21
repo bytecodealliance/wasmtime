@@ -2,7 +2,7 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{ABIOperand, ABIResults, RetArea, ABI},
+    abi::{vmctx, ABIOperand, ABIResults, RetArea, ABI},
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm, SPOffset, StackSlot},
@@ -184,10 +184,7 @@ impl<'a> CodeGenContext<'a> {
             Val::F32(v) => masm.store(RegImm::f32(v.bits()), addr, size),
             Val::F64(v) => masm.store(RegImm::f64(v.bits()), addr, size),
             Val::Local(local) => {
-                let slot = self
-                    .frame
-                    .get_local(local.index)
-                    .unwrap_or_else(|| panic!("invalid local at index = {}", local.index));
+                let slot = self.frame.get_wasm_local(local.index);
                 let scratch = <M::ABI as ABI>::scratch_reg();
                 let local_addr = masm.local_address(&slot);
                 masm.load(local_addr, scratch, size);
@@ -211,10 +208,7 @@ impl<'a> CodeGenContext<'a> {
             Val::F32(imm) => masm.mov(RegImm::f32(imm.bits()), dst, size),
             Val::F64(imm) => masm.mov(RegImm::f64(imm.bits()), dst, size),
             Val::Local(local) => {
-                let slot = self
-                    .frame
-                    .get_local(local.index)
-                    .unwrap_or_else(|| panic!("invalid local at index = {}", local.index));
+                let slot = self.frame.get_wasm_local(local.index);
                 let addr = masm.local_address(&slot);
                 masm.load(addr, dst, size);
             }
@@ -500,6 +494,15 @@ impl<'a> CodeGenContext<'a> {
         }
     }
 
+    /// Load the [VMContext] pointer into the designated pinned register.
+    pub fn load_vmctx<M>(&mut self, masm: &mut M)
+    where
+        M: MacroAssembler,
+    {
+        let addr = masm.local_address(&self.frame.vmctx_slot);
+        masm.load_ptr(addr, vmctx!(M));
+    }
+
     /// Spill locals and registers to memory.
     // TODO: optimize the spill range;
     // At any point in the program, the stack might already contain memory
@@ -518,7 +521,7 @@ impl<'a> CodeGenContext<'a> {
                 *v = Val::mem(r.ty, slot);
             }
             Val::Local(local) => {
-                let slot = frame.get_local(local.index).expect("valid local at slot");
+                let slot = frame.get_wasm_local(local.index);
                 let addr = masm.local_address(&slot);
                 let scratch = <M::ABI as ABI>::scratch_for(&slot.ty);
                 masm.load(addr, scratch, slot.ty.into());

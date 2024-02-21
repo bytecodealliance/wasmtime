@@ -1,19 +1,23 @@
 //!
-//! # Default ABI
+//! The Default ABI
 //!
-//! Winch uses a default internal ABI, for all internal functions.
-//! This allows us to push the complexity of system ABI compliance to
-//! the trampolines (not yet implemented).  The default ABI treats all
-//! allocatable registers as caller saved, which means that (i) all
-//! register values in the Wasm value stack (which are normally
-//! referred to as "live"), must be saved onto the machine stack (ii)
-//! function prologues and epilogues don't store/restore other
-//! registers more than the non-allocatable ones (e.g. rsp/rbp in
-//! x86_64).
+//! Winch uses a default ABI, for all internal functions. This allows
+//! us to push the complexity of system ABI compliance to the trampolines.  The
+//! default ABI treats all allocatable registers as caller saved, which means
+//! that (i) all register values in the Wasm value stack (which are normally
+//! referred to as "live"), must be saved onto the machine stack (ii) function
+//! prologues and epilogues don't store/restore other registers more than the
+//! non-allocatable ones (e.g. rsp/rbp in x86_64).
 //!
-//! The calling convention in the default ABI, uses registers to a
-//! certain fixed count for arguments and return values, and then the
-//! stack is used for all additional arguments.
+//! The calling convention in the default ABI, uses registers to a certain fixed
+//! count for arguments and return values, and then the stack is used for all
+//! additional arguments and return values. Aside from the parameters declared
+//! in each WebAssembly function, Winch's ABI declares two extra parameters, to
+//! hold the callee and caller `VMContext` pointers. A well-known `LocalSlot` is
+//! reserved for the callee VMContext pointer and also a particular pinned
+//! register is used to hold the value of the callee `VMContext`, which is
+//! available throughout the lifetime of the function.
+//!
 //!
 //! Generally the stack layout looks like:
 //! +-------------------------------+
@@ -28,10 +32,10 @@
 //! |            SP                 |
 //! +-------------------------------+----> SP @ Function prologue
 //! |                               |
+//! +-------------------------------+----> VMContext slot
 //! |                               |
 //! |                               |
 //! |        Stack slots            |
-//! |        + `VMContext` slot     |
 //! |        + dynamic space        |
 //! |                               |
 //! |                               |
@@ -58,6 +62,84 @@ pub(crate) use local::*;
 pub(super) enum ParamsOrReturns {
     Params,
     Returns,
+}
+
+/// Macro to get the pinned register holding the [VMContext].
+macro_rules! vmctx {
+    ($m:ident) => {
+        <$m::ABI as ABI>::vmctx_reg()
+    };
+}
+
+pub(crate) use vmctx;
+
+/// Constructs an [ABISig] using Winch's ABI.
+pub(crate) fn wasm_sig<A: ABI>(ty: &WasmFuncType) -> ABISig {
+    // 6 is used semi-arbitrarily here, we can modify as we see fit.
+    let mut params: SmallVec<[WasmValType; 6]> = SmallVec::new();
+    params.extend_from_slice(&vmctx_types::<A>());
+    params.extend_from_slice(ty.params());
+
+    A::sig_from(&params, ty.returns(), &CallingConvention::Default)
+}
+
+/// Returns the callee and caller [VMContext] types.
+pub(crate) fn vmctx_types<A: ABI>() -> [WasmValType; 2] {
+    [A::ptr_type(), A::ptr_type()]
+}
+
+/// Returns an [ABISig] for the array calling convention.
+/// The signature looks like:
+/// ```ignore
+/// unsafe extern "C" fn(
+///     callee_vmctx: *mut VMOpaqueContext,
+///     caller_vmctx: *mut VMOpaqueContext,
+///     values_ptr: *mut ValRaw,
+///     values_len: usize,
+/// )
+/// ```
+pub(crate) fn array_sig<A: ABI>(call_conv: &CallingConvention) -> ABISig {
+    let params = [A::ptr_type(), A::ptr_type(), A::ptr_type(), A::ptr_type()];
+    A::sig_from(&params, &[], call_conv)
+}
+
+/// Returns an [ABISig] that follows a variation of the system's
+/// calling convention.
+/// The main difference between the flavor of the returned signature
+/// and the vanilla signature is how multiple values are returned.
+/// Multiple returns are handled following Wasmtime's expectations:
+/// * A single value is returned via a register according to the calling
+///   convention.
+/// * More than one values are returned via a return pointer.
+/// These variations look like:
+///
+/// Single return value.
+///
+/// ```ignore
+/// unsafe extern "C" fn(
+///     callee_vmctx: *mut VMOpaqueContext,
+///     caller_vmctx: *mut VMOpaqueContext,
+///     // rest of parameters
+/// ) -> // single result
+/// ```
+///
+/// Multiple return values.
+///
+/// ```ignore
+/// unsafe extern "C" fn(
+///     callee_vmctx: *mut VMOpaqueContext,
+///     caller_vmctx: *mut VMOpaqueContext,
+///     // rest of parameters
+///     retptr: *mut (), // 2+ results
+/// ) -> // first result
+/// ```
+pub(crate) fn native_sig<A: ABI>(ty: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+    // 6 is used semi-arbitrarily here, we can modify as we see fit.
+    let mut params: SmallVec<[WasmValType; 6]> = SmallVec::new();
+    params.extend_from_slice(&vmctx_types::<A>());
+    params.extend_from_slice(ty.params());
+
+    A::sig_from(&params, ty.returns(), call_conv)
 }
 
 /// Trait implemented by a specific ISA and used to provide
@@ -140,6 +222,13 @@ pub(crate) trait ABI {
 
     /// Returns the size in bits of the given [`WasmType`].
     fn sizeof_bits(ty: &WasmValType) -> u8;
+
+    /// The target pointer size represented as [WasmValType].
+    fn ptr_type() -> WasmValType {
+        // Defaulting to 64, since we currently only support 64-bit
+        // architectures.
+        WasmValType::I64
+    }
 }
 
 /// ABI-specific representation of function argument or result.
@@ -309,7 +398,7 @@ impl ABIResults {
     /// Creates [`ABIResults`] from a slice of `WasmType`.
     /// This function maps the given return types to their ABI specific
     /// representation. It does so, by iterating over them and applying the
-    /// given `map` closure. The map closure takes a [WasmType], maps its ABI
+    /// given `map` closure. The map closure takes a [WasmValType], maps its ABI
     /// representation, according to the calling convention. In the case of
     /// results, one result is stored in registers and the rest at particular
     /// offsets in the stack.

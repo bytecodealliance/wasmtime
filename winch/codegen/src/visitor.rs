@@ -4,7 +4,7 @@
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
 
-use crate::abi::{RetArea, ABI};
+use crate::abi::RetArea;
 use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
@@ -1335,10 +1335,7 @@ where
     fn visit_local_get(&mut self, index: u32) {
         use WasmValType::*;
         let context = &mut self.context;
-        let slot = context
-            .frame
-            .get_local(index)
-            .unwrap_or_else(|| panic!("valid local at slot = {}", index));
+        let slot = context.frame.get_wasm_local(index);
         match slot.ty {
             I32 | I64 | F32 | F64 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
@@ -1397,20 +1394,12 @@ where
     }
 
     fn visit_table_init(&mut self, elem: u32, table: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
-
         debug_assert!(self.context.stack.len() >= 3);
         let at = self.context.stack.len() - 3;
 
-        self.context.stack.insert_many(
-            at,
-            &[
-                vmctx.into(),
-                table.try_into().unwrap(),
-                elem.try_into().unwrap(),
-            ],
-        );
+        self.context
+            .stack
+            .insert_many(at, &[table.try_into().unwrap(), elem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.table_init::<M::ABI, M::Ptr>();
         FnCall::emit::<M, M::Ptr>(
@@ -1421,18 +1410,11 @@ where
     }
 
     fn visit_table_copy(&mut self, dst: u32, src: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         debug_assert!(self.context.stack.len() >= 3);
         let at = self.context.stack.len() - 3;
-        self.context.stack.insert_many(
-            at,
-            &[
-                vmctx.into(),
-                dst.try_into().unwrap(),
-                src.try_into().unwrap(),
-            ],
-        );
+        self.context
+            .stack
+            .insert_many(at, &[dst.try_into().unwrap(), src.try_into().unwrap()]);
 
         let builtin = self.env.builtins.table_copy::<M::ABI, M::Ptr>();
         FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
@@ -1453,8 +1435,6 @@ where
     }
 
     fn visit_table_grow(&mut self, table: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
         let builtin = match table_plan.table.wasm_ty.heap_type {
@@ -1476,7 +1456,7 @@ where
         self.context.stack.inner_mut().swap(len - 1, len - 2);
         self.context
             .stack
-            .insert_many(at, &[vmctx.into(), table.try_into().unwrap()]);
+            .insert_many(at, &[table.try_into().unwrap()]);
 
         FnCall::emit::<M, M::Ptr>(
             self.masm,
@@ -1492,8 +1472,6 @@ where
     }
 
     fn visit_table_fill(&mut self, table: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
         let builtin = match table_plan.table.wasm_ty.heap_type {
@@ -1506,7 +1484,7 @@ where
         let at = len - 3;
         self.context
             .stack
-            .insert_many(at, &[vmctx.into(), table.try_into().unwrap()]);
+            .insert_many(at, &[table.try_into().unwrap()]);
         FnCall::emit::<M, M::Ptr>(
             self.masm,
             &mut self.context,
@@ -1552,27 +1530,17 @@ where
     }
 
     fn visit_elem_drop(&mut self, index: u32) {
-        let ptr_type = self.env.ptr_type();
         let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
-        self.context
-            .stack
-            .extend([vmctx.into(), index.try_into().unwrap()]);
+        self.context.stack.extend([index.try_into().unwrap()]);
         FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(elem_drop))
     }
 
     fn visit_memory_init(&mut self, data_index: u32, mem: u32) {
         debug_assert!(self.context.stack.len() >= 3);
-        let ptr_type = self.env.ptr_type();
         let at = self.context.stack.len() - 3;
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         self.context.stack.insert_many(
             at,
-            &[
-                vmctx.into(),
-                mem.try_into().unwrap(),
-                data_index.try_into().unwrap(),
-            ],
+            &[mem.try_into().unwrap(), data_index.try_into().unwrap()],
         );
         let builtin = self.env.builtins.memory_init::<M::ABI, M::Ptr>();
         FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
@@ -1585,8 +1553,6 @@ where
         //     [ vmctx, dst_mem, dst_offset, src_mem, src_offset, len ]
         // Which is the order expected by the builtin function.
         debug_assert!(self.context.stack.len() >= 3);
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let at = self.context.stack.len() - 2;
         self.context
             .stack
@@ -1596,7 +1562,7 @@ where
         let at = self.context.stack.len() - 4;
         self.context
             .stack
-            .insert_many(at, &[vmctx.into(), dst_mem.try_into().unwrap()]);
+            .insert_many(at, &[dst_mem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.memory_copy::<M::ABI, M::Ptr>();
 
@@ -1605,13 +1571,11 @@ where
 
     fn visit_memory_fill(&mut self, mem: u32) {
         debug_assert!(self.context.stack.len() >= 3);
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let at = self.context.stack.len() - 3;
 
         self.context
             .stack
-            .insert_many(at, &[vmctx.into(), mem.try_into().unwrap()]);
+            .insert_many(at, &[mem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.memory_fill::<M::ABI, M::Ptr>();
         FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
@@ -1624,13 +1588,9 @@ where
 
     fn visit_memory_grow(&mut self, mem: u32, _: u8) {
         debug_assert!(self.context.stack.len() >= 1);
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
-        let at = self.context.stack.len() - 1;
         // The stack at this point contains: [ delta ]
         // The desired state is
         //   [ vmctx, delta, index ]
-        self.context.stack.insert_many(at, &[vmctx.into()]);
         self.context.stack.extend([mem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>();
@@ -1638,11 +1598,7 @@ where
     }
 
     fn visit_data_drop(&mut self, data_index: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
-        self.context
-            .stack
-            .extend([vmctx.into(), data_index.try_into().unwrap()]);
+        self.context.stack.extend([data_index.try_into().unwrap()]);
 
         let builtin = self.env.builtins.data_drop::<M::ABI, M::Ptr>();
         FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
@@ -1858,10 +1814,7 @@ where
 
     fn visit_global_get(&mut self, global_index: u32) {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
-        let addr = self
-            .masm
-            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let (ty, addr) = self.emit_get_global_addr(index);
         let dst = self.context.reg_for_type(ty, self.masm);
         self.masm.load(addr, dst, ty.into());
         self.context.stack.push(Val::reg(dst, ty));
@@ -1869,10 +1822,8 @@ where
 
     fn visit_global_set(&mut self, global_index: u32) {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
-        let addr = self
-            .masm
-            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let (ty, addr) = self.emit_get_global_addr(index);
+
         let typed_reg = self.context.pop_to_reg(self.masm, None);
         self.context.free_reg(typed_reg.reg);
         self.masm.store(typed_reg.reg.into(), addr, ty.into());

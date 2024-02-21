@@ -223,7 +223,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 "elem",
                 "select",
                 "unreached_invalid",
-                "imports",
                 "linking",
             ]
             .contains(&testname);

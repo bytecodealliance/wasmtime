@@ -1,9 +1,8 @@
 use crate::{
-    abi::{ABISig, ABI},
+    abi::{wasm_sig, ABISig, ABI},
     codegen::{control, BlockSig, BuiltinFunction, BuiltinFunctions, OperandSize},
-    isa::{CallingConvention, TargetIsa},
+    isa::TargetIsa,
 };
-use smallvec::SmallVec;
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
@@ -14,6 +13,16 @@ use wasmtime_environ::{
     ModuleTypesBuilder, PtrSize, TableIndex, TablePlan, TypeConvert, TypeIndex, VMOffsets,
     WasmHeapType, WasmValType, WASM_PAGE_SIZE,
 };
+
+#[derive(Debug, Clone, Copy)]
+pub struct GlobalData {
+    /// The offset of the global.
+    pub offset: u32,
+    /// True if the global is imported.
+    pub imported: bool,
+    /// The WebAssembly type of the global.
+    pub ty: WasmValType,
+}
 
 /// Table metadata.
 #[derive(Debug, Copy, Clone)]
@@ -131,6 +140,8 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     /// A map from [TypeIndex] to [ABISig], to keep track of the resolved
     /// indirect function signatures.
     resolved_sigs: HashMap<TypeIndex, ABISig>,
+    /// A map from [GlobalIndex] to [GlobalData].
+    resolved_globals: HashMap<GlobalIndex, GlobalData>,
     /// Pointer size represented as a WebAssembly type.
     ptr_type: WasmValType,
     /// Whether or not to enable Spectre mitigation on heap bounds checks.
@@ -151,6 +162,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         types: &'translation ModuleTypesBuilder,
         builtins: &'translation mut BuiltinFunctions,
         isa: &dyn TargetIsa,
+        ptr_type: WasmValType,
     ) -> Self {
         Self {
             vmoffsets,
@@ -160,7 +172,8 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             resolved_heaps: HashMap::new(),
             resolved_callees: HashMap::new(),
             resolved_sigs: HashMap::new(),
-            ptr_type: ptr_type_from_ptr_size(vmoffsets.ptr.size()),
+            resolved_globals: HashMap::new(),
+            ptr_type,
             heap_access_spectre_mitigation: isa.flags().enable_heap_access_spectre_mitigation(),
             builtins,
         }
@@ -179,7 +192,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         let val = || {
             let sig_index = self.translation.module.types[idx].unwrap_function();
             let ty = &self.types[sig_index];
-            let sig = <A as ABI>::sig(ty, &CallingConvention::Default);
+            let sig = wasm_sig::<A>(ty);
             sig
         };
         Callee::FuncRef(self.resolved_sigs.entry(idx).or_insert_with(val))
@@ -190,25 +203,13 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     where
         A: ABI,
     {
-        let ptr = self.ptr_type();
-        let types = &self.translation.get_types();
+        let types = self.translation.get_types();
         let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
         let ty = self.convert_func_type(ty);
         let import = self.translation.module.is_imported_function(idx);
         let val = || {
-            let info = if import {
-                let mut params: SmallVec<[WasmValType; 6]> =
-                    SmallVec::with_capacity(ty.params().len() + 2);
-                params.extend_from_slice(&[ptr, ptr]);
-                params.extend_from_slice(ty.params());
-                let sig = <A as ABI>::sig_from(&params, ty.returns(), &CallingConvention::Default);
-                CalleeInfo { sig, index: idx }
-            } else {
-                let sig = <A as ABI>::sig(&ty, &CallingConvention::Default);
-                CalleeInfo { sig, index: idx }
-            };
-
-            info
+            let sig = wasm_sig::<A>(&ty);
+            CalleeInfo { sig, index: idx }
         };
 
         if import {
@@ -236,15 +237,23 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         }
     }
 
-    /// Resolves the type and offset of a global at the given index.
-    pub fn resolve_global_type_and_offset(&self, index: GlobalIndex) -> (WasmValType, u32) {
+    /// Resolves [GlobalData] of a global at the given index.
+    pub fn resolve_global(&mut self, index: GlobalIndex) -> GlobalData {
         let ty = self.translation.module.globals[index].wasm_ty;
-        let offset = match self.translation.module.defined_global_index(index) {
-            Some(defined_index) => self.vmoffsets.vmctx_vmglobal_definition(defined_index),
-            None => self.vmoffsets.vmctx_vmglobal_import_from(index),
+        let val = || match self.translation.module.defined_global_index(index) {
+            Some(defined_index) => GlobalData {
+                offset: self.vmoffsets.vmctx_vmglobal_definition(defined_index),
+                imported: false,
+                ty,
+            },
+            None => GlobalData {
+                offset: self.vmoffsets.vmctx_vmglobal_import_from(index),
+                imported: true,
+                ty,
+            },
         };
 
-        (ty, offset)
+        *self.resolved_globals.entry(index).or_insert_with(val)
     }
 
     /// Returns the table information for the given table index.

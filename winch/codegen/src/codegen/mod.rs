@@ -1,17 +1,19 @@
 use crate::{
-    abi::{ABIOperand, ABISig, RetArea, ABI},
+    abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
     codegen::BlockSig,
     isa::reg::Reg,
     masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::TypedReg,
 };
+
 use anyhow::Result;
 use smallvec::SmallVec;
 use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
 };
 use wasmtime_environ::{
-    MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType, FUNCREF_MASK,
+    GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType,
+    FUNCREF_MASK,
 };
 
 mod context;
@@ -86,6 +88,9 @@ where
     fn emit_start(&mut self) -> Result<()> {
         self.masm.prologue();
 
+        // Pin the `VMContext` pointer.
+        self.pin_vmctx();
+
         // Stack overflow checks must occur during the function prologue to ensure that unwinding
         // will not assume they're user-handlable exceptions. As the `save_clobbers` call below
         // marks the end of the prologue for unwinding annotations, we make the stack check here.
@@ -157,6 +162,18 @@ where
         }
     }
 
+    /// Assigns the [VMContext] pointer to the designated, pinned [VMContext]
+    /// register.
+    fn pin_vmctx(&mut self) {
+        let pinned = vmctx!(M);
+        let vmctx = self.sig.params().first().expect("VMContext argument");
+        self.masm.mov(
+            vmctx.unwrap_reg().into(),
+            pinned,
+            self.env.ptr_type().into(),
+        );
+    }
+
     fn emit_body(
         &mut self,
         body: &mut BinaryReader<'a>,
@@ -165,12 +182,6 @@ where
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
         self.masm.zero_mem_range(defined_locals_range.as_range());
-
-        // Save the vmctx pointer to its local slot in case we need to reload it
-        // at any point.
-        let vmctx_addr = self.masm.local_address(&self.context.frame.vmctx_slot);
-        self.masm
-            .store_ptr(<M::ABI as ABI>::vmctx_reg().into(), vmctx_addr);
 
         // Save the results base parameter register into its slot.
         self.sig.params.has_retptr().then(|| {
@@ -332,11 +343,7 @@ where
             .filter(|(_, a)| a.is_reg())
             .for_each(|(index, arg)| {
                 let ty = arg.ty();
-                let local = self
-                    .context
-                    .frame
-                    .get_local(index as u32)
-                    .expect("valid local slot at location");
+                let local = self.context.frame.get_frame_local(index);
                 let addr = self.masm.local_address(local);
                 let src = arg
                     .get_reg()
@@ -372,6 +379,22 @@ where
         src
     }
 
+    /// Loads the address of the given global.
+    pub fn emit_get_global_addr(&mut self, index: GlobalIndex) -> (WasmValType, M::Address) {
+        let data = self.env.resolve_global(index);
+
+        let addr = if data.imported {
+            let global_base = self.masm.address_at_reg(vmctx!(M), data.offset);
+            let scratch = <M::ABI as ABI>::scratch_reg();
+            self.masm.load_ptr(global_base, scratch);
+            self.masm.address_at_reg(scratch, 0)
+        } else {
+            self.masm.address_at_reg(vmctx!(M), data.offset)
+        };
+
+        (data.ty, addr)
+    }
+
     pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) {
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
@@ -380,11 +403,11 @@ where
             .builtins
             .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
 
-        // Request the builtin's  result register and use it to hold the
-        // table element value. We preemptively request this register to
-        // avoid conflict at the control flow merge below.
-        // Requesting the result register is safe since we know ahead-of-time
-        // the builtin's signature.
+        // Request the builtin's  result register and use it to hold the table
+        // element value. We preemptively spill and request this register to
+        // avoid conflict at the control flow merge below. Requesting the result
+        // register is safe since we know ahead-of-time the builtin's signature.
+        self.context.spill(self.masm);
         let elem_value: Reg = self
             .context
             .reg(
@@ -407,11 +430,9 @@ where
         let (defined, cont) = (self.masm.get_label(), self.masm.get_label());
 
         // Push the built-in arguments to the stack.
-        self.context.stack.extend([
-            TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into(),
-            table_index.as_u32().try_into().unwrap(),
-            index.into(),
-        ]);
+        self.context
+            .stack
+            .extend([table_index.as_u32().try_into().unwrap(), index.into()]);
 
         self.masm.branch(
             IntCmpKind::Ne,

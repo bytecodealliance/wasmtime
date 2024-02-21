@@ -1,10 +1,10 @@
 use crate::{
-    abi::ABI,
+    abi::{wasm_sig, ABI},
     codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv},
 };
 
 use crate::frame::{DefinedLocals, Frame};
-use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
+use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
@@ -105,9 +105,17 @@ impl TargetIsa for X64 {
             self.isa_flags.clone(),
         );
         let stack = Stack::new();
-        let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
-        let env = FuncEnv::new(&vmoffsets, translation, types, builtins, self);
+        let abi_sig = wasm_sig::<abi::X64ABI>(sig);
+
+        let env = FuncEnv::new(
+            &vmoffsets,
+            translation,
+            types,
+            builtins,
+            self,
+            abi::X64ABI::ptr_type(),
+        );
         let defined_locals = DefinedLocals::new::<abi::X64ABI>(&env, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
