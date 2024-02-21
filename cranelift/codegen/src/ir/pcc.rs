@@ -1004,6 +1004,37 @@ impl Fact {
                 nullable: *nullable_lhs && *nullable_rhs,
             },
 
+            (Fact::Def { value: v1 }, Fact::Def { value: v2 }) => Fact::Def {
+                value: std::cmp::min(*v1, *v2),
+            },
+
+            (
+                Fact::Compare {
+                    kind: kind1,
+                    lhs: lhs1,
+                    rhs: rhs1,
+                },
+                Fact::Compare {
+                    kind: kind2,
+                    lhs: lhs2,
+                    rhs: rhs2,
+                },
+            ) if kind1 == kind2 => {
+                if (lhs1, rhs1) <= (lhs2, rhs2) {
+                    Fact::Compare {
+                        kind: *kind1,
+                        lhs: *lhs1,
+                        rhs: *rhs1,
+                    }
+                } else {
+                    Fact::Compare {
+                        kind: *kind2,
+                        lhs: *lhs2,
+                        rhs: *rhs2,
+                    }
+                }
+            }
+
             _ => Fact::Conflict,
         };
         trace!("Fact::intersect: {a:?} {b:?} -> {result:?}");

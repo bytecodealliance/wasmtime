@@ -247,6 +247,20 @@ pub(crate) fn check(
             Ok(())
         }
 
+        Inst::AluRRImm12 {
+            alu_op: ALUOp::SubS,
+            size,
+            rd,
+            rn,
+            imm12,
+        } if rd.to_reg() == zero_reg() => {
+            // Compare.
+            let rn = get_fact_or_default(vcode, rn, size.bits().into());
+            let rm = Fact::constant(size.bits().into(), imm12.value().into());
+            state.cmp_flags = Some((rn, rm));
+            Ok(())
+        }
+
         Inst::AluRRImmLogic {
             alu_op: ALUOp::Orr,
             size,
@@ -311,10 +325,17 @@ pub(crate) fn check(
         }
 
         Inst::CSel { rd, cond, rn, rm }
-            if (cond == Cond::Hs || cond == Cond::Hi) && cmp_flags.is_some() =>
+            if (cond == Cond::Hs || cond == Cond::Hi || cond == Cond::Ls || cond == Cond::Lo)
+                && cmp_flags.is_some() =>
         {
             let (cmp_lhs, cmp_rhs) = cmp_flags.unwrap();
             trace!("CSel: cmp {cond:?} ({cmp_lhs:?}, {cmp_rhs:?})");
+
+            let (cmp_lhs, cmp_rhs) = match cond {
+                Cond::Hs | Cond::Hi => (cmp_lhs, cmp_rhs),
+                Cond::Ls | Cond::Lo => (cmp_rhs, cmp_lhs),
+                _ => unreachable!(),
+            };
 
             check_output(ctx, vcode, rd, &[], |vcode| {
                 // We support transitivity-based reasoning. If the
@@ -334,16 +355,16 @@ pub(crate) fn check(
                 // True side: lhs >= rhs (Hs) or lhs > rhs (Hi).
                 let rn = get_fact_or_default(vcode, rn, 64);
                 let lhs_kind = match cond {
-                    Cond::Hs => InequalityKind::Loose,
-                    Cond::Hi => InequalityKind::Strict,
+                    Cond::Hs | Cond::Ls => InequalityKind::Loose,
+                    Cond::Hi | Cond::Lo => InequalityKind::Strict,
                     _ => unreachable!(),
                 };
                 let rn = ctx.apply_inequality(&rn, &cmp_lhs, &cmp_rhs, lhs_kind);
                 // false side: rhs < lhs (Hs) or rhs <= lhs (Hi).
                 let rm = get_fact_or_default(vcode, rm, 64);
                 let rhs_kind = match cond {
-                    Cond::Hs => InequalityKind::Strict,
-                    Cond::Hi => InequalityKind::Loose,
+                    Cond::Hs | Cond::Ls => InequalityKind::Strict,
+                    Cond::Hi | Cond::Lo => InequalityKind::Loose,
                     _ => unreachable!(),
                 };
                 let rm = ctx.apply_inequality(&rm, &cmp_rhs, &cmp_lhs, rhs_kind);
