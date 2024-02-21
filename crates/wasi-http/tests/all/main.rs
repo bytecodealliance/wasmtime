@@ -11,7 +11,7 @@ use wasmtime::{
     component::{Component, Linker, Resource, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
     body::HyperIncomingBody,
@@ -160,7 +160,7 @@ async fn run_wasi_http(
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let out = store.data_mut().new_response_outparam(sender)?;
 
-    let handle = preview2::spawn(async move {
+    let handle = wasmtime_wasi::spawn(async move {
         proxy
             .wasi_http_incoming_handler()
             .call_handle(&mut store, req, out)
@@ -267,7 +267,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponseInternal {
                         resp,
-                        worker: Arc::new(preview2::spawn(future::ready(()))),
+                        worker: Arc::new(wasmtime_wasi::spawn(future::ready(()))),
                         between_bytes_timeout,
                     })
                 });

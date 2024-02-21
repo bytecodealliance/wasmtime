@@ -4,7 +4,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::{
+use wasmtime_wasi::{
     pipe::MemoryOutputPipe,
     preview1::{WasiPreview1Adapter, WasiPreview1View},
     DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,

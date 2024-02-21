@@ -9,7 +9,7 @@ use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
-use wasmtime_wasi::preview2::{
+use wasmtime_wasi::{
     self, poll_noop, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError,
     Subscribe,
 };
@@ -36,7 +36,7 @@ impl BodyWithTimeout {
             inner,
             between_bytes_timeout,
             reset_sleep: true,
-            timeout: Box::pin(preview2::with_ambient_tokio_runtime(|| {
+            timeout: Box::pin(wasmtime_wasi::with_ambient_tokio_runtime(|| {
                 tokio::time::sleep(Duration::new(0, 0))
             })),
         }
