@@ -343,7 +343,7 @@ where
             .filter(|(_, a)| a.is_reg())
             .for_each(|(index, arg)| {
                 let ty = arg.ty();
-                let local = self.context.frame.get_local_unchecked(index);
+                let local = self.context.frame.get_frame_local(index);
                 let addr = self.masm.local_address(local);
                 let src = arg
                     .get_reg()

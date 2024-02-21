@@ -163,7 +163,7 @@ impl Frame {
     /// # Panics
     /// This method panics if the index is not associated to a valid WebAssembly
     /// local.
-    pub fn get_local(&self, index: u32) -> &LocalSlot {
+    pub fn get_wasm_local(&self, index: u32) -> &LocalSlot {
         let local_index = Self::WASM_LOCALS_OFFSET + index as usize;
         self.locals
             .get(local_index)
@@ -178,7 +178,7 @@ impl Frame {
     /// # Panics
     /// This method panics if the index is not associated to a valid WebAssembly
     /// local.
-    pub fn get_local_unchecked(&self, index: usize) -> &LocalSlot {
+    pub fn get_frame_local(&self, index: usize) -> &LocalSlot {
         self.locals
             .get(index)
             .unwrap_or_else(|| panic!(" Expected Frame local at slot: {index}"))
@@ -193,7 +193,7 @@ impl Frame {
         index: u32,
         masm: &mut M,
     ) -> (WasmValType, M::Address) {
-        let slot = self.get_local(index);
+        let slot = self.get_wasm_local(index);
         (slot.ty, masm.local_address(&slot))
     }
 

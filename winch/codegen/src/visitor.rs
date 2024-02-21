@@ -1335,7 +1335,7 @@ where
     fn visit_local_get(&mut self, index: u32) {
         use WasmValType::*;
         let context = &mut self.context;
-        let slot = context.frame.get_local(index);
+        let slot = context.frame.get_wasm_local(index);
         match slot.ty {
             I32 | I64 | F32 | F64 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
