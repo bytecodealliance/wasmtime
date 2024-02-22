@@ -94,7 +94,7 @@ where
         // Stack overflow checks must occur during the function prologue to ensure that unwinding
         // will not assume they're user-handlable exceptions. As the `save_clobbers` call below
         // marks the end of the prologue for unwinding annotations, we make the stack check here.
-        self.masm.check_stack();
+        self.masm.check_stack(vmctx!(M));
 
         // We don't have any callee save registers in the winch calling convention, but
         // `save_clobbers` does some useful work for setting up unwinding state, and marks the end

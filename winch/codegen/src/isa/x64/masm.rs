@@ -77,12 +77,12 @@ impl Masm for MacroAssembler {
             .mov_rr(stack_pointer, frame_pointer, OperandSize::S64);
     }
 
-    fn check_stack(&mut self) {
+    fn check_stack(&mut self, vmctx: Reg) {
         let ptr_size: u8 = self.ptr_size.bytes().try_into().unwrap();
         let scratch = regs::scratch();
 
         self.load_ptr(
-            self.address_at_vmctx(ptr_size.vmcontext_runtime_limits().into()),
+            self.address_at_reg(vmctx, ptr_size.vmcontext_runtime_limits().into()),
             scratch,
         );
 

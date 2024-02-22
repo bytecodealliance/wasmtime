@@ -488,7 +488,7 @@ pub(crate) trait MacroAssembler {
     }
 
     /// Emit a stack check.
-    fn check_stack(&mut self);
+    fn check_stack(&mut self, vmctx: Reg);
 
     /// Emit the function epilogue.
     fn epilogue(&mut self, locals_size: u32);
