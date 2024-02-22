@@ -3707,3 +3707,9 @@ criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2024-02-15"
 end = "2025-02-16"
+
+[[trusted.witx]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2021-06-22"
+end = "2025-02-22"

@@ -1336,6 +1336,13 @@ when = "2024-02-15"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.witx]]
+version = "0.9.1"
+when = "2021-06-22"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[audits.embark-studios.wildcard-audits.spdx]]
 who = "Jake Shadle <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
