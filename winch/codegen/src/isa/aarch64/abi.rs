@@ -162,10 +162,6 @@ impl ABI for Aarch64ABI {
             ty => unimplemented!("Support for WasmType: {ty}"),
         }
     }
-
-    fn sizeof_bits(ty: &WasmValType) -> u8 {
-        Self::sizeof(ty) * 8
-    }
 }
 
 impl Aarch64ABI {

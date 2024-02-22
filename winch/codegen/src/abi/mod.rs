@@ -220,9 +220,6 @@ pub(crate) trait ABI {
     /// Returns the size in bytes of the given [`WasmType`].
     fn sizeof(ty: &WasmValType) -> u8;
 
-    /// Returns the size in bits of the given [`WasmType`].
-    fn sizeof_bits(ty: &WasmValType) -> u8;
-
     /// The target pointer size represented as [WasmValType].
     fn ptr_type() -> WasmValType {
         // Defaulting to 64, since we currently only support 64-bit
