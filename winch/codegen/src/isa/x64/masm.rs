@@ -61,7 +61,7 @@ impl Masm for MacroAssembler {
     type Ptr = u8;
     type ABI = X64ABI;
 
-    fn prologue(&mut self) {
+    fn frame_setup(&mut self) {
         let frame_pointer = rbp();
         let stack_pointer = rsp();
 
@@ -801,12 +801,8 @@ impl Masm for MacroAssembler {
         context.stack.push(Val::reg(rdx, divisor.ty));
     }
 
-    fn epilogue(&mut self, locals_size: u32) {
-        assert_eq!(self.sp_offset, locals_size);
-
-        if locals_size > 0 {
-            self.free_stack(locals_size);
-        }
+    fn frame_restore(&mut self) {
+        assert_eq!(self.sp_offset, 0);
         self.asm.pop_r(rbp());
         self.asm.ret();
     }

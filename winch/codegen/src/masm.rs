@@ -468,7 +468,18 @@ pub(crate) trait MacroAssembler {
     type ABI: abi::ABI;
 
     /// Emit the function prologue.
-    fn prologue(&mut self);
+    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)], locals_size: u32) {
+        self.frame_setup();
+        self.check_stack(vmctx);
+        self.save_clobbers(clobbers);
+        self.reserve_stack(locals_size);
+    }
+
+    /// Generate the frame setup sequence.
+    fn frame_setup(&mut self);
+
+    /// Generate the frame restore sequence.
+    fn frame_restore(&mut self);
 
     /// Save all the given clobbered registers to the stack. By default this is the same as pushing
     /// the registers, however it's present in the [`MacroAssembler`] trait to ensure that it's
@@ -491,7 +502,11 @@ pub(crate) trait MacroAssembler {
     fn check_stack(&mut self, vmctx: Reg);
 
     /// Emit the function epilogue.
-    fn epilogue(&mut self, locals_size: u32);
+    fn epilogue(&mut self, clobbers: &[(Reg, OperandSize)], locals_size: u32) {
+        self.free_stack(locals_size);
+        self.restore_clobbers(clobbers);
+        self.frame_restore();
+    }
 
     /// Reserve stack space.
     fn reserve_stack(&mut self, bytes: u32);
