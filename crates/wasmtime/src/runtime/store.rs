@@ -307,7 +307,6 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
     signal_handler: Option<Box<SignalHandler<'static>>>,
-    #[cfg(feature = "gc")]
     externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
@@ -498,7 +497,6 @@ impl<T> Store<T> {
                 #[cfg(feature = "component-model")]
                 num_component_instances: 0,
                 signal_handler: None,
-                #[cfg(feature = "gc")]
                 externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable::new(),
                 modules: ModuleRegistry::default(),
                 func_refs: FuncRefs::default(),
@@ -1382,14 +1380,12 @@ impl StoreOpaque {
     }
 
     #[inline]
-    #[cfg(feature = "gc")]
     pub fn externref_activations_table(
         &mut self,
     ) -> &mut wasmtime_runtime::VMExternRefActivationsTable {
         &mut self.externref_activations_table
     }
 
-    #[cfg(feature = "gc")]
     pub fn gc(&mut self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
         // are upheld for all host-->Wasm calls.
@@ -1535,7 +1531,6 @@ impl StoreOpaque {
         &self.runtime_limits as *const VMRuntimeLimits as *mut VMRuntimeLimits
     }
 
-    #[cfg(feature = "gc")]
     pub unsafe fn insert_vmexternref_without_gc(&mut self, r: wasmtime_runtime::VMExternRef) {
         self.externref_activations_table.insert_without_gc(r);
     }
@@ -2052,7 +2047,6 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         self.engine.epoch_counter() as *const _
     }
 
-    #[cfg(feature = "gc")]
     fn externref_activations_table(
         &mut self,
     ) -> (

@@ -106,7 +106,6 @@ pub unsafe trait Store {
     /// The first element returned is the table in which externrefs are stored
     /// throughout wasm execution, and the second element is how to look up
     /// module information for gc requests.
-    #[cfg(feature = "gc")]
     fn externref_activations_table(
         &mut self,
     ) -> (&mut VMExternRefActivationsTable, &dyn ModuleInfoLookup);

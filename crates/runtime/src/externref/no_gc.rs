@@ -76,39 +76,45 @@ impl Deref for VMExternRef {
     }
 }
 
-pub struct VMExternRefActivationsTable(Uninhabited);
+pub struct VMExternRefActivationsTable {
+    _priv: (),
+}
 
 impl VMExternRefActivationsTable {
-    pub fn bump_capacity_remaining(&self) -> usize {
-        match self.0 {}
+    pub fn new() -> Self {
+        Self { _priv: () }
     }
 
-    pub fn try_insert(&mut self, _externref: VMExternRef) -> Result<(), VMExternRef> {
-        match self.0 {}
+    pub fn bump_capacity_remaining(&self) -> usize {
+        usize::MAX
+    }
+
+    pub fn try_insert(&mut self, externref: VMExternRef) -> Result<(), VMExternRef> {
+        match externref.0 {}
     }
 
     pub unsafe fn insert_with_gc(
         &mut self,
         _limits: *const VMRuntimeLimits,
-        _externref: VMExternRef,
+        externref: VMExternRef,
         _module_info_lookup: &dyn ModuleInfoLookup,
     ) {
-        match self.0 {}
+        match externref.0 {}
     }
 
-    pub fn insert_without_gc(&mut self, _externref: VMExternRef) {
-        match self.0 {}
+    pub fn insert_without_gc(&mut self, externref: VMExternRef) {
+        match externref.0 {}
     }
 
     pub fn set_gc_okay(&mut self, _okay: bool) -> bool {
-        match self.0 {}
+        true
     }
 }
 
 pub unsafe fn gc(
     _limits: *const VMRuntimeLimits,
     _module_info_lookup: &dyn ModuleInfoLookup,
-    externref_activations_table: &mut VMExternRefActivationsTable,
+    _externref_activations_table: &mut VMExternRefActivationsTable,
 ) {
-    match externref_activations_table.0 {}
+    // Nothing to do.
 }

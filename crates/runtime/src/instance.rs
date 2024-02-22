@@ -465,15 +465,7 @@ impl Instance {
             *self.vmctx_plus_offset_mut(self.offsets().vmctx_store()) = store;
             *self.runtime_limits() = (*store).vmruntime_limits();
             *self.epoch_ptr() = (*store).epoch_ptr();
-
-            #[cfg(feature = "gc")]
-            {
-                *self.externref_activations_table() = (*store).externref_activations_table().0;
-            }
-            #[cfg(not(feature = "gc"))]
-            {
-                *self.externref_activations_table() = ptr::null_mut();
-            }
+            *self.externref_activations_table() = (*store).externref_activations_table().0;
         } else {
             assert_eq!(
                 mem::size_of::<*mut dyn Store>(),
