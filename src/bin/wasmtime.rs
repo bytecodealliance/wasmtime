@@ -62,7 +62,7 @@ enum Subcommand {
     Config(wasmtime_cli::commands::ConfigCommand),
 
     /// Compiles a WebAssembly module.
-    #[cfg(feature = "cranelift")]
+    #[cfg(feature = "compile")]
     Compile(wasmtime_cli::commands::CompileCommand),
 
     /// Explore the compilation of a WebAssembly module to native code.
@@ -97,7 +97,7 @@ impl Wasmtime {
             #[cfg(feature = "cache")]
             Subcommand::Config(c) => c.execute(),
 
-            #[cfg(feature = "cranelift")]
+            #[cfg(feature = "compile")]
             Subcommand::Compile(c) => c.execute(),
 
             #[cfg(feature = "explore")]
