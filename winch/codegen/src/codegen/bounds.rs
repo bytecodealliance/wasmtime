@@ -3,7 +3,7 @@
 //! recommended when working on this area of Winch.
 use super::env::{HeapData, HeapStyle};
 use crate::{
-    abi::ABI,
+    abi::{vmctx, ABI},
     codegen::CodeGenContext,
     isa::reg::Reg,
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
@@ -102,7 +102,7 @@ where
                 masm.load_ptr(addr, scratch);
                 scratch
             } else {
-                <M::ABI as ABI>::vmctx_reg()
+                vmctx!(M)
             };
             let addr = masm.address_at_reg(base, heap.current_length_offset);
             masm.load_ptr(addr, dst);
@@ -205,7 +205,7 @@ pub(crate) fn load_heap_addr_unchecked<M>(
     } else {
         // Else if the WebAssembly memory is defined in the current module,
         // simply use the `VMContext` as the base for subsequent operations.
-        <M::ABI as ABI>::vmctx_reg()
+        vmctx!(M)
     };
 
     // Load the base of the memory into the `addr` register.
