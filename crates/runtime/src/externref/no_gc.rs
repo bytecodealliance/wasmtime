@@ -30,6 +30,11 @@ impl Drop for VMExternRef {
 }
 
 impl VMExternRef {
+    /// This method is only available when the `gc` cargo feature is *disabled*.
+    pub fn assert_unreachable<T>(&self) -> T {
+        match self.0 {}
+    }
+
     pub fn as_raw(&self) -> *mut u8 {
         match self.0 {}
     }

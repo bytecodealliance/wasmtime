@@ -2027,9 +2027,8 @@ impl<T> Caller<'_, T> {
     /// Perform garbage collection of `ExternRef`s.
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
-    ///
-    /// This method is only available when the `gc` cargo feature is enabled.
     #[cfg(feature = "gc")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn gc(&mut self) {
         self.store.gc()
     }

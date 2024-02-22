@@ -2,6 +2,8 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
+#![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
+
 use crate::externref::VMExternRef;
 use crate::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::{SendSyncPtr, Store};
@@ -583,10 +585,6 @@ impl Drop for Table {
         let ty = self.element_type();
 
         // `funcref` tables don't need drops.
-        //
-        // This is an irrefutable pattern when the `gc` cargo feature is not
-        // enabled.
-        #[allow(irrefutable_let_patterns)]
         if let TableElementType::Func = ty {
             return;
         }

@@ -18,12 +18,12 @@ use wasmtime_runtime::VMExternRef;
 /// `gc` cargo feature to properly use this type.
 #[derive(Clone, Debug)]
 pub struct ExternRef {
-    pub(crate) _inner: Uninhabited,
+    _inner: Uninhabited,
 }
 
 impl ExternRef {
-    pub(crate) fn from_vm_extern_ref(_inner: VMExternRef) -> Self {
-        unreachable!()
+    pub(crate) fn from_vm_extern_ref(inner: VMExternRef) -> Self {
+        inner.assert_unreachable()
     }
 
     pub(crate) fn into_vm_extern_ref(self) -> VMExternRef {
