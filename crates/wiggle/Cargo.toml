@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-witx = { path = "../wasi-common/WASI/tools/witx", version = "0.9.1", optional = true }
+witx = { version = "0.9.1", optional = true }
 wiggle-macro = { workspace = true }
 tracing = { workspace = true }
 bitflags = { workspace = true }

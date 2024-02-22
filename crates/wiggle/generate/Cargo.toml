@@ -15,7 +15,7 @@ include = ["src/**/*", "README.md", "LICENSE"]
 workspace = true
 
 [dependencies]
-witx = { version = "0.9.1", path = "../../wasi-common/WASI/tools/witx" }
+witx = "0.9.1"
 quote = "1.0"
 proc-macro2 = "1.0"
 heck = { workspace = true }

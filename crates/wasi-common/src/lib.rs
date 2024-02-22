@@ -126,9 +126,7 @@ macro_rules! define_wasi {
             wiggle::wasmtime_integration!({
                 // The wiggle code to integrate with lives here:
                 target: crate::snapshots::preview_1,
-                // This must be the same witx document as used above. This should be ensured by
-                // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
-                witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
+                witx: ["$CARGO_MANIFEST_DIR/witx/preview1/wasi_snapshot_preview1.witx"],
                 errors: { errno => trappable Error },
                 $async_mode: *
             });
@@ -137,9 +135,7 @@ macro_rules! define_wasi {
             wiggle::wasmtime_integration!({
                 // The wiggle code to integrate with lives here:
                 target: crate::snapshots::preview_0,
-                // This must be the same witx document as used above. This should be ensured by
-                // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
-                witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
+                witx: ["$CARGO_MANIFEST_DIR/witx/preview0/wasi_unstable.witx"],
                 errors: { errno => trappable Error },
                 $async_mode: *
             });

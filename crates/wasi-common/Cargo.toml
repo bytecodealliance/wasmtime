@@ -10,12 +10,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
 include = ["src/**/*", "tests/**/*", "WASI/phases/**/*", "README.md", "LICENSE", "build.rs"]
-build = "build.rs"
-
-# This doesn't actually link to a native library, but it allows us to set env
-# vars like `DEP_WASI_COMMON_19_*` for crates that have build scripts and depend
-# on this crate, allowing other crates to use the same witx files.
-links = "wasi-common-19"
 
 [lints]
 workspace = true
