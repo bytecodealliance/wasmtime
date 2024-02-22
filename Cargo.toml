@@ -126,8 +126,6 @@ members = [
   "winch/codegen",
 ]
 exclude = [
-  'crates/wasi-common/WASI/tools/witx-cli',
-  'crates/wasi-common/WASI/tools/witx',
   'docs/rust_wasi_markdown_parser',
 ]
 

@@ -15,7 +15,7 @@ use std::ops::Deref;
 use wiggle::GuestPtr;
 
 wiggle::from_witx!({
-    witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
+    witx: ["$CARGO_MANIFEST_DIR/witx/preview0/wasi_unstable.witx"],
     errors: { errno => trappable Error },
     async: *,
     wasmtime: false,

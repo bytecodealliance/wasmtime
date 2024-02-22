@@ -178,9 +178,6 @@ audit-as-crates-io = true
 [policy.winch-codegen]
 audit-as-crates-io = true
 
-[policy.witx]
-audit-as-crates-io = false
-
 [[exemptions.addr2line]]
 version = "0.17.0"
 criteria = "safe-to-deploy"

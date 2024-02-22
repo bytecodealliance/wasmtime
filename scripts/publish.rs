@@ -81,9 +81,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
 // releases since everything not mentioned here is just an organizational detail
 // that no one else should rely on.
 const PUBLIC_CRATES: &[&str] = &[
-    // just here to appease the script because these are submodules of this
-    // repository.
-    "witx",
     // these are actually public crates which we cannot break the API of in
     // patch releases.
     "wasmtime",
@@ -252,9 +249,6 @@ fn read_crate(ws: Option<&Workspace>, manifest: &Path) -> Crate {
     }
     let name = name.unwrap();
     let version = version.unwrap();
-    if ["witx", "witx-cli"].contains(&&name[..]) {
-        publish = false;
-    }
     Crate {
         manifest: manifest.to_path_buf(),
         name,
@@ -490,14 +484,6 @@ fn verify(crates: &[Crate]) {
     fs::create_dir_all(".cargo").unwrap();
     fs::write(".cargo/config.toml", vendor.stdout).unwrap();
 
-    // Vendor witx which wasn't vendored because it's a path dependency, but
-    // it'll need to be in our directory registry for crates that depend on it.
-    let witx = crates
-        .iter()
-        .find(|c| c.name == "witx" && c.manifest.iter().any(|p| p == "wasi-common"))
-        .unwrap();
-    verify_and_vendor(&witx);
-
     for krate in crates {
         if !krate.publish {
             continue;
@@ -511,7 +497,7 @@ fn verify(crates: &[Crate]) {
             .arg("--manifest-path")
             .arg(&krate.manifest)
             .env("CARGO_TARGET_DIR", "./target");
-        if krate.name == "witx" || krate.name.contains("wasi-nn") {
+        if krate.name.contains("wasi-nn") {
             cmd.arg("--no-verify");
         }
         let status = cmd.status().unwrap();
