@@ -1549,9 +1549,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Add an external relocation at the current offset.
-    pub fn add_reloc<T: Into<RelocTarget> + Clone>(
+    /// Add an external relocation at the given offset from current offset.
+    pub fn add_reloc_at_offset<T: Into<RelocTarget> + Clone>(
         &mut self,
+        offset: CodeOffset,
         kind: Reloc,
         target: &T,
         addend: Addend,
@@ -1591,11 +1592,21 @@ impl<I: VCodeInst> MachBuffer<I> {
         // when a relocation can't otherwise be resolved later, so it shouldn't
         // actually result in any memory unsafety or anything like that.
         self.relocs.push(MachReloc {
-            offset: self.data.len() as CodeOffset,
+            offset: self.data.len() as CodeOffset + offset,
             kind,
             target,
             addend,
         });
+    }
+
+    /// Add an external relocation at the current offset.
+    pub fn add_reloc<T: Into<RelocTarget> + Clone>(
+        &mut self,
+        kind: Reloc,
+        target: &T,
+        addend: Addend,
+    ) {
+        self.add_reloc_at_offset(0, kind, target, addend);
     }
 
     /// Add a trap record at the current offset.

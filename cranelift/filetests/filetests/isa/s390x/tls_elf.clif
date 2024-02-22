@@ -37,7 +37,7 @@ block0(v0: i32):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   lg %r2, 0(%r1)
-;   brasl %r14, 0x22 ; reloc_external TlsGdCall u1:0 0
+;   brasl %r14, 0x22 ; reloc_external PLTRel32Dbl %ElfTlsGetOffset 2 ; reloc_external TlsGdCall u1:0 0
 ;   ear %r3, %a0
 ;   sllg %r5, %r3, 0x20
 ;   ear %r5, %a1
