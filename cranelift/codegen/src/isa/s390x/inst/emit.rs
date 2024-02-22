@@ -218,15 +218,8 @@ pub fn mem_emit(
         &MemArg::Symbol {
             ref name, offset, ..
         } => {
-            let reloc = Reloc::S390xPCRel32Dbl;
-            put_with_reloc(
-                sink,
-                &enc_ril_b(opcode_ril.unwrap(), rd, 0),
-                2,
-                reloc,
-                name,
-                offset.into(),
-            );
+            sink.add_reloc_at_offset(2, Reloc::S390xPCRel32Dbl, &**name, (offset + 2).into());
+            put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
         _ => unreachable!(),
     }
@@ -1318,25 +1311,6 @@ fn put_with_trap(sink: &mut MachBuffer<Inst>, enc: &[u8], trap_code: TrapCode) {
     }
     sink.add_trap(trap_code);
     sink.put1(enc[len - 1]);
-}
-
-/// Emit encoding to sink, adding a relocation at byte offset.
-fn put_with_reloc(
-    sink: &mut MachBuffer<Inst>,
-    enc: &[u8],
-    offset: usize,
-    ri2_reloc: Reloc,
-    ri2_name: &ExternalName,
-    ri2_offset: i64,
-) {
-    let len = enc.len();
-    for i in 0..offset {
-        sink.put1(enc[i]);
-    }
-    sink.add_reloc(ri2_reloc, ri2_name, ri2_offset + offset as i64);
-    for i in offset..len {
-        sink.put1(enc[i]);
-    }
 }
 
 /// State carried between emissions of a sequence of instructions.
@@ -3505,6 +3479,13 @@ impl Inst {
             &Inst::Call { link, ref info } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
 
+                let opcode = 0xc05; // BRASL
+
+                // Add relocation for target function.  This has to be done *before*
+                // the S390xTlsGdCall relocation if any, to ensure linker relaxation
+                // works correctly.
+                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
+
                 // Add relocation for TLS libcalls to enable linker optimizations.
                 match &info.tls_symbol {
                     None => {}
@@ -3514,19 +3495,10 @@ impl Inst {
                     _ => unreachable!(),
                 }
 
-                let opcode = 0xc05; // BRASL
-                let reloc = Reloc::S390xPLTRel32Dbl;
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
                 }
-                put_with_reloc(
-                    sink,
-                    &enc_ril_b(opcode, link.to_reg(), 0),
-                    2,
-                    reloc,
-                    &info.dest,
-                    0,
-                );
+                put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
