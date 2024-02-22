@@ -463,6 +463,11 @@ impl Engine {
             };
         }
 
+        #[cfg(target_family = "wasm")]
+        {
+            let _ = &mut enabled;
+        }
+
         match enabled {
             Some(true) => return Ok(()),
             Some(false) => {
