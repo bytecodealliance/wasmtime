@@ -40,7 +40,6 @@ use wasmtime_environ::{
 ///
 /// ```
 /// # use wasmtime::*;
-/// # use anyhow::Result;
 /// # fn main() -> Result<()> {
 /// let engine = Engine::default();
 /// let module = Module::new(
@@ -170,7 +169,6 @@ pub(crate) fn from_runtime_box(
 ///
 /// ```
 /// # use wasmtime::*;
-/// # use anyhow::Result;
 /// # fn main() -> Result<()> {
 /// let engine = Engine::default();
 /// let module = Module::new(
@@ -230,7 +228,6 @@ impl WasmBacktrace {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # use anyhow::Result;
     /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let module = Module::new(

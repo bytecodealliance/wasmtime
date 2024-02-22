@@ -67,8 +67,6 @@ use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
 use crate::{machinst::*, trace};
 
-use smallvec::SmallVec;
-
 /// Mapping from CLIF BBs to VCode BBs.
 #[derive(Debug)]
 pub struct BlockLoweringOrder {
@@ -330,7 +328,7 @@ mod test {
     use crate::flowgraph::ControlFlowGraph;
     use crate::ir::types::*;
     use crate::ir::UserFuncName;
-    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
+    use crate::ir::{AbiParam, InstBuilder, Signature};
     use crate::isa::CallConv;
 
     fn build_test_func(n_blocks: usize, edges: &[(usize, usize)]) -> BlockLoweringOrder {

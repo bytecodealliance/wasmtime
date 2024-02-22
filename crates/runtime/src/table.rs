@@ -6,7 +6,6 @@ use crate::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::{SendSyncPtr, Store, VMExternRef};
 use anyhow::{bail, format_err, Error, Result};
 use sptr::Strict;
-use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::{

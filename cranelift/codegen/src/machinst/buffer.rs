@@ -184,7 +184,6 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::convert::TryFrom;
 use std::mem;
 use std::string::String;
 use std::vec::Vec;
@@ -2079,8 +2078,6 @@ mod test {
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::machinst::{MachInstEmit, MachInstEmitState};
     use crate::settings;
-    use std::default::Default;
-    use std::vec::Vec;
 
     fn label(n: u32) -> MachLabel {
         MachLabel::from_block(BlockIndex::new(n as usize))

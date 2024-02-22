@@ -9,7 +9,6 @@
 
 use crate::Variable;
 use alloc::vec::Vec;
-use core::convert::TryInto;
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};

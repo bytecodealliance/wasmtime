@@ -31,7 +31,7 @@
 //! $ sysctl vm.max_map_count=$LARGER_LIMIT
 //! ```
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use bytesize::ByteSize;
 use clap::Parser;
 use log::{info, warn};

@@ -160,7 +160,10 @@ pub(crate) trait ABI {
 
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
+    #[cfg(test)]
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
+    }
 
     /// Construct an ABI signature from WasmType params and returns.
     fn sig_from(
@@ -219,9 +222,6 @@ pub(crate) trait ABI {
 
     /// Returns the size in bytes of the given [`WasmType`].
     fn sizeof(ty: &WasmValType) -> u8;
-
-    /// Returns the size in bits of the given [`WasmType`].
-    fn sizeof_bits(ty: &WasmValType) -> u8;
 
     /// The target pointer size represented as [WasmValType].
     fn ptr_type() -> WasmValType {

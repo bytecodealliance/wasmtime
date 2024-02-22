@@ -1,6 +1,5 @@
 use hyper::rt::{Read, ReadBufCursor, Write};
 use std::io::Error;
-use std::marker::Unpin;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};

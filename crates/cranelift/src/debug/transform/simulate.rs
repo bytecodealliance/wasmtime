@@ -7,7 +7,7 @@ use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_wasm::get_vmctx_value_label;
 use gimli::write;
-use gimli::{self, LineEncoding};
+use gimli::LineEncoding;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};

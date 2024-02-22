@@ -8,7 +8,6 @@
 //      cargo build -p example-fib-debug-wasm --target wasm32-unknown-unknown
 //      cargo run --example fib-debug
 
-use anyhow::Result;
 use wasmtime::*;
 
 fn main() -> Result<()> {

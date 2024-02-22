@@ -4,7 +4,6 @@ use crate::ir::entities::DynamicType;
 use crate::ir::types::*;
 use crate::ir::GlobalValue;
 use crate::ir::PrimaryMap;
-use crate::ir::Type;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};

@@ -4,7 +4,6 @@ use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::slice;
 use std::time::Instant;

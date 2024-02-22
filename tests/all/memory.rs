@@ -1,9 +1,8 @@
-use anyhow::Result;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
 use std::time::{Duration, Instant};
 use wasmtime::*;
-use wasmtime_runtime::{mpk, MpkEnabled};
+use wasmtime_runtime::mpk;
 
 fn module(engine: &Engine) -> Result<Module> {
     let mut wat = format!("(module\n");

@@ -3,7 +3,6 @@
 use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
-use crate::ir::Type;
 use crate::isa::aarch64::inst::args::{Cond, PairAMode, ShiftOp};
 use crate::isa::aarch64::inst::regs::zero_reg;
 use crate::isa::aarch64::inst::Inst;

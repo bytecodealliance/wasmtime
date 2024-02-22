@@ -1,6 +1,5 @@
 use super::config::tests::test_prolog;
 use super::*;
-use std::fs;
 
 // Since cache system is a global thing, each test needs to be run in seperate process.
 // So, init() tests are run as integration tests.

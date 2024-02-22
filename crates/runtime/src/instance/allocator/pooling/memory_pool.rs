@@ -752,9 +752,8 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InstanceLimits, PoolingInstanceAllocator};
+    use crate::PoolingInstanceAllocator;
     use proptest::prelude::*;
-    use wasmtime_environ::WASM_PAGE_SIZE;
 
     #[cfg(target_pointer_width = "64")]
     #[test]

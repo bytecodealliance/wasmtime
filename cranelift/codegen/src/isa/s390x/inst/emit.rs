@@ -1,13 +1,10 @@
 //! S390x ISA: binary code emission.
 
-use crate::binemit::{Reloc, StackMap};
+use crate::binemit::StackMap;
 use crate::ir::{MemFlags, RelSourceLoc, TrapCode};
-use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::machinst::{Reg, RegClass};
 use crate::trace;
-use core::convert::TryFrom;
 use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 

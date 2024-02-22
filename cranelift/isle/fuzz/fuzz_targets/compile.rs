@@ -1,7 +1,6 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use std::default::Default;
 
 fuzz_target!(|s: &str| {
     let _ = env_logger::try_init();

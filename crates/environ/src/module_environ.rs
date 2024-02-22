@@ -11,7 +11,6 @@ use crate::{
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::types::{CoreTypeId, Types};

@@ -3,7 +3,7 @@ use crate::abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrRe
 use crate::isa::{reg::Reg, CallingConvention};
 use crate::masm::OperandSize;
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
@@ -83,10 +83,6 @@ impl ABI for Aarch64ABI {
         64
     }
 
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
-        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
-    }
-
     fn sig_from(
         params: &[WasmValType],
         returns: &[WasmValType],
@@ -161,10 +157,6 @@ impl ABI for Aarch64ABI {
             WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
             ty => unimplemented!("Support for WasmType: {ty}"),
         }
-    }
-
-    fn sizeof_bits(ty: &WasmValType) -> u8 {
-        Self::sizeof(ty) * 8
     }
 }
 

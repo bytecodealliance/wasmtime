@@ -7,7 +7,6 @@ use crate::Engine;
 use std::{
     borrow::Borrow,
     collections::{HashMap, HashSet},
-    convert::TryFrom,
     fmt::Debug,
     hash::{Hash, Hasher},
     ops::Deref,

@@ -10,7 +10,6 @@
 
 #![cfg(not(miri))]
 
-use anyhow::Result;
 use wasmtime::*;
 
 const MB: usize = 1 << 20;

@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::{env, process};
 use test_programs::preview1::open_scratch_directory;
 

@@ -10,7 +10,6 @@ use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
 use io_lifetimes::{AsSocket, BorrowedSocket};
 use std::any::Any;
-use std::convert::TryInto;
 use std::io;
 #[cfg(unix)]
 use system_interface::fs::GetSetFdFlags;

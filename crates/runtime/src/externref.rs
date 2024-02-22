@@ -966,7 +966,6 @@ pub unsafe fn gc(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::TryInto;
 
     #[test]
     fn extern_ref_is_pointer_sized_and_aligned() {

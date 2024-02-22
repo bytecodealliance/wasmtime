@@ -20,21 +20,18 @@
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
 use crate::ir::pcc::*;
-use crate::ir::RelSourceLoc;
-use crate::ir::{self, types, Constant, ConstantData, DynamicStackSlot, ValueLabel};
+use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
 use crate::machinst::*;
 use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 use crate::{LabelValueLoc, ValueLocRange};
-use cranelift_control::ControlPlane;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand, OperandKind,
-    PRegSet, RegClass, VReg,
+    PRegSet, RegClass,
 };
 
-use alloc::vec::Vec;
-use cranelift_entity::{entity_impl, Keys, PrimaryMap};
+use cranelift_entity::{entity_impl, Keys};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt;

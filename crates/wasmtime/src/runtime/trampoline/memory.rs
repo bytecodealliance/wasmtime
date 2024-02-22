@@ -3,7 +3,6 @@ use crate::module::BareModuleInfo;
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use anyhow::{anyhow, Result};
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::sync::Arc;
 use wasmtime_environ::{

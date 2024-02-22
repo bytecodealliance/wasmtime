@@ -12,7 +12,6 @@
 use crate::file::{FdFlags, FileType, WasiFile};
 use crate::Error;
 use std::any::Any;
-use std::convert::TryInto;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
 

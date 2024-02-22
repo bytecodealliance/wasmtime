@@ -9,7 +9,6 @@ use crate::ir::{Block, Inst};
 use crate::packed_option::PackedOption;
 use crate::{timing, trace};
 use core::cmp;
-use core::iter::{IntoIterator, Iterator};
 
 /// The `Layout` struct determines the layout of blocks and instructions in a function. It does not
 /// contain definitions of instructions or blocks, but depends on `Inst` and `Block` entity references
@@ -681,7 +680,6 @@ mod serde {
     use ::serde::de::{Deserializer, Error, SeqAccess, Visitor};
     use ::serde::ser::{SerializeSeq, Serializer};
     use ::serde::{Deserialize, Serialize};
-    use core::convert::TryFrom;
     use core::fmt;
     use core::marker::PhantomData;
 

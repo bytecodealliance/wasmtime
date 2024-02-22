@@ -14,15 +14,14 @@ use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32,
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
 use cranelift_codegen::ir::types;
-use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, JumpTableData, MemFlags, MemoryTypeData, MemoryTypeField, Opcode,
-    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    UserFuncName, Value,
+    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, UserFuncName,
+    Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -3255,14 +3254,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ParseError;
     use crate::isaspec::IsaSpec;
-    use crate::testfile::{Comment, Details};
-    use cranelift_codegen::ir::entities::AnyEntity;
-    use cranelift_codegen::ir::types;
-    use cranelift_codegen::ir::StackSlotKind;
-    use cranelift_codegen::ir::{ArgumentExtension, ArgumentPurpose};
-    use cranelift_codegen::isa::CallConv;
 
     #[test]
     fn argument_type() {

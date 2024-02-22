@@ -6,7 +6,6 @@
 
 use alloc::vec::Vec;
 use core::cmp::Ordering;
-use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
@@ -1181,9 +1180,7 @@ impl Not for Ieee64 {
 mod tests {
     use super::*;
     use alloc::string::ToString;
-    use core::fmt::Display;
     use core::mem;
-    use core::str::FromStr;
     use core::{f32, f64};
 
     #[test]

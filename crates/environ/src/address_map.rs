@@ -4,7 +4,6 @@ use crate::obj::ELF_WASMTIME_ADDRMAP;
 use object::write::{Object, StandardSegment};
 use object::{Bytes, LittleEndian, SectionKind, U32Bytes};
 use serde_derive::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use std::ops::Range;
 
 /// Single source location to generated address mapping.

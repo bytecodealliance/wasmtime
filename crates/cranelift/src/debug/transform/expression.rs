@@ -8,7 +8,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
 use cranelift_wasm::get_vmctx_value_label;
-use gimli::{self, write, Expression, Operation, Reader, ReaderOffset};
+use gimli::{write, Expression, Operation, Reader, ReaderOffset};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -786,7 +786,7 @@ mod tests {
         FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
     };
     use crate::CompiledFunctionMetadata;
-    use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
+    use gimli::{constants, Encoding, EndianSlice, Expression, RunTimeEndian};
     use wasmtime_environ::FilePos;
 
     macro_rules! dw_op {

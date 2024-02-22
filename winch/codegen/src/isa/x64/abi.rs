@@ -5,7 +5,7 @@ use crate::{
     masm::OperandSize,
 };
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmValType};
 
 /// Helper environment to track argument-register
 /// assignment in x64.
@@ -133,10 +133,6 @@ impl ABI for X64ABI {
         ABISig::new(params, results)
     }
 
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
-        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
-    }
-
     fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults {
         // Use absolute count for results given that for Winch's
         // default CallingConvention only one register is used for results
@@ -192,10 +188,6 @@ impl ABI for X64ABI {
             WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
             ty => unimplemented!("Support for WasmType: {ty}"),
         }
-    }
-
-    fn sizeof_bits(ty: &WasmValType) -> u8 {
-        Self::sizeof(ty) * 8
     }
 }
 

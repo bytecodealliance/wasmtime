@@ -2,7 +2,6 @@
 //! for example, during interpretation and for wrapping immediates.
 use crate::ir::immediates::{Ieee32, Ieee64, Offset32};
 use crate::ir::{types, ConstantData, Type};
-use core::convert::TryInto;
 use core::fmt::{self, Display, Formatter};
 
 /// Represent a data value. Where [Value] is an SSA reference, [DataValue] is the type + value

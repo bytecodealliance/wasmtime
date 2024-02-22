@@ -5,7 +5,6 @@ use crate::keys::Keys;
 use crate::EntityRef;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::mem;
 use core::ops::{Index, IndexMut};

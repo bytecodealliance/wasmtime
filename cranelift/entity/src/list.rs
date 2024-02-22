@@ -642,8 +642,6 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::{sclass_for_length, sclass_size};
-    use crate::EntityRef;
 
     /// An opaque reference to an instruction in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

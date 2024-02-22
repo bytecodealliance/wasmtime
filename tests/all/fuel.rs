@@ -1,4 +1,3 @@
-use anyhow::Result;
 use wasmtime::*;
 use wast::parser::{self, Parse, ParseBuffer, Parser};
 use wast::token::Span;

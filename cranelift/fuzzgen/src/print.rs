@@ -1,6 +1,6 @@
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::Function;
-use cranelift::prelude::settings::{self, SettingKind};
+use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use std::fmt;
 

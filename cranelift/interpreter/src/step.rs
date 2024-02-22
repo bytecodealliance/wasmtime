@@ -12,7 +12,6 @@ use cranelift_codegen::ir::{
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
-use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::ops::RangeFrom;
 use thiserror::Error;

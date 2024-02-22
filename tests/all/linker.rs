@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};

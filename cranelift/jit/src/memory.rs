@@ -5,7 +5,6 @@ use memmap2::MmapMut;
 
 #[cfg(not(any(feature = "selinux-fix", windows)))]
 use std::alloc;
-use std::convert::TryFrom;
 use std::ffi::c_void;
 use std::io;
 use std::mem;

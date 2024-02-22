@@ -2,7 +2,7 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{anyhow, bail, Context as _, Error, Result};
+use anyhow::{anyhow, bail, Context as _};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str;

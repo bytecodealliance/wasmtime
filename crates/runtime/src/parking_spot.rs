@@ -363,7 +363,6 @@ mod tests {
         use super::*;
         use std::sync::atomic::AtomicU32;
         use std::sync::Arc;
-        use std::time::Duration;
 
         macro_rules! test {
             ( $( $name:ident(

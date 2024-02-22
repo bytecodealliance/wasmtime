@@ -1,6 +1,6 @@
 use {
     proc_macro2::{Span, TokenStream},
-    std::{collections::HashMap, iter::FromIterator, path::PathBuf},
+    std::{collections::HashMap, path::PathBuf},
     syn::{
         braced, bracketed,
         parse::{Parse, ParseStream},

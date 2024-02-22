@@ -13,7 +13,7 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use wasmparser::{self, BinaryReader, FuncValidator, FunctionBody, WasmModuleResources};
+use wasmparser::{BinaryReader, FuncValidator, FunctionBody, WasmModuleResources};
 
 /// WebAssembly to Cranelift IR function translator.
 ///

@@ -2,7 +2,6 @@
 
 // You can execute this example with `cargo run --example linking`
 
-use anyhow::Result;
 use wasi_common::sync::WasiCtxBuilder;
 use wasmtime::*;
 

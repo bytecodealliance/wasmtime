@@ -3,7 +3,6 @@
 
 // You can execute this example with `cargo run --example threads`
 
-use anyhow::Result;
 use std::sync::Arc;
 use std::thread;
 use std::time;

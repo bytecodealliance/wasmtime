@@ -1,6 +1,5 @@
 #![cfg(not(miri))]
 
-use anyhow::Result;
 use wasmtime::*;
 
 #[test]

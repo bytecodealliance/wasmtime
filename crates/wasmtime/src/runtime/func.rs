@@ -2537,7 +2537,7 @@ mod rooted {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Instance, Module, Store};
+    use crate::Store;
 
     #[test]
     fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {

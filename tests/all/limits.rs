@@ -1,6 +1,4 @@
-use anyhow::Result;
 use wasmtime::*;
-use wasmtime_runtime::MpkEnabled;
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
