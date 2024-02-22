@@ -198,7 +198,7 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      CARGO_MDBOOK_VERSION: 0.4.21
+      CARGO_MDBOOK_VERSION: 0.4.37
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
@@ -207,7 +207,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2023-10-10
+        toolchain: nightly-2024-02-22
 
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -383,7 +383,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2023-10-10
+        toolchain: nightly-2024-02-22
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
@@ -410,7 +410,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 8.1.1
+      QEMU_BUILD_VERSION: 8.2.1
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -689,14 +689,14 @@ jobs:
     name: Miri
     runs-on: ubuntu-latest
     env:
-      CARGO_NEXTEST_VERSION: 0.9.51
+      CARGO_NEXTEST_VERSION: 0.9.67
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2023-10-10
+        toolchain: nightly-2024-02-22
     - run: rustup component add rust-src miri
     - uses: actions/cache@v4
       with:
