@@ -252,7 +252,15 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
-        ret.wasm_reference_types(cfg!(feature = "gc"));
+        #[cfg(feature = "gc")]
+        ret.wasm_reference_types(true);
+        #[cfg(not(feature = "gc"))]
+        {
+            ret.features.reference_types = false;
+            ret.features.function_references = false;
+            ret.features.gc = false;
+        }
+
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
