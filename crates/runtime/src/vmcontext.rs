@@ -3,7 +3,9 @@
 
 mod vm_host_func_context;
 
+#[cfg(feature = "gc")]
 use crate::externref::VMExternRef;
+
 use sptr::Strict;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
@@ -390,7 +392,6 @@ pub struct VMGlobalDefinition {
 #[cfg(test)]
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
-    use crate::externref::VMExternRef;
     use std::mem::{align_of, size_of};
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
@@ -421,7 +422,9 @@ mod test_vmglobal_definition {
     }
 
     #[test]
+    #[cfg(feature = "gc")]
     fn check_vmglobal_can_contain_externref() {
+        use crate::externref::VMExternRef;
         assert!(size_of::<VMExternRef>() <= size_of::<VMGlobalDefinition>());
     }
 }
@@ -533,11 +536,13 @@ impl VMGlobalDefinition {
     }
 
     /// Return a reference to the value as an externref.
+    #[cfg(feature = "gc")]
     pub unsafe fn as_externref(&self) -> &Option<VMExternRef> {
         &*(self.storage.as_ref().as_ptr().cast::<Option<VMExternRef>>())
     }
 
     /// Return a mutable reference to the value as an externref.
+    #[cfg(feature = "gc")]
     pub unsafe fn as_externref_mut(&mut self) -> &mut Option<VMExternRef> {
         &mut *(self
             .storage
@@ -707,6 +712,7 @@ macro_rules! define_builtin_array {
         #[repr(C)]
         pub struct VMBuiltinFunctionsArray {
             $(
+                $( #[ $attr ] )*
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -714,8 +720,12 @@ macro_rules! define_builtin_array {
         }
 
         impl VMBuiltinFunctionsArray {
+            #[allow(unused_doc_comments)]
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
-                $($name: crate::libcalls::trampolines::$name,)*
+                $(
+                    $( #[ $attr ] )*
+                    $name: crate::libcalls::trampolines::$name,
+                )*
             };
         }
     };
@@ -1025,6 +1035,7 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
+    #[cfg(feature = "gc")]
     externref: *mut c_void,
 }
 
@@ -1097,8 +1108,16 @@ impl ValRaw {
     /// Creates a WebAssembly `externref` value
     #[inline]
     pub fn externref(i: *mut c_void) -> ValRaw {
-        ValRaw {
-            externref: Strict::map_addr(i, |i| i.to_le()),
+        #[cfg(feature = "gc")]
+        {
+            return ValRaw {
+                externref: Strict::map_addr(i, |i| i.to_le()),
+            };
+        }
+        #[cfg(not(feature = "gc"))]
+        {
+            assert!(i.is_null());
+            return ValRaw::funcref(i);
         }
     }
 
@@ -1153,7 +1172,15 @@ impl ValRaw {
     /// Gets the WebAssembly `externref` value
     #[inline]
     pub fn get_externref(&self) -> *mut c_void {
-        unsafe { Strict::map_addr(self.externref, |i| usize::from_le(i)) }
+        #[cfg(feature = "gc")]
+        unsafe {
+            return Strict::map_addr(self.externref, |i| usize::from_le(i));
+        }
+        #[cfg(not(feature = "gc"))]
+        {
+            assert!(self.get_funcref().is_null());
+            return std::ptr::null_mut();
+        }
     }
 }
 

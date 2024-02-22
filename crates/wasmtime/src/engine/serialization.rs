@@ -22,7 +22,7 @@
 //! using wasmtime artifacts across versions.
 
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use object::write::{Object, StandardSegment};
 use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
 use serde_derive::{Deserialize, Serialize};
@@ -406,6 +406,27 @@ impl Metadata<'_> {
         Ok(())
     }
 
+    fn check_cfg_bool(
+        cfg: bool,
+        cfg_str: &str,
+        found: bool,
+        expected: bool,
+        feature: &str,
+    ) -> Result<()> {
+        if cfg {
+            Self::check_bool(found, expected, feature)
+        } else {
+            assert!(!expected);
+            ensure!(
+                !found,
+                "Module was compiled with {feature} but support in the host \
+                 was disabled at compile time because the `{cfg_str}` Cargo \
+                 feature was not enabled",
+            );
+            Ok(())
+        }
+    }
+
     fn check_features(&mut self, other: &wasmparser::WasmFeatures) -> Result<()> {
         let WasmFeatures {
             reference_types,
@@ -424,11 +445,28 @@ impl Metadata<'_> {
             gc,
         } = self.features;
 
-        Self::check_bool(
+        Self::check_cfg_bool(
+            cfg!(feature = "gc"),
+            "gc",
             reference_types,
             other.reference_types,
             "WebAssembly reference types support",
         )?;
+        Self::check_cfg_bool(
+            cfg!(feature = "gc"),
+            "gc",
+            function_references,
+            other.function_references,
+            "WebAssembly function-references support",
+        )?;
+        Self::check_cfg_bool(
+            cfg!(feature = "gc"),
+            "gc",
+            gc,
+            other.gc,
+            "WebAssembly garbage collection support",
+        )?;
+
         Self::check_bool(
             multi_value,
             other.multi_value,
@@ -472,12 +510,6 @@ impl Metadata<'_> {
             other.relaxed_simd,
             "WebAssembly relaxed-simd support",
         )?;
-        Self::check_bool(
-            function_references,
-            other.function_references,
-            "WebAssembly function-references support",
-        )?;
-        Self::check_bool(gc, other.gc, "WebAssembly garbage collection support")?;
 
         Ok(())
     }

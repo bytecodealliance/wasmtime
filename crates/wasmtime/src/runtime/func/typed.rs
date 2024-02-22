@@ -156,14 +156,17 @@ where
             Self::debug_typecheck(store.0, func.as_ref().type_index);
         }
 
-        // See the comment in `Func::call_impl`'s `write_params` function.
-        if params.externrefs_count()
-            > store
-                .0
-                .externref_activations_table()
-                .bump_capacity_remaining()
+        #[cfg(feature = "gc")]
         {
-            store.gc();
+            // See the comment in `Func::call_impl`'s `write_params` function.
+            if params.externrefs_count()
+                > store
+                    .0
+                    .externref_activations_table()
+                    .bump_capacity_remaining()
+            {
+                store.gc();
+            }
         }
 
         // Validate that all runtime values flowing into this store indeed
@@ -423,6 +426,7 @@ floats! {
     f64/u64/get_f64 => F64
 }
 
+#[cfg(feature = "gc")]
 unsafe impl WasmTy for ExternRef {
     type Abi = NonNull<u8>;
 
@@ -506,6 +510,7 @@ unsafe impl WasmTy for ExternRef {
     }
 }
 
+#[cfg(feature = "gc")]
 unsafe impl WasmTy for Option<ExternRef> {
     type Abi = *mut u8;
 

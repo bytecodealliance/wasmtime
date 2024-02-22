@@ -11,7 +11,7 @@ use std::{
     ptr::NonNull,
     sync::{Arc, RwLock},
 };
-use wasmtime_runtime::{ModuleInfo, VMSharedTypeIndex, VMWasmCallFunction};
+use wasmtime_runtime::{VMSharedTypeIndex, VMWasmCallFunction};
 
 /// Used for registering modules with a store.
 ///
@@ -67,7 +67,8 @@ impl ModuleRegistry {
     }
 
     /// Fetches information about a registered module given a program counter value.
-    pub fn lookup_module_info(&self, pc: usize) -> Option<&dyn ModuleInfo> {
+    #[cfg(feature = "gc")]
+    pub fn lookup_module_info(&self, pc: usize) -> Option<&dyn wasmtime_runtime::ModuleInfo> {
         let (module, _) = self.module_and_offset(pc)?;
         Some(module.module_info())
     }

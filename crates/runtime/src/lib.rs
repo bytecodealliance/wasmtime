@@ -14,6 +14,7 @@ mod arch;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod export;
+#[cfg(feature = "gc")]
 mod externref;
 mod imports;
 mod instance;
@@ -38,6 +39,7 @@ pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
 pub use crate::arch::{get_stack_pointer, V128Abi};
 pub use crate::export::*;
+#[cfg(feature = "gc")]
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
@@ -106,6 +108,7 @@ pub unsafe trait Store {
     /// The first element returned is the table in which externrefs are stored
     /// throughout wasm execution, and the second element is how to look up
     /// module information for gc requests.
+    #[cfg(feature = "gc")]
     fn externref_activations_table(
         &mut self,
     ) -> (&mut VMExternRefActivationsTable, &dyn ModuleInfoLookup);

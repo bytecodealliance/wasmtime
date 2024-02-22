@@ -110,16 +110,25 @@ impl Global {
                 ValType::V128 => Val::V128((*definition.as_u128()).into()),
                 ValType::Ref(ref_ty) => {
                     let reference = match ref_ty.heap_type() {
+                        HeapType::Func | HeapType::Concrete(_) => {
+                            Ref::Func(Func::from_raw(store, definition.as_func_ref().cast()))
+                        }
+
+                        HeapType::NoFunc => Ref::Func(None),
+
+                        #[cfg(feature = "gc")]
                         HeapType::Extern => Ref::Extern(
                             definition
                                 .as_externref()
                                 .clone()
                                 .map(|inner| ExternRef { inner }),
                         ),
-                        HeapType::Func | HeapType::Concrete(_) => {
-                            Ref::Func(Func::from_raw(store, definition.as_func_ref().cast()))
+
+                        #[cfg(not(feature = "gc"))]
+                        HeapType::Extern => {
+                            assert!(definition.as_func_ref().is_null());
+                            Ref::Extern(None)
                         }
-                        HeapType::NoFunc => Ref::Func(None),
                     };
                     debug_assert!(
                         ref_ty.is_nullable() || !reference.is_null(),
@@ -162,12 +171,19 @@ impl Global {
                     *definition.as_func_ref_mut() =
                         f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr().cast());
                 }
+                #[cfg(feature = "gc")]
                 Val::ExternRef(e) => {
                     // Take care to invoke the `Drop` implementation of the
                     // existing `ExternRef` so that it doesn't leak.
                     let old = mem::replace(definition.as_externref_mut(), e.map(|e| e.inner));
                     drop(old);
                 }
+                #[cfg(not(feature = "gc"))]
+                Val::ExternRef(None) => {
+                    assert!(definition.as_func_ref().is_null());
+                }
+                #[cfg(not(feature = "gc"))]
+                Val::ExternRef(Some(e)) => match e._inner {},
             }
         }
         Ok(())

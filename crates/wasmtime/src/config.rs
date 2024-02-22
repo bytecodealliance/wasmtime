@@ -252,6 +252,7 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
+        #[cfg(feature = "gc")]
         ret.wasm_reference_types(true);
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
@@ -721,7 +722,9 @@ impl Config {
     ///
     /// Note that the reference types proposal depends on the bulk memory proposal.
     ///
-    /// This feature is `true` by default.
+    /// This method requires the `gc` Cargo feature to be enabled.
+    ///
+    /// This feature is `true` by default, when the `gc` Cargo feature is enabled.
     ///
     /// # Errors
     ///
@@ -729,6 +732,7 @@ impl Config {
     /// and thus may cause `Engine::new` fail if the `bulk_memory` feature is disabled.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
+    #[cfg(feature = "gc")]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
         self
@@ -744,9 +748,12 @@ impl Config {
     /// Note that the function references proposal depends on the reference
     /// types proposal.
     ///
+    /// This method requires the `gc` Cargo feature to be enabled.
+    ///
     /// This feature is `false` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
+    #[cfg(feature = "gc")]
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
         self.features.function_references = enable;
         self
@@ -761,12 +768,15 @@ impl Config {
     /// Note that the function references proposal depends on the typed function
     /// references proposal.
     ///
+    /// This method requires the `gc` Cargo feature to be enabled.
+    ///
     /// This feature is `false` by default.
     ///
     /// **Warning: Wasmtime's implementation of the GC proposal is still in
     /// progress and generally not ready for primetime.**
     ///
     /// [proposal]: https://github.com/WebAssembly/gc
+    #[cfg(feature = "gc")]
     pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
         self.features.gc = enable;
         self

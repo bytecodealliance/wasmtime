@@ -2,8 +2,10 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
+#[cfg(feature = "gc")]
+use crate::externref::VMExternRef;
 use crate::vmcontext::{VMFuncRef, VMTableDefinition};
-use crate::{SendSyncPtr, Store, VMExternRef};
+use crate::{SendSyncPtr, Store};
 use anyhow::{bail, format_err, Error, Result};
 use sptr::Strict;
 use std::ops::Range;
@@ -19,8 +21,11 @@ use wasmtime_environ::{
 pub enum TableElement {
     /// A `funcref`.
     FuncRef(*mut VMFuncRef),
+
     /// An `exrernref`.
+    #[cfg(feature = "gc")]
     ExternRef(Option<VMExternRef>),
+
     /// An uninitialized funcref value. This should never be exposed
     /// beyond the `wasmtime` crate boundary; the upper-level code
     /// (which has access to the info needed for lazy initialization)
@@ -31,12 +36,16 @@ pub enum TableElement {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TableElementType {
     Func,
+
+    #[cfg(feature = "gc")]
     Extern,
 }
 
 // The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this
 // just relies on thread-safety of `VMExternRef` itself.
+#[cfg(feature = "gc")]
 unsafe impl Send for TableElement where VMExternRef: Send {}
+#[cfg(feature = "gc")]
 unsafe impl Sync for TableElement where VMExternRef: Sync {}
 
 impl TableElement {
@@ -55,7 +64,9 @@ impl TableElement {
                 let masked = Strict::map_addr(ptr, |a| a & FUNCREF_MASK);
                 Self::FuncRef(masked.cast())
             }
+            #[cfg(feature = "gc")]
             (TableElementType::Extern, None) => Self::ExternRef(None),
+            #[cfg(feature = "gc")]
             (TableElementType::Extern, Some(ptr)) => {
                 Self::ExternRef(Some(VMExternRef::from_raw(ptr.as_ptr())))
             }
@@ -72,6 +83,7 @@ impl TableElement {
             // Functions have no ownership, so defer to the prior method.
             TableElementType::Func => TableElement::from_table_value(ty, ptr),
 
+            #[cfg(feature = "gc")]
             TableElementType::Extern => {
                 Self::ExternRef(ptr.map(|p| VMExternRef::clone_from_raw(p.as_ptr())))
             }
@@ -94,6 +106,7 @@ impl TableElement {
                 let tagged = Strict::map_addr(e, |e| e | FUNCREF_INIT_BIT);
                 Some(NonNull::new(tagged.cast()).unwrap().into())
             }
+            #[cfg(feature = "gc")]
             Self::ExternRef(e) => e.map(|e| NonNull::new(e.into_raw()).unwrap().into()),
         }
     }
@@ -112,8 +125,10 @@ impl TableElement {
     pub(crate) unsafe fn into_ref_asserting_initialized(self) -> *mut u8 {
         match self {
             Self::FuncRef(e) => e.cast(),
-            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
+
+            #[cfg(feature = "gc")]
+            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
         }
     }
 
@@ -133,12 +148,14 @@ impl From<*mut VMFuncRef> for TableElement {
     }
 }
 
+#[cfg(feature = "gc")]
 impl From<Option<VMExternRef>> for TableElement {
     fn from(x: Option<VMExternRef>) -> TableElement {
         TableElement::ExternRef(x)
     }
 }
 
+#[cfg(feature = "gc")]
 impl From<VMExternRef> for TableElement {
     fn from(x: VMExternRef) -> TableElement {
         TableElement::ExternRef(Some(x))
@@ -178,7 +195,12 @@ fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
         WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
             TableElementType::Func
         }
+
+        #[cfg(feature = "gc")]
         WasmHeapType::Extern => TableElementType::Extern,
+
+        #[cfg(not(feature = "gc"))]
+        WasmHeapType::Extern => unreachable!(),
     }
 }
 
@@ -490,7 +512,10 @@ impl Table {
     fn type_matches(&self, val: &TableElement) -> bool {
         match (&val, self.element_type()) {
             (TableElement::FuncRef(_), TableElementType::Func) => true,
+
+            #[cfg(feature = "gc")]
             (TableElement::ExternRef(_), TableElementType::Extern) => true,
+
             _ => false,
         }
     }
@@ -536,6 +561,8 @@ impl Table {
                 dst_table.elements_mut()[dst_range]
                     .copy_from_slice(&src_table.elements()[src_range]);
             }
+
+            #[cfg(feature = "gc")]
             TableElementType::Extern => {
                 // We need to clone each `externref`
                 let dst = dst_table.elements_mut();
@@ -556,6 +583,8 @@ impl Table {
                 // `funcref` are `Copy`, so just do a memmove
                 dst.copy_within(src_range, dst_range.start);
             }
+
+            #[cfg(feature = "gc")]
             TableElementType::Extern => {
                 // We need to clone each `externref` while handling overlapping
                 // ranges
@@ -579,7 +608,11 @@ impl Drop for Table {
     fn drop(&mut self) {
         let ty = self.element_type();
 
-        // funcref tables can skip this
+        // `funcref` tables don't need drops.
+        //
+        // This is an irrefutable pattern when the `gc` cargo feature is not
+        // enabled.
+        #[allow(irrefutable_let_patterns)]
         if let TableElementType::Func = ty {
             return;
         }

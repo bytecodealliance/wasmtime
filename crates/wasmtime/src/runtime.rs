@@ -21,6 +21,7 @@ pub(crate) mod trampoline;
 pub(crate) mod trap;
 pub(crate) mod type_registry;
 pub(crate) mod types;
+pub(crate) mod uninhabited;
 pub(crate) mod v128;
 pub(crate) mod values;
 
@@ -65,6 +66,8 @@ pub use trap::*;
 pub use types::*;
 pub use v128::V128;
 pub use values::*;
+
+pub(crate) use uninhabited::*;
 
 #[cfg(feature = "profiling")]
 pub use profiling::GuestProfiler;
