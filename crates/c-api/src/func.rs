@@ -249,7 +249,12 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
         let mut vals = mem::take(&mut caller.data_mut().hostcall_val_storage);
         debug_assert!(vals.is_empty());
         vals.reserve(params.len() + results.len());
-        vals.extend(params.iter().cloned().map(|p| wasmtime_val_t::from_val(p)));
+        vals.extend(
+            params
+                .iter()
+                .cloned()
+                .map(|p| wasmtime_val_t::from_val(&mut caller, p)),
+        );
         vals.extend((0..results.len()).map(|_| wasmtime_val_t {
             kind: crate::WASMTIME_I32,
             of: wasmtime_val_union { i32: 0 },
@@ -272,7 +277,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 
         // Translate the `wasmtime_val_t` results into the `results` space
         for (i, result) in out_results.iter().enumerate() {
-            results[i] = result.to_val();
+            results[i] = result.to_val(&mut caller.caller);
         }
 
         // Move our `vals` storage back into the store now that we no longer
@@ -330,7 +335,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
         &mut params,
         crate::slice_from_raw_parts(args, nargs)
             .iter()
-            .map(|i| i.to_val()),
+            .map(|i| i.to_val(&mut store)),
         nresults,
     );
 
@@ -345,7 +350,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
         Ok(Ok(())) => {
             let results = crate::slice_from_raw_parts_mut(results, nresults);
             for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
-                crate::initialize(slot, wasmtime_val_t::from_val(val.clone()));
+                crate::initialize(slot, wasmtime_val_t::from_val(&mut store, val.clone()));
             }
             params.truncate(0);
             store.data_mut().wasm_val_storage = params;

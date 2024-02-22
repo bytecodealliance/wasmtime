@@ -161,24 +161,23 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
     )?;
     assert!(global.get(&mut store).unwrap_externref().is_none());
 
-    global.set(
-        &mut store,
-        Val::ExternRef(Some(ExternRef::new("hello".to_string()))),
-    )?;
+    let hello = ExternRef::new(&mut store, "hello".to_string());
+    global.set(&mut store, hello.into())?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
-    assert!(r.data().is::<String>());
-    assert_eq!(r.data().downcast_ref::<String>().unwrap(), "hello");
+    assert!(r.data(&store)?.is::<String>());
+    assert_eq!(r.data(&store)?.downcast_ref::<String>().unwrap(), "hello");
 
     // Initialize with a non-null externref.
 
+    let externref = ExternRef::new(&mut store, 42_i32);
     let global = Global::new(
         &mut store,
         GlobalType::new(ValType::EXTERNREF, Mutability::Const),
-        Val::ExternRef(Some(ExternRef::new(42_i32))),
+        externref.into(),
     )?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
-    assert!(r.data().is::<i32>());
-    assert_eq!(r.data().downcast_ref::<i32>().copied().unwrap(), 42);
+    assert!(r.data(&store)?.is::<i32>());
+    assert_eq!(r.data(&store)?.downcast_ref::<i32>().copied().unwrap(), 42);
 
     Ok(())
 }
@@ -288,11 +287,8 @@ fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
     let mut store = Store::new(&engine, ());
 
     let table_ty = TableType::new(RefType::EXTERNREF, 10, None);
-    let table = Table::new(
-        &mut store,
-        table_ty,
-        Ref::Extern(Some(ExternRef::new(42_usize))),
-    )?;
+    let init = ExternRef::new(&mut store, 42_usize);
+    let table = Table::new(&mut store, table_ty, init.into())?;
 
     assert_eq!(
         *table
@@ -300,7 +296,7 @@ fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
             .unwrap()
             .unwrap_extern()
             .unwrap()
-            .data()
+            .data(&store)?
             .downcast_ref::<usize>()
             .unwrap(),
         42
@@ -325,12 +321,8 @@ fn fill_externref_tables_via_api() -> anyhow::Result<()> {
         assert!(table.get(&mut store, i).unwrap().unwrap_extern().is_none());
     }
 
-    table.fill(
-        &mut store,
-        2,
-        Ref::Extern(Some(ExternRef::new(42_usize))),
-        4,
-    )?;
+    let val = ExternRef::new(&mut store, 42_usize);
+    table.fill(&mut store, 2, val.into(), 4)?;
 
     for i in (0..2).chain(7..10) {
         assert!(table.get(&mut store, i).unwrap().unwrap_extern().is_none());
@@ -342,7 +334,7 @@ fn fill_externref_tables_via_api() -> anyhow::Result<()> {
                 .unwrap()
                 .unwrap_extern()
                 .unwrap()
-                .data()
+                .data(&store)?
                 .downcast_ref::<usize>()
                 .unwrap(),
             42

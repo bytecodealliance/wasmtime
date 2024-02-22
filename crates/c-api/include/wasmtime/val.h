@@ -42,7 +42,8 @@ typedef struct wasmtime_externref wasmtime_externref_t;
  * The returned value must be deleted with #wasmtime_externref_delete
  */
 WASM_API_EXTERN wasmtime_externref_t *
-wasmtime_externref_new(void *data, void (*finalizer)(void *));
+wasmtime_externref_new(wasmtime_context_t *context, void *data,
+                       void (*finalizer)(void *));
 
 /**
  * \brief Get an `externref`'s wrapped data
@@ -50,20 +51,23 @@ wasmtime_externref_new(void *data, void (*finalizer)(void *));
  * Returns the original `data` passed to #wasmtime_externref_new. It is required
  * that `data` is not `NULL`.
  */
-WASM_API_EXTERN void *wasmtime_externref_data(wasmtime_externref_t *data);
+WASM_API_EXTERN void *wasmtime_externref_data(wasmtime_context_t *context,
+                                              wasmtime_externref_t *data);
 
 /**
  * \brief Creates a shallow copy of the `externref` argument, returning a
  * separately owned pointer (increases the reference count).
  */
 WASM_API_EXTERN wasmtime_externref_t *
-wasmtime_externref_clone(wasmtime_externref_t *ref);
+wasmtime_externref_clone(wasmtime_context_t *context,
+                         wasmtime_externref_t *ref);
 
 /**
  * \brief Decrements the reference count of the `ref`, deleting it if it's the
  * last reference.
  */
-WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_externref_t *ref);
+WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_context_t *context,
+                                               wasmtime_externref_t *ref);
 
 /**
  * \brief Converts a raw `externref` value coming from #wasmtime_val_raw_t into
@@ -222,12 +226,14 @@ typedef struct wasmtime_val {
  * Note that this only deletes the contents, not the memory that `val` points to
  * itself (which is owned by the caller).
  */
-WASM_API_EXTERN void wasmtime_val_delete(wasmtime_val_t *val);
+WASM_API_EXTERN void wasmtime_val_delete(wasmtime_context_t *context,
+                                         wasmtime_val_t *val);
 
 /**
  * \brief Copies `src` into `dst`.
  */
-WASM_API_EXTERN void wasmtime_val_copy(wasmtime_val_t *dst,
+WASM_API_EXTERN void wasmtime_val_copy(wasmtime_context_t *context,
+                                       wasmtime_val_t *dst,
                                        const wasmtime_val_t *src);
 
 #ifdef __cplusplus

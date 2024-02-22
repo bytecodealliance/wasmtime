@@ -4,7 +4,7 @@
 )]
 
 use crate::store::StoreOpaque;
-use crate::{ValRaw, ValType, WasmTy};
+use crate::{Result, ValRaw, ValType, WasmTy};
 use std::cmp::Ordering;
 use std::fmt;
 use wasmtime_runtime::V128Abi;
@@ -120,8 +120,8 @@ unsafe impl WasmTy for V128 {
     }
 
     #[inline]
-    fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
-        self.0
+    fn into_abi(self, _store: &mut StoreOpaque) -> Result<Self::Abi> {
+        Ok(self.0)
     }
 
     #[inline]

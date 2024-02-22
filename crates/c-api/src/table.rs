@@ -115,13 +115,13 @@ pub extern "C" fn wasm_table_as_extern_const(t: &wasm_table_t) -> &wasm_extern_t
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_new(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     tt: &wasm_tabletype_t,
     init: &wasmtime_val_t,
     out: &mut Table,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        init.to_val()
+        init.to_val(&mut store)
             .ref_()
             .ok_or_else(|| anyhow!("wasmtime_table_new init value is not a reference"))
             .and_then(|init| Table::new(store, tt.ty().ty.clone(), init)),
@@ -139,14 +139,14 @@ pub unsafe extern "C" fn wasmtime_table_type(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_table_get(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     table: &Table,
     index: u32,
     ret: &mut MaybeUninit<wasmtime_val_t>,
 ) -> bool {
-    match table.get(store, index) {
+    match table.get(&mut store, index) {
         Some(r) => {
-            crate::initialize(ret, wasmtime_val_t::from_val(r.into()));
+            crate::initialize(ret, wasmtime_val_t::from_val(store, r.into()));
             true
         }
         None => false,
@@ -155,13 +155,13 @@ pub extern "C" fn wasmtime_table_get(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_set(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     table: &Table,
     index: u32,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        val.to_val()
+        val.to_val(&mut store)
             .ref_()
             .ok_or_else(|| anyhow!("wasmtime_table_set value is not a reference"))
             .and_then(|val| table.set(store, index, val)),
@@ -176,14 +176,14 @@ pub extern "C" fn wasmtime_table_size(store: CStoreContext<'_>, table: &Table) -
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_grow(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     table: &Table,
     delta: u32,
     val: &wasmtime_val_t,
     prev_size: &mut u32,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        val.to_val()
+        val.to_val(&mut store)
             .ref_()
             .ok_or_else(|| anyhow!("wasmtime_table_grow value is not a reference"))
             .and_then(|val| table.grow(store, delta, val)),

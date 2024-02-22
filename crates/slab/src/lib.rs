@@ -411,23 +411,6 @@ impl<T> Slab<T> {
         }
     }
 
-    /// Iterate over all values currently allocated within this `Slab`.
-    ///
-    /// Yields pairs of an `Id` and the `Id`'s associated value.
-    ///
-    /// Iteration order is undefined.
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (Id, &T)> + '_ {
-        assert!(self.entries.len() <= Self::MAX_CAPACITY);
-        self.entries
-            .iter()
-            .enumerate()
-            .filter_map(|(i, e)| match e {
-                Entry::Occupied(x) => Some((Id(EntryIndex::new(i)), x)),
-                Entry::Free { .. } => None,
-            })
-    }
-
     /// Deallocate the value associated with the given `id`.
     ///
     /// If `id` comes from a different `Slab` instance, this method may panic,
@@ -446,5 +429,60 @@ impl<T> Slab<T> {
                 self.len -= 1;
             }
         }
+    }
+
+    /// Iterate over all values currently allocated within this `Slab`.
+    ///
+    /// Yields pairs of an `Id` and the `Id`'s associated value.
+    ///
+    /// Iteration order is undefined.
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (Id, &T)> + '_ {
+        assert!(self.entries.len() <= Self::MAX_CAPACITY);
+        self.entries
+            .iter()
+            .enumerate()
+            .filter_map(|(i, e)| match e {
+                Entry::Occupied(x) => Some((Id(EntryIndex::new(i)), x)),
+                Entry::Free { .. } => None,
+            })
+    }
+
+    /// Mutably iterate over all values currently allocated within this `Slab`.
+    ///
+    /// Yields pairs of an `Id` and the `Id`'s associated value.
+    ///
+    /// Iteration order is undefined.
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Id, &mut T)> + '_ {
+        assert!(self.entries.len() <= Self::MAX_CAPACITY);
+        self.entries
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(i, e)| match e {
+                Entry::Occupied(x) => Some((Id(EntryIndex::new(i)), x)),
+                Entry::Free { .. } => None,
+            })
+    }
+
+    /// Iterate over and remove all entries in this slab.
+    ///
+    /// The slab will be empty after calling this method.
+    ///
+    /// Yields pairs of an `Id` and the `Id`'s associated value.
+    ///
+    /// Iteration order is undefined.
+    #[inline]
+    pub fn drain(&mut self) -> impl Iterator<Item = (Id, T)> + '_ {
+        assert!(self.entries.len() <= Self::MAX_CAPACITY);
+        self.len = 0;
+        self.free = None;
+        self.entries
+            .drain(..)
+            .enumerate()
+            .filter_map(|(i, e)| match e {
+                Entry::Occupied(x) => Some((Id(EntryIndex::new(i)), x)),
+                Entry::Free { .. } => None,
+            })
     }
 }

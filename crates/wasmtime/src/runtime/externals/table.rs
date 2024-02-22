@@ -163,7 +163,7 @@ impl Table {
 
                 #[cfg_attr(not(feature = "gc"), allow(unreachable_code, unused_variables))]
                 runtime::TableElement::ExternRef(Some(x)) => {
-                    let x = ExternRef::from_vm_extern_ref(x);
+                    let x = ExternRef::from_vm_extern_ref(store, x);
                     Some(x.into())
                 }
             }
@@ -399,7 +399,8 @@ mod tests {
         // That said, they really point to the same table.
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_none());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_none());
-        t1.set(&mut store, 0, Ref::Extern(Some(ExternRef::new(42))))?;
+        let e = ExternRef::new(&mut store, 42);
+        t1.set(&mut store, 0, e.into())?;
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_some());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_some());
 

@@ -77,7 +77,7 @@ impl Global {
             "type mismatch: initial value provided does not match the type of this global",
         )?;
         unsafe {
-            let wasmtime_export = generate_global_export(store, ty, val);
+            let wasmtime_export = generate_global_export(store, ty, val)?;
             Ok(Global::from_wasmtime_global(wasmtime_export, store))
         }
     }
@@ -120,7 +120,7 @@ impl Global {
                             definition
                                 .as_externref()
                                 .clone()
-                                .map(|inner| ExternRef::from_vm_extern_ref(inner)),
+                                .map(|inner| ExternRef::from_vm_extern_ref(store.0, inner)),
                         ),
                     };
                     debug_assert!(
@@ -165,12 +165,13 @@ impl Global {
                         f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr().cast());
                 }
                 Val::ExternRef(e) => {
+                    let new = match e {
+                        None => None,
+                        Some(e) => Some(e.try_to_vm_extern_ref(store)?),
+                    };
                     // Take care to invoke the `Drop` implementation of the
-                    // existing `ExternRef` so that it doesn't leak.
-                    let old = mem::replace(
-                        definition.as_externref_mut(),
-                        e.map(|e| e.into_vm_extern_ref()),
-                    );
+                    // existing `VMExternRef` so that it doesn't leak.
+                    let old = mem::replace(definition.as_externref_mut(), new);
                     drop(old);
                 }
             }

@@ -31,7 +31,7 @@ fn wrap_func() -> Result<()> {
     linker.func_wrap("", "", || -> i64 { 0 })?;
     linker.func_wrap("m", "f", || -> f32 { 0.0 })?;
     linker.func_wrap("m2", "f", || -> f64 { 0.0 })?;
-    linker.func_wrap("m3", "", || -> Option<ExternRef> { None })?;
+    linker.func_wrap("m3", "", || -> Option<Rooted<ExternRef>> { None })?;
     linker.func_wrap("m3", "f", || -> Option<Func> { None })?;
 
     linker.func_wrap("", "f1", || -> Result<()> { loop {} })?;
@@ -39,7 +39,9 @@ fn wrap_func() -> Result<()> {
     linker.func_wrap("", "f3", || -> Result<i64> { loop {} })?;
     linker.func_wrap("", "f4", || -> Result<f32> { loop {} })?;
     linker.func_wrap("", "f5", || -> Result<f64> { loop {} })?;
-    linker.func_wrap("", "f6", || -> Result<Option<ExternRef>> { loop {} })?;
+    linker.func_wrap("", "f6", || -> Result<Option<Rooted<ExternRef>>> {
+        loop {}
+    })?;
     linker.func_wrap("", "f7", || -> Result<Option<Func>> { loop {} })?;
     Ok(())
 }
@@ -142,9 +144,14 @@ fn signatures_match() -> Result<()> {
     linker.func_wrap(
         "",
         "f6",
-        |_: f32, _: f64, _: i32, _: i64, _: i32, _: Option<ExternRef>, _: Option<Func>| -> f64 {
-            loop {}
-        },
+        |_: f32,
+         _: f64,
+         _: i32,
+         _: i64,
+         _: i32,
+         _: Option<Rooted<ExternRef>>,
+         _: Option<Func>|
+         -> f64 { loop {} },
     )?;
 
     let mut store = Store::new(&engine, ());
@@ -275,7 +282,7 @@ fn import_works() -> Result<()> {
          c: i32,
          d: f32,
          e: f64,
-         f: Option<ExternRef>,
+         f: Option<Rooted<ExternRef>>,
          g: Option<Func>| {
             assert_eq!(a, 100);
             assert_eq!(b, 200);
@@ -283,7 +290,12 @@ fn import_works() -> Result<()> {
             assert_eq!(d, 400.0);
             assert_eq!(e, 500.0);
             assert_eq!(
-                f.as_ref().unwrap().data().downcast_ref::<String>().unwrap(),
+                f.as_ref()
+                    .unwrap()
+                    .data(&caller)
+                    .unwrap()
+                    .downcast_ref::<String>()
+                    .unwrap(),
                 "hello"
             );
             let mut results = [Val::I32(0)];
@@ -302,14 +314,8 @@ fn import_works() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
     let run = instance.get_func(&mut store, "run").unwrap();
     let funcref = Val::FuncRef(Some(Func::wrap(&mut store, || -> i32 { 42 })));
-    run.call(
-        &mut store,
-        &[
-            Val::ExternRef(Some(ExternRef::new("hello".to_string()))),
-            funcref,
-        ],
-        &mut [],
-    )?;
+    let externref = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())));
+    run.call(&mut store, &[externref, funcref], &mut [])?;
 
     assert_eq!(HITS.load(SeqCst), 4);
 

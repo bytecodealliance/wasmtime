@@ -638,11 +638,11 @@ pub fn table_ops(
                     caller.gc();
                 }
 
-                let a = ExternRef::new(CountDrops(num_dropped.clone()));
-                let b = ExternRef::new(CountDrops(num_dropped.clone()));
-                let c = ExternRef::new(CountDrops(num_dropped.clone()));
+                let a = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()));
+                let b = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()));
+                let c = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()));
 
-                log::info!("table_ops: make_refs() -> ({:p}, {:p}, {:p})", a, b, c);
+                log::info!("table_ops: make_refs() -> ({:?}, {:?}, {:?})", a, b, c);
 
                 expected_drops.fetch_add(3, SeqCst);
                 results[0] = Some(a).into();
@@ -656,39 +656,30 @@ pub fn table_ops(
         linker
             .func_wrap("", "take_refs", {
                 let expected_drops = expected_drops.clone();
-                move |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
-                    log::info!(
-                        "table_ops: take_refs({}, {}, {})",
-                        a.as_ref().map_or_else(
-                            || format!("{:p}", std::ptr::null::<()>()),
-                            |r| format!("{:p}", *r)
-                        ),
-                        b.as_ref().map_or_else(
-                            || format!("{:p}", std::ptr::null::<()>()),
-                            |r| format!("{:p}", *r)
-                        ),
-                        c.as_ref().map_or_else(
-                            || format!("{:p}", std::ptr::null::<()>()),
-                            |r| format!("{:p}", *r)
-                        ),
-                    );
+                move |caller: Caller<'_, StoreLimits>,
+                      a: Option<Rooted<ExternRef>>,
+                      b: Option<Rooted<ExternRef>>,
+                      c: Option<Rooted<ExternRef>>|
+                      -> Result<()> {
+                    log::info!("table_ops: take_refs({a:?}, {b:?}, {c:?})",);
 
                     // Do the assertion on each ref's inner data, even though it
                     // all points to the same atomic, so that if we happen to
                     // run into a use-after-free bug with one of these refs we
                     // are more likely to trigger a segfault.
                     if let Some(a) = a {
-                        let a = a.data().downcast_ref::<CountDrops>().unwrap();
+                        let a = a.data(&caller)?.downcast_ref::<CountDrops>().unwrap();
                         assert!(a.0.load(SeqCst) <= expected_drops.load(SeqCst));
                     }
                     if let Some(b) = b {
-                        let b = b.data().downcast_ref::<CountDrops>().unwrap();
+                        let b = b.data(&caller)?.downcast_ref::<CountDrops>().unwrap();
                         assert!(b.0.load(SeqCst) <= expected_drops.load(SeqCst));
                     }
                     if let Some(c) = c {
-                        let c = c.data().downcast_ref::<CountDrops>().unwrap();
+                        let c = c.data(&caller)?.downcast_ref::<CountDrops>().unwrap();
                         assert!(c.0.load(SeqCst) <= expected_drops.load(SeqCst));
                     }
+                    Ok(())
                 }
             })
             .unwrap();
@@ -704,12 +695,15 @@ pub fn table_ops(
         let func = Func::new(&mut store, func_ty, {
             let num_dropped = num_dropped.clone();
             let expected_drops = expected_drops.clone();
-            move |_caller, _params, results| {
+            move |mut caller, _params, results| {
                 log::info!("table_ops: make_refs");
                 expected_drops.fetch_add(3, SeqCst);
-                results[0] = Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                results[1] = Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                results[2] = Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
+                results[0] =
+                    Some(ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))).into();
+                results[1] =
+                    Some(ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))).into();
+                results[2] =
+                    Some(ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))).into();
                 Ok(())
             }
         });
@@ -718,23 +712,31 @@ pub fn table_ops(
         let instance = linker.instantiate(&mut store, &module).unwrap();
         let run = instance.get_func(&mut store, "run").unwrap();
 
-        let args: Vec<_> = (0..ops.num_params)
-            .map(|_| Val::ExternRef(Some(ExternRef::new(CountDrops(num_dropped.clone())))))
-            .collect();
+        {
+            let mut scope = RootScope::new(&mut store);
+            let args: Vec<_> = (0..ops.num_params)
+                .map(|_| {
+                    Val::ExternRef(Some(ExternRef::new(
+                        &mut scope,
+                        CountDrops(num_dropped.clone()),
+                    )))
+                })
+                .collect();
 
-        // The generated function should always return a trap. The only two
-        // valid traps are table-out-of-bounds which happens through `table.get`
-        // and `table.set` generated or an out-of-fuel trap. Otherwise any other
-        // error is unexpected and should fail fuzzing.
-        let trap = run
-            .call(&mut store, &args, &mut [])
-            .unwrap_err()
-            .downcast::<Trap>()
-            .unwrap();
+            // The generated function should always return a trap. The only two
+            // valid traps are table-out-of-bounds which happens through `table.get`
+            // and `table.set` generated or an out-of-fuel trap. Otherwise any other
+            // error is unexpected and should fail fuzzing.
+            let trap = run
+                .call(&mut scope, &args, &mut [])
+                .unwrap_err()
+                .downcast::<Trap>()
+                .unwrap();
 
-        match trap {
-            Trap::TableOutOfBounds | Trap::OutOfFuel => {}
-            _ => panic!("unexpected trap: {trap}"),
+            match trap {
+                Trap::TableOutOfBounds | Trap::OutOfFuel => {}
+                _ => panic!("unexpected trap: {trap}"),
+            }
         }
 
         // Do a final GC after running the Wasm.

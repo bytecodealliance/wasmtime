@@ -33,7 +33,6 @@ static void exit_with_error(const char *message, wasmtime_error_t *error,
                             wasm_trap_t *trap);
 
 int main() {
-  int ret = 0;
   bool ok = true;
   // Create a new configuration with Wasm reference types enabled.
   printf("Initializing...\n");
@@ -96,10 +95,11 @@ int main() {
   // Note that the NULL here is a finalizer callback, but we don't need one for
   // this example.
   wasmtime_externref_t *externref =
-      wasmtime_externref_new("Hello, World!", NULL);
+      wasmtime_externref_new(context, "Hello, World!", NULL);
+  assert(externref != NULL);
 
   // The `externref`'s wrapped data should be the string "Hello, World!".
-  void *data = wasmtime_externref_data(externref);
+  void *data = wasmtime_externref_data(context, externref);
   assert(strcmp((char *)data, "Hello, World!") == 0);
 
   printf("Touching `externref` table...\n");
@@ -125,9 +125,9 @@ int main() {
   ok = wasmtime_table_get(context, &item.of.table, 3, &elem);
   assert(ok);
   assert(elem.kind == WASMTIME_EXTERNREF);
-  assert(strcmp((char *)wasmtime_externref_data(elem.of.externref),
+  assert(strcmp((char *)wasmtime_externref_data(context, elem.of.externref),
                 "Hello, World!") == 0);
-  wasmtime_val_delete(&elem);
+  wasmtime_val_delete(context, &elem);
 
   printf("Touching `externref` global...\n");
 
@@ -146,9 +146,11 @@ int main() {
   wasmtime_val_t global_val;
   wasmtime_global_get(context, &item.of.global, &global_val);
   assert(global_val.kind == WASMTIME_EXTERNREF);
-  assert(strcmp((char *)wasmtime_externref_data(elem.of.externref),
-                "Hello, World!") == 0);
-  wasmtime_val_delete(&global_val);
+  assert(global_val.of.externref != NULL);
+  assert(
+      strcmp((char *)wasmtime_externref_data(context, global_val.of.externref),
+             "Hello, World!") == 0);
+  wasmtime_val_delete(context, &global_val);
 
   printf("Calling `externref` func...\n");
 
@@ -168,9 +170,11 @@ int main() {
   // `func` returns the same reference we gave it, so `results[0]` should be our
   // `externref`.
   assert(results[0].kind == WASMTIME_EXTERNREF);
-  assert(strcmp((char *)wasmtime_externref_data(results[0].of.externref),
-                "Hello, World!") == 0);
-  wasmtime_val_delete(&results[0]);
+  assert(results[0].of.externref != NULL);
+  assert(
+      strcmp((char *)wasmtime_externref_data(context, results[0].of.externref),
+             "Hello, World!") == 0);
+  wasmtime_val_delete(context, &results[0]);
 
   // We can GC any now-unused references to our externref that the store is
   // holding.
@@ -179,7 +183,6 @@ int main() {
 
   // Clean up after ourselves at this point
   printf("All finished!\n");
-  ret = 0;
 
   wasmtime_store_delete(store);
   wasmtime_module_delete(module);

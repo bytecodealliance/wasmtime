@@ -55,7 +55,7 @@ pub use limits::*;
 pub use linker::*;
 pub use memory::*;
 pub use module::{Module, ModuleExport};
-pub use r#ref::ExternRef;
+pub use r#ref::*;
 pub use resources::*;
 #[cfg(feature = "async")]
 pub use store::CallHookHandler;

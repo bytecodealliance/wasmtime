@@ -79,6 +79,7 @@
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::{BareModuleInfo, RegisteredModuleId};
+use crate::r#ref::RootSet;
 use crate::trampoline::VMHostGlobalContext;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory};
@@ -308,6 +309,7 @@ pub struct StoreOpaque {
     num_component_instances: usize,
     signal_handler: Option<Box<SignalHandler<'static>>>,
     externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable,
+    gc_roots: RootSet,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
     host_globals: Vec<StoreBox<VMHostGlobalContext>>,
@@ -498,6 +500,7 @@ impl<T> Store<T> {
                 num_component_instances: 0,
                 signal_handler: None,
                 externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable::new(),
+                gc_roots: RootSet::default(),
                 modules: ModuleRegistry::default(),
                 func_refs: FuncRefs::default(),
                 host_globals: Vec::new(),
@@ -1384,6 +1387,16 @@ impl StoreOpaque {
         &mut self,
     ) -> &mut wasmtime_runtime::VMExternRefActivationsTable {
         &mut self.externref_activations_table
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots(&self) -> &RootSet {
+        &self.gc_roots
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots_mut(&mut self) -> &mut RootSet {
+        &mut self.gc_roots
     }
 
     pub fn gc(&mut self) {

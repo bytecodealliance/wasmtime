@@ -250,20 +250,15 @@ where
             orig_value,
             &mut optimized_values,
         );
+        trace!("  -> returned from ISLE: {orig_value} -> {optimized_values:?}");
 
         // It's not supposed to matter what order `simplify` returns values in.
         self.ctrl_plane.shuffle(&mut optimized_values);
 
-        let num_matches = optimized_values.len();
-        if num_matches > MATCHES_LIMIT {
-            trace!(
-                "Reached maximum matches limit; too many optimized values \
-                 ({num_matches} > {MATCHES_LIMIT}); ignoring rest.",
-            );
+        if optimized_values.len() > MATCHES_LIMIT {
+            trace!("Reached maximum matches limit; too many optimized values, ignoring rest.");
             optimized_values.truncate(MATCHES_LIMIT);
         }
-
-        trace!("  -> returned from ISLE: {orig_value} -> {optimized_values:?}");
 
         // Create a union of all new values with the original (or
         // maybe just one new value marked as "subsuming" the
