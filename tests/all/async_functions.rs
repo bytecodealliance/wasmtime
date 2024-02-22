@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};

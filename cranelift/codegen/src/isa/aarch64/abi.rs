@@ -7,7 +7,7 @@ use crate::ir::MemFlags;
 use crate::ir::Opcode;
 use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
-use crate::isa::aarch64::{inst::EmitState, inst::*, settings as aarch64_settings};
+use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;

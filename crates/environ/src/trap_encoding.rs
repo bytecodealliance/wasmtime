@@ -1,7 +1,6 @@
 use crate::obj::ELF_WASMTIME_TRAPS;
 use object::write::{Object, StandardSegment};
 use object::{Bytes, LittleEndian, SectionKind, U32Bytes};
-use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Range;
 

@@ -6,7 +6,6 @@ You can execute this example with:
     cargo run --example wasi
 */
 
-use anyhow::Result;
 use wasi_common::sync::WasiCtxBuilder;
 use wasmtime::*;
 

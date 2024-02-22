@@ -1,4 +1,3 @@
-use anyhow::Result;
 use wasmtime::*;
 
 /// Return an instance implementing the "spectest" interface used in the

@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::bail;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasi_common::sync::WasiCtxBuilder;
 use wasi_common::I32Exit;

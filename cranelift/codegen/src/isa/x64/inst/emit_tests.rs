@@ -15,7 +15,6 @@
 use super::*;
 use crate::ir::{MemFlags, UserExternalNameRef};
 use crate::isa::x64;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_entity::EntityRef as _;
 

@@ -1,7 +1,6 @@
 use crate::sync::file::convert_systimespec;
 use fs_set_times::SetTimes;
 use std::any::Any;
-use std::convert::TryInto;
 use std::io::{self, IsTerminal, Read, Write};
 use system_interface::io::ReadReady;
 

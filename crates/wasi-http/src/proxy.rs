@@ -50,7 +50,6 @@ where
 
 pub mod sync {
     use crate::{bindings, WasiHttpView};
-    use wasmtime_wasi;
 
     wasmtime::component::bindgen!({
         world: "wasi:http/proxy",

@@ -1,7 +1,5 @@
 use super::skip_pooling_allocator_tests;
-use anyhow::Result;
 use wasmtime::*;
-use wasmtime_runtime::MpkEnabled;
 
 #[test]
 fn successful_instantiation() -> Result<()> {

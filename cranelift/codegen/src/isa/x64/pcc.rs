@@ -2,7 +2,6 @@
 
 use crate::ir::pcc::*;
 use crate::ir::types::*;
-use crate::ir::Type;
 use crate::isa::x64::args::AvxOpcode;
 use crate::isa::x64::inst::args::{
     AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SyntheticAmode,

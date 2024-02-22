@@ -4,7 +4,7 @@ use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memor
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{self, ir, settings, FinalizedMachReloc};
+use cranelift_codegen::{ir, settings, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
@@ -14,7 +14,6 @@ use cranelift_module::{
 use log::info;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
 use std::ffi::CString;
 use std::io::Write;
 use std::ptr;

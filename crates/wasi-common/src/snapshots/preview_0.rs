@@ -9,7 +9,6 @@ use crate::snapshots::preview_1::MAX_SHARED_BUFFER_SIZE;
 use crate::{ErrorExt, WasiCtx};
 use cap_std::time::Duration;
 use std::collections::HashSet;
-use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::Deref;
 use wiggle::GuestPtr;

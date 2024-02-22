@@ -20,7 +20,6 @@ use anyhow::Result;
 use sptr::Strict;
 use std::alloc::{self, Layout};
 use std::any::Any;
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;

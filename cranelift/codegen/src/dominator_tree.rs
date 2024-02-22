@@ -586,9 +586,8 @@ impl DominatorTreePreorder {
 mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::flowgraph::ControlFlowGraph;
     use crate::ir::types::*;
-    use crate::ir::{Function, InstBuilder, TrapCode};
+    use crate::ir::{InstBuilder, TrapCode};
 
     #[test]
     fn empty() {

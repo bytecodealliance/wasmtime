@@ -101,22 +101,18 @@
 //! registers. In some cases this is an extension of the base system
 //! ABI. See each platform's `abi.rs` implementation for details.
 
-use crate::binemit::StackMap;
-use crate::entity::{PrimaryMap, SecondaryMap};
+use crate::entity::SecondaryMap;
 use crate::fx::FxHashMap;
 use crate::ir::types::*;
-use crate::ir::{ArgumentExtension, ArgumentPurpose, DynamicStackSlot, Signature, StackSlot};
+use crate::ir::{ArgumentExtension, ArgumentPurpose, Signature};
 use crate::isa::TargetIsa;
-use crate::settings;
 use crate::settings::ProbestackStrategy;
+use crate::CodegenError;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
-use crate::{CodegenError, CodegenResult};
-use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::smallvec;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::marker::PhantomData;
 use std::mem;
 

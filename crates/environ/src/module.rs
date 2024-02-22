@@ -1,11 +1,10 @@
 //! Data structures for representing decoded wasm modules.
 
-use crate::{ModuleTranslation, PrimaryMap, Tunables, WasmHeapType, WASM_PAGE_SIZE};
+use crate::{ModuleTranslation, PrimaryMap, Tunables, WASM_PAGE_SIZE};
 use cranelift_entity::{packed_option::ReservedValue, EntityRef};
 use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::mem;
 use std::ops::Range;
 use wasmtime_types::*;

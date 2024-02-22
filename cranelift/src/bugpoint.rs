@@ -1059,7 +1059,6 @@ impl<'a> CrashCheckContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_reader::ParseOptions;
 
     fn run_test(test_str: &str, expected_str: &str) {
         let test_file = parse_test(test_str, ParseOptions::default()).unwrap();

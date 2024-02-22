@@ -2,7 +2,6 @@
 
 use cranelift_isle::compile;
 use cranelift_isle::error::Errors;
-use std::default::Default;
 
 fn build(filename: &str) -> Result<String, Errors> {
     compile::from_files(&[filename], &Default::default())

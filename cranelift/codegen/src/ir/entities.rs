@@ -561,7 +561,6 @@ impl From<Table> for AnyEntity {
 mod tests {
     use super::*;
     use alloc::string::ToString;
-    use core::u32;
 
     #[test]
     fn value_with_number() {

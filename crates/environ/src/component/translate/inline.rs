@@ -45,12 +45,10 @@
 //! side-effectful initializers are emitted to the `GlobalInitializer` list in the
 //! final `Component`.
 
-use crate::component::translate::adapt::{Adapter, AdapterOptions};
 use crate::component::translate::*;
-use crate::{EntityType, PrimaryMap};
-use indexmap::IndexMap;
+use crate::EntityType;
 use std::borrow::Cow;
-use wasmparser::types::{ComponentAnyTypeId, ComponentEntityType, ComponentInstanceTypeId};
+use wasmparser::types::ComponentAnyTypeId;
 
 pub(super) fn run(
     types: &mut ComponentTypesBuilder,

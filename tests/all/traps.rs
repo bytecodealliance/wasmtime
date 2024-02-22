@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{bail, Error, Result};
+use anyhow::bail;
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use std::sync::{Arc, Mutex};

@@ -1,11 +1,8 @@
 use crate::ir::types::*;
 use crate::ir::TrapCode;
 use crate::isa::aarch64::inst::*;
-use crate::isa::CallConv;
-use crate::settings;
 
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 
 #[cfg(test)]
 fn simm9_zero() -> SImm9 {

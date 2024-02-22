@@ -486,16 +486,12 @@ impl Metadata<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    use crate::{Config, Engine, Module, ModuleVersionStrategy, OptLevel};
-
-    use anyhow::Result;
-    use tempfile::TempDir;
-
+    use crate::{Config, Module, OptLevel};
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
     };
+    use tempfile::TempDir;
 
     #[test]
     fn test_architecture_mismatch() -> Result<()> {

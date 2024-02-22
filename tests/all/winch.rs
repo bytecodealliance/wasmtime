@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::bail;
 use wasmtime::*;
 
 const MODULE: &'static str = r#"

@@ -3,10 +3,6 @@
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::MemFlags;
 use crate::isa::s390x::inst::*;
-use crate::machinst::MachLabel;
-use crate::machinst::{PrettyPrint, Reg};
-
-use std::string::String;
 
 //=============================================================================
 // Instruction sub-components (memory addresses): definitions

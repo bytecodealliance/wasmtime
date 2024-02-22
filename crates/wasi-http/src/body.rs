@@ -10,8 +10,7 @@ use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::{
-    self, poll_noop, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError,
-    Subscribe,
+    poll_noop, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError, Subscribe,
 };
 
 pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;

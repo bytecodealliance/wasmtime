@@ -24,7 +24,6 @@ use object::{RelocationEncoding, RelocationKind, SectionKind};
 use std::any::Any;
 use std::cmp;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::mem;
 use std::path;
 use std::sync::{Arc, Mutex};

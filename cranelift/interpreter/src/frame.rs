@@ -110,7 +110,6 @@ impl<'a> Frame<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_codegen::data_value::DataValue;
     use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
     use cranelift_codegen::ir::InstBuilder;
     use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};

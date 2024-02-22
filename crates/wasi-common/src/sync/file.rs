@@ -6,7 +6,6 @@ use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
 use io_lifetimes::AsFilelike;
 use std::any::Any;
-use std::convert::TryInto;
 use std::io::{self, IsTerminal};
 use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},

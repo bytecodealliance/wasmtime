@@ -2,7 +2,7 @@ use super::CacheConfig;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use tempfile::{self, TempDir};
+use tempfile::TempDir;
 
 // note: config loading during validation creates cache directory to canonicalize its path,
 //       that's why these function and macro always use custom cache directory

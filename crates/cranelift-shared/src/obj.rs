@@ -25,7 +25,6 @@ use gimli::RunTimeEndian;
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::ops::Range;
 use wasmtime_environ::{Compiler, FuncIndex};
 

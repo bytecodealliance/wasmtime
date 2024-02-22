@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{bail, Error, Result};
+use anyhow::bail;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};

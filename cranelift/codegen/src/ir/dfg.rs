@@ -1527,8 +1527,7 @@ impl DataFlowGraph {
 mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::types;
-    use crate::ir::{Function, InstructionData, Opcode, TrapCode};
+    use crate::ir::{Function, Opcode, TrapCode};
     use alloc::string::ToString;
 
     #[test]

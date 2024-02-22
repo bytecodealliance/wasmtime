@@ -14,7 +14,6 @@ use crate::{
     HeapData, HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeConvert, TypeIndex,
     WasmFuncType, WasmHeapType, WasmResult,
 };
-use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::{self, InstBuilder};
