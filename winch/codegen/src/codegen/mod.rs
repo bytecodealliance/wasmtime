@@ -96,12 +96,13 @@ where
 
         // We need to use the vmctx paramter before pinning it for stack checking, and we don't
         // have any callee save registers in the winch calling convention.
-        self.masm
-            .prologue(vmctx, &[], self.context.frame.locals_size);
+        self.masm.prologue(vmctx, &[]);
 
         // Pin the `VMContext` pointer.
         self.masm
             .mov(vmctx.into(), vmctx!(M), self.env.ptr_type().into());
+
+        self.masm.reserve_stack(self.context.frame.locals_size);
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
@@ -315,7 +316,8 @@ where
             self.masm.reset_stack_pointer(base);
         }
         debug_assert_eq!(self.context.stack.len(), 0);
-        self.masm.epilogue(&[], self.context.frame.locals_size);
+        self.masm.free_stack(self.context.frame.locals_size);
+        self.masm.epilogue(&[]);
         Ok(())
     }
 

@@ -468,11 +468,10 @@ pub(crate) trait MacroAssembler {
     type ABI: abi::ABI;
 
     /// Emit the function prologue.
-    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)], locals_size: u32) {
+    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)]) {
         self.frame_setup();
         self.check_stack(vmctx);
         self.save_clobbers(clobbers);
-        self.reserve_stack(locals_size);
     }
 
     /// Generate the frame setup sequence.
@@ -502,8 +501,7 @@ pub(crate) trait MacroAssembler {
     fn check_stack(&mut self, vmctx: Reg);
 
     /// Emit the function epilogue.
-    fn epilogue(&mut self, clobbers: &[(Reg, OperandSize)], locals_size: u32) {
-        self.free_stack(locals_size);
+    fn epilogue(&mut self, clobbers: &[(Reg, OperandSize)]) {
         self.restore_clobbers(clobbers);
         self.frame_restore();
     }

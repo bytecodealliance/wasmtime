@@ -102,7 +102,7 @@ where
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&array_sig.params)?;
         let (dst_callee_vmctx, dst_caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params)?;
 
-        self.masm.prologue(caller_vmctx, &self.callee_saved_regs, 0);
+        self.masm.prologue(caller_vmctx, &self.callee_saved_regs);
 
         self.masm
             .mov(vmctx.into(), dst_callee_vmctx, self.pointer_type.into());
@@ -157,7 +157,7 @@ where
         }
 
         self.masm.free_stack(spill_size);
-        self.masm.epilogue(&self.callee_saved_regs, 0);
+        self.masm.epilogue(&self.callee_saved_regs);
         Ok(())
     }
 
@@ -198,7 +198,7 @@ where
         let wasm_sig = wasm_sig::<M::ABI>(&ty);
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
 
-        self.masm.prologue(caller_vmctx, &self.callee_saved_regs, 0);
+        self.masm.prologue(caller_vmctx, &self.callee_saved_regs);
 
         let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(vmctx);
         let ret_area = self.make_ret_area(&wasm_sig);
@@ -233,7 +233,7 @@ where
         }
 
         self.masm.free_stack(spill_size);
-        self.masm.epilogue(&self.callee_saved_regs, 0);
+        self.masm.epilogue(&self.callee_saved_regs);
 
         Ok(())
     }
@@ -367,7 +367,7 @@ where
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params).unwrap();
         let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
 
-        self.masm.prologue(caller_vmctx, &[], 0);
+        self.masm.prologue(caller_vmctx, &[]);
 
         // Save the FP and return address when exiting Wasm.
         // TODO: Once Winch supports comparison operators,
@@ -418,7 +418,7 @@ where
         }
 
         self.masm.free_stack(spill_size);
-        self.masm.epilogue(&[], 0);
+        self.masm.epilogue(&[]);
 
         Ok(())
     }
