@@ -49,7 +49,7 @@ impl Masm for MacroAssembler {
         self.move_sp_to_shadow_sp();
     }
 
-    fn check_stack(&mut self) {
+    fn check_stack(&mut self, _vmctx: Reg) {
         // TODO: Implement when we have more complete assembler support.
     }
 

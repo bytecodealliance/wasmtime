@@ -77,12 +77,12 @@ impl Masm for MacroAssembler {
             .mov_rr(stack_pointer, frame_pointer, OperandSize::S64);
     }
 
-    fn check_stack(&mut self) {
+    fn check_stack(&mut self, vmctx: Reg) {
         let ptr_size: u8 = self.ptr_size.bytes().try_into().unwrap();
         let scratch = regs::scratch();
 
         self.load_ptr(
-            self.address_at_vmctx(ptr_size.vmcontext_runtime_limits().into()),
+            self.address_at_reg(vmctx, ptr_size.vmcontext_runtime_limits().into()),
             scratch,
         );
 
@@ -110,7 +110,7 @@ impl Masm for MacroAssembler {
                     RegClass::Float => align_to(total, float_bytes) + float_bytes,
                     RegClass::Vector => unimplemented!(),
                 }),
-            16,
+            float_bytes,
         );
 
         // Emit unwind info.
@@ -148,6 +148,9 @@ impl Masm for MacroAssembler {
     }
 
     fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        let int_bytes: u32 = Self::ABI::word_bytes().try_into().unwrap();
+        let float_bytes = int_bytes * 2;
+
         let mut off = 0;
         for &(reg, size) in clobbers {
             // Align the current offset
@@ -161,7 +164,7 @@ impl Masm for MacroAssembler {
             off += size.bytes();
         }
 
-        self.free_stack(align_to(off, 16));
+        self.free_stack(align_to(off, float_bytes));
     }
 
     fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {

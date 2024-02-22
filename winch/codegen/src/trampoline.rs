@@ -98,11 +98,12 @@ where
             .map(|operand| RegImm::reg(operand.unwrap_reg()))
             .ok_or_else(|| anyhow!("Expected value pointer to be in a register"))?;
 
-        self.prologue_with_callee_saved();
-
         // Assign the caller and caller VMContext arguments.
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&array_sig.params)?;
         let (dst_callee_vmctx, dst_caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params)?;
+
+        self.prologue_with_callee_saved(caller_vmctx);
+
         self.masm
             .mov(vmctx.into(), dst_callee_vmctx, self.pointer_type.into());
         self.masm.mov(
@@ -194,9 +195,9 @@ where
     pub fn emit_native_to_wasm(mut self, ty: &WasmFuncType, callee_index: FuncIndex) -> Result<()> {
         let native_sig = native_sig::<M::ABI>(&ty, &self.call_conv);
         let wasm_sig = wasm_sig::<M::ABI>(&ty);
-        let (vmctx, _) = Self::callee_and_caller_vmctx(&native_sig.params)?;
+        let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
 
-        self.prologue_with_callee_saved();
+        self.prologue_with_callee_saved(caller_vmctx);
 
         let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(vmctx);
         let ret_area = self.make_ret_area(&wasm_sig);
@@ -363,7 +364,7 @@ where
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params).unwrap();
         let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
 
-        self.prologue();
+        self.prologue(caller_vmctx);
 
         // Save the FP and return address when exiting Wasm.
         // TODO: Once Winch supports comparison operators,
@@ -620,17 +621,17 @@ where
     }
 
     /// The trampoline's prologue.
-    fn prologue(&mut self) {
+    fn prologue(&mut self, vmctx: Reg) {
         self.masm.prologue();
-        // TODO: emit a stack check
+        self.masm.check_stack(vmctx);
         self.masm.save_clobbers(&[]);
     }
 
     /// Similar to [Trampoline::prologue], but saves
     /// callee-saved registers.
-    fn prologue_with_callee_saved(&mut self) {
+    fn prologue_with_callee_saved(&mut self, vmctx: Reg) {
         self.masm.prologue();
-        // TODO: emit a stack check
+        self.masm.check_stack(vmctx);
         // Save any callee-saved registers.
         self.masm.save_clobbers(&self.callee_saved_regs);
     }
