@@ -160,7 +160,10 @@ pub(crate) trait ABI {
 
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
+    #[cfg(test)]
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
+    }
 
     /// Construct an ABI signature from WasmType params and returns.
     fn sig_from(

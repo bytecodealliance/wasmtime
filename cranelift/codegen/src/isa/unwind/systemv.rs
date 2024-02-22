@@ -135,8 +135,6 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
 pub(crate) trait RegisterMapper<Reg> {
     /// Maps Reg.
     fn map(&self, reg: Reg) -> Result<Register, RegisterMappingError>;
-    /// Gets stack pointer register.
-    fn sp(&self) -> Register;
     /// Gets the frame pointer register, if any.
     fn fp(&self) -> Option<Register> {
         None
