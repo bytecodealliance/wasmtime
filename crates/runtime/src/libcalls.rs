@@ -54,9 +54,7 @@
 //! }
 //! ```
 
-#[cfg(feature = "gc")]
 use crate::externref::VMExternRef;
-
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::VMFuncRef;
 use crate::{Instance, TrapReason};
@@ -230,16 +228,7 @@ unsafe fn table_grow(
 
     let element = match instance.table_element_type(table_index) {
         TableElementType::Func => (init_value as *mut VMFuncRef).into(),
-
-        #[cfg(feature = "gc")]
-        TableElementType::Extern => {
-            let init_value = if init_value.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(init_value))
-            };
-            init_value.into()
-        }
+        TableElementType::Extern => VMExternRef::clone_from_raw(init_value).into(),
     };
 
     Ok(match instance.table_grow(table_index, delta, element)? {
@@ -271,13 +260,8 @@ unsafe fn table_fill(
             table.fill(dst, val.into(), len)
         }
 
-        #[cfg(feature = "gc")]
         TableElementType::Extern => {
-            let val = if val.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(val))
-            };
+            let val = VMExternRef::clone_from_raw(val);
             table.fill(dst, val.into(), len)
         }
     }
@@ -407,7 +391,7 @@ unsafe fn drop_externref(_instance: &mut Instance, externref: *mut u8) {
 // `VMExternRefActivationsTable`.
 #[cfg(feature = "gc")]
 unsafe fn activations_table_insert_with_gc(instance: &mut Instance, externref: *mut u8) {
-    let externref = VMExternRef::clone_from_raw(externref);
+    let externref = VMExternRef::clone_from_raw(externref).unwrap();
     let limits = *instance.runtime_limits();
     let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
 
@@ -444,11 +428,7 @@ unsafe fn externref_global_get(instance: &mut Instance, index: u32) -> *mut u8 {
 // Perform a Wasm `global.set` for `externref` globals.
 #[cfg(feature = "gc")]
 unsafe fn externref_global_set(instance: &mut Instance, index: u32, externref: *mut u8) {
-    let externref = if externref.is_null() {
-        None
-    } else {
-        Some(VMExternRef::clone_from_raw(externref))
-    };
+    let externref = VMExternRef::clone_from_raw(externref);
 
     let index = wasmtime_environ::GlobalIndex::from_u32(index);
     let global = instance.defined_or_imported_global_ptr(index);

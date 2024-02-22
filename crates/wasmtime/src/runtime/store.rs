@@ -2312,7 +2312,6 @@ impl Drop for StoreOpaque {
     }
 }
 
-#[cfg(feature = "gc")]
 impl wasmtime_runtime::ModuleInfoLookup for ModuleRegistry {
     fn lookup(&self, pc: usize) -> Option<&dyn wasmtime_runtime::ModuleInfo> {
         self.lookup_module_info(pc)

@@ -116,19 +116,12 @@ impl Global {
 
                         HeapType::NoFunc => Ref::Func(None),
 
-                        #[cfg(feature = "gc")]
                         HeapType::Extern => Ref::Extern(
                             definition
                                 .as_externref()
                                 .clone()
-                                .map(|inner| ExternRef { inner }),
+                                .map(|inner| ExternRef::from_vm_extern_ref(inner)),
                         ),
-
-                        #[cfg(not(feature = "gc"))]
-                        HeapType::Extern => {
-                            assert!(definition.as_func_ref().is_null());
-                            Ref::Extern(None)
-                        }
                     };
                     debug_assert!(
                         ref_ty.is_nullable() || !reference.is_null(),
@@ -171,19 +164,15 @@ impl Global {
                     *definition.as_func_ref_mut() =
                         f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr().cast());
                 }
-                #[cfg(feature = "gc")]
                 Val::ExternRef(e) => {
                     // Take care to invoke the `Drop` implementation of the
                     // existing `ExternRef` so that it doesn't leak.
-                    let old = mem::replace(definition.as_externref_mut(), e.map(|e| e.inner));
+                    let old = mem::replace(
+                        definition.as_externref_mut(),
+                        e.map(|e| e.into_vm_extern_ref()),
+                    );
                     drop(old);
                 }
-                #[cfg(not(feature = "gc"))]
-                Val::ExternRef(None) => {
-                    assert!(definition.as_func_ref().is_null());
-                }
-                #[cfg(not(feature = "gc"))]
-                Val::ExternRef(Some(e)) => match e._inner {},
             }
         }
         Ok(())

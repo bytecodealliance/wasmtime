@@ -963,7 +963,6 @@ impl Module {
         self.inner.clone()
     }
 
-    #[cfg(feature = "gc")]
     pub(crate) fn module_info(&self) -> &dyn wasmtime_runtime::ModuleInfo {
         &*self.inner
     }
@@ -1216,7 +1215,6 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 }
 
-#[cfg(feature = "gc")]
 impl wasmtime_runtime::ModuleInfo for ModuleInner {
     fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
         let text_offset = pc - self.module.text().as_ptr() as usize;

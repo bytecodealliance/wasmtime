@@ -159,12 +159,11 @@ impl Table {
                     unreachable!("lazy init above should have converted UninitFunc")
                 }
 
-                #[cfg(feature = "gc")]
                 runtime::TableElement::ExternRef(None) => Some(Ref::Extern(None)),
 
-                #[cfg(feature = "gc")]
+                #[cfg_attr(not(feature = "gc"), allow(unreachable_code, unused_variables))]
                 runtime::TableElement::ExternRef(Some(x)) => {
-                    let x = ExternRef { inner: x };
+                    let x = ExternRef::from_vm_extern_ref(x);
                     Some(x.into())
                 }
             }

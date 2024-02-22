@@ -3,9 +3,7 @@
 
 mod vm_host_func_context;
 
-#[cfg(feature = "gc")]
 use crate::externref::VMExternRef;
-
 use sptr::Strict;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
@@ -536,19 +534,21 @@ impl VMGlobalDefinition {
     }
 
     /// Return a reference to the value as an externref.
-    #[cfg(feature = "gc")]
     pub unsafe fn as_externref(&self) -> &Option<VMExternRef> {
-        &*(self.storage.as_ref().as_ptr().cast::<Option<VMExternRef>>())
+        let ret = &*(self.storage.as_ref().as_ptr().cast::<Option<VMExternRef>>());
+        assert!(cfg!(feature = "gc") || ret.is_none());
+        ret
     }
 
     /// Return a mutable reference to the value as an externref.
-    #[cfg(feature = "gc")]
     pub unsafe fn as_externref_mut(&mut self) -> &mut Option<VMExternRef> {
-        &mut *(self
+        let ret = &mut *(self
             .storage
             .as_mut()
             .as_mut_ptr()
-            .cast::<Option<VMExternRef>>())
+            .cast::<Option<VMExternRef>>());
+        assert!(cfg!(feature = "gc") || ret.is_none());
+        ret
     }
 
     /// Return a reference to the value as a `VMFuncRef`.
@@ -1035,7 +1035,6 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    #[cfg(feature = "gc")]
     externref: *mut c_void,
 }
 
@@ -1108,16 +1107,9 @@ impl ValRaw {
     /// Creates a WebAssembly `externref` value
     #[inline]
     pub fn externref(i: *mut c_void) -> ValRaw {
-        #[cfg(feature = "gc")]
-        {
-            return ValRaw {
-                externref: Strict::map_addr(i, |i| i.to_le()),
-            };
-        }
-        #[cfg(not(feature = "gc"))]
-        {
-            assert!(i.is_null());
-            return ValRaw::funcref(i);
+        assert!(cfg!(feature = "gc") || i.is_null());
+        ValRaw {
+            externref: Strict::map_addr(i, |i| i.to_le()),
         }
     }
 
@@ -1172,15 +1164,9 @@ impl ValRaw {
     /// Gets the WebAssembly `externref` value
     #[inline]
     pub fn get_externref(&self) -> *mut c_void {
-        #[cfg(feature = "gc")]
-        unsafe {
-            return Strict::map_addr(self.externref, |i| usize::from_le(i));
-        }
-        #[cfg(not(feature = "gc"))]
-        {
-            assert!(self.get_funcref().is_null());
-            return std::ptr::null_mut();
-        }
+        let ptr = unsafe { Strict::map_addr(self.externref, |i| usize::from_le(i)) };
+        assert!(cfg!(feature = "gc") || ptr.is_null());
+        ptr
     }
 }
 

@@ -3,7 +3,6 @@
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
 use crate::export::Export;
-#[cfg(feature = "gc")]
 use crate::externref::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement, TableElementType};
@@ -439,7 +438,6 @@ impl Instance {
     }
 
     /// Return a pointer to the `VMExternRefActivationsTable`.
-    #[cfg(feature = "gc")]
     pub fn externref_activations_table(&mut self) -> *mut *mut VMExternRefActivationsTable {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_externref_activations_table()) }
     }
@@ -472,6 +470,10 @@ impl Instance {
             {
                 *self.externref_activations_table() = (*store).externref_activations_table().0;
             }
+            #[cfg(not(feature = "gc"))]
+            {
+                *self.externref_activations_table() = ptr::null_mut();
+            }
         } else {
             assert_eq!(
                 mem::size_of::<*mut dyn Store>(),
@@ -483,10 +485,7 @@ impl Instance {
             *self.runtime_limits() = ptr::null_mut();
             *self.epoch_ptr() = ptr::null_mut();
 
-            #[cfg(feature = "gc")]
-            {
-                *self.externref_activations_table() = ptr::null_mut();
-            }
+            *self.externref_activations_table() = ptr::null_mut();
         }
     }
 
@@ -852,7 +851,6 @@ impl Instance {
                 )?;
             }
 
-            #[cfg(feature = "gc")]
             TableElementType::Extern => {
                 debug_assert!(elements.iter().all(|e| *e == FuncIndex::reserved_value()));
                 table.fill(dst, TableElement::ExternRef(None), len)?;
@@ -1246,17 +1244,10 @@ impl Instance {
                     // count as values move between globals, everything else is just
                     // copy-able bits.
                     match wasm_ty {
-                        #[cfg(feature = "gc")]
                         WasmValType::Ref(WasmRefType {
                             heap_type: WasmHeapType::Extern,
                             ..
                         }) => *(*to).as_externref_mut() = from.as_externref().clone(),
-
-                        #[cfg(not(feature = "gc"))]
-                        WasmValType::Ref(WasmRefType {
-                            heap_type: WasmHeapType::Extern,
-                            ..
-                        }) => unreachable!(),
 
                         _ => ptr::copy_nonoverlapping(from, to, 1),
                     }
@@ -1302,21 +1293,12 @@ impl Drop for Instance {
             };
             match global.wasm_ty {
                 // For now only externref globals need to get destroyed
-                #[cfg(feature = "gc")]
                 WasmValType::Ref(WasmRefType {
                     heap_type: WasmHeapType::Extern,
                     ..
                 }) => unsafe {
                     drop((*self.global_ptr(idx)).as_externref_mut().take());
                 },
-
-                #[cfg(not(feature = "gc"))]
-                WasmValType::Ref(WasmRefType {
-                    heap_type: WasmHeapType::Extern,
-                    ..
-                }) => unreachable!(
-                    "global {idx:?} is an externref but the `gc` cargo feature is disabled"
-                ),
 
                 _ => continue,
             }

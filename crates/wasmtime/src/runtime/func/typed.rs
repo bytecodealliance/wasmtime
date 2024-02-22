@@ -464,7 +464,8 @@ unsafe impl WasmTy for ExternRef {
 
     #[inline]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
-        let abi = self.inner.as_raw();
+        let inner = self.into_vm_extern_ref();
+        let abi = inner.as_raw();
         unsafe {
             // NB: We _must not_ trigger a GC when passing refs from host
             // code into Wasm (e.g. returned from a host function or passed
@@ -495,7 +496,7 @@ unsafe impl WasmTy for ExternRef {
             // In conclusion, to prevent uses after free, we cannot GC
             // during this insertion.
             let mut store = AutoAssertNoGc::new(store);
-            store.insert_vmexternref_without_gc(self.inner);
+            store.insert_vmexternref_without_gc(inner);
 
             debug_assert!(!abi.is_null());
             NonNull::new_unchecked(abi)
@@ -504,9 +505,8 @@ unsafe impl WasmTy for ExternRef {
 
     #[inline]
     unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
-        ExternRef {
-            inner: wasmtime_runtime::VMExternRef::clone_from_raw(abi.as_ptr()),
-        }
+        let inner = wasmtime_runtime::VMExternRef::clone_from_raw(abi.as_ptr()).unwrap();
+        ExternRef::from_vm_extern_ref(inner)
     }
 }
 
@@ -555,13 +555,8 @@ unsafe impl WasmTy for Option<ExternRef> {
 
     #[inline]
     unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
-        if abi.is_null() {
-            None
-        } else {
-            Some(ExternRef {
-                inner: wasmtime_runtime::VMExternRef::clone_from_raw(abi),
-            })
-        }
+        let inner = wasmtime_runtime::VMExternRef::clone_from_raw(abi)?;
+        Some(ExternRef::from_vm_extern_ref(inner))
     }
 }
 

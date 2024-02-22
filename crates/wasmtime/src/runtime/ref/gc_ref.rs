@@ -7,7 +7,7 @@ use wasmtime_runtime::VMExternRef;
 #[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct ExternRef {
-    pub(crate) inner: VMExternRef,
+    inner: VMExternRef,
 }
 
 impl ExternRef {
@@ -18,6 +18,14 @@ impl ExternRef {
     {
         let inner = VMExternRef::new(value);
         ExternRef { inner }
+    }
+
+    pub(crate) fn from_vm_extern_ref(inner: VMExternRef) -> Self {
+        ExternRef { inner }
+    }
+
+    pub(crate) fn into_vm_extern_ref(self) -> VMExternRef {
+        self.inner
     }
 
     /// Get the underlying data for this `ExternRef`.
@@ -71,13 +79,8 @@ impl ExternRef {
     /// [`ValRaw`]: crate::ValRaw
     pub unsafe fn from_raw(raw: *mut c_void) -> Option<ExternRef> {
         let raw = raw.cast::<u8>();
-        if raw.is_null() {
-            None
-        } else {
-            Some(ExternRef {
-                inner: VMExternRef::clone_from_raw(raw),
-            })
-        }
+        let inner = VMExternRef::clone_from_raw(raw)?;
+        Some(ExternRef { inner })
     }
 
     /// Converts this [`ExternRef`] to a raw value suitable to store within a

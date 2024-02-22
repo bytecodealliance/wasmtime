@@ -179,12 +179,7 @@ impl Val {
             Val::ExternRef(e) => {
                 let externref = match e {
                     None => ptr::null_mut(),
-
-                    #[cfg(feature = "gc")]
                     Some(e) => e.to_raw(store),
-
-                    #[cfg(not(feature = "gc"))]
-                    Some(x) => match x._inner {},
                 };
                 ValRaw::externref(externref)
             }
@@ -218,15 +213,7 @@ impl Val {
                         Func::from_raw(store, raw.get_funcref()).into()
                     }
                     HeapType::NoFunc => Ref::Func(None),
-
-                    #[cfg(feature = "gc")]
                     HeapType::Extern => ExternRef::from_raw(raw.get_externref()).into(),
-
-                    #[cfg(not(feature = "gc"))]
-                    HeapType::Extern => {
-                        assert!(raw.get_externref().is_null());
-                        Ref::Extern(None)
-                    }
                 };
                 assert!(
                     ref_ty.is_nullable() || !ref_.is_null(),
@@ -703,22 +690,12 @@ impl Ref {
                 Ok(TableElement::FuncRef(f.vm_func_ref(store).as_ptr()))
             }
 
-            #[cfg(feature = "gc")]
             (Ref::Extern(e), HeapType::Extern) => match e {
                 None => {
                     assert!(ty.is_nullable());
                     Ok(TableElement::ExternRef(None))
                 }
-                Some(e) => Ok(TableElement::ExternRef(Some(e.inner))),
-            },
-
-            #[cfg(not(feature = "gc"))]
-            (Ref::Extern(e), HeapType::Extern) => match e {
-                None => bail!(
-                    "support for externref tables disabled at compile time \
-                     because the `gc` cargo feature was not enabled"
-                ),
-                Some(e) => match e._inner {},
+                Some(e) => Ok(TableElement::ExternRef(Some(e.into_vm_extern_ref()))),
             },
 
             _ => unreachable!("checked that the value matches the type above"),
