@@ -729,9 +729,7 @@ impl Config {
     ///
     /// Note that the reference types proposal depends on the bulk memory proposal.
     ///
-    /// This method requires the `gc` Cargo feature to be enabled.
-    ///
-    /// This feature is `true` by default, when the `gc` Cargo feature is enabled.
+    /// This feature is `true` by default.
     ///
     /// # Errors
     ///
@@ -740,6 +738,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     #[cfg(feature = "gc")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
         self
@@ -755,12 +754,11 @@ impl Config {
     /// Note that the function references proposal depends on the reference
     /// types proposal.
     ///
-    /// This method requires the `gc` Cargo feature to be enabled.
-    ///
     /// This feature is `false` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
     #[cfg(feature = "gc")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
         self.features.function_references = enable;
         self
@@ -775,8 +773,6 @@ impl Config {
     /// Note that the function references proposal depends on the typed function
     /// references proposal.
     ///
-    /// This method requires the `gc` Cargo feature to be enabled.
-    ///
     /// This feature is `false` by default.
     ///
     /// **Warning: Wasmtime's implementation of the GC proposal is still in
@@ -784,6 +780,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/WebAssembly/gc
     #[cfg(feature = "gc")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
         self.features.gc = enable;
         self
