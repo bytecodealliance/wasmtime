@@ -38,7 +38,7 @@ impl Masm for MacroAssembler {
     type Ptr = u8;
     type ABI = Aarch64ABI;
 
-    fn prologue(&mut self) {
+    fn frame_setup(&mut self) {
         let lr = regs::lr();
         let fp = regs::fp();
         let sp = regs::sp();
@@ -53,15 +53,8 @@ impl Masm for MacroAssembler {
         // TODO: Implement when we have more complete assembler support.
     }
 
-    fn epilogue(&mut self, locals_size: u32) {
-        assert!(self.sp_offset == locals_size);
-
-        let sp = regs::sp();
-        if locals_size > 0 {
-            self.asm
-                .add_ir(locals_size as u64, sp, sp, OperandSize::S64);
-            self.move_sp_to_shadow_sp();
-        }
+    fn frame_restore(&mut self) {
+        assert_eq!(self.sp_offset, 0);
 
         let lr = regs::lr();
         let fp = regs::fp();
@@ -83,8 +76,16 @@ impl Masm for MacroAssembler {
         self.increment_sp(bytes);
     }
 
-    fn free_stack(&mut self, _bytes: u32) {
-        todo!()
+    fn free_stack(&mut self, bytes: u32) {
+        if bytes == 0 {
+            return;
+        }
+
+        let sp = regs::sp();
+        self.asm.add_ir(bytes as u64, sp, sp, OperandSize::S64);
+        self.move_sp_to_shadow_sp();
+
+        self.decrement_sp(bytes);
     }
 
     fn reset_stack_pointer(&mut self, offset: SPOffset) {
@@ -534,6 +535,10 @@ impl Masm for MacroAssembler {
 impl MacroAssembler {
     fn increment_sp(&mut self, bytes: u32) {
         self.sp_offset += bytes;
+    }
+
+    fn decrement_sp(&mut self, bytes: u32) {
+        self.sp_offset -= bytes;
     }
 
     // Copies the value of the stack pointer to the shadow stack

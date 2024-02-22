@@ -86,20 +86,21 @@ where
     }
 
     fn emit_start(&mut self) -> Result<()> {
-        self.masm.prologue();
+        let vmctx = self
+            .sig
+            .params()
+            .first()
+            .expect("VMContext argument")
+            .unwrap_reg()
+            .into();
+
+        // We need to use the vmctx paramter before pinning it for stack checking, and we don't
+        // have any callee save registers in the winch calling convention.
+        self.masm.prologue(vmctx, &[]);
 
         // Pin the `VMContext` pointer.
-        self.pin_vmctx();
-
-        // Stack overflow checks must occur during the function prologue to ensure that unwinding
-        // will not assume they're user-handlable exceptions. As the `save_clobbers` call below
-        // marks the end of the prologue for unwinding annotations, we make the stack check here.
-        self.masm.check_stack(vmctx!(M));
-
-        // We don't have any callee save registers in the winch calling convention, but
-        // `save_clobbers` does some useful work for setting up unwinding state, and marks the end
-        // of the function prologue as far as the windows unwind annotation is concerend.
-        self.masm.save_clobbers(&[]);
+        self.masm
+            .mov(vmctx.into(), vmctx!(M), self.env.ptr_type().into());
 
         self.masm.reserve_stack(self.context.frame.locals_size);
 
@@ -160,18 +161,6 @@ where
             // in this state through an infinite loop.
             frame.ensure_stack_state(self.masm, &mut self.context);
         }
-    }
-
-    /// Assigns the [VMContext] pointer to the designated, pinned [VMContext]
-    /// register.
-    fn pin_vmctx(&mut self) {
-        let pinned = vmctx!(M);
-        let vmctx = self.sig.params().first().expect("VMContext argument");
-        self.masm.mov(
-            vmctx.unwrap_reg().into(),
-            pinned,
-            self.env.ptr_type().into(),
-        );
     }
 
     fn emit_body(
@@ -327,8 +316,8 @@ where
             self.masm.reset_stack_pointer(base);
         }
         debug_assert_eq!(self.context.stack.len(), 0);
-        self.masm.restore_clobbers(&[]);
-        self.masm.epilogue(self.context.frame.locals_size);
+        self.masm.free_stack(self.context.frame.locals_size);
+        self.masm.epilogue(&[]);
         Ok(())
     }
 

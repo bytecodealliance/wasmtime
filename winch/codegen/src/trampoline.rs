@@ -102,7 +102,7 @@ where
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&array_sig.params)?;
         let (dst_callee_vmctx, dst_caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params)?;
 
-        self.prologue_with_callee_saved(caller_vmctx);
+        self.masm.prologue(caller_vmctx, &self.callee_saved_regs);
 
         self.masm
             .mov(vmctx.into(), dst_callee_vmctx, self.pointer_type.into());
@@ -156,7 +156,8 @@ where
             self.masm.free_stack(wasm_sig.results.size());
         }
 
-        self.epilogue_with_callee_saved_restore(spill_size);
+        self.masm.free_stack(spill_size);
+        self.masm.epilogue(&self.callee_saved_regs);
         Ok(())
     }
 
@@ -197,7 +198,7 @@ where
         let wasm_sig = wasm_sig::<M::ABI>(&ty);
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
 
-        self.prologue_with_callee_saved(caller_vmctx);
+        self.masm.prologue(caller_vmctx, &self.callee_saved_regs);
 
         let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(vmctx);
         let ret_area = self.make_ret_area(&wasm_sig);
@@ -230,7 +231,9 @@ where
         if wasm_sig.has_stack_results() {
             self.masm.free_stack(wasm_sig.results.size());
         }
-        self.epilogue_with_callee_saved_restore(spill_size);
+
+        self.masm.free_stack(spill_size);
+        self.masm.epilogue(&self.callee_saved_regs);
 
         Ok(())
     }
@@ -364,7 +367,7 @@ where
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params).unwrap();
         let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
 
-        self.prologue(caller_vmctx);
+        self.masm.prologue(caller_vmctx, &[]);
 
         // Save the FP and return address when exiting Wasm.
         // TODO: Once Winch supports comparison operators,
@@ -414,7 +417,8 @@ where
             self.masm.free_stack(native_sig.results.size());
         }
 
-        self.epilogue(spill_size);
+        self.masm.free_stack(spill_size);
+        self.masm.epilogue(&[]);
 
         Ok(())
     }
@@ -618,39 +622,5 @@ where
         let ret_addr = masm.address_at_reg(fp, ret_addr_offset.into());
         masm.load_ptr(ret_addr, scratch);
         masm.store(scratch.into(), last_wasm_exit_pc_addr, OperandSize::S64);
-    }
-
-    /// The trampoline's prologue.
-    fn prologue(&mut self, vmctx: Reg) {
-        self.masm.prologue();
-        self.masm.check_stack(vmctx);
-        self.masm.save_clobbers(&[]);
-    }
-
-    /// Similar to [Trampoline::prologue], but saves
-    /// callee-saved registers.
-    fn prologue_with_callee_saved(&mut self, vmctx: Reg) {
-        self.masm.prologue();
-        self.masm.check_stack(vmctx);
-        // Save any callee-saved registers.
-        self.masm.save_clobbers(&self.callee_saved_regs);
-    }
-
-    /// Similar to [Trampoline::epilogue], but restores
-    /// callee-saved registers.
-    fn epilogue_with_callee_saved_restore(&mut self, arg_size: u32) {
-        // Free the stack space allocated by pushing the trampoline arguments.
-        self.masm.free_stack(arg_size);
-        // Restore the callee-saved registers.
-        self.masm.restore_clobbers(&self.callee_saved_regs);
-        self.masm.epilogue(0);
-    }
-
-    /// The trampoline's epilogue.
-    fn epilogue(&mut self, arg_size: u32) {
-        // Free the stack space allocated by pushing the trampoline arguments.
-        self.masm.free_stack(arg_size);
-        self.masm.restore_clobbers(&[]);
-        self.masm.epilogue(0);
     }
 }
