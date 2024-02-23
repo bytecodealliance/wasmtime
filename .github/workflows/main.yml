@@ -288,6 +288,10 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features wmemcheck
     - run: cargo check -p wasmtime --no-default-features --features demangle
     - run: cargo check -p wasmtime --no-default-features --features addr2line
+    - run: cargo check -p wasmtime --no-default-features --features gc
+    - run: cargo check -p wasmtime --no-default-features --features runtime,gc
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,gc
+    - run: cargo check -p wasmtime --no-default-features --features runtime
     - run: cargo check --features component-model
     - run: cargo check -p wasmtime --features incremental-cache
 

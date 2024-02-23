@@ -49,3 +49,4 @@ component-model = [
   "dep:wasmtime-component-util",
 ]
 demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
+gc = []

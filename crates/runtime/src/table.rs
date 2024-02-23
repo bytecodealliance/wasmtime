@@ -2,8 +2,11 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
+#![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
+
+use crate::externref::VMExternRef;
 use crate::vmcontext::{VMFuncRef, VMTableDefinition};
-use crate::{SendSyncPtr, Store, VMExternRef};
+use crate::{SendSyncPtr, Store};
 use anyhow::{bail, format_err, Error, Result};
 use sptr::Strict;
 use std::ops::Range;
@@ -19,8 +22,10 @@ use wasmtime_environ::{
 pub enum TableElement {
     /// A `funcref`.
     FuncRef(*mut VMFuncRef),
+
     /// An `exrernref`.
     ExternRef(Option<VMExternRef>),
+
     /// An uninitialized funcref value. This should never be exposed
     /// beyond the `wasmtime` crate boundary; the upper-level code
     /// (which has access to the info needed for lazy initialization)
@@ -57,7 +62,7 @@ impl TableElement {
             }
             (TableElementType::Extern, None) => Self::ExternRef(None),
             (TableElementType::Extern, Some(ptr)) => {
-                Self::ExternRef(Some(VMExternRef::from_raw(ptr.as_ptr())))
+                Self::ExternRef(VMExternRef::from_raw(ptr.as_ptr()))
             }
         }
     }
@@ -73,7 +78,7 @@ impl TableElement {
             TableElementType::Func => TableElement::from_table_value(ty, ptr),
 
             TableElementType::Extern => {
-                Self::ExternRef(ptr.map(|p| VMExternRef::clone_from_raw(p.as_ptr())))
+                Self::ExternRef(ptr.and_then(|p| VMExternRef::clone_from_raw(p.as_ptr())))
             }
         }
     }
@@ -112,8 +117,8 @@ impl TableElement {
     pub(crate) unsafe fn into_ref_asserting_initialized(self) -> *mut u8 {
         match self {
             Self::FuncRef(e) => e.cast(),
-            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
+            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
         }
     }
 
@@ -579,7 +584,7 @@ impl Drop for Table {
     fn drop(&mut self) {
         let ty = self.element_type();
 
-        // funcref tables can skip this
+        // `funcref` tables don't need drops.
         if let TableElementType::Func = ty {
             return;
         }

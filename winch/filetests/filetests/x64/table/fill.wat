@@ -118,7 +118,7 @@
 ;;   c1:	 4883e0fe             	and	rax, 0xfffffffffffffffe
 ;;      	 4889442404           	mov	qword ptr [rsp + 4], rax
 ;;      	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
-;;      	 498b4368             	mov	rax, qword ptr [r11 + 0x68]
+;;      	 498b4358             	mov	rax, qword ptr [r11 + 0x58]
 ;;      	 448b5c2414           	mov	r11d, dword ptr [rsp + 0x14]
 ;;      	 4883ec04             	sub	rsp, 4
 ;;      	 44891c24             	mov	dword ptr [rsp], r11d

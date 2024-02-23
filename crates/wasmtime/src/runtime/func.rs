@@ -1,3 +1,4 @@
+use crate::runtime::Uninhabited;
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
 use crate::{
@@ -77,9 +78,6 @@ use wasmtime_runtime::{
 pub struct NoFunc {
     _inner: Uninhabited,
 }
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Uninhabited {}
 
 impl NoFunc {
     /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference.
@@ -1158,20 +1156,23 @@ impl Func {
 
         let values_vec_size = params.len().max(ty.results().len());
 
-        // Whenever we pass `externref`s from host code to Wasm code, they
-        // go into the `VMExternRefActivationsTable`. But the table might be
-        // at capacity already, so check for that. If it is at capacity
-        // (unlikely) then do a GC to free up space. This is necessary
-        // because otherwise we would either keep filling up the bump chunk
-        // and making it larger and larger or we would always take the slow
-        // path when inserting references into the table.
-        if ty.as_wasm_func_type().externref_params_count()
-            > store
-                .0
-                .externref_activations_table()
-                .bump_capacity_remaining()
+        #[cfg(feature = "gc")]
         {
-            store.gc();
+            // Whenever we pass `externref`s from host code to Wasm code, they
+            // go into the `VMExternRefActivationsTable`. But the table might be
+            // at capacity already, so check for that. If it is at capacity
+            // (unlikely) then do a GC to free up space. This is necessary
+            // because otherwise we would either keep filling up the bump chunk
+            // and making it larger and larger or we would always take the slow
+            // path when inserting references into the table.
+            if ty.as_wasm_func_type().externref_params_count()
+                > store
+                    .0
+                    .externref_activations_table()
+                    .bump_capacity_remaining()
+            {
+                store.gc();
+            }
         }
 
         // Store the argument values into `values_vec`.
@@ -1307,15 +1308,18 @@ impl Func {
         let (params, results) = val_vec.split_at_mut(nparams);
         func(caller.sub_caller(), params, results)?;
 
-        // See the comment in `Func::call_impl`'s `write_params` function.
-        if ty.as_wasm_func_type().externref_returns_count()
-            > caller
-                .store
-                .0
-                .externref_activations_table()
-                .bump_capacity_remaining()
+        #[cfg(feature = "gc")]
         {
-            caller.store.gc();
+            // See the comment in `Func::call_impl`'s `write_params` function.
+            if ty.as_wasm_func_type().externref_returns_count()
+                > caller
+                    .store
+                    .0
+                    .externref_activations_table()
+                    .bump_capacity_remaining()
+            {
+                caller.store.gc();
+            }
         }
 
         // Unlike our arguments we need to dynamically check that the return
@@ -2023,6 +2027,8 @@ impl<T> Caller<'_, T> {
     /// Perform garbage collection of `ExternRef`s.
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
+    #[cfg(feature = "gc")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn gc(&mut self) {
         self.store.gc()
     }

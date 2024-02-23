@@ -154,13 +154,17 @@ impl Table {
                     let func = Func::from_vm_func_ref(store, f);
                     Some(func.into())
                 }
-                runtime::TableElement::ExternRef(None) => Some(Ref::Extern(None)),
-                runtime::TableElement::ExternRef(Some(x)) => {
-                    let x = ExternRef { inner: x };
-                    Some(x.into())
-                }
+
                 runtime::TableElement::UninitFunc => {
                     unreachable!("lazy init above should have converted UninitFunc")
+                }
+
+                runtime::TableElement::ExternRef(None) => Some(Ref::Extern(None)),
+
+                #[cfg_attr(not(feature = "gc"), allow(unreachable_code, unused_variables))]
+                runtime::TableElement::ExternRef(Some(x)) => {
+                    let x = ExternRef::from_vm_extern_ref(x);
+                    Some(x.into())
                 }
             }
         }

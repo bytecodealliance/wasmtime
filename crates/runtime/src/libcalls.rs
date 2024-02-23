@@ -62,12 +62,8 @@ use crate::{Instance, TrapReason};
 use anyhow::bail;
 use anyhow::Result;
 use cfg_if::cfg_if;
-use std::mem;
-use std::ptr::{self, NonNull};
 use std::time::{Duration, Instant};
-use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap, Unsigned,
-};
+use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
     DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds,
@@ -80,6 +76,10 @@ use wasmtime_wmemcheck::AccessError::{
 /// now to ensure that the fp/sp on exit are recorded for backtraces to work
 /// properly.
 pub mod trampolines {
+    // Allow these things because of the macro and how we can't differentiate
+    // between doc comments and `cfg`s.
+    #![allow(unused_doc_comments, unused_attributes)]
+
     use crate::arch::wasm_to_libcall_trampoline;
     use crate::{Instance, TrapReason, VMContext};
 
@@ -96,6 +96,7 @@ pub mod trampolines {
                 // supported platforms or otherwise in inline assembly for
                 // platforms like s390x which don't have stable `global_asm!`
                 // yet.
+                $( #[$attr] )*
                 extern "C" {
                     #[allow(missing_docs)]
                     #[allow(improper_ctypes)]
@@ -106,6 +107,7 @@ pub mod trampolines {
                     ) $(-> libcall!(@ty $result))?;
                 }
 
+                $( #[ $attr ] )*
                 wasm_to_libcall_trampoline!($name ; [<impl_ $name>]);
 
                 // This is the direct entrypoint from the inline assembly which
@@ -119,6 +121,7 @@ pub mod trampolines {
                 // like s390x need to use outlined assembly files which requires
                 // `no_mangle`.
                 #[cfg_attr(target_arch = "s390x", wasmtime_versioned_export_macros::versioned_export)]
+                $( #[ $attr ] )*
                 unsafe extern "C" fn [<impl_ $name>](
                     vmctx: *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
@@ -139,6 +142,7 @@ pub mod trampolines {
                 // in a linking failure.
                 #[allow(non_upper_case_globals)]
                 #[used]
+                $( #[ $attr ] )*
                 static [<impl_ $name _ref>]: unsafe extern "C" fn(
                     *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
@@ -221,17 +225,12 @@ unsafe fn table_grow(
     init_value: *mut u8,
 ) -> Result<u32> {
     let table_index = TableIndex::from_u32(table_index);
+
     let element = match instance.table_element_type(table_index) {
         TableElementType::Func => (init_value as *mut VMFuncRef).into(),
-        TableElementType::Extern => {
-            let init_value = if init_value.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(init_value))
-            };
-            init_value.into()
-        }
+        TableElementType::Extern => VMExternRef::clone_from_raw(init_value).into(),
     };
+
     Ok(match instance.table_grow(table_index, delta, element)? {
         Some(r) => r,
         None => (-1_i32).unsigned(),
@@ -239,6 +238,8 @@ unsafe fn table_grow(
 }
 
 use table_grow as table_grow_func_ref;
+
+#[cfg(feature = "gc")]
 use table_grow as table_grow_externref;
 
 // Implementation of `table.fill`.
@@ -258,18 +259,17 @@ unsafe fn table_fill(
             let val = val as *mut VMFuncRef;
             table.fill(dst, val.into(), len)
         }
+
         TableElementType::Extern => {
-            let val = if val.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(val))
-            };
+            let val = VMExternRef::clone_from_raw(val);
             table.fill(dst, val.into(), len)
         }
     }
 }
 
 use table_fill as table_fill_func_ref;
+
+#[cfg(feature = "gc")]
 use table_fill as table_fill_externref;
 
 // Implementation of `table.copy`.
@@ -380,16 +380,18 @@ unsafe fn table_get_lazy_init_func_ref(
 }
 
 // Drop a `VMExternRef`.
+#[cfg(feature = "gc")]
 unsafe fn drop_externref(_instance: &mut Instance, externref: *mut u8) {
     let externref = externref as *mut crate::externref::VMExternData;
-    let externref = NonNull::new(externref).unwrap().into();
+    let externref = std::ptr::NonNull::new(externref).unwrap().into();
     crate::externref::VMExternData::drop_and_dealloc(externref);
 }
 
 // Do a GC and insert the given `externref` into the
 // `VMExternRefActivationsTable`.
+#[cfg(feature = "gc")]
 unsafe fn activations_table_insert_with_gc(instance: &mut Instance, externref: *mut u8) {
-    let externref = VMExternRef::clone_from_raw(externref);
+    let externref = VMExternRef::clone_from_raw(externref).unwrap();
     let limits = *instance.runtime_limits();
     let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
 
@@ -406,12 +408,13 @@ unsafe fn activations_table_insert_with_gc(instance: &mut Instance, externref: *
 }
 
 // Perform a Wasm `global.get` for `externref` globals.
+#[cfg(feature = "gc")]
 unsafe fn externref_global_get(instance: &mut Instance, index: u32) -> *mut u8 {
-    let index = GlobalIndex::from_u32(index);
+    let index = wasmtime_environ::GlobalIndex::from_u32(index);
     let limits = *instance.runtime_limits();
     let global = instance.defined_or_imported_global_ptr(index);
     match (*global).as_externref().clone() {
-        None => ptr::null_mut(),
+        None => std::ptr::null_mut(),
         Some(externref) => {
             let raw = externref.as_raw();
             let (activations_table, module_info_lookup) =
@@ -423,21 +426,18 @@ unsafe fn externref_global_get(instance: &mut Instance, index: u32) -> *mut u8 {
 }
 
 // Perform a Wasm `global.set` for `externref` globals.
+#[cfg(feature = "gc")]
 unsafe fn externref_global_set(instance: &mut Instance, index: u32, externref: *mut u8) {
-    let externref = if externref.is_null() {
-        None
-    } else {
-        Some(VMExternRef::clone_from_raw(externref))
-    };
+    let externref = VMExternRef::clone_from_raw(externref);
 
-    let index = GlobalIndex::from_u32(index);
+    let index = wasmtime_environ::GlobalIndex::from_u32(index);
     let global = instance.defined_or_imported_global_ptr(index);
 
     // Swap the new `externref` value into the global before we drop the old
     // value. This protects against an `externref` with a `Drop` implementation
     // that calls back into Wasm and touches this global again (we want to avoid
     // it observing a halfway-deinitialized value).
-    let old = mem::replace((*global).as_externref_mut(), externref);
+    let old = std::mem::replace((*global).as_externref_mut(), externref);
     drop(old);
 }
 

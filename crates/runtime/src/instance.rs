@@ -476,6 +476,7 @@ impl Instance {
 
             *self.runtime_limits() = ptr::null_mut();
             *self.epoch_ptr() = ptr::null_mut();
+
             *self.externref_activations_table() = ptr::null_mut();
         }
     }
@@ -1239,6 +1240,7 @@ impl Instance {
                             heap_type: WasmHeapType::Extern,
                             ..
                         }) => *(*to).as_externref_mut() = from.as_externref().clone(),
+
                         _ => ptr::copy_nonoverlapping(from, to, 1),
                     }
                 }
@@ -1286,11 +1288,11 @@ impl Drop for Instance {
                 WasmValType::Ref(WasmRefType {
                     heap_type: WasmHeapType::Extern,
                     ..
-                }) => {}
+                }) => unsafe {
+                    drop((*self.global_ptr(idx)).as_externref_mut().take());
+                },
+
                 _ => continue,
-            }
-            unsafe {
-                drop((*self.global_ptr(idx)).as_externref_mut().take());
             }
         }
     }

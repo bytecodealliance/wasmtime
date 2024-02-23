@@ -34,26 +34,41 @@ macro_rules! declare_function_signatures {
     ) => {
         /// A struct with an `Option<ir::SigRef>` member for every builtin
         /// function, to de-duplicate constructing/getting its signature.
+        #[allow(unused_doc_comments)]
         struct BuiltinFunctionSignatures {
             pointer_type: ir::Type,
+
+            #[cfg(feature = "gc")]
             reference_type: ir::Type,
+
             call_conv: isa::CallConv,
+
             $(
+                $( #[$attr] )*
                 $name: Option<ir::SigRef>,
             )*
         }
 
+        #[allow(unused_doc_comments)]
         impl BuiltinFunctionSignatures {
             fn new(
                 pointer_type: ir::Type,
                 reference_type: ir::Type,
                 call_conv: isa::CallConv,
             ) -> Self {
+                #[cfg(not(feature = "gc"))]
+                let _ = reference_type;
+
                 Self {
                     pointer_type,
+
+                    #[cfg(feature = "gc")]
                     reference_type,
+
                     call_conv,
+
                     $(
+                        $( #[$attr] )*
                         $name: None,
                     )*
                 }
@@ -63,6 +78,7 @@ macro_rules! declare_function_signatures {
                 AbiParam::special(self.pointer_type, ArgumentPurpose::VMContext)
             }
 
+            #[cfg(feature = "gc")]
             fn reference(&self) -> AbiParam {
                 AbiParam::new(self.reference_type)
             }
@@ -89,6 +105,7 @@ macro_rules! declare_function_signatures {
             }
 
             $(
+                $( #[$attr] )*
                 fn $name(&mut self, func: &mut Function) -> ir::SigRef {
                     let sig = self.$name.unwrap_or_else(|| {
                         func.import_signature(Signature {
@@ -336,6 +353,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// reference count.
     ///
     /// The new reference count is returned.
+    #[cfg(feature = "gc")]
     fn mutate_externref_ref_count(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -1324,11 +1342,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     self.builtin_function_signatures
                         .table_grow_func_ref(&mut pos.func),
                 ),
+                #[cfg(feature = "gc")]
                 WasmHeapType::Extern => (
                     BuiltinFunctionIndex::table_grow_externref(),
                     self.builtin_function_signatures
                         .table_grow_externref(&mut pos.func),
                 ),
+                #[cfg(not(feature = "gc"))]
+                WasmHeapType::Extern => {
+                    return Err(cranelift_wasm::wasm_unsupported!(
+                        "support for `externref` disabled at compile time because \
+                     the `gc` cargo feature was not enabled",
+                    ))
+                }
             };
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
@@ -1350,8 +1376,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         table: ir::Table,
         index: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let pointer_type = self.pointer_type();
-
         let plan = &self.module.table_plans[table_index];
         match plan.table.wasm_ty.heap_type {
             WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => match plan
@@ -1361,6 +1385,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     Ok(self.get_or_init_func_ref_table_elem(builder, table_index, table, index))
                 }
             },
+            #[cfg(feature = "gc")]
             WasmHeapType::Extern => {
                 // Our read barrier for `externref` tables is roughly equivalent
                 // to the following pseudocode:
@@ -1382,6 +1407,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // onto the stack are safely held alive by the
                 // `VMExternRefActivationsTable`.
 
+                let pointer_type = self.pointer_type();
                 let reference_type = self.reference_type(WasmHeapType::Extern);
 
                 builder.ensure_inserted_block();
@@ -1477,6 +1503,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(elem)
             }
+            #[cfg(not(feature = "gc"))]
+            WasmHeapType::Extern => {
+                return Err(cranelift_wasm::wasm_unsupported!(
+                    "support for `externref` disabled at compile time because the \
+                 `gc` cargo feature was not enabled",
+                ))
+            }
         }
     }
 
@@ -1510,6 +1543,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             },
 
+            #[cfg(feature = "gc")]
             WasmHeapType::Extern => {
                 // Our write barrier for `externref`s being copied out of the
                 // stack and into a table is roughly equivalent to the following
@@ -1640,6 +1674,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(())
             }
+
+            #[cfg(not(feature = "gc"))]
+            WasmHeapType::Extern => {
+                return Err(cranelift_wasm::wasm_unsupported!(
+                    "support for `externref` disabled at compile time because the \
+                     `gc` cargo feature was not enabled",
+                ))
+            }
         }
     }
 
@@ -1658,11 +1700,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     self.builtin_function_signatures
                         .table_fill_func_ref(&mut pos.func),
                 ),
+                #[cfg(feature = "gc")]
                 WasmHeapType::Extern => (
                     BuiltinFunctionIndex::table_fill_externref(),
                     self.builtin_function_signatures
                         .table_fill_externref(&mut pos.func),
                 ),
+                #[cfg(not(feature = "gc"))]
+                WasmHeapType::Extern => {
+                    return Err(cranelift_wasm::wasm_unsupported!(
+                        "support for `externref` disabled at compile time because the \
+                         `gc` cargo feature was not enabled",
+                    ));
+                }
             };
 
         let (vmctx, builtin_addr) =
@@ -1727,6 +1777,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
+    #[cfg(feature = "gc")]
     fn translate_custom_global_get(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
@@ -1754,6 +1805,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
+    #[cfg(not(feature = "gc"))]
+    fn translate_custom_global_get(
+        &mut self,
+        _pos: FuncCursor,
+        index: GlobalIndex,
+    ) -> WasmResult<ir::Value> {
+        debug_assert_eq!(
+            self.module.globals[index].wasm_ty,
+            WasmValType::Ref(WasmRefType::EXTERNREF),
+            "We only use GlobalVariable::Custom for externref"
+        );
+        Err(cranelift_wasm::wasm_unsupported!(
+            "support for `externref` disabled at compile time because the \
+             `gc` cargo feature was not enabled",
+        ))
+    }
+
+    #[cfg(feature = "gc")]
     fn translate_custom_global_set(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
@@ -1779,6 +1848,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .call_indirect(builtin_sig, builtin_addr, &[vmctx, global_index_arg, value]);
 
         Ok(())
+    }
+
+    #[cfg(not(feature = "gc"))]
+    fn translate_custom_global_set(
+        &mut self,
+        _pos: FuncCursor,
+        index: GlobalIndex,
+        _value: ir::Value,
+    ) -> WasmResult<()> {
+        debug_assert_eq!(
+            self.module.globals[index].wasm_ty,
+            WasmValType::Ref(WasmRefType::EXTERNREF),
+            "We only use GlobalVariable::Custom for externref"
+        );
+        Err(cranelift_wasm::wasm_unsupported!(
+            "support for `externref` disabled at compile time because the \
+             `gc` cargo feature was not enabled",
+        ))
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {

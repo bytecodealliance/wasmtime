@@ -86,6 +86,7 @@ wasi-common = { path = "../wasi-common", default-features = true }
 default = [
   'async',
   'cache',
+  'gc',
   'wat',
   'profiling',
   'parallel-compilation',
@@ -172,3 +173,19 @@ debug-builtins = ["wasmtime-runtime?/debug-builtins"]
 
 # Enable support for executing compiled Wasm modules.
 runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence", "dep:wasmtime-slab"]
+
+# Enable support for garbage collection-related things.
+#
+# This Cargo feature is required to compile or run Wasm that uses any of the
+# following Wasm proposals:
+#
+# * Reference types: https://github.com/WebAssembly/reference-types/
+# * Typed function references: https://github.com/WebAssembly/function-references/
+# * Garbage collection: https://github.com/WebAssembly/gc
+#
+# When a compiler Cargo feature (`cranelift` or `winch`) is enabled, this
+# feature gates the ability to compile Wasm that uses those proposals.
+#
+# When the `runtime` Cargo feature is enabled, this feature gates the ability to
+# load and run Wasm that uses those proposals.
+gc = ["wasmtime-environ/gc", "wasmtime-runtime?/gc", "wasmtime-cranelift?/gc"]

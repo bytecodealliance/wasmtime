@@ -110,16 +110,18 @@ impl Global {
                 ValType::V128 => Val::V128((*definition.as_u128()).into()),
                 ValType::Ref(ref_ty) => {
                     let reference = match ref_ty.heap_type() {
+                        HeapType::Func | HeapType::Concrete(_) => {
+                            Ref::Func(Func::from_raw(store, definition.as_func_ref().cast()))
+                        }
+
+                        HeapType::NoFunc => Ref::Func(None),
+
                         HeapType::Extern => Ref::Extern(
                             definition
                                 .as_externref()
                                 .clone()
-                                .map(|inner| ExternRef { inner }),
+                                .map(|inner| ExternRef::from_vm_extern_ref(inner)),
                         ),
-                        HeapType::Func | HeapType::Concrete(_) => {
-                            Ref::Func(Func::from_raw(store, definition.as_func_ref().cast()))
-                        }
-                        HeapType::NoFunc => Ref::Func(None),
                     };
                     debug_assert!(
                         ref_ty.is_nullable() || !reference.is_null(),
@@ -165,7 +167,10 @@ impl Global {
                 Val::ExternRef(e) => {
                     // Take care to invoke the `Drop` implementation of the
                     // existing `ExternRef` so that it doesn't leak.
-                    let old = mem::replace(definition.as_externref_mut(), e.map(|e| e.inner));
+                    let old = mem::replace(
+                        definition.as_externref_mut(),
+                        e.map(|e| e.into_vm_extern_ref()),
+                    );
                     drop(old);
                 }
             }
