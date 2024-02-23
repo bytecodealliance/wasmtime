@@ -186,6 +186,7 @@ impl RunCommon {
             Some(Precompiled::Component) => {
                 bail!("support for components was not enabled at compile time");
             }
+            #[cfg(any(feature = "cranelift", feature = "winch"))]
             None => {
                 // Parse the text format here specifically to add the `path` to
                 // the error message if there's a syntax error.
@@ -206,11 +207,13 @@ impl RunCommon {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    #[cfg(feature = "cranelift")]
-                    return Ok(RunTarget::Core(Module::new(engine, &bytes)?));
-                    #[cfg(not(feature = "cranelift"))]
-                    bail!("support for compiling modules was disabled at compile time");
+                    RunTarget::Core(Module::new(engine, &bytes)?)
                 }
+            }
+            #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+            None => {
+                let _ = path;
+                bail!("support for compiling modules was disabled at compile time");
             }
         })
     }

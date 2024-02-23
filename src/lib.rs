@@ -6,6 +6,7 @@
 
 pub mod commands;
 
+#[cfg(feature = "run")]
 pub(crate) mod common;
 
 #[cfg(feature = "old-cli")]
