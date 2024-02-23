@@ -6,26 +6,23 @@ Before continuing, make sure you can [build
 Wasmtime](./contributing-building.md) successfully. Can't run the tests if you
 can't build it!
 
+## Installing `wasm32` Targets
+
+To compile the tests, you'll need the `wasm32-wasi` and
+`wasm32-unknown-unknown` targets installed, which, assuming you're using
+[rustup.rs](https://rustup.rs) to manage your Rust versions, can be done as
+follows:
+
+```shell
+rustup target add wasm32-wasi wasm32-unknown-unknown
+```
+
 ## Running All Tests
 
-To run all of Wasmtime's tests (excluding WASI integration tests), execute this command:
+To run all of Wasmtime's tests, execute this command:
 
 ```shell
-cargo test --all
-```
-
-To include WASI integration tests, you'll need `wasm32-wasi` target installed, which,
-assuming you're using [rustup.rs](https://rustup.rs) to manage your Rust versions,
-can be done as follows:
-
-```shell
-rustup target add wasm32-wasi
-```
-
-Next, to run all tests including the WASI integration tests, execute this command:
-
-```shell
-cargo test --features test-programs/test_programs --all
+cargo test --workspace
 ```
 
 You can also exclude a particular crate from testing with `--exclude`. For
@@ -34,7 +31,13 @@ requires that `libclang` is installed on your system, and for some reason maybe
 you don't have it — you can run:
 
 ```shell
-cargo test --all --exclude wasmtime-fuzzing
+cargo test --workspace --exclude wasmtime-fuzzing
+```
+
+Similarly, to skip WASI integration tests, run:
+
+```shell
+cargo test --workspace --exclude test-programs
 ```
 
 ## Testing a Specific Crate
@@ -78,7 +81,7 @@ can be useful when working on the `wasi-common` crate. This can be done by
 executing this command:
 
 ```shell
-cargo test --features test-programs/test_programs -p test-programs
+cargo test -p test-programs
 ```
 
 ## Adding New Tests
