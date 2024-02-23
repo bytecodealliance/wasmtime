@@ -16,9 +16,9 @@ use wasmtime_environ::{WasmHeapType, WasmValType};
 struct RegIndexEnv {
     /// General purpose register index or the field used for absolute
     /// counts.
-    gpr_or_absolute_count: u8,
+    gpr_or_absolute_count: u16,
     /// Floating point register index.
-    fpr: u8,
+    fpr: u16,
     /// Whether the count should be absolute rather than per register class.
     /// When this field is true, only the `gpr_or_absolute_count` field is
     /// incremented.
@@ -36,11 +36,11 @@ impl RegIndexEnv {
 }
 
 impl RegIndexEnv {
-    fn next_gpr(&mut self) -> u8 {
+    fn next_gpr(&mut self) -> u16 {
         Self::increment(&mut self.gpr_or_absolute_count)
     }
 
-    fn next_fpr(&mut self) -> u8 {
+    fn next_fpr(&mut self) -> u16 {
         if self.absolute_count {
             Self::increment(&mut self.gpr_or_absolute_count)
         } else {
@@ -48,7 +48,7 @@ impl RegIndexEnv {
         }
     }
 
-    fn increment(index: &mut u8) -> u8 {
+    fn increment(index: &mut u16) -> u16 {
         let current = *index;
         *index += 1;
         current
@@ -249,7 +249,7 @@ impl X64ABI {
     }
 
     fn int_reg_for(
-        index: u8,
+        index: u16,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> Option<Reg> {
@@ -283,7 +283,7 @@ impl X64ABI {
     }
 
     fn float_reg_for(
-        index: u8,
+        index: u16,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> Option<Reg> {

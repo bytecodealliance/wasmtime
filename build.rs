@@ -208,7 +208,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         if testsuite == "misc_testsuite" {
             let denylist = [
                 "externref_id_function",
-                "func_400_params",
                 "int_to_float_splat",
                 "issue6562",
                 "many_table_gets_lead_to_gc",
