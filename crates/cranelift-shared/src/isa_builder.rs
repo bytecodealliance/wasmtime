@@ -28,9 +28,12 @@ impl<T> IsaBuilder<T> {
             .set("enable_probestack", "false")
             .expect("should be valid flag");
 
+        let triple_specified = triple.is_some();
         let triple = triple.unwrap_or_else(Triple::host);
         let mut isa_flags = lookup(triple)?;
-        cranelift_native::infer_native_flags(&mut isa_flags).unwrap();
+        if !triple_specified {
+            cranelift_native::infer_native_flags(&mut isa_flags).unwrap();
+        }
 
         Ok(Self {
             shared_flags: flags,
