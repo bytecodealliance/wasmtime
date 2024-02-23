@@ -1275,12 +1275,24 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wit-bindgen]]
+version = "0.19.1"
+when = "2024-02-23"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-core]]
 version = "0.17.0"
 when = "2024-02-05"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen-core]]
+version = "0.19.1"
+when = "2024-02-23"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
 version = "0.17.0"
@@ -1289,12 +1301,24 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wit-bindgen-rust]]
+version = "0.19.1"
+when = "2024-02-23"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-rust-macro]]
 version = "0.17.0"
 when = "2024-02-05"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
+
+[[publisher.wit-bindgen-rust-macro]]
+version = "0.19.1"
+when = "2024-02-23"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.wit-component]]
 version = "0.20.1"
