@@ -206,10 +206,19 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     // Ignore some tests for when testing Winch.
     if strategy == "Winch" {
         if testsuite == "misc_testsuite" {
-            // The misc/call_indirect is fully supported by Winch.
-            if testname != "call_indirect" {
-                return true;
-            }
+            let denylist = [
+                "externref_id_function",
+                "func_400_params",
+                "int_to_float_splat",
+                "issue6562",
+                "many_table_gets_lead_to_gc",
+                "mutable_externref_globals",
+                "no_mixup_stack_maps",
+                "no_panic",
+                "simple_ref_is_null",
+                "table_grow_with_funcref",
+            ];
+            return denylist.contains(&testname);
         }
         if testsuite == "spec_testsuite" {
             let denylist = [
