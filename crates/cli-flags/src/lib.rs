@@ -59,6 +59,10 @@ wasmtime_option_group! {
         /// memories.
         pub dynamic_memory_reserved_for_growth: Option<u64>,
 
+        /// Indicates whether an unmapped region of memory is placed before all
+        /// linear memories.
+        pub guard_before_linear_memory: Option<bool>,
+
         /// Enable the pooling allocator, in place of the on-demand allocator.
         pub pooling_allocator: Option<bool>,
 
@@ -493,6 +497,9 @@ impl CommonOptions {
         }
         if let Some(size) = self.opts.dynamic_memory_reserved_for_growth {
             config.dynamic_memory_reserved_for_growth(size);
+        }
+        if let Some(enable) = self.opts.guard_before_linear_memory {
+            config.guard_before_linear_memory(enable);
         }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
