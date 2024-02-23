@@ -3690,6 +3690,30 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-08-20"
 end = "2024-07-14"
 
+[[trusted.wit-bindgen]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-23"
+end = "2025-02-23"
+
+[[trusted.wit-bindgen-core]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-23"
+end = "2025-02-23"
+
+[[trusted.wit-bindgen-rust]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-23"
+end = "2025-02-23"
+
+[[trusted.wit-bindgen-rust-macro]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-23"
+end = "2025-02-23"
+
 [[trusted.wit-component]]
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
