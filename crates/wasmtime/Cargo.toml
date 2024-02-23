@@ -32,6 +32,7 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
+wasmtime-slab = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
@@ -170,4 +171,4 @@ coredump = ["dep:wasm-encoder", "runtime"]
 debug-builtins = ["wasmtime-runtime?/debug-builtins"]
 
 # Enable support for executing compiled Wasm modules.
-runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence"]
+runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence", "dep:wasmtime-slab"]

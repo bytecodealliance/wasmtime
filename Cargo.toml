@@ -123,7 +123,7 @@ members = [
   "examples/component/wasm",
   "fuzz",
   "winch",
-  "winch/codegen",
+  "winch/codegen", "crates/slab",
 ]
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
@@ -177,6 +177,7 @@ wasmtime-component-util = { path = "crates/component-util", version = "=19.0.0" 
 wasmtime-component-macro = { path = "crates/component-macro", version = "=19.0.0" }
 wasmtime-asm-macros = { path = "crates/asm-macros", version = "=19.0.0" }
 wasmtime-versioned-export-macros = { path = "crates/versioned-export-macros", version = "=19.0.0" }
+wasmtime-slab = { path = "crates/slab", version = "=19.0.0" }
 component-test-util = { path = "crates/misc/component-test-util" }
 component-fuzz-util = { path = "crates/misc/component-fuzz-util" }
 wiggle = { path = "crates/wiggle", version = "=19.0.0", default-features = false }
