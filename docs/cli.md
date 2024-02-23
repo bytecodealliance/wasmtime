@@ -1,22 +1,21 @@
 # Using the `wasmtime` CLI
 
-In addition to the embedding API which allows you to use Wasmtime as a
-library, the Wasmtime project also provides a `wasmtime` CLI tool to conveniently
-execute WebAssembly modules from the command line.
+In addition to the [embedding API](https://docs.rs/wasmtime/latest/wasmtime/)
+which allows you to use Wasmtime as a library, the Wasmtime project also
+provides a `wasmtime` CLI tool to conveniently execute WebAssembly modules from
+the command line.
 
-This section will provide a guide to the `wasmtime` CLI and major functionality
-that it contains. In short, however, you can execute a WebAssembly file
-(actually doing work as part of the `start` function) like so:
+The `wasmtime` CLI executes the WebAssembly module or component provided to it
+as a CLI argument:
 
 ```sh
 $ wasmtime foo.wasm
 ```
 
-Or similarly if you want to invoke a "start" function, such as with WASI
-modules, you can execute
+CLI arguments can be passed to the WebAssembly file itself too:
 
 ```sh
-$ wasmtime --invoke _start foo.wasm
+$ wasmtime example.wasm arg1 --flag1 arg2
 ```
 
 For more information be sure to check out [how to install the

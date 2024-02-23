@@ -4,15 +4,19 @@ Wasmtime's release process was [originally designed in an RFC][rfc4] and this
 page is intended to serve as documentation for the current process as-is today.
 The high-level summary of Wasmtime's release process is:
 
-* A new major version of Wasmtime will be made available once a month.
+* On the 5th of every month a `release-X.0.0` branch is created from the current
+  `main` branch.
+* On the 20th of every month the contents of `release-X.0.0` is published as a
+  new major version.
 * Security bugs and correctness fixes will be backported to the latest two
   releases of Wasmtime and issued as patch releases.
 
 Once a month Wasmtime will issue a new major version. This will be issued with a
-semver-major version update, such as 4.0.0 to 5.0.0. The precise schedule of
-Wasmtime's release is currently an automated PR is sent to bump the version on
-the 5th of every month and a release is made when the PR is merged. The PR
-typically gets merged within a few days.
+semver-major version update, such as 4.0.0 to 5.0.0. A release branch is created
+on the 5th of the month ahead of the release on the 20th. This enables at least
+two weeks of fuzzing to discover any possible issues with the latest changes to
+Wasmtime. If the 20th isn't a normal work day then the release may be delayed to
+the next work day.
 
 Each major release of Wasmtime reserves the right to break both behavior and API
 backwards-compatibility. This is not expected to happen frequently, however, and

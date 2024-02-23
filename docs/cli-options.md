@@ -49,8 +49,38 @@ The `run` command accepts an optional `invoke` argument which is the name of
 an exported function of the module to run.
 
 ```sh
-$ wasmtime run foo.wasm --invoke initialize
+$ wasmtime run --invoke initialize foo.wasm
 ```
+
+Flags to Wasmtime must appear after the `run` command and before the WebAssembly
+binary, for example:
+
+```sh
+$ wasmtime run -D coredump ./foo.wasm
+```
+
+All arguments, including flags, after the WebAssembly binary are passed to the
+binary itself, for example:
+
+```sh
+$ wasmtime run ./foo.wasm --flag-to-wasm-binary
+```
+
+## `compile`
+
+This subcommand is used to Ahead-Of-Time (AOT) compile a WebAssembly module to produce
+a "compiled wasm" (.cwasm) file.
+
+The `wasmtime run` subcommand can then be used to run a AOT-compiled WebAssembly module:
+
+```sh
+$ wasmtime compile foo.wasm
+$ wasmtime foo.cwasm
+```
+
+AOT-compiled modules can be cross-compiled with the `--target` flag to different
+hosts. The `-C cranelift-*` flags can additionally configure target options such
+as AVX support for x86\_64 processors.
 
 ## `wast`
 
@@ -77,21 +107,6 @@ $ wasmtime config new
 ```
 
 And that'll print out the path to the file you can edit.
-
-## `compile`
-
-This subcommand is used to Ahead-Of-Time (AOT) compile a WebAssembly module to produce
-a "compiled wasm" (.cwasm) file.
-
-The `wasmtime run` subcommand can then be used to run a AOT-compiled WebAssembly module:
-
-```sh
-$ wasmtime compile foo.wasm
-$ wasmtime foo.cwasm
-```
-
-AOT-compiled modules can be run from hosts that are compatible with the target
-environment of the AOT-completed module.
 
 ## `settings`
 

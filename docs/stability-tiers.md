@@ -25,8 +25,7 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-apple-darwin`                      |
 | Target               | `x86_64-pc-windows-msvc`                   |
 | Target               | `x86_64-unknown-linux-gnu`                 |
-| WASI Proposal        | `wasi_snapshot_preview1`                   |
-| WASI Proposal        | `wasi_unstable`                            |
+| Compiler Backend     | Cranelift                                  |
 | WebAssembly Proposal | [`mutable-globals`]                        |
 | WebAssembly Proposal | [`sign-extension-ops`]                     |
 | WebAssembly Proposal | [`nontrapping-float-to-int-conversion`]    |
@@ -34,6 +33,19 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`bulk-memory`]                            |
 | WebAssembly Proposal | [`reference-types`]                        |
 | WebAssembly Proposal | [`simd`]                                   |
+| WebAssembly Proposal | [`multi-memory`]                           |
+| WebAssembly Proposal | [`component-model`]                        |
+| WebAssembly Proposal | [`threads`]                                |
+| WebAssembly Proposal | [`relaxed-simd`]                           |
+| WASI Proposal        | [`wasi-io`]                                |
+| WASI Proposal        | [`wasi-clocks`]                            |
+| WASI Proposal        | [`wasi-filesystem`]                        |
+| WASI Proposal        | [`wasi-random`]                            |
+| WASI Proposal        | [`wasi-poll`]                              |
+| WASI Proposal        | [`wasi-sockets`]                           |
+| WASI Proposal        | [`wasi-http`]                              |
+| WASI Proposal        | `wasi_snapshot_preview1`                   |
+| WASI Proposal        | `wasi_unstable`                            |
 
 [`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
 [`sign-extension-ops`]: https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md
@@ -50,18 +62,10 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-unknown-linux-gnu`| Continuous fuzzing          |
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
+| Compiler Backend     | Winch on x86\_64           | All fuzz bugs fixed         |
 | WebAssembly Proposal | [`memory64`]               | Unstable wasm proposal      |
-| WebAssembly Proposal | [`multi-memory`]           | Unstable wasm proposal      |
-| WebAssembly Proposal | [`threads`]                | Unstable wasm proposal      |
-| WebAssembly Proposal | [`component-model`]        | Unstable wasm proposal      |
-| WebAssembly Proposal | [`tail-call`]              | Unstable wasm proposal, performance work |
-| WebAssembly Proposal | [`relaxed-simd`]           | Unstable wasm proposal      |
+| WebAssembly Proposal | [`tail-call`]              | performance work            |
 | WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
-| WASI Proposal        | [`wasi-io`]                | Unstable WASI proposal      |
-| WASI Proposal        | [`wasi-clocks`]            | Unstable WASI proposal      |
-| WASI Proposal        | [`wasi-filesystem`]        | Unstable WASI proposal      |
-| WASI Proposal        | [`wasi-random`]            | Unstable WASI proposal      |
-| WASI Proposal        | [`wasi-poll`]              | Unstable WASI proposal      |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
@@ -83,10 +87,11 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-apple-darwin`            | CI testing                  |
 | Target               | `aarch64-pc-windows-msvc`         | CI testing, unwinding, full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
+| Target               | `wasm32-wasi` [^3]                | fleshed out support         |
+| Compiler Backend     | Winch on aarch64                  | finished implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
-| WASI Proposal        | [`wasi-sockets`]                  | Complete implementation     |
-| WASI Proposal        | [`wasi-http`]                     | Complete implementation     |
+| WebAssembly Proposal | [`gc`]                            | Still being implemented     |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
 
@@ -94,6 +99,7 @@ For explanations of what each tier means see below.
 [`wasi-nn`]: https://github.com/WebAssembly/wasi-nn
 [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 [`wasi-http`]: https://github.com/WebAssembly/wasi-http
+[`gc`]: https://github.com/WebAssembly/gc
 
 [^1]: This is intended to encompass features that Cranelift supports as a
 general-purpose code generator such as integer value types other than `i32` and
@@ -108,6 +114,11 @@ support is currently best-effort. Additionally there are known shortcomings
 and bugs. At this time there's no developer time to improve the situation here
 as well.
 
+[^3]: Wasmtime and its CLI can be compiled to WebAssembly, but only if the
+`runtime` feature is excluded. This effectively means that only Cranelift
+and Winch, the support for compiling modules, can itself be compiled to
+WebAssembly.
+
 #### Unsupported features and platforms
 
 While this is not an exhaustive list, Wasmtime does not currently have support
@@ -118,7 +129,7 @@ features to figure out how best to implement them and at least move them to Tier
 3 above.
 
 * Target: ARM 32-bit
-* Target: WebAssembly (compiling Wasmtime to WebAssembly itself)
+* Target: WebAssembly (compiling Wasmtime's runtime portion to WebAssembly)
 * Target: [FreeBSD](https://github.com/bytecodealliance/wasmtime/issues/5499)
 * Target: [NetBSD/OpenBSD](https://github.com/bytecodealliance/wasmtime/issues/6962)
 * Target: [i686 (32-bit Intel targets)](https://github.com/bytecodealliance/wasmtime/issues/1980)
@@ -131,7 +142,6 @@ features to figure out how best to implement them and at least move them to Tier
 * [WebAssembly proposal: `exception-handling`](https://github.com/WebAssembly/exception-handling)
 * [WebAssembly proposal: `extended-const`](https://github.com/WebAssembly/extended-const)
 * [WebAssembly proposal: `flexible-vectors`](https://github.com/WebAssembly/flexible-vectors)
-* [WebAssembly proposal: `gc`](https://github.com/WebAssembly/gc)
 * [WebAssembly proposal: `memory-control`](https://github.com/WebAssembly/memory-control)
 * [WebAssembly proposal: `stack-switching`](https://github.com/WebAssembly/stack-switching)
 * [WASI proposal: `proxy-wasm`](https://github.com/proxy-wasm/spec)

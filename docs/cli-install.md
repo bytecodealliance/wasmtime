@@ -1,11 +1,7 @@
 # Installing `wasmtime`
 
-Here we'll show you how to install the `wasmtime` command line tool. Note that
-this is distinct from embedding the Wasmtime project into another, for that
-you'll want to consult the [embedding documentation](embed.md).
-
-The easiest way to install the `wasmtime` CLI tool is through our installation
-script. Linux and macOS users can execute the following:
+For Linux and macOS users `wasmtime` can be installed through our installation
+script:
 
 ```sh
 $ curl https://wasmtime.dev/install.sh -sSf | bash
@@ -16,22 +12,19 @@ This will download a precompiled version of `wasmtime`, place it in
 directory in `PATH`.
 
 Windows users will want to visit our [releases page][releases] and can download
-the MSI installer (`wasmtime-dev-x86_64-windows.msi` for example) and use that
-to install.
+the MSI installer (`wasmtime-v18.0.0-x86_64-windows.msi` for example) and use
+that to install.
 
-[releases]: https://github.com/bytecodealliance/wasmtime/releases
+[releases]: https://github.com/bytecodealliance/wasmtime/releases/latest
 
 You can confirm your installation works by executing:
 
 ```sh
 $ wasmtime -V
-wasmtime 0.12.0
+wasmtime-cli 18.0.0
 ```
 
-And now you're off to the races! Be sure to check out the [various CLI
-options](cli-options.md) as well.
-
-## Download Precompiled Binaries
+## Download Precompiled Binaries Manually
 
 If you'd prefer to not use an installation script, or you're perhaps
 orchestrating something in CI, you can also download one of our precompiled
@@ -56,9 +49,9 @@ the `dev` release)
 Each of these archives has a `wasmtime` binary placed inside which can be
 executed normally as the CLI would.
 
-[wasmtime-dev-x86_64-linux.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-linux.tar.xz
-[wasmtime-dev-x86_64-macos.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-macos.tar.xz
-[wasmtime-dev-x86_64-windows.zip`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-windows.zip
+[`wasmtime-dev-x86_64-linux.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-linux.tar.xz
+[`wasmtime-dev-x86_64-macos.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-macos.tar.xz
+[`wasmtime-dev-x86_64-windows.zip`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-windows.zip
 
 ## Compiling from Source
 

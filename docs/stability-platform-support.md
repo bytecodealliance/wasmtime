@@ -1,38 +1,31 @@
 # Platform Support
 
-The `wasmtime` project is a configurable and lightweight runtime for WebAssembly
-which has a number of ways it can be configured. Not all features are supported
-on all platforms, but it is intended that `wasmtime` can run in some capacity on
-almost all platforms! The matrix of what's being tested, what works, and what's
-supported where is evolving over time, and this document hopes to capture a
-snapshot of what the current state of the world looks like.
+A full list of supported platforms can be found in the [tiers of support
+documentation](./stability-tiers.md), but Wasmtime in general works on Linux,
+macOS, and Windows across the aarch64, x86\_64, riscv64, and s390x
+architectures.
 
-All features of `wasmtime` should work on the following platforms:
+The rest of this page is intended to detail the system-level requirements that
+Wasmtime currently has.
 
-* Linux x86\_64
-* Linux aarch64
-* macOS x86\_64
-* Windows x86\_64
+## Virtual Memory Support
 
-For more detailed information about supported platforms, please check out the
-sections below!
+Wasmtime's most general usage assumes the existence of virtual memory. This is
+used to create new executable pages of memory on-the-fly when WebAssembly
+modules or components are compiled. Additionally this is used for the default
+mode of implementing linear memories by omitting bounds checks and relying on
+virtual memory instead.
 
-## JIT compiler support
-
-The JIT compiler, backed by Cranelift, supports the x86\_64 and aarch64
-architectures at this time. Support for at least ARM and x86 is planned as well.
-
-Usage of the JIT compiler will require a host operating system which supports
-creating executable memory pages on-the-fly. In Rust terms this generally means
-that `std` needs to be supported on this platform.
+At this time it is not possible to use Wasmtime without support for virtual
+memory. Discussion and support for relaxing this requirement, however, would be
+welcome.
 
 ## Interpreter support
 
-At this time `wasmtime` does not have a mode in which it simply interprets
-WebAssembly code. It is planned to add support for an interpreter, however, and
-this will have minimal system dependencies. It is planned that the system will
-need to support some form of dynamic memory allocation, but other than that not
-much else will be needed.
+At this time `wasmtime` does not have a mode in which it interprets WebAssembly
+code rather than compiling it to machine code. Wasmtime would like to have an
+interpreter one day but support for this has not been planned yet. If you're
+interested in helping to implement this please reach out to us.
 
 ## What about `#[no_std]`?
 
