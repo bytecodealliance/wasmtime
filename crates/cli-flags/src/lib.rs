@@ -39,7 +39,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 wasmtime_option_group! {
     #[derive(PartialEq, Clone)]
     pub struct OptimizeOptions {
-        /// Optimization level of generated code (0-2, s; default: 0)
+        /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
         /// Byte size of the guard region after dynamic memories are allocated
