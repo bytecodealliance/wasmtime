@@ -12,6 +12,7 @@ mod dynamic;
 mod func;
 mod import;
 mod instance;
+mod linker;
 mod macros;
 mod nested;
 mod post_return;
