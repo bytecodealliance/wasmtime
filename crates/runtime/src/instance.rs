@@ -29,8 +29,9 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableIndex,
-    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmValType, VMCONTEXT_MAGIC,
+    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableElementExpression,
+    TableIndex, TableInitialValue, TableSegmentElements, Trap, VMOffsets, WasmHeapType,
+    WasmRefType, WasmValType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -803,11 +804,12 @@ impl Instance {
         // disconnected from the lifetime of `self`.
         let module = self.module().clone();
 
+        let empty = TableSegmentElements::Functions(Box::new([]));
         let elements = match module.passive_elements_map.get(&elem_index) {
             Some(index) if !self.dropped_elements.contains(elem_index) => {
-                module.passive_elements[*index].as_ref()
+                &module.passive_elements[*index]
             }
-            _ => &[],
+            _ => &empty,
         };
         self.table_init_segment(table_index, elements, dst, src, len)
     }
@@ -815,7 +817,7 @@ impl Instance {
     pub(crate) fn table_init_segment(
         &mut self,
         table_index: TableIndex,
-        elements: &[FuncIndex],
+        elements: &TableSegmentElements,
         dst: u32,
         src: u32,
         len: u32,
@@ -823,30 +825,62 @@ impl Instance {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
         let table = unsafe { &mut *self.get_table(table_index) };
+        let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
+        let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-        let elements = match elements
-            .get(usize::try_from(src).unwrap()..)
-            .and_then(|s| s.get(..usize::try_from(len).unwrap()))
-        {
-            Some(elements) => elements,
-            None => return Err(Trap::TableOutOfBounds),
-        };
-
-        match table.element_type() {
-            TableElementType::Func => {
-                table.init_funcs(
+        match elements {
+            TableSegmentElements::Functions(funcs) => {
+                let elements = funcs
+                    .get(src..)
+                    .and_then(|s| s.get(..len))
+                    .ok_or(Trap::TableOutOfBounds)?;
+                table.init(
                     dst,
-                    elements
-                        .iter()
-                        .map(|idx| self.get_func_ref(*idx).unwrap_or(std::ptr::null_mut())),
+                    elements.iter().map(|idx| {
+                        TableElement::FuncRef(
+                            self.get_func_ref(*idx).unwrap_or(std::ptr::null_mut()),
+                        )
+                    }),
                 )?;
             }
-
-            TableElementType::Extern => {
-                debug_assert!(elements.iter().all(|e| *e == FuncIndex::reserved_value()));
-                table.fill(dst, TableElement::ExternRef(None), len)?;
+            TableSegmentElements::Expressions(exprs) => {
+                let ty = table.element_type();
+                let exprs = exprs
+                    .get(src..)
+                    .and_then(|s| s.get(..len))
+                    .ok_or(Trap::TableOutOfBounds)?;
+                table.init(
+                    dst,
+                    exprs.iter().map(|expr| match ty {
+                        TableElementType::Func => {
+                            let funcref = match expr {
+                                TableElementExpression::Null => std::ptr::null_mut(),
+                                TableElementExpression::Function(idx) => {
+                                    self.get_func_ref(*idx).unwrap()
+                                }
+                                TableElementExpression::GlobalGet(idx) => {
+                                    let global = self.defined_or_imported_global_ptr(*idx);
+                                    unsafe { (*global).as_func_ref() }
+                                }
+                            };
+                            TableElement::FuncRef(funcref)
+                        }
+                        TableElementType::Extern => {
+                            let externref = match expr {
+                                TableElementExpression::Null => None,
+                                TableElementExpression::Function(_) => unreachable!(),
+                                TableElementExpression::GlobalGet(idx) => {
+                                    let global = self.defined_or_imported_global_ptr(*idx);
+                                    unsafe { (*global).as_externref().clone() }
+                                }
+                            };
+                            TableElement::ExternRef(externref)
+                        }
+                    }),
+                )?;
             }
         }
+
         Ok(())
     }
 
@@ -1059,7 +1093,9 @@ impl Instance {
                 let module = self.module();
                 let precomputed = match &module.table_initialization.initial_values[idx] {
                     TableInitialValue::Null { precomputed } => precomputed,
-                    TableInitialValue::FuncRef(_) => unreachable!(),
+                    TableInitialValue::FuncRef(_) | TableInitialValue::GlobalGet(_) => {
+                        unreachable!()
+                    }
                 };
                 let func_index = precomputed.get(i as usize).cloned();
                 let func_ref = func_index
