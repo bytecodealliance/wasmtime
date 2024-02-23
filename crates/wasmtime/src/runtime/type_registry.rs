@@ -23,6 +23,7 @@ use wasmtime_environ::{
     WasmFuncType,
 };
 use wasmtime_runtime::VMSharedTypeIndex;
+use wasmtime_slab::{Id as SlabId, Slab};
 
 // ### Notes on the Lifetime Management of Types
 //
@@ -154,8 +155,13 @@ impl Drop for TypeCollection {
 }
 
 #[inline]
-fn entry_index(index: VMSharedTypeIndex) -> usize {
-    usize::try_from(index.bits()).unwrap()
+fn shared_type_index_to_slab_id(index: VMSharedTypeIndex) -> SlabId {
+    SlabId::from_raw(index.bits())
+}
+
+#[inline]
+fn slab_id_to_shared_type_index(id: SlabId) -> VMSharedTypeIndex {
+    VMSharedTypeIndex::new(id.into_raw())
 }
 
 /// A Wasm type that has been registered in the engine's `TypeRegistry`.
@@ -168,7 +174,7 @@ fn entry_index(index: VMSharedTypeIndex) -> usize {
 /// Dereferences to its underlying `WasmFuncType`.
 pub struct RegisteredType {
     engine: Engine,
-    entry: OccupiedEntry,
+    entry: Entry,
 }
 
 impl Debug for RegisteredType {
@@ -271,9 +277,9 @@ impl RegisteredType {
     /// registry.
     pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
         let entry = {
-            let i = entry_index(index);
+            let id = shared_type_index_to_slab_id(index);
             let inner = engine.signatures().0.read().unwrap();
-            let e = inner.entries.get(i)?.as_occupied()?;
+            let e = inner.entries.get(id)?;
 
             // NB: make sure to incref while the lock is held to prevent:
             //
@@ -293,7 +299,7 @@ impl RegisteredType {
     ///
     /// It is the caller's responsibility to ensure that the entry's reference
     /// count has already been incremented.
-    fn from_parts(engine: Engine, entry: OccupiedEntry) -> Self {
+    fn from_parts(engine: Engine, entry: Entry) -> Self {
         debug_assert!(entry.0.registrations.load(Acquire) != 0);
         RegisteredType { engine, entry }
     }
@@ -311,7 +317,7 @@ impl RegisteredType {
 
 /// A Wasm function type, its `VMSharedTypeIndex`, and its registration count.
 #[derive(Debug)]
-struct OccupiedEntryInner {
+struct EntryInner {
     ty: WasmFuncType,
     index: VMSharedTypeIndex,
     registrations: AtomicUsize,
@@ -321,9 +327,9 @@ struct OccupiedEntryInner {
 /// function type, so that this can be a hash consing key in
 /// `TypeRegistryInner::map`.
 #[derive(Clone, Debug)]
-struct OccupiedEntry(Arc<OccupiedEntryInner>);
+struct Entry(Arc<EntryInner>);
 
-impl Deref for OccupiedEntry {
+impl Deref for Entry {
     type Target = WasmFuncType;
 
     fn deref(&self) -> &Self::Target {
@@ -331,27 +337,27 @@ impl Deref for OccupiedEntry {
     }
 }
 
-impl PartialEq for OccupiedEntry {
+impl PartialEq for Entry {
     fn eq(&self, other: &Self) -> bool {
         self.0.ty == other.0.ty
     }
 }
 
-impl Eq for OccupiedEntry {}
+impl Eq for Entry {}
 
-impl Hash for OccupiedEntry {
+impl Hash for Entry {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.ty.hash(state);
     }
 }
 
-impl Borrow<WasmFuncType> for OccupiedEntry {
+impl Borrow<WasmFuncType> for Entry {
     fn borrow(&self) -> &WasmFuncType {
         &self.0.ty
     }
 }
 
-impl OccupiedEntry {
+impl Entry {
     /// Increment the registration count.
     fn incref(&self, why: &str) {
         let old_count = self.0.registrations.fetch_add(1, AcqRel);
@@ -377,69 +383,15 @@ impl OccupiedEntry {
     }
 }
 
-#[derive(Debug)]
-enum RegistryEntry {
-    /// An occupied entry containing a registered type.
-    Occupied(OccupiedEntry),
-
-    /// A vacant entry that is additionally a link in the free list of all
-    /// vacant entries.
-    Vacant {
-        /// The next link in the free list of all vacant entries, if any.
-        next_vacant: Option<VMSharedTypeIndex>,
-    },
-}
-
-impl RegistryEntry {
-    fn is_vacant(&self) -> bool {
-        matches!(self, Self::Vacant { .. })
-    }
-
-    fn is_occupied(&self) -> bool {
-        matches!(self, Self::Occupied(_))
-    }
-
-    fn as_occupied(&self) -> Option<&OccupiedEntry> {
-        match self {
-            Self::Occupied(o) => Some(o),
-            Self::Vacant { .. } => None,
-        }
-    }
-
-    fn unwrap_occupied(&self) -> &OccupiedEntry {
-        match self {
-            Self::Occupied(o) => o,
-            Self::Vacant { .. } => panic!("unwrap_occupied on vacant entry"),
-        }
-    }
-
-    fn unwrap_next_vacant(&self) -> Option<VMSharedTypeIndex> {
-        match self {
-            Self::Vacant { next_vacant } => *next_vacant,
-            Self::Occupied(_) => panic!("unwrap_next_vacant on occupied entry"),
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 struct TypeRegistryInner {
     // A map from the Wasm function type to a `VMSharedTypeIndex`, for all
     // the Wasm function types we have already registered.
-    map: HashSet<OccupiedEntry>,
+    map: HashSet<Entry>,
 
     // A map from `VMSharedTypeIndex::bits()` to the type index's associated
     // Wasm type.
-    entries: Vec<RegistryEntry>,
-
-    // The head of the free list of the entries that are vacant and can
-    // therefore (along with their associated `VMSharedTypeIndex`) be reused.
-    //
-    // This is a size optimization, and arguably not strictly necessary for
-    // correctness, but is necessary to avoid unbounded memory growth: if we did
-    // not reuse entries/indices, we would have holes in our `self.entries` list
-    // and, as we load and unload new Wasm modules, `self.entries` would keep
-    // growing indefinitely.
-    first_vacant: Option<VMSharedTypeIndex>,
+    entries: Slab<Entry>,
 
     // An explicit stack of entries that we are in the middle of dropping. Used
     // to avoid recursion when dropping a type that is holding the last
@@ -470,9 +422,9 @@ impl TypeRegistryInner {
             EngineOrModuleTypeIndex::Module(_) => Err(()),
             EngineOrModuleTypeIndex::Engine(id) => {
                 let id = VMSharedTypeIndex::new(id);
-                let i = entry_index(id);
+                let id = shared_type_index_to_slab_id(id);
                 assert!(
-                    self.entries[i].is_occupied(),
+                    self.entries.contains(id),
                     "canonicalized in a different engine? {ty:?}"
                 );
                 Ok(())
@@ -507,42 +459,6 @@ impl TypeRegistryInner {
         debug_assert!(self.is_canonicalized(ty))
     }
 
-    /// Allocate a vacant entry, either from the free list, or creating a new
-    /// entry.
-    fn alloc_vacant_entry(&mut self) -> VMSharedTypeIndex {
-        match self.first_vacant.take() {
-            // Pop a vacant entry off the free list when we can.
-            Some(index) => {
-                let i = entry_index(index);
-                let entry = &mut self.entries[i];
-                self.first_vacant = entry.unwrap_next_vacant();
-                index
-            }
-
-            // Otherwise, allocate a new entry.
-            None => {
-                debug_assert_eq!(self.entries.len(), self.map.len());
-
-                let len = self.entries.len();
-                let len = u32::try_from(len).unwrap();
-
-                // Keep `index_map`'s length under `u32::MAX` because
-                // `u32::MAX` is reserved for `VMSharedTypeIndex`'s
-                // default value.
-                assert!(
-                    len < std::u32::MAX,
-                    "Invariant check: self.entries.len() < std::u32::MAX"
-                );
-
-                let index = VMSharedTypeIndex::new(len);
-                self.entries
-                    .push(RegistryEntry::Vacant { next_vacant: None });
-
-                index
-            }
-        }
-    }
-
     /// Add a new type to this registry.
     ///
     /// The type must be canonicalized and must not already exist in the
@@ -550,7 +466,7 @@ impl TypeRegistryInner {
     ///
     /// Initializes the new entry's registration count to one, and callers
     /// should not further increment the registration count.
-    fn register_new(&mut self, ty: WasmFuncType) -> OccupiedEntry {
+    fn register_new(&mut self, ty: WasmFuncType) -> Entry {
         assert!(
             self.is_canonicalized(&ty),
             "ty is not already canonicalized: {ty:?}"
@@ -562,8 +478,8 @@ impl TypeRegistryInner {
         ty.trace::<_, ()>(&mut |idx| match idx {
             EngineOrModuleTypeIndex::Engine(id) => {
                 let id = VMSharedTypeIndex::new(id);
-                let i = entry_index(id);
-                let e = self.entries[i].unwrap_occupied();
+                let i = shared_type_index_to_slab_id(id);
+                let e = &self.entries[i];
                 e.incref("new type references existing type in TypeRegistryInner::register_new");
                 Ok(())
             }
@@ -571,9 +487,10 @@ impl TypeRegistryInner {
         })
         .unwrap();
 
-        let index = self.alloc_vacant_entry();
+        let id = self.entries.next_id();
+        let index = slab_id_to_shared_type_index(id);
         log::trace!("create {index:?} = {ty:?} (registrations -> 1)");
-        let entry = OccupiedEntry(Arc::new(OccupiedEntryInner {
+        let entry = Entry(Arc::new(EntryInner {
             ty,
             index,
             registrations: AtomicUsize::new(1),
@@ -581,15 +498,14 @@ impl TypeRegistryInner {
         let is_new_entry = self.map.insert(entry.clone());
         assert!(is_new_entry);
 
-        let i = entry_index(index);
-        assert!(self.entries[i].is_vacant());
-        self.entries[i] = RegistryEntry::Occupied(entry.clone());
+        let id = self.entries.alloc(entry.clone());
+        assert_eq!(id, shared_type_index_to_slab_id(index));
 
         entry
     }
 
     /// Register the given canonicalized type, incrementing its reference count.
-    fn register_canonicalized(&mut self, ty: WasmFuncType) -> OccupiedEntry {
+    fn register_canonicalized(&mut self, ty: WasmFuncType) -> Entry {
         assert!(
             self.is_canonicalized(&ty),
             "type is not already canonicalized: {ty:?}"
@@ -607,8 +523,8 @@ impl TypeRegistryInner {
 
     fn unregister_type_collection(&mut self, collection: &TypeCollection) {
         for (_, id) in collection.types.iter() {
-            let i = entry_index(*id);
-            let e = self.entries[i].unwrap_occupied();
+            let i = shared_type_index_to_slab_id(*id);
+            let e = &self.entries[i];
             if e.decref("TypeRegistryInner::unregister_type_collection") {
                 self.unregister_entry(*id);
             }
@@ -626,9 +542,9 @@ impl TypeRegistryInner {
         debug_assert!(self.drop_stack.is_empty());
         self.drop_stack.push(index);
 
-        while let Some(id) = self.drop_stack.pop() {
-            let i = entry_index(id);
-            let entry = self.entries[i].unwrap_occupied();
+        while let Some(index) = self.drop_stack.pop() {
+            let slab_id = shared_type_index_to_slab_id(index);
+            let entry = &self.entries[slab_id];
 
             // We need to double check whether the entry is still at zero
             // registrations: Between the time that we observed a zero and
@@ -643,7 +559,7 @@ impl TypeRegistryInner {
             let registrations = entry.0.registrations.load(Acquire);
             if registrations != 0 {
                 log::trace!(
-                    "{id:?} was concurrently resurrected and no longer has zero \
+                    "{index:?} was concurrently resurrected and no longer has zero \
                      registrations (registrations -> {registrations})"
                 );
                 continue;
@@ -654,15 +570,15 @@ impl TypeRegistryInner {
             entry
                 .0
                 .ty
-                .trace::<_, ()>(&mut |idx| match idx {
-                    EngineOrModuleTypeIndex::Engine(child_id) => {
-                        let child_id = VMSharedTypeIndex::new(child_id);
-                        let child_index = entry_index(child_id);
-                        let child_entry = self.entries[child_index].unwrap_occupied();
+                .trace::<_, ()>(&mut |child_index| match child_index {
+                    EngineOrModuleTypeIndex::Engine(child_index) => {
+                        let child_index = VMSharedTypeIndex::new(child_index);
+                        let child_slab_id = shared_type_index_to_slab_id(child_index);
+                        let child_entry = &self.entries[child_slab_id];
                         if child_entry.decref(
                             "referenced by unregistered type in TypeCollection::unregister_entry",
                         ) {
-                            self.drop_stack.push(child_id);
+                            self.drop_stack.push(child_index);
                         }
                         Ok(())
                     }
@@ -672,12 +588,9 @@ impl TypeRegistryInner {
                 })
                 .unwrap();
 
-            log::trace!("removing {id:?} from registry");
+            log::trace!("removing {index:?} from registry");
             self.map.remove(entry);
-            self.entries[i] = RegistryEntry::Vacant {
-                next_vacant: self.first_vacant.take(),
-            };
-            self.first_vacant = Some(id);
+            self.entries.dealloc(slab_id);
         }
     }
 }
@@ -692,7 +605,7 @@ impl Drop for TypeRegistryInner {
             "type registry not empty: still have registered types in self.map"
         );
         assert!(
-            self.entries.iter().all(|e| e.is_vacant()),
+            self.entries.is_empty(),
             "type registry not empty: not all entries are vacant"
         );
     }
@@ -720,9 +633,8 @@ impl TypeRegistry {
     /// constructor if you need to ensure that property and you don't have some
     /// other mechanism already keeping the type registered.
     pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<impl Deref<Target = WasmFuncType>> {
-        let i = entry_index(index);
+        let id = shared_type_index_to_slab_id(index);
         let inner = self.0.read().unwrap();
-        let e = inner.entries.get(i)?;
-        e.as_occupied().cloned()
+        inner.entries.get(id).cloned()
     }
 }
