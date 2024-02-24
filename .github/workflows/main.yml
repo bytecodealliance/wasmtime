@@ -415,6 +415,7 @@ jobs:
     # Afterwards make sure the generated header file is up to date by ensuring
     # that the regeneration process didn't change anything in-tree.
     - run: cargo install cbindgen --vers "^0.26"
+    - run: rustup component add rust-src
     - run: ./build.sh ./embedding/x86_64-unknown-unknown.json
       working-directory: ./examples/min-platform
     - run: git diff --exit-code
