@@ -46,7 +46,7 @@ clang -shared -O2 -o libwasmtime-platform.so ./embedding/wasmtime-platform.c \
 # The final artifacts will be placed in Cargo's standard target directory.
 RUSTC_BOOTSTRAP_SYNTHETIC_TARGET=1 \
 RUSTFLAGS="--cfg=wasmtime_custom_platform" \
-  cargo +nightly build -Zbuild-std=std,panic_abort \
+  cargo build -Zbuild-std=std,panic_abort \
     --manifest-path embedding/Cargo.toml \
     --target $target \
     --release
