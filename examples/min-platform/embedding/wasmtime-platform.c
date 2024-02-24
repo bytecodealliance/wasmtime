@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/ucontext.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "wasmtime-platform.h"
@@ -20,51 +20,46 @@ static int wasmtime_to_mmap_prot_flags(uint32_t prot_flags) {
 }
 
 uint8_t *wasmtime_mmap_new(uintptr_t size, uint32_t prot_flags) {
-  void *rc = mmap(NULL, size,
-      wasmtime_to_mmap_prot_flags(prot_flags),
-      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void *rc = mmap(NULL, size, wasmtime_to_mmap_prot_flags(prot_flags),
+                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   assert(rc != MAP_FAILED);
   return rc;
 }
 
 void wasmtime_mmap_remap(uint8_t *addr, uintptr_t size, uint32_t prot_flags) {
-  void *rc = mmap(addr, size,
-      wasmtime_to_mmap_prot_flags(prot_flags),
-      MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void *rc = mmap(addr, size, wasmtime_to_mmap_prot_flags(prot_flags),
+                  MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   assert(rc == addr);
-  (void) rc;
+  (void)rc;
 }
 
 void wasmtime_munmap(uint8_t *ptr, uintptr_t size) {
   int rc = munmap(ptr, size);
   assert(rc == 0);
-  (void) rc;
+  (void)rc;
 }
 
 void wasmtime_mprotect(uint8_t *ptr, uintptr_t size, uint32_t prot_flags) {
   int rc = mprotect(ptr, size, wasmtime_to_mmap_prot_flags(prot_flags));
   assert(rc == 0);
-  (void) rc;
+  (void)rc;
 }
 
-uintptr_t wasmtime_page_size(void) {
-  return sysconf(_SC_PAGESIZE);
-}
+uintptr_t wasmtime_page_size(void) { return sysconf(_SC_PAGESIZE); }
 
 int32_t wasmtime_setjmp(const uint8_t **jmp_buf_out,
-                               void (*callback)(uint8_t*, uint8_t*),
-                               uint8_t *payload,
-                               uint8_t *callee) {
+                        void (*callback)(uint8_t *, uint8_t *),
+                        uint8_t *payload, uint8_t *callee) {
   jmp_buf buf;
   if (setjmp(buf) != 0)
     return 0;
-  *jmp_buf_out = (uint8_t*) &buf;
+  *jmp_buf_out = (uint8_t *)&buf;
   callback(payload, callee);
   return 1;
 }
 
 void wasmtime_longjmp(const uint8_t *jmp_buf_ptr) {
-  longjmp(*(jmp_buf*) jmp_buf_ptr, 1);
+  longjmp(*(jmp_buf *)jmp_buf_ptr, 1);
 }
 
 static wasmtime_trap_handler_t g_handler = NULL;
@@ -87,7 +82,7 @@ static void handle_signal(int signo, siginfo_t *info, void *context) {
   bool has_faulting_addr = signo == SIGSEGV;
   uintptr_t faulting_addr = 0;
   if (has_faulting_addr)
-    faulting_addr = (uintptr_t) info->si_addr;
+    faulting_addr = (uintptr_t)info->si_addr;
   g_handler(ip, fp, has_faulting_addr, faulting_addr);
 
   // If wasmtime didn't handle this trap then reset the handler to the default
@@ -112,22 +107,21 @@ extern void wasmtime_init_traps(wasmtime_trap_handler_t handler) {
   assert(rc == 0);
   rc = sigaction(SIGFPE, &action, NULL);
   assert(rc == 0);
-  (void) rc;
+  (void)rc;
 }
 
-struct wasmtime_memory_image *wasmtime_memory_image_new(const uint8_t *ptr, uintptr_t len) {
+struct wasmtime_memory_image *wasmtime_memory_image_new(const uint8_t *ptr,
+                                                        uintptr_t len) {
   return NULL;
 }
 
 void wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
-                                  uint8_t *addr,
-                                  uintptr_t len) {
+                                  uint8_t *addr, uintptr_t len) {
   abort();
 }
 
 void wasmtime_memory_image_remap_zeros(struct wasmtime_memory_image *image,
-                                       uint8_t *addr,
-                                       uintptr_t len) {
+                                       uint8_t *addr, uintptr_t len) {
   abort();
 }
 
