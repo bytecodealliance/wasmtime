@@ -507,7 +507,7 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
         let table = unsafe { &*instance.get_table(segment.table_index) };
         let start = get_table_init_start(segment, instance)?;
         let start = usize::try_from(start).unwrap();
-        let end = start.checked_add(segment.elements.len());
+        let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
         match end {
             Some(end) if end <= table.size() as usize => {
@@ -533,6 +533,13 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 let table = unsafe { &mut *instance.get_defined_table(table) };
                 table.init_func(funcref)?;
             }
+
+            TableInitialValue::GlobalGet(idx) => unsafe {
+                let global = instance.defined_or_imported_global_ptr(*idx);
+                let funcref = (*global).as_func_ref();
+                let table = &mut *instance.get_defined_table(table);
+                table.init_func(funcref)?;
+            },
         }
     }
 
@@ -550,7 +557,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
             &segment.elements,
             start,
             0,
-            segment.elements.len() as u32,
+            segment.elements.len(),
         )?;
     }
 

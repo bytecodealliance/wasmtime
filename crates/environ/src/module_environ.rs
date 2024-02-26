@@ -1,6 +1,6 @@
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
-    ModuleType, TablePlan, TableSegment,
+    ModuleType, TableElementExpression, TablePlan, TableSegment, TableSegmentElements,
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
@@ -8,7 +8,6 @@ use crate::{
     Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmValType,
     WasmparserTypeConverter,
 };
-use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -320,6 +319,10 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     self.flag_func_escaped(index);
                                     TableInitialValue::FuncRef(index)
                                 }
+                                Operator::GlobalGet { global_index } => {
+                                    let index = GlobalIndex::from_u32(global_index);
+                                    TableInitialValue::GlobalGet(index)
+                                }
                                 s => {
                                     return Err(WasmError::Unsupported(format!(
                                         "unsupported init expr in table section: {:?}",
@@ -449,25 +452,31 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     // possible to create anything other than a `ref.null
                     // extern` for externref segments, so those just get
                     // translated to the reserved value of `FuncIndex`.
-                    let mut elements = Vec::new();
-                    match items {
+                    let elements = match items {
                         ElementItems::Functions(funcs) => {
-                            elements.reserve(usize::try_from(funcs.count()).unwrap());
+                            let mut elems =
+                                Vec::with_capacity(usize::try_from(funcs.count()).unwrap());
                             for func in funcs {
                                 let func = FuncIndex::from_u32(func?);
                                 self.flag_func_escaped(func);
-                                elements.push(func);
+                                elems.push(func);
                             }
+                            TableSegmentElements::Functions(elems.into())
                         }
-                        ElementItems::Expressions(_ty, funcs) => {
-                            elements.reserve(usize::try_from(funcs.count()).unwrap());
-                            for func in funcs {
-                                let func = match func?.get_binary_reader().read_operator()? {
-                                    Operator::RefNull { .. } => FuncIndex::reserved_value(),
+                        ElementItems::Expressions(_ty, items) => {
+                            let mut exprs =
+                                Vec::with_capacity(usize::try_from(items.count()).unwrap());
+                            for expr in items {
+                                let expr = match expr?.get_binary_reader().read_operator()? {
+                                    Operator::RefNull { .. } => TableElementExpression::Null,
                                     Operator::RefFunc { function_index } => {
                                         let func = FuncIndex::from_u32(function_index);
                                         self.flag_func_escaped(func);
-                                        func
+                                        TableElementExpression::Function(func)
+                                    }
+                                    Operator::GlobalGet { global_index } => {
+                                        let global = GlobalIndex::from_u32(global_index);
+                                        TableElementExpression::GlobalGet(global)
                                     }
                                     s => {
                                         return Err(WasmError::Unsupported(format!(
@@ -476,10 +485,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                         )));
                                     }
                                 };
-                                elements.push(func);
+                                exprs.push(expr);
                             }
+                            TableSegmentElements::Expressions(exprs.into())
                         }
-                    }
+                    };
 
                     match kind {
                         ElementKind::Active {

@@ -133,7 +133,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
             .max_memory_protection_keys(2)
             .memory_pages(805)
             .max_memories_per_module(if multi_memory { 9 } else { 1 })
-            .max_tables_per_module(4);
+            .max_tables_per_module(5);
 
         // When testing, we may choose to start with MPK force-enabled to ensure
         // we use that functionality.

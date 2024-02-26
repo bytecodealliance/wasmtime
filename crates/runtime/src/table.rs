@@ -39,6 +39,16 @@ pub enum TableElementType {
     Extern,
 }
 
+impl TableElementType {
+    fn matches(&self, val: &TableElement) -> bool {
+        match (val, self) {
+            (TableElement::FuncRef(_), TableElementType::Func) => true,
+            (TableElement::ExternRef(_), TableElementType::Extern) => true,
+            _ => false,
+        }
+    }
+}
+
 // The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this
 // just relies on thread-safety of `VMExternRef` itself.
 unsafe impl Send for TableElement where VMExternRef: Send {}
@@ -293,12 +303,12 @@ impl Table {
     /// Fill `table[dst..]` with values from `items`
     ///
     /// Returns a trap error on out-of-bounds accesses.
-    pub fn init_funcs(
+    pub fn init(
         &mut self,
         dst: u32,
-        items: impl ExactSizeIterator<Item = *mut VMFuncRef>,
+        items: impl ExactSizeIterator<Item = TableElement>,
     ) -> Result<(), Trap> {
-        assert!(self.element_type() == TableElementType::Func);
+        let ty = self.element_type();
 
         let elements = match self
             .elements_mut()
@@ -310,8 +320,9 @@ impl Table {
         };
 
         for (item, slot) in items.zip(elements) {
+            debug_assert!(ty.matches(&item));
             unsafe {
-                *slot = TableElement::FuncRef(item).into_table_value();
+                *slot = item.into_table_value();
             }
         }
         Ok(())
@@ -493,11 +504,7 @@ impl Table {
     }
 
     fn type_matches(&self, val: &TableElement) -> bool {
-        match (&val, self.element_type()) {
-            (TableElement::FuncRef(_), TableElementType::Func) => true,
-            (TableElement::ExternRef(_), TableElementType::Extern) => true,
-            _ => false,
-        }
+        self.element_type().matches(val)
     }
 
     fn elements(&self) -> &[TableValue] {
