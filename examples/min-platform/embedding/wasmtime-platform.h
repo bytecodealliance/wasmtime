@@ -40,11 +40,15 @@ typedef struct wasmtime_memory_image wasmtime_memory_image;
  * * `faulting_addr` - if `has_faulting_addr` is true then this is the address
  *   that was attempted to be accessed. Otherwise this value is not used.
  *
- * If this function returns then the trap was not handled. This probably means
- * that a fatal exception happened and the process should be aborted.
+ * If this function returns then the trap was not handled by Wasmtime. This
+ * means that it's left up to the embedder how to deal with the trap/signal
+ * depending on its default behavior. This could mean forwarding to a
+ * non-Wasmtime handler, aborting the process, logging then crashing, etc. The
+ * meaning of a trap that's not handled by Wasmtime depends on the context in
+ * which the trap was generated.
  *
- * This function may not return as it may invoke `wasmtime_longjmp` if a wasm
- * trap is detected.
+ * When this function does not return it's because `wasmtime_longjmp` is
+ * used to handle a Wasm-based trap.
  */
 typedef void (*wasmtime_trap_handler_t)(uintptr_t ip,
                                         uintptr_t fp,
@@ -122,7 +126,7 @@ extern uintptr_t wasmtime_page_size(void);
  * * `payload` and `callee` - the two arguments to pass to `callback`.
  *
  * Returns 0 if `wasmtime_longjmp` was used to return to this function.
- * Returns 1 if `wasmtime_longjmp` was not called an `callback` returned.
+ * Returns 1 if `wasmtime_longjmp` was not called and `callback` returned.
  */
 extern int32_t wasmtime_setjmp(const uint8_t **jmp_buf,
                                void (*callback)(uint8_t*, uint8_t*),
@@ -159,11 +163,18 @@ extern void wasmtime_init_traps(wasmtime_trap_handler_t handler);
 
 /**
  * Attempts to create a new in-memory image of the `ptr`/`len` combo which
- * can be mapped to virtual addresses in the future. The returned
- * `wasmtime_memory_image` pointer can be `NULL` to indicate that an image
- * cannot be created. The structure otherwise will later be deallocated
- * with `wasmtime_memory_image_free` and `wasmtime_memory_image_map_at`
- * will be used to map the image into new regions of the address space.
+ * can be mapped to virtual addresses in the future.
+ *
+ * The returned `wasmtime_memory_image` pointer can be `NULL` to indicate
+ * that an image cannot be created. The structure otherwise will later be
+ * deallocated with `wasmtime_memory_image_free` and
+ * `wasmtime_memory_image_map_at` will be used to map the image into new
+ * regions of the address space.
+ *
+ * The `ptr` and `len` arguments are only valid for this function call, if
+ * the image needs to refer to them in the future then it must make a copy.
+ *
+ * Both `ptr` and `len` are guaranteed to be page-aligned.
  */
 extern struct wasmtime_memory_image *wasmtime_memory_image_new(const uint8_t *ptr, uintptr_t len);
 
@@ -178,6 +189,9 @@ extern struct wasmtime_memory_image *wasmtime_memory_image_new(const uint8_t *pt
  * In effect this is to create a copy-on-write mapping at `addr`/`len`
  * pointing back to the memory used by the image originally.
  *
+ * Note that the memory region will be unmapped with `wasmtime_munmap` in
+ * the future.
+ *
  * Aborts the process on failure.
  */
 extern void wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
@@ -185,16 +199,10 @@ extern void wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
                                          uintptr_t len);
 
 /**
- * Replaces the VM mappings at `addr` and `len` with zeros.
- *
- * Aborts the process on failure.
- */
-extern void wasmtime_memory_image_remap_zeros(struct wasmtime_memory_image *image,
-                                              uint8_t *addr,
-                                              uintptr_t len);
-
-/**
  * Deallocates the provided `wasmtime_memory_image`.
+ *
+ * Note that mappings created from this image are not guaranteed to be
+ * deallocated and/or unmapped before this is called.
  */
 extern void wasmtime_memory_image_free(struct wasmtime_memory_image *image);
 

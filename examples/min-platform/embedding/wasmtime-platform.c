@@ -120,11 +120,6 @@ void wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
   abort();
 }
 
-void wasmtime_memory_image_remap_zeros(struct wasmtime_memory_image *image,
-                                       uint8_t *addr, uintptr_t len) {
-  abort();
-}
-
 void wasmtime_memory_image_free(struct wasmtime_memory_image *image) {
   abort();
 }

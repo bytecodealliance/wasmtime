@@ -1,6 +1,6 @@
 use anyhow::Result;
 use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
-use object::{Object, ObjectSymbol};
+use object::{Object, ObjectSymbol, SymbolKind};
 use std::io::Write;
 use std::path::Path;
 
@@ -26,12 +26,12 @@ fn main() -> Result<()> {
     // how running `libembedding.so` in this case requires only minimal
     // dependencies.
     for sym in object.symbols() {
-        if !sym.is_undefined() || sym.is_weak() {
+        if !sym.is_undefined() || sym.is_weak() || sym.kind() == SymbolKind::Null {
             continue;
         }
 
         match sym.name()? {
-            "" | "memmove" | "memset" | "memcmp" | "memcpy" | "bcmp" | "__tls_get_addr" => {}
+            "memmove" | "memset" | "memcmp" | "memcpy" | "bcmp" | "__tls_get_addr" => {}
             s if s.starts_with("wasmtime_") => {}
             other => {
                 panic!("unexpected dependency on symbol `{other}`")

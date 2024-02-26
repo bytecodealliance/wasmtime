@@ -28,11 +28,15 @@ pub use WASMTIME_PROT_WRITE as PROT_WRITE;
 /// * `faulting_addr` - if `has_faulting_addr` is true then this is the address
 ///   that was attempted to be accessed. Otherwise this value is not used.
 ///
-/// If this function returns then the trap was not handled. This probably means
-/// that a fatal exception happened and the process should be aborted.
+/// If this function returns then the trap was not handled by Wasmtime. This
+/// means that it's left up to the embedder how to deal with the trap/signal
+/// depending on its default behavior. This could mean forwarding to a
+/// non-Wasmtime handler, aborting the process, logging then crashing, etc. The
+/// meaning of a trap that's not handled by Wasmtime depends on the context in
+/// which the trap was generated.
 ///
-/// This function may not return as it may invoke `wasmtime_longjmp` if a wasm
-/// trap is detected.
+/// When this function does not return it's because `wasmtime_longjmp` is
+/// used to handle a Wasm-based trap.
 pub type wasmtime_trap_handler_t =
     extern "C" fn(ip: usize, fp: usize, has_faulting_addr: bool, faulting_addr: usize);
 
@@ -97,7 +101,7 @@ extern "C" {
     /// * `payload` and `callee` - the two arguments to pass to `callback`.
     ///
     /// Returns 0 if `wasmtime_longjmp` was used to return to this function.
-    /// Returns 1 if `wasmtime_longjmp` was not called an `callback` returned.
+    /// Returns 1 if `wasmtime_longjmp` was not called and `callback` returned.
     pub fn wasmtime_setjmp(
         jmp_buf: *mut *const u8,
         callback: extern "C" fn(*mut u8, *mut u8),
@@ -130,11 +134,18 @@ extern "C" {
     pub fn wasmtime_init_traps(handler: wasmtime_trap_handler_t);
 
     /// Attempts to create a new in-memory image of the `ptr`/`len` combo which
-    /// can be mapped to virtual addresses in the future. The returned
-    /// `wasmtime_memory_image` pointer can be `NULL` to indicate that an image
-    /// cannot be created. The structure otherwise will later be deallocated
-    /// with `wasmtime_memory_image_free` and `wasmtime_memory_image_map_at`
-    /// will be used to map the image into new regions of the address space.
+    /// can be mapped to virtual addresses in the future.
+    ///
+    /// The returned `wasmtime_memory_image` pointer can be `NULL` to indicate
+    /// that an image cannot be created. The structure otherwise will later be
+    /// deallocated with `wasmtime_memory_image_free` and
+    /// `wasmtime_memory_image_map_at` will be used to map the image into new
+    /// regions of the address space.
+    ///
+    /// The `ptr` and `len` arguments are only valid for this function call, if
+    /// the image needs to refer to them in the future then it must make a copy.
+    ///
+    /// Both `ptr` and `len` are guaranteed to be page-aligned.
     pub fn wasmtime_memory_image_new(ptr: *const u8, len: usize) -> *mut wasmtime_memory_image;
 
     /// Maps the `image` provided to the virtual address at `addr` and `len`.
@@ -147,6 +158,9 @@ extern "C" {
     /// In effect this is to create a copy-on-write mapping at `addr`/`len`
     /// pointing back to the memory used by the image originally.
     ///
+    /// Note that the memory region will be unmapped with `wasmtime_munmap` in
+    /// the future.
+    ///
     /// Aborts the process on failure.
     pub fn wasmtime_memory_image_map_at(
         image: *mut wasmtime_memory_image,
@@ -154,15 +168,9 @@ extern "C" {
         len: usize,
     );
 
-    /// Replaces the VM mappings at `addr` and `len` with zeros.
-    ///
-    /// Aborts the process on failure.
-    pub fn wasmtime_memory_image_remap_zeros(
-        image: *mut wasmtime_memory_image,
-        addr: *mut u8,
-        len: usize,
-    );
-
     /// Deallocates the provided `wasmtime_memory_image`.
+    ///
+    /// Note that mappings created from this image are not guaranteed to be
+    /// deallocated and/or unmapped before this is called.
     pub fn wasmtime_memory_image_free(image: *mut wasmtime_memory_image);
 }

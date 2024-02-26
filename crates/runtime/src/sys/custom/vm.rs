@@ -79,7 +79,7 @@ impl MemoryImageSource {
     }
 
     pub unsafe fn remap_as_zeros_at(&self, base: *mut u8, len: usize) -> io::Result<()> {
-        capi::wasmtime_memory_image_remap_zeros(self.data.as_ptr(), base, len);
+        capi::wasmtime_mmap_remap(base.cast(), len, capi::PROT_READ | capi::PROT_WRITE);
         Ok(())
     }
 }
