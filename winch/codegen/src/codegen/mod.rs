@@ -494,6 +494,7 @@ where
         let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None));
         let offset = bounds::ensure_index_and_offset(self.masm, index, memarg.offset, ptr_size);
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
+        let scratch = <M::ABI as ABI>::scratch_reg();
 
         let addr = match heap.style {
             // == Dynamic Heaps ==
@@ -508,12 +509,17 @@ where
                     bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
 
                 let index_reg = index.as_typed_reg().reg;
+
+                // Move the value of the index to the scratch register
+                // to perform the overflow check to avoid clobbering the
+                // initial index value.
+                self.masm.mov(index_reg.into(), scratch, heap.ty.into());
                 // Perform
                 // index = index + offset + access_size, trapping if the
                 // addition overflows.
                 self.masm.checked_uadd(
-                    index_reg,
-                    index_reg,
+                    scratch,
+                    scratch,
                     RegImm::i64(offset_with_access_size as i64),
                     ptr_size,
                     TrapCode::HeapOutOfBounds,
