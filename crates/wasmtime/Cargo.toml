@@ -58,6 +58,7 @@ gimli = { workspace = true }
 # Support address-to-file/line information in traps when wasm files have DWARF
 # debugging information.
 addr2line = { version = "0.21.0", default-features = false, optional = true }
+semver = { version = "1.0.17", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -156,6 +157,7 @@ component-model = [
   "dep:wasmtime-component-macro",
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
+  "dep:semver",
 ]
 
 wmemcheck = ["wasmtime-runtime?/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
