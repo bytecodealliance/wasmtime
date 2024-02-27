@@ -269,7 +269,7 @@ First, create a new `demo.wat` file:
 (module
     ;; Import the required fd_write WASI function which will write the given io vectors to stdout
     ;; The function signature for fd_write is:
-    ;; (File Descriptor, *iovs, iovs_len, nwritten) -> Returns 0 on success, nonzero on error
+    ;; (File Descriptor, *iovs, iovs_len, *nwritten) -> Returns 0 on success, nonzero on error
     (import "wasi_snapshot_preview1" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
 
     (memory 1)
