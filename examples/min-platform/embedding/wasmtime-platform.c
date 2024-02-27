@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <string.h>
@@ -19,30 +20,35 @@ static int wasmtime_to_mmap_prot_flags(uint32_t prot_flags) {
   return flags;
 }
 
-uint8_t *wasmtime_mmap_new(uintptr_t size, uint32_t prot_flags) {
+int wasmtime_mmap_new(uintptr_t size, uint32_t prot_flags, uint8_t **ret) {
   void *rc = mmap(NULL, size, wasmtime_to_mmap_prot_flags(prot_flags),
                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  assert(rc != MAP_FAILED);
-  return rc;
+  if (rc == MAP_FAILED)
+    return errno;
+  *ret = rc;
+  return 0;
 }
 
-void wasmtime_mmap_remap(uint8_t *addr, uintptr_t size, uint32_t prot_flags) {
+int wasmtime_mmap_remap(uint8_t *addr, uintptr_t size, uint32_t prot_flags) {
   void *rc = mmap(addr, size, wasmtime_to_mmap_prot_flags(prot_flags),
                   MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  assert(rc == addr);
-  (void)rc;
+  if (rc == MAP_FAILED)
+    return errno;
+  return 0;
 }
 
-void wasmtime_munmap(uint8_t *ptr, uintptr_t size) {
+int wasmtime_munmap(uint8_t *ptr, uintptr_t size) {
   int rc = munmap(ptr, size);
-  assert(rc == 0);
-  (void)rc;
+  if (rc != 0)
+    return errno;
+  return 0;
 }
 
-void wasmtime_mprotect(uint8_t *ptr, uintptr_t size, uint32_t prot_flags) {
+int wasmtime_mprotect(uint8_t *ptr, uintptr_t size, uint32_t prot_flags) {
   int rc = mprotect(ptr, size, wasmtime_to_mmap_prot_flags(prot_flags));
-  assert(rc == 0);
-  (void)rc;
+  if (rc != 0)
+    return errno;
+  return 0;
 }
 
 uintptr_t wasmtime_page_size(void) { return sysconf(_SC_PAGESIZE); }
@@ -90,7 +96,7 @@ static void handle_signal(int signo, siginfo_t *info, void *context) {
   signal(signo, SIG_DFL);
 }
 
-extern void wasmtime_init_traps(wasmtime_trap_handler_t handler) {
+int wasmtime_init_traps(wasmtime_trap_handler_t handler) {
   int rc;
   g_handler = handler;
 
@@ -102,21 +108,25 @@ extern void wasmtime_init_traps(wasmtime_trap_handler_t handler) {
   sigemptyset(&action.sa_mask);
 
   rc = sigaction(SIGILL, &action, NULL);
-  assert(rc == 0);
+  if (rc != 0)
+    return errno;
   rc = sigaction(SIGSEGV, &action, NULL);
-  assert(rc == 0);
+  if (rc != 0)
+    return errno;
   rc = sigaction(SIGFPE, &action, NULL);
-  assert(rc == 0);
-  (void)rc;
+  if (rc != 0)
+    return errno;
+  return 0;
 }
 
-struct wasmtime_memory_image *wasmtime_memory_image_new(const uint8_t *ptr,
-                                                        uintptr_t len) {
-  return NULL;
+int wasmtime_memory_image_new(const uint8_t *ptr, uintptr_t len,
+                              struct wasmtime_memory_image **ret) {
+  *ret = NULL;
+  return 0;
 }
 
-void wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
-                                  uint8_t *addr, uintptr_t len) {
+int wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
+                                 uint8_t *addr, uintptr_t len) {
   abort();
 }
 

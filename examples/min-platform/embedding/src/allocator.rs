@@ -14,6 +14,7 @@
 
 use dlmalloc::Dlmalloc;
 use std::alloc::{GlobalAlloc, Layout};
+use std::ptr;
 use std::sync::Mutex;
 
 #[global_allocator]
@@ -64,16 +65,21 @@ unsafe impl GlobalAlloc for MyGlobalDmalloc {
 const PROT_READ: u32 = 1 << 0;
 const PROT_WRITE: u32 = 1 << 1;
 extern "C" {
-    fn wasmtime_mmap_new(size: usize, prot_flags: u32) -> *mut u8;
+    fn wasmtime_mmap_new(size: usize, prot_flags: u32, ret: &mut *mut u8) -> i32;
     fn wasmtime_page_size() -> usize;
-    fn wasmtime_munmap(ptr: *mut u8, size: usize);
+    fn wasmtime_munmap(ptr: *mut u8, size: usize) -> i32;
 }
 
 unsafe impl dlmalloc::Allocator for MyAllocator {
     fn alloc(&self, size: usize) -> (*mut u8, usize, u32) {
         unsafe {
-            let ptr = wasmtime_mmap_new(size, PROT_READ | PROT_WRITE);
-            (ptr, size, 0)
+            let mut ptr = ptr::null_mut();
+            let rc = wasmtime_mmap_new(size, PROT_READ | PROT_WRITE, &mut ptr);
+            if rc != 0 {
+                (ptr::null_mut(), 0, 0)
+            } else {
+                (ptr, size, 0)
+            }
         }
     }
 

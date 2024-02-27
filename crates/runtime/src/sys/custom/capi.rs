@@ -50,11 +50,12 @@ extern "C" {
     ///
     /// Memory can be lazily committed.
     ///
-    /// Returns the base pointer of the new mapping. Aborts the process on
-    /// failure.
+    /// Stores the base pointer of the new mapping in `ret` on success.
+    ///
+    /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `mmap(0, size, prot_flags, MAP_PRIVATE, 0, -1)` on Linux.
-    pub fn wasmtime_mmap_new(size: usize, prot_flags: u32) -> *mut u8;
+    pub fn wasmtime_mmap_new(size: usize, prot_flags: u32, ret: &mut *mut u8) -> i32;
 
     /// Remaps the virtual memory starting at `addr` going for `size` bytes to
     /// the protections specified with a new blank mapping.
@@ -63,28 +64,28 @@ extern "C" {
     /// anonymous memory are used to replace these mappings and the new area
     /// should have the protection specified by `prot_flags`.
     ///
-    /// Aborts the process on failure.
+    /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `mmap(addr, size, prot_flags, MAP_PRIVATE | MAP_FIXED, 0, -1)` on Linux.
-    pub fn wasmtime_mmap_remap(addr: *mut u8, size: usize, prot_flags: u32);
+    pub fn wasmtime_mmap_remap(addr: *mut u8, size: usize, prot_flags: u32) -> i32;
 
     /// Unmaps memory at the specified `ptr` for `size` bytes.
     ///
     /// The memory should be discarded and decommitted and should generate a
     /// segfault if accessed after this function call.
     ///
-    /// Aborts the process on failure.
+    /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `munmap` on Linux.
-    pub fn wasmtime_munmap(ptr: *mut u8, size: usize);
+    pub fn wasmtime_munmap(ptr: *mut u8, size: usize) -> i32;
 
     /// Configures the protections associated with a region of virtual memory
     /// starting at `ptr` and going to `size`.
     ///
-    /// Aborts the process on failure.
+    /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `mprotect` on Linux.
-    pub fn wasmtime_mprotect(ptr: *mut u8, size: usize, prot_flags: u32);
+    pub fn wasmtime_mprotect(ptr: *mut u8, size: usize, prot_flags: u32) -> i32;
 
     /// Returns the page size, in bytes, of the current system.
     pub fn wasmtime_page_size() -> usize;
@@ -131,13 +132,16 @@ extern "C" {
     /// The `handler` provided is a function pointer to invoke whenever a trap
     /// is encountered. The `handler` is invoked whenever a trap is caught by
     /// the system.
-    pub fn wasmtime_init_traps(handler: wasmtime_trap_handler_t);
+    ///
+    /// Returns 0 on success and an error code on failure.
+    pub fn wasmtime_init_traps(handler: wasmtime_trap_handler_t) -> i32;
 
     /// Attempts to create a new in-memory image of the `ptr`/`len` combo which
     /// can be mapped to virtual addresses in the future.
     ///
-    /// The returned `wasmtime_memory_image` pointer can be `NULL` to indicate
-    /// that an image cannot be created. The structure otherwise will later be
+    /// On successed the returned `wasmtime_memory_image` pointer is stored into `ret`.
+    /// This value stored can be `NULL` to indicate that an image cannot be
+    /// created but no failure occurred. The structure otherwise will later be
     /// deallocated with `wasmtime_memory_image_free` and
     /// `wasmtime_memory_image_map_at` will be used to map the image into new
     /// regions of the address space.
@@ -146,7 +150,16 @@ extern "C" {
     /// the image needs to refer to them in the future then it must make a copy.
     ///
     /// Both `ptr` and `len` are guaranteed to be page-aligned.
-    pub fn wasmtime_memory_image_new(ptr: *const u8, len: usize) -> *mut wasmtime_memory_image;
+    ///
+    /// Returns 0 on success and an error code on failure. Note that storing
+    /// `NULL` into `ret` is not considered a failure, and failure is used to
+    /// indicate that something fatal has happened and Wasmtime will propagate
+    /// the error upwards.
+    pub fn wasmtime_memory_image_new(
+        ptr: *const u8,
+        len: usize,
+        ret: &mut *mut wasmtime_memory_image,
+    ) -> i32;
 
     /// Maps the `image` provided to the virtual address at `addr` and `len`.
     ///
@@ -166,7 +179,7 @@ extern "C" {
         image: *mut wasmtime_memory_image,
         addr: *mut u8,
         len: usize,
-    );
+    ) -> i32;
 
     /// Deallocates the provided `wasmtime_memory_image`.
     ///

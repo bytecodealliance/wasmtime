@@ -1,10 +1,11 @@
+use super::cvt;
 use crate::sys::capi;
 use crate::SendSyncPtr;
 use anyhow::{bail, Result};
 use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 
 #[derive(Debug)]
 pub struct Mmap {
@@ -19,14 +20,18 @@ impl Mmap {
     }
 
     pub fn new(size: usize) -> Result<Self> {
-        let ptr = unsafe { capi::wasmtime_mmap_new(size, capi::PROT_READ | capi::PROT_WRITE) };
+        let mut ptr = ptr::null_mut();
+        cvt(unsafe {
+            capi::wasmtime_mmap_new(size, capi::PROT_READ | capi::PROT_WRITE, &mut ptr)
+        })?;
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
 
     pub fn reserve(size: usize) -> Result<Self> {
-        let ptr = unsafe { capi::wasmtime_mmap_new(size, 0) };
+        let mut ptr = ptr::null_mut();
+        cvt(unsafe { capi::wasmtime_mmap_new(size, 0, &mut ptr) })?;
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
@@ -39,11 +44,11 @@ impl Mmap {
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
         let ptr = self.memory.as_ptr().cast::<u8>();
         unsafe {
-            capi::wasmtime_mprotect(
+            cvt(capi::wasmtime_mprotect(
                 ptr.add(start).cast(),
                 len,
                 capi::PROT_READ | capi::PROT_WRITE,
-            )
+            ))?;
         }
 
         Ok(())
@@ -75,7 +80,11 @@ impl Mmap {
         // not mapped into the C API at this time.
         let _ = enable_branch_protection;
 
-        capi::wasmtime_mprotect(base, len, capi::PROT_READ | capi::PROT_EXEC);
+        cvt(capi::wasmtime_mprotect(
+            base,
+            len,
+            capi::PROT_READ | capi::PROT_EXEC,
+        ))?;
         Ok(())
     }
 
@@ -83,7 +92,7 @@ impl Mmap {
         let base = self.memory.as_ptr().cast::<u8>().add(range.start).cast();
         let len = range.end - range.start;
 
-        capi::wasmtime_mprotect(base, len, capi::PROT_READ);
+        cvt(capi::wasmtime_mprotect(base, len, capi::PROT_READ))?;
         Ok(())
     }
 }
@@ -96,7 +105,7 @@ impl Drop for Mmap {
             if len == 0 {
                 return;
             }
-            capi::wasmtime_munmap(ptr, len);
+            cvt(capi::wasmtime_munmap(ptr, len)).unwrap();
         }
     }
 }
