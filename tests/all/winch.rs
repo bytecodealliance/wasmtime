@@ -302,7 +302,6 @@ fn dynamic_heap() -> Result<()> {
     "#;
     let mut store = Store::new(&engine, ());
     let module = Module::new(&engine, wat)?;
-    let func = Func::wrap::<(), (), Result<()>>(&mut store, || bail!("error"));
     let instance = Instance::new(&mut store, &module, &[])?;
     let f = instance.get_typed_func::<(), i32>(&mut store, " ")?;
     let result = f.call(&mut store, ())?;
