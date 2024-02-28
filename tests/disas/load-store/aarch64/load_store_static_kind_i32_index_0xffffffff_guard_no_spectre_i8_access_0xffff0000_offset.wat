@@ -20,7 +20,7 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ldr x7, [x0, #80]
+;;   ldr x7, [x0, #96]
 ;;   add x7, x7, x2, UXTW
 ;;   movz x8, #65535, LSL #16
 ;;   strb w3, [x7, x8]
@@ -30,7 +30,7 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ldr x7, [x0, #80]
+;;   ldr x7, [x0, #96]
 ;;   add x7, x7, x2, UXTW
 ;;   movz x8, #65535, LSL #16
 ;;   ldrb w0, [x7, x8]

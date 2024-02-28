@@ -22,7 +22,7 @@
 ;; block0:
 ;;   mov w11, w2
 ;;   movz x12, #0
-;;   ldr x13, [x0, #80]
+;;   ldr x13, [x0, #96]
 ;;   add x13, x13, x2, UXTW
 ;;   add x13, x13, #4096
 ;;   movn w10, #4096
@@ -38,7 +38,7 @@
 ;; block0:
 ;;   mov w11, w2
 ;;   movz x12, #0
-;;   ldr x13, [x0, #80]
+;;   ldr x13, [x0, #96]
 ;;   add x13, x13, x2, UXTW
 ;;   add x13, x13, #4096
 ;;   movn w10, #4096

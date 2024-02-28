@@ -23,19 +23,19 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @008f                               v6 = global_value.i64 gv3
-;; @008f                               v7 = load.i64 notrap aligned readonly v6+56
+;; @008f                               v7 = load.i64 notrap aligned readonly v6+72
 ;; @008f                               v8 = load.i64 notrap aligned readonly v7+216
 ;; @008f                               v9 = iconst.i32 0
 ;; @008f                               v10 = call_indirect sig0, v8(v6, v9)  ; v9 = 0
 ;; @0091                               v11 = global_value.i64 gv3
-;; @0091                               v12 = load.i64 notrap aligned readonly v11+56
+;; @0091                               v12 = load.i64 notrap aligned readonly v11+72
 ;; @0091                               v13 = load.i64 notrap aligned readonly v12+216
 ;; @0091                               v14 = iconst.i32 1
 ;; @0091                               v15 = call_indirect sig0, v13(v11, v14)  ; v14 = 1
 ;; @0093                               v16 = global_value.i64 gv3
-;; @0093                               v17 = load.i64 notrap aligned table v16+144
+;; @0093                               v17 = load.i64 notrap aligned table v16+160
 ;; @0095                               v18 = global_value.i64 gv3
-;; @0095                               v19 = load.i64 notrap aligned table v18+160
+;; @0095                               v19 = load.i64 notrap aligned table v18+176
 ;; @0097                               jump block1(v10, v15, v17, v19)
 ;;
 ;;                                 block1(v2: r64, v3: r64, v4: i64, v5: i64):

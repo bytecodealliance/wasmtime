@@ -474,12 +474,16 @@ impl ModuleTranslation<'_> {
                 .heap_type
             {
                 WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {}
+
                 // If this is not a funcref table, then we can't support a
                 // pre-computed table of function indices. Technically this
                 // initializer won't trap so we could continue processing
                 // segments, but that's left as a future optimization if
                 // necessary.
-                WasmHeapType::Extern => break,
+                WasmHeapType::Extern
+                | WasmHeapType::Any
+                | WasmHeapType::I31
+                | WasmHeapType::None => break,
             }
 
             // Function indices can be optimized here, but fully general

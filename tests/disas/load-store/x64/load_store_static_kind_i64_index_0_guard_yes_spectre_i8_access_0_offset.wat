@@ -26,7 +26,7 @@
 ;; block0:
 ;;   xorq    %r10, %r10, %r10
 ;;   movq    %rdx, %r9
-;;   addq    %r9, 80(%rdi), %r9
+;;   addq    %r9, 96(%rdi), %r9
 ;;   cmpq    const(0), %rdx
 ;;   cmovnbeq %r10, %r9, %r9
 ;;   movb    %cl, 0(%r9)
@@ -44,7 +44,7 @@
 ;; block0:
 ;;   xorq    %r10, %r10, %r10
 ;;   movq    %rdx, %r9
-;;   addq    %r9, 80(%rdi), %r9
+;;   addq    %r9, 96(%rdi), %r9
 ;;   cmpq    const(0), %rdx
 ;;   cmovnbeq %r10, %r9, %r9
 ;;   movzbq  0(%r9), %rax

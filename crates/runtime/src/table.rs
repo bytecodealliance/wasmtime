@@ -4,9 +4,8 @@
 
 #![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
 
-use crate::gc::VMExternRef;
 use crate::vmcontext::{VMFuncRef, VMTableDefinition};
-use crate::{SendSyncPtr, Store};
+use crate::{GcStore, SendSyncPtr, Store, VMGcRef};
 use anyhow::{bail, format_err, Error, Result};
 use sptr::Strict;
 use std::ops::Range;
@@ -17,14 +16,14 @@ use wasmtime_environ::{
 
 /// An element going into or coming out of a table.
 ///
-/// Table elements are stored as pointers and are default-initialized with `ptr::null_mut`.
-#[derive(Clone)]
+/// Table elements are stored as pointers and are default-initialized with
+/// `ptr::null_mut`.
 pub enum TableElement {
     /// A `funcref`.
     FuncRef(*mut VMFuncRef),
 
-    /// An `exrernref`.
-    ExternRef(Option<VMExternRef>),
+    /// A GC reference.
+    GcRef(Option<VMGcRef>),
 
     /// An uninitialized funcref value. This should never be exposed
     /// beyond the `wasmtime` crate boundary; the upper-level code
@@ -36,23 +35,23 @@ pub enum TableElement {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TableElementType {
     Func,
-    Extern,
+    GcRef,
 }
 
 impl TableElementType {
     fn matches(&self, val: &TableElement) -> bool {
         match (val, self) {
             (TableElement::FuncRef(_), TableElementType::Func) => true,
-            (TableElement::ExternRef(_), TableElementType::Extern) => true,
+            (TableElement::GcRef(_), TableElementType::GcRef) => true,
             _ => false,
         }
     }
 }
 
-// The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this
-// just relies on thread-safety of `VMExternRef` itself.
-unsafe impl Send for TableElement where VMExternRef: Send {}
-unsafe impl Sync for TableElement where VMExternRef: Sync {}
+// The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this just relies
+// on thread-safety of `VMGcRef` itself.
+unsafe impl Send for TableElement where VMGcRef: Send {}
+unsafe impl Sync for TableElement where VMGcRef: Sync {}
 
 impl TableElement {
     /// Consumes a table element into a pointer/reference, as it
@@ -66,11 +65,11 @@ impl TableElement {
     /// # Safety
     ///
     /// The same warnings as for `into_table_values()` apply.
-    pub(crate) unsafe fn into_ref_asserting_initialized(self) -> *mut u8 {
+    pub(crate) unsafe fn into_func_ref_asserting_initialized(self) -> *mut VMFuncRef {
         match self {
-            Self::FuncRef(e) => e.cast(),
+            Self::FuncRef(e) => e,
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
-            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
+            Self::GcRef(_) => panic!("GC reference is not a function reference"),
         }
     }
 
@@ -90,15 +89,15 @@ impl From<*mut VMFuncRef> for TableElement {
     }
 }
 
-impl From<Option<VMExternRef>> for TableElement {
-    fn from(x: Option<VMExternRef>) -> TableElement {
-        TableElement::ExternRef(x)
+impl From<Option<VMGcRef>> for TableElement {
+    fn from(x: Option<VMGcRef>) -> TableElement {
+        TableElement::GcRef(x)
     }
 }
 
-impl From<VMExternRef> for TableElement {
-    fn from(x: VMExternRef) -> TableElement {
-        TableElement::ExternRef(Some(x))
+impl From<VMGcRef> for TableElement {
+    fn from(x: VMGcRef) -> TableElement {
+        TableElement::GcRef(Some(x))
     }
 }
 
@@ -162,7 +161,9 @@ fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
         WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
             TableElementType::Func
         }
-        WasmHeapType::Extern => TableElementType::Extern,
+        WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
+            TableElementType::GcRef
+        }
     }
 }
 
@@ -285,15 +286,15 @@ impl Table {
     /// Fill `table[dst..]` with values from `items`
     ///
     /// Returns a trap error on out-of-bounds accesses.
-    pub fn init_extern(
+    pub fn init_gc_refs(
         &mut self,
         dst: u32,
-        items: impl ExactSizeIterator<Item = Option<VMExternRef>>,
+        items: impl ExactSizeIterator<Item = Option<VMGcRef>>,
     ) -> Result<(), Trap> {
         let dst = usize::try_from(dst).map_err(|_| Trap::TableOutOfBounds)?;
 
         let elements = self
-            .externrefs_mut()
+            .gc_refs_mut()
             .get_mut(dst..)
             .and_then(|s| s.get_mut(..items.len()))
             .ok_or(Trap::TableOutOfBounds)?;
@@ -311,7 +312,13 @@ impl Table {
     /// # Panics
     ///
     /// Panics if `val` does not have a type that matches this table.
-    pub fn fill(&mut self, dst: u32, val: TableElement, len: u32) -> Result<(), Trap> {
+    pub fn fill(
+        &mut self,
+        gc_store: &mut GcStore,
+        dst: u32,
+        val: TableElement,
+        len: u32,
+    ) -> Result<(), Trap> {
         let start = dst as usize;
         let end = start
             .checked_add(len as usize)
@@ -325,8 +332,16 @@ impl Table {
             TableElement::FuncRef(f) => {
                 self.funcrefs_mut()[start..end].fill(TaggedFuncRef::from(f));
             }
-            TableElement::ExternRef(e) => {
-                self.externrefs_mut()[start..end].fill(e);
+            TableElement::GcRef(e) => {
+                // Clone the init GC reference into each table slot.
+                self.gc_refs_mut()[start..end]
+                    .fill_with(|| e.as_ref().map(|e| gc_store.clone_gc_ref(e)));
+
+                // Drop the init GC reference, since we aren't holding onto this
+                // reference anymore, only the clones in the table.
+                if let Some(e) = e {
+                    gc_store.drop_gc_ref(e);
+                }
             }
             TableElement::UninitFunc => {
                 self.funcrefs_mut()[start..end].fill(TaggedFuncRef::UNINIT);
@@ -399,7 +414,7 @@ impl Table {
             }
         }
 
-        self.fill(old_size, init_value, delta)
+        self.fill(store.gc_store(), old_size, init_value, delta)
             .expect("table should not be out of bounds");
 
         Ok(Some(old_size))
@@ -408,7 +423,7 @@ impl Table {
     /// Get reference to the specified element.
     ///
     /// Returns `None` if the index is out of bounds.
-    pub fn get(&self, index: u32) -> Option<TableElement> {
+    pub fn get(&self, gc_store: &mut GcStore, index: u32) -> Option<TableElement> {
         let index = usize::try_from(index).ok()?;
         match self.element_type() {
             TableElementType::Func => self
@@ -416,11 +431,10 @@ impl Table {
                 .get(index)
                 .copied()
                 .map(|e| e.into_table_element()),
-            TableElementType::Extern => self
-                .externrefs()
-                .get(index)
-                .cloned()
-                .map(TableElement::ExternRef),
+            TableElementType::GcRef => self.gc_refs().get(index).map(|r| {
+                let r = r.as_ref().map(|r| gc_store.clone_gc_ref(r));
+                TableElement::GcRef(r)
+            }),
         }
     }
 
@@ -443,8 +457,8 @@ impl Table {
             TableElement::UninitFunc => {
                 *self.funcrefs_mut().get_mut(index).ok_or(())? = TaggedFuncRef::UNINIT;
             }
-            TableElement::ExternRef(e) => {
-                *self.externrefs_mut().get_mut(index).ok_or(())? = e;
+            TableElement::GcRef(e) => {
+                *self.gc_refs_mut().get_mut(index).ok_or(())? = e;
             }
         }
         Ok(())
@@ -457,6 +471,7 @@ impl Table {
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables.
     pub unsafe fn copy(
+        gc_store: &mut GcStore,
         dst_table: *mut Self,
         src_table: *mut Self,
         dst_index: u32,
@@ -485,9 +500,9 @@ impl Table {
 
         // Check if the tables are the same as we cannot mutably borrow and also borrow the same `RefCell`
         if ptr::eq(dst_table, src_table) {
-            (*dst_table).copy_elements_within(dst_range, src_range);
+            (*dst_table).copy_elements_within(gc_store, dst_range, src_range);
         } else {
-            Self::copy_elements(&mut *dst_table, &*src_table, dst_range, src_range);
+            Self::copy_elements(gc_store, &mut *dst_table, &*src_table, dst_range, src_range);
         }
 
         Ok(())
@@ -545,8 +560,8 @@ impl Table {
         }
     }
 
-    fn externrefs(&self) -> &[Option<VMExternRef>] {
-        assert_eq!(self.element_type(), TableElementType::Extern);
+    fn gc_refs(&self) -> &[Option<VMGcRef>] {
+        assert_eq!(self.element_type(), TableElementType::GcRef);
         unsafe {
             let (a, b, c) = self.raw_elements().align_to();
             assert!(a.is_empty());
@@ -555,8 +570,11 @@ impl Table {
         }
     }
 
-    fn externrefs_mut(&mut self) -> &mut [Option<VMExternRef>] {
-        assert_eq!(self.element_type(), TableElementType::Extern);
+    /// Get this table's GC references as a slice.
+    ///
+    /// Panics if this is not a table of GC references.
+    pub fn gc_refs_mut(&mut self) -> &mut [Option<VMGcRef>] {
+        assert_eq!(self.element_type(), TableElementType::GcRef);
         unsafe {
             let (a, b, c) = self.raw_elements_mut().align_to_mut();
             assert!(a.is_empty());
@@ -566,6 +584,7 @@ impl Table {
     }
 
     fn copy_elements(
+        gc_store: &mut GcStore,
         dst_table: &mut Self,
         src_table: &Self,
         dst_range: Range<usize>,
@@ -582,49 +601,63 @@ impl Table {
                 dst_table.funcrefs_mut()[dst_range]
                     .copy_from_slice(&src_table.funcrefs()[src_range]);
             }
-            TableElementType::Extern => {
-                dst_table.externrefs_mut()[dst_range]
-                    .clone_from_slice(&src_table.externrefs()[src_range]);
+            TableElementType::GcRef => {
+                assert_eq!(
+                    dst_range.end - dst_range.start,
+                    src_range.end - src_range.start
+                );
+                assert!(dst_range.end <= dst_table.gc_refs().len());
+                assert!(src_range.end <= src_table.gc_refs().len());
+                for (dst, src) in dst_range.zip(src_range) {
+                    gc_store.write_gc_ref(
+                        &mut dst_table.gc_refs_mut()[dst],
+                        src_table.gc_refs()[src].as_ref(),
+                    );
+                }
             }
         }
     }
 
-    fn copy_elements_within(&mut self, dst_range: Range<usize>, src_range: Range<usize>) {
+    fn copy_elements_within(
+        &mut self,
+        gc_store: &mut GcStore,
+        dst_range: Range<usize>,
+        src_range: Range<usize>,
+    ) {
+        assert_eq!(
+            dst_range.end - dst_range.start,
+            src_range.end - src_range.start
+        );
+
+        // This is a no-op.
+        if src_range.start == dst_range.start {
+            return;
+        }
+
         let ty = self.element_type();
         match ty {
             TableElementType::Func => {
                 // `funcref` are `Copy`, so just do a memmove
                 self.funcrefs_mut().copy_within(src_range, dst_range.start);
             }
-            TableElementType::Extern => {
+            TableElementType::GcRef => {
                 // We need to clone each `externref` while handling overlapping
                 // ranges
-                let elements = self.externrefs_mut();
-                if dst_range.start <= src_range.start {
-                    for (s, d) in src_range.zip(dst_range) {
-                        elements[d] = elements[s].clone();
+                let elements = self.gc_refs_mut();
+                if dst_range.start < src_range.start {
+                    for (d, s) in dst_range.zip(src_range) {
+                        let (ds, ss) = elements.split_at_mut(s);
+                        let dst = &mut ds[d];
+                        let src = ss[0].as_ref();
+                        gc_store.write_gc_ref(dst, src);
                     }
                 } else {
                     for (s, d) in src_range.rev().zip(dst_range.rev()) {
-                        elements[d] = elements[s].clone();
+                        let (ss, ds) = elements.split_at_mut(d);
+                        let dst = &mut ds[0];
+                        let src = ss[s].as_ref();
+                        gc_store.write_gc_ref(dst, src);
                     }
-                }
-            }
-        }
-    }
-}
-
-impl Drop for Table {
-    fn drop(&mut self) {
-        match self.element_type() {
-            // `funcref` tables don't need drops.
-            TableElementType::Func => {}
-
-            // `externref` tables are null'd out to ensure that no strong
-            // references are preserved.
-            TableElementType::Extern => {
-                for e in self.externrefs_mut() {
-                    let _ = e.take();
                 }
             }
         }

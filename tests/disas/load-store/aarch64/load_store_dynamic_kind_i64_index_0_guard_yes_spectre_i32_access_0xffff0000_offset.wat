@@ -23,8 +23,8 @@
 ;;   movn w13, #65531
 ;;   adds x13, x2, x13
 ;;   b.hs #trap=heap_oob
-;;   ldr x14, [x0, #88]
-;;   ldr x0, [x0, #80]
+;;   ldr x14, [x0, #104]
+;;   ldr x0, [x0, #96]
 ;;   movz x15, #0
 ;;   add x0, x0, x2
 ;;   movz x1, #65535, LSL #16
@@ -42,8 +42,8 @@
 ;;   movn w13, #65531
 ;;   adds x13, x2, x13
 ;;   b.hs #trap=heap_oob
-;;   ldr x14, [x0, #88]
-;;   ldr x0, [x0, #80]
+;;   ldr x14, [x0, #104]
+;;   ldr x0, [x0, #96]
 ;;   movz x15, #0
 ;;   add x0, x0, x2
 ;;   movz x1, #65535, LSL #16

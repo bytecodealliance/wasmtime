@@ -75,3 +75,5 @@ fn null_elem_segment_works_with_imported_table() -> Result<()> {
     Instance::new(&mut store, &module, &[table.into()])?;
     Ok(())
 }
+
+// TODO FITZGEN: tables of i31ref and all their operations

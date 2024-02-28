@@ -28,7 +28,7 @@
 ;;   cmpq    const(0), %r9
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   movb    %cl, 4096(%r11,%r9,1)
 ;;   jmp     label2
 ;; block2:
@@ -48,7 +48,7 @@
 ;;   cmpq    const(0), %r9
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   movzbq  4096(%r11,%r9,1), %rax
 ;;   jmp     label2
 ;; block2:

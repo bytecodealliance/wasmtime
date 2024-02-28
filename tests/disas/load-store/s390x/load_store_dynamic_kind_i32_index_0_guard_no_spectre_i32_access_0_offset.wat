@@ -23,13 +23,13 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   lgr %r3, %r4
-;;   lg %r4, 88(%r2)
+;;   lg %r4, 104(%r2)
 ;;   llgfr %r3, %r3
 ;;   aghi %r4, -4
 ;;   clgr %r3, %r4
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   lg %r4, 80(%r2)
+;;   lg %r4, 96(%r2)
 ;;   strv %r5, 0(%r3,%r4)
 ;;   jg label2
 ;; block2:
@@ -42,13 +42,13 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   lgr %r5, %r4
-;;   lg %r4, 88(%r2)
+;;   lg %r4, 104(%r2)
 ;;   llgfr %r3, %r5
 ;;   aghi %r4, -4
 ;;   clgr %r3, %r4
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   lg %r4, 80(%r2)
+;;   lg %r4, 96(%r2)
 ;;   lrv %r2, 0(%r3,%r4)
 ;;   jg label2
 ;; block2:

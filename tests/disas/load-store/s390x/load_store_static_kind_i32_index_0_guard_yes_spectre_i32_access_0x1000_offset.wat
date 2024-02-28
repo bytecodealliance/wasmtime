@@ -36,7 +36,7 @@
 ;;   llgfr %r4, %r4
 ;;   lghi %r3, 0
 ;;   lgr %r6, %r4
-;;   ag %r6, 80(%r2)
+;;   ag %r6, 96(%r2)
 ;;   aghik %r2, %r6, 4096
 ;;   clgfi %r4, 4294963196
 ;;   locgrh %r2, %r3
@@ -53,7 +53,7 @@
 ;;   llgfr %r4, %r4
 ;;   lghi %r3, 0
 ;;   lgr %r5, %r4
-;;   ag %r5, 80(%r2)
+;;   ag %r5, 96(%r2)
 ;;   aghik %r2, %r5, 4096
 ;;   clgfi %r4, 4294963196
 ;;   locgrh %r2, %r3

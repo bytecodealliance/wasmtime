@@ -21,7 +21,7 @@
 ;; function u0:0:
 ;; block0:
 ;;   movz x9, #0
-;;   ldr x10, [x0, #80]
+;;   ldr x10, [x0, #96]
 ;;   add x10, x10, x2
 ;;   orr x8, xzr, #4294967295
 ;;   subs xzr, x2, x8
@@ -35,7 +35,7 @@
 ;; function u0:1:
 ;; block0:
 ;;   movz x9, #0
-;;   ldr x10, [x0, #80]
+;;   ldr x10, [x0, #96]
 ;;   add x10, x10, x2
 ;;   orr x8, xzr, #4294967295
 ;;   subs xzr, x2, x8

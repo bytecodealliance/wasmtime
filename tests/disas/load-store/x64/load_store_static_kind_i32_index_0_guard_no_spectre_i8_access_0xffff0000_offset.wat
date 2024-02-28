@@ -28,7 +28,7 @@
 ;;   cmpq    $65535, %r9
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %r9, 80(%rdi), %r9
+;;   addq    %r9, 96(%rdi), %r9
 ;;   movl    $-65536, %esi
 ;;   movb    %cl, 0(%r9,%rsi,1)
 ;;   jmp     label2
@@ -49,7 +49,7 @@
 ;;   cmpq    $65535, %r9
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %r9, 80(%rdi), %r9
+;;   addq    %r9, 96(%rdi), %r9
 ;;   movl    $-65536, %esi
 ;;   movzbq  0(%r9,%rsi,1), %rax
 ;;   jmp     label2

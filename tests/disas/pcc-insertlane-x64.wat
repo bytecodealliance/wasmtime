@@ -73,7 +73,7 @@
 ;; block0:
 ;;   movdqu  const(0), %xmm0
 ;;   movl    %edx, %r10d
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   pinsrb  $1, %xmm0, 0(%r11,%r10,1), %xmm0
 ;;   jmp     label1
 ;; block1:
@@ -89,7 +89,7 @@
 ;; block0:
 ;;   movdqu  const(0), %xmm0
 ;;   movl    %edx, %r10d
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   pinsrw  $1, %xmm0, 0(%r11,%r10,1), %xmm0
 ;;   jmp     label1
 ;; block1:
@@ -105,7 +105,7 @@
 ;; block0:
 ;;   movdqu  const(0), %xmm0
 ;;   movl    %edx, %r10d
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   pinsrd  $1, %xmm0, 0(%r11,%r10,1), %xmm0
 ;;   jmp     label1
 ;; block1:
@@ -121,7 +121,7 @@
 ;; block0:
 ;;   movdqu  const(0), %xmm0
 ;;   movl    %edx, %r10d
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   pinsrd.w $1, %xmm0, 0(%r11,%r10,1), %xmm0
 ;;   jmp     label1
 ;; block1:
@@ -136,7 +136,7 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movl    %edx, %r10d
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   insertps $0, %xmm0, 0(%r11,%r10,1), %xmm0
 ;;   jmp     label1
 ;; block1:
@@ -151,7 +151,7 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movl    %edx, %r11d
-;;   movq    80(%rdi), %rsi
+;;   movq    96(%rdi), %rsi
 ;;   movdqu  0(%rsi,%r11,1), %xmm7
 ;;   movlhps %xmm0, %xmm7, %xmm0
 ;;   jmp     label1
@@ -167,7 +167,7 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movl    %edx, %r11d
-;;   movq    80(%rdi), %rsi
+;;   movq    96(%rdi), %rsi
 ;;   movsd   0(%rsi,%r11,1), %xmm1
 ;;   movsd   %xmm0, %xmm1, %xmm0
 ;;   jmp     label1
@@ -184,7 +184,7 @@
 ;; block0:
 ;;   pshufd  $238, %xmm0, %xmm7
 ;;   movl    %edx, %r10d
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   movsd   %xmm7, 0(%r11,%r10,1)
 ;;   jmp     label1
 ;; block1:
@@ -200,7 +200,7 @@
 ;; block0:
 ;;   pshufd  $1, %xmm0, %xmm7
 ;;   movl    %edx, %r10d
-;;   movq    80(%rdi), %r11
+;;   movq    96(%rdi), %r11
 ;;   movss   %xmm7, 0(%r11,%r10,1)
 ;;   jmp     label1
 ;; block1:
@@ -217,7 +217,7 @@
 ;;   pextrb  $1, %xmm0, %r11
 ;;   movsbl  %r11b, %r11d
 ;;   movl    %edx, %esi
-;;   movq    80(%rdi), %rdi
+;;   movq    96(%rdi), %rdi
 ;;   movb    %r11b, 0(%rdi,%rsi,1)
 ;;   jmp     label1
 ;; block1:
@@ -234,7 +234,7 @@
 ;;   pextrw  $1, %xmm0, %r11
 ;;   movswl  %r11w, %r11d
 ;;   movl    %edx, %esi
-;;   movq    80(%rdi), %rdi
+;;   movq    96(%rdi), %rdi
 ;;   movw    %r11w, 0(%rdi,%rsi,1)
 ;;   jmp     label1
 ;; block1:
@@ -249,7 +249,7 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movl    %edx, %r9d
-;;   movq    80(%rdi), %r10
+;;   movq    96(%rdi), %r10
 ;;   pextrd  $1, %xmm0, 0(%r10,%r9,1)
 ;;   jmp     label1
 ;; block1:
@@ -264,7 +264,7 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movl    %edx, %r9d
-;;   movq    80(%rdi), %r10
+;;   movq    96(%rdi), %r10
 ;;   pextrq  $1, %xmm0, 0(%r10,%r9,1)
 ;;   jmp     label1
 ;; block1:

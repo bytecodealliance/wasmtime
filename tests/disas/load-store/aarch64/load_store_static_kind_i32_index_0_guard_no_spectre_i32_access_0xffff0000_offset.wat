@@ -25,7 +25,7 @@
 ;;   subs xzr, x9, x10
 ;;   b.hi label3 ; b label1
 ;; block1:
-;;   ldr x11, [x0, #80]
+;;   ldr x11, [x0, #96]
 ;;   add x11, x11, x2, UXTW
 ;;   movz x12, #65535, LSL #16
 ;;   str w3, [x11, x12]
@@ -42,7 +42,7 @@
 ;;   subs xzr, x9, x10
 ;;   b.hi label3 ; b label1
 ;; block1:
-;;   ldr x11, [x0, #80]
+;;   ldr x11, [x0, #96]
 ;;   add x11, x11, x2, UXTW
 ;;   movz x12, #65535, LSL #16
 ;;   ldr w0, [x11, x12]

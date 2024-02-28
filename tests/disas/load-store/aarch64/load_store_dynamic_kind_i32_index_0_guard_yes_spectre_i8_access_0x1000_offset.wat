@@ -20,8 +20,8 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ldr x15, [x0, #88]
-;;   ldr x14, [x0, #80]
+;;   ldr x15, [x0, #104]
+;;   ldr x14, [x0, #96]
 ;;   mov w13, w2
 ;;   movz x0, #4097
 ;;   sub x15, x15, x0
@@ -38,8 +38,8 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ldr x15, [x0, #88]
-;;   ldr x14, [x0, #80]
+;;   ldr x15, [x0, #104]
+;;   ldr x14, [x0, #96]
 ;;   mov w13, w2
 ;;   movz x0, #4097
 ;;   sub x15, x15, x0

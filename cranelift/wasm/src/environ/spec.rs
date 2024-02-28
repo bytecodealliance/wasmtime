@@ -522,6 +522,15 @@ pub trait FuncEnvironment: TargetEnvironment {
         count: ir::Value,
     ) -> WasmResult<ir::Value>;
 
+    /// Translate an `i32` value into an `i31ref`.
+    fn translate_ref_i31(&mut self, pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value>;
+
+    /// Sign-extend an `i31ref` into an `i32`.
+    fn translate_i31_get_s(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
+
+    /// Zero-extend an `i31ref` into an `i32`.
+    fn translate_i31_get_u(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
+
     /// Emit code at the beginning of every wasm loop.
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at

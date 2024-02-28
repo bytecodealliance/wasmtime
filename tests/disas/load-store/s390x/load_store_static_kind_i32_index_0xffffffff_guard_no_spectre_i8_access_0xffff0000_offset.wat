@@ -23,7 +23,7 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   llgfr %r4, %r4
-;;   ag %r4, 80(%r2)
+;;   ag %r4, 96(%r2)
 ;;   llilh %r2, 65535
 ;;   stc %r5, 0(%r2,%r4)
 ;;   jg label1
@@ -35,7 +35,7 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   llgfr %r4, %r4
-;;   ag %r4, 80(%r2)
+;;   ag %r4, 96(%r2)
 ;;   llilh %r5, 65535
 ;;   llc %r2, 0(%r5,%r4)
 ;;   jg label1

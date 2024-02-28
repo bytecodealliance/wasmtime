@@ -23,7 +23,7 @@
 ;;   ld a1,[const(0)]
 ;;   bgtu a2,a1,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a4,80(a0)
+;;   ld a4,96(a0)
 ;;   add a2,a4,a2
 ;;   sb a3,0(a2)
 ;;   j label2
@@ -37,7 +37,7 @@
 ;;   ld a1,[const(0)]
 ;;   bgtu a2,a1,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a3,80(a0)
+;;   ld a3,96(a0)
 ;;   add a2,a3,a2
 ;;   lbu a0,0(a2)
 ;;   j label2

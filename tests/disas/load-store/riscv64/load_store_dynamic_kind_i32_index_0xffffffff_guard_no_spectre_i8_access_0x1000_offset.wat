@@ -20,12 +20,12 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld a4,88(a0)
+;;   ld a4,104(a0)
 ;;   slli a2,a2,32
 ;;   srli a5,a2,32
 ;;   bgtu a5,a4,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a4,80(a0)
+;;   ld a4,96(a0)
 ;;   add a4,a4,a5
 ;;   sb a3,4096(a4)
 ;;   j label2
@@ -36,12 +36,12 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld a3,88(a0)
+;;   ld a3,104(a0)
 ;;   slli a2,a2,32
 ;;   srli a4,a2,32
 ;;   bgtu a4,a3,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a5,80(a0)
+;;   ld a5,96(a0)
 ;;   add a4,a5,a4
 ;;   lbu a0,4096(a4)
 ;;   j label2

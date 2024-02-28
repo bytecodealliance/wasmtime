@@ -3,6 +3,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
+// TODO FITZGEN: func.typed and func::wrap for anyref, option<anyref>, i31, and option<i31>
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn call_wasm_to_wasm() -> Result<()> {
@@ -629,9 +631,9 @@ fn import_works() -> Result<()> {
     ];
     let instance = Instance::new(&mut store, &module, &imports)?;
     let run = instance.get_func(&mut store, "run").unwrap();
-    let hello = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())));
+    let hello = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())?));
     dbg!(&hello);
-    let goodbye = Val::ExternRef(Some(ExternRef::new(&mut store, "goodbye".to_string())));
+    let goodbye = Val::ExternRef(Some(ExternRef::new(&mut store, "goodbye".to_string())?));
     dbg!(&goodbye);
     let funcref = Val::FuncRef(Some(Func::wrap(&mut store, || -> i32 { 42 })));
     run.call(&mut store, &[hello, goodbye, funcref], &mut [])?;
@@ -1411,7 +1413,7 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
     let untyped = typed.func();
 
     let my_funcref = Func::wrap(&mut store, || 100u32);
-    let my_externref = ExternRef::new(&mut store, 99u32);
+    let my_externref = ExternRef::new(&mut store, 99u32)?;
     let mut results = [Val::I32(0), Val::I32(0)];
 
     fn assert_my_funcref(mut store: impl AsContextMut, func: Option<&Func>) -> Result<()> {

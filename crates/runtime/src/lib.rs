@@ -11,6 +11,7 @@ use std::sync::Arc;
 use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
 
 mod arch;
+mod async_yield;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod export;
@@ -37,12 +38,14 @@ pub mod mpk;
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
 pub use crate::arch::{get_stack_pointer, V128Abi};
+pub use crate::async_yield::*;
 pub use crate::export::*;
 pub use crate::gc::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    Instance, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl, InstanceHandle,
-    MemoryAllocationIndex, OnDemandInstanceAllocator, StorePtr, TableAllocationIndex,
+    GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator,
+    InstanceAllocatorImpl, InstanceHandle, MemoryAllocationIndex, OnDemandInstanceAllocator,
+    StorePtr, TableAllocationIndex,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
@@ -101,14 +104,8 @@ pub unsafe trait Store {
     /// Used to configure the `VMContext` on initialization.
     fn epoch_ptr(&self) -> *const AtomicU64;
 
-    /// Returns the externref management structures necessary for this store.
-    ///
-    /// The first element returned is the table in which externrefs are stored
-    /// throughout wasm execution, and the second element is how to look up
-    /// module information for gc requests.
-    fn externref_activations_table(
-        &mut self,
-    ) -> (&mut VMExternRefActivationsTable, &dyn ModuleInfoLookup);
+    /// Get this store's GC heap and `externref` host data table.
+    fn gc_store(&mut self) -> &mut GcStore;
 
     /// Callback invoked to allow the store's resource limiter to reject a
     /// memory grow operation.
@@ -118,11 +115,13 @@ pub unsafe trait Store {
         desired: usize,
         maximum: Option<usize>,
     ) -> Result<bool, Error>;
+
     /// Callback invoked to notify the store's resource limiter that a memory
     /// grow operation has failed.
     ///
     /// Note that this is not invoked if `memory_growing` returns an error.
     fn memory_grow_failed(&mut self, error: Error) -> Result<()>;
+
     /// Callback invoked to allow the store's resource limiter to reject a
     /// table grow operation.
     fn table_growing(
@@ -131,19 +130,33 @@ pub unsafe trait Store {
         desired: u32,
         maximum: Option<u32>,
     ) -> Result<bool, Error>;
+
     /// Callback invoked to notify the store's resource limiter that a table
     /// grow operation has failed.
     ///
     /// Note that this is not invoked if `table_growing` returns an error.
     fn table_grow_failed(&mut self, error: Error) -> Result<()>;
+
     /// Callback invoked whenever fuel runs out by a wasm instance. If an error
     /// is returned that's raised as a trap. Otherwise wasm execution will
     /// continue as normal.
     fn out_of_gas(&mut self) -> Result<(), Error>;
+
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     fn new_epoch(&mut self) -> Result<u64, Error>;
+
+    /// Callback invoked whenever an instance needs to trigger a GC.
+    ///
+    /// Optionally given a GC reference that is rooted for the collection, and
+    /// then whose updated GC reference is returned.
+    ///
+    /// Cooperative, async-yielding (if configured) is completely transparent.
+    ///
+    /// If the async GC was cancelled, returns an error. This should be raised
+    /// as a trap to clean up Wasm execution.
+    fn gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]

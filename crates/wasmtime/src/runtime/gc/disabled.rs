@@ -1,13 +1,16 @@
-//! The dummy `ExternRef` type used when the `gc` cargo feature is disabled.
+//! The dummy implementation of garbage-collection, for when the `gc` Cargo
+//! feature is disabled.
 //!
-//! Providing a dummy type means that downstream users need to do fewer
-//! `#[cfg(...)]`s versus if this type or its methods simply didn't exist. The
-//! only methods that are left missing are constructors.
+//! We provide dummy/uninhabited types so that downstream users (and the rest of
+//! Wasmtime) need to do fewer `#[cfg(...)]`s for when GC is enabled versus
+//! disabled at compile time. While we implement dummy methods for these types'
+//! public methods, we do not, however, create dummy constructors constructors.
 
 #![allow(missing_docs)]
 
-use crate::runtime::Uninhabited;
-use crate::{store::StoreOpaque, AsContext, AsContextMut, GcRef, Result, RootedGcRef};
+use crate::{
+    runtime::Uninhabited, store::StoreOpaque, AsContext, AsContextMut, GcRef, Result, RootedGcRef,
+};
 use std::any::Any;
 use std::ffi::c_void;
 use std::fmt::Debug;

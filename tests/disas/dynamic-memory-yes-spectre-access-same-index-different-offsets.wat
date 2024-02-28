@@ -36,8 +36,8 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+88
-;;     gv5 = load.i64 notrap aligned checked gv3+80
+;;     gv4 = load.i64 notrap aligned gv3+104
+;;     gv5 = load.i64 notrap aligned checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -47,8 +47,8 @@
 ;;                                     v39 -> v0
 ;;                                     v40 -> v0
 ;;                                     v41 -> v0
-;; @0047                               v7 = load.i64 notrap aligned v0+88
-;; @0047                               v9 = load.i64 notrap aligned checked v0+80
+;; @0047                               v7 = load.i64 notrap aligned v0+104
+;; @0047                               v9 = load.i64 notrap aligned checked v0+96
 ;; @0047                               v6 = uextend.i64 v2
 ;; @0047                               v8 = icmp ugt v6, v7
 ;; @0047                               v11 = iconst.i64 0
@@ -80,8 +80,8 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+88
-;;     gv5 = load.i64 notrap aligned checked gv3+80
+;;     gv4 = load.i64 notrap aligned gv3+104
+;;     gv5 = load.i64 notrap aligned checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
@@ -91,8 +91,8 @@
 ;;                                     v36 -> v0
 ;;                                     v37 -> v0
 ;;                                     v38 -> v0
-;; @005d                               v7 = load.i64 notrap aligned v0+88
-;; @005d                               v9 = load.i64 notrap aligned checked v0+80
+;; @005d                               v7 = load.i64 notrap aligned v0+104
+;; @005d                               v9 = load.i64 notrap aligned checked v0+96
 ;; @005d                               v6 = uextend.i64 v2
 ;; @005d                               v8 = icmp ugt v6, v7
 ;; @005d                               v11 = iconst.i64 0

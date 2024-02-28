@@ -26,7 +26,7 @@
 ;; block0:
 ;;   xorq    %rsi, %rsi, %rsi
 ;;   movq    %rdx, %rax
-;;   addq    %rax, 80(%rdi), %rax
+;;   addq    %rax, 96(%rdi), %rax
 ;;   movl    $-65536, %edi
 ;;   lea     0(%rax,%rdi,1), %r11
 ;;   cmpq    $65535, %rdx
@@ -46,7 +46,7 @@
 ;; block0:
 ;;   xorq    %rsi, %rsi, %rsi
 ;;   movq    %rdx, %rax
-;;   addq    %rax, 80(%rdi), %rax
+;;   addq    %rax, 96(%rdi), %rax
 ;;   movl    $-65536, %edi
 ;;   lea     0(%rax,%rdi,1), %r11
 ;;   cmpq    $65535, %rdx

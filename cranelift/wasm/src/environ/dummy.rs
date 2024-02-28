@@ -24,6 +24,7 @@ use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources, WasmFeatures};
+use wasmtime_types::wasm_unsupported;
 
 /// A collection of names under which a given entity is exported.
 pub struct Exportable<T> {
@@ -639,6 +640,26 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _count: ir::Value,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, 0))
+    }
+
+    fn translate_ref_i31(&mut self, _pos: FuncCursor, _val: ir::Value) -> WasmResult<ir::Value> {
+        Err(wasm_unsupported!("ref.i31"))
+    }
+
+    fn translate_i31_get_s(
+        &mut self,
+        _pos: FuncCursor,
+        _i31ref: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(wasm_unsupported!("i31.get_s"))
+    }
+
+    fn translate_i31_get_u(
+        &mut self,
+        _pos: FuncCursor,
+        _i31ref: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(wasm_unsupported!("i31.get_u"))
     }
 }
 

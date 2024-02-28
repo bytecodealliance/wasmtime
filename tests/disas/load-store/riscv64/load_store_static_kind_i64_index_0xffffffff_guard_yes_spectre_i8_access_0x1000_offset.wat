@@ -22,7 +22,7 @@
 ;; block0:
 ;;   ld a1,[const(0)]
 ;;   sltu a1,a1,a2
-;;   ld a4,80(a0)
+;;   ld a4,96(a0)
 ;;   add a2,a4,a2
 ;;   lui a4,1
 ;;   add a2,a2,a4
@@ -38,7 +38,7 @@
 ;; block0:
 ;;   ld a1,[const(0)]
 ;;   sltu a1,a1,a2
-;;   ld a3,80(a0)
+;;   ld a3,96(a0)
 ;;   add a2,a3,a2
 ;;   lui a3,1
 ;;   add a2,a2,a3

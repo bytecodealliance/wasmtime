@@ -27,7 +27,7 @@
 ;;   movl    %edx, %esi
 ;;   xorq    %r11, %r11, %r11
 ;;   movq    %rsi, %r10
-;;   addq    %r10, 80(%rdi), %r10
+;;   addq    %r10, 96(%rdi), %r10
 ;;   cmpq    const(0), %rsi
 ;;   cmovnbeq %r11, %r10, %r10
 ;;   movl    %ecx, 0(%r10)
@@ -46,7 +46,7 @@
 ;;   movl    %edx, %esi
 ;;   xorq    %r11, %r11, %r11
 ;;   movq    %rsi, %r10
-;;   addq    %r10, 80(%rdi), %r10
+;;   addq    %r10, 96(%rdi), %r10
 ;;   cmpq    const(0), %rsi
 ;;   cmovnbeq %r11, %r10, %r10
 ;;   movl    0(%r10), %eax

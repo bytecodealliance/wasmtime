@@ -29,6 +29,12 @@ pub unsafe fn decommit_table_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "pooling-allocator")]
+pub unsafe fn decommit_gc_heap_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
+    std::ptr::write_bytes(ptr, 0, len);
+    Ok(())
+}
+
 pub fn get_page_size() -> usize {
     4096
 }
