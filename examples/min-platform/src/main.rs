@@ -1,10 +1,16 @@
-use anyhow::Result;
-use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
-use object::{Object, ObjectSymbol, SymbolKind};
-use std::io::Write;
-use std::path::Path;
+#[cfg(not(target_os = "linux"))]
+fn main() {
+    eprintln!("This example only runs on Linux right now");
+}
 
+#[cfg(target_os = "linux")]
 fn main() -> Result<()> {
+    use anyhow::Result;
+    use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
+    use object::{Object, ObjectSymbol, SymbolKind};
+    use std::io::Write;
+    use std::path::Path;
+
     let target = std::env::args().nth(1).unwrap();
     let target = Path::new(&target).file_stem().unwrap().to_str().unwrap();
     // Path to the artifact which is the build of the embedding.
