@@ -353,6 +353,14 @@ audited_as = "15.0.1"
 version = "17.0.1"
 audited_as = "17.0.0"
 
+[[unpublished.wasmtime-c-api-impl]]
+version = "19.0.0"
+audited_as = "18.0.1"
+
+[[unpublished.wasmtime-c-api-macros]]
+version = "19.0.0"
+audited_as = "18.0.1"
+
 [[unpublished.wasmtime-cache]]
 version = "15.0.0"
 audited_as = "14.0.2"
@@ -2160,6 +2168,18 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-asm-macros]]
 version = "17.0.0"
 when = "2024-01-25"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-c-api-impl]]
+version = "18.0.1"
+when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-c-api-macros]]
+version = "18.0.1"
+when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
