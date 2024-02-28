@@ -85,3 +85,41 @@ of it boils down to the fact that, unlike traditional e-graphs, our rules are
    One day we intend to extend ISLE with built-in support for commutativity, so
    we don't need to author the redundant commutations ourselves:
    https://github.com/bytecodealliance/wasmtime/issues/6128
+
+4. Be careful with (ideally avoid) multiple matches on the same `Value`, as
+   they can result in surprising multi-matching behavior. Be skeptical of
+   helpers that can inadvertently create this behavior.
+
+   In our mid-end ISLE environment, a `Value` corresponds to an eclass, with
+   multiple possible representations. A rule that matches on a `Value` will
+   traverse all enodes in the eclass, looking for a match. This is usually
+   exactly what we want: it is what allows a pattern like `(iadd (iconst k) x)`
+   to find the `iconst` amongst multiple possibilities for the argument.
+
+   However, this can also result in surprising behavior. If one has a helper
+   and a simplify rule like
+
+       (decl suitable_for_rewrite (Value) Value)
+       (rule (suitable_for_rewrite x @ (iadd ...)) x)
+       (rule (suitable_for_rewrite x @ (isub ...)) x)
+
+       (rule (simplify (ireduce _ x))
+         (if-let _ (suitable_for_rewrite x))
+         x)
+
+    Then this can result in the extremely surprising behavior that `(ireduce
+    (other_op ...))` matches, if `(other_op ...)` is in the same eclass as an
+    `iadd` or `isub`. This happens because the left-hand side binds `x`, which
+    describes the entire eclass; and `suitable_for_rewrite` matches if *any*
+    representation of `x` matches.
+
+    This resulted in a real bug in #7999. The best guidance is to keep rules
+    simple and direct: rather than attempting to abstract out helpers and
+    perform multiple, separate, matches on a `Value`, write patterns directly.
+    This has the additional benefit that the rewrites are more clearly visible
+    to the casual reader. For example:
+
+        (rule (simplify (ireduce _ (iadd ...)))
+              (iadd ...))
+        (rule (simplify (ireduce _ (isub ...)))
+              (isub ...))
