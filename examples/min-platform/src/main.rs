@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 #[cfg(not(target_os = "linux"))]
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     eprintln!("This example only runs on Linux right now");
     Ok(())
 }
