@@ -95,7 +95,7 @@ audit-as-crates-io = true
 audit-as-crates-io = true
 
 [policy.wasmtime-c-api-macros]
-audit-as-crates-io = true
+audit-as-crates-io = false
 
 [policy.wasmtime-cache]
 audit-as-crates-io = true
