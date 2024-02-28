@@ -120,15 +120,3 @@
 (extractor (sextend_maybe ty val) (sextend_maybe_etor ty val))
 (rule 0 (sextend_maybe ty val) (sextend ty val))
 (rule 1 (sextend_maybe ty val@(value_type ty)) val)
-
-(decl unary_op (Type Opcode Value) Value)
-(extractor (unary_op ty opcode x)
-           (inst_data ty (InstructionData.Unary opcode x)))
-(rule (unary_op ty opcode x)
-      (make_inst ty (InstructionData.Unary opcode x)))
-
-(decl binary_op (Type Opcode Value Value) Value)
-(extractor (binary_op ty opcode x y)
-           (inst_data ty (InstructionData.Binary opcode (value_array_2 x y))))
-(rule (binary_op ty opcode x y)
-      (make_inst ty (InstructionData.Binary opcode (value_array_2_ctor x y))))

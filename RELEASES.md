@@ -1,5 +1,15 @@
 --------------------------------------------------------------------------------
 
+## 18.0.2
+
+### Fixed
+
+* Fix an egraph rule bug that was permitting an incorrect `ireduce` rewrite to
+  unary and binary operations, leading to miscompilations.
+  [#8005](https://github.com/bytecodealliance/wasmtime/pull/8005)
+
+--------------------------------------------------------------------------------
+
 ## 18.0.1
 
 Released 2024-02-20.
