@@ -3,10 +3,13 @@
 //!
 //! This module checks:
 //! - that OpenVINO can be found in the environment
+//! - that WinML is available
 //! - that some ML model artifacts can be downloaded and cached.
 
 use anyhow::{anyhow, Context, Result};
 use std::{env, fs, path::Path, path::PathBuf, process::Command, sync::Mutex};
+#[cfg(feature = "winml")]
+use windows::AI::MachineLearning::{LearningModelDevice, LearningModelDeviceKind};
 
 /// Return the directory in which the test artifacts are stored.
 pub fn artifacts_dir() -> PathBuf {
@@ -41,6 +44,7 @@ pub fn check() -> Result<()> {
     }
     #[cfg(feature = "winml")]
     {
+        check_winml_is_available()?;
         check_winml_artifacts_are_available()?;
     }
     Ok(())
@@ -53,6 +57,19 @@ fn check_openvino_is_installed() -> Result<()> {
     {
         Ok(_) => Ok(()),
         Err(e) => Err(anyhow!("unable to find an OpenVINO installation: {:?}", e)),
+    }
+}
+
+#[cfg(feature = "winml")]
+fn check_winml_is_available() -> Result<()> {
+    match std::panic::catch_unwind(|| {
+        println!(
+            "> WinML learning device is available: {:?}",
+            LearningModelDevice::Create(LearningModelDeviceKind::Default)
+        )
+    }) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(anyhow!("WinML learning device is not available: {:?}", e)),
     }
 }
 

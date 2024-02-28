@@ -31,8 +31,11 @@ fn run(path: &str, preload_model: bool) -> Result<()> {
     {
         backends.push(Backend::from(backend::winml::WinMLBackend::default()));
     }
-    for backend in backends{
-        let mut store = Store::new(&engine, Ctx::new(&testing::artifacts_dir(), preload_model,backend)?);
+    for backend in backends {
+        let mut store = Store::new(
+            &engine,
+            Ctx::new(&testing::artifacts_dir(), preload_model, backend)?,
+        );
         let instance = linker.instantiate(&mut store, &module)?;
         let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
         start.call(&mut store, ())?;
