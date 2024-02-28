@@ -199,11 +199,11 @@ version = "1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.capstone]]
-version = "0.9.0"
+version = "0.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.capstone-sys]]
-version = "0.13.0"
+version = "0.16.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.cast]]
