@@ -2,6 +2,8 @@
 
 ## 18.0.2
 
+Released 2024-02-28.
+
 ### Fixed
 
 * Fix an egraph rule bug that was permitting an incorrect `ireduce` rewrite to
