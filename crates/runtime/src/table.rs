@@ -321,9 +321,7 @@ impl Table {
 
         for (item, slot) in items.zip(elements) {
             debug_assert!(ty.matches(&item));
-            unsafe {
-                *slot = item.into_table_value();
-            }
+            Self::set_raw(ty, slot, item);
         }
         Ok(())
     }
