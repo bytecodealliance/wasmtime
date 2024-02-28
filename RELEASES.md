@@ -2,6 +2,8 @@
 
 ## 17.0.2
 
+Released 2024-02-28
+
 ### Fixed
 
 * Fix an egraph rule bug that was permitting an incorrect `ireduce` rewrite to
@@ -11,6 +13,8 @@
 --------------------------------------------------------------------------------
 
 ## 17.0.1
+
+Released 2024-02-07
 
 ### Fixed
 
