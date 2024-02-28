@@ -250,18 +250,20 @@ where
             orig_value,
             &mut optimized_values,
         );
-        trace!(
-            "  -> returned from ISLE, generated {} optimized values",
-            optimized_values.len()
-        );
 
         // It's not supposed to matter what order `simplify` returns values in.
         self.ctrl_plane.shuffle(&mut optimized_values);
 
-        if optimized_values.len() > MATCHES_LIMIT {
-            trace!("Reached maximum matches limit; too many optimized values, ignoring rest.");
+        let num_matches = optimized_values.len();
+        if num_matches > MATCHES_LIMIT {
+            trace!(
+                "Reached maximum matches limit; too many optimized values \
+                 ({num_matches} > {MATCHES_LIMIT}); ignoring rest.",
+            );
             optimized_values.truncate(MATCHES_LIMIT);
         }
+
+        trace!("  -> returned from ISLE: {orig_value} -> {optimized_values:?}");
 
         // Create a union of all new values with the original (or
         // maybe just one new value marked as "subsuming" the
@@ -298,6 +300,7 @@ where
         }
 
         self.rewrite_depth -= 1;
+        trace!("Decrementing rewrite depth; now {}", self.rewrite_depth);
 
         debug_assert!(self.optimized_values.is_empty());
         self.optimized_values = optimized_values;
