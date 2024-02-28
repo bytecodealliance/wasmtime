@@ -595,7 +595,8 @@ mod test {
     i32.add
   )
   (export "test" (func 0))
-)"#
+)
+"#
         )
     }
 
