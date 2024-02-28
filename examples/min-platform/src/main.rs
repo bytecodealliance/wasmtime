@@ -1,11 +1,13 @@
+use anyhow::Result;
+
 #[cfg(not(target_os = "linux"))]
-fn main() {
+fn main() -> anyhow::Result<()> {
     eprintln!("This example only runs on Linux right now");
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
-    use anyhow::Result;
     use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
     use object::{Object, ObjectSymbol, SymbolKind};
     use std::io::Write;
