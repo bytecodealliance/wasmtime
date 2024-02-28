@@ -1,12 +1,12 @@
 #[cfg(feature = "gc")]
-mod gc_ref;
+mod enabled;
 #[cfg(feature = "gc")]
-pub use gc_ref::*;
+pub use enabled::*;
 
 #[cfg(not(feature = "gc"))]
-mod no_gc_ref;
+mod disabled;
 #[cfg(not(feature = "gc"))]
-pub use no_gc_ref::*;
+pub use disabled::*;
 
 use std::ops::Deref;
 

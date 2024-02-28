@@ -1,4 +1,4 @@
-use crate::r#ref::ExternRef;
+use crate::gc::ExternRef;
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, Func, HeapType, RefType, Rooted, ValType, V128};
 use anyhow::{bail, Context, Result};

@@ -14,7 +14,7 @@ pub(crate) mod linker;
 pub(crate) mod memory;
 pub(crate) mod module;
 pub(crate) mod profiling;
-pub(crate) mod r#ref;
+pub(crate) mod gc;
 pub(crate) mod resources;
 pub(crate) mod store;
 pub(crate) mod trampoline;
@@ -55,7 +55,7 @@ pub use limits::*;
 pub use linker::*;
 pub use memory::*;
 pub use module::{Module, ModuleExport};
-pub use r#ref::*;
+pub use gc::*;
 pub use resources::*;
 #[cfg(feature = "async")]
 pub use store::CallHookHandler;
