@@ -312,7 +312,7 @@ fn import_works() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
     let run = instance.get_func(&mut store, "run").unwrap();
     let funcref = Val::FuncRef(Some(Func::wrap(&mut store, || -> i32 { 42 })));
-    let externref = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())));
+    let externref = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())?));
     run.call(&mut store, &[externref, funcref], &mut [])?;
 
     assert_eq!(HITS.load(SeqCst), 4);

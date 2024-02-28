@@ -54,6 +54,9 @@ pub enum TrapCode {
 
     /// A null reference was encountered which was required to be non-null.
     NullReference,
+
+    /// A null `i31ref` was encountered which was required to be non-null.
+    NullI31Ref,
 }
 
 impl TrapCode {
@@ -93,6 +96,7 @@ impl Display for TrapCode {
             Interrupt => "interrupt",
             User(x) => return write!(f, "user{}", x),
             NullReference => "null_reference",
+            NullI31Ref => "null_i31ref",
         };
         f.write_str(identifier)
     }
@@ -116,6 +120,7 @@ impl FromStr for TrapCode {
             "unreachable" => Ok(UnreachableCodeReached),
             "interrupt" => Ok(Interrupt),
             "null_reference" => Ok(NullReference),
+            "null_i31ref" => Ok(NullI31Ref),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }

@@ -25,7 +25,7 @@
 ;;       stg     %r1, 0(%r15)
 ;;       clgfi   %r4, 0xffff
 ;;       jgh     0x36
-;;       ag      %r4, 0x50(%r2)
+;;       ag      %r4, 0x60(%r2)
 ;;       llilh   %r2, 0xffff
 ;;       stc     %r5, 0(%r2, %r4)
 ;;       lmg     %r14, %r15, 0x110(%r15)
@@ -39,7 +39,7 @@
 ;;       stg     %r1, 0(%r15)
 ;;       clgfi   %r4, 0xffff
 ;;       jgh     0x70
-;;       ag      %r4, 0x50(%r2)
+;;       ag      %r4, 0x60(%r2)
 ;;       llilh   %r2, 0xffff
 ;;       llc     %r2, 0(%r2, %r4)
 ;;       lmg     %r14, %r15, 0x110(%r15)

@@ -26,7 +26,7 @@
 ;;       lui     a4, 0x10
 ;;       addi    a4, a4, -1
 ;;       sltu    a4, a4, a2
-;;       ld      a5, 0x50(a0)
+;;       ld      a5, 0x60(a0)
 ;;       add     a5, a5, a2
 ;;       lui     a2, 0xffff
 ;;       slli    a0, a2, 4
@@ -48,7 +48,7 @@
 ;;       lui     a3, 0x10
 ;;       addi    a4, a3, -1
 ;;       sltu    a3, a4, a2
-;;       ld      a4, 0x50(a0)
+;;       ld      a4, 0x60(a0)
 ;;       add     a4, a4, a2
 ;;       lui     a2, 0xffff
 ;;       slli    a5, a2, 4

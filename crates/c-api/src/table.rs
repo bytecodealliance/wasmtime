@@ -36,6 +36,7 @@ fn option_wasm_ref_t_to_ref(r: Option<&wasm_ref_t>, table_ty: &TableType) -> Ref
     match (r.map(|r| r.r.clone()), table_ty.element().heap_type()) {
         (None, HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_)) => Ref::Func(None),
         (None, HeapType::Extern) => Ref::Extern(None),
+        (None, HeapType::Any | HeapType::I31 | HeapType::None) => Ref::Any(None),
         (Some(r), _) => r,
     }
 }

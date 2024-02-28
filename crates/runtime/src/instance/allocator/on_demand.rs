@@ -12,6 +12,9 @@ use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, VMOffsets,
 };
 
+#[cfg(feature = "gc")]
+use crate::{GcHeap, GcHeapAllocationIndex, GcRuntime};
+
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
@@ -192,5 +195,23 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         // allocator will never hand out protection keys to the stores its
         // engine creates.
         unreachable!()
+    }
+
+    #[cfg(feature = "gc")]
+    fn allocate_gc_heap(
+        &self,
+        gc_runtime: &dyn GcRuntime,
+    ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
+        Ok((GcHeapAllocationIndex::default(), gc_runtime.new_gc_heap()?))
+    }
+
+    #[cfg(feature = "gc")]
+    fn deallocate_gc_heap(
+        &self,
+        allocation_index: GcHeapAllocationIndex,
+        gc_heap: Box<dyn crate::GcHeap>,
+    ) {
+        debug_assert_eq!(allocation_index, GcHeapAllocationIndex::default());
+        drop(gc_heap);
     }
 }

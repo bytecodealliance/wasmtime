@@ -25,10 +25,10 @@
 ;;       mov     w12, #-0xffff
 ;;       adds    x11, x11, x12
 ;;       b.hs    #0x40
-;;   18: ldr     x12, [x0, #0x58]
+;;   18: ldr     x12, [x0, #0x68]
 ;;       cmp     x11, x12
 ;;       b.hi    #0x3c
-;;   24: ldr     x14, [x0, #0x50]
+;;   24: ldr     x14, [x0, #0x60]
 ;;       add     x14, x14, w2, uxtw
 ;;       mov     x15, #0xffff0000
 ;;       strb    w3, [x14, x15]
@@ -44,10 +44,10 @@
 ;;       mov     w12, #-0xffff
 ;;       adds    x11, x11, x12
 ;;       b.hs    #0xa0
-;;   78: ldr     x12, [x0, #0x58]
+;;   78: ldr     x12, [x0, #0x68]
 ;;       cmp     x11, x12
 ;;       b.hi    #0x9c
-;;   84: ldr     x14, [x0, #0x50]
+;;   84: ldr     x14, [x0, #0x60]
 ;;       add     x14, x14, w2, uxtw
 ;;       mov     x15, #0xffff0000
 ;;       ldrb    w0, [x14, x15]

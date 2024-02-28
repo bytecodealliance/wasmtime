@@ -88,21 +88,22 @@ impl Options {
 
         let realloc = self.realloc.unwrap();
 
+        let params = (
+            u32::try_from(old)?,
+            u32::try_from(old_size)?,
+            old_align,
+            u32::try_from(new_size)?,
+        );
+
+        type ReallocFunc = crate::TypedFunc<(u32, u32, u32, u32), u32>;
+
+        // This call doesn't take any GC refs, and therefore we shouldn't ever
+        // need to GC before entering Wasm.
+        debug_assert!(!ReallocFunc::need_gc_before_call_raw(store.0, &params));
+
         // Invoke the wasm malloc function using its raw and statically known
         // signature.
-        let result = unsafe {
-            crate::TypedFunc::<(u32, u32, u32, u32), u32>::call_raw(
-                store,
-                realloc_ty,
-                realloc,
-                (
-                    u32::try_from(old)?,
-                    u32::try_from(old_size)?,
-                    old_align,
-                    u32::try_from(new_size)?,
-                ),
-            )?
-        };
+        let result = unsafe { ReallocFunc::call_raw(store, realloc_ty, realloc, params)? };
 
         if result % old_align != 0 {
             bail!("realloc return: result not aligned");

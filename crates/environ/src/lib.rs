@@ -9,6 +9,7 @@
 mod address_map;
 mod builtin;
 mod demangling;
+mod gc;
 mod module;
 mod module_artifacts;
 mod module_types;
@@ -23,6 +24,7 @@ mod vmoffsets;
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::demangling::*;
+pub use crate::gc::*;
 pub use crate::module::*;
 pub use crate::module_artifacts::*;
 pub use crate::module_types::*;

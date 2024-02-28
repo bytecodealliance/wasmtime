@@ -9,7 +9,9 @@
 //      runtime_limits: *const VMRuntimeLimits,
 //      builtins: *mut VMBuiltinFunctionsArray,
 //      callee: *mut VMFunctionBody,
-//      externref_activations_table: *mut VMExternRefActivationsTable,
+//      gc_heap_base: *mut u8,
+//      gc_heap_bound: *mut u8,
+//      gc_heap_data: *mut T, // Collector-specific pointer
 //      store: *mut dyn Store,
 //      type_ids: *const VMSharedTypeIndex,
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
@@ -77,7 +79,9 @@ pub struct VMOffsets<P> {
     builtin_functions: u32,
     callee: u32,
     epoch_ptr: u32,
-    externref_activations_table: u32,
+    gc_heap_base: u32,
+    gc_heap_bound: u32,
+    gc_heap_data: u32,
     store: u32,
     type_ids: u32,
     imported_functions: u32,
@@ -361,7 +365,9 @@ impl<P: PtrSize> VMOffsets<P> {
             imported_functions: "imported functions",
             type_ids: "module types",
             store: "jit store state",
-            externref_activations_table: "jit host externref state",
+            gc_heap_data: "GC implementation-specific data",
+            gc_heap_bound: "GC heap bound",
+            gc_heap_base: "GC heap base",
             epoch_ptr: "jit current epoch state",
             callee: "callee function pointer",
             builtin_functions: "jit builtin functions state",
@@ -389,7 +395,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             builtin_functions: 0,
             callee: 0,
             epoch_ptr: 0,
-            externref_activations_table: 0,
+            gc_heap_base: 0,
+            gc_heap_bound: 0,
+            gc_heap_data: 0,
             store: 0,
             type_ids: 0,
             imported_functions: 0,
@@ -440,7 +448,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(builtin_functions) = ret.ptr.size(),
             size(callee) = ret.ptr.size(),
             size(epoch_ptr) = ret.ptr.size(),
-            size(externref_activations_table) = ret.ptr.size(),
+            size(gc_heap_base) = ret.ptr.size(),
+            size(gc_heap_bound) = ret.ptr.size(),
+            size(gc_heap_data) = ret.ptr.size(),
             size(store) = ret.ptr.size() * 2,
             size(type_ids) = ret.ptr.size(),
             size(imported_functions)
@@ -635,10 +645,25 @@ impl<P: PtrSize> VMOffsets<P> {
         self.epoch_ptr
     }
 
-    /// The offset of the `*mut VMExternRefActivationsTable` member.
+    /// Return the offset to the GC heap base in this `VMContext`.
     #[inline]
-    pub fn vmctx_externref_activations_table(&self) -> u32 {
-        self.externref_activations_table
+    pub fn vmctx_gc_heap_base(&self) -> u32 {
+        self.gc_heap_base
+    }
+
+    /// Return the offset to the GC heap bound in this `VMContext`.
+    #[inline]
+    pub fn vmctx_gc_heap_bound(&self) -> u32 {
+        self.gc_heap_bound
+    }
+
+    /// Return the offset to the `*mut T` collector-specific data.
+    ///
+    /// This is a pointer that different collectors can use however they see
+    /// fit.
+    #[inline]
+    pub fn vmctx_gc_heap_data(&self) -> u32 {
+        self.gc_heap_data
     }
 
     /// The offset of the `*const dyn Store` member.
@@ -865,26 +890,30 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMExternData`.
+/// Offsets for `VMDrcHeader`.
+///
+/// Should only be used when the DRC collector is enabled.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset for `VMExternData::ref_count`.
+    /// Return the offset for `VMDrcHeader::ref_count`.
     #[inline]
-    pub fn vm_extern_data_ref_count(&self) -> u32 {
-        0
+    pub fn vm_drc_header_ref_count(&self) -> u32 {
+        8
     }
 }
 
-/// Offsets for `VMExternRefActivationsTable`.
+/// Offsets for `VMGcRefActivationsTable`.
+///
+/// These should only be used when the DRC collector is enabled.
 impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset for `VMExternRefActivationsTable::next`.
+    /// Return the offset for `VMGcRefActivationsTable::next`.
     #[inline]
-    pub fn vm_extern_ref_activation_table_next(&self) -> u32 {
+    pub fn vm_gc_ref_activation_table_next(&self) -> u32 {
         0
     }
 
-    /// Return the offset for `VMExternRefActivationsTable::end`.
+    /// Return the offset for `VMGcRefActivationsTable::end`.
     #[inline]
-    pub fn vm_extern_ref_activation_table_end(&self) -> u32 {
+    pub fn vm_gc_ref_activation_table_end(&self) -> u32 {
         self.pointer_size().into()
     }
 }

@@ -29,7 +29,7 @@
 ;;       addi    a5, a4, -1
 ;;       slli    a2, a5, 2
 ;;       bltu    a2, a1, 0x20
-;;       ld      a0, 0x50(a0)
+;;       ld      a0, 0x60(a0)
 ;;       add     a0, a0, a1
 ;;       sw      a3, 0(a0)
 ;;       ld      ra, 8(sp)
@@ -49,7 +49,7 @@
 ;;       addi    a5, a3, -1
 ;;       slli    a2, a5, 2
 ;;       bltu    a2, a1, 0x20
-;;       ld      a0, 0x50(a0)
+;;       ld      a0, 0x60(a0)
 ;;       add     a0, a0, a1
 ;;       lw      a0, 0(a0)
 ;;       ld      ra, 8(sp)

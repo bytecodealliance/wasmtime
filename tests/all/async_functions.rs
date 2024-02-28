@@ -967,16 +967,18 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
             Ok(())
         },
     )?;
-    linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, _>, val: i32| {
+    linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, Option<F>>, val: i32| {
         let func = cx.data().clone().unwrap();
-        let r = Some(ExternRef::new(&mut cx, val));
-        Box::new(async move { func.call_async(&mut cx, (val, r)).await })
+        Box::new(async move {
+            let r = Some(ExternRef::new(&mut cx, val)?);
+            Ok(func.call_async(&mut cx, (val, r)).await)
+        })
     })?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let func: F = instance.get_typed_func(&mut store, "run")?;
     *store.data_mut() = Some(func.clone());
 
-    let r = Some(ExternRef::new(&mut store, 5));
+    let r = Some(ExternRef::new(&mut store, 5)?);
     func.call_async(&mut store, (5, r)).await?;
 
     Ok(())

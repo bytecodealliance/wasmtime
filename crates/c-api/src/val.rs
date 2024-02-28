@@ -183,6 +183,7 @@ impl wasmtime_val_t {
                 of: wasmtime_val_union { f64: i },
             },
             Val::ExternRef(_) => crate::abort("externref"),
+            Val::AnyRef(_) => crate::abort("anyref"),
             Val::FuncRef(func) => wasmtime_val_t {
                 kind: crate::WASMTIME_FUNCREF,
                 of: wasmtime_val_union {

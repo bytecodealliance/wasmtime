@@ -16,7 +16,7 @@ pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
         V128(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes()).into()),
         RefNull(HeapType::Extern) => Val::ExternRef(None),
         RefNull(HeapType::Func) => Val::FuncRef(None),
-        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x))),
+        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x)?)),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
 }
@@ -58,7 +58,10 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
         (Val::V128(a), WastRetCore::V128(b)) => match_v128(a.as_u128(), b),
 
         // Null references.
-        (Val::FuncRef(None) | Val::ExternRef(None), WastRetCore::RefNull(_))
+        (
+            Val::FuncRef(None) | Val::ExternRef(None) | Val::AnyRef(None),
+            WastRetCore::RefNull(_),
+        )
         | (Val::ExternRef(None), WastRetCore::RefExtern(None)) => Ok(()),
 
         // Null and non-null mismatches.
@@ -87,6 +90,14 @@ pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> R
                 Ok(())
             } else {
                 bail!("expected {} found {}", y, x);
+            }
+        }
+
+        (Val::AnyRef(Some(x)), WastRetCore::RefI31) => {
+            if x.is_i31(store)? {
+                Ok(())
+            } else {
+                bail!("expected a `(ref i31)`, found {x:?}");
             }
         }
 

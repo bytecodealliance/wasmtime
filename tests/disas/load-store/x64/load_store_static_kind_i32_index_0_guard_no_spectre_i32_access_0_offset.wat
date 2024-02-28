@@ -24,7 +24,7 @@
 ;;       movl    %edx, %r9d
 ;;       cmpq    0x1a(%rip), %r9
 ;;       ja      0x21
-;;   14: movq    0x50(%rdi), %r11
+;;   14: movq    0x60(%rdi), %r11
 ;;       movl    %ecx, (%r11, %r9)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
@@ -40,7 +40,7 @@
 ;;       movl    %edx, %r9d
 ;;       cmpq    0x1a(%rip), %r9
 ;;       ja      0x51
-;;   44: movq    0x50(%rdi), %r11
+;;   44: movq    0x60(%rdi), %r11
 ;;       movl    (%r11, %r9), %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
