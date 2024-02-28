@@ -20,7 +20,7 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ldr x6, [x0, #80]
+;;   ldr x6, [x0, #96]
 ;;   add x6, x6, #4096
 ;;   str w3, [x6, w2, UXTW]
 ;;   b label1
@@ -29,7 +29,7 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ldr x6, [x0, #80]
+;;   ldr x6, [x0, #96]
 ;;   add x5, x6, #4096
 ;;   ldr w0, [x5, w2, UXTW]
 ;;   b label1

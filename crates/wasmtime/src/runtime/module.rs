@@ -1062,6 +1062,16 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.module.module()
     }
 
+    fn engine_type_index(
+        &self,
+        module_index: wasmtime_environ::ModuleInternedTypeIndex,
+    ) -> VMSharedTypeIndex {
+        self.code
+            .signatures()
+            .shared_type(module_index)
+            .expect("bad module-level interned type index")
+    }
+
     fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
         let ptr = self
             .module
@@ -1186,6 +1196,13 @@ impl BareModuleInfo {
 impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
     fn module(&self) -> &Arc<wasmtime_environ::Module> {
         &self.module
+    }
+
+    fn engine_type_index(
+        &self,
+        _module_index: wasmtime_environ::ModuleInternedTypeIndex,
+    ) -> VMSharedTypeIndex {
+        unreachable!()
     }
 
     fn function(&self, _index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {

@@ -20,8 +20,8 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld a4,88(a0)
-;;   ld a5,80(a0)
+;;   ld a4,104(a0)
+;;   ld a5,96(a0)
 ;;   slli a2,a2,32
 ;;   srli a0,a2,32
 ;;   sltu a4,a4,a0
@@ -38,8 +38,8 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld a3,88(a0)
-;;   ld a4,80(a0)
+;;   ld a3,104(a0)
+;;   ld a4,96(a0)
 ;;   slli a2,a2,32
 ;;   srli a5,a2,32
 ;;   sltu a3,a3,a5

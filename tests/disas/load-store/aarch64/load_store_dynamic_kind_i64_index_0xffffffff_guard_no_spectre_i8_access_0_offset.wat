@@ -20,11 +20,11 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ldr x6, [x0, #88]
+;;   ldr x6, [x0, #104]
 ;;   subs xzr, x2, x6
 ;;   b.hs label3 ; b label1
 ;; block1:
-;;   ldr x8, [x0, #80]
+;;   ldr x8, [x0, #96]
 ;;   strb w3, [x8, x2]
 ;;   b label2
 ;; block2:
@@ -34,11 +34,11 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ldr x6, [x0, #88]
+;;   ldr x6, [x0, #104]
 ;;   subs xzr, x2, x6
 ;;   b.hs label3 ; b label1
 ;; block1:
-;;   ldr x8, [x0, #80]
+;;   ldr x8, [x0, #96]
 ;;   ldrb w0, [x8, x2]
 ;;   b label2
 ;; block2:

@@ -41,6 +41,11 @@ pub unsafe fn decommit_table_pages(addr: *mut u8, len: usize) -> io::Result<()> 
     erase_existing_mapping(addr, len)
 }
 
+#[cfg(feature = "pooling-allocator")]
+pub unsafe fn decommit_gc_heap_pages(addr: *mut u8, len: usize) -> io::Result<()> {
+    erase_existing_mapping(addr, len)
+}
+
 pub fn get_page_size() -> usize {
     unsafe {
         let mut info = MaybeUninit::uninit();

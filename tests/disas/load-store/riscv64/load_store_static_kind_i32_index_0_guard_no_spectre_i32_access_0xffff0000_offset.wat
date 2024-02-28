@@ -26,7 +26,7 @@
 ;;   addi a4,a1,-4
 ;;   bgtu a2,a4,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a4,80(a0)
+;;   ld a4,96(a0)
 ;;   add a2,a4,a2
 ;;   lui a1,65535
 ;;   slli a4,a1,4
@@ -46,7 +46,7 @@
 ;;   addi a3,a1,-4
 ;;   bgtu a2,a3,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a3,80(a0)
+;;   ld a3,96(a0)
 ;;   add a2,a3,a2
 ;;   lui a1,65535
 ;;   slli a3,a1,4

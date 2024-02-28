@@ -36,7 +36,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned gv3+88
 ;;     sig0 = (i64 vmctx, i64) fast
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     stack_limit = gv2
@@ -45,7 +45,7 @@
 ;;                                     v15 -> v0
 ;;                                     v19 -> v0
 ;;                                     v26 -> v0
-;; @0031                               v6 = load.i64 notrap aligned v0+72
+;; @0031                               v6 = load.i64 notrap aligned v0+88
 ;; @0031                               v3 = iconst.i32 2
 ;; @0031                               v4 = icmp uge v2, v3  ; v3 = 2
 ;; @0031                               v9 = iconst.i64 0
@@ -60,7 +60,7 @@
 ;; @0031                               brif v11, block3(v12), block2
 ;;
 ;;                                 block2 cold:
-;; @0031                               v16 = load.i64 notrap aligned readonly v0+56
+;; @0031                               v16 = load.i64 notrap aligned readonly v0+72
 ;; @0031                               v17 = load.i64 notrap aligned readonly v16+72
 ;; @0031                               v14 = iconst.i32 0
 ;; @0031                               v18 = call_indirect sig1, v17(v0, v14, v2)  ; v14 = 0
@@ -68,7 +68,7 @@
 ;;
 ;;                                 block3(v13: i64):
 ;; @0031                               v22 = load.i32 icall_null aligned readonly v13+24
-;; @0031                               v20 = load.i64 notrap aligned readonly v0+64
+;; @0031                               v20 = load.i64 notrap aligned readonly v0+80
 ;; @0031                               v21 = load.i32 notrap aligned readonly v20
 ;; @0031                               v23 = icmp eq v22, v21
 ;; @0031                               brif v23, block5, block4

@@ -35,7 +35,7 @@
 ;; block0:
 ;;   lghi %r3, 0
 ;;   lgr %r6, %r4
-;;   ag %r6, 80(%r2)
+;;   ag %r6, 96(%r2)
 ;;   llilh %r2, 65535
 ;;   agrk %r2, %r6, %r2
 ;;   clgfi %r4, 65535
@@ -52,7 +52,7 @@
 ;; block0:
 ;;   lghi %r3, 0
 ;;   lgr %r5, %r4
-;;   ag %r5, 80(%r2)
+;;   ag %r5, 96(%r2)
 ;;   llilh %r2, 65535
 ;;   agrk %r2, %r5, %r2
 ;;   clgfi %r4, 65535

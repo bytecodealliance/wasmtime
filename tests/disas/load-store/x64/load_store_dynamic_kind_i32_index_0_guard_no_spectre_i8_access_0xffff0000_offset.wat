@@ -28,11 +28,11 @@
 ;;   movq    %r9, %rsi
 ;;   addq    %rsi, const(0), %rsi
 ;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %rax
+;;   movq    104(%rdi), %rax
 ;;   cmpq    %rax, %rsi
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %r9, 80(%rdi), %r9
+;;   addq    %r9, 96(%rdi), %r9
 ;;   movl    $-65536, %edx
 ;;   movb    %cl, 0(%r9,%rdx,1)
 ;;   jmp     label2
@@ -53,11 +53,11 @@
 ;;   movq    %r9, %rsi
 ;;   addq    %rsi, const(0), %rsi
 ;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %rax
+;;   movq    104(%rdi), %rax
 ;;   cmpq    %rax, %rsi
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %r9, 80(%rdi), %r9
+;;   addq    %r9, 96(%rdi), %r9
 ;;   movl    $-65536, %ecx
 ;;   movzbq  0(%r9,%rcx,1), %rax
 ;;   jmp     label2

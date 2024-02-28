@@ -348,6 +348,9 @@ impl<T> Linker<T> {
                                             | HeapType::Concrete(_)
                                             | HeapType::NoFunc => Val::null_func_ref(),
                                             HeapType::Extern => Val::null_extern_ref(),
+                                            HeapType::Any | HeapType::I31 | HeapType::None => {
+                                                Val::null_any_ref()
+                                            }
                                         }
                                     }
                                 };

@@ -1,7 +1,7 @@
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{array_call_signature, native_call_signature, DEBUG_ASSERT_TRAP_CODE};
-use crate::{builder::LinkOptions, value_type, wasm_call_signature};
+use crate::{builder::LinkOptions, wasm_call_signature};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
     self, InstBuilder, MemFlags, UserExternalName, UserExternalNameRef, UserFuncName, Value,
@@ -430,12 +430,14 @@ impl wasmtime_environ::Compiler for Compiler {
             let slot = *args.last().unwrap();
             assert_eq!(offsets.len(), wasm_func_ty.returns().len() - 1);
             for (ty, offset) in wasm_func_ty.returns()[1..].iter().zip(offsets) {
-                let ty = crate::value_type(isa, *ty);
-                results.push(
-                    builder
-                        .ins()
-                        .load(ty, MemFlags::trusted(), slot, offset as i32),
-                );
+                results.push(crate::unbarriered_load_type_at_offset(
+                    isa,
+                    &mut builder.cursor(),
+                    *ty,
+                    ir::MemFlags::trusted(),
+                    slot,
+                    i32::try_from(offset).unwrap(),
+                ));
             }
         }
         builder.ins().return_(&results);
@@ -897,6 +899,7 @@ impl Compiler {
         values_vec_ptr: Value,
         values_vec_capacity: Value,
     ) {
+        debug_assert_eq!(types.len(), values.len());
         debug_assert_enough_capacity_for_length(builder, types.len(), values_vec_capacity);
 
         // Note that loads and stores are unconditionally done in the
@@ -904,14 +907,19 @@ impl Compiler {
         // despite this load/store being unrelated to execution in wasm itself.
         // For more details on this see the `ValRaw` type in the
         // `wasmtime-runtime` crate.
-        let mut mflags = MemFlags::trusted();
-        mflags.set_endianness(ir::Endianness::Little);
+        let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
 
         let value_size = mem::size_of::<u128>();
-        for (i, val) in values.iter().copied().enumerate() {
-            builder
-                .ins()
-                .store(mflags, val, values_vec_ptr, (i * value_size) as i32);
+        for (i, (val, ty)) in values.iter().copied().zip(types).enumerate() {
+            crate::unbarriered_store_type_at_offset(
+                &*self.isa,
+                &mut builder.cursor(),
+                *ty,
+                flags,
+                values_vec_ptr,
+                i32::try_from(i * value_size).unwrap(),
+                val,
+            );
         }
     }
 
@@ -936,18 +944,18 @@ impl Compiler {
 
         // Note that this is little-endian like `store_values_to_array` above,
         // see notes there for more information.
-        let mut mflags = MemFlags::trusted();
-        mflags.set_endianness(ir::Endianness::Little);
+        let flags = MemFlags::trusted().with_endianness(ir::Endianness::Little);
 
         let mut results = Vec::new();
-        for (i, r) in types.iter().enumerate() {
-            let load = builder.ins().load(
-                value_type(isa, *r),
-                mflags,
+        for (i, ty) in types.iter().enumerate() {
+            results.push(crate::unbarriered_load_type_at_offset(
+                isa,
+                &mut builder.cursor(),
+                *ty,
+                flags,
                 values_vec_ptr,
-                (i * value_size) as i32,
-            );
-            results.push(load);
+                i32::try_from(i * value_size).unwrap(),
+            ));
         }
         results
     }

@@ -20,7 +20,7 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ldr x5, [x0, #80]
+;;   ldr x5, [x0, #96]
 ;;   strb w3, [x5, w2, UXTW]
 ;;   b label1
 ;; block1:
@@ -28,7 +28,7 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ldr x5, [x0, #80]
+;;   ldr x5, [x0, #96]
 ;;   ldrb w0, [x5, w2, UXTW]
 ;;   b label1
 ;; block1:

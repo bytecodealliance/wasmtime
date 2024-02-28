@@ -259,7 +259,9 @@ fn fact_import_to_core_def(
 ) -> dfg::CoreDef {
     let mut simple_intrinsic = |trampoline: dfg::Trampoline| {
         let signature = ty.unwrap_func();
-        let index = dfg.trampolines.push((signature, trampoline));
+        let index = dfg
+            .trampolines
+            .push((signature.unwrap_module_type_index(), trampoline));
         dfg::CoreDef::Trampoline(index)
     };
     match import {
@@ -285,7 +287,7 @@ fn fact_import_to_core_def(
             let to = dfg.memories.push(unwrap_memory(to));
             let signature = ty.unwrap_func();
             let index = dfg.trampolines.push((
-                signature,
+                signature.unwrap_module_type_index(),
                 dfg::Trampoline::Transcoder {
                     op: *op,
                     from,

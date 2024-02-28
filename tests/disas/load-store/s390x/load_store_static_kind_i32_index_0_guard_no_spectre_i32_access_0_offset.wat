@@ -26,7 +26,7 @@
 ;;   clgfi %r4, 4294967292
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   lg %r2, 80(%r2)
+;;   lg %r2, 96(%r2)
 ;;   strv %r5, 0(%r4,%r2)
 ;;   jg label2
 ;; block2:
@@ -42,7 +42,7 @@
 ;;   clgfi %r4, 4294967292
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   lg %r2, 80(%r2)
+;;   lg %r2, 96(%r2)
 ;;   lrv %r2, 0(%r4,%r2)
 ;;   jg label2
 ;; block2:

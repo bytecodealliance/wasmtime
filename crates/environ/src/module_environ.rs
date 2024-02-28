@@ -258,7 +258,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let sig_index = self.result.module.types[index].unwrap_function();
                             self.result.module.num_imported_funcs += 1;
                             self.result.debuginfo.wasm_file.imported_func_count += 1;
-                            EntityType::Function(sig_index)
+                            EntityType::Function(wasmtime_types::EngineOrModuleTypeIndex::Module(
+                                sig_index,
+                            ))
                         }
                         TypeRef::Memory(ty) => {
                             self.result.module.num_imported_memories += 1;
@@ -778,7 +780,11 @@ and for re-adding support for interface types you can see this issue:
 
     fn push_type(&mut self, ty: EntityType) -> EntityIndex {
         match ty {
-            EntityType::Function(ty) => EntityIndex::Function(self.result.module.push_function(ty)),
+            EntityType::Function(ty) => EntityIndex::Function(
+                self.result
+                    .module
+                    .push_function(ty.unwrap_module_type_index()),
+            ),
             EntityType::Table(ty) => {
                 let plan = TablePlan::for_table(ty, &self.tunables);
                 EntityIndex::Table(self.result.module.table_plans.push(plan))

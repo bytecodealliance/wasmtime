@@ -20,7 +20,7 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld a5,80(a0)
+;;   ld a5,96(a0)
 ;;   slli a4,a2,32
 ;;   srli a0,a4,32
 ;;   add a5,a5,a0
@@ -34,7 +34,7 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld a5,80(a0)
+;;   ld a5,96(a0)
 ;;   slli a4,a2,32
 ;;   srli a0,a4,32
 ;;   add a5,a5,a0

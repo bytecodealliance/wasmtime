@@ -23,10 +23,10 @@
 ;;   ld a1,[const(0)]
 ;;   add a1,a2,a1
 ;;   trap_if heap_oob##(a1 ult a2)
-;;   ld a4,88(a0)
+;;   ld a4,104(a0)
 ;;   bgtu a1,a4,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a4,80(a0)
+;;   ld a4,96(a0)
 ;;   add a2,a4,a2
 ;;   lui a1,65535
 ;;   slli a4,a1,4
@@ -43,10 +43,10 @@
 ;;   ld a1,[const(0)]
 ;;   add a1,a2,a1
 ;;   trap_if heap_oob##(a1 ult a2)
-;;   ld a3,88(a0)
+;;   ld a3,104(a0)
 ;;   bgtu a1,a3,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a3,80(a0)
+;;   ld a3,96(a0)
 ;;   add a2,a3,a2
 ;;   lui a1,65535
 ;;   slli a3,a1,4

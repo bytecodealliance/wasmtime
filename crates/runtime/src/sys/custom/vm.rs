@@ -42,6 +42,19 @@ pub unsafe fn decommit_table_pages(addr: *mut u8, len: usize) -> io::Result<()> 
     ))
 }
 
+#[cfg(feature = "pooling-allocator")]
+pub unsafe fn decommit_gc_heap_pages(addr: *mut u8, len: usize) -> io::Result<()> {
+    if len == 0 {
+        return Ok(());
+    }
+
+    cvt(capi::wasmtime_mmap_remap(
+        addr,
+        len,
+        capi::PROT_READ | capi::PROT_WRITE,
+    ))
+}
+
 pub fn get_page_size() -> usize {
     unsafe { capi::wasmtime_page_size() }
 }

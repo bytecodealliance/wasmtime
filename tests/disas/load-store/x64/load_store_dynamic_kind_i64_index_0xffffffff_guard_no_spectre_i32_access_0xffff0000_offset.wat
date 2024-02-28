@@ -24,11 +24,11 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    88(%rdi), %r10
+;;   movq    104(%rdi), %r10
 ;;   cmpq    %r10, %rdx
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %rdx, 80(%rdi), %rdx
+;;   addq    %rdx, 96(%rdi), %rdx
 ;;   movl    $-65536, %esi
 ;;   movl    %ecx, 0(%rdx,%rsi,1)
 ;;   jmp     label2
@@ -45,11 +45,11 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    88(%rdi), %r10
+;;   movq    104(%rdi), %r10
 ;;   cmpq    %r10, %rdx
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %rdx, 80(%rdi), %rdx
+;;   addq    %rdx, 96(%rdi), %rdx
 ;;   movl    $-65536, %esi
 ;;   movl    0(%rdx,%rsi,1), %eax
 ;;   jmp     label2

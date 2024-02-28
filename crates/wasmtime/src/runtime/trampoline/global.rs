@@ -1,5 +1,5 @@
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{GlobalType, HeapType, Mutability, Result, Val};
+use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
 use std::ptr;
 use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
@@ -7,26 +7,6 @@ use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 pub struct VMHostGlobalContext {
     pub(crate) ty: GlobalType,
     pub(crate) global: VMGlobalDefinition,
-}
-
-impl Drop for VMHostGlobalContext {
-    fn drop(&mut self) {
-        match self.ty.content() {
-            crate::ValType::I32
-            | crate::ValType::I64
-            | crate::ValType::F32
-            | crate::ValType::F64
-            | crate::ValType::V128 => {
-                // Nothing to drop.
-            }
-            crate::ValType::Ref(r) => match r.heap_type() {
-                HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => {
-                    // Nothing to drop.
-                }
-                HeapType::Extern => unsafe { ptr::drop_in_place(self.global.as_externref_mut()) },
-            },
-        }
-    }
 }
 
 pub fn generate_global_export(
@@ -60,15 +40,29 @@ pub fn generate_global_export(
                     f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&mut store).as_ptr());
             }
             Val::ExternRef(x) => {
-                *global.as_externref_mut() = match x {
+                let new = match x {
                     None => None,
-                    Some(x) => Some(x.try_to_vm_extern_ref(&mut store)?),
+                    Some(x) => Some(x.try_gc_ref(&mut store)?.unchecked_copy()),
                 };
+                let new = new.as_ref();
+                global.write_gc_ref(store.gc_store_mut()?, new);
+            }
+            Val::AnyRef(a) => {
+                let new = match a {
+                    None => None,
+                    Some(a) => Some(a.try_gc_ref(&mut store)?.unchecked_copy()),
+                };
+                let new = new.as_ref();
+                global.write_gc_ref(store.gc_store_mut()?, new);
             }
         }
         global
     };
 
     store.host_globals().push(ctx);
-    Ok(wasmtime_runtime::ExportGlobal { definition, global })
+    Ok(wasmtime_runtime::ExportGlobal {
+        definition,
+        vmctx: std::ptr::null_mut(),
+        global,
+    })
 }

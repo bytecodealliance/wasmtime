@@ -447,15 +447,7 @@ impl TypeRegistryInner {
         module_to_shared: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         ty: &mut WasmFuncType,
     ) {
-        ty.trace_mut::<_, ()>(&mut |index| match index {
-            EngineOrModuleTypeIndex::Engine(_) => unreachable!("already canonicalized?"),
-            EngineOrModuleTypeIndex::Module(module_index) => {
-                *index = EngineOrModuleTypeIndex::Engine(module_to_shared[*module_index].bits());
-                Ok(())
-            }
-        })
-        .unwrap();
-
+        ty.canonicalize(&mut |module_index| module_to_shared[module_index].bits());
         debug_assert!(self.is_canonicalized(ty))
     }
 

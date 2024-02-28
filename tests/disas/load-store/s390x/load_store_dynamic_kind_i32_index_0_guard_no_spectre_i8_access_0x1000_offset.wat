@@ -23,13 +23,13 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   lgr %r3, %r4
-;;   lg %r4, 88(%r2)
+;;   lg %r4, 104(%r2)
 ;;   llgfr %r3, %r3
 ;;   aghi %r4, -4097
 ;;   clgr %r3, %r4
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   ag %r3, 80(%r2)
+;;   ag %r3, 96(%r2)
 ;;   lghi %r2, 4096
 ;;   stc %r5, 0(%r2,%r3)
 ;;   jg label2
@@ -42,13 +42,13 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lg %r3, 88(%r2)
+;;   lg %r3, 104(%r2)
 ;;   llgfr %r5, %r4
 ;;   aghi %r3, -4097
 ;;   clgr %r5, %r3
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   ag %r5, 80(%r2)
+;;   ag %r5, 96(%r2)
 ;;   lghi %r2, 4096
 ;;   llc %r2, 0(%r2,%r5)
 ;;   jg label2

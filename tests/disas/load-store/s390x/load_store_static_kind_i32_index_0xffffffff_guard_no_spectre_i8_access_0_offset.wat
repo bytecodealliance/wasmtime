@@ -23,7 +23,7 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   lgr %r3, %r4
-;;   lg %r4, 80(%r2)
+;;   lg %r4, 96(%r2)
 ;;   lgr %r2, %r3
 ;;   llgfr %r2, %r2
 ;;   stc %r5, 0(%r2,%r4)
@@ -36,7 +36,7 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   lgr %r5, %r4
-;;   lg %r4, 80(%r2)
+;;   lg %r4, 96(%r2)
 ;;   lgr %r2, %r5
 ;;   llgfr %r5, %r2
 ;;   llc %r2, 0(%r5,%r4)

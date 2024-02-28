@@ -49,6 +49,7 @@ pub fn dummy_value(val_ty: ValType) -> Result<Val> {
             _ if !r.is_nullable() => bail!("cannot construct a dummy value of type `{r}`"),
             HeapType::Extern => Val::null_extern_ref(),
             HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_) => Val::null_func_ref(),
+            HeapType::Any | HeapType::I31 | HeapType::None => Val::null_any_ref(),
         },
     })
 }

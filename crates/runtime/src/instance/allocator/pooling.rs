@@ -22,16 +22,20 @@ mod index_allocator;
 mod memory_pool;
 mod table_pool;
 
+#[cfg(feature = "gc")]
+mod gc_heap_pool;
+
 #[cfg(all(feature = "async", unix, not(miri)))]
 mod stack_pool;
 
 use super::{
-    InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
+    GcHeapAllocationIndex, InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex,
+    TableAllocationIndex,
 };
 use crate::{
     instance::Instance,
     mpk::{self, MpkEnabled, ProtectionKey, ProtectionMask},
-    CompiledModuleId, Memory, Table,
+    CompiledModuleId, GcHeap, GcRuntime, Memory, Table,
 };
 use anyhow::{bail, Result};
 use memory_pool::MemoryPool;
@@ -44,6 +48,9 @@ use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, Tunables,
     VMOffsets,
 };
+
+#[cfg(feature = "gc")]
+use gc_heap_pool::GcHeapPool;
 
 #[cfg(all(feature = "async", unix, not(miri)))]
 use stack_pool::StackPool;
@@ -112,6 +119,10 @@ pub struct InstanceLimits {
 
     /// Maximum number of Wasm pages for each linear memory.
     pub memory_pages: u64,
+
+    /// The total number of GC heaps in the pool, across all instances.
+    #[cfg(feature = "gc")]
+    pub total_gc_heaps: u32,
 }
 
 impl Default for InstanceLimits {
@@ -134,6 +145,8 @@ impl Default for InstanceLimits {
             table_elements: 10_000,
             max_memories_per_module: 1,
             memory_pages: 160,
+            #[cfg(feature = "gc")]
+            total_gc_heaps: 1000,
         }
     }
 }
@@ -213,6 +226,9 @@ pub struct PoolingInstanceAllocator {
     memories: MemoryPool,
     tables: TablePool,
 
+    #[cfg(feature = "gc")]
+    gc_heaps: GcHeapPool,
+
     #[cfg(all(feature = "async", unix, not(miri)))]
     stacks: StackPool,
 
@@ -230,6 +246,9 @@ impl Drop for PoolingInstanceAllocator {
         debug_assert!(self.memories.is_empty());
         debug_assert!(self.tables.is_empty());
 
+        #[cfg(feature = "gc")]
+        debug_assert!(self.gc_heaps.is_empty());
+
         #[cfg(all(feature = "async", unix, not(miri)))]
         debug_assert!(self.stacks.is_empty());
         #[cfg(all(feature = "async", windows))]
@@ -246,6 +265,8 @@ impl PoolingInstanceAllocator {
             live_core_instances: AtomicU64::new(0),
             memories: MemoryPool::new(config, tunables)?,
             tables: TablePool::new(config)?,
+            #[cfg(feature = "gc")]
+            gc_heaps: GcHeapPool::new(config)?,
             #[cfg(all(feature = "async", unix, not(miri)))]
             stacks: StackPool::new(config)?,
             #[cfg(all(feature = "async", windows))]
@@ -557,6 +578,23 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
 
     fn allow_all_pkeys(&self) {
         mpk::allow(ProtectionMask::all());
+    }
+
+    #[cfg(feature = "gc")]
+    fn allocate_gc_heap(
+        &self,
+        gc_runtime: &dyn GcRuntime,
+    ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
+        self.gc_heaps.allocate(gc_runtime)
+    }
+
+    #[cfg(feature = "gc")]
+    fn deallocate_gc_heap(
+        &self,
+        allocation_index: GcHeapAllocationIndex,
+        gc_heap: Box<dyn GcHeap>,
+    ) {
+        self.gc_heaps.deallocate(allocation_index, gc_heap);
     }
 }
 

@@ -25,8 +25,8 @@
 ;;   slli a4,a1,2
 ;;   add a1,a2,a4
 ;;   trap_if heap_oob##(a1 ult a2)
-;;   ld a4,88(a0)
-;;   ld a5,80(a0)
+;;   ld a4,104(a0)
+;;   ld a5,96(a0)
 ;;   sltu a1,a4,a1
 ;;   add a2,a5,a2
 ;;   lui a0,65535
@@ -47,8 +47,8 @@
 ;;   slli a3,a1,2
 ;;   add a1,a2,a3
 ;;   trap_if heap_oob##(a1 ult a2)
-;;   ld a3,88(a0)
-;;   ld a4,80(a0)
+;;   ld a3,104(a0)
+;;   ld a4,96(a0)
 ;;   sltu a1,a3,a1
 ;;   add a2,a4,a2
 ;;   lui a0,65535

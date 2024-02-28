@@ -27,7 +27,7 @@
 ;; block0:
 ;;   lghi %r14, 0
 ;;   lgr %r3, %r4
-;;   ag %r3, 80(%r2)
+;;   ag %r3, 96(%r2)
 ;;   aghi %r3, 4096
 ;;   clgfi %r4, 4294963196
 ;;   locgrh %r3, %r14
@@ -43,7 +43,7 @@
 ;; block0:
 ;;   lghi %r3, 0
 ;;   lgr %r5, %r4
-;;   ag %r5, 80(%r2)
+;;   ag %r5, 96(%r2)
 ;;   aghi %r5, 4096
 ;;   clgfi %r4, 4294963196
 ;;   locgrh %r5, %r3

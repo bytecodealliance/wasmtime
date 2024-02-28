@@ -28,9 +28,9 @@
 ;;   movq    %r11, %rdx
 ;;   addq    %rdx, const(0), %rdx
 ;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %r9
+;;   movq    104(%rdi), %r9
 ;;   xorq    %r8, %r8, %r8
-;;   addq    %r11, 80(%rdi), %r11
+;;   addq    %r11, 96(%rdi), %r11
 ;;   movl    $-65536, %r10d
 ;;   lea     0(%r11,%r10,1), %r10
 ;;   cmpq    %r9, %rdx
@@ -52,9 +52,9 @@
 ;;   movq    %r11, %rcx
 ;;   addq    %rcx, const(0), %rcx
 ;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %r8
+;;   movq    104(%rdi), %r8
 ;;   xorq    %rdx, %rdx, %rdx
-;;   addq    %r11, 80(%rdi), %r11
+;;   addq    %r11, 96(%rdi), %r11
 ;;   movl    $-65536, %r9d
 ;;   lea     0(%r11,%r9,1), %r9
 ;;   cmpq    %r8, %rcx
