@@ -36,11 +36,11 @@ impl RegIndexEnv {
 }
 
 impl RegIndexEnv {
-    fn next_gpr(&mut self) -> u8 {
+    fn next_gpr(&mut self) -> Option<u8> {
         Self::increment(&mut self.gpr_or_absolute_count)
     }
 
-    fn next_fpr(&mut self) -> u8 {
+    fn next_fpr(&mut self) -> Option<u8> {
         if self.absolute_count {
             Self::increment(&mut self.gpr_or_absolute_count)
         } else {
@@ -48,10 +48,15 @@ impl RegIndexEnv {
         }
     }
 
-    fn increment(index: &mut u8) -> u8 {
+    fn increment(index: &mut u8) -> Option<u8> {
         let current = *index;
-        *index += 1;
-        current
+        match index.checked_add(1) {
+            Some(next) => {
+                *index = next;
+                Some(current)
+            }
+            None => None,
+        }
     }
 }
 
@@ -249,11 +254,16 @@ impl X64ABI {
     }
 
     fn int_reg_for(
-        index: u8,
+        index: Option<u8>,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> Option<Reg> {
         use ParamsOrReturns::*;
+
+        let index = match index {
+            None => return None,
+            Some(index) => index,
+        };
 
         if call_conv.is_fastcall() {
             return match (index, params_or_returns) {
@@ -283,11 +293,17 @@ impl X64ABI {
     }
 
     fn float_reg_for(
-        index: u8,
+        index: Option<u8>,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> Option<Reg> {
         use ParamsOrReturns::*;
+
+        let index = match index {
+            None => return None,
+            Some(index) => index,
+        };
+
         if call_conv.is_fastcall() {
             return match (index, params_or_returns) {
                 (0, Params) => Some(regs::xmm0()),
@@ -335,21 +351,21 @@ mod tests {
     #[test]
     fn test_get_next_reg_index() {
         let mut index_env = RegIndexEnv::default();
-        assert_eq!(index_env.next_fpr(), 0);
-        assert_eq!(index_env.next_gpr(), 0);
-        assert_eq!(index_env.next_fpr(), 1);
-        assert_eq!(index_env.next_gpr(), 1);
-        assert_eq!(index_env.next_fpr(), 2);
-        assert_eq!(index_env.next_gpr(), 2);
+        assert_eq!(index_env.next_fpr(), Some(0));
+        assert_eq!(index_env.next_gpr(), Some(0));
+        assert_eq!(index_env.next_fpr(), Some(1));
+        assert_eq!(index_env.next_gpr(), Some(1));
+        assert_eq!(index_env.next_fpr(), Some(2));
+        assert_eq!(index_env.next_gpr(), Some(2));
     }
 
     #[test]
     fn test_reg_index_env_absolute_count() {
         let mut e = RegIndexEnv::with_absolute_count();
-        assert!(e.next_gpr() == 0);
-        assert!(e.next_fpr() == 1);
-        assert!(e.next_gpr() == 2);
-        assert!(e.next_fpr() == 3);
+        assert!(e.next_gpr() == Some(0));
+        assert!(e.next_fpr() == Some(1));
+        assert!(e.next_gpr() == Some(2));
+        assert!(e.next_fpr() == Some(3));
     }
 
     #[test]
