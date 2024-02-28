@@ -3,7 +3,7 @@
 
 mod vm_host_func_context;
 
-use crate::externref::VMExternRef;
+use crate::gc::VMExternRef;
 use sptr::Strict;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
@@ -422,7 +422,7 @@ mod test_vmglobal_definition {
     #[test]
     #[cfg(feature = "gc")]
     fn check_vmglobal_can_contain_externref() {
-        use crate::externref::VMExternRef;
+        use crate::gc::VMExternRef;
         assert!(size_of::<VMExternRef>() <= size_of::<VMGlobalDefinition>());
     }
 }

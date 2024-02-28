@@ -4,7 +4,7 @@
 
 #![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
 
-use crate::externref::VMExternRef;
+use crate::gc::VMExternRef;
 use crate::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::{SendSyncPtr, Store};
 use anyhow::{bail, format_err, Error, Result};

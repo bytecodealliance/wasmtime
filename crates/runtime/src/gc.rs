@@ -1,12 +1,12 @@
 #[cfg(feature = "gc")]
-mod gc;
+mod enabled;
 #[cfg(feature = "gc")]
-pub use gc::*;
+pub use enabled::*;
 
 #[cfg(not(feature = "gc"))]
-mod no_gc;
+mod disabled;
 #[cfg(not(feature = "gc"))]
-pub use no_gc::*;
+pub use disabled::*;
 
 use crate::SendSyncPtr;
 use std::ptr::NonNull;
