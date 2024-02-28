@@ -115,6 +115,9 @@ Like above human interaction is indicated with **bold** text in these steps.
    * Please make sure to update the `RELEASES.md` at this point to include the
      `Released on` date by pushing directly to the branch associated with the
      PR.
+4. **Forward-port the release notes to main**
+   * Once the release is done, please forward-port the release notes to the
+     `RELEASES.md` on the main branch, to ensure consistency in future releases.
 
 After a patch release has been made you'll also want to double-check that the
 release notes on the patch branch are in sync with the `main` branch.
