@@ -835,13 +835,11 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                table.init(
+                table.init_func(
                     dst,
-                    elements.iter().map(|idx| {
-                        TableElement::FuncRef(
-                            self.get_func_ref(*idx).unwrap_or(std::ptr::null_mut()),
-                        )
-                    }),
+                    elements
+                        .iter()
+                        .map(|idx| self.get_func_ref(*idx).unwrap_or(std::ptr::null_mut())),
                 )?;
             }
             TableSegmentElements::Expressions(exprs) => {
@@ -850,11 +848,11 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                table.init(
-                    dst,
-                    exprs.iter().map(|expr| match ty {
-                        TableElementType::Func => {
-                            let funcref = match expr {
+                match ty {
+                    TableElementType::Func => {
+                        table.init_func(
+                            dst,
+                            exprs.iter().map(|expr| match expr {
                                 TableElementExpression::Null => std::ptr::null_mut(),
                                 TableElementExpression::Function(idx) => {
                                     self.get_func_ref(*idx).unwrap()
@@ -863,22 +861,23 @@ impl Instance {
                                     let global = self.defined_or_imported_global_ptr(*idx);
                                     unsafe { (*global).as_func_ref() }
                                 }
-                            };
-                            TableElement::FuncRef(funcref)
-                        }
-                        TableElementType::Extern => {
-                            let externref = match expr {
+                            }),
+                        )?;
+                    }
+                    TableElementType::Extern => {
+                        table.init_extern(
+                            dst,
+                            exprs.iter().map(|expr| match expr {
                                 TableElementExpression::Null => None,
                                 TableElementExpression::Function(_) => unreachable!(),
                                 TableElementExpression::GlobalGet(idx) => {
                                     let global = self.defined_or_imported_global_ptr(*idx);
                                     unsafe { (*global).as_externref().clone() }
                                 }
-                            };
-                            TableElement::ExternRef(externref)
-                        }
-                    }),
-                )?;
+                            }),
+                        )?;
+                    }
+                }
             }
         }
 

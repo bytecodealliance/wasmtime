@@ -651,3 +651,81 @@ fn gc_and_tail_calls_and_stack_arguments() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn no_leak_with_global_get_elem_segment() -> anyhow::Result<()> {
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (global $init externref))
+                (start $f)
+                (table $t 1 externref)
+                (elem $e externref (global.get $init))
+
+                (func $f
+                    i32.const 0
+                    i32.const 0
+                    i32.const 1
+                    table.init $t $e
+
+                    i32.const 0
+                    i32.const 0
+                    i32.const 1
+                    table.init $t $e
+                )
+            )
+        "#,
+    )?;
+
+    let global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::EXTERNREF, Mutability::Const),
+        Val::ExternRef(Some(ExternRef::new(SetFlagOnDrop(dropped.clone())))),
+    )?;
+
+    Instance::new(&mut store, &module, &[global.into()])?;
+
+    drop(store);
+
+    assert!(dropped.load(SeqCst));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn table_init_with_externref_global_get() -> anyhow::Result<()> {
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (global $init externref))
+                (table $t 1 externref (global.get $init))
+            )
+        "#,
+    )?;
+
+    let global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::EXTERNREF, Mutability::Const),
+        Val::ExternRef(Some(ExternRef::new(SetFlagOnDrop(dropped.clone())))),
+    )?;
+
+    Instance::new(&mut store, &module, &[global.into()])?;
+
+    drop(store);
+
+    assert!(dropped.load(SeqCst));
+    Ok(())
+}
