@@ -279,3 +279,48 @@ to hear embedder use cases/profiles if Wasmtime is not suitable for binary size
 reasons today. Please feel free to [open an
 issue](https://github.com/bytecodealliance/wasmtime/issues/new) and let us know
 and we'd be happy to discuss more how best to handle a particular use case.
+
+# Building Wasmtime for a Custom Platform
+
+If you're not running on a built-in supported platform such as Windows, macOS,
+or Linux, then Wasmtime won't work out-of-the-box for you. Wasmtime includes a
+compilation mode, however, that enables you to define how to work with the
+platform externally.
+
+This mode is enabled when `--cfg wasmtime_custom_platform` is passed to rustc,
+via `RUSTFLAGS` for example when building through Cargo, when an existing
+platform is not matched. This means that with this configuration Wasmtime may be
+compiled for custom or previously unknown targets.
+
+Wasmtime's current "platform embedding API" which is required to operate is
+defined at `examples/min-platform/embedding/wasmtime-platform.h`. That directory
+additionally has an example of building a minimal `*.so` on Linux which has the
+platform API implemented in C using Linux syscalls. While a bit contrived it
+effectively shows a minimal Wasmtime embedding which has no dependencies other
+than the platform API.
+
+Building Wasmtime for a custom platform is not a turnkey process right now,
+there are a number of points that need to be considered:
+
+* For a truly custom platform you'll probably want to create a [custom Rust
+  target](https://docs.rust-embedded.org/embedonomicon/custom-target.html). This
+  means that Nightly Rust will be required.
+
+* Wasmtime and its dependencies require the Rust standard library `std` to be
+  available. The Rust standard library can be compiled for any target with
+  unsupported functionality being stubbed out. This mode of compiling the Rust
+  standard library is not stable, however. Currently this is done through the
+  `-Zbuild-std` argument to Cargo along with a
+  `+RUSTC_BOOTSTRAP_SYNTHETIC_TARGET=1` environment variable.
+
+* Wasmtime additionally depends on the availability of a memory allocator (e.g.
+  `malloc`). Wasmtime assumes that failed memory allocation aborts the process.
+
+* Not all features for Wasmtime can be built for custom targets. For example
+  WASI support does not work on custom targets. When building Wasmtime you'll
+  probably want `--no-default-features` and will then want to incrementally add
+  features back in as needed.
+
+The `examples/min-platform` directory has an example of building this minimal
+embedding and some necessary steps. Combined with the above features about
+producing a minimal build currently produces a 400K library on Linux.

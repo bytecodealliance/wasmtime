@@ -119,6 +119,8 @@ members = [
   "examples/wasi/wasm",
   "examples/tokio/wasm",
   "examples/component/wasm",
+  "examples/min-platform",
+  "examples/min-platform/embedding",
   "fuzz",
   "winch",
   "winch/codegen", "crates/slab",

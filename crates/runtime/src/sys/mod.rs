@@ -18,6 +18,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(unix)] {
         mod unix;
         pub use unix::*;
+    } else if #[cfg(wasmtime_custom_platform)] {
+        mod custom;
+        pub use custom::*;
     } else {
         compile_error!(
             "Wasmtime is being compiled for a platform \

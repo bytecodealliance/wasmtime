@@ -37,11 +37,11 @@ much else will be needed.
 ## What about `#[no_std]`?
 
 The `wasmtime` project does not currently use `#[no_std]` for its crates, but
-this is not because it won't support it! At this time we're still gathering use
-cases for for what `#[no_std]` might entail, so if you're interested in this
-we'd love to hear about your use case! Feel free to [open an
+this is not because it won't support it! For information on building Wasmtime
+for a custom target see [the minimal build
+  documentation](./examples-minimal.md). Please [open an
 issue](https://github.com/bytecodealliance/wasmtime/issues/new) on the
-`wasmtime` repository to discuss this.
+`wasmtime` repository to request support for a specific platform.
 
 This is a common question we are asked, however, so to provide some more context
 on why Wasmtime is the way it is, here's some responses to frequent points

@@ -3286,6 +3286,12 @@ user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2019-07-30"
 end = "2025-02-12"
 
+[[trusted.dlmalloc]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-05-19"
+end = "2025-02-23"
+
 [[trusted.equivalent]]
 criteria = "safe-to-deploy"
 user-id = 539 # Josh Stone (cuviper)
