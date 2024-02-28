@@ -2,7 +2,7 @@ use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle};
 use crate::memory::Memory;
 use crate::mpk::ProtectionKey;
-use crate::table::Table;
+use crate::table::{Table, TableElementType};
 use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Result};
 use std::{alloc, any::Any, mem, ptr, sync::Arc};
@@ -531,14 +531,25 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
             TableInitialValue::FuncRef(idx) => {
                 let funcref = instance.get_func_ref(*idx).unwrap();
                 let table = unsafe { &mut *instance.get_defined_table(table) };
-                table.init_func(funcref)?;
+                let init = (0..table.size()).map(|_| funcref);
+                table.init_func(0, init)?;
             }
 
             TableInitialValue::GlobalGet(idx) => unsafe {
                 let global = instance.defined_or_imported_global_ptr(*idx);
-                let funcref = (*global).as_func_ref();
                 let table = &mut *instance.get_defined_table(table);
-                table.init_func(funcref)?;
+                match table.element_type() {
+                    TableElementType::Func => {
+                        let funcref = (*global).as_func_ref();
+                        let init = (0..table.size()).map(|_| funcref);
+                        table.init_func(0, init)?;
+                    }
+                    TableElementType::Extern => {
+                        let externref = (*global).as_externref();
+                        let init = (0..table.size()).map(|_| externref.clone());
+                        table.init_extern(0, init)?;
+                    }
+                }
             },
         }
     }
