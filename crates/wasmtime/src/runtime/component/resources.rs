@@ -12,7 +12,8 @@ use std::marker;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, DefinedResourceIndex, InterfaceType, TypeResourceTableIndex,
+    CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType, ResourceIndex,
+    TypeResourceTableIndex,
 };
 use wasmtime_runtime::component::{ComponentInstance, InstanceFlags, ResourceTables};
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
@@ -69,6 +70,15 @@ impl ResourceType {
             },
         }
     }
+
+    pub(crate) fn uninstantiated(types: &ComponentTypes, index: ResourceIndex) -> ResourceType {
+        ResourceType {
+            kind: ResourceTypeKind::Uninstantiated {
+                component: types as *const _ as usize,
+                index,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -81,6 +91,14 @@ enum ResourceTypeKind {
         // instantiations of the same component within the store.
         instance: usize,
         id: DefinedResourceIndex,
+    },
+    Uninstantiated {
+        // Like `instance` in `Guest` above this is a pointer and is used to
+        // distinguish between two components. Technically susceptible to ABA
+        // issues but the consequence is a nonexistent resource would be equal
+        // to a new resource so there's not really any issue with that.
+        component: usize,
+        index: ResourceIndex,
     },
 }
 
