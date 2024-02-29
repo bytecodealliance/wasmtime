@@ -407,7 +407,6 @@ impl<'a> AutoAssertNoGc<'a> {
         }
         #[cfg(not(all(debug_assertions, feature = "gc")))]
         {
-            let _ = &mut store;
             return AutoAssertNoGc { store };
         }
     }
