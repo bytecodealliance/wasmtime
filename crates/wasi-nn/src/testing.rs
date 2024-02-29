@@ -3,10 +3,13 @@
 //!
 //! This module checks:
 //! - that OpenVINO can be found in the environment
+//! - that WinML is available
 //! - that some ML model artifacts can be downloaded and cached.
 
 use anyhow::{anyhow, Context, Result};
 use std::{env, fs, path::Path, path::PathBuf, process::Command, sync::Mutex};
+#[cfg(feature = "winml")]
+use windows::AI::MachineLearning::{LearningModelDevice, LearningModelDeviceKind};
 
 /// Return the directory in which the test artifacts are stored.
 pub fn artifacts_dir() -> PathBuf {
@@ -34,17 +37,39 @@ macro_rules! check_test {
 
 /// Return `Ok` if all checks pass.
 pub fn check() -> Result<()> {
-    check_openvino_is_installed()?;
-    check_openvino_artifacts_are_available()?;
+    #[cfg(feature = "openvino")]
+    {
+        check_openvino_is_installed()?;
+        check_openvino_artifacts_are_available()?;
+    }
+    #[cfg(feature = "winml")]
+    {
+        check_winml_is_available()?;
+        check_winml_artifacts_are_available()?;
+    }
     Ok(())
 }
 
 /// Return `Ok` if we find a working OpenVINO installation.
+#[cfg(feature = "openvino")]
 fn check_openvino_is_installed() -> Result<()> {
     match std::panic::catch_unwind(|| println!("> found openvino version: {}", openvino::version()))
     {
         Ok(_) => Ok(()),
         Err(e) => Err(anyhow!("unable to find an OpenVINO installation: {:?}", e)),
+    }
+}
+
+#[cfg(feature = "winml")]
+fn check_winml_is_available() -> Result<()> {
+    match std::panic::catch_unwind(|| {
+        println!(
+            "> WinML learning device is available: {:?}",
+            LearningModelDevice::Create(LearningModelDeviceKind::Default)
+        )
+    }) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(anyhow!("WinML learning device is not available: {:?}", e)),
     }
 }
 
@@ -55,6 +80,7 @@ static ARTIFACTS: Mutex<()> = Mutex::new(());
 
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
+#[cfg(feature = "openvino")]
 fn check_openvino_artifacts_are_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
     const BASE_URL: &str =
@@ -77,6 +103,31 @@ fn check_openvino_artifacts_are_available() -> Result<()> {
             println!("> using cached artifact: {}", local_path.display())
         }
     }
+    Ok(())
+}
+
+#[cfg(feature = "winml")]
+fn check_winml_artifacts_are_available() -> Result<()> {
+    let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
+    let artifacts_dir = artifacts_dir();
+    if !artifacts_dir.is_dir() {
+        fs::create_dir(&artifacts_dir)?;
+    }
+    const MODEL_URL: &str="https://github.com/onnx/models/raw/5faef4c33eba0395177850e1e31c4a6a9e634c82/vision/classification/mobilenet/model/mobilenetv2-12.onnx";
+    for (from, to) in [(MODEL_URL, "model.onnx")] {
+        let local_path = artifacts_dir.join(to);
+        if !local_path.is_file() {
+            download(&from, &local_path).with_context(|| "unable to retrieve test artifact")?;
+        } else {
+            println!("> using cached artifact: {}", local_path.display())
+        }
+    }
+    // kitten.rgb is converted from https://github.com/microsoft/Windows-Machine-Learning/blob/master/SharedContent/media/kitten_224.png?raw=true.
+    let tensor_path = env::current_dir()?
+        .join("tests")
+        .join("fixtures")
+        .join("kitten.rgb");
+    fs::copy(tensor_path, artifacts_dir.join("kitten.rgb"))?;
     Ok(())
 }
 

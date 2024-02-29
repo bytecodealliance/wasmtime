@@ -2,9 +2,15 @@
 //! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
+#[cfg(feature = "openvino")]
 pub mod openvino;
+#[cfg(feature = "winml")]
+pub mod winml;
 
+#[cfg(feature = "openvino")]
 use self::openvino::OpenvinoBackend;
+#[cfg(feature = "winml")]
+use self::winml::WinMLBackend;
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph};
 use std::path::Path;
@@ -13,7 +19,16 @@ use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<crate::Backend> {
-    vec![Backend::from(OpenvinoBackend::default())]
+    let mut backends = vec![];
+    #[cfg(feature = "openvino")]
+    {
+        backends.push(Backend::from(OpenvinoBackend::default()));
+    }
+    #[cfg(feature = "winml")]
+    {
+        backends.push(Backend::from(WinMLBackend::default()));
+    }
+    backends
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
