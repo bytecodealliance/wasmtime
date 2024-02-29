@@ -3,7 +3,7 @@ mod rooting;
 use anyhow::anyhow;
 pub use rooting::*;
 
-use crate::{store::StoreOpaque, AsContext, AsContextMut, Result};
+use crate::{store::StoreOpaque, AsContextMut, Result, StoreContext, StoreContextMut};
 use std::any::Any;
 use std::ffi::c_void;
 use wasmtime_runtime::{VMExternRef, VMGcRef};
@@ -42,7 +42,10 @@ pub(crate) unsafe fn clone_extern_ref_from_gc_ref(
     VMExternRef::clone_from_raw(gc_ref.as_non_null().as_ptr()).unwrap()
 }
 
-unsafe fn extend_to_store_lifetime<'a, 'b, T>(_store: &'a impl AsContext, reference: &'b T) -> &'a T
+unsafe fn extend_to_store_lifetime<'a, 'b, C, T>(
+    _store: StoreContext<'a, C>,
+    reference: &'b T,
+) -> &'a T
 where
     'a: 'b,
     T: ?Sized,
@@ -50,8 +53,8 @@ where
     std::mem::transmute(reference)
 }
 
-unsafe fn extend_to_store_lifetime_mut<'a, 'b, T>(
-    _store: &'a mut impl AsContextMut,
+unsafe fn extend_to_store_lifetime_mut<'a, 'b, C, T>(
+    _store: StoreContextMut<'a, C>,
     reference: &'b mut T,
 ) -> &'a mut T
 where
@@ -269,8 +272,15 @@ impl ExternRef {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn data<'a>(&self, store: &'a impl AsContext) -> Result<&'a (dyn Any + Send + Sync)> {
-        let gc_ref = self.inner.try_gc_ref(store.as_context().0)?.as_non_null();
+    pub fn data<'a, T>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> Result<&'a (dyn Any + Send + Sync)>
+    where
+        T: 'a,
+    {
+        let store = store.into();
+        let gc_ref = self.inner.try_gc_ref(store.0)?.as_non_null();
         unsafe {
             let inner = VMExternRef::ref_from_raw(&gc_ref);
             Ok(extend_to_store_lifetime(store, inner.data()))
@@ -304,11 +314,15 @@ impl ExternRef {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn data_mut<'a>(
+    pub fn data_mut<'a, T>(
         &self,
-        store: &'a mut impl AsContextMut,
-    ) -> Result<&'a mut (dyn Any + Send + Sync)> {
-        let mut gc_ref = self.inner.try_gc_ref(store.as_context().0)?.as_non_null();
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> Result<&'a mut (dyn Any + Send + Sync)>
+    where
+        T: 'a,
+    {
+        let store = store.into();
+        let mut gc_ref = self.inner.try_gc_ref(store.0)?.as_non_null();
         unsafe {
             let inner = VMExternRef::ref_mut_from_raw(&mut gc_ref);
             Ok(extend_to_store_lifetime_mut(store, inner.data_mut()))
