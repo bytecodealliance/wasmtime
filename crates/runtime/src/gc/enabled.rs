@@ -99,7 +99,7 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
-use crate::{Backtrace, ModuleInfoLookup, SendSyncPtr, VMRuntimeLimits};
+use crate::{Backtrace, ModuleInfoLookup, SendSyncPtr, VMGcRef, VMRuntimeLimits};
 use std::alloc::Layout;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
@@ -159,7 +159,7 @@ use std::ptr::{self, NonNull};
 /// ```
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct VMExternRef(SendSyncPtr<VMExternData>);
+pub struct VMExternRef(VMGcRef);
 
 #[repr(C)]
 pub(crate) struct VMExternData {
@@ -253,8 +253,12 @@ impl VMExternData {
     }
 
     /// Drop the inner value and then free this `VMExternData` heap allocation.
-    pub(crate) unsafe fn drop_and_dealloc(mut data: SendSyncPtr<VMExternData>) {
-        log::trace!("Dropping externref data @ {:p}", data);
+    ///
+    /// The given `gc_ref` must point to a valid `VMExternData`.
+    pub(crate) unsafe fn drop_and_dealloc(gc_ref: VMGcRef) {
+        log::trace!("Dropping externref data @ {gc_ref:#p}");
+        assert!(VMGcRef::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        let mut data = gc_ref.0.cast::<VMExternData>();
 
         // Note: we introduce a block scope so that we drop the live
         // reference to the data before we free the heap allocation it
@@ -347,11 +351,74 @@ impl VMExternRef {
             );
 
             log::trace!("New externref data @ {:p}", extern_data_ptr);
-            VMExternRef(NonNull::new_unchecked(extern_data_ptr).into())
+            VMExternRef(VMGcRef::from_non_null(NonNull::new_unchecked(
+                extern_data_ptr as *mut u8,
+            )))
         }
     }
 
-    /// Turn this `VMExternRef` into a raw, untyped pointer.
+    /// Turn this `VMExternRef` into a its underlying GC reference.
+    ///
+    /// Unlike `into_gc_ref`, this does not consume and forget `self`. It is *not*
+    /// safe to use `from_gc_ref` on pointers returned from this method; only use
+    /// `clone_from_gc_ref`!
+    ///
+    /// Nor does this method increment the reference count. You must ensure that
+    /// `self` (or some other clone of `self`) stays alive until
+    /// `clone_from_raw` is called.
+    #[inline]
+    pub fn as_gc_ref(&self) -> &VMGcRef {
+        &self.0
+    }
+
+    /// Consume this `VMExternRef` into a raw, untyped pointer.
+    ///
+    /// # Safety
+    ///
+    /// This method forgets self, so it is possible to create a leak of the
+    /// underlying reference counted data if not used carefully.
+    ///
+    /// Use `from_raw` to recreate the `VMExternRef`.
+    pub unsafe fn into_gc_ref(self) -> VMGcRef {
+        let gc_ref = self.0;
+        std::mem::forget(self);
+        gc_ref
+    }
+
+    /// Recreate a `VMExternRef` from a pointer returned from a previous call to
+    /// `{as,into}_gc_ref`.
+    ///
+    /// # Safety
+    ///
+    /// The given `gc_ref` must point to a valid `VMExternData`.
+    ///
+    /// Unlike `clone_from_raw`, this does not increment the reference count of
+    /// the underlying data. It is not safe to continue to use the pointer
+    /// passed to this function.
+    #[inline]
+    pub unsafe fn from_gc_ref(gc_ref: VMGcRef) -> Self {
+        VMExternRef(gc_ref)
+    }
+
+    /// Recreate a `VMExternRef` from a pointer returned from a previous call to
+    /// `{as,into}_gc_ref`.
+    ///
+    /// # Safety
+    ///
+    /// Wildly unsafe to use with anything other than the result of a previous
+    /// `{as,into}_gc_ref` call!
+    ///
+    /// Additionally, it is your responsibility to ensure that this raw
+    /// `VMExternRef` is still valid, or else you could have use-after-free
+    /// bugs.
+    #[inline]
+    pub unsafe fn clone_from_gc_ref(gc_ref: VMGcRef) -> Self {
+        let x = VMExternRef(gc_ref);
+        x.extern_data().increment_ref_count();
+        x
+    }
+
+    /// Get a raw pointer for this `VMExternRef`.
     ///
     /// Unlike `into_raw`, this does not consume and forget `self`. It is *not*
     /// safe to use `from_raw` on pointers returned from this method; only use
@@ -362,8 +429,7 @@ impl VMExternRef {
     /// `clone_from_raw` is called.
     #[inline]
     pub fn as_raw(&self) -> *mut u8 {
-        let ptr = self.0.as_ptr().cast::<u8>();
-        ptr
+        self.0.as_ptr()
     }
 
     /// Consume this `VMExternRef` into a raw, untyped pointer.
@@ -375,56 +441,24 @@ impl VMExternRef {
     ///
     /// Use `from_raw` to recreate the `VMExternRef`.
     pub unsafe fn into_raw(self) -> *mut u8 {
-        let ptr = self.0.as_ptr().cast::<u8>();
+        let raw = self.0;
         std::mem::forget(self);
-        ptr
+        raw.as_ptr()
     }
 
     /// Recreate a `VMExternRef` from a pointer returned from a previous call to
     /// `{as,into}_raw`.
     ///
     /// # Safety
+    ///
+    /// The given `raw` must point to a valid `VMExternData`.
     ///
     /// Unlike `clone_from_raw`, this does not increment the reference count of
     /// the underlying data. It is not safe to continue to use the pointer
     /// passed to this function.
     #[inline]
-    pub unsafe fn from_raw(ptr: *mut u8) -> Option<Self> {
-        Some(VMExternRef(NonNull::new(ptr)?.cast().into()))
-    }
-
-    /// Create a `&VMExternRef` from a reference to a non-null pointer that was
-    /// returned from a previous call to `{as,into}_raw`.
-    ///
-    /// Does not increment or decrement the ref count.
-    ///
-    /// # Safety
-    ///
-    /// Wildly unsafe to use with anything other than the result of a previous
-    /// `{as,into}_raw` call!
-    ///
-    /// Additionally, it is your responsibility to ensure that this raw
-    /// `VMExternRef` is still valid, or else you could have use-after-free
-    /// bugs.
-    pub unsafe fn ref_from_raw<'a>(ptr: &'a NonNull<u8>) -> &'a Self {
-        std::mem::transmute(ptr)
-    }
-
-    /// Create a `&mut VMExternRef` from a reference to a non-null pointer that
-    /// was returned from a previous call to `{as,into}_raw`.
-    ///
-    /// Does not increment or decrement the ref count.
-    ///
-    /// # Safety
-    ///
-    /// Wildly unsafe to use with anything other than the result of a previous
-    /// `{as,into}_raw` call!
-    ///
-    /// Additionally, it is your responsibility to ensure that this raw
-    /// `VMExternRef` is still valid, or else you could have use-after-free
-    /// bugs.
-    pub unsafe fn ref_mut_from_raw<'a>(ptr: &'a mut NonNull<u8>) -> &'a mut Self {
-        std::mem::transmute(ptr)
+    pub unsafe fn from_raw(raw: *mut u8) -> Option<Self> {
+        VMGcRef::from_ptr(raw).map(|r| Self::from_gc_ref(r))
     }
 
     /// Recreate a `VMExternRef` from a pointer returned from a previous call to
@@ -439,10 +473,8 @@ impl VMExternRef {
     /// `VMExternRef` is still valid, or else you could have use-after-free
     /// bugs.
     #[inline]
-    pub unsafe fn clone_from_raw(ptr: *mut u8) -> Option<Self> {
-        let x = VMExternRef(NonNull::new(ptr)?.cast::<VMExternData>().into());
-        x.extern_data().increment_ref_count();
-        Some(x)
+    pub unsafe fn clone_from_raw(raw: *mut u8) -> Option<Self> {
+        VMGcRef::from_ptr(raw).map(|r| Self::clone_from_gc_ref(r))
     }
 
     /// Get the strong reference count for this `VMExternRef`.
@@ -452,12 +484,12 @@ impl VMExternRef {
 
     #[inline]
     fn extern_data(&self) -> &VMExternData {
-        unsafe { self.0.as_ref() }
+        unsafe { self.0.as_non_null().cast().as_ref() }
     }
 
     #[inline]
     fn extern_data_mut(&mut self) -> &mut VMExternData {
-        unsafe { self.0.as_mut() }
+        unsafe { self.0.as_non_null().cast().as_mut() }
     }
 }
 
@@ -758,9 +790,9 @@ impl VMExternRefActivationsTable {
 
     fn insert_precise_stack_root(
         precise_stack_roots: &mut HashSet<VMExternRefWithTraits>,
-        root: NonNull<VMExternData>,
+        root: VMGcRef,
     ) {
-        let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr().cast()).unwrap() };
+        let root = root.as_extern_ref().clone();
         log::trace!("Found externref on stack: {:p}", root);
         precise_stack_roots.insert(VMExternRefWithTraits(root));
     }
@@ -922,7 +954,7 @@ pub unsafe fn gc(
     let mut activations_table_set: DebugOnly<HashSet<_>> = Default::default();
     if cfg!(debug_assertions) {
         externref_activations_table.elements(|elem| {
-            activations_table_set.insert(elem.as_raw() as *mut VMExternData);
+            activations_table_set.insert(*elem.as_gc_ref());
         });
     }
 
@@ -970,22 +1002,21 @@ pub unsafe fn gc(
                 continue;
             }
 
-            let stack_slot = stack_slot as *const *mut VMExternData;
+            let stack_slot = stack_slot as *const *mut u8;
             let r = std::ptr::read(stack_slot);
             log::trace!("Stack slot @ {:p} = {:p}", stack_slot, r);
 
-            debug_assert!(
-                r.is_null() || activations_table_set.contains(&r),
-                "every on-stack externref inside a Wasm frame should \
-                 have an entry in the VMExternRefActivationsTable; \
-                 {:?} is not in the table",
-                r
-            );
+            if let Some(gc_ref) = VMGcRef::from_ptr(r) {
+                debug_assert!(
+                    activations_table_set.contains(&gc_ref),
+                    "every on-stack externref inside a Wasm frame should \
+                     have an entry in the VMExternRefActivationsTable; \
+                     {gc_ref:?} is not in the table",
+                );
 
-            if let Some(r) = NonNull::new(r) {
                 VMExternRefActivationsTable::insert_precise_stack_root(
                     &mut externref_activations_table.precise_stack_roots,
-                    r,
+                    gc_ref,
                 );
             }
         }

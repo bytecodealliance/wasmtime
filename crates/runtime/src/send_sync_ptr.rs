@@ -43,6 +43,12 @@ impl<T: ?Sized> SendSyncPtr<T> {
     pub fn as_non_null(&self) -> NonNull<T> {
         self.0
     }
+
+    /// Cast this to a pointer to a `U`.
+    #[inline]
+    pub fn cast<U>(&self) -> SendSyncPtr<U> {
+        SendSyncPtr(self.0.cast::<U>())
+    }
 }
 
 impl<T> SendSyncPtr<[T]> {

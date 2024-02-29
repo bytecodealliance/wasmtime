@@ -40,6 +40,12 @@ impl std::fmt::Pointer for VMGcRef {
 }
 
 impl VMGcRef {
+    /// The only type of valid `VMGcRef` is currently `VMExternRef`.
+    ///
+    /// Assert on this anywhere you are making that assumption, so that we know
+    /// all the places to update when it no longer holds true.
+    pub const ONLY_EXTERN_REF_IMPLEMENTED_YET: bool = true;
+
     /// Create a new `VMGcRef`.
     ///
     /// Returns `None` for null pointers.
@@ -61,8 +67,28 @@ impl VMGcRef {
         VMGcRef(SendSyncPtr::new(raw))
     }
 
+    /// Get this GC reference as a pointer.
+    ///
+    /// Note that the returned pointer does not point to a valid GC object when
+    /// `self.is_i31()`.
+    pub fn as_ptr(&self) -> *mut u8 {
+        self.0.as_ptr()
+    }
+
     /// Get this GC reference as a non-null pointer.
     pub fn as_non_null(&self) -> NonNull<u8> {
         self.0.as_non_null()
+    }
+
+    /// Get this GC reference as a `VMExternRef`.
+    pub fn as_extern_ref(&self) -> &VMExternRef {
+        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        unsafe { std::mem::transmute(self) }
+    }
+
+    /// Get this GC reference as a mutable `VMExternRef`.
+    pub fn as_extern_ref_mut(&mut self) -> &mut VMExternRef {
+        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        unsafe { std::mem::transmute(self) }
     }
 }
