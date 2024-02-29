@@ -453,7 +453,16 @@ impl RootSet {
         ret
     }
 
-    fn unroot_gc_ref(&mut self, gc_ref: VMGcRef) {
+    /// Hook for when a `gc_ref` is being unrooted.
+    ///
+    /// In the future, when we support multiple GC implementations, this should
+    /// be optional.
+    ///
+    /// # Safety
+    ///
+    /// The `gc_ref` must be rooted in this root set and belong to this root
+    /// set's store.
+    unsafe fn unroot_gc_ref(&mut self, gc_ref: VMGcRef) {
         // Safety: our mutable access to the root set means that no one else
         // should have concurrent access to the `VMExternRef`, so
         // decrementing the reference count here is safe.
@@ -1363,10 +1372,11 @@ where
         let roots = store.gc_roots_mut();
         roots.manually_rooted.dealloc(id);
 
-        // Drop the `ExternRef`. In the future this will be a
-        // `wasmtime_runtime::GcRuntime::on_unroot` trait method hook or
-        // something like that.
-        roots.unroot_gc_ref(gc_ref);
+        // Safety: this `gc_ref` belongs to this store, asserted by
+        // `get_gc_ref`.
+        unsafe {
+            roots.unroot_gc_ref(gc_ref);
+        }
     }
 
     /// Clone this `ManuallyRooted<T>` into a `Rooted<T>`.
