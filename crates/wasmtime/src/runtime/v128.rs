@@ -125,7 +125,7 @@ unsafe impl WasmTy for V128 {
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
+    unsafe fn from_abi(abi: Self::Abi, _store: &mut AutoAssertNoGc<'_>) -> Self {
         V128(abi)
     }
 }

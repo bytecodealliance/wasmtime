@@ -1,5 +1,5 @@
 use crate::gc::ExternRef;
-use crate::store::StoreOpaque;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{AsContext, AsContextMut, Func, HeapType, RefType, Rooted, ValType, V128};
 use anyhow::{bail, Context, Result};
 use std::ptr;
@@ -674,7 +674,8 @@ impl Ref {
         store: &mut StoreOpaque,
         ty: &RefType,
     ) -> Result<TableElement> {
-        self.ensure_matches_ty(store, &ty)
+        let mut store = AutoAssertNoGc::new(store);
+        self.ensure_matches_ty(&store, &ty)
             .context("type mismatch: value does not match table element type")?;
         match (self, ty.heap_type()) {
             (Ref::Func(None), HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_)) => {
@@ -683,10 +684,10 @@ impl Ref {
             }
             (Ref::Func(Some(f)), HeapType::Func | HeapType::Concrete(_)) => {
                 debug_assert!(
-                    f.comes_from_same_store(store),
+                    f.comes_from_same_store(&store),
                     "checked in `ensure_matches_ty`"
                 );
-                Ok(TableElement::FuncRef(f.vm_func_ref(store).as_ptr()))
+                Ok(TableElement::FuncRef(f.vm_func_ref(&mut store).as_ptr()))
             }
 
             (Ref::Extern(e), HeapType::Extern) => match e {
@@ -695,7 +696,7 @@ impl Ref {
                     Ok(TableElement::ExternRef(None))
                 }
                 Some(e) => Ok(TableElement::ExternRef(Some(
-                    e.try_to_vm_extern_ref(store)?,
+                    e.try_to_vm_extern_ref(&mut store)?,
                 ))),
             },
 

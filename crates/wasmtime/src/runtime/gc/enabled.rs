@@ -3,7 +3,8 @@ mod rooting;
 use anyhow::anyhow;
 pub use rooting::*;
 
-use crate::{store::StoreOpaque, AsContextMut, Result, StoreContext, StoreContextMut};
+use crate::store::AutoAssertNoGc;
+use crate::{AsContextMut, Result, StoreContext, StoreContextMut};
 use std::any::Any;
 use std::ffi::c_void;
 use wasmtime_runtime::VMExternRef;
@@ -154,9 +155,11 @@ impl ExternRef {
         // `ExternRef` methods take `impl AsContext[Mut]` methods.
         let inner = unsafe { VMExternRef::new(value) };
 
+        let mut context = AutoAssertNoGc::new(context.as_context_mut().0);
+
         // Safety: we just created the `VMExternRef` and are associating it with
         // this store.
-        unsafe { Self::from_vm_extern_ref(context.as_context_mut().0, inner) }
+        unsafe { Self::from_vm_extern_ref(&mut context, inner) }
     }
 
     /// Creates a new, manually-rooted instance of `ExternRef` wrapping the
@@ -191,6 +194,8 @@ impl ExternRef {
     where
         T: 'static + Any + Send + Sync,
     {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+
         // Safety: We proviode `VMExternRef`'s invariants via the way that
         // `ExternRef` methods take `impl AsContext[Mut]` methods.
         let inner = unsafe { VMExternRef::new(value) };
@@ -198,7 +203,7 @@ impl ExternRef {
 
         // Safety: `inner` is a GC reference pointing to an `externref` GC
         // object.
-        unsafe { ManuallyRooted::new(store.as_context_mut().0, inner) }
+        unsafe { ManuallyRooted::new(&mut store, inner) }
     }
 
     /// Create an `ExternRef` from an underlying `VMExternRef`.
@@ -207,7 +212,7 @@ impl ExternRef {
     ///
     /// The underlying `VMExternRef` must belong to `store`.
     pub(crate) unsafe fn from_vm_extern_ref(
-        store: &mut StoreOpaque,
+        store: &mut AutoAssertNoGc<'_>,
         inner: VMExternRef,
     ) -> Rooted<Self> {
         // Safety: `inner` is a GC reference pointing to an `externref` GC
@@ -215,13 +220,16 @@ impl ExternRef {
         unsafe { Rooted::new(store, inner.into_gc_ref()) }
     }
 
-    pub(crate) fn to_vm_extern_ref(&self, store: &mut StoreOpaque) -> Option<VMExternRef> {
+    pub(crate) fn to_vm_extern_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Option<VMExternRef> {
         let gc_ref = self.inner.get_gc_ref(store)?;
         // Safety: Our underlying `gc_ref` is always pointing to an `externref`.
         Some(unsafe { VMExternRef::clone_from_gc_ref(*gc_ref) })
     }
 
-    pub(crate) fn try_to_vm_extern_ref(&self, store: &mut StoreOpaque) -> Result<VMExternRef> {
+    pub(crate) fn try_to_vm_extern_ref(
+        &self,
+        store: &mut AutoAssertNoGc<'_>,
+    ) -> Result<VMExternRef> {
         self.to_vm_extern_ref(store)
             .ok_or_else(|| anyhow!("attempted to use an `externref` that was unrooted"))
     }
@@ -258,8 +266,16 @@ impl ExternRef {
     where
         T: 'a,
     {
-        let store = store.into();
-        let gc_ref = self.inner.try_gc_ref(store.0)?;
+        let store = store.into().0;
+
+        // Safety: we don't do anything that could cause a GC while handling
+        // this `gc_ref`.
+        //
+        // NB: We can't use AutoAssertNoGc` here because then the lifetime of
+        // `gc_ref.as_extern_ref()` would only be the lifetime of the `store`
+        // local, rather than `'a`.
+        let gc_ref = unsafe { self.inner.unchecked_try_gc_ref(store)? };
+
         let externref = gc_ref.as_extern_ref();
         Ok(externref.data())
     }
@@ -299,7 +315,15 @@ impl ExternRef {
         T: 'a,
     {
         let store = store.into();
-        let gc_ref = self.inner.try_gc_ref_mut(store.0)?;
+
+        // Safety: we don't do anything that could cause a GC while handling
+        // this `gc_ref`.
+        //
+        // NB: We can't use AutoAssertNoGc` here because then the lifetime of
+        // `gc_ref.as_extern_ref()` would only be the lifetime of the `store`
+        // local, rather than `'a`.
+        let gc_ref = unsafe { self.inner.unchecked_try_gc_ref_mut(store.0)? };
+
         let externref = gc_ref.as_extern_ref_mut();
         // Safety: We have a mutable borrow on the store, which prevents
         // concurrent access to the underlying `VMExternRef`.
@@ -338,9 +362,10 @@ impl ExternRef {
         mut store: impl AsContextMut,
         raw: *mut c_void,
     ) -> Option<Rooted<ExternRef>> {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         let raw = raw.cast::<u8>();
         let inner = VMExternRef::clone_from_raw(raw)?;
-        Some(Self::from_vm_extern_ref(store.as_context_mut().0, inner))
+        Some(Self::from_vm_extern_ref(&mut store, inner))
     }
 
     /// Converts this [`ExternRef`] to a raw value suitable to store within a
@@ -356,8 +381,8 @@ impl ExternRef {
     ///
     /// [`ValRaw`]: crate::ValRaw
     pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> Result<*mut c_void> {
-        let store = store.as_context_mut().0;
-        let gc_ref = self.inner.try_gc_ref(store)?;
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        let gc_ref = self.inner.try_gc_ref(&store)?;
         let inner = VMExternRef::clone_from_gc_ref(*gc_ref);
         let raw = inner.as_raw();
         store.insert_vmexternref_without_gc(inner);

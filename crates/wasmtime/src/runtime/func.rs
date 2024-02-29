@@ -1055,7 +1055,11 @@ impl Func {
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
-        Func::from_vm_func_ref(store.as_context_mut().0, raw.cast())
+        Self::_from_raw(store.as_context_mut().0, raw)
+    }
+
+    pub(crate) unsafe fn _from_raw(store: &mut StoreOpaque, raw: *mut c_void) -> Option<Func> {
+        Func::from_vm_func_ref(store, raw.cast())
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -2181,7 +2185,12 @@ macro_rules! impl_into_func {
                                 if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
                                     return R::fallible_from_error(trap);
                                 }
-                                $(let $args = $args::from_abi($args, caller.store.0);)*
+
+                                let mut store = AutoAssertNoGc::new(caller.store.0);
+                                $(let $args = $args::from_abi($args, &mut store);)*
+                                let _ = &mut store;
+                                drop(store);
+
                                 let r = func(
                                     caller.sub_caller(),
                                     $( $args, )*

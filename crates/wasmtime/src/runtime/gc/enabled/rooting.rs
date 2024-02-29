@@ -107,7 +107,11 @@ use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use anyhow::anyhow;
-use std::{fmt::Debug, hash::Hash, ops::Deref};
+use std::{
+    fmt::Debug,
+    hash::Hash,
+    ops::{Deref, DerefMut},
+};
 use wasmtime_runtime::{VMExternRef, VMGcRef};
 use wasmtime_slab::{Id as SlabId, Slab};
 
@@ -187,9 +191,17 @@ impl GcRootIndex {
         self.store_id == store.id()
     }
 
-    /// Same as `RootedGcRefImpl::get_gc_ref` but not associated with any
-    /// particular `T: GcRef`.
-    pub(crate) fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
+    /// Same as `RootedGcRefImpl::get_gc_ref` but doesn't check that the raw GC
+    /// ref is only used during the scope of an `AutoAssertNoGc`.
+    ///
+    /// # Safety
+    ///
+    /// You must not trigger a GC while holding onto the resulting raw
+    /// `VMGcRef`.
+    pub(crate) unsafe fn unchecked_get_gc_ref<'a>(
+        &self,
+        store: &'a StoreOpaque,
+    ) -> Option<&'a VMGcRef> {
         assert!(
             self.comes_from_same_store(store),
             "object used with wrong store"
@@ -210,17 +222,47 @@ impl GcRootIndex {
         }
     }
 
+    /// Same as `RootedGcRefImpl::get_gc_ref` but not associated with any
+    /// particular `T: GcRef`.
+    pub(crate) fn get_gc_ref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Option<&'a VMGcRef> {
+        unsafe { self.unchecked_get_gc_ref(store) }
+    }
+
+    /// Same as `unchecked_get_gc_ref` but returns an error instead of `None` if
+    /// the GC reference has been unrooted.
+    ///
+    /// # Safety
+    ///
+    /// You must not trigger a GC while holding onto the resulting raw
+    /// `VMGcRef`.
+    pub(crate) unsafe fn unchecked_try_gc_ref<'a>(
+        &self,
+        store: &'a StoreOpaque,
+    ) -> Result<&'a VMGcRef> {
+        self.unchecked_get_gc_ref(store).ok_or_else(|| {
+            anyhow!("attempted to use a garbage-collected object that has been unrooted")
+        })
+    }
+
     /// Same as `get_gc_ref` but returns an error instead of `None` if the GC
     /// reference has been unrooted.
-    pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
+    pub(crate) fn try_gc_ref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcRef> {
         self.get_gc_ref(store).ok_or_else(|| {
             anyhow!("attempted to use a garbage-collected object that has been unrooted")
         })
     }
 
-    /// Same as `RootedGcRefImpl::get_gc_ref_mut` but not associated with any
-    /// particular `T: GcRef`.
-    pub(crate) fn get_gc_ref_mut<'a>(&self, store: &'a mut StoreOpaque) -> Option<&'a mut VMGcRef> {
+    /// Same as `RootedGcRefImpl::get_gc_ref_mut` but doesn't check that the raw
+    /// GC ref is only used during the scope of an `AutoAssertNoGc`.
+    ///
+    /// # Safety
+    ///
+    /// You must not trigger a GC while holding onto the resulting raw
+    /// `VMGcRef`.
+    pub(crate) unsafe fn unchecked_get_gc_ref_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> Option<&'a mut VMGcRef> {
         assert!(
             self.comes_from_same_store(store),
             "object used with wrong store"
@@ -241,9 +283,39 @@ impl GcRootIndex {
         }
     }
 
+    /// Same as `RootedGcRefImpl::get_gc_ref_mut` but not associated with any
+    /// particular `T: GcRef`.
+    #[allow(dead_code)] // not currently used, but added for consistency
+    pub(crate) fn get_gc_ref_mut<'a>(
+        &self,
+        store: &'a mut AutoAssertNoGc<'_>,
+    ) -> Option<&'a mut VMGcRef> {
+        unsafe { self.unchecked_get_gc_ref_mut(store) }
+    }
+
+    /// Same as `unchecked_get_gc_ref_mut` but returns an error instead of
+    /// `None` if the GC reference has been unrooted.
+    ///
+    /// # Safety
+    ///
+    /// You must not trigger a GC while holding onto the resulting raw
+    /// `VMGcRef`.
+    pub(crate) unsafe fn unchecked_try_gc_ref_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> Result<&'a mut VMGcRef> {
+        self.unchecked_get_gc_ref_mut(store).ok_or_else(|| {
+            anyhow!("attempted to use a garbage-collected object that has been unrooted")
+        })
+    }
+
     /// Same as `get_gc_ref_mut` but returns an error instead of `None` if the
     /// GC reference has been unrooted.
-    pub(crate) fn try_gc_ref_mut<'a>(&self, store: &'a mut StoreOpaque) -> Result<&'a mut VMGcRef> {
+    #[allow(dead_code)] // not currently used, but added for consistency
+    pub(crate) fn try_gc_ref_mut<'a>(
+        &self,
+        store: &'a mut AutoAssertNoGc<'_>,
+    ) -> Result<&'a mut VMGcRef> {
         self.get_gc_ref_mut(store).ok_or_else(|| {
             anyhow!("attempted to use a garbage-collected object that has been unrooted")
         })
@@ -443,10 +515,10 @@ impl RootSet {
         self.lifo_generation += 1;
     }
 
-    pub(crate) fn with_lifo_scope<T>(
-        store: &mut StoreOpaque,
-        f: impl FnOnce(&mut StoreOpaque) -> T,
-    ) -> T {
+    pub(crate) fn with_lifo_scope<S, T>(store: &mut S, f: impl FnOnce(&mut S) -> T) -> T
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         let scope = store.gc_roots().enter_lifo_scope();
         let ret = f(store);
         store.gc_roots_mut().exit_lifo_scope(scope);
@@ -754,7 +826,7 @@ impl<T: GcRef> Rooted<T> {
     /// type that `T` represents.
     ///
     /// `gc_ref` must belong to `store`'s heap.
-    pub(crate) unsafe fn new(store: &mut StoreOpaque, gc_ref: VMGcRef) -> Rooted<T> {
+    pub(crate) unsafe fn new(store: &mut AutoAssertNoGc<'_>, gc_ref: VMGcRef) -> Rooted<T> {
         let roots = store.gc_roots_mut();
         let generation = roots.lifo_generation;
         let index = roots.lifo_roots.len();
@@ -1292,7 +1364,7 @@ where
     /// type that `T` represents.
     ///
     /// `gc_ref` must belong to `store`'s heap.
-    pub(crate) unsafe fn new(store: &mut StoreOpaque, gc_ref: VMGcRef) -> Self {
+    pub(crate) unsafe fn new(store: &mut AutoAssertNoGc<'_>, gc_ref: VMGcRef) -> Self {
         let id = store.gc_roots_mut().manually_rooted.alloc(gc_ref);
         ManuallyRooted {
             inner: GcRootIndex {
@@ -1347,12 +1419,13 @@ where
     }
 
     pub(crate) fn _clone(&self, store: &mut StoreOpaque) -> Self {
+        let mut store = AutoAssertNoGc::new(store);
         let gc_ref = *self
-            .get_gc_ref(store)
+            .get_gc_ref(&store)
             .expect("ManuallyRooted always has a gc ref");
         // Safety: `gc_ref` belongs to this store, asserted by `get_gc_ref`.
-        let gc_ref = unsafe { clone_root(store, gc_ref) };
-        unsafe { Self::new(store, gc_ref) }
+        let gc_ref = unsafe { clone_root(&mut store, gc_ref) };
+        unsafe { Self::new(&mut store, gc_ref) }
     }
 
     /// Unroot this GC object.

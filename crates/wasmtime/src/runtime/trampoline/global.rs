@@ -1,4 +1,4 @@
-use crate::store::StoreOpaque;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{GlobalType, HeapType, Mutability, Result, Val};
 use std::ptr;
 use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
@@ -46,6 +46,7 @@ pub fn generate_global_export(
         global: VMGlobalDefinition::new(),
     });
 
+    let mut store = AutoAssertNoGc::new(store);
     let definition = unsafe {
         let global = &mut (*ctx.get()).global;
         match val {
@@ -56,12 +57,12 @@ pub fn generate_global_export(
             Val::V128(x) => *global.as_u128_mut() = x.into(),
             Val::FuncRef(f) => {
                 *global.as_func_ref_mut() =
-                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr());
+                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&mut store).as_ptr());
             }
             Val::ExternRef(x) => {
                 *global.as_externref_mut() = match x {
                     None => None,
-                    Some(x) => Some(x.try_to_vm_extern_ref(store)?),
+                    Some(x) => Some(x.try_to_vm_extern_ref(&mut store)?),
                 };
             }
         }
