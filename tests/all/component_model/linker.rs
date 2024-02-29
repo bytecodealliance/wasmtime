@@ -1,4 +1,5 @@
 use anyhow::Result;
+use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Linker, ResourceType};
 use wasmtime::{Engine, Store};
 
@@ -101,5 +102,46 @@ fn missing_import_selects_max() -> Result<()> {
     assert_eq!(i.get_resource(&mut store, "t1"), Some(t2));
     assert_eq!(i.get_resource(&mut store, "t2"), Some(t2));
 
+    Ok(())
+}
+
+#[test]
+fn linker_substituting_types_issue_8003() -> Result<()> {
+    let engine = Engine::default();
+    let linker = Linker::<()>::new(&engine);
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+              (component $foo
+                (type $_myres (resource (rep i32)))
+                (export $myres "myres" (type $_myres))
+
+                (core module $m
+                  (func (export "make") (result i32) unreachable)
+                )
+                (core instance $m (instantiate $m))
+
+                (func (export "make") (result (own $myres))
+                  (canon lift (core func $m "make")))
+              )
+              (instance $foo (instantiate $foo))
+              (export "foo" (instance $foo))
+            )
+        "#,
+    )?;
+
+    let component_ty = linker.substituted_component_type(&component)?;
+    let exports = component_ty.exports(&engine);
+    for (_name, item) in exports {
+        match item {
+            ComponentItem::ComponentInstance(instance) => {
+                for _ in instance.exports(&engine) {
+                    // ..
+                }
+            }
+            _ => {}
+        }
+    }
     Ok(())
 }

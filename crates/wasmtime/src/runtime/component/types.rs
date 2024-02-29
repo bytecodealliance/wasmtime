@@ -944,7 +944,18 @@ impl ComponentItem {
                 engine,
                 ty.types[*idx].clone(),
             )),
-            TypeDef::Resource(idx) => Self::Resource(ty.resources[ty.types[*idx].ty]),
+            TypeDef::Resource(idx) => {
+                let resource_index = ty.types[*idx].ty;
+                let ty = match ty.resources.get(resource_index) {
+                    // This resource type was substituted by a linker for
+                    // example so it's replaced here.
+                    Some(ty) => *ty,
+
+                    // This resource type was not substituted.
+                    None => ResourceType::uninstantiated(&ty.types, resource_index),
+                };
+                Self::Resource(ty)
+            }
         }
     }
 }
