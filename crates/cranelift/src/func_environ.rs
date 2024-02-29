@@ -361,20 +361,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         delta: i64,
     ) -> ir::Value {
         debug_assert!(delta == -1 || delta == 1);
-
         let pointer_type = self.pointer_type();
-
-        // If this changes that's ok, the `atomic_rmw` below just needs to be
-        // preceded with an add instruction of `externref` and the offset.
-        assert_eq!(self.offsets.vm_extern_data_ref_count(), 0);
-        let delta = builder.ins().iconst(pointer_type, delta);
-        builder.ins().atomic_rmw(
-            pointer_type,
-            ir::MemFlags::trusted(),
-            ir::AtomicRmwOp::Add,
-            externref,
-            delta,
-        )
+        let offset = i32::try_from(self.offsets.vm_extern_data_ref_count()).unwrap();
+        let count = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), externref, offset);
+        let new_count = builder.ins().iadd_imm(count, delta);
+        builder
+            .ins()
+            .store(ir::MemFlags::trusted(), new_count, externref, offset);
+        new_count
     }
 
     fn get_global_location(
@@ -1643,9 +1639,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 );
 
                 builder.switch_to_block(dec_ref_count_block);
-                let prev_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
-                let one = builder.ins().iconst(pointer_type, 1);
-                let cond = builder.ins().icmp(IntCC::Equal, one, prev_ref_count);
+                let new_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
+                let cond = builder.ins().icmp_imm(IntCC::Equal, new_ref_count, 0);
                 builder
                     .ins()
                     .brif(cond, drop_block, &[], continue_block, &[]);

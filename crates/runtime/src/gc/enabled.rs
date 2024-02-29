@@ -170,8 +170,7 @@ pub(crate) struct VMExternData {
     //
     /// The reference count for this `VMExternData` and value. When it reaches
     /// zero, we can safely destroy the value and free this heap
-    /// allocation. This is an `UnsafeCell`, rather than plain `Cell`, because
-    /// it can be modified by compiled Wasm code.
+    /// allocation. This field can be modified by compiled Wasm code.
     ///
     /// Note: this field's offset must be kept in sync with
     /// `wasmtime_environ::VMOffsets::vm_extern_data_ref_count()` which is
