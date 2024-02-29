@@ -705,30 +705,6 @@ impl<T: GcRef> Debug for Rooted<T> {
     }
 }
 
-impl<T: GcRef> PartialEq for Rooted<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-    }
-}
-
-impl<T: GcRef> Eq for Rooted<T> {}
-
-impl<T: GcRef> Hash for Rooted<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.inner.hash(state);
-    }
-
-    fn hash_slice<H: std::hash::Hasher>(data: &[Self], state: &mut H)
-    where
-        Self: Sized,
-    {
-        // Safety: `Rooted<T>` is a `repr(transparent)` newtype over
-        // `GcRootIndex`.
-        let data: &[GcRootIndex] = unsafe { std::mem::transmute(data) };
-        GcRootIndex::hash_slice(data, state);
-    }
-}
-
 impl<T: GcRef> RootedGcRefImpl<T> for Rooted<T> {
     #[allow(private_interfaces)]
     fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
@@ -964,6 +940,36 @@ impl<T: GcRef> Rooted<T> {
         let a = a.try_gc_ref(store)?;
         let b = b.try_gc_ref(store)?;
         Ok(a == b)
+    }
+
+    /// Hash this root.
+    ///
+    /// Note that, similar to `Rooted::rooted_eq`, this only operates on the
+    /// root and *not* the underlying GC reference. That means that two
+    /// different rootings of the same object will hash to different values
+    /// (modulo hash collisions). If this is undesirable, use the
+    /// [`ref_hash`][crate::Rooted::ref_hash] method instead.
+    pub fn rooted_hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.inner.hash(state);
+    }
+
+    /// Hash the underlying rooted object reference.
+    ///
+    /// Note that, similar to `Rooted::ref_eq`, and operates on the underlying
+    /// rooted GC object reference, not the root. That means that two
+    /// *different* rootings of the same object will hash to the *same*
+    /// value. If this is undesirable, use the
+    /// [`rooted_hash`][crate::Rooted::rooted_hash] method instead.
+    pub fn ref_hash<H>(&self, store: impl AsContext, state: &mut H) -> Result<()>
+    where
+        H: std::hash::Hasher,
+    {
+        let gc_ref = self.try_gc_ref(store.as_context().0)?;
+        gc_ref.hash(state);
+        Ok(())
     }
 }
 
@@ -1498,6 +1504,92 @@ where
         let rooted = self._to_rooted(store);
         self._unroot(store);
         rooted
+    }
+
+    /// Are these two GC roots referencing the same underlying GC object?
+    ///
+    /// This function will return `true` even when `a` and `b` are different GC
+    /// roots (for example because they were rooted in different scopes) if they
+    /// are rooting the same underlying GC object.
+    ///
+    /// Because this method takes any `impl RootedGcRef<T>` arguments, it can be
+    /// used to compare, for example, a `Rooted<T>` and a `ManuallyRooted<T>`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either `a` or `b` is not associated with the given `store`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn foo() -> Result<()> {
+    /// let mut store = Store::<()>::default();
+    ///
+    /// let a = ExternRef::new_manually_rooted(&mut store, "hello");
+    /// let b = a.clone(&mut store);
+    ///
+    /// // `a` and `b` are rooting the same object.
+    /// assert!(ManuallyRooted::ref_eq(&store, &a, &b)?);
+    ///
+    /// {
+    ///     let mut scope = RootScope::new(&mut store);
+    ///
+    ///     // `c` is a different GC root, is in a different scope, and is a
+    ///     // `Rooted<T>` instead of a `ManuallyRooted<T>`, but is still rooting
+    ///     // the same object.
+    ///     let c = a.to_rooted(&mut scope);
+    ///     assert!(ManuallyRooted::ref_eq(&scope, &a, &c)?);
+    /// }
+    ///
+    /// let x = ExternRef::new_manually_rooted(&mut store, "goodbye");
+    ///
+    /// // `a` and `x` are rooting different objects.
+    /// assert!(!ManuallyRooted::ref_eq(&store, &a, &x)?);
+    ///
+    /// a.unroot(&mut store);
+    /// b.unroot(&mut store);
+    /// x.unroot(&mut store);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn ref_eq(
+        store: impl AsContext,
+        a: &impl RootedGcRef<T>,
+        b: &impl RootedGcRef<T>,
+    ) -> Result<bool> {
+        Rooted::ref_eq(store, a, b)
+    }
+
+    /// Hash this root.
+    ///
+    /// Note that, similar to `Rooted::rooted_eq`, this only operates on the
+    /// root and *not* the underlying GC reference. That means that two
+    /// different rootings of the same object will hash to different values
+    /// (modulo hash collisions). If this is undesirable, use the
+    /// [`ref_hash`][crate::ManuallyRooted::ref_hash] method instead.
+    pub fn rooted_hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.inner.hash(state);
+    }
+
+    /// Hash the underlying rooted object reference.
+    ///
+    /// Note that, similar to `Rooted::ref_eq`, and operates on the underlying
+    /// rooted GC object reference, not the root. That means that two
+    /// *different* rootings of the same object will hash to the *same*
+    /// value. If this is undesirable, use the
+    /// [`rooted_hash`][crate::Rooted::rooted_hash] method instead.
+    pub fn ref_hash<H>(&self, store: impl AsContext, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        let gc_ref = self
+            .get_gc_ref(store.as_context().0)
+            .expect("ManuallyRooted's get_gc_ref is infallible");
+        gc_ref.hash(state);
     }
 }
 
