@@ -117,8 +117,16 @@ impl ExternRef {
     /// # fn _foo() -> Result<()> {
     /// let mut store = Store::<()>::default();
     ///
-    /// // Create an `externref` wrapping a `str`.
-    /// let externref = ExternRef::new(&mut store, "hello!");
+    /// {
+    ///     let mut scope = RootScope::new(&mut store);
+    ///
+    ///     // Create an `externref` wrapping a `str`.
+    ///     let externref = ExternRef::new(&mut scope, "hello!");
+    ///
+    ///     // Use `externref`...
+    /// }
+    ///
+    /// // The `externref` is automatically unrooted when we exit the scope.
     /// # Ok(())
     /// # }
     /// ```
@@ -150,11 +158,12 @@ impl ExternRef {
     /// # fn _foo() -> Result<()> {
     /// let mut store = Store::<()>::default();
     ///
+    /// // Create a manually-rooted `externref` wrapping a `str`.
     /// let externref = ExternRef::new_manually_rooted(&mut store, "hello!");
     ///
     /// // Use `externref` a bunch...
     ///
-    /// // Don't forget to unroot the `externref` when done using it.
+    /// // Don't forget to explicitly unroot the `externref` when done using it.
     /// externref.unroot(&mut store);
     /// # Ok(())
     /// # }
