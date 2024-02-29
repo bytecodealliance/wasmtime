@@ -9,7 +9,6 @@ use anyhow::{bail, Context as _, Error, Result};
 use std::ffi::c_void;
 use std::future::Future;
 use std::mem;
-use std::ops::DerefMut;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
@@ -1655,13 +1654,11 @@ pub unsafe trait WasmRet {
     // `invoke_wasm_and_catch_traps` is on the stack, and therefore this method
     // is unsafe.
     #[doc(hidden)]
-    unsafe fn into_abi_for_ret<S>(
+    unsafe fn into_abi_for_ret(
         self,
-        store: &mut AutoAssertNoGc<S>,
+        store: &mut AutoAssertNoGc<'_>,
         ptr: Self::Retptr,
-    ) -> Result<Self::Abi>
-    where
-        S: DerefMut<Target = StoreOpaque>;
+    ) -> Result<Self::Abi>;
 
     #[doc(hidden)]
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType;
@@ -1692,14 +1689,11 @@ where
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret<S>(
+    unsafe fn into_abi_for_ret(
         self,
-        store: &mut AutoAssertNoGc<S>,
+        store: &mut AutoAssertNoGc<'_>,
         _retptr: (),
-    ) -> Result<Self::Abi>
-    where
-        S: DerefMut<Target = StoreOpaque>,
-    {
+    ) -> Result<Self::Abi> {
         <Self as WasmTy>::into_abi(self, store)
     }
 
@@ -1735,14 +1729,11 @@ where
         }
     }
 
-    unsafe fn into_abi_for_ret<S>(
+    unsafe fn into_abi_for_ret(
         self,
-        store: &mut AutoAssertNoGc<S>,
+        store: &mut AutoAssertNoGc<'_>,
         retptr: Self::Retptr,
-    ) -> Result<Self::Abi>
-    where
-        S: DerefMut<Target = StoreOpaque>,
-    {
+    ) -> Result<Self::Abi> {
         self.and_then(|val| val.into_abi_for_ret(store, retptr))
     }
 
@@ -1782,14 +1773,11 @@ macro_rules! impl_wasm_host_results {
             }
 
             #[inline]
-            unsafe fn into_abi_for_ret<S>(
+            unsafe fn into_abi_for_ret(
                 self,
-                _store: &mut AutoAssertNoGc<S>,
+                _store: &mut AutoAssertNoGc<'_>,
                 ptr: Self::Retptr,
-            ) -> Result<Self::Abi>
-            where
-                S: DerefMut<Target = StoreOpaque>
-            {
+            ) -> Result<Self::Abi> {
                 let ($($t,)*) = self;
                 let abi = ($($t.into_abi(_store)?,)*);
                 Ok(<($($t::Abi,)*) as HostAbi>::into_abi(abi, ptr))
