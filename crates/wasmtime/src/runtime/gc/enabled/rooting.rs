@@ -128,12 +128,7 @@ mod sealed {
     pub unsafe trait GcRefImpl: Sized {
         /// Transmute a `&GcRootIndex` into an `&Self`.
         #[allow(private_interfaces)]
-        fn transmute_ref(index: &GcRootIndex) -> &Self {
-            // This is valid and safe because all implementers must be newtypes
-            // over `GcRootIndex`, which is part of the contract for
-            // implementing this trait.
-            unsafe { std::mem::transmute(index) }
-        }
+        fn transmute_ref(index: &GcRootIndex) -> &Self;
     }
 
     /// Sealed, `wasmtime`-internal trait for the common methods on rooted GC
