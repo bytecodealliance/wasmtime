@@ -25,7 +25,7 @@ package wasi:filesystem@0.2.0;
 /// [WASI filesystem path resolution]: https://github.com/WebAssembly/wasi-filesystem/blob/main/path-resolution.md
 interface types {
     use wasi:io/streams@0.2.0.{input-stream, output-stream, error};
-    use wasi:clocks/wall-clock@0.2.0.{datetime};
+    use wasi:clocks/wall-clock@0.2.1.{datetime};
 
     /// File size or length of a region within a file.
     type filesize = u64;

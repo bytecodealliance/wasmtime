@@ -1,5 +1,5 @@
 pub mod host;
-use crate::preview2::bindings::clocks::timezone::TimezoneDisplay;
+use crate::bindings::clocks::timezone::TimezoneDisplay;
 use cap_std::time::Duration;
 
 pub trait HostWallClock: Send {
@@ -12,7 +12,7 @@ pub trait HostMonotonicClock: Send {
     fn now(&self) -> u64;
 }
 
-pub trait HostTimezone: Send + Sync {
+pub trait HostTimezone: Send {
     fn display(&self, datetime: Duration) -> TimezoneDisplay;
     fn utc_offset(&self, datetime: Duration) -> i32;
 }

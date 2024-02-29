@@ -1,5 +1,5 @@
 use super::{HostMonotonicClock, HostTimezone, HostWallClock};
-use crate::preview2::bindings::clocks::timezone::TimezoneDisplay;
+use crate::bindings::clocks::timezone::TimezoneDisplay;
 use cap_std::time::{Duration, Instant, SystemClock};
 use cap_std::{ambient_authority, AmbientAuthority};
 use cap_time_ext::{MonotonicClockExt, SystemClockExt};

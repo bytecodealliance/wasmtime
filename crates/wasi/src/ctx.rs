@@ -1,7 +1,7 @@
 use crate::{
     clocks::{
-        host::{monotonic_clock, wall_clock},
-        HostMonotonicClock, HostWallClock,
+        host::{monotonic_clock, timezone, wall_clock},
+        HostMonotonicClock, HostTimezone, HostWallClock,
     },
     filesystem::{Dir, OpenMode},
     network::{SocketAddrCheck, SocketAddrUse},
@@ -28,7 +28,7 @@ pub struct WasiCtxBuilder {
     wall_clock: Box<dyn HostWallClock + Send>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     allowed_network_uses: AllowedNetworkUses,
-    timezone: Box<dyn HostTimezone + Send + Sync>,
+    timezone: Box<dyn HostTimezone + Send>,
     built: bool,
 }
 

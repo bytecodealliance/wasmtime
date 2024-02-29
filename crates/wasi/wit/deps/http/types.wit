@@ -2,7 +2,7 @@
 /// HTTP Requests and Responses, both incoming and outgoing, as well as
 /// their headers, trailers, and bodies.
 interface types {
-  use wasi:clocks/monotonic-clock@0.2.0.{duration};
+  use wasi:clocks/monotonic-clock@0.2.1.{duration};
   use wasi:io/streams@0.2.0.{input-stream, output-stream};
   use wasi:io/error@0.2.0.{error as io-error};
   use wasi:io/poll@0.2.0.{pollable};

@@ -2,6 +2,7 @@
 
 use crate::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
+    clocks::timezone::{self, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},
 };
 use crate::poll::{subscribe, Subscribe};
