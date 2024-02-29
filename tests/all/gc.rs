@@ -674,10 +674,11 @@ fn no_leak_with_global_get_elem_segment() -> anyhow::Result<()> {
         "#,
     )?;
 
+    let externref = ExternRef::new(&mut store, SetFlagOnDrop(dropped.clone()));
     let global = Global::new(
         &mut store,
         GlobalType::new(ValType::EXTERNREF, Mutability::Const),
-        Val::ExternRef(Some(ExternRef::new(SetFlagOnDrop(dropped.clone())))),
+        externref.into(),
     )?;
 
     Instance::new(&mut store, &module, &[global.into()])?;
