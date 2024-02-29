@@ -7,20 +7,18 @@ use futures::{future, stream, Future, SinkExt, StreamExt, TryStreamExt};
 use url::Url;
 
 mod bindings {
-    use super::Handler;
-
     wit_bindgen::generate!({
         path: "../wasi-http/wit",
         world: "wasi:http/proxy",
-        exports: {
-            "wasi:http/incoming-handler": Handler,
-        },
+        default_bindings_module: "bindings",
     });
 }
 
 const MAX_CONCURRENCY: usize = 16;
 
 struct Handler;
+
+bindings::export!(Handler);
 
 impl bindings::exports::wasi::http::incoming_handler::Guest for Handler {
     fn handle(request: IncomingRequest, response_out: ResponseOutparam) {

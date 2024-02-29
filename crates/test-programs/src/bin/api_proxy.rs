@@ -1,18 +1,16 @@
 pub mod bindings {
-    use super::T;
-
     wit_bindgen::generate!({
         path: "../wasi-http/wit",
         world: "wasi:http/proxy",
-        exports: {
-            "wasi:http/incoming-handler": T,
-        },
+        default_bindings_module: "bindings",
     });
 }
 
 use bindings::wasi::http::types::{IncomingRequest, ResponseOutparam};
 
 struct T;
+
+bindings::export!(T);
 
 impl bindings::exports::wasi::http::incoming_handler::Guest for T {
     fn handle(request: IncomingRequest, outparam: ResponseOutparam) {
