@@ -3,10 +3,11 @@
     allow(unused_imports)
 )]
 
-use crate::store::StoreOpaque;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{Result, ValRaw, ValType, WasmTy};
 use std::cmp::Ordering;
 use std::fmt;
+use std::ops::DerefMut;
 use wasmtime_runtime::V128Abi;
 
 /// Representation of a 128-bit vector type, `v128`, for WebAssembly.
@@ -120,7 +121,10 @@ unsafe impl WasmTy for V128 {
     }
 
     #[inline]
-    fn into_abi(self, _store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, _store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         Ok(self.0)
     }
 

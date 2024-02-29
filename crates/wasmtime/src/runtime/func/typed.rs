@@ -7,6 +7,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
+use std::ops::DerefMut;
 use std::os::raw::c_void;
 use std::ptr::{self, NonNull};
 use wasmtime_runtime::{
@@ -326,8 +327,37 @@ pub unsafe trait WasmTy: Send {
     unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw);
 
     // Convert `self` into `Self::Abi`.
+    //
+    // NB: We _must not_ trigger a GC when passing refs from host code into Wasm
+    // (e.g. returned from a host function or passed as arguments to a Wasm
+    // function). After insertion into the activations table, the reference is
+    // no longer rooted. If multiple references are being sent from the host
+    // into Wasm and we allowed GCs during insertion, then the following events
+    // could happen:
+    //
+    // * Reference A is inserted into the activations table. This does not
+    //   trigger a GC, but does fill the table to capacity.
+    //
+    // * The caller's reference to A is removed. Now the only reference to A is
+    //   from the activations table.
+    //
+    // * Reference B is inserted into the activations table. Because the table
+    //   is at capacity, a GC is triggered.
+    //
+    // * A is reclaimed because the only reference keeping it alive was the
+    //   activation table's reference (it isn't inside any Wasm frames on the
+    //   stack yet, so stack scanning and stack maps don't increment its
+    //   reference count).
+    //
+    // * We transfer control to Wasm, giving it A and B. Wasm uses A. That's a
+    //   use-after-free bug.
+    //
+    // In conclusion, to prevent uses-after-free bugs, we cannot GC while
+    // converting types into their raw ABI forms.
     #[doc(hidden)]
-    fn into_abi(self, store: &mut StoreOpaque) -> Result<Self::Abi>;
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>;
 
     // Convert back from `Self::Abi` into `Self`.
     #[doc(hidden)]
@@ -363,7 +393,10 @@ macro_rules! integers {
                 *raw = ValRaw::$primitive(abi);
             }
             #[inline]
-            fn into_abi(self, _store: &mut StoreOpaque) -> Result<Self::Abi> {
+            fn into_abi<S>(self, _store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+            where
+                S: DerefMut<Target = StoreOpaque>
+            {
                 Ok(self)
             }
             #[inline]
@@ -410,7 +443,10 @@ macro_rules! floats {
                 *raw = ValRaw::$float(abi.to_bits());
             }
             #[inline]
-            fn into_abi(self, _store: &mut StoreOpaque) -> Result<Self::Abi> {
+            fn into_abi<S>(self, _store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+            where
+                S: DerefMut<Target = StoreOpaque>
+            {
                 Ok(self)
             }
             #[inline]
@@ -463,39 +499,13 @@ unsafe impl WasmTy for Rooted<ExternRef> {
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         let inner = self.try_to_vm_extern_ref(store)?;
         let abi = inner.as_raw();
         unsafe {
-            // NB: We _must not_ trigger a GC when passing refs from host
-            // code into Wasm (e.g. returned from a host function or passed
-            // as arguments to a Wasm function). After insertion into the
-            // table, this reference is no longer rooted. If multiple
-            // references are being sent from the host into Wasm and we
-            // allowed GCs during insertion, then the following events could
-            // happen:
-            //
-            // * Reference A is inserted into the activations
-            //   table. This does not trigger a GC, but does fill the table
-            //   to capacity.
-            //
-            // * The caller's reference to A is removed. Now the only
-            //   reference to A is from the activations table.
-            //
-            // * Reference B is inserted into the activations table. Because
-            //   the table is at capacity, a GC is triggered.
-            //
-            // * A is reclaimed because the only reference keeping it alive
-            //   was the activation table's reference (it isn't inside any
-            //   Wasm frames on the stack yet, so stack scanning and stack
-            //   maps don't increment its reference count).
-            //
-            // * We transfer control to Wasm, giving it A and B. Wasm uses
-            //   A. That's a use after free.
-            //
-            // In conclusion, to prevent uses after free, we cannot GC
-            // during this insertion.
-            let mut store = AutoAssertNoGc::new(store);
             store.insert_vmexternref_without_gc(inner);
 
             debug_assert!(!abi.is_null());
@@ -545,7 +555,10 @@ unsafe impl WasmTy for Option<Rooted<ExternRef>> {
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         Ok(if let Some(x) = self {
             <Rooted<ExternRef> as WasmTy>::into_abi(x, store)?.as_ptr()
         } else {
@@ -597,39 +610,13 @@ unsafe impl WasmTy for ManuallyRooted<ExternRef> {
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         let inner = self.try_to_vm_extern_ref(store)?;
         let abi = inner.as_raw();
         unsafe {
-            // NB: We _must not_ trigger a GC when passing refs from host
-            // code into Wasm (e.g. returned from a host function or passed
-            // as arguments to a Wasm function). After insertion into the
-            // table, this reference is no longer rooted. If multiple
-            // references are being sent from the host into Wasm and we
-            // allowed GCs during insertion, then the following events could
-            // happen:
-            //
-            // * Reference A is inserted into the activations
-            //   table. This does not trigger a GC, but does fill the table
-            //   to capacity.
-            //
-            // * The caller's reference to A is removed. Now the only
-            //   reference to A is from the activations table.
-            //
-            // * Reference B is inserted into the activations table. Because
-            //   the table is at capacity, a GC is triggered.
-            //
-            // * A is reclaimed because the only reference keeping it alive
-            //   was the activation table's reference (it isn't inside any
-            //   Wasm frames on the stack yet, so stack scanning and stack
-            //   maps don't increment its reference count).
-            //
-            // * We transfer control to Wasm, giving it A and B. Wasm uses
-            //   A. That's a use after free.
-            //
-            // In conclusion, to prevent uses after free, we cannot GC
-            // during this insertion.
-            let mut store = AutoAssertNoGc::new(store);
             store.insert_vmexternref_without_gc(inner);
             self._unroot(&mut *store);
 
@@ -686,7 +673,10 @@ unsafe impl WasmTy for Option<ManuallyRooted<ExternRef>> {
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         Ok(if let Some(x) = self {
             <ManuallyRooted<ExternRef> as WasmTy>::into_abi(x, store)?.as_ptr()
         } else {
@@ -742,7 +732,10 @@ unsafe impl WasmTy for NoFunc {
     }
 
     #[inline]
-    fn into_abi(self, _store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, _store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         unreachable!("NoFunc is uninhabited")
     }
 
@@ -796,7 +789,10 @@ unsafe impl WasmTy for Option<NoFunc> {
     }
 
     #[inline]
-    fn into_abi(self, _store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, _store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         Ok(ptr::null_mut())
     }
 
@@ -848,7 +844,10 @@ unsafe impl WasmTy for Func {
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         Ok(self.vm_func_ref(store))
     }
 
@@ -907,7 +906,10 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque) -> Result<Self::Abi> {
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         Ok(if let Some(f) = self {
             f.vm_func_ref(store).as_ptr()
         } else {
@@ -941,7 +943,9 @@ pub unsafe trait WasmParams: Send {
     fn externrefs_count(&self) -> usize;
 
     #[doc(hidden)]
-    fn into_abi(self, store: &mut StoreOpaque, func_ty: &FuncType) -> Result<Self::Abi>;
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>, func_ty: &FuncType) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>;
 
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
@@ -974,7 +978,10 @@ where
     }
 
     #[inline]
-    fn into_abi(self, store: &mut StoreOpaque, func_ty: &FuncType) -> Result<Self::Abi> {
+    fn into_abi<S>(self, store: &mut AutoAssertNoGc<S>, func_ty: &FuncType) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         <(T,) as WasmParams>::into_abi((self,), store, func_ty)
     }
 
@@ -1030,11 +1037,14 @@ macro_rules! impl_wasm_params {
 
 
             #[inline]
-            fn into_abi(
+            fn into_abi<S>(
                 self,
-                _store: &mut StoreOpaque,
+                _store: &mut AutoAssertNoGc<S>,
                 _func_ty: &FuncType,
-            ) -> Result<Self::Abi> {
+            ) -> Result<Self::Abi>
+            where
+                S: DerefMut<Target = StoreOpaque>
+            {
                 let ($($t,)*) = self;
 
                 let mut _i = 0;

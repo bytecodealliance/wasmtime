@@ -1,5 +1,5 @@
 use crate::runtime::Uninhabited;
-use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, Ref,
@@ -9,6 +9,7 @@ use anyhow::{bail, Context as _, Error, Result};
 use std::ffi::c_void;
 use std::future::Future;
 use std::mem;
+use std::ops::DerefMut;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
@@ -1654,11 +1655,13 @@ pub unsafe trait WasmRet {
     // `invoke_wasm_and_catch_traps` is on the stack, and therefore this method
     // is unsafe.
     #[doc(hidden)]
-    unsafe fn into_abi_for_ret(
+    unsafe fn into_abi_for_ret<S>(
         self,
-        store: &mut StoreOpaque,
+        store: &mut AutoAssertNoGc<S>,
         ptr: Self::Retptr,
-    ) -> Result<Self::Abi>;
+    ) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>;
 
     #[doc(hidden)]
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType;
@@ -1689,7 +1692,14 @@ where
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret(self, store: &mut StoreOpaque, _retptr: ()) -> Result<Self::Abi> {
+    unsafe fn into_abi_for_ret<S>(
+        self,
+        store: &mut AutoAssertNoGc<S>,
+        _retptr: (),
+    ) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         <Self as WasmTy>::into_abi(self, store)
     }
 
@@ -1725,11 +1735,14 @@ where
         }
     }
 
-    unsafe fn into_abi_for_ret(
+    unsafe fn into_abi_for_ret<S>(
         self,
-        store: &mut StoreOpaque,
+        store: &mut AutoAssertNoGc<S>,
         retptr: Self::Retptr,
-    ) -> Result<Self::Abi> {
+    ) -> Result<Self::Abi>
+    where
+        S: DerefMut<Target = StoreOpaque>,
+    {
         self.and_then(|val| val.into_abi_for_ret(store, retptr))
     }
 
@@ -1769,7 +1782,14 @@ macro_rules! impl_wasm_host_results {
             }
 
             #[inline]
-            unsafe fn into_abi_for_ret(self, _store: &mut StoreOpaque, ptr: Self::Retptr) -> Result<Self::Abi> {
+            unsafe fn into_abi_for_ret<S>(
+                self,
+                _store: &mut AutoAssertNoGc<S>,
+                ptr: Self::Retptr,
+            ) -> Result<Self::Abi>
+            where
+                S: DerefMut<Target = StoreOpaque>
+            {
                 let ($($t,)*) = self;
                 let abi = ($($t.into_abi(_store)?,)*);
                 Ok(<($($t::Abi,)*) as HostAbi>::into_abi(abi, ptr))
@@ -2201,7 +2221,8 @@ macro_rules! impl_into_func {
                                 if !ret.compatible_with_store(caller.store.0) {
                                     CallResult::Trap(anyhow::anyhow!("host function attempted to return cross-`Store` value to Wasm"))
                                 } else {
-                                    match ret.into_abi_for_ret(caller.store.0, retptr) {
+                                    let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
+                                    match ret.into_abi_for_ret(&mut store, retptr) {
                                         Ok(val) => CallResult::Ok(val),
                                         Err(trap) => CallResult::Trap(trap.into()),
                                     }

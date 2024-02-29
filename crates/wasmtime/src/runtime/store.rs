@@ -76,10 +76,10 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::gc::RootSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::{BareModuleInfo, RegisteredModuleId};
-use crate::gc::RootSet;
 use crate::trampoline::VMHostGlobalContext;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory};
@@ -390,7 +390,8 @@ unsafe impl Send for AsyncState {}
 unsafe impl Sync for AsyncState {}
 
 /// An RAII type to automatically mark a region of code as unsafe for GC.
-pub(crate) struct AutoAssertNoGc<T>
+#[doc(hidden)]
+pub struct AutoAssertNoGc<T>
 where
     T: std::ops::DerefMut<Target = StoreOpaque>,
 {
