@@ -390,6 +390,7 @@ impl RootSet {
     /// when the scope is finished.
     ///
     /// Calls to `{enter,exit}_lifo_scope` must happen in a strict LIFO order.
+    #[inline]
     pub(crate) fn enter_lifo_scope(&self) -> usize {
         let len = self.lifo_roots.len();
         log::debug!("Entering GC root set LIFO scope: {len}");
@@ -402,10 +403,20 @@ impl RootSet {
     /// `enter_lifo_scope` call.
     ///
     /// Calls to `{enter,exit}_lifo_scope` must happen in a strict LIFO order.
+    #[inline]
     pub(crate) fn exit_lifo_scope(&mut self, scope: usize) {
         log::debug!("Exiting GC root set LIFO scope: {scope}");
         debug_assert!(self.lifo_roots.len() >= scope);
 
+        // If we actually have roots to unroot, call an out-of-line slow path.
+        if self.lifo_roots.len() > scope {
+            self.exit_lifo_scope_slow(scope)
+        }
+    }
+
+    #[inline(never)]
+    #[cold]
+    fn exit_lifo_scope_slow(&mut self, scope: usize) {
         // In the case where we have a tracing GC, this should really be:
         //
         //     self.lifo_roots.truncate(scope);
