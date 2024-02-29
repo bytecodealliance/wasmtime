@@ -1,12 +1,11 @@
 wit_bindgen::generate!({
     world: "test-reactor",
     path: "../wasi/wit",
-    exports: {
-        world: T,
-    }
 });
 
 struct T;
+
+export!(T);
 
 static mut STATE: Vec<String> = Vec::new();
 
