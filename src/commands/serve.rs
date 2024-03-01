@@ -450,10 +450,11 @@ async fn handle_request(
         Ok(Ok(resp)) => Ok(resp),
         Ok(Err(e)) => Err(e.into()),
         Err(_) => {
-            // If the receiver has an error (`RecvError`), it will not describe
-            // the real failure in any meaningful way. Instead we retrieve and
-            // propagate the error from inside the task which should more
-            // clearly tell the user what went wrong.
+            // An error in the receiver (`RecvError`) only indicates that the
+            // task exited before a response was sent (i.e., the sender was
+            // dropped); it does not describe the underlying cause of failure.
+            // Instead we retrieve and propagate the error from inside the task
+            // which should more clearly tell the user what went wrong.
             let e = match task.await {
                 Ok(r) => r.expect_err("if the receiver has an error, the task must have failed"),
                 Err(e) => e.into(),
