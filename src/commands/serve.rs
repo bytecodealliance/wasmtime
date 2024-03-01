@@ -454,7 +454,9 @@ async fn handle_request(
             // task exited before a response was sent (i.e., the sender was
             // dropped); it does not describe the underlying cause of failure.
             // Instead we retrieve and propagate the error from inside the task
-            // which should more clearly tell the user what went wrong.
+            // which should more clearly tell the user what went wrong. Note
+            // that we assume the task has already exited at this point so the
+            // `await` should resolve immediately.
             let e = match task.await {
                 Ok(r) => r.expect_err("if the receiver has an error, the task must have failed"),
                 Err(e) => e.into(),
