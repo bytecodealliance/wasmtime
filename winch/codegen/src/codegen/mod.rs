@@ -4,6 +4,7 @@ use crate::{
     isa::reg::Reg,
     masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::TypedReg,
+    CallingConvention,
 };
 
 use anyhow::Result;
@@ -51,6 +52,12 @@ where
     // NB The 64 is set arbitrarily, we can adjust it as
     // we see fit.
     pub control_frames: SmallVec<[ControlStackFrame; 64]>,
+
+    /// The callee saved registers.
+    pub callee_saved_regs: SmallVec<[(Reg, OperandSize); 18]>,
+
+    /// The SP offset at the end of the prologue.
+    prologue_sp_offset: Option<SPOffset>,
 }
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
@@ -69,6 +76,8 @@ where
             masm,
             env,
             control_frames: Default::default(),
+            callee_saved_regs: M::ABI::callee_saved_regs(&CallingConvention::Default),
+            prologue_sp_offset: None,
         }
     }
 
@@ -94,9 +103,10 @@ where
             .unwrap_reg()
             .into();
 
-        // We need to use the vmctx paramter before pinning it for stack checking, and we don't
-        // have any callee save registers in the winch calling convention.
-        self.masm.prologue(vmctx, &[]);
+        // We need to use the vmctx paramter before pinning it for stack checking.
+        self.masm.prologue(vmctx, self.callee_saved_regs.as_slice());
+
+        self.prologue_sp_offset = Some(self.masm.sp_offset());
 
         // Pin the `VMContext` pointer.
         self.masm
@@ -300,7 +310,9 @@ where
         // The implicit body block is treated a normal block (it pushes results
         // to the stack); so when reaching the end, we pop them taking as
         // reference the current function's signature.
-        let base = SPOffset::from_u32(self.context.frame.locals_size);
+        let base = SPOffset::from_u32(
+            self.prologue_sp_offset.unwrap().as_u32() + self.context.frame.locals_size,
+        );
         if self.context.reachable {
             ControlStackFrame::pop_abi_results_impl(
                 &mut self.sig.results,
@@ -317,7 +329,7 @@ where
         }
         debug_assert_eq!(self.context.stack.len(), 0);
         self.masm.free_stack(self.context.frame.locals_size);
-        self.masm.epilogue(&[]);
+        self.masm.epilogue(self.callee_saved_regs.as_slice());
         Ok(())
     }
 

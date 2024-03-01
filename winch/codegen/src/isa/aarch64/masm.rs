@@ -193,8 +193,11 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn pop(&mut self, _dst: Reg, _size: OperandSize) {
-        todo!()
+    fn pop(&mut self, dst: Reg, size: OperandSize) {
+        let bytes = size.bytes();
+        let addr = Address::from_shadow_sp(i64::try_from(bytes).unwrap());
+        self.asm.ldr(addr, dst, size);
+        self.free_stack(bytes);
     }
 
     fn sp_offset(&self) -> SPOffset {
