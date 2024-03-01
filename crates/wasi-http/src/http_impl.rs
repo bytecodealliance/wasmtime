@@ -94,13 +94,23 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .body(body)
             .map_err(|err| internal_error(err.to_string()))?;
 
-        Ok(Ok(self.send_request(OutgoingRequest {
+        let result = self.send_request(OutgoingRequest {
             use_tls,
             authority,
             request,
             connect_timeout,
             first_byte_timeout,
             between_bytes_timeout,
-        })?))
+        });
+
+        // attempt to downcast the error to a ErrorCode
+        // so that the guest may handle it
+        match result {
+            Ok(response) => Ok(Ok(response)),
+            Err(err) => match err.downcast::<types::ErrorCode>() {
+                Ok(err) => Ok(Err(err)),
+                Err(err) => Err(err),
+            },
+        }
     }
 }
