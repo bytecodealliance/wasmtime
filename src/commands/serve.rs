@@ -385,8 +385,7 @@ async fn handle_request(
 
     let (sender, receiver) = tokio::sync::oneshot::channel();
 
-    // TODO: need to track the join handle, but don't want to block the response on it
-    tokio::task::spawn(async move {
+    let task = tokio::task::spawn(async move {
         let req_id = inner.next_req_id();
         let (mut parts, body) = req.into_parts();
 
@@ -450,7 +449,20 @@ async fn handle_request(
     match receiver.await {
         Ok(Ok(resp)) => Ok(resp),
         Ok(Err(e)) => Err(e.into()),
-        Err(_) => bail!("guest never invoked `response-outparam::set` method"),
+        Err(_) => {
+            // An error in the receiver (`RecvError`) only indicates that the
+            // task exited before a response was sent (i.e., the sender was
+            // dropped); it does not describe the underlying cause of failure.
+            // Instead we retrieve and propagate the error from inside the task
+            // which should more clearly tell the user what went wrong. Note
+            // that we assume the task has already exited at this point so the
+            // `await` should resolve immediately.
+            let e = match task.await {
+                Ok(r) => r.expect_err("if the receiver has an error, the task must have failed"),
+                Err(e) => e.into(),
+            };
+            bail!("guest never invoked `response-outparam::set` method: {e:?}")
+        }
     }
 }
 
