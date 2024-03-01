@@ -743,8 +743,15 @@ impl RunCommand {
         for (key, value) in self.vars.iter() {
             let value = match value {
                 Some(value) => value.clone(),
-                None => std::env::var(key)
-                    .map_err(|_| anyhow!("environment variable `{key}` not found"))?,
+                None => match std::env::var_os(key) {
+                    Some(val) => val
+                        .into_string()
+                        .map_err(|_| anyhow!("environment variable `{key}` not valid utf-8"))?,
+                    None => {
+                        // leave the env var un-set in the guest
+                        continue;
+                    }
+                },
             };
             builder.env(key, &value)?;
         }
@@ -775,8 +782,15 @@ impl RunCommand {
         for (key, value) in self.vars.iter() {
             let value = match value {
                 Some(value) => value.clone(),
-                None => std::env::var(key)
-                    .map_err(|_| anyhow!("environment variable `{key}` not found"))?,
+                None => match std::env::var_os(key) {
+                    Some(val) => val
+                        .into_string()
+                        .map_err(|_| anyhow!("environment variable `{key}` not valid utf-8"))?,
+                    None => {
+                        // leave the env var un-set in the guest
+                        continue;
+                    }
+                },
             };
             builder.env(key, &value);
         }

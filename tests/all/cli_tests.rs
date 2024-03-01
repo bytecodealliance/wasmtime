@@ -519,7 +519,7 @@ fn specify_env() -> Result<()> {
             "tests/all/cli_tests/print_env.wat",
         ])
         .output()?;
-    assert!(!output.status.success());
+    assert!(output.status.success());
 
     Ok(())
 }
