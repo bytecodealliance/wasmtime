@@ -33,6 +33,7 @@ pub fn disasm(
 
             let is_jump = detail
                 .groups()
+                .iter()
                 .find(|g| g.0 as u32 == CS_GRP_JUMP)
                 .is_some();
 
@@ -67,8 +68,12 @@ pub fn disasm(
 
             // Flip write_offsets to true once we've seen a `ret`, as instructions that follow the
             // return are often related to trap tables.
-            write_offsets =
-                write_offsets || detail.groups().find(|g| g.0 as u32 == CS_GRP_RET).is_some();
+            write_offsets = write_offsets
+                || detail
+                    .groups()
+                    .iter()
+                    .find(|g| g.0 as u32 == CS_GRP_RET)
+                    .is_some();
 
             line
         })
