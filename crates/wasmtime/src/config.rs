@@ -2156,9 +2156,10 @@ pub enum WasmBacktraceDetails {
 ///
 /// Another disadvantage of the pooling allocator is that it may keep memory
 /// alive when nothing is using it. A previously used slot for an instance might
-/// have paged-in memory that will not get paged out until the [`Engine`] owning
-/// the pooling allocator is dropped. While suitable for some applications this
-/// behavior may not be suitable for all applications.
+/// have paged-in memory that will not get paged out until the
+/// [`Engine`](crate::Engine) owning the pooling allocator is dropped. While
+/// suitable for some applications this behavior may not be suitable for all
+/// applications.
 ///
 /// Finally the last disadvantage of the pooling allocator is that the
 /// configuration values for the maximum number of instances, memories, tables,
