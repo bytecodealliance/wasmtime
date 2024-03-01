@@ -2076,6 +2076,90 @@ pub enum WasmBacktraceDetails {
 ///
 /// This structure has a builder-style API in the same manner as [`Config`] and
 /// is configured with [`Config::allocation_strategy`].
+///
+/// Note that usage of the pooling allocator does not affect compiled
+/// WebAssembly code. Compiled `*.cwasm` files, for example, are usable both
+/// with and without the pooling allocator.
+///
+/// ## Advantages of Pooled Allocation
+///
+/// The main benefit of the pooling allocator is to make WebAssembly
+/// instantiation both faster and more scalable in terms of parallelism.
+/// Allocation is faster because virtual memory is already configured and ready
+/// to go within the pool, there's no need to [`mmap`] (for example on Unix) a
+/// new region and configure it with guard pages. By avoiding [`mmap`] this
+/// avoids whole-process virtual memory locks which can improve scalability and
+/// performance through avoiding this.
+///
+/// Additionally with pooled allocation it's possible to create "affine slots"
+/// to a particular WebAssembly module or component over time. For example if
+/// the same module is multiple times over time the pooling allocator will, by
+/// default, attempt to reuse the same slot. This mean that the slot has been
+/// pre-configured and can retain virtual memory mappings for a copy-on-write
+/// image, for example (see [`Config::memory_init_cow`] for more information.
+/// This means that in a steady state instance deallocation is a single
+/// [`madvise`] to reset linear memory to its original contents followed by a
+/// single (optional) [`mprotect`] during the next instantiation to shrink
+/// memory back to its original size. Compared to non-pooled allocation this
+/// avoids the need to [`mmap`] a new region of memory, [`munmap`] it, and
+/// [`mprotect`] regions too.
+///
+/// Another benefit of pooled allocation is that it's possible to configure
+/// things such that no virtual memory management is required at all in a steady
+/// state. For example a pooling allocator can be configured with
+/// [`Config::memory_init_cow`] disabledd, dynamic bounds checks enabled
+/// through
+/// [`Config::static_memory_maximum_size(0)`](Config::static_memory_maximum_size),
+/// and sufficient space through
+/// [`PoolingAllocationConfig::table_keep_resident`] /
+/// [`PoolingAllocationConfig::linear_memory_keep_resident`]. With all these
+/// options in place no virtual memory tricks are used at all and everything is
+/// manually managed by Wasmtime (for example resetting memory is a
+/// `memset(0)`). This is not as fast in a single-threaded scenario but can
+/// provide benefits in high-parallelism situations as no virtual memory locks
+/// or IPIs need happen.
+///
+/// ## Disadvantages of Pooled Allocation
+///
+/// Despite the above advantages to instantiation performance the pooling
+/// allocator is not enabled by default in Wasmtime. One reason is that the
+/// performance advantages are not necessarily portable, for example while the
+/// pooling allocator works on Windows it has not been tuned for performance on
+/// Windows in the same way it has on Linux.
+///
+/// Additionally the main cost of the pooling allocator is that it requires a
+/// very large reservation of virtual memory (on the order of most of the
+/// addressable virtual address space). WebAssembly 32-bit linear memories in
+/// Wasmtime are, by default 4G address space reservations with a 2G guard
+/// region both before and after the linear memory. Memories in the pooling
+/// allocator are contiguous which means that we only need a guard after linear
+/// memory because the previous linear memory's slot post-guard is our own
+/// pre-guard. This means that, by default, the pooling allocator uses 6G of
+/// virtual memory per WebAssembly linear memory slot. 6G of virtual memory is
+/// 32.5 bits of a 64-bit address. Many 64-bit systems can only actually use
+/// 48-bit addresses by default (although this can be extended on architectures
+/// nowadays too), and of those 48 bits one of them is reserved to indicate
+/// kernel-vs-userspace. This leaves 47-32.5=14.5 bits left, meaning you can
+/// only have at most 64k slots of linear memories on many systems by default.
+/// This is a relatively small number and shows how the pooling allocator can
+/// quickly exhaust all of virtual memory.
+///
+/// Another disadvantage of the pooling allocator is that it may keep memory
+/// alive when nothing is using it. A previously used slot for an instance might
+/// have paged-in memory that will not get paged out until the [`Engine`] owning
+/// the pooling allocator is dropped. While suitable for some applications this
+/// behavior may not be suitable for all applications.
+///
+/// Finally the last disadvantage of the pooling allocator is that the
+/// configuration values for the maximum number of instances, memories, tables,
+/// etc, must all be fixed up-front. There's not always a clear answer as to
+/// what these values should be so not all applications may be able to work
+/// with this constraint.
+///
+/// [`madvise`]: https://man7.org/linux/man-pages/man2/madvise.2.html
+/// [`mprotect`]: https://man7.org/linux/man-pages/man2/mprotect.2.html
+/// [`mmap`]: https://man7.org/linux/man-pages/man2/mmap.2.html
+/// [`munmap`]: https://man7.org/linux/man-pages/man2/munmap.2.html
 #[cfg(feature = "pooling-allocator")]
 #[derive(Debug, Clone, Default)]
 pub struct PoolingAllocationConfig {
