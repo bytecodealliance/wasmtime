@@ -415,18 +415,21 @@ impl<'a> AutoAssertNoGc<'a> {
 impl std::ops::Deref for AutoAssertNoGc<'_> {
     type Target = StoreOpaque;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &*self.store
     }
 }
 
 impl std::ops::DerefMut for AutoAssertNoGc<'_> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.store
     }
 }
 
 impl Drop for AutoAssertNoGc<'_> {
+    #[inline]
     fn drop(&mut self) {
         #[cfg(all(debug_assertions, feature = "gc"))]
         {
