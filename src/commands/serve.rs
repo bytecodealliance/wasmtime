@@ -385,7 +385,6 @@ async fn handle_request(
 
     let (sender, receiver) = tokio::sync::oneshot::channel();
 
-    // TODO: need to track the join handle, but don't want to block the response on it
     let task = tokio::task::spawn(async move {
         let req_id = inner.next_req_id();
         let (mut parts, body) = req.into_parts();
