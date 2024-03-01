@@ -1526,6 +1526,15 @@ impl Config {
     /// if a module is instantiated many times this can lower the overall memory
     /// required needed to run that module.
     ///
+    /// The main disadvantage of copy-on-write initialization, however, is that
+    /// it may be possible for highly-parallel scenarios to be less scalable. If
+    /// a page is read initially by a WebAssembly module then that page will be
+    /// mapped to a read-only copy shared between all WebAssembly instances. If
+    /// the same page is then written, however, then a private copy is created
+    /// and swapped out from the read-only version. This also requires an [IPI],
+    /// however, which can be a significant bottleneck in high-parallelism
+    /// situations.
+    ///
     /// This feature is only applicable when a WebAssembly module meets specific
     /// criteria to be initialized in this fashion, such as:
     ///
@@ -1554,6 +1563,7 @@ impl Config {
     ///
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     /// [`Module`]: crate::Module
+    /// [IPI]: https://en.wikipedia.org/wiki/Inter-processor_interrupt
     pub fn memory_init_cow(&mut self, enable: bool) -> &mut Self {
         self.memory_init_cow = enable;
         self
