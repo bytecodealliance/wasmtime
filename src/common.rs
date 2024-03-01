@@ -2,7 +2,7 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use std::{path::Path, time::Duration};
+use std::{path::Path, path::PathBuf, time::Duration};
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 
@@ -199,15 +199,19 @@ impl RunCommon {
                     #[cfg(feature = "component-model")]
                     {
                         self.ensure_allow_components()?;
-                        RunTarget::Component(Component::new(engine, &bytes)?)
+                        RunTarget::Component(Component::new(engine, &bytes, None)?)
                     }
                     #[cfg(not(feature = "component-model"))]
                     {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    #[cfg(feature = "cranelift")]
-                    return Ok(RunTarget::Core(Module::new(engine, &bytes)?));
+                    // #[cfg(feature = "cranelift")]
+                    return Ok(RunTarget::Core(Module::new(
+                        engine,
+                        &bytes,
+                        Some(PathBuf::from(path)),
+                    )?));
                     #[cfg(not(feature = "cranelift"))]
                     bail!("support for compiling modules was disabled at compile time");
                 }

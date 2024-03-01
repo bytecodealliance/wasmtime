@@ -1,3 +1,4 @@
+use crate::dwarf_relocate::Relocate;
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
     ModuleType, TablePlan, TableSegment,
@@ -9,6 +10,7 @@ use crate::{
     WasmparserTypeConverter,
 };
 use cranelift_entity::packed_option::ReservedValue;
+use gimli::DwarfPackage;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -126,12 +128,14 @@ pub struct DebugInfoData<'a> {
     debug_loclists: gimli::DebugLocLists<Reader<'a>>,
     pub debug_ranges: gimli::DebugRanges<Reader<'a>>,
     pub debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
+    pub dwarf_package: Option<DwarfPackage<RelocateReader<'a>>>,
 }
 
 #[allow(missing_docs)]
 pub type Dwarf<'input> = gimli::Dwarf<Reader<'input>>;
 
 type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
+type RelocateReader<'input> = Relocate<'input, gimli::EndianSlice<'input, gimli::LittleEndian>>;
 
 #[derive(Debug, Default)]
 #[allow(missing_docs)]
@@ -715,7 +719,9 @@ and for re-adding support for interface types you can see this issue:
             // `gimli::Dwarf` fields.
             ".debug_abbrev" => dwarf.debug_abbrev = gimli::DebugAbbrev::new(data, endian),
             ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
-            ".debug_info" => dwarf.debug_info = gimli::DebugInfo::new(data, endian),
+            ".debug_info" => {
+                dwarf.debug_info = gimli::DebugInfo::new(data, endian);
+            }
             ".debug_line" => dwarf.debug_line = gimli::DebugLine::new(data, endian),
             ".debug_line_str" => dwarf.debug_line_str = gimli::DebugLineStr::from(slice),
             ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),

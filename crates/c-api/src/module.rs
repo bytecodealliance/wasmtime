@@ -137,7 +137,7 @@ pub unsafe extern "C" fn wasmtime_module_new(
     out: &mut *mut wasmtime_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        Module::from_binary(&engine.engine, crate::slice_from_raw_parts(wasm, len)),
+        Module::from_binary(&engine.engine, crate::slice_from_raw_parts(wasm, len), None),
         |module| {
             *out = Box::into_raw(Box::new(wasmtime_module_t { module }));
         },

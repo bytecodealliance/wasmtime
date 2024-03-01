@@ -118,6 +118,10 @@
 use crate::component::translate::*;
 use crate::fact;
 use crate::EntityType;
+use bincode::config::LittleEndian;
+use gimli::DwarfPackage;
+use gimli::EndianSlice;
+use gimli::Reader;
 use std::collections::HashSet;
 use wasmparser::WasmFeatures;
 
@@ -216,7 +220,7 @@ impl<'data> Translator<'_, 'data> {
                 multi_memory: true,
                 ..*self.validator.features()
             });
-            let translation = ModuleEnvironment::new(
+            let mut translation = ModuleEnvironment::new(
                 self.tunables,
                 &mut validator,
                 self.types.module_types_builder(),

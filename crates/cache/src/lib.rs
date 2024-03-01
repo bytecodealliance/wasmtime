@@ -1,4 +1,8 @@
 use base64::Engine;
+use gimli::DwarfPackage;
+use gimli::EndianSlice;
+use gimli::LittleEndian;
+use gimli::Reader;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -7,6 +11,7 @@ use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use wasmtime_environ::dwarf_relocate::Relocate;
 
 #[macro_use] // for tests
 mod config;
@@ -46,7 +51,14 @@ impl<'config> ModuleCacheEntry<'config> {
     /// Gets cached data if state matches, otherwise calls `compute`.
     ///
     /// Data is automatically serialized/deserialized with `bincode`.
-    pub fn get_data<T, U, E>(&self, state: T, compute: fn(&T) -> Result<U, E>) -> Result<U, E>
+    pub fn get_data<T, U, E>(
+        &self,
+        state: T,
+        compute: fn(
+            &T,
+            Option<DwarfPackage<Relocate<EndianSlice<'_, LittleEndian>>>>,
+        ) -> Result<U, E>,
+    ) -> Result<U, E>
     where
         T: Hash,
         U: Serialize + for<'a> Deserialize<'a>,
@@ -56,6 +68,7 @@ impl<'config> ModuleCacheEntry<'config> {
             compute,
             |_state, data| bincode::serialize(data).ok(),
             |_state, data| bincode::deserialize(&data).ok(),
+            None,
         )
     }
 
@@ -71,16 +84,20 @@ impl<'config> ModuleCacheEntry<'config> {
         state: &T,
         // NOTE: These are function pointers instead of closures so that they
         // don't accidentally close over something not accounted in the cache.
-        compute: fn(&T) -> Result<U, E>,
+        compute: fn(
+            &T,
+            Option<DwarfPackage<Relocate<'_, EndianSlice<'_, LittleEndian>>>>,
+        ) -> Result<U, E>,
         serialize: fn(&T, &U) -> Option<Vec<u8>>,
         deserialize: fn(&T, Vec<u8>) -> Option<U>,
+        dwarf_package: Option<DwarfPackage<Relocate<'_, EndianSlice<'_, LittleEndian>>>>,
     ) -> Result<U, E>
     where
         T: Hash,
     {
         let inner = match &self.0 {
             Some(inner) => inner,
-            None => return compute(state),
+            None => return compute(state, dwarf_package),
         };
 
         let mut hasher = Sha256Hasher(Sha256::new());
@@ -96,7 +113,7 @@ impl<'config> ModuleCacheEntry<'config> {
                 return Ok(val);
             }
         }
-        let val_to_cache = compute(state)?;
+        let val_to_cache = compute(state, dwarf_package)?;
         if let Some(bytes) = serialize(state, &val_to_cache) {
             if inner.update_data(&hash, &bytes).is_some() {
                 let mod_cache_path = inner.root_path.join(&hash);

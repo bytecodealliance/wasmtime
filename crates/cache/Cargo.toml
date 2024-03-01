@@ -22,6 +22,8 @@ serde_derive = "1.0.188"
 sha2 = "0.10.2"
 toml = "0.5.5"
 zstd = { version = "0.11.1", default-features = false }
+gimli = { workspace = true }
+wasmtime-environ = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true

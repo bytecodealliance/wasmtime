@@ -100,9 +100,9 @@ impl CompileCommand {
         });
 
         let output_bytes = if wasmparser::Parser::is_component(&input) {
-            engine.precompile_component(&input)?
+            engine.precompile_component(&input, None)?
         } else {
-            engine.precompile_module(&input)?
+            engine.precompile_module(&input, None)?
         };
         fs::write(&output, output_bytes)
             .with_context(|| format!("failed to write output: {}", output.display()))?;

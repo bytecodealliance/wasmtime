@@ -27,7 +27,7 @@ wasmtime-cranelift-shared = { workspace = true }
 wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
 gimli = { workspace = true }
-object = { workspace = true, features = ['write'] }
+object = { workspace = true, features = ['write', 'wasm'] }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }

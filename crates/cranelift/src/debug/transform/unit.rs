@@ -313,6 +313,8 @@ where
                     0
                 };
 
+                log::debug!("{}", "CU");
+
                 clone_die_attributes(
                     dwarf,
                     &unit,

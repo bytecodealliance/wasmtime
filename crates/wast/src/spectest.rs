@@ -78,6 +78,7 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
                 (func (export "f") (result i32) i32.const 101)
             )
         "#,
+        None,
     )?;
     i.module("simple-module", &module)?;
 

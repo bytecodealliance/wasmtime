@@ -8,23 +8,38 @@ use crate::{
     Engine,
 };
 use anyhow::{bail, Context, Result};
+use gimli::{DwarfPackage, EndianSlice, LittleEndian, RunTimeEndian};
+use memmap2::Mmap;
+use object::{File, Object, ObjectSection, ObjectSymbol};
 use once_cell::sync::OnceCell;
+use std::borrow::Cow;
 use std::fs;
+use std::io::Read;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
+use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::sync::Arc;
+use thiserror::Error;
+
+// use std::{
+//     collections::{HashMap, HashSet},
+//     fmt::Debug,
+//     fs, mem,
+//     path::PathBuf,
+// };
+use std::collections::HashMap;
+use typed_arena::Arena;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
-    ObjectKind, VMOffsets,
+    dwarf_relocate::Relocate, CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex,
+    EntityIndex, HostPtr, ModuleTypes, ObjectKind, VMOffsets,
 };
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
     VMNativeCallFunction, VMSharedTypeIndex, VMWasmCallFunction,
 };
-
 mod registry;
 
 pub use registry::{
@@ -102,7 +117,11 @@ pub use registry::{
 #[derive(Clone)]
 pub struct Module {
     inner: Arc<ModuleInner>,
+
+    dwarf_package_bytes: Option<Vec<u8>>,
 }
+
+type RelocationMap = HashMap<usize, object::Relocation>;
 
 struct ModuleInner {
     engine: Engine,
@@ -209,11 +228,15 @@ impl Module {
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
+    pub fn new(
+        engine: &Engine,
+        bytes: impl AsRef<[u8]>,
+        wasm_path: Option<PathBuf>,
+    ) -> Result<Module> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes)?;
-        Self::from_binary(engine, &bytes)
+        Self::from_binary(engine, &bytes, wasm_path)
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given
@@ -252,8 +275,14 @@ impl Module {
             engine,
             &fs::read(file)
                 .with_context(|| format!("failed to read input file: {}", file.display()))?,
+            Some(file.to_path_buf()),
         ) {
-            Ok(m) => Ok(m),
+            Ok(mut m) => {
+                let mut dwp_path = file.with_extension("dwp");
+                let file = fs::read(dwp_path).ok();
+                m.dwarf_package_bytes = file;
+                Ok(m)
+            }
             Err(e) => {
                 cfg_if::cfg_if! {
                     if #[cfg(feature = "wat")] {
@@ -265,6 +294,44 @@ impl Module {
                     }
                 }
             }
+        }
+    }
+
+    /// Attempts to load a DWARF package file (.dwp) using the passed name as
+    /// the stem of the file name.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn read_dwarf_package<'a>(
+        wasm_file: PathBuf,
+        buffer: &'a mut Vec<u8>,
+        arena_data: &'a Arena<Cow<'a, [u8]>>,
+        arena_relocations: &'a Arena<RelocationMap>,
+    ) -> Option<DwarfPackage<Relocate<'a, gimli::EndianSlice<'a, gimli::LittleEndian>>>> {
+        let dwp_path = wasm_file.with_extension("dwp");
+
+        match fs::File::open(&dwp_path) {
+            Ok(mut file) => {
+                if let Err(err) = file.read_to_end(buffer) {
+                    eprintln!("Error reading dwarf package: {}", err);
+                    return None;
+                }
+
+                let object_file = match object::File::parse(&buffer[..]) {
+                    Ok(file) => file,
+                    Err(err) => {
+                        eprintln!("Failed to parse file '{:?}': {}", dwp_path, err);
+                        return None;
+                    }
+                };
+
+                match Module::load_dwp(object_file, &arena_data, &arena_relocations) {
+                    Ok(package) => Some(package),
+                    Err(err) => {
+                        eprintln!("Failed to load Dwarf package '{:?}': {}", dwp_path, err);
+                        None
+                    }
+                }
+            }
+            Err(_) => None,
         }
     }
 
@@ -301,7 +368,13 @@ impl Module {
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
+    pub fn from_binary(
+        engine: &Engine,
+        binary: &[u8],
+        wasm_path: Option<PathBuf>,
+    ) -> Result<Module> {
+        use wasm_encoder::Component;
+
         use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
 
         engine
@@ -310,7 +383,16 @@ impl Module {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
+                if wasm_path.is_some()
+                {
+                    println!("hello");
+                }
                 let state = (HashedEngineCompileEnv(engine), binary);
+
+                let mut buffer = Vec::new();
+                let arena_data = Arena::new();
+                let arena_relocations = Arena::new();
+
                 let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
@@ -319,8 +401,8 @@ impl Module {
                     &state,
 
                     // Cache miss, compute the actual artifacts
-                    |(engine, wasm)| -> Result<_> {
-                        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
+                    |(engine, wasm), dwarf_package| -> Result<_> {
+                        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm, dwarf_package)?;
                         let code = publish_mmap(mmap.0)?;
                         Ok((code, info))
                     },
@@ -335,14 +417,15 @@ impl Module {
                         let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Module).ok()?;
                         Some((code, None))
                     },
+
+                    wasm_path.map(|path|Module::read_dwarf_package(path, &mut buffer, &arena_data, &arena_relocations)).flatten()
                 )?;
             } else {
-                let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary)?;
+                let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary, wasm_path)?;
                 let code = publish_mmap(mmap.0)?;
             }
         };
 
-        let info_and_types = info_and_types.map(|(info, types)| (info, types.into()));
         return Self::from_parts(engine, code, info_and_types);
 
         fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
@@ -350,6 +433,133 @@ impl Module {
             code.publish()?;
             Ok(Arc::new(code))
         }
+    }
+
+    fn add_relocations(
+        relocations: &mut RelocationMap,
+        file: &object::File,
+        section: &object::Section,
+    ) {
+        for (offset64, mut relocation) in section.relocations() {
+            let offset = offset64 as usize;
+            if offset as u64 != offset64 {
+                continue;
+            }
+            let offset = offset as usize;
+            match relocation.kind() {
+                object::RelocationKind::Absolute => {
+                    match relocation.target() {
+                        object::RelocationTarget::Symbol(symbol_idx) => {
+                            match file.symbol_by_index(symbol_idx) {
+                                Ok(symbol) => {
+                                    let addend =
+                                        symbol.address().wrapping_add(relocation.addend() as u64);
+                                    relocation.set_addend(addend as i64);
+                                }
+                                Err(_) => {
+                                    eprintln!(
+                                        "Relocation with invalid symbol for section {} at offset 0x{:08x}",
+                                        section.name().unwrap(),
+                                        offset
+                                    );
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                    if relocations.insert(offset, relocation).is_some() {
+                        eprintln!(
+                            "Multiple relocations for section {} at offset 0x{:08x}",
+                            section.name().unwrap(),
+                            offset
+                        );
+                    }
+                }
+                _ => {
+                    eprintln!(
+                        "Unsupported relocation for section {} at offset 0x{:08x}",
+                        section.name().unwrap(),
+                        offset
+                    );
+                }
+            }
+        }
+    }
+
+    fn load_file_section<'input, 'arena, Endian: gimli::Endianity>(
+        id: gimli::SectionId,
+        file: &object::File<'input>,
+        endian: Endian,
+        is_dwo: bool,
+        arena_data: &'arena Arena<Cow<'input, [u8]>>,
+        arena_relocations: &'arena Arena<RelocationMap>,
+    ) -> Result<Relocate<'input, gimli::EndianSlice<'input, Endian>>>
+    where
+        'arena: 'input,
+    {
+        let mut relocations = RelocationMap::default();
+        let name = if is_dwo {
+            id.dwo_name()
+        } else if file.format() == object::BinaryFormat::Xcoff {
+            id.xcoff_name()
+        } else {
+            Some(id.name())
+        };
+
+        let data = match name.and_then(|name| file.section_by_name(&name)) {
+            Some(ref section) => {
+                // DWO sections never have relocations, so don't bother.
+                if !is_dwo {
+                    Module::add_relocations(&mut relocations, file, section);
+                }
+                section.uncompressed_data()?
+            }
+            // Use a non-zero capacity so that `ReaderOffsetId`s are unique.
+            None => Cow::Owned(Vec::with_capacity(1)),
+        };
+        let data_ref = arena_data.alloc(data);
+        let reader = gimli::EndianSlice::new(data_ref, endian);
+        let section = reader;
+        let relocations = arena_relocations.alloc(relocations);
+        Ok(Relocate {
+            relocations,
+            section,
+            reader,
+        })
+    }
+
+    fn empty_file_section<'input, 'arena>(
+        arena_relocations: &'arena Arena<RelocationMap>,
+    ) -> Relocate<'arena, gimli::EndianSlice<'arena, gimli::LittleEndian>> {
+        let reader = gimli::EndianSlice::new(&[], gimli::LittleEndian);
+        let section = reader;
+        let relocations = RelocationMap::default();
+        let relocations = arena_relocations.alloc(relocations);
+        Relocate {
+            relocations,
+            section,
+            reader,
+        }
+    }
+
+    fn load_dwp<'a>(
+        file: File<'a>,
+        arena_data: &'a Arena<Cow<'a, [u8]>>,
+        arena_relocations: &'a Arena<RelocationMap>,
+    ) -> Result<DwarfPackage<Relocate<'a, gimli::EndianSlice<'a, gimli::LittleEndian>>>> {
+        let mut load_section = |id: gimli::SectionId| -> Result<_> {
+            Module::load_file_section(
+                id,
+                &file,
+                gimli::LittleEndian,
+                true,
+                arena_data,
+                arena_relocations,
+            )
+        };
+
+        let empty = Module::empty_file_section(&arena_relocations);
+        gimli::DwarfPackage::load(&mut load_section, empty)
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given `file`
@@ -382,7 +592,7 @@ impl Module {
             return Module::from_parts(engine, code, None);
         }
 
-        Module::new(engine, &*mmap)
+        Module::new(engine, &*mmap, Some(file.as_ref().to_path_buf()))
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -524,6 +734,7 @@ impl Module {
                 serializable,
                 offsets,
             }),
+            dwarf_package_bytes: None,
         })
     }
 
@@ -1326,6 +1537,7 @@ mod tests {
                     (data (i32.const 100) "abcd")
                 )
             "#,
+            None,
         )
         .unwrap();
 

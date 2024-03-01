@@ -7,12 +7,18 @@ use crate::CompiledFunctionsMetadata;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
-    write, DebugAddr, DebugLine, DebugLineStr, DebugStr, DebugStrOffsets, LocationLists,
-    RangeLists, UnitSectionOffset,
+    write, DebugAddr, DebugLine, DebugLineStr, DebugStr, DebugStrOffsets, Dwarf, DwarfPackage,
+    LocationLists, RangeLists, Unit, UnitSectionOffset,
 };
-use std::collections::HashSet;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    fs, mem,
+    path::PathBuf,
+};
 use thiserror::Error;
-use wasmtime_environ::DebugInfoData;
+use wasmtime_environ::{dwarf_relocate::Relocate, DebugInfoData};
 
 pub use address_transform::AddressTransform;
 
@@ -26,9 +32,12 @@ mod simulate;
 mod unit;
 mod utils;
 
-pub(crate) trait Reader: gimli::Reader<Offset = usize> {}
+pub(crate) trait Reader: gimli::Reader<Offset = usize> + Send + Sync {}
 
-impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where Endian: gimli::Endianity {}
+impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where
+    Endian: gimli::Endianity + Send + Sync
+{
+}
 
 #[derive(Error, Debug)]
 #[error("Debug info transform error: {0}")]
@@ -85,7 +94,18 @@ pub fn transform_dwarf(
     let mut translated = HashSet::new();
     let mut iter = di.dwarf.debug_info.units();
     while let Some(header) = iter.next().unwrap_or(None) {
-        let unit = di.dwarf.unit(header)?;
+        let mut unit = di.dwarf.unit(header)?;
+
+        if let gimli::UnitType::Skeleton(dwo_id) = unit.header.type_() {
+            if di.dwarf_package.is_some() {
+                let mut unit = replace_unit_from_split_dwarf(
+                    &unit,
+                    di.dwarf_package.as_ref().unwrap(),
+                    &di.dwarf,
+                );
+            }
+        }
+
         if let Some((id, ref_map, pending_refs)) = clone_unit(
             &di.dwarf,
             unit,
@@ -123,4 +143,18 @@ pub fn transform_dwarf(
         line_strings: out_line_strings,
         strings: out_strings,
     })
+}
+
+fn replace_unit_from_split_dwarf<'a>(
+    unit: &'a Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize>,
+    dwp: &DwarfPackage<Relocate<gimli::EndianSlice<'a, gimli::LittleEndian>>>,
+    parent: &Dwarf<gimli::EndianSlice<'a, gimli::LittleEndian>>,
+) -> &'a Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize> {
+    // if let Some(dwoId) = unit.dwo_id {
+    //     match dwp.find_cu(dwoId, parent) {
+    //         _ => {}
+    //     }
+    // }
+
+    unit
 }

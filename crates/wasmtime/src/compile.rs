@@ -24,18 +24,20 @@
 
 use crate::Engine;
 use anyhow::{Context, Result};
+use gimli::{EndianSlice, LittleEndian, Reader, RunTimeEndian};
 use std::{
     any::Any,
     collections::{btree_map, BTreeMap, BTreeSet, HashMap},
     mem,
+    path::PathBuf,
 };
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
-    FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex,
-    WasmFunctionInfo,
+    dwarf_relocate::Relocate, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex,
+    FinishedObject, FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
+    StaticModuleIndex, WasmFunctionInfo,
 };
 
 /// Converts an input binary-encoded WebAssembly module to compilation
@@ -53,6 +55,7 @@ use wasmtime_environ::{
 pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
+    dwarf_package: Option<gimli::DwarfPackage<Relocate<'_, EndianSlice<'_, LittleEndian>>>>,
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
     let tunables = &engine.config().tunables;
 
@@ -66,6 +69,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
         .translate(parser, wasm)
         .context("failed to parse WebAssembly module")?;
+    translation.debuginfo.dwarf_package = dwarf_package;
     let functions = mem::take(&mut translation.function_body_inputs);
 
     let compile_inputs = CompileInputs::for_module(&types, &translation, functions);

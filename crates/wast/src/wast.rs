@@ -115,7 +115,7 @@ where
     }
 
     fn instantiate_module(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
-        let module = Module::new(self.store.engine(), module)?;
+        let module = Module::new(self.store.engine(), module, None)?;
         Ok(
             match self.core_linker.instantiate(&mut self.store, &module) {
                 Ok(i) => Outcome::Ok(i),
@@ -127,7 +127,7 @@ where
     #[cfg(feature = "component-model")]
     fn instantiate_component(&mut self, module: &[u8]) -> Result<Outcome<component::Instance>> {
         let engine = self.store.engine();
-        let module = component::Component::new(engine, module)?;
+        let module = component::Component::new(engine, module, None)?;
         Ok(
             match self.component_linker.instantiate(&mut self.store, &module) {
                 Ok(i) => Outcome::Ok(i),
