@@ -82,20 +82,25 @@ wasmtime_option_group! {
         /// copy-on-write mapping (default: yes)
         pub memory_init_cow: Option<bool>,
 
-        /// The maximum number of WebAssembly instances which can be created.
-        pub total_core_instances: Option<u32>,
+        /// The maximum number of WebAssembly instances which can be created
+        /// with the pooling allocator.
+        pub pooling_total_core_instances: Option<u32>,
 
-        /// The maximum number of WebAssembly components which can be created.
-        pub total_component_instances: Option<u32>,
+        /// The maximum number of WebAssembly components which can be created
+        /// with the pooling allocator.
+        pub pooling_total_component_instances: Option<u32>,
 
-        /// The maximum number of WebAssembly memories which can be created.
-        pub total_memories: Option<u32>,
+        /// The maximum number of WebAssembly memories which can be created with
+        /// the pooling allocator.
+        pub pooling_total_memories: Option<u32>,
 
-        /// The maximum number of WebAssembly tables which can be created.
-        pub total_tables: Option<u32>,
+        /// The maximum number of WebAssembly tables which can be created with
+        /// the pooling allocator.
+        pub pooling_total_tables: Option<u32>,
 
-        /// The maximum number of WebAssembly stacks which can be created.
-        pub total_stacks: Option<u32>,
+        /// The maximum number of WebAssembly stacks which can be created with
+        /// the pooling allocator.
+        pub pooling_total_stacks: Option<u32>,
     }
 
     enum Optimize {
@@ -543,19 +548,19 @@ impl CommonOptions {
                     if let Some(size) = self.opts.pooling_table_keep_resident {
                         cfg.table_keep_resident(size);
                     }
-                    if let Some(limit) = self.opts.total_core_instances {
+                    if let Some(limit) = self.opts.pooling_total_core_instances {
                         cfg.total_core_instances(limit);
                     }
-                    if let Some(limit) = self.opts.total_component_instances {
+                    if let Some(limit) = self.opts.pooling_total_component_instances {
                         cfg.total_component_instances(limit);
                     }
-                    if let Some(limit) = self.opts.total_memories {
+                    if let Some(limit) = self.opts.pooling_total_memories {
                         cfg.total_memories(limit);
                     }
-                    if let Some(limit) = self.opts.total_tables {
+                    if let Some(limit) = self.opts.pooling_total_tables {
                         cfg.total_tables(limit);
                     }
-                    if let Some(limit) = self.opts.total_stacks {
+                    if let Some(limit) = self.opts.pooling_total_stacks {
                         cfg.total_stacks(limit);
                     }
                     if let Some(enable) = self.opts.memory_protection_keys {
