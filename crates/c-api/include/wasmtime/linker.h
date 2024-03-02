@@ -43,6 +43,15 @@ typedef struct wasmtime_linker wasmtime_linker_t;
 WASM_API_EXTERN wasmtime_linker_t *wasmtime_linker_new(wasm_engine_t *engine);
 
 /**
+ * \brief Clones existing linker.
+ *
+ * This function does not take ownership of the linker argument, and the caller
+ * is expected to delete the returned linker.
+ */
+WASM_API_EXTERN wasmtime_linker_t *
+wasmtime_linker_clone(wasmtime_linker_t *linker);
+
+/**
  * \brief Deletes a linker
  */
 WASM_API_EXTERN void wasmtime_linker_delete(wasmtime_linker_t *linker);

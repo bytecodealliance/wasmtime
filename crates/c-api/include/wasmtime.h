@@ -195,6 +195,7 @@
 #include <wasmtime/memory.h>
 #include <wasmtime/module.h>
 #include <wasmtime/profiling.h>
+#include <wasmtime/sharedmemory.h>
 #include <wasmtime/store.h>
 #include <wasmtime/table.h>
 #include <wasmtime/trap.h>

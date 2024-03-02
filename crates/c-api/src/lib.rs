@@ -29,6 +29,7 @@ mod module;
 #[cfg(feature = "profiling")]
 mod profiling;
 mod r#ref;
+mod sharedmemory;
 mod store;
 mod table;
 mod trap;
