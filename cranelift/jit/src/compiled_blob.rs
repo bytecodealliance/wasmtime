@@ -38,39 +38,39 @@ impl CompiledBlob {
             match kind {
                 Reloc::Abs4 => {
                     let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = base.wrapping_offset(isize::try_from(addend).unwrap());
                     unsafe {
                         write_unaligned(at as *mut u32, u32::try_from(what as usize).unwrap())
                     };
                 }
                 Reloc::Abs8 => {
                     let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = base.wrapping_offset(isize::try_from(addend).unwrap());
                     unsafe {
                         write_unaligned(at as *mut u64, u64::try_from(what as usize).unwrap())
                     };
                 }
                 Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                     let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = base.wrapping_offset(isize::try_from(addend).unwrap());
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::X86GOTPCRel4 => {
                     let base = get_got_entry(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = base.wrapping_offset(isize::try_from(addend).unwrap());
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::X86CallPLTRel4 => {
                     let base = get_plt_entry(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = base.wrapping_offset(isize::try_from(addend).unwrap());
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::S390xPCRel32Dbl | Reloc::S390xPLTRel32Dbl => {
                     let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = base.wrapping_offset(isize::try_from(addend).unwrap());
                     let pcrel = i32::try_from(((what as isize) - (at as isize)) >> 1).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
@@ -128,7 +128,7 @@ impl CompiledBlob {
                     // 2. R_RISCV_PCREL_LO12_I on the `jalr`
 
                     let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = base.wrapping_offset(isize::try_from(addend).unwrap());
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap() as u32;
 
                     // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
