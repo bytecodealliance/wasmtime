@@ -12,18 +12,30 @@
 ;;      	 4889e5               	mov	rbp, rsp
 ;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4981c340000000       	add	r11, 0x40
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f872a000000         	ja	0x45
-;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 0f8763000000         	ja	0x7e
+;;   1b:	 4883ec30             	sub	rsp, 0x30
+;;      	 48891c24             	mov	qword ptr [rsp], rbx
+;;      	 4c89642408           	mov	qword ptr [rsp + 8], r12
+;;      	 4c896c2410           	mov	qword ptr [rsp + 0x10], r13
+;;      	 4c89742418           	mov	qword ptr [rsp + 0x18], r14
+;;      	 4c897c2420           	mov	qword ptr [rsp + 0x20], r15
+;;      	 4989fe               	mov	r14, rdi
 ;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 f30f100515000000     	movss	xmm0, dword ptr [rip + 0x15]
+;;      	 48897c2438           	mov	qword ptr [rsp + 0x38], rdi
+;;      	 4889742430           	mov	qword ptr [rsp + 0x30], rsi
+;;      	 f30f100530000000     	movss	xmm0, dword ptr [rip + 0x30]
 ;;      	 660f7ec0             	movd	eax, xmm0
-;;      	 f30f100509000000     	movss	xmm0, dword ptr [rip + 9]
+;;      	 f30f100524000000     	movss	xmm0, dword ptr [rip + 0x24]
 ;;      	 4883c410             	add	rsp, 0x10
+;;      	 488b1c24             	mov	rbx, qword ptr [rsp]
+;;      	 4c8b642408           	mov	r12, qword ptr [rsp + 8]
+;;      	 4c8b6c2410           	mov	r13, qword ptr [rsp + 0x10]
+;;      	 4c8b742418           	mov	r14, qword ptr [rsp + 0x18]
+;;      	 4c8b7c2420           	mov	r15, qword ptr [rsp + 0x20]
+;;      	 4883c430             	add	rsp, 0x30
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   45:	 0f0b                 	ud2	
-;;   47:	 0000                 	add	byte ptr [rax], al
+;;   7e:	 0f0b                 	ud2	
+;;   80:	 0000                 	add	byte ptr [rax], al

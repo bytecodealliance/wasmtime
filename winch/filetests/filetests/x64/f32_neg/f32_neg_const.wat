@@ -10,24 +10,35 @@
 ;;      	 4889e5               	mov	rbp, rsp
 ;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4981c340000000       	add	r11, 0x40
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f872d000000         	ja	0x48
-;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 0f8766000000         	ja	0x81
+;;   1b:	 4883ec30             	sub	rsp, 0x30
+;;      	 48891c24             	mov	qword ptr [rsp], rbx
+;;      	 4c89642408           	mov	qword ptr [rsp + 8], r12
+;;      	 4c896c2410           	mov	qword ptr [rsp + 0x10], r13
+;;      	 4c89742418           	mov	qword ptr [rsp + 0x18], r14
+;;      	 4c897c2420           	mov	qword ptr [rsp + 0x20], r15
+;;      	 4989fe               	mov	r14, rdi
 ;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 f30f10051d000000     	movss	xmm0, dword ptr [rip + 0x1d]
+;;      	 48897c2438           	mov	qword ptr [rsp + 0x38], rdi
+;;      	 4889742430           	mov	qword ptr [rsp + 0x30], rsi
+;;      	 f30f100538000000     	movss	xmm0, dword ptr [rip + 0x38]
 ;;      	 41bb00000080         	mov	r11d, 0x80000000
 ;;      	 66450f6efb           	movd	xmm15, r11d
 ;;      	 410f57c7             	xorps	xmm0, xmm15
 ;;      	 4883c410             	add	rsp, 0x10
+;;      	 488b1c24             	mov	rbx, qword ptr [rsp]
+;;      	 4c8b642408           	mov	r12, qword ptr [rsp + 8]
+;;      	 4c8b6c2410           	mov	r13, qword ptr [rsp + 0x10]
+;;      	 4c8b742418           	mov	r14, qword ptr [rsp + 0x18]
+;;      	 4c8b7c2420           	mov	r15, qword ptr [rsp + 0x20]
+;;      	 4883c430             	add	rsp, 0x30
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   48:	 0f0b                 	ud2	
-;;   4a:	 0000                 	add	byte ptr [rax], al
-;;   4c:	 0000                 	add	byte ptr [rax], al
-;;   4e:	 0000                 	add	byte ptr [rax], al
-;;   50:	 c3                   	ret	
-;;   51:	 f5                   	cmc	
-;;   52:	 a8bf                 	test	al, 0xbf
+;;   81:	 0f0b                 	ud2	
+;;   83:	 0000                 	add	byte ptr [rax], al
+;;   85:	 0000                 	add	byte ptr [rax], al
+;;   87:	 00c3                 	add	bl, al
+;;   89:	 f5                   	cmc	
+;;   8a:	 a8bf                 	test	al, 0xbf

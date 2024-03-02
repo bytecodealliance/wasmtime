@@ -20,31 +20,39 @@
 ;;      	 4889e5               	mov	rbp, rsp
 ;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c320000000       	add	r11, 0x20
+;;      	 4981c350000000       	add	r11, 0x50
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f8756000000         	ja	0x71
-;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 0f8791000000         	ja	0xac
+;;   1b:	 4883ec30             	sub	rsp, 0x30
+;;      	 48891c24             	mov	qword ptr [rsp], rbx
+;;      	 4c89642408           	mov	qword ptr [rsp + 8], r12
+;;      	 4c896c2410           	mov	qword ptr [rsp + 0x10], r13
+;;      	 4c89742418           	mov	qword ptr [rsp + 0x18], r14
+;;      	 4c897c2420           	mov	qword ptr [rsp + 0x20], r15
+;;      	 4989fe               	mov	r14, rdi
 ;;      	 4883ec20             	sub	rsp, 0x20
-;;      	 48897c2418           	mov	qword ptr [rsp + 0x18], rdi
-;;      	 4889742410           	mov	qword ptr [rsp + 0x10], rsi
+;;      	 48897c2448           	mov	qword ptr [rsp + 0x48], rdi
+;;      	 4889742440           	mov	qword ptr [rsp + 0x40], rsi
 ;;      	 4531db               	xor	r11d, r11d
-;;      	 4c895c2408           	mov	qword ptr [rsp + 8], r11
-;;      	 4c891c24             	mov	qword ptr [rsp], r11
-;;      	 f20f100538000000     	movsd	xmm0, qword ptr [rip + 0x38]
-;;      	 f20f11442408         	movsd	qword ptr [rsp + 8], xmm0
-;;      	 f20f100532000000     	movsd	xmm0, qword ptr [rip + 0x32]
-;;      	 f20f110424           	movsd	qword ptr [rsp], xmm0
-;;      	 f20f100424           	movsd	xmm0, qword ptr [rsp]
-;;      	 f20f104c2408         	movsd	xmm1, qword ptr [rsp + 8]
+;;      	 4c895c2438           	mov	qword ptr [rsp + 0x38], r11
+;;      	 4c895c2430           	mov	qword ptr [rsp + 0x30], r11
+;;      	 f20f100553000000     	movsd	xmm0, qword ptr [rip + 0x53]
+;;      	 f20f11442438         	movsd	qword ptr [rsp + 0x38], xmm0
+;;      	 f20f10054d000000     	movsd	xmm0, qword ptr [rip + 0x4d]
+;;      	 f20f11442430         	movsd	qword ptr [rsp + 0x30], xmm0
+;;      	 f20f10442430         	movsd	xmm0, qword ptr [rsp + 0x30]
+;;      	 f20f104c2438         	movsd	xmm1, qword ptr [rsp + 0x38]
 ;;      	 660f2ec1             	ucomisd	xmm0, xmm1
 ;;      	 b800000000           	mov	eax, 0
 ;;      	 400f97c0             	seta	al
 ;;      	 4883c420             	add	rsp, 0x20
+;;      	 488b1c24             	mov	rbx, qword ptr [rsp]
+;;      	 4c8b642408           	mov	r12, qword ptr [rsp + 8]
+;;      	 4c8b6c2410           	mov	r13, qword ptr [rsp + 0x10]
+;;      	 4c8b742418           	mov	r14, qword ptr [rsp + 0x18]
+;;      	 4c8b7c2420           	mov	r15, qword ptr [rsp + 0x20]
+;;      	 4883c430             	add	rsp, 0x30
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   71:	 0f0b                 	ud2	
-;;   73:	 0000                 	add	byte ptr [rax], al
-;;   75:	 0000                 	add	byte ptr [rax], al
-;;   77:	 009a99999999         	add	byte ptr [rdx - 0x66666667], bl
-;;   7d:	 99                   	cdq	
-;;   7e:	 f1                   	int1	
+;;   ac:	 0f0b                 	ud2	
+;;   ae:	 0000                 	add	byte ptr [rax], al
