@@ -2,7 +2,8 @@ use crate::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::host::network::util;
 use crate::poll::{subscribe, Pollable, Subscribe};
-use crate::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
+use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::{SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
 use std::net::{Ipv6Addr, ToSocketAddrs};
@@ -48,12 +49,14 @@ impl<T: WasiView> HostResolveAddressStream for T {
         let stream: &mut ResolveAddressStream = self.table().get_mut(&resource)?;
         loop {
             match stream {
-                ResolveAddressStream::Waiting(future) => match crate::poll_noop(Pin::new(future)) {
-                    Some(result) => {
-                        *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
+                ResolveAddressStream::Waiting(future) => {
+                    match crate::runtime::poll_noop(Pin::new(future)) {
+                        Some(result) => {
+                            *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
+                        }
+                        None => return Err(ErrorCode::WouldBlock.into()),
                     }
-                    None => return Err(ErrorCode::WouldBlock.into()),
-                },
+                }
                 ResolveAddressStream::Done(slot @ Err(_)) => {
                     mem::replace(slot, Ok(Vec::new().into_iter()))?;
                     unreachable!();

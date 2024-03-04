@@ -1,8 +1,6 @@
-use super::network::SocketAddressFamily;
-use super::{
-    with_ambient_tokio_runtime, HostInputStream, HostOutputStream, SocketResult, StreamError,
-};
-use crate::{AbortOnDropJoinHandle, Subscribe};
+use crate::network::SocketAddressFamily;
+use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
+use crate::{HostInputStream, HostOutputStream, SocketResult, StreamError, Subscribe};
 use anyhow::{Error, Result};
 use cap_net_ext::AddressFamily;
 use futures::Future;
@@ -164,7 +162,7 @@ impl TcpWriteStream {
         assert!(matches!(self.last_write, LastWrite::Done));
 
         let stream = self.stream.clone();
-        self.last_write = LastWrite::Waiting(crate::spawn(async move {
+        self.last_write = LastWrite::Waiting(crate::runtime::spawn(async move {
             // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
             // primitive try_write, which goes directly to attempt a write with mio. This has
             // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream
@@ -236,7 +234,7 @@ impl HostOutputStream for TcpWriteStream {
 
         let writable = self.stream.writable();
         futures::pin_mut!(writable);
-        if super::poll_noop(writable).is_none() {
+        if crate::runtime::poll_noop(writable).is_none() {
             return Ok(0);
         }
         Ok(SOCKET_READY_SIZE)

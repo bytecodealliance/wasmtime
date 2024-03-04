@@ -1,6 +1,6 @@
 use crate::host::network::util;
 use crate::poll::Subscribe;
-use crate::with_ambient_tokio_runtime;
+use crate::runtime::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking};
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};

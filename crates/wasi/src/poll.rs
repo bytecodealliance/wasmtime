@@ -154,7 +154,8 @@ pub mod sync {
     use crate::{
         bindings::io::poll as async_poll,
         bindings::sync_io::io::poll::{self, Pollable},
-        in_tokio, WasiView,
+        runtime::in_tokio,
+        WasiView,
     };
     use anyhow::Result;
     use wasmtime::component::Resource;

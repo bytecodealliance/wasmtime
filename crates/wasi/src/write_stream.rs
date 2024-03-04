@@ -139,7 +139,7 @@ impl Worker {
 /// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream {
     worker: Arc<Worker>,
-    _join_handle: crate::AbortOnDropJoinHandle<()>,
+    _join_handle: crate::runtime::AbortOnDropJoinHandle<()>,
 }
 
 impl AsyncWriteStream {
@@ -152,7 +152,7 @@ impl AsyncWriteStream {
         let worker = Arc::new(Worker::new(write_budget));
 
         let w = Arc::clone(&worker);
-        let join_handle = crate::spawn(async move { w.work(writer).await });
+        let join_handle = crate::runtime::spawn(async move { w.work(writer).await });
 
         AsyncWriteStream {
             worker,

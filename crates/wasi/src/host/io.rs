@@ -232,7 +232,8 @@ pub mod sync {
         },
         bindings::sync_io::io::poll::Pollable,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
-        in_tokio, StreamError, StreamResult, WasiView,
+        runtime::in_tokio,
+        StreamError, StreamResult, WasiView,
     };
     use wasmtime::component::Resource;
 
