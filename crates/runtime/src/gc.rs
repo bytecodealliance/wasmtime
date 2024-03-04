@@ -79,16 +79,4 @@ impl VMGcRef {
     pub fn as_non_null(&self) -> NonNull<u8> {
         self.0.as_non_null()
     }
-
-    /// Get this GC reference as a `VMExternRef`.
-    pub fn as_extern_ref(&self) -> &VMExternRef {
-        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
-        unsafe { std::mem::transmute(self) }
-    }
-
-    /// Get this GC reference as a mutable `VMExternRef`.
-    pub fn as_extern_ref_mut(&mut self) -> &mut VMExternRef {
-        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
-        unsafe { std::mem::transmute(self) }
-    }
 }

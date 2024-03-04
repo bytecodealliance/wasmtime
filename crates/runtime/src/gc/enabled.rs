@@ -161,6 +161,38 @@ use std::ptr::{self, NonNull};
 #[repr(transparent)]
 pub struct VMExternRef(VMGcRef);
 
+impl VMGcRef {
+    /// Get this GC reference as a `VMExternRef`.
+    pub fn as_extern_ref(&self) -> &VMExternRef {
+        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        assert_eq!(
+            std::mem::size_of::<VMExternRef>(),
+            std::mem::size_of::<VMGcRef>()
+        );
+        assert_eq!(
+            std::mem::align_of::<VMExternRef>(),
+            std::mem::align_of::<VMGcRef>()
+        );
+        let ptr = self as *const VMGcRef;
+        unsafe { &*(ptr.cast::<VMExternRef>()) }
+    }
+
+    /// Get this GC reference as a mutable `VMExternRef`.
+    pub fn as_extern_ref_mut(&mut self) -> &mut VMExternRef {
+        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        assert_eq!(
+            std::mem::size_of::<VMExternRef>(),
+            std::mem::size_of::<VMGcRef>()
+        );
+        assert_eq!(
+            std::mem::align_of::<VMExternRef>(),
+            std::mem::align_of::<VMGcRef>()
+        );
+        let ptr = self as *mut VMGcRef;
+        unsafe { &mut *(ptr.cast::<VMExternRef>()) }
+    }
+}
+
 #[repr(C)]
 pub(crate) struct VMExternData {
     // Implicit, dynamically-sized member that always preceded an
@@ -338,8 +370,11 @@ impl VMExternRef {
             let value_ptr = alloc_ptr.cast::<T>();
             ptr::write(value_ptr.as_ptr(), make_value());
 
-            let extern_data_ptr =
-                alloc_ptr.cast::<u8>().as_ptr().add(footer_offset) as *mut VMExternData;
+            let extern_data_ptr = alloc_ptr
+                .cast::<u8>()
+                .as_ptr()
+                .add(footer_offset)
+                .cast::<VMExternData>();
 
             ptr::write(
                 extern_data_ptr,
@@ -352,7 +387,7 @@ impl VMExternRef {
 
             log::trace!("New externref data @ {:p}", extern_data_ptr);
             VMExternRef(VMGcRef::from_non_null(NonNull::new_unchecked(
-                extern_data_ptr as *mut u8,
+                extern_data_ptr.cast::<u8>(),
             )))
         }
     }
@@ -365,7 +400,7 @@ impl VMExternRef {
     ///
     /// Nor does this method increment the reference count. You must ensure that
     /// `self` (or some other clone of `self`) stays alive until
-    /// `clone_from_raw` is called.
+    /// `clone_from_gc_ref` is called.
     #[inline]
     pub fn as_gc_ref(&self) -> &VMGcRef {
         &self.0
@@ -378,7 +413,7 @@ impl VMExternRef {
     /// This method forgets self, so it is possible to create a leak of the
     /// underlying reference counted data if not used carefully.
     ///
-    /// Use `from_raw` to recreate the `VMExternRef`.
+    /// Use `from_gc_ref` to recreate the `VMExternRef`.
     pub unsafe fn into_gc_ref(self) -> VMGcRef {
         let gc_ref = self.0;
         std::mem::forget(self);
@@ -392,11 +427,12 @@ impl VMExternRef {
     ///
     /// The given `gc_ref` must point to a valid `VMExternData`.
     ///
-    /// Unlike `clone_from_raw`, this does not increment the reference count of
-    /// the underlying data. It is not safe to continue to use the pointer
+    /// Unlike `clone_from_gc_ref`, this does not increment the reference count
+    /// of the underlying data. It is not safe to continue to use the pointer
     /// passed to this function.
     #[inline]
     pub unsafe fn from_gc_ref(gc_ref: VMGcRef) -> Self {
+        assert!(VMGcRef::ONLY_EXTERN_REF_IMPLEMENTED_YET);
         VMExternRef(gc_ref)
     }
 
@@ -413,6 +449,7 @@ impl VMExternRef {
     /// bugs.
     #[inline]
     pub unsafe fn clone_from_gc_ref(gc_ref: VMGcRef) -> Self {
+        assert!(VMGcRef::ONLY_EXTERN_REF_IMPLEMENTED_YET);
         let x = VMExternRef(gc_ref);
         x.extern_data().increment_ref_count();
         x
