@@ -293,8 +293,6 @@ where
         trace!("Calling into ISLE with original value {}", orig_value);
         self.stats.rewrite_rule_invoked += 1;
         debug_assert!(optimized_values.is_empty());
-
-        optimized_values.push(orig_value);
         crate::opts::generated_code::constructor_simplify(
             &mut IsleContext { ctx: self },
             orig_value,
@@ -304,6 +302,8 @@ where
             "  -> returned from ISLE, generated {} optimized values",
             optimized_values.len()
         );
+
+        optimized_values.push(orig_value);
 
         // Remove any values from optimized_values that do not have
         // the highest possible available block in the domtree, in
