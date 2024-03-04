@@ -221,7 +221,26 @@ where
         }
     }
 
+    /// Find the block where a pure instruction first becomes available,
+    /// defined as the block that is closest to the root where all of
+    /// its arguments are available. In the unusual case where a pure
+    /// instruction has no arguments (e.g. get_return_address), we can
+    /// place it anywhere, so it is available in the entry block.
+    ///
+    /// This function does not compute available blocks recursively.
+    /// All of the instruction's arguments must have had their available
+    /// blocks assigned already.
     fn get_available_block(&self, inst: Inst) -> Block {
+        // Side-effecting instructions have different rules for where
+        // they become available, so this function does not apply.
+        debug_assert!(is_pure_for_egraph(self.func, inst));
+
+        // Note that the def-point of all arguments to an instruction
+        // in SSA lie on a line of direct ancestors in the domtree, and
+        // so do their available-blocks. This means that for any pair of
+        // arguments, their available blocks are either the same or one
+        // strictly dominates the other. We just need to find any argument
+        // whose available block is deepest in the domtree.
         self.func.dfg.insts[inst]
             .arguments(&self.func.dfg.value_lists)
             .iter()
@@ -274,6 +293,8 @@ where
         trace!("Calling into ISLE with original value {}", orig_value);
         self.stats.rewrite_rule_invoked += 1;
         debug_assert!(optimized_values.is_empty());
+
+        optimized_values.push(orig_value);
         crate::opts::generated_code::constructor_simplify(
             &mut IsleContext { ctx: self },
             orig_value,
@@ -284,16 +305,34 @@ where
             optimized_values.len()
         );
 
-        optimized_values.push(orig_value);
-
+        // Remove any values from optimized_values that do not have
+        // the highest possible available block in the domtree, in
+        // O(n) time. This loop scans in reverse, establishing the
+        // loop invariant that all values at indices >= idx have the
+        // same available block, which is the best available block
+        // seen so far. Note that orig_value must also be removed if
+        // it isn't in the best block, so we push it above, which means
+        // optimized_values is never empty: there's always at least one
+        // value in best_block.
         let mut best_block = self.available_block[*optimized_values.last().unwrap()];
         for idx in (0..optimized_values.len() - 1).rev() {
+            // At the beginning of each iteration, there is a non-empty
+            // collection of values after idx, which are all available
+            // at best_block.
             let this_block = self.available_block[optimized_values[idx]];
             if this_block != best_block {
                 if self.domtree.dominates(this_block, best_block) {
+                    // If the available block for this value dominates
+                    // the best block we've seen so far, discard all
+                    // the values we already checked and leave only this
+                    // value in the tail of the vector.
                     optimized_values.truncate(idx + 1);
                     best_block = this_block;
                 } else {
+                    // Otherwise the tail of the vector contains values
+                    // which are all better than this value, so we can
+                    // swap any of them in place of this value to delete
+                    // this one in O(1) time.
                     debug_assert!(self.domtree.dominates(best_block, this_block));
                     optimized_values.swap_remove(idx);
                     debug_assert!(optimized_values.len() > idx);
@@ -534,8 +573,19 @@ impl<'a> EgraphPass<'a> {
         let mut effectful_gvn_map: ScopedHashMap<(Type, InstructionData), Value> =
             ScopedHashMap::new();
 
+        // We assign an "available block" to every value. Values tied to
+        // the side-effecting skeleton are available in the block where
+        // they're defined. Results from pure instructions could legally
+        // float up the domtree so they are available as soon as all
+        // their arguments are available. Values which identify union
+        // nodes are available in the same block as all values in the
+        // eclass, enforced by optimize_pure_enode.
         let mut available_block: SecondaryMap<Value, Block> =
             SecondaryMap::with_default(Block::reserved_value());
+        // This is an initial guess at the size we'll need, but we add
+        // more values as we build simplified alternative expressions so
+        // this is likely to realloc again later.
+        available_block.resize(cursor.func.dfg.num_values());
 
         // In domtree preorder, visit blocks. (TODO: factor out an
         // iterator from this and elaborator.)
