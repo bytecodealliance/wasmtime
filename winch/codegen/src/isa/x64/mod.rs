@@ -1,6 +1,6 @@
 use crate::{
     abi::{wasm_sig, ABI},
-    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv},
+    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv, TypeConverter},
 };
 
 use crate::frame::{DefinedLocals, Frame};
@@ -116,7 +116,9 @@ impl TargetIsa for X64 {
             self,
             abi::X64ABI::ptr_type(),
         );
-        let defined_locals = DefinedLocals::new::<abi::X64ABI>(&env, &mut body, validator)?;
+        let type_converter = TypeConverter::new(env.translation, env.types);
+        let defined_locals =
+            DefinedLocals::new::<abi::X64ABI>(&type_converter, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),

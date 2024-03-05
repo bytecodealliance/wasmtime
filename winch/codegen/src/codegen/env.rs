@@ -205,9 +205,10 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     {
         let types = self.translation.get_types();
         let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
-        let ty = self.convert_func_type(ty);
         let import = self.translation.module.is_imported_function(idx);
         let val = || {
+            let converter = TypeConverter::new(self.translation, self.types);
+            let ty = converter.convert_func_type(&ty);
             let sig = wasm_sig::<A>(&ty);
             CalleeInfo { sig, index: idx }
         };
@@ -225,7 +226,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         match ty {
             Empty => BlockSig::new(control::BlockType::void()),
             Type(ty) => {
-                let ty = self.convert_valtype(ty);
+                let ty = TypeConverter::new(self.translation, self.types).convert_valtype(ty);
                 BlockSig::new(control::BlockType::single(ty))
             }
             FuncType(idx) => {
@@ -351,13 +352,26 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 }
 
-impl<P: PtrSize> TypeConvert for FuncEnv<'_, '_, '_, P> {
+/// A wrapper struct over a reference to a [ModuleTranslation] and
+/// [ModuleTypesBuilder].
+pub(crate) struct TypeConverter<'a, 'data: 'a> {
+    translation: &'a ModuleTranslation<'data>,
+    types: &'a ModuleTypesBuilder,
+}
+
+impl TypeConvert for TypeConverter<'_, '_> {
     fn lookup_heap_type(&self, idx: wasmparser::UnpackedIndex) -> WasmHeapType {
         wasmtime_environ::WasmparserTypeConverter {
             module: &self.translation.module,
             types: self.types,
         }
         .lookup_heap_type(idx)
+    }
+}
+
+impl<'a, 'data> TypeConverter<'a, 'data> {
+    pub fn new(translation: &'a ModuleTranslation<'data>, types: &'a ModuleTypesBuilder) -> Self {
+        Self { translation, types }
     }
 }
 

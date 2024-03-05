@@ -1,7 +1,7 @@
 use self::regs::{ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_GPR};
 use crate::{
     abi::{wasm_sig, ABI},
-    codegen::{CodeGen, CodeGenContext, FuncEnv},
+    codegen::{CodeGen, CodeGenContext, FuncEnv, TypeConverter},
     frame::{DefinedLocals, Frame},
     isa::{Builder, TargetIsa},
     masm::MacroAssembler,
@@ -106,7 +106,9 @@ impl TargetIsa for Aarch64 {
             self,
             abi::Aarch64ABI::ptr_type(),
         );
-        let defined_locals = DefinedLocals::new::<abi::Aarch64ABI>(&env, &mut body, validator)?;
+        let type_converter = TypeConverter::new(env.translation, env.types);
+        let defined_locals =
+            DefinedLocals::new::<abi::Aarch64ABI>(&type_converter, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),
