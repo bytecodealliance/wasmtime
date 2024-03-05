@@ -42,124 +42,11 @@ use mach2::mach_port::*;
 use mach2::message::*;
 use mach2::port::*;
 use mach2::thread_act::*;
+use mach2::thread_status::*;
 use mach2::traps::*;
 use std::mem;
 use std::ptr::addr_of_mut;
 use std::thread;
-
-mod mach_addons {
-    #![allow(non_camel_case_types)]
-    #![allow(non_upper_case_globals)]
-    #![allow(dead_code)]
-
-    use mach2::{
-        exception_types::*, kern_return::*, mach_types::*, message::*, port::*, thread_status::*,
-    };
-    use std::mem;
-
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug)]
-    #[allow(dead_code)]
-    pub struct NDR_record_t {
-        mig_vers: libc::c_uchar,
-        if_vers: libc::c_uchar,
-        reserved1: libc::c_uchar,
-        mig_encoding: libc::c_uchar,
-        int_rep: libc::c_uchar,
-        char_rep: libc::c_uchar,
-        float_rep: libc::c_uchar,
-        reserved32: libc::c_uchar,
-    }
-
-    extern "C" {
-        pub static NDR_record: NDR_record_t;
-    }
-
-    // Note that this is copied from Gecko at
-    //
-    // https://searchfox.org/mozilla-central/rev/ed93119be4818da1509bbcb7b28e245853eeedd5/js/src/wasm/WasmSignalHandlers.cpp#583-601
-    //
-    // which distinctly diverges from the actual version of this in the header
-    // files provided by macOS, notably in the `code` field which uses `i64`
-    // instead of `i32`.
-    //
-    // Also note the `packed(4)` here which forcibly decreases alignment to 4 to
-    // additionally match what mach expects (apparently, I wish I had a better
-    // reference for this).
-    #[repr(C, packed(4))]
-    #[allow(dead_code)]
-    #[derive(Copy, Clone, Debug)]
-    pub struct __Request__exception_raise_t {
-        pub Head: mach_msg_header_t,
-        /* start of the kernel processed data */
-        pub msgh_body: mach_msg_body_t,
-        pub thread: mach_msg_port_descriptor_t,
-        pub task: mach_msg_port_descriptor_t,
-        /* end of the kernel processed data */
-        pub NDR: NDR_record_t,
-        pub exception: exception_type_t,
-        pub codeCnt: mach_msg_type_number_t,
-
-        // Note that this is a divergence from the C headers which use
-        // `integer_t` here for this field which is a `c_int`. That isn't
-        // actually reflecting reality apparently though because if `c_int` is
-        // used here then the structure is too small to receive a message.
-        pub code: [i64; 2],
-    }
-
-    #[repr(C)]
-    #[allow(dead_code)]
-    #[derive(Copy, Clone, Debug)]
-    pub struct __Reply__exception_raise_t {
-        pub Head: mach_msg_header_t,
-        pub NDR: NDR_record_t,
-        pub RetCode: kern_return_t,
-    }
-
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, Default, Hash, PartialOrd, PartialEq, Eq, Ord)]
-    pub struct arm_thread_state64_t {
-        pub __x: [u64; 29],
-        pub __fp: u64, // frame pointer x29
-        pub __lr: u64, // link register x30
-        pub __sp: u64, // stack pointer x31
-        pub __pc: u64,
-        pub __cpsr: u32,
-        pub __pad: u32,
-    }
-
-    impl arm_thread_state64_t {
-        pub fn count() -> mach_msg_type_number_t {
-            (mem::size_of::<Self>() / mem::size_of::<u32>()) as mach_msg_type_number_t
-        }
-    }
-
-    pub static ARM_THREAD_STATE64: thread_state_flavor_t = 6;
-
-    #[cfg(target_arch = "x86_64")]
-    pub static THREAD_STATE_NONE: thread_state_flavor_t = 13;
-    #[cfg(target_arch = "aarch64")]
-    pub static THREAD_STATE_NONE: thread_state_flavor_t = 5;
-
-    extern "C" {
-        pub fn thread_set_state(
-            target_act: thread_port_t,
-            flavor: thread_state_flavor_t,
-            new_state: thread_state_t,
-            new_stateCnt: mach_msg_type_number_t,
-        ) -> kern_return_t;
-
-        pub fn thread_set_exception_ports(
-            thread: thread_port_t,
-            exception_mask: exception_mask_t,
-            new_port: mach_port_t,
-            behavior: libc::c_uint,
-            new_flavor: thread_state_flavor_t,
-        ) -> kern_return_t;
-    }
-}
-
-use mach_addons::*;
 
 /// Process-global port that we use to route thread-level exceptions to.
 static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;
@@ -478,7 +365,7 @@ pub fn lazy_per_thread_init() {
             EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC,
             WASMTIME_PORT,
             EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
-            mach_addons::THREAD_STATE_NONE,
+            THREAD_STATE_NONE,
         );
         mach_port_deallocate(mach_task_self(), this_thread);
         assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
