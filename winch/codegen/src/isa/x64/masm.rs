@@ -225,10 +225,12 @@ impl Masm for MacroAssembler {
         let (reg, offset) = local
             .addressed_from_sp()
             .then(|| {
-                let offset = self.sp_offset.checked_sub(local.offset).expect(&format!(
-                    "Invalid local offset = {}; sp offset = {}",
-                    local.offset, self.sp_offset
-                ));
+                let offset = self.sp_offset.checked_sub(local.offset).unwrap_or_else(|| {
+                    panic!(
+                        "Invalid local offset = {}; sp offset = {}",
+                        local.offset, self.sp_offset
+                    )
+                });
                 (rsp(), offset)
             })
             .unwrap_or((rbp(), local.offset));
