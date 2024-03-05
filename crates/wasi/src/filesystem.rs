@@ -1,7 +1,6 @@
 use crate::bindings::filesystem::types;
-use crate::{
-    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe, TrappableError,
-};
+use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::{HostOutputStream, StreamError, Subscribe, TrappableError};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;

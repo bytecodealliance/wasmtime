@@ -1,5 +1,6 @@
 use crate::host::network::util;
 use crate::network::SocketAddrUse;
+use crate::runtime::with_ambient_tokio_runtime;
 use crate::tcp::{TcpReadStream, TcpSocket, TcpState, TcpWriteStream};
 use crate::{
     bindings::{
@@ -9,7 +10,7 @@ use crate::{
     },
     network::SocketAddressFamily,
 };
-use crate::{with_ambient_tokio_runtime, Pollable, SocketResult, WasiView};
+use crate::{Pollable, SocketResult, WasiView};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;

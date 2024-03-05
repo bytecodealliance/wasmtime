@@ -52,7 +52,7 @@ mod sync {
     // Small wrapper around `in_tokio` to add a `Result` layer which is always
     // `Ok`
     fn in_tokio<F: Future>(future: F) -> Result<F::Output> {
-        Ok(crate::in_tokio(future))
+        Ok(crate::runtime::in_tokio(future))
     }
 }
 

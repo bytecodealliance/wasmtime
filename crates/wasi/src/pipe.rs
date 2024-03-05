@@ -112,7 +112,7 @@ pub struct AsyncReadStream {
     closed: bool,
     buffer: Option<Result<Bytes, StreamError>>,
     receiver: mpsc::Receiver<Result<Bytes, StreamError>>,
-    _join_handle: crate::AbortOnDropJoinHandle<()>,
+    _join_handle: crate::runtime::AbortOnDropJoinHandle<()>,
 }
 
 impl AsyncReadStream {
@@ -120,7 +120,7 @@ impl AsyncReadStream {
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new<T: tokio::io::AsyncRead + Send + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = mpsc::channel(1);
-        let join_handle = crate::spawn(async move {
+        let join_handle = crate::runtime::spawn(async move {
             loop {
                 use tokio::io::AsyncReadExt;
                 let mut buf = bytes::BytesMut::with_capacity(4096);
