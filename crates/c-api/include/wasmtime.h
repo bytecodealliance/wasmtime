@@ -152,9 +152,7 @@
  * provided access to it. For example in a host function created with
  * #wasmtime_func_new you can use #wasmtime_context_t in the host function
  * callback. This is because an argument, a #wasmtime_caller_t, provides access
- * to #wasmtime_context_t. On the other hand a destructor passed to
- * #wasmtime_externref_new, however, cannot use a #wasmtime_context_t because
- * it was not provided access to one. Doing so may lead to memory unsafety.
+ * to #wasmtime_context_t.
  *
  * ### Stores
  *
