@@ -310,3 +310,33 @@ fn dynamic_heap() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+#[cfg_attr(windows, ignore)]
+fn static_oob() -> Result<()> {
+    let mut c = Config::new();
+    c.static_memory_maximum_size(65536);
+    c.strategy(Strategy::Winch);
+    let engine = Engine::new(&c)?;
+    let wat = r#"
+        (module
+          (memory 0 1)
+          (func (export "") (result i32)
+            (i32.const 0)
+            (i32.const 1)
+            (i32.store offset=726020653)
+            (i32.const 1)
+            (memory.grow)
+          )
+        )
+    "#;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(&engine, wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "")?;
+    let result = f.call(&mut store, ()).unwrap_err();
+    assert!(result.downcast_ref::<WasmBacktrace>().is_some());
+
+    Ok(())
+}
