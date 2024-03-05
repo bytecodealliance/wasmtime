@@ -1695,6 +1695,12 @@ criteria = "safe-to-deploy"
 version = "0.3.3"
 notes = "I am the author of this crate."
 
+[[audits.mach2]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.4.2"
+notes = "It does unsafe FFI bindings, as expected. I didn't check the FFI bindings against the C headers."
+
 [[audits.matchers]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"

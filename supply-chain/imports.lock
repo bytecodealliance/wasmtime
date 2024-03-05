@@ -2453,6 +2453,12 @@ criteria = "safe-to-deploy"
 version = "0.4.17"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.mach2]]
+who = "Gabriele Svelto <gsvelto@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.memoffset]]
 who = "Gabriele Svelto <gsvelto@mozilla.com>"
 criteria = "safe-to-deploy"
