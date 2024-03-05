@@ -35,12 +35,15 @@
 
 use crate::sys::traphandlers::wasmtime_longjmp;
 use crate::traphandlers::tls;
+use mach2::exc::*;
 use mach2::exception_types::*;
 use mach2::kern_return::*;
 use mach2::mach_init::*;
 use mach2::mach_port::*;
 use mach2::message::*;
+use mach2::ndr::*;
 use mach2::port::*;
+use mach2::structs::*;
 use mach2::thread_act::*;
 use mach2::thread_status::*;
 use mach2::traps::*;
@@ -364,7 +367,9 @@ pub fn lazy_per_thread_init() {
             this_thread,
             EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC,
             WASMTIME_PORT,
-            EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
+            (EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES)
+                .try_into()
+                .unwrap(),
             THREAD_STATE_NONE,
         );
         mach_port_deallocate(mach_task_self(), this_thread);
