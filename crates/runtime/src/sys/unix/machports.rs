@@ -367,9 +367,7 @@ pub fn lazy_per_thread_init() {
             this_thread,
             EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC,
             WASMTIME_PORT,
-            (EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES)
-                .try_into()
-                .unwrap(),
+            (EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES) as exception_behavior_t,
             THREAD_STATE_NONE,
         );
         mach_port_deallocate(mach_task_self(), this_thread);
