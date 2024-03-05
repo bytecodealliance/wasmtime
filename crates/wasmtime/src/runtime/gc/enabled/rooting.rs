@@ -131,7 +131,6 @@ mod sealed {
     /// * Only have `&self` methods.
     pub unsafe trait GcRefImpl: Sized {
         /// Transmute a `&GcRootIndex` into an `&Self`.
-        #[allow(private_interfaces)]
         fn transmute_ref(index: &GcRootIndex) -> &Self;
     }
 
@@ -145,16 +144,13 @@ mod sealed {
         /// its associated `RootedScope` was dropped).
         ///
         /// Panics if this root is not associated with the given store.
-        #[allow(private_interfaces)]
         fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef>;
 
         /// Like `get_gc_ref` but for mutable references.
-        #[allow(private_interfaces)]
         fn get_gc_ref_mut<'a>(&self, store: &'a mut StoreOpaque) -> Option<&'a mut VMGcRef>;
 
         /// Same as `get_gc_ref` but returns an error instead of `None` for
         /// objects that have been unrooted.
-        #[allow(private_interfaces)]
         fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
             self.get_gc_ref(store).ok_or_else(|| {
                 anyhow!("attempted to use a garbage-collected object that has been unrooted")
@@ -162,7 +158,6 @@ mod sealed {
         }
 
         /// Like `try_gc_ref` but for mutable references.
-        #[allow(private_interfaces)]
         fn try_gc_ref_mut<'a>(&self, store: &'a mut StoreOpaque) -> Result<&'a mut VMGcRef> {
             self.get_gc_ref_mut(store).ok_or_else(|| {
                 anyhow!("attempted to use a garbage-collected object that has been unrooted")
@@ -179,7 +174,10 @@ pub(crate) use sealed::*;
 ///
 /// Every `T` such that `T: GcRef` must be a newtype over this `GcRootIndex`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct GcRootIndex {
+// Just `pub` to avoid `warn(private_interfaces)` in public APIs, which we can't
+// `allow(...)` on our MSRV yet.
+#[doc(hidden)]
+pub struct GcRootIndex {
     store_id: StoreId,
     generation: u32,
     index: PackedIndex,
@@ -778,7 +776,6 @@ impl<T: GcRef> Debug for Rooted<T> {
 }
 
 impl<T: GcRef> RootedGcRefImpl<T> for Rooted<T> {
-    #[allow(private_interfaces)]
     fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
         assert!(
             self.comes_from_same_store(store),
@@ -793,7 +790,6 @@ impl<T: GcRef> RootedGcRefImpl<T> for Rooted<T> {
         }
     }
 
-    #[allow(private_interfaces)]
     fn get_gc_ref_mut<'a>(&self, store: &'a mut StoreOpaque) -> Option<&'a mut VMGcRef> {
         assert!(
             self.comes_from_same_store(store),
@@ -1667,7 +1663,6 @@ where
 }
 
 impl<T: GcRef> RootedGcRefImpl<T> for ManuallyRooted<T> {
-    #[allow(private_interfaces)]
     fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
         assert!(
             self.comes_from_same_store(store),
@@ -1678,7 +1673,6 @@ impl<T: GcRef> RootedGcRefImpl<T> for ManuallyRooted<T> {
         store.gc_roots().manually_rooted.get(id)
     }
 
-    #[allow(private_interfaces)]
     fn get_gc_ref_mut<'a>(&self, store: &'a mut StoreOpaque) -> Option<&'a mut VMGcRef> {
         assert!(
             self.comes_from_same_store(store),

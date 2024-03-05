@@ -103,7 +103,6 @@ pub struct ExternRef {
 }
 
 unsafe impl GcRefImpl for ExternRef {
-    #[allow(private_interfaces)]
     fn transmute_ref(index: &GcRootIndex) -> &Self {
         // Safety: `ExternRef` is a newtype of a `GcRootIndex`.
         let me: &Self = unsafe { std::mem::transmute(index) };
