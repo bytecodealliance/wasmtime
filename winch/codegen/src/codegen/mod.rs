@@ -658,8 +658,8 @@ where
                 .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0), size);
 
             self.context.free_reg(addr);
-            self.context.free_reg(src);
         }
+        self.context.free_reg(src);
     }
 }
 
