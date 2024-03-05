@@ -3,12 +3,9 @@ use crate::{
     from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t, CStoreContextMut,
     WASM_I32,
 };
-use std::ffi::c_void;
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ptr;
-use wasmtime::{
-    AsContextMut, ExternRef, Func, HeapType, ManuallyRooted, Ref, RootScope, Rooted, Val, ValType,
-};
+use wasmtime::{AsContextMut, Func, HeapType, Ref, Val, ValType};
 
 #[repr(C)]
 pub struct wasm_val_t {
@@ -87,16 +84,7 @@ impl wasm_val_t {
                 kind: from_valtype(&ValType::F64),
                 of: wasm_val_union { u64: f },
             },
-            Val::ExternRef(r) => wasm_val_t {
-                kind: from_valtype(&ValType::EXTERNREF),
-                of: wasm_val_union {
-                    ref_: r.map_or(ptr::null_mut(), |r| {
-                        Box::into_raw(Box::new(wasm_ref_t {
-                            r: Ref::Extern(Some(r)),
-                        }))
-                    }),
-                },
-            },
+            Val::ExternRef(_) => crate::abort("externref"),
             Val::FuncRef(f) => wasm_val_t {
                 kind: from_valtype(&ValType::FUNCREF),
                 of: wasm_val_union {
@@ -162,7 +150,6 @@ pub union wasmtime_val_union {
     pub f32: u32,
     pub f64: u64,
     pub funcref: wasmtime_func_t,
-    pub externref: ManuallyDrop<Option<Box<wasmtime_externref_t>>>,
     pub v128: [u8; 16],
 }
 
@@ -175,6 +162,9 @@ pub struct wasmtime_func_t {
 
 impl wasmtime_val_t {
     pub fn from_val(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
+        // TODO: Needed for when we re-add externref support.
+        let _ = cx;
+
         match val {
             Val::I32(i) => wasmtime_val_t {
                 kind: crate::WASMTIME_I32,
@@ -192,14 +182,7 @@ impl wasmtime_val_t {
                 kind: crate::WASMTIME_F64,
                 of: wasmtime_val_union { f64: i },
             },
-            Val::ExternRef(e) => wasmtime_val_t {
-                kind: crate::WASMTIME_EXTERNREF,
-                of: wasmtime_val_union {
-                    externref: ManuallyDrop::new(
-                        e.map(|e| wasmtime_externref_t::from_extern_ref(cx, e)),
-                    ),
-                },
-            },
+            Val::ExternRef(_) => crate::abort("externref"),
             Val::FuncRef(func) => wasmtime_val_t {
                 kind: crate::WASMTIME_FUNCREF,
                 of: wasmtime_val_union {
@@ -222,6 +205,9 @@ impl wasmtime_val_t {
     }
 
     pub unsafe fn to_val(&self, cx: impl AsContextMut) -> Val {
+        // TODO: needed for when we re-add externref support.
+        let _ = cx;
+
         match self.kind {
             crate::WASMTIME_I32 => Val::I32(self.of.i32),
             crate::WASMTIME_I64 => Val::I64(self.of.i64),
@@ -237,12 +223,6 @@ impl wasmtime_val_t {
                     Some(mem::transmute::<wasmtime_func_t, Func>(self.of.funcref))
                 })
             }
-            crate::WASMTIME_EXTERNREF => self
-                .of
-                .externref
-                .as_ref()
-                .map(|e| e.inner.to_rooted(cx))
-                .into(),
             other => panic!("unknown wasmtime_valkind_t: {}", other),
         }
     }
@@ -250,13 +230,7 @@ impl wasmtime_val_t {
 
 impl Drop for wasmtime_val_t {
     fn drop(&mut self) {
-        // NB: this will deallocate the `Box` but cannot unroot the
-        // `ManuallyRooted`.
-        if self.kind == crate::WASMTIME_EXTERNREF {
-            unsafe {
-                ManuallyDrop::drop(&mut self.of.externref);
-            }
-        }
+        // TODO: this drop impl is needed for when we re-add externref support.
     }
 }
 
@@ -265,13 +239,9 @@ pub unsafe extern "C" fn wasmtime_val_delete(
     cx: CStoreContextMut<'_>,
     val: &mut ManuallyDrop<wasmtime_val_t>,
 ) {
-    if val.kind == crate::WASMTIME_EXTERNREF {
-        unsafe {
-            if let Some(e) = (*val.of.externref).take() {
-                e.inner.unroot(cx);
-            }
-        }
-    }
+    // TODO: needed for when we re-add externref support.
+    let _ = cx;
+
     ManuallyDrop::drop(val)
 }
 
@@ -283,85 +253,4 @@ pub unsafe extern "C" fn wasmtime_val_copy(
 ) {
     let val = src.to_val(&mut cx);
     crate::initialize(dst, wasmtime_val_t::from_val(cx, val))
-}
-
-#[repr(C)]
-pub struct wasmtime_externref_t {
-    inner: ManuallyRooted<ExternRef>,
-}
-
-impl wasmtime_externref_t {
-    fn from_extern_ref(cx: impl AsContextMut, inner: Rooted<ExternRef>) -> Box<Self> {
-        let inner = inner
-            .to_manually_rooted(cx)
-            .expect("wasmtime_externref_t::from_extern_ref given an unrooted inner reference");
-        Box::new(wasmtime_externref_t { inner })
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_new(
-    cx: CStoreContextMut<'_>,
-    data: *mut c_void,
-    finalizer: Option<extern "C" fn(*mut c_void)>,
-) -> Box<wasmtime_externref_t> {
-    let mut scope = RootScope::new(cx);
-    let inner = ExternRef::new(&mut scope, crate::ForeignData { data, finalizer });
-    wasmtime_externref_t::from_extern_ref(scope, inner)
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_data(
-    cx: CStoreContextMut<'_>,
-    externref: &wasmtime_externref_t,
-) -> *mut c_void {
-    externref
-        .inner
-        .data(&cx)
-        .map_or(std::ptr::null_mut(), |data| {
-            data.downcast_ref::<crate::ForeignData>().unwrap().data
-        })
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_clone(
-    cx: CStoreContextMut<'_>,
-    externref: &wasmtime_externref_t,
-) -> Box<wasmtime_externref_t> {
-    let inner = externref.inner.clone(cx);
-    Box::new(wasmtime_externref_t { inner })
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_delete(
-    cx: CStoreContextMut<'_>,
-    val: Option<Box<wasmtime_externref_t>>,
-) {
-    if let Some(val) = val {
-        val.inner.unroot(cx);
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_externref_to_raw(
-    cx: CStoreContextMut<'_>,
-    val: Option<&wasmtime_externref_t>,
-) -> *mut c_void {
-    match val {
-        Some(r) => r
-            .inner
-            .to_raw(cx)
-            .expect("ExternRef::to_raw can't fail with ManuallyRooted"),
-        None => ptr::null_mut(),
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_externref_from_raw(
-    cx: CStoreContextMut<'_>,
-    val: *mut c_void,
-) -> Option<Box<wasmtime_externref_t>> {
-    let mut scope = RootScope::new(cx);
-    let inner = ExternRef::from_raw(&mut scope, val)?;
-    Some(wasmtime_externref_t::from_extern_ref(scope, inner))
 }
