@@ -1826,6 +1826,15 @@ criteria = "safe-to-deploy"
 delta = "0.31.1 -> 0.32.0"
 notes = "Various new features and refactorings as one would expect from an object parsing crate, all looks good."
 
+[[audits.object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.32.0 -> 0.33.0"
+notes = """
+No `unsafe` code in this update. Lots of changes but all
+object-file-format-related, everything looks good.
+"""
+
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
