@@ -41,14 +41,9 @@ pub extern "C" fn wasm_ref_copy(r: Option<&wasm_ref_t>) -> Option<Box<wasm_ref_t
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_ref_same(a: Option<&wasm_ref_t>, b: Option<&wasm_ref_t>) -> bool {
-    match (a.map(|a| &a.r), b.map(|b| &b.r)) {
-        (Some(Ref::Extern(Some(a))), Some(Ref::Extern(Some(b)))) => a.ptr_eq(b),
-        (None, None) => true,
-        // Note: we don't support equality for `Func`, so we always return
-        // `false` for `funcref`s.
-        _ => false,
-    }
+pub extern "C" fn wasm_ref_same(_a: Option<&wasm_ref_t>, _b: Option<&wasm_ref_t>) -> bool {
+    // We need a store to determine whether these are the same reference or not.
+    abort("wasm_ref_same")
 }
 
 #[no_mangle]

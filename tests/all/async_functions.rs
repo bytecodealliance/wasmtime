@@ -922,6 +922,8 @@ async fn non_stacky_async_activations() -> Result<()> {
 
 #[tokio::test]
 async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
+    let _ = env_logger::try_init();
+
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config)?;
@@ -952,27 +954,30 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
         "#,
     )?;
 
-    type F = TypedFunc<(i32, Option<ExternRef>), ()>;
+    type F = TypedFunc<(i32, Option<Rooted<ExternRef>>), ()>;
 
     let mut store = Store::new(&engine, None);
     let mut linker = Linker::<Option<F>>::new(&engine);
     linker.func_wrap("", "gc", |mut cx: Caller<'_, _>| cx.gc())?;
-    linker.func_wrap("", "test", |val: i32, handle: Option<ExternRef>| {
-        assert_eq!(handle.unwrap().data().downcast_ref(), Some(&val));
-    })?;
+    linker.func_wrap(
+        "",
+        "test",
+        |cx: Caller<'_, _>, val: i32, handle: Option<Rooted<ExternRef>>| -> Result<()> {
+            assert_eq!(handle.unwrap().data(&cx)?.downcast_ref(), Some(&val));
+            Ok(())
+        },
+    )?;
     linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, _>, val: i32| {
         let func = cx.data().clone().unwrap();
-        Box::new(async move {
-            func.call_async(&mut cx, (val, Some(ExternRef::new(val))))
-                .await
-        })
+        let r = Some(ExternRef::new(&mut cx, val));
+        Box::new(async move { func.call_async(&mut cx, (val, r)).await })
     })?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let func: F = instance.get_typed_func(&mut store, "run")?;
     *store.data_mut() = Some(func.clone());
 
-    func.call_async(&mut store, (5, Some(ExternRef::new(5))))
-        .await?;
+    let r = Some(ExternRef::new(&mut store, 5));
+    func.call_async(&mut store, (5, r)).await?;
 
     Ok(())
 }

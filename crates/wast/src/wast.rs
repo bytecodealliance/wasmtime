@@ -173,7 +173,7 @@ where
                     .args
                     .iter()
                     .map(|v| match v {
-                        WastArg::Core(v) => core::val(v),
+                        WastArg::Core(v) => core::val(&mut self.store, v),
                         WastArg::Component(_) => bail!("expected component function, found core"),
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -309,7 +309,8 @@ where
                             bail!("expected component value found core value")
                         }
                     };
-                    core::match_val(v, e).with_context(|| format!("result {} didn't match", i))?;
+                    core::match_val(&self.store, v, e)
+                        .with_context(|| format!("result {} didn't match", i))?;
                 }
             }
             #[cfg(feature = "component-model")]

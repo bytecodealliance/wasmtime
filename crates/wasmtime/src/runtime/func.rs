@@ -1,5 +1,5 @@
 use crate::runtime::Uninhabited;
-use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, Ref,
@@ -1055,7 +1055,11 @@ impl Func {
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
-        Func::from_vm_func_ref(store.as_context_mut().0, raw.cast())
+        Self::_from_raw(store.as_context_mut().0, raw)
+    }
+
+    pub(crate) unsafe fn _from_raw(store: &mut StoreOpaque, raw: *mut c_void) -> Option<Func> {
+        Func::from_vm_func_ref(store, raw.cast())
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -1181,7 +1185,7 @@ impl Func {
         values_vec.resize_with(values_vec_size, || ValRaw::i32(0));
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
             unsafe {
-                *slot = arg.to_raw(&mut *store);
+                *slot = arg.to_raw(&mut *store)?;
             }
         }
 
@@ -1330,7 +1334,7 @@ impl Func {
             ret.ensure_matches_ty(caller.store.0, &ty)
                 .context("function attempted to return an incompatible value")?;
             unsafe {
-                values_vec[i] = ret.to_raw(&mut caller.store);
+                values_vec[i] = ret.to_raw(&mut caller.store)?;
             }
         }
 
@@ -1639,7 +1643,7 @@ fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
 pub unsafe trait WasmRet {
     // Same as `WasmTy::Abi`.
     #[doc(hidden)]
-    type Abi: Copy;
+    type Abi: 'static + Copy;
     #[doc(hidden)]
     type Retptr: Copy;
 
@@ -1656,7 +1660,7 @@ pub unsafe trait WasmRet {
     #[doc(hidden)]
     unsafe fn into_abi_for_ret(
         self,
-        store: &mut StoreOpaque,
+        store: &mut AutoAssertNoGc<'_>,
         ptr: Self::Retptr,
     ) -> Result<Self::Abi>;
 
@@ -1689,8 +1693,12 @@ where
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret(self, store: &mut StoreOpaque, _retptr: ()) -> Result<Self::Abi> {
-        Ok(<Self as WasmTy>::into_abi(self, store))
+    unsafe fn into_abi_for_ret(
+        self,
+        store: &mut AutoAssertNoGc<'_>,
+        _retptr: (),
+    ) -> Result<Self::Abi> {
+        <Self as WasmTy>::into_abi(self, store)
     }
 
     fn func_type(engine: &Engine, params: impl Iterator<Item = ValType>) -> FuncType {
@@ -1727,7 +1735,7 @@ where
 
     unsafe fn into_abi_for_ret(
         self,
-        store: &mut StoreOpaque,
+        store: &mut AutoAssertNoGc<'_>,
         retptr: Self::Retptr,
     ) -> Result<Self::Abi> {
         self.and_then(|val| val.into_abi_for_ret(store, retptr))
@@ -1769,9 +1777,13 @@ macro_rules! impl_wasm_host_results {
             }
 
             #[inline]
-            unsafe fn into_abi_for_ret(self, _store: &mut StoreOpaque, ptr: Self::Retptr) -> Result<Self::Abi> {
+            unsafe fn into_abi_for_ret(
+                self,
+                _store: &mut AutoAssertNoGc<'_>,
+                ptr: Self::Retptr,
+            ) -> Result<Self::Abi> {
                 let ($($t,)*) = self;
-                let abi = ($($t.into_abi(_store),)*);
+                let abi = ($($t.into_abi(_store)?,)*);
                 Ok(<($($t::Abi,)*) as HostAbi>::into_abi(abi, ptr))
             }
 
@@ -1952,14 +1964,30 @@ pub struct Caller<'a, T> {
 }
 
 impl<T> Caller<'_, T> {
-    unsafe fn with<R>(caller: *mut VMContext, f: impl FnOnce(Caller<'_, T>) -> R) -> R {
+    unsafe fn with<F, R>(caller: *mut VMContext, f: F) -> R
+    where
+        // The closure must be valid for any `Caller` it is given; it doesn't
+        // get to choose the `Caller`'s lifetime.
+        F: for<'a> FnOnce(Caller<'a, T>) -> R,
+        // And the return value must not borrow from the caller/store.
+        R: 'static,
+    {
         assert!(!caller.is_null());
         wasmtime_runtime::Instance::from_vmctx(caller, |instance| {
             let store = StoreContextMut::from_raw(instance.store());
-            f(Caller {
+            let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
+
+            let ret = f(Caller {
                 store,
                 caller: &instance,
-            })
+            });
+
+            // Safe to recreate a mutable borrow of the store because `ret`
+            // cannot be borrowing from the store.
+            let store = StoreContextMut::<T>::from_raw(instance.store());
+            store.0.gc_roots_mut().exit_lifo_scope(gc_lifo_scope);
+
+            ret
         })
     }
 
@@ -2157,7 +2185,12 @@ macro_rules! impl_into_func {
                                 if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
                                     return R::fallible_from_error(trap);
                                 }
-                                $(let $args = $args::from_abi($args, caller.store.0);)*
+
+                                let mut store = AutoAssertNoGc::new(caller.store.0);
+                                $(let $args = $args::from_abi($args, &mut store);)*
+                                let _ = &mut store;
+                                drop(store);
+
                                 let r = func(
                                     caller.sub_caller(),
                                     $( $args, )*
@@ -2185,7 +2218,8 @@ macro_rules! impl_into_func {
                                 if !ret.compatible_with_store(caller.store.0) {
                                     CallResult::Trap(anyhow::anyhow!("host function attempted to return cross-`Store` value to Wasm"))
                                 } else {
-                                    match ret.into_abi_for_ret(caller.store.0, retptr) {
+                                    let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
+                                    match ret.into_abi_for_ret(&mut store, retptr) {
                                         Ok(val) => CallResult::Ok(val),
                                         Err(trap) => CallResult::Trap(trap.into()),
                                     }

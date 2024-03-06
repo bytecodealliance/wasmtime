@@ -1,6 +1,6 @@
-use crate::r#ref::ExternRef;
-use crate::store::StoreOpaque;
-use crate::{AsContext, AsContextMut, Func, HeapType, RefType, ValType, V128};
+use crate::gc::ExternRef;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::{AsContext, AsContextMut, Func, HeapType, RefType, Rooted, ValType, V128};
 use anyhow::{bail, Context, Result};
 use std::ptr;
 use wasmtime_runtime::TableElement;
@@ -42,7 +42,7 @@ pub enum Val {
     FuncRef(Option<Func>),
 
     /// An external reference.
-    ExternRef(Option<ExternRef>),
+    ExternRef(Option<Rooted<ExternRef>>),
 }
 
 macro_rules! accessors {
@@ -165,30 +165,33 @@ impl Val {
 
     /// Convenience method to convert this [`Val`] into a [`ValRaw`].
     ///
+    /// Returns an error if this value is a GC reference and the GC reference
+    /// has been unrooted.
+    ///
     /// # Unsafety
     ///
     /// This method is unsafe for the reasons that [`ExternRef::to_raw`] and
     /// [`Func::to_raw`] are unsafe.
-    pub unsafe fn to_raw(&self, store: impl AsContextMut) -> ValRaw {
+    pub unsafe fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
         match self {
-            Val::I32(i) => ValRaw::i32(*i),
-            Val::I64(i) => ValRaw::i64(*i),
-            Val::F32(u) => ValRaw::f32(*u),
-            Val::F64(u) => ValRaw::f64(*u),
-            Val::V128(b) => ValRaw::v128(b.as_u128()),
+            Val::I32(i) => Ok(ValRaw::i32(*i)),
+            Val::I64(i) => Ok(ValRaw::i64(*i)),
+            Val::F32(u) => Ok(ValRaw::f32(*u)),
+            Val::F64(u) => Ok(ValRaw::f64(*u)),
+            Val::V128(b) => Ok(ValRaw::v128(b.as_u128())),
             Val::ExternRef(e) => {
                 let externref = match e {
                     None => ptr::null_mut(),
-                    Some(e) => e.to_raw(store),
+                    Some(e) => e.to_raw(store)?,
                 };
-                ValRaw::externref(externref)
+                Ok(ValRaw::externref(externref))
             }
             Val::FuncRef(f) => {
                 let funcref = match f {
                     Some(f) => f.to_raw(store),
                     None => ptr::null_mut(),
                 };
-                ValRaw::funcref(funcref)
+                Ok(ValRaw::funcref(funcref))
             }
         }
     }
@@ -213,7 +216,7 @@ impl Val {
                         Func::from_raw(store, raw.get_funcref()).into()
                     }
                     HeapType::NoFunc => Ref::Func(None),
-                    HeapType::Extern => ExternRef::from_raw(raw.get_externref()).into(),
+                    HeapType::Extern => ExternRef::from_raw(store, raw.get_externref()).into(),
                 };
                 assert!(
                     ref_ty.is_nullable() || !ref_.is_null(),
@@ -231,7 +234,7 @@ impl Val {
         (F32(f32) f32 unwrap_f32 f32::from_bits(*e))
         (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
         (FuncRef(Option<&Func>) func_ref unwrap_func_ref e.as_ref())
-        (ExternRef(Option<&ExternRef>) extern_ref unwrap_extern_ref e.as_ref())
+        (ExternRef(Option<&Rooted<ExternRef>>) extern_ref unwrap_extern_ref e.as_ref())
         (V128(V128) v128 unwrap_v128 *e)
     }
 
@@ -253,7 +256,7 @@ impl Val {
     ///
     /// If this is a non-null `externref`, then `Some(Some(..))` is returned.
     #[inline]
-    pub fn externref(&self) -> Option<Option<&ExternRef>> {
+    pub fn externref(&self) -> Option<Option<&Rooted<ExternRef>>> {
         match self {
             Val::ExternRef(None) => Some(None),
             Val::ExternRef(Some(e)) => Some(Some(e)),
@@ -272,7 +275,7 @@ impl Val {
     ///
     /// Panics if `self` is not a (nullable) `externref`.
     #[inline]
-    pub fn unwrap_externref(&self) -> Option<&ExternRef> {
+    pub fn unwrap_externref(&self) -> Option<&Rooted<ExternRef>> {
         self.externref().expect("expected externref")
     }
 
@@ -313,15 +316,13 @@ impl Val {
             Val::FuncRef(Some(f)) => f.comes_from_same_store(store),
             Val::FuncRef(None) => true,
 
-            // Integers, floats, vectors, and `externref`s have no association
-            // with any particular store, so they're always considered as "yes I
-            // came from that store",
-            Val::I32(_)
-            | Val::I64(_)
-            | Val::F32(_)
-            | Val::F64(_)
-            | Val::V128(_)
-            | Val::ExternRef(_) => true,
+            Val::ExternRef(Some(x)) => x.comes_from_same_store(store),
+            Val::ExternRef(None) => true,
+
+            // Integers, floats, and vectors have no association with any
+            // particular store, so they're always considered as "yes I came
+            // from that store",
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
         }
     }
 }
@@ -364,16 +365,16 @@ impl From<Ref> for Val {
     }
 }
 
-impl From<ExternRef> for Val {
+impl From<Rooted<ExternRef>> for Val {
     #[inline]
-    fn from(val: ExternRef) -> Val {
+    fn from(val: Rooted<ExternRef>) -> Val {
         Val::ExternRef(Some(val))
     }
 }
 
-impl From<Option<ExternRef>> for Val {
+impl From<Option<Rooted<ExternRef>>> for Val {
     #[inline]
-    fn from(val: Option<ExternRef>) -> Val {
+    fn from(val: Option<Rooted<ExternRef>>) -> Val {
         Val::ExternRef(val)
     }
 }
@@ -479,7 +480,7 @@ pub enum Ref {
     ///
     /// Wasm can create null external references via the `ref.null extern`
     /// instruction.
-    Extern(Option<ExternRef>),
+    Extern(Option<Rooted<ExternRef>>),
 }
 
 impl From<Func> for Ref {
@@ -496,16 +497,16 @@ impl From<Option<Func>> for Ref {
     }
 }
 
-impl From<ExternRef> for Ref {
+impl From<Rooted<ExternRef>> for Ref {
     #[inline]
-    fn from(e: ExternRef) -> Ref {
+    fn from(e: Rooted<ExternRef>) -> Ref {
         Ref::Extern(Some(e))
     }
 }
 
-impl From<Option<ExternRef>> for Ref {
+impl From<Option<Rooted<ExternRef>>> for Ref {
     #[inline]
-    fn from(e: Option<ExternRef>) -> Ref {
+    fn from(e: Option<Rooted<ExternRef>>) -> Ref {
         Ref::Extern(e)
     }
 }
@@ -541,7 +542,7 @@ impl Ref {
     ///
     /// Returns `Some(Some(_))` if this `Ref` is a non-null `extern` reference.
     #[inline]
-    pub fn as_extern(&self) -> Option<Option<&ExternRef>> {
+    pub fn as_extern(&self) -> Option<Option<&Rooted<ExternRef>>> {
         match self {
             Ref::Extern(e) => Some(e.as_ref()),
             _ => None,
@@ -555,7 +556,7 @@ impl Ref {
     ///
     /// Returns `Some(_)` if this `Ref` is a non-null `extern` reference.
     #[inline]
-    pub fn unwrap_extern(&self) -> Option<&ExternRef> {
+    pub fn unwrap_extern(&self) -> Option<&Rooted<ExternRef>> {
         self.as_extern()
             .expect("Ref::unwrap_extern on non-extern reference")
     }
@@ -663,10 +664,8 @@ impl Ref {
         match self {
             Ref::Func(Some(f)) => f.comes_from_same_store(store),
             Ref::Func(None) => true,
-
-            // `ExternRef`s aren't associated with any single store right
-            // now. That may change in the future.
-            Ref::Extern(_) => true,
+            Ref::Extern(Some(x)) => x.comes_from_same_store(store),
+            Ref::Extern(None) => true,
         }
     }
 
@@ -675,7 +674,8 @@ impl Ref {
         store: &mut StoreOpaque,
         ty: &RefType,
     ) -> Result<TableElement> {
-        self.ensure_matches_ty(store, &ty)
+        let mut store = AutoAssertNoGc::new(store);
+        self.ensure_matches_ty(&store, &ty)
             .context("type mismatch: value does not match table element type")?;
         match (self, ty.heap_type()) {
             (Ref::Func(None), HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_)) => {
@@ -684,10 +684,10 @@ impl Ref {
             }
             (Ref::Func(Some(f)), HeapType::Func | HeapType::Concrete(_)) => {
                 debug_assert!(
-                    f.comes_from_same_store(store),
+                    f.comes_from_same_store(&store),
                     "checked in `ensure_matches_ty`"
                 );
-                Ok(TableElement::FuncRef(f.vm_func_ref(store).as_ptr()))
+                Ok(TableElement::FuncRef(f.vm_func_ref(&mut store).as_ptr()))
             }
 
             (Ref::Extern(e), HeapType::Extern) => match e {
@@ -695,7 +695,9 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(TableElement::ExternRef(None))
                 }
-                Some(e) => Ok(TableElement::ExternRef(Some(e.into_vm_extern_ref()))),
+                Some(e) => Ok(TableElement::ExternRef(Some(
+                    e.try_to_vm_extern_ref(&mut store)?,
+                ))),
             },
 
             _ => unreachable!("checked that the value matches the type above"),

@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::gc::RootSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::{BareModuleInfo, RegisteredModuleId};
@@ -308,6 +309,7 @@ pub struct StoreOpaque {
     num_component_instances: usize,
     signal_handler: Option<Box<SignalHandler<'static>>>,
     externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable,
+    gc_roots: RootSet,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
     host_globals: Vec<StoreBox<VMHostGlobalContext>>,
@@ -388,22 +390,16 @@ unsafe impl Send for AsyncState {}
 unsafe impl Sync for AsyncState {}
 
 /// An RAII type to automatically mark a region of code as unsafe for GC.
-pub(crate) struct AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
+#[doc(hidden)]
+pub struct AutoAssertNoGc<'a> {
     #[cfg(all(debug_assertions, feature = "gc"))]
     prev_okay: bool,
-    store: T,
+    store: &'a mut StoreOpaque,
 }
 
-impl<T> AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
+impl<'a> AutoAssertNoGc<'a> {
     #[inline]
-    pub fn new(mut store: T) -> Self {
-        let _ = &mut store;
+    pub fn new(store: &'a mut StoreOpaque) -> Self {
         #[cfg(all(debug_assertions, feature = "gc"))]
         {
             let prev_okay = store.externref_activations_table.set_gc_okay(false);
@@ -416,30 +412,24 @@ where
     }
 }
 
-impl<T> std::ops::Deref for AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
-    type Target = T;
+impl std::ops::Deref for AutoAssertNoGc<'_> {
+    type Target = StoreOpaque;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.store
+        &*self.store
     }
 }
 
-impl<T> std::ops::DerefMut for AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
+impl std::ops::DerefMut for AutoAssertNoGc<'_> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.store
+        &mut *self.store
     }
 }
 
-impl<T> Drop for AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
+impl Drop for AutoAssertNoGc<'_> {
+    #[inline]
     fn drop(&mut self) {
         #[cfg(all(debug_assertions, feature = "gc"))]
         {
@@ -498,6 +488,7 @@ impl<T> Store<T> {
                 num_component_instances: 0,
                 signal_handler: None,
                 externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable::new(),
+                gc_roots: RootSet::default(),
                 modules: ModuleRegistry::default(),
                 func_refs: FuncRefs::default(),
                 host_globals: Vec::new(),
@@ -1384,6 +1375,16 @@ impl StoreOpaque {
         &mut self,
     ) -> &mut wasmtime_runtime::VMExternRefActivationsTable {
         &mut self.externref_activations_table
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots(&self) -> &RootSet {
+        &self.gc_roots
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots_mut(&mut self) -> &mut RootSet {
+        &mut self.gc_roots
     }
 
     pub fn gc(&mut self) {

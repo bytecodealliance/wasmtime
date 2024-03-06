@@ -99,21 +99,17 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
-use crate::{Backtrace, ModuleInfoLookup, SendSyncPtr, VMRuntimeLimits};
+use crate::{Backtrace, ModuleInfoLookup, SendSyncPtr, VMGcRef, VMRuntimeLimits};
 use std::alloc::Layout;
 use std::any::Any;
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
 use std::cmp;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::mem;
-use std::ops::Deref;
 use std::ptr::{self, NonNull};
-use std::sync::atomic::{self, AtomicUsize, Ordering};
 
 /// An external reference to some opaque data.
-///
-/// `VMExternRef`s dereference to their underlying opaque data as `dyn Any`.
 ///
 /// Unlike the `externref` in the Wasm spec, `VMExternRef`s are non-nullable,
 /// and always point to a valid value. You may use `Option<VMExternRef>` to
@@ -146,15 +142,15 @@ use std::sync::atomic::{self, AtomicUsize, Ordering};
 /// let file = std::fs::File::create("some/file/path")?;
 ///
 /// // Wrap the file up as an `VMExternRef` that can be passed to Wasm.
-/// let extern_ref_to_file = VMExternRef::new(file);
+/// let extern_ref_to_file = unsafe { VMExternRef::new(file) };
 ///
-/// // `VMExternRef`s dereference to `dyn Any`, so you can use `Any` methods to
-/// // perform runtime type checks and downcasts.
+/// // Get the underlying `dyn Any` via the `data` method, so you can use `Any`
+/// // methods to perform runtime type checks and downcasts.
 ///
-/// assert!(extern_ref_to_file.is::<std::fs::File>());
-/// assert!(!extern_ref_to_file.is::<String>());
+/// assert!(extern_ref_to_file.data().is::<std::fs::File>());
+/// assert!(!extern_ref_to_file.data().is::<String>());
 ///
-/// if let Some(mut file) = extern_ref_to_file.downcast_ref::<std::fs::File>() {
+/// if let Some(mut file) = extern_ref_to_file.data().downcast_ref::<std::fs::File>() {
 ///     use std::io::Write;
 ///     writeln!(&mut file, "Hello, `VMExternRef`!")?;
 /// }
@@ -163,11 +159,37 @@ use std::sync::atomic::{self, AtomicUsize, Ordering};
 /// ```
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct VMExternRef(SendSyncPtr<VMExternData>);
+pub struct VMExternRef(VMGcRef);
 
-impl std::fmt::Pointer for VMExternRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Pointer::fmt(&self.0, f)
+impl VMGcRef {
+    /// Get this GC reference as a `VMExternRef`.
+    pub fn as_extern_ref(&self) -> &VMExternRef {
+        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        assert_eq!(
+            std::mem::size_of::<VMExternRef>(),
+            std::mem::size_of::<VMGcRef>()
+        );
+        assert_eq!(
+            std::mem::align_of::<VMExternRef>(),
+            std::mem::align_of::<VMGcRef>()
+        );
+        let ptr = self as *const VMGcRef;
+        unsafe { &*(ptr.cast::<VMExternRef>()) }
+    }
+
+    /// Get this GC reference as a mutable `VMExternRef`.
+    pub fn as_extern_ref_mut(&mut self) -> &mut VMExternRef {
+        assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        assert_eq!(
+            std::mem::size_of::<VMExternRef>(),
+            std::mem::size_of::<VMGcRef>()
+        );
+        assert_eq!(
+            std::mem::align_of::<VMExternRef>(),
+            std::mem::align_of::<VMGcRef>()
+        );
+        let ptr = self as *mut VMGcRef;
+        unsafe { &mut *(ptr.cast::<VMExternRef>()) }
     }
 }
 
@@ -180,17 +202,28 @@ pub(crate) struct VMExternData {
     //
     /// The reference count for this `VMExternData` and value. When it reaches
     /// zero, we can safely destroy the value and free this heap
-    /// allocation. This is an `UnsafeCell`, rather than plain `Cell`, because
-    /// it can be modified by compiled Wasm code.
+    /// allocation. This field can be modified by compiled Wasm code.
     ///
     /// Note: this field's offset must be kept in sync with
     /// `wasmtime_environ::VMOffsets::vm_extern_data_ref_count()` which is
     /// currently always zero.
-    ref_count: AtomicUsize,
+    ref_count: Cell<usize>,
 
     /// Always points to the implicit, dynamically-sized `value` member that
     /// precedes this `VMExternData`.
     value_ptr: SendSyncPtr<dyn Any + Send + Sync>,
+}
+
+// It is up to `VMExternRef` users to uphold that instances are used in a way
+// that is `Send`/`Sync`. This is part of the unsafe contract of
+// `VMExternRef::new`.
+unsafe impl Send for VMExternRef {}
+unsafe impl Sync for VMExternRef {}
+
+impl std::fmt::Pointer for VMExternRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Pointer::fmt(&self.0, f)
+    }
 }
 
 impl Clone for VMExternRef {
@@ -206,17 +239,15 @@ impl Drop for VMExternRef {
     fn drop(&mut self) {
         let data = self.extern_data();
 
-        // Note that the memory orderings here also match the standard library
-        // itself. Documentation is more available in the implementation of
-        // `Arc`, but the general idea is that this is a special pattern allowed
-        // by the C standard with atomic orderings where we "release" for all
-        // the decrements and only the final decrementer performs an acquire
-        // fence. This properly ensures that the final thread, which actually
-        // destroys the data, sees all the updates from all other threads.
-        if data.ref_count.fetch_sub(1, Ordering::Release) != 1 {
+        debug_assert!(data.ref_count.get() > 0);
+        data.ref_count.set(data.ref_count.get() - 1);
+        log::trace!(
+            "Decrementing ref count of externref @ 0x{data:p} -> {}",
+            data.ref_count.get()
+        );
+        if data.ref_count.get() > 0 {
             return;
         }
-        atomic::fence(Ordering::Acquire);
 
         unsafe {
             VMExternData::drop_and_dealloc(self.0);
@@ -254,15 +285,19 @@ impl VMExternData {
     }
 
     /// Drop the inner value and then free this `VMExternData` heap allocation.
-    pub(crate) unsafe fn drop_and_dealloc(mut data: SendSyncPtr<VMExternData>) {
-        log::trace!("Dropping externref data @ {:p}", data);
+    ///
+    /// The given `gc_ref` must point to a valid `VMExternData`.
+    pub(crate) unsafe fn drop_and_dealloc(gc_ref: VMGcRef) {
+        log::trace!("Dropping externref data @ {gc_ref:#p}");
+        assert!(VMGcRef::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        let mut data = gc_ref.0.cast::<VMExternData>();
 
         // Note: we introduce a block scope so that we drop the live
         // reference to the data before we free the heap allocation it
         // resides within after this block.
         let (alloc_ptr, layout) = {
             let data = data.as_mut();
-            debug_assert_eq!(data.ref_count.load(Ordering::SeqCst), 0);
+            debug_assert_eq!(data.ref_count.get(), 0);
 
             // Same thing, but for the dropping the reference to `value` before
             // we drop it itself.
@@ -283,14 +318,12 @@ impl VMExternData {
 
     #[inline]
     fn increment_ref_count(&self) {
-        // This is only using during cloning operations, and like the standard
-        // library we use `Relaxed` here. The rationale is better documented in
-        // libstd's implementation of `Arc`, but the general gist is that we're
-        // creating a new pointer for our own thread, so there's no need to have
-        // any synchronization with orderings. The synchronization with other
-        // threads with respect to orderings happens when the pointer is sent to
-        // another thread.
-        self.ref_count.fetch_add(1, Ordering::Relaxed);
+        self.ref_count.set(self.ref_count.get() + 1);
+        log::trace!(
+            "Incrementing ref count of externref @ 0x{:p} -> {}",
+            self as *const _,
+            self.ref_count.get(),
+        );
     }
 }
 
@@ -303,7 +336,12 @@ fn round_up_to_align(n: usize, align: usize) -> Option<usize> {
 
 impl VMExternRef {
     /// Wrap the given value inside an `VMExternRef`.
-    pub fn new<T>(value: T) -> VMExternRef
+    ///
+    /// # Safety
+    ///
+    /// Callers are responsible for ensuring that the `VMExternRef` is used in a
+    /// thread-safe way, because the internal reference counting is not atomic.
+    pub unsafe fn new<T>(value: T) -> VMExternRef
     where
         T: 'static + Any + Send + Sync,
     {
@@ -311,7 +349,12 @@ impl VMExternRef {
     }
 
     /// Construct a new `VMExternRef` in place by invoking `make_value`.
-    pub fn new_with<T>(make_value: impl FnOnce() -> T) -> VMExternRef
+    ///
+    /// # Safety
+    ///
+    /// Callers are responsible for ensuring that the `VMExternRef` is used in a
+    /// thread-safe way, because the internal reference counting is not atomic.
+    pub unsafe fn new_with<T>(make_value: impl FnOnce() -> T) -> VMExternRef
     where
         T: 'static + Any + Send + Sync,
     {
@@ -327,36 +370,103 @@ impl VMExternRef {
             let value_ptr = alloc_ptr.cast::<T>();
             ptr::write(value_ptr.as_ptr(), make_value());
 
-            let extern_data_ptr =
-                alloc_ptr.cast::<u8>().as_ptr().add(footer_offset) as *mut VMExternData;
+            let extern_data_ptr = alloc_ptr
+                .cast::<u8>()
+                .as_ptr()
+                .add(footer_offset)
+                .cast::<VMExternData>();
 
             ptr::write(
                 extern_data_ptr,
                 VMExternData {
-                    ref_count: AtomicUsize::new(1),
+                    ref_count: Cell::new(1),
                     // Cast from `*mut T` to `*mut dyn Any` here.
                     value_ptr: SendSyncPtr::new(NonNull::new_unchecked(value_ptr.as_ptr())),
                 },
             );
 
             log::trace!("New externref data @ {:p}", extern_data_ptr);
-            VMExternRef(NonNull::new_unchecked(extern_data_ptr).into())
+            VMExternRef(VMGcRef::from_non_null(NonNull::new_unchecked(
+                extern_data_ptr.cast::<u8>(),
+            )))
         }
     }
 
-    /// Turn this `VMExternRef` into a raw, untyped pointer.
+    /// Turn this `VMExternRef` into a its underlying GC reference.
+    ///
+    /// Unlike `into_gc_ref`, this does not consume and forget `self`. It is *not*
+    /// safe to use `from_gc_ref` on pointers returned from this method; only use
+    /// `clone_from_gc_ref`!
+    ///
+    /// Nor does this method increment the reference count. You must ensure that
+    /// `self` (or some other clone of `self`) stays alive until
+    /// `clone_from_gc_ref` is called.
+    #[inline]
+    pub fn as_gc_ref(&self) -> &VMGcRef {
+        &self.0
+    }
+
+    /// Consume this `VMExternRef` into a raw, untyped pointer.
+    ///
+    /// # Safety
+    ///
+    /// This method forgets self, so it is possible to create a leak of the
+    /// underlying reference counted data if not used carefully.
+    ///
+    /// Use `from_gc_ref` to recreate the `VMExternRef`.
+    pub unsafe fn into_gc_ref(self) -> VMGcRef {
+        let gc_ref = self.0;
+        std::mem::forget(self);
+        gc_ref
+    }
+
+    /// Recreate a `VMExternRef` from a pointer returned from a previous call to
+    /// `{as,into}_gc_ref`.
+    ///
+    /// # Safety
+    ///
+    /// The given `gc_ref` must point to a valid `VMExternData`.
+    ///
+    /// Unlike `clone_from_gc_ref`, this does not increment the reference count
+    /// of the underlying data. It is not safe to continue to use the pointer
+    /// passed to this function.
+    #[inline]
+    pub unsafe fn from_gc_ref(gc_ref: VMGcRef) -> Self {
+        assert!(VMGcRef::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        VMExternRef(gc_ref)
+    }
+
+    /// Recreate a `VMExternRef` from a pointer returned from a previous call to
+    /// `{as,into}_gc_ref`.
+    ///
+    /// # Safety
+    ///
+    /// Wildly unsafe to use with anything other than the result of a previous
+    /// `{as,into}_gc_ref` call!
+    ///
+    /// Additionally, it is your responsibility to ensure that this raw
+    /// `VMExternRef` is still valid, or else you could have use-after-free
+    /// bugs.
+    #[inline]
+    pub unsafe fn clone_from_gc_ref(gc_ref: VMGcRef) -> Self {
+        assert!(VMGcRef::ONLY_EXTERN_REF_IMPLEMENTED_YET);
+        let x = VMExternRef(gc_ref);
+        x.extern_data().increment_ref_count();
+        x
+    }
+
+    /// Get a raw pointer for this `VMExternRef`.
     ///
     /// Unlike `into_raw`, this does not consume and forget `self`. It is *not*
     /// safe to use `from_raw` on pointers returned from this method; only use
     /// `clone_from_raw`!
     ///
-    ///  Nor does this method increment the reference count. You must ensure
-    ///  that `self` (or some other clone of `self`) stays alive until
-    ///  `clone_from_raw` is called.
+    /// Nor does this method increment the reference count. You must ensure that
+    /// `self` (or some other clone of `self`) stays alive until
+    /// `clone_from_raw` is called.
     #[inline]
     pub fn as_raw(&self) -> *mut u8 {
-        let ptr = self.0.as_ptr().cast::<u8>();
-        ptr
+        self.0.as_ptr()
     }
 
     /// Consume this `VMExternRef` into a raw, untyped pointer.
@@ -368,53 +478,55 @@ impl VMExternRef {
     ///
     /// Use `from_raw` to recreate the `VMExternRef`.
     pub unsafe fn into_raw(self) -> *mut u8 {
-        let ptr = self.0.as_ptr().cast::<u8>();
+        let raw = self.0;
         std::mem::forget(self);
-        ptr
+        raw.as_ptr()
     }
 
     /// Recreate a `VMExternRef` from a pointer returned from a previous call to
-    /// `as_raw`.
+    /// `{as,into}_raw`.
     ///
     /// # Safety
     ///
-    /// Unlike `clone_from_raw`, this does not increment the reference count of the
-    /// underlying data.  It is not safe to continue to use the pointer passed to this
-    /// function.
+    /// The given `raw` must point to a valid `VMExternData`.
+    ///
+    /// Unlike `clone_from_raw`, this does not increment the reference count of
+    /// the underlying data. It is not safe to continue to use the pointer
+    /// passed to this function.
     #[inline]
-    pub unsafe fn from_raw(ptr: *mut u8) -> Option<Self> {
-        Some(VMExternRef(NonNull::new(ptr)?.cast().into()))
+    pub unsafe fn from_raw(raw: *mut u8) -> Option<Self> {
+        VMGcRef::from_ptr(raw).map(|r| Self::from_gc_ref(r))
     }
 
     /// Recreate a `VMExternRef` from a pointer returned from a previous call to
-    /// `as_raw`.
+    /// `{as,into}_raw`.
     ///
     /// # Safety
     ///
     /// Wildly unsafe to use with anything other than the result of a previous
-    /// `as_raw` call!
+    /// `{as,into}_raw` call!
     ///
     /// Additionally, it is your responsibility to ensure that this raw
-    /// `VMExternRef`'s reference count has not dropped to zero. Failure to do
-    /// so will result in use after free!
+    /// `VMExternRef` is still valid, or else you could have use-after-free
+    /// bugs.
     #[inline]
-    pub unsafe fn clone_from_raw(ptr: *mut u8) -> Option<Self> {
-        let x = VMExternRef(NonNull::new(ptr)?.cast::<VMExternData>().into());
-        x.extern_data().increment_ref_count();
-        Some(x)
+    pub unsafe fn clone_from_raw(raw: *mut u8) -> Option<Self> {
+        VMGcRef::from_ptr(raw).map(|r| Self::clone_from_gc_ref(r))
     }
 
     /// Get the strong reference count for this `VMExternRef`.
-    ///
-    /// Note that this loads with a `SeqCst` ordering to synchronize with other
-    /// threads.
     pub fn strong_count(&self) -> usize {
-        self.extern_data().ref_count.load(Ordering::SeqCst)
+        self.extern_data().ref_count.get()
     }
 
     #[inline]
     fn extern_data(&self) -> &VMExternData {
-        unsafe { self.0.as_ref() }
+        unsafe { self.0.as_non_null().cast().as_ref() }
+    }
+
+    #[inline]
+    fn extern_data_mut(&mut self) -> &mut VMExternData {
+        unsafe { self.0.as_non_null().cast().as_mut() }
     }
 }
 
@@ -457,13 +569,20 @@ impl VMExternRef {
         let b = b.0.as_ptr() as usize;
         a.cmp(&b)
     }
-}
 
-impl Deref for VMExternRef {
-    type Target = dyn Any;
-
-    fn deref(&self) -> &dyn Any {
+    /// Get the underlying host data.
+    pub fn data(&self) -> &(dyn Any + Send + Sync) {
         unsafe { self.extern_data().value_ptr.as_ref() }
+    }
+
+    /// Get a mutable borrow of the underlying host data.
+    ///
+    /// # Safety
+    ///
+    /// It is up to the caller to ensure that there are not any other active
+    /// borrows of the data.
+    pub unsafe fn data_mut(&mut self) -> &mut (dyn Any + Send + Sync) {
+        unsafe { self.extern_data_mut().value_ptr.as_mut() }
     }
 }
 
@@ -708,9 +827,9 @@ impl VMExternRefActivationsTable {
 
     fn insert_precise_stack_root(
         precise_stack_roots: &mut HashSet<VMExternRefWithTraits>,
-        root: NonNull<VMExternData>,
+        root: VMGcRef,
     ) {
-        let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr().cast()).unwrap() };
+        let root = root.as_extern_ref().clone();
         log::trace!("Found externref on stack: {:p}", root);
         precise_stack_roots.insert(VMExternRefWithTraits(root));
     }
@@ -872,7 +991,7 @@ pub unsafe fn gc(
     let mut activations_table_set: DebugOnly<HashSet<_>> = Default::default();
     if cfg!(debug_assertions) {
         externref_activations_table.elements(|elem| {
-            activations_table_set.insert(elem.as_raw() as *mut VMExternData);
+            activations_table_set.insert(*elem.as_gc_ref());
         });
     }
 
@@ -920,22 +1039,21 @@ pub unsafe fn gc(
                 continue;
             }
 
-            let stack_slot = stack_slot as *const *mut VMExternData;
+            let stack_slot = stack_slot as *const *mut u8;
             let r = std::ptr::read(stack_slot);
             log::trace!("Stack slot @ {:p} = {:p}", stack_slot, r);
 
-            debug_assert!(
-                r.is_null() || activations_table_set.contains(&r),
-                "every on-stack externref inside a Wasm frame should \
-                 have an entry in the VMExternRefActivationsTable; \
-                 {:?} is not in the table",
-                r
-            );
+            if let Some(gc_ref) = VMGcRef::from_ptr(r) {
+                debug_assert!(
+                    activations_table_set.contains(&gc_ref),
+                    "every on-stack externref inside a Wasm frame should \
+                     have an entry in the VMExternRefActivationsTable; \
+                     {gc_ref:?} is not in the table",
+                );
 
-            if let Some(r) = NonNull::new(r) {
                 VMExternRefActivationsTable::insert_precise_stack_root(
                     &mut externref_activations_table.precise_stack_roots,
-                    r,
+                    gc_ref,
                 );
             }
         }
@@ -975,7 +1093,7 @@ mod tests {
         let s: *mut (dyn Any + Send + Sync) = s as _;
 
         let extern_data = VMExternData {
-            ref_count: AtomicUsize::new(0),
+            ref_count: Cell::new(0),
             value_ptr: NonNull::new(s).unwrap().into(),
         };
 

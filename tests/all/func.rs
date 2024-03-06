@@ -385,8 +385,10 @@ fn func_constructors() {
     Func::wrap(&mut store, || -> i64 { 0 });
     Func::wrap(&mut store, || -> f32 { 0.0 });
     Func::wrap(&mut store, || -> f64 { 0.0 });
-    Func::wrap(&mut store, || -> ExternRef { loop {} });
-    Func::wrap(&mut store, || -> Option<ExternRef> { None });
+    Func::wrap(&mut store, || -> Rooted<ExternRef> { loop {} });
+    Func::wrap(&mut store, || -> Option<Rooted<ExternRef>> { None });
+    Func::wrap(&mut store, || -> ManuallyRooted<ExternRef> { loop {} });
+    Func::wrap(&mut store, || -> Option<ManuallyRooted<ExternRef>> { None });
     Func::wrap(&mut store, || -> Func { loop {} });
     Func::wrap(&mut store, || -> Option<Func> { None });
     Func::wrap(&mut store, || -> NoFunc { loop {} });
@@ -397,8 +399,17 @@ fn func_constructors() {
     Func::wrap(&mut store, || -> Result<i64> { loop {} });
     Func::wrap(&mut store, || -> Result<f32> { loop {} });
     Func::wrap(&mut store, || -> Result<f64> { loop {} });
-    Func::wrap(&mut store, || -> Result<ExternRef> { loop {} });
-    Func::wrap(&mut store, || -> Result<Option<ExternRef>> { loop {} });
+    Func::wrap(&mut store, || -> Result<Rooted<ExternRef>> { loop {} });
+    Func::wrap(&mut store, || -> Result<Option<Rooted<ExternRef>>> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<ManuallyRooted<ExternRef>> {
+        loop {}
+    });
+    Func::wrap(
+        &mut store,
+        || -> Result<Option<ManuallyRooted<ExternRef>>> { loop {} },
+    );
     Func::wrap(&mut store, || -> Result<Func> { loop {} });
     Func::wrap(&mut store, || -> Result<Option<Func>> { loop {} });
     Func::wrap(&mut store, || -> Result<NoFunc> { loop {} });
@@ -485,19 +496,26 @@ fn signatures_match() {
 
     let f = Func::wrap(
         &mut store,
-        |_: f32, _: f64, _: i32, _: i64, _: i32, _: Option<ExternRef>, _: Option<Func>| -> f64 {
-            loop {}
-        },
+        |_: f32,
+         _: f64,
+         _: i32,
+         _: i64,
+         _: i32,
+         _: Option<Rooted<ExternRef>>,
+         _: Option<ManuallyRooted<ExternRef>>,
+         _: Option<Func>|
+         -> f64 { loop {} },
     );
 
-    assert_eq!(f.ty(&store).params().len(), 7);
+    assert_eq!(f.ty(&store).params().len(), 8);
     assert!(f.ty(&store).params().nth(0).unwrap().is_f32());
     assert!(f.ty(&store).params().nth(1).unwrap().is_f64());
     assert!(f.ty(&store).params().nth(2).unwrap().is_i32());
     assert!(f.ty(&store).params().nth(3).unwrap().is_i64());
     assert!(f.ty(&store).params().nth(4).unwrap().is_i32());
     assert!(f.ty(&store).params().nth(5).unwrap().is_externref());
-    assert!(f.ty(&store).params().nth(6).unwrap().is_funcref());
+    assert!(f.ty(&store).params().nth(6).unwrap().is_externref());
+    assert!(f.ty(&store).params().nth(7).unwrap().is_funcref());
 
     assert_eq!(f.ty(&store).results().len(), 1);
     assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
@@ -506,6 +524,8 @@ fn signatures_match() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn import_works() -> Result<()> {
+    let _ = env_logger::try_init();
+
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
     let wasm = wat::parse_str(
@@ -513,9 +533,9 @@ fn import_works() -> Result<()> {
             (import "" "" (func))
             (import "" "" (func (param i32) (result i32)))
             (import "" "" (func (param i32) (param i64)))
-            (import "" "" (func (param i32 i64 i32 f32 f64 externref funcref)))
+            (import "" "" (func (param i32 i64 i32 f32 f64 externref externref funcref)))
 
-            (func (export "run") (param externref funcref)
+            (func (export "run") (param externref externref funcref)
                 call 0
                 i32.const 0
                 call 1
@@ -531,6 +551,7 @@ fn import_works() -> Result<()> {
                 f64.const 500
                 local.get 0
                 local.get 1
+                local.get 2
                 call 3
             )
         "#,
@@ -565,39 +586,55 @@ fn import_works() -> Result<()> {
              c: i32,
              d: f32,
              e: f64,
-             f: Option<ExternRef>,
-             g: Option<Func>| {
+             f: Option<Rooted<ExternRef>>,
+             g: Option<ManuallyRooted<ExternRef>>,
+             h: Option<Func>|
+             -> Result<()> {
                 assert_eq!(a, 100);
                 assert_eq!(b, 200);
                 assert_eq!(c, 300);
                 assert_eq!(d, 400.0);
                 assert_eq!(e, 500.0);
+                dbg!(f);
+                dbg!(g.as_ref());
+                dbg!(f.as_ref().unwrap().data(&caller)?.downcast_ref::<String>());
+                dbg!(g.as_ref().unwrap().data(&caller)?.downcast_ref::<String>());
                 assert_eq!(
-                    f.as_ref().unwrap().data().downcast_ref::<String>().unwrap(),
+                    f.as_ref()
+                        .unwrap()
+                        .data(&caller)?
+                        .downcast_ref::<String>()
+                        .unwrap(),
                     "hello"
                 );
+                assert_eq!(
+                    g.as_ref()
+                        .unwrap()
+                        .data(&caller)?
+                        .downcast_ref::<String>()
+                        .unwrap(),
+                    "goodbye"
+                );
                 let mut results = [Val::I32(0)];
-                g.as_ref()
+                h.as_ref()
                     .unwrap()
                     .call(&mut caller, &[], &mut results)
                     .unwrap();
                 assert_eq!(results[0].unwrap_i32(), 42);
                 assert_eq!(HITS.fetch_add(1, SeqCst), 3);
+                Ok(())
             },
         )
         .into(),
     ];
     let instance = Instance::new(&mut store, &module, &imports)?;
     let run = instance.get_func(&mut store, "run").unwrap();
+    let hello = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())));
+    dbg!(&hello);
+    let goodbye = Val::ExternRef(Some(ExternRef::new(&mut store, "goodbye".to_string())));
+    dbg!(&goodbye);
     let funcref = Val::FuncRef(Some(Func::wrap(&mut store, || -> i32 { 42 })));
-    run.call(
-        &mut store,
-        &[
-            Val::ExternRef(Some(ExternRef::new("hello".to_string()))),
-            funcref,
-        ],
-        &mut [],
-    )?;
+    run.call(&mut store, &[hello, goodbye, funcref], &mut [])?;
     assert_eq!(HITS.load(SeqCst), 4);
     Ok(())
 }
@@ -646,8 +683,16 @@ fn get_from_wrapper() {
     assert!(f.typed::<(), f32>(&store).is_ok());
     let f = Func::wrap(&mut store, || -> f64 { loop {} });
     assert!(f.typed::<(), f64>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Option<ExternRef> { loop {} });
-    assert!(f.typed::<(), Option<ExternRef>>(&store).is_ok());
+    let f = Func::wrap(&mut store, || -> Option<Rooted<ExternRef>> { loop {} });
+    assert!(f.typed::<(), Option<Rooted<ExternRef>>>(&store).is_ok());
+    let f = Func::wrap(&mut store, || -> Option<Func> { loop {} });
+    assert!(f.typed::<(), Option<Func>>(&store).is_ok());
+    let f = Func::wrap(&mut store, || -> Option<ManuallyRooted<ExternRef>> {
+        loop {}
+    });
+    assert!(f
+        .typed::<(), Option<ManuallyRooted<ExternRef>>>(&store)
+        .is_ok());
     let f = Func::wrap(&mut store, || -> Option<Func> { loop {} });
     assert!(f.typed::<(), Option<Func>>(&store).is_ok());
 
@@ -662,8 +707,14 @@ fn get_from_wrapper() {
     assert!(f.typed::<f32, ()>(&store).is_ok());
     let f = Func::wrap(&mut store, |_: f64| {});
     assert!(f.typed::<f64, ()>(&store).is_ok());
-    let f = Func::wrap(&mut store, |_: Option<ExternRef>| {});
-    assert!(f.typed::<Option<ExternRef>, ()>(&store).is_ok());
+    let f = Func::wrap(&mut store, |_: Option<Rooted<ExternRef>>| {});
+    assert!(f.typed::<Option<Rooted<ExternRef>>, ()>(&store).is_ok());
+    let f = Func::wrap(&mut store, |_: Option<Func>| {});
+    assert!(f.typed::<Option<Func>, ()>(&store).is_ok());
+    let f = Func::wrap(&mut store, |_: Option<ManuallyRooted<ExternRef>>| {});
+    assert!(f
+        .typed::<Option<ManuallyRooted<ExternRef>>, ()>(&store)
+        .is_ok());
     let f = Func::wrap(&mut store, |_: Option<Func>| {});
     assert!(f.typed::<Option<Func>, ()>(&store).is_ok());
 }
@@ -1341,12 +1392,12 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
     linker.func_wrap(
         "",
         "witness",
-        |mut caller: Caller<'_, ()>, func: Option<Func>, externref: Option<ExternRef>| {
+        |mut caller: Caller<'_, ()>, func: Option<Func>, externref: Option<Rooted<ExternRef>>| {
             if func.is_some() {
                 assert_my_funcref(&mut caller, func.as_ref())?;
             }
             if externref.is_some() {
-                assert_my_externref(externref.as_ref());
+                assert_my_externref(&caller, externref);
             }
             Ok(())
         },
@@ -1354,13 +1405,13 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
 
     let typed = instance
-        .get_typed_func::<(Option<Func>, Option<ExternRef>), (Option<ExternRef>, Option<Func>)>(
+        .get_typed_func::<(Option<Func>, Option<Rooted<ExternRef>>), (Option<Rooted<ExternRef>>, Option<Func>)>(
             &mut store, "f",
         )?;
     let untyped = typed.func();
 
     let my_funcref = Func::wrap(&mut store, || 100u32);
-    let my_externref = ExternRef::new(99u32);
+    let my_externref = ExternRef::new(&mut store, 99u32);
     let mut results = [Val::I32(0), Val::I32(0)];
 
     fn assert_my_funcref(mut store: impl AsContextMut, func: Option<&Func>) -> Result<()> {
@@ -1369,8 +1420,11 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
         assert_eq!(func.typed::<(), u32>(&store)?.call(&mut store, ())?, 100);
         Ok(())
     }
-    fn assert_my_externref(externref: Option<&ExternRef>) {
-        assert_eq!(externref.unwrap().data().downcast_ref(), Some(&99u32));
+    fn assert_my_externref(store: impl AsContext, externref: Option<Rooted<ExternRef>>) {
+        assert_eq!(
+            externref.unwrap().data(&store).unwrap().downcast_ref(),
+            Some(&99u32)
+        );
     }
 
     // funcref=null, externref=null
@@ -1399,7 +1453,7 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
 
     // funcref=null, externref=Some
     let (a, b) = typed.call(&mut store, (None, Some(my_externref.clone())))?;
-    assert_my_externref(a.as_ref());
+    assert_my_externref(&store, a);
     assert!(b.is_none());
     untyped.call(
         &mut store,
@@ -1409,12 +1463,12 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
         ],
         &mut results,
     )?;
-    assert_my_externref(results[0].unwrap_externref());
+    assert_my_externref(&store, results[0].unwrap_externref().copied());
     assert!(results[1].unwrap_funcref().is_none());
 
     // funcref=Some, externref=Some
     let (a, b) = typed.call(&mut store, (Some(my_funcref), Some(my_externref.clone())))?;
-    assert_my_externref(a.as_ref());
+    assert_my_externref(&store, a);
     assert_my_funcref(&mut store, b.as_ref())?;
     untyped.call(
         &mut store,
@@ -1424,7 +1478,7 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
         ],
         &mut results,
     )?;
-    assert_my_externref(results[0].unwrap_externref());
+    assert_my_externref(&store, results[0].unwrap_externref().copied());
     assert_my_funcref(&mut store, results[1].unwrap_funcref())?;
 
     Ok(())
@@ -1494,7 +1548,10 @@ fn typed_concrete_param() -> anyhow::Result<()> {
 
     // Calling `typed` with a type that is not a supertype nor a subtype fails
     // the initial type check.
-    let e = f.typed::<Option<ExternRef>, ()>(&store).err().unwrap();
+    let e = f
+        .typed::<Option<Rooted<ExternRef>>, ()>(&store)
+        .err()
+        .unwrap();
     let e = format!("{e:?}");
     assert!(e.contains("type mismatch with parameters"));
     assert!(e.contains("type mismatch: expected func, found extern"));
@@ -1547,7 +1604,7 @@ fn typed_concrete_result() -> anyhow::Result<()> {
     ));
 
     // Nor some unrelated type that it is neither a subtype or supertype of.
-    let e = f.typed::<(), ExternRef>(&store).err().unwrap();
+    let e = f.typed::<(), Rooted<ExternRef>>(&store).err().unwrap();
     let e = format!("{e:?}");
     assert!(e.contains("type mismatch with results"));
     assert!(e.contains(

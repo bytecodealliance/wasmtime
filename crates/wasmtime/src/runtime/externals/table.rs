@@ -1,4 +1,4 @@
-use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_table_export;
 use crate::{AsContext, AsContextMut, ExternRef, Func, Ref, TableType};
 use anyhow::{anyhow, bail, Context, Result};
@@ -146,12 +146,12 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Ref> {
-        let store = store.as_context_mut().0;
-        let table = self.wasmtime_table(store, std::iter::once(index));
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        let table = self.wasmtime_table(&mut store, std::iter::once(index));
         unsafe {
             match (*table).get(index)? {
                 runtime::TableElement::FuncRef(f) => {
-                    let func = Func::from_vm_func_ref(store, f);
+                    let func = Func::from_vm_func_ref(&mut store, f);
                     Some(func.into())
                 }
 
@@ -163,7 +163,7 @@ impl Table {
 
                 #[cfg_attr(not(feature = "gc"), allow(unreachable_code, unused_variables))]
                 runtime::TableElement::ExternRef(Some(x)) => {
-                    let x = ExternRef::from_vm_extern_ref(x);
+                    let x = ExternRef::from_vm_extern_ref(&mut store, x);
                     Some(x.into())
                 }
             }
@@ -399,7 +399,8 @@ mod tests {
         // That said, they really point to the same table.
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_none());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_none());
-        t1.set(&mut store, 0, Ref::Extern(Some(ExternRef::new(42))))?;
+        let e = ExternRef::new(&mut store, 42);
+        t1.set(&mut store, 0, e.into())?;
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_some());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_some());
 

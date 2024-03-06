@@ -1,5 +1,5 @@
-use crate::store::StoreOpaque;
-use crate::{GlobalType, HeapType, Mutability, Val};
+use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::{GlobalType, HeapType, Mutability, Result, Val};
 use std::ptr;
 use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
@@ -33,7 +33,7 @@ pub fn generate_global_export(
     store: &mut StoreOpaque,
     ty: GlobalType,
     val: Val,
-) -> wasmtime_runtime::ExportGlobal {
+) -> Result<wasmtime_runtime::ExportGlobal> {
     let global = wasmtime_environ::Global {
         wasm_ty: ty.content().to_wasm_type(),
         mutability: match ty.mutability() {
@@ -46,6 +46,7 @@ pub fn generate_global_export(
         global: VMGlobalDefinition::new(),
     });
 
+    let mut store = AutoAssertNoGc::new(store);
     let definition = unsafe {
         let global = &mut (*ctx.get()).global;
         match val {
@@ -56,15 +57,18 @@ pub fn generate_global_export(
             Val::V128(x) => *global.as_u128_mut() = x.into(),
             Val::FuncRef(f) => {
                 *global.as_func_ref_mut() =
-                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr());
+                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&mut store).as_ptr());
             }
             Val::ExternRef(x) => {
-                *global.as_externref_mut() = x.map(|x| x.into_vm_extern_ref());
+                *global.as_externref_mut() = match x {
+                    None => None,
+                    Some(x) => Some(x.try_to_vm_extern_ref(&mut store)?),
+                };
             }
         }
         global
     };
 
     store.host_globals().push(ctx);
-    wasmtime_runtime::ExportGlobal { definition, global }
+    Ok(wasmtime_runtime::ExportGlobal { definition, global })
 }

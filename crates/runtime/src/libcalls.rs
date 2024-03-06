@@ -54,7 +54,7 @@
 //! }
 //! ```
 
-use crate::externref::VMExternRef;
+use crate::gc::VMExternRef;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::VMFuncRef;
 use crate::{Instance, TrapReason};
@@ -382,9 +382,11 @@ unsafe fn table_get_lazy_init_func_ref(
 // Drop a `VMExternRef`.
 #[cfg(feature = "gc")]
 unsafe fn drop_externref(_instance: &mut Instance, externref: *mut u8) {
-    let externref = externref as *mut crate::externref::VMExternData;
-    let externref = std::ptr::NonNull::new(externref).unwrap().into();
-    crate::externref::VMExternData::drop_and_dealloc(externref);
+    use crate::VMGcRef;
+
+    let non_null = std::ptr::NonNull::new(externref).unwrap();
+    let gc_ref = VMGcRef::from_non_null(non_null);
+    crate::gc::VMExternData::drop_and_dealloc(gc_ref);
 }
 
 // Do a GC and insert the given `externref` into the

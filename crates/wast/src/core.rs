@@ -1,11 +1,11 @@
 use anyhow::{bail, Context, Result};
 use std::fmt::{Display, LowerHex};
-use wasmtime::{ExternRef, Val};
+use wasmtime::{ExternRef, Store, Val};
 use wast::core::{HeapType, NanPattern, V128Pattern, WastArgCore, WastRetCore};
 use wast::token::{Float32, Float64};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
-pub fn val(v: &WastArgCore<'_>) -> Result<Val> {
+pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
     use wast::core::WastArgCore::*;
 
     Ok(match v {
@@ -16,7 +16,7 @@ pub fn val(v: &WastArgCore<'_>) -> Result<Val> {
         V128(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes()).into()),
         RefNull(HeapType::Extern) => Val::ExternRef(None),
         RefNull(HeapType::Func) => Val::FuncRef(None),
-        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(*x))),
+        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x))),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
 }
@@ -37,15 +37,15 @@ fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
     (bytes >> (lane * 64)) as i64
 }
 
-pub fn match_val(actual: &Val, expected: &WastRetCore) -> Result<()> {
+pub fn match_val<T>(store: &Store<T>, actual: &Val, expected: &WastRetCore) -> Result<()> {
     match (actual, expected) {
         (_, WastRetCore::Either(expected)) => {
             for expected in expected {
-                if match_val(actual, expected).is_ok() {
+                if match_val(store, actual, expected).is_ok() {
                     return Ok(());
                 }
             }
-            match_val(actual, &expected[0])
+            match_val(store, actual, &expected[0])
         }
 
         (Val::I32(a), WastRetCore::I32(b)) => match_int(a, b),
@@ -67,7 +67,7 @@ pub fn match_val(actual: &Val, expected: &WastRetCore) -> Result<()> {
         }
         (Val::ExternRef(Some(x)), WastRetCore::RefNull(Some(HeapType::Extern))) => {
             let x = x
-                .data()
+                .data(store)?
                 .downcast_ref::<u32>()
                 .expect("only u32 externrefs created in wast test suites");
             bail!("expected null externref, found non-null externref of {x}");
@@ -80,7 +80,7 @@ pub fn match_val(actual: &Val, expected: &WastRetCore) -> Result<()> {
         (Val::FuncRef(Some(_)), WastRetCore::RefFunc(_)) => Ok(()),
         (Val::ExternRef(Some(x)), WastRetCore::RefExtern(Some(y))) => {
             let x = x
-                .data()
+                .data(store)?
                 .downcast_ref::<u32>()
                 .expect("only u32 externrefs created in wast test suites");
             if x == y {
