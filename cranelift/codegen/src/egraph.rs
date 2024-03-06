@@ -169,19 +169,19 @@ where
             if let NewOrExistingInst::Existing(inst) = inst {
                 debug_assert_eq!(self.func.dfg.inst_results(inst).len(), 1);
                 let result = self.func.dfg.first_result(inst);
-                debug_assert_eq!(
+                debug_assert!(
+                    self.domtree.dominates(
+                        self.available_block[orig_result],
+                        self.get_available_block(inst)
+                    ),
+                    "GVN shouldn't replace {result} (available in {}) with non-dominating {orig_result} (available in {})",
                     self.get_available_block(inst),
-                    self.available_block[orig_result]
+                    self.available_block[orig_result],
                 );
-                self.available_block[result] = self.available_block[orig_result];
                 self.value_to_opt_value[result] = orig_result;
-                self.eclasses.union(result, orig_result);
                 self.func.dfg.merge_facts(result, orig_result);
-                self.stats.union += 1;
-                result
-            } else {
-                orig_result
             }
+            orig_result
         } else {
             // Now actually insert the InstructionData and attach
             // result value (exactly one).
@@ -427,7 +427,6 @@ where
                     let orig_result = *o.get();
                     // Hit in GVN map -- reuse value.
                     self.value_to_opt_value[result] = orig_result;
-                    self.eclasses.union(orig_result, result);
                     trace!(" -> merges result {} to {}", result, orig_result);
                     true
                 }
