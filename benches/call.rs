@@ -189,7 +189,7 @@ fn bench_host_to_wasm<Params, Results>(
             let mut space = vec![ValRaw::i32(0); params.len().max(results.len())];
             b.iter(|| unsafe {
                 for (i, param) in params.iter().enumerate() {
-                    space[i] = param.to_raw(&mut *store);
+                    space[i] = param.to_raw(&mut *store).unwrap();
                 }
                 untyped
                     .call_unchecked(&mut *store, space.as_mut_ptr(), space.len())
@@ -348,7 +348,7 @@ fn wasm_to_host(c: &mut Criterion) {
                         Val::I64(0) => {}
                         _ => unreachable!(),
                     }
-                    space[0] = Val::F32(0).to_raw(&mut caller);
+                    space[0] = Val::F32(0).to_raw(&mut caller).unwrap();
                     Ok(())
                 })
                 .unwrap();
