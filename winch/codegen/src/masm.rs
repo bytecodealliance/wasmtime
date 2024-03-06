@@ -468,10 +468,15 @@ pub(crate) trait MacroAssembler {
     type ABI: abi::ABI;
 
     /// Emit the function prologue.
-    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)]) {
+    #[must_use]
+    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)]) -> SPOffset {
         self.frame_setup();
         self.check_stack(vmctx);
         self.save_clobbers(clobbers);
+
+        // Reset the sp_offset to zero, to ensure that `address_from_sp` is computing relative to
+        // the sp without the clobbers.
+        self.clear_sp_offset()
     }
 
     /// Generate the frame setup sequence.
@@ -501,7 +506,8 @@ pub(crate) trait MacroAssembler {
     fn check_stack(&mut self, vmctx: Reg);
 
     /// Emit the function epilogue.
-    fn epilogue(&mut self, clobbers: &[(Reg, OperandSize)]) {
+    fn epilogue(&mut self, prologue_sp_offset: SPOffset, clobbers: &[(Reg, OperandSize)]) {
+        self.restore_sp_offset(prologue_sp_offset);
         self.restore_clobbers(clobbers);
         self.frame_restore();
     }
@@ -557,6 +563,12 @@ pub(crate) trait MacroAssembler {
 
     /// Emit a function call to either a local or external function.
     fn call(&mut self, stack_args_size: u32, f: impl FnMut(&mut Self) -> CalleeKind) -> u32;
+
+    /// Reset the stack pointer offset to `0`, returning the previous [`SPOffset`].
+    fn clear_sp_offset(&mut self) -> SPOffset;
+
+    /// Restore the previous stack offset.
+    fn restore_sp_offset(&mut self, offset: SPOffset);
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> SPOffset;

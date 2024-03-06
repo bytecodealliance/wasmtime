@@ -197,6 +197,17 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn clear_sp_offset(&mut self) -> SPOffset {
+        let offset = self.sp_offset();
+        self.sp_offset = 0;
+        offset
+    }
+
+    fn restore_sp_offset(&mut self, offset: SPOffset) {
+        assert_eq!(self.sp_offset, 0);
+        self.sp_offset = offset.as_u32();
+    }
+
     fn sp_offset(&self) -> SPOffset {
         SPOffset::from_u32(self.sp_offset)
     }

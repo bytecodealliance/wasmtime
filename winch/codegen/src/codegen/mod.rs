@@ -78,14 +78,14 @@ where
         body: &mut BinaryReader<'a>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
-        self.emit_start()
-            .and_then(|_| self.emit_body(body, validator))
-            .and_then(|_| self.emit_end())?;
+        let prologue_sp_offset = self.emit_start()?;
+        self.emit_body(body, validator)?;
+        self.emit_end(prologue_sp_offset)?;
 
         Ok(())
     }
 
-    fn emit_start(&mut self) -> Result<()> {
+    fn emit_start(&mut self) -> Result<SPOffset> {
         let vmctx = self
             .sig
             .params()
@@ -96,7 +96,7 @@ where
 
         // We need to use the vmctx paramter before pinning it for stack checking, and we don't
         // have any callee save registers in the winch calling convention.
-        self.masm.prologue(vmctx, &[]);
+        let prologue_sp_offset = self.masm.prologue(vmctx, &[]);
 
         // Pin the `VMContext` pointer.
         self.masm
@@ -122,7 +122,7 @@ where
                 .set_ret_area(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
         }
 
-        Ok(())
+        Ok(prologue_sp_offset)
     }
 
     /// The following two helpers, handle else or end instructions when the
@@ -296,7 +296,7 @@ where
     }
 
     /// Emit the usual function end instruction sequence.
-    fn emit_end(&mut self) -> Result<()> {
+    fn emit_end(&mut self, prologue_sp_offset: SPOffset) -> Result<()> {
         // The implicit body block is treated a normal block (it pushes results
         // to the stack); so when reaching the end, we pop them taking as
         // reference the current function's signature.
@@ -317,7 +317,7 @@ where
         }
         debug_assert_eq!(self.context.stack.len(), 0);
         self.masm.free_stack(self.context.frame.locals_size);
-        self.masm.epilogue(&[]);
+        self.masm.epilogue(prologue_sp_offset, &[]);
         Ok(())
     }
 
