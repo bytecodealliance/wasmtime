@@ -1,3 +1,5 @@
+use crate::component::matching::InstanceType;
+use crate::component::types;
 use crate::{
     code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
     type_registry::TypeCollection, Engine, Module, ResourcesRequired,
@@ -282,6 +284,141 @@ impl Component {
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Component> {
         let code = engine.load_code_file(path.as_ref(), ObjectKind::Component)?;
         Component::from_parts(engine, code, None)
+    }
+
+    /// Returns the type of this component as a [`types::Component`].
+    ///
+    /// This method enables runtime introspection of the type of a component
+    /// before instantiation, if necessary.
+    ///
+    /// ## Component types and Resources
+    ///
+    /// An important point to note here is that the precise type of imports and
+    /// exports of a component change when it is instantiated with respect to
+    /// resources. For example a [`Component`] represents an un-instantiated
+    /// component meaning that its imported resources are represeted as abstract
+    /// resource types. These abstract types are not equal to any other
+    /// component's types.
+    ///
+    /// For example:
+    ///
+    /// ```
+    /// # use wasmtime::Engine;
+    /// # use wasmtime::component::Component;
+    /// # use wasmtime::component::types::ComponentItem;
+    /// # fn main() -> wasmtime::Result<()> {
+    /// # let engine = Engine::default();
+    /// let a = Component::new(&engine, r#"
+    ///     (component (import "x" (type (sub resource))))
+    /// "#)?;
+    /// let b = Component::new(&engine, r#"
+    ///     (component (import "x" (type (sub resource))))
+    /// "#)?;
+    ///
+    /// let (_, a_ty) = a.component_type().imports(&engine).next().unwrap();
+    /// let (_, b_ty) = b.component_type().imports(&engine).next().unwrap();
+    ///
+    /// let a_ty = match a_ty {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// let b_ty = match b_ty {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// assert!(a_ty != b_ty);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Additionally, however, these abstract types are "substituted" during
+    /// instantiation meaning that a component type will appear to have changed
+    /// once it is instantiated.
+    ///
+    /// ```
+    /// # use wasmtime::{Engine, Store};
+    /// # use wasmtime::component::{Component, Linker, ResourceType};
+    /// # use wasmtime::component::types::ComponentItem;
+    /// # fn main() -> wasmtime::Result<()> {
+    /// # let engine = Engine::default();
+    /// // Here this component imports a resource and then exports it as-is
+    /// // which means that the export is equal to the import.
+    /// let a = Component::new(&engine, r#"
+    ///     (component
+    ///         (import "x" (type $x (sub resource)))
+    ///         (export "x" (type $x))
+    ///     )
+    /// "#)?;
+    ///
+    /// let (_, import) = a.component_type().imports(&engine).next().unwrap();
+    /// let (_, export) = a.component_type().exports(&engine).next().unwrap();
+    ///
+    /// let import = match import {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// let export = match export {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// assert_eq!(import, export);
+    ///
+    /// // However after instantiation the resource type "changes"
+    /// let mut store = Store::new(&engine, ());
+    /// let mut linker = Linker::new(&engine);
+    /// linker.root().resource("x", ResourceType::host::<()>(), |_, _| Ok(()))?;
+    /// let instance = linker.instantiate(&mut store, &a)?;
+    /// let instance_ty = instance.exports(&mut store).root().resource("x").unwrap();
+    ///
+    /// // Here `instance_ty` is not the same as either `import` or `export`,
+    /// // but it is equal to what we provided as an import.
+    /// assert!(instance_ty != import);
+    /// assert!(instance_ty != export);
+    /// assert!(instance_ty == ResourceType::host::<()>());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Finally, each instantiation of an exported resource from a component is
+    /// considered "fresh" for all instantiations meaning that different
+    /// instantiations will have different exported resource types:
+    ///
+    /// ```
+    /// # use wasmtime::{Engine, Store};
+    /// # use wasmtime::component::{Component, Linker};
+    /// # fn main() -> wasmtime::Result<()> {
+    /// # let engine = Engine::default();
+    /// let a = Component::new(&engine, r#"
+    ///     (component
+    ///         (type $x (resource (rep i32)))
+    ///         (export "x" (type $x))
+    ///     )
+    /// "#)?;
+    ///
+    /// let mut store = Store::new(&engine, ());
+    /// let linker = Linker::new(&engine);
+    /// let instance1 = linker.instantiate(&mut store, &a)?;
+    /// let instance2 = linker.instantiate(&mut store, &a)?;
+    ///
+    /// let x1 = instance1.exports(&mut store).root().resource("x").unwrap();
+    /// let x2 = instance2.exports(&mut store).root().resource("x").unwrap();
+    ///
+    /// // Despite these two resources being the same export of the same
+    /// // component they come from two different instances meaning that their
+    /// // types will be unique.
+    /// assert!(x1 != x2);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn component_type(&self) -> types::Component {
+        let resources = Arc::new(PrimaryMap::new());
+        types::Component::from(
+            self.inner.ty,
+            &InstanceType {
+                types: self.types(),
+                resources: &resources,
+            },
+        )
     }
 
     /// Final assembly step for a component from its in-memory representation.
