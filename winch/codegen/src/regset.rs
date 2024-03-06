@@ -40,6 +40,8 @@ pub struct RegBitSet {
     allocatable: u64,
     /// The set of non-alloctable registers.
     non_allocatable: u64,
+    /// The set of registers that have been used.
+    used: u64,
     /// The max number of registers.
     /// Invariant:
     /// When allocating or freeing a register the encoding (index) of the
@@ -56,6 +58,7 @@ impl RegBitSet {
             class: RegClass::Int,
             allocatable,
             non_allocatable,
+            used: 0,
             max,
         }
     }
@@ -124,6 +127,15 @@ impl RegSet {
             || self.is_non_allocatable(reg.class(), reg.hw_enc().try_into().unwrap())
     }
 
+    /// Returns true if the specified register has ever been allocated.
+    pub fn has_been_allocated(&self, reg: Reg) -> bool {
+        let bitset = &self[reg.class()];
+        assert!(reg.hw_enc() < bitset.max);
+        let index = 1 << reg.hw_enc();
+
+        (bitset.used & index) != 0
+    }
+
     fn available(&self, class: RegClass) -> bool {
         let bitset = &self[class];
         bitset.allocatable != 0
@@ -132,6 +144,9 @@ impl RegSet {
     fn allocate(&mut self, class: RegClass, index: u64) {
         if !self.is_non_allocatable(class, index) {
             self[class].allocatable &= !(1 << index);
+
+            // Mark the register as used.
+            self[class].used |= 1 << index;
         }
     }
 
