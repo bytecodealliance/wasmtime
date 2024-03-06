@@ -1068,6 +1068,12 @@ criteria = "safe-to-deploy"
 version = "0.11.1"
 notes = "This library uses `forbid(unsafe_code)` and has no filesystem or network I/O."
 
+[[audits.compact_str]]
+who = "David Justice <david@justice.dev"
+criteria = "safe-to-deploy"
+version = "0.7.1"
+notes = "This library has many uses of unsafe, but contains extensive fuzzing and miri testing."
+
 [[audits.constant_time_eq]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
