@@ -22,10 +22,8 @@ use crate::isa::TargetIsa;
 use crate::trace;
 
 mod globalvalue;
-mod table;
 
 use self::globalvalue::expand_global_value;
-use self::table::expand_table_addr;
 
 fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> Value {
     let ty = pos.func.dfg.value_type(arg);
@@ -152,12 +150,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     mflags.set_aligned();
                     pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
                 }
-                InstructionData::TableAddr {
-                    opcode: ir::Opcode::TableAddr,
-                    table,
-                    arg,
-                    offset,
-                } => expand_table_addr(isa, inst, &mut pos.func, table, arg, offset),
 
                 InstructionData::BinaryImm64 { opcode, arg, imm } => {
                     let is_signed = match opcode {

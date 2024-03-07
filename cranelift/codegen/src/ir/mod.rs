@@ -23,7 +23,6 @@ pub mod pcc;
 mod progpoint;
 mod sourceloc;
 pub mod stackslot;
-mod table;
 mod trapcode;
 pub mod types;
 
@@ -39,7 +38,7 @@ pub use crate::ir::dfg::{BlockData, DataFlowGraph, ValueDef};
 pub use crate::ir::dynamic_type::{dynamic_to_fixed, DynamicTypeData, DynamicTypes};
 pub use crate::ir::entities::{
     Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Immediate, Inst,
-    JumpTable, MemoryType, SigRef, StackSlot, Table, UserExternalNameRef, Value,
+    JumpTable, MemoryType, SigRef, StackSlot, UserExternalNameRef, Value,
 };
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
@@ -63,7 +62,6 @@ pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{
     DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKind, StackSlots,
 };
-pub use crate::ir::table::TableData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
 

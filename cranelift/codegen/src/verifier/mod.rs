@@ -457,49 +457,6 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
-        if let Some(isa) = self.isa {
-            for (table, table_data) in &self.func.tables {
-                let base = table_data.base_gv;
-                if !self.func.global_values.is_valid(base) {
-                    return errors.nonfatal((table, format!("invalid base global value {}", base)));
-                }
-
-                let pointer_type = isa.pointer_type();
-                let base_type = self.func.global_values[base].global_type(isa);
-                if base_type != pointer_type {
-                    errors.report((
-                        table,
-                        format!(
-                            "table base has type {}, which is not the pointer type {}",
-                            base_type, pointer_type
-                        ),
-                    ));
-                }
-
-                let bound_gv = table_data.bound_gv;
-                if !self.func.global_values.is_valid(bound_gv) {
-                    return errors
-                        .nonfatal((table, format!("invalid bound global value {}", bound_gv)));
-                }
-
-                let index_type = table_data.index_type;
-                let bound_type = self.func.global_values[bound_gv].global_type(isa);
-                if index_type != bound_type {
-                    errors.report((
-                        table,
-                        format!(
-                            "table index type {} differs from the type of its bound, {}",
-                            index_type, bound_type
-                        ),
-                    ));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     /// Check that the given block can be encoded as a BB, by checking that only
     /// branching instructions are ending the block.
     fn encodable_as_bb(&self, block: Block, errors: &mut VerifierErrors) -> VerifierStepResult {
@@ -660,9 +617,6 @@ impl<'a> Verifier<'a> {
             }
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
-            }
-            TableAddr { table, .. } => {
-                self.verify_table(inst, table, errors)?;
             }
             NullAry {
                 opcode: Opcode::GetPinnedReg,
@@ -851,19 +805,6 @@ impl<'a> Verifier<'a> {
                 self.context(inst),
                 format!("invalid global value {}", gv),
             ))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_table(
-        &self,
-        inst: Inst,
-        table: ir::Table,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult {
-        if !self.func.tables.is_valid(table) {
-            errors.nonfatal((inst, self.context(inst), format!("invalid table {}", table)))
         } else {
             Ok(())
         }
@@ -1533,20 +1474,6 @@ impl<'a> Verifier<'a> {
     // constraints.
     fn typecheck_special(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         match self.func.dfg.insts[inst] {
-            ir::InstructionData::TableAddr { table, arg, .. } => {
-                let index_type = self.func.dfg.value_type(arg);
-                let table_index_type = self.func.tables[table].index_type;
-                if index_type != table_index_type {
-                    return errors.nonfatal((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "index type {} differs from table index type {}",
-                            index_type, table_index_type,
-                        ),
-                    ));
-                }
-            }
             ir::InstructionData::UnaryGlobalValue { global_value, .. } => {
                 if let Some(isa) = self.isa {
                     let inst_type = self.func.dfg.value_type(self.func.dfg.first_result(inst));
@@ -1801,7 +1728,6 @@ impl<'a> Verifier<'a> {
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         self.verify_global_values(errors)?;
         self.verify_memory_types(errors)?;
-        self.verify_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;

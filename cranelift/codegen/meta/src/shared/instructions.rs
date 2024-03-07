@@ -1299,38 +1299,6 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 
-    let TableOffset = &TypeVar::new(
-        "TableOffset",
-        "An unsigned table offset",
-        TypeSetBuilder::new().ints(32..64).build(),
-    );
-
-    ig.push(
-        Inst::new(
-            "table_addr",
-            r#"
-        Bounds check and compute absolute address of a table entry.
-
-        Verify that the offset ``p`` is in bounds for the table T, and generate
-        an absolute address that is safe to dereference.
-
-        ``Offset`` must be less than the size of a table element.
-
-        1. If ``p`` is not greater than the table bound, return an absolute
-           address corresponding to a byte offset of ``p`` from the table's
-           base address.
-        2. If ``p`` is greater than the table bound, generate a trap.
-        "#,
-            &formats.table_addr,
-        )
-        .operands_in(vec![
-            Operand::new("T", &entities.table),
-            Operand::new("p", TableOffset),
-            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from element address"),
-        ])
-        .operands_out(vec![Operand::new("addr", iAddr)]),
-    );
-
     ig.push(
         Inst::new(
             "iconst",

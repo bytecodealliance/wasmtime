@@ -41,7 +41,6 @@ pub enum Token<'a> {
     DynamicStackSlot(u32), // dss4
     GlobalValue(u32),      // gv3
     MemoryType(u32),       // mt0
-    Table(u32),            // table2
     Constant(u32),         // const2
     FuncRef(u32),          // fn2
     SigRef(u32),           // sig2
@@ -346,7 +345,6 @@ impl<'a> Lexer<'a> {
             "dt" => Some(Token::DynamicType(number)),
             "gv" => Some(Token::GlobalValue(number)),
             "mt" => Some(Token::MemoryType(number)),
-            "table" => Some(Token::Table(number)),
             "const" => Some(Token::Constant(number)),
             "fn" => Some(Token::FuncRef(number)),
             "sig" => Some(Token::SigRef(number)),

@@ -30,7 +30,6 @@ pub(crate) struct Formats {
     pub(crate) dynamic_stack_store: Rc<InstructionFormat>,
     pub(crate) store: Rc<InstructionFormat>,
     pub(crate) store_no_offset: Rc<InstructionFormat>,
-    pub(crate) table_addr: Rc<InstructionFormat>,
     pub(crate) ternary: Rc<InstructionFormat>,
     pub(crate) ternary_imm8: Rc<InstructionFormat>,
     pub(crate) trap: Rc<InstructionFormat>,
@@ -190,13 +189,6 @@ impl Formats {
             dynamic_stack_store: Builder::new("DynamicStackStore")
                 .value()
                 .imm(&entities.dynamic_stack_slot)
-                .build(),
-
-            // Accessing a WebAssembly table.
-            table_addr: Builder::new("TableAddr")
-                .imm(&entities.table)
-                .value()
-                .imm(&imm.offset32)
                 .build(),
 
             trap: Builder::new("Trap").imm(&imm.trapcode).build(),
