@@ -28,7 +28,6 @@ use crate::{
     GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
-use std::convert::TryFrom;
 use wasmtime_types::OwnedMemoryIndex;
 
 #[cfg(target_pointer_width = "32")]

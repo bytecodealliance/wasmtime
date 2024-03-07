@@ -27,12 +27,12 @@ toolchains will be able to implement WASI as well!
 ### Rust
 
 To install a WASI-enabled Rust toolchain, see the [online section of the
-guide](https://bytecodealliance.github.io/wasmtime/wasm-rust.html)
+guide](https://bytecodealliance.github.io/wasmtime/examples-rust-embed.html)
 
 ### C/C++
 
 To install a WASI-enabled C/C++ toolchain, see the [online section of the
-guide](https://bytecodealliance.github.io/wasmtime/wasm-c.html)
+guide](https://bytecodealliance.github.io/wasmtime/examples-c-embed.html)
 
 ## How can I run programs that use WASI?
 

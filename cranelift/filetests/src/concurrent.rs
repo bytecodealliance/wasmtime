@@ -6,9 +6,7 @@
 use crate::runone;
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::timing;
-use file_per_thread_logger;
 use log::error;
-use num_cpus;
 use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};

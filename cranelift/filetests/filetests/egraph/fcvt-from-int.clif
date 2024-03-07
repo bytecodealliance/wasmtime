@@ -1,0 +1,222 @@
+test optimize
+set opt_level=speed
+target x86_64
+target aarch64
+target s390x
+target riscv64
+
+function %i32_0_to_f32() -> f32 {
+block0:
+  v0 = iconst.i32 0
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+  ; check: v2 = f32const 0.0
+  ; check: return v2
+}
+
+function %i32_neg1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i32 -1
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+  ; check: v2 = f32const -0x1.000000p0
+  ; check: return v2
+}
+
+function %i32_1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i32 1
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+  ; check: v2 = f32const 0x1.000000p0
+  ; check: return v2
+}
+
+function %u32_0_to_f32() -> f32 {
+block0:
+  v0 = iconst.i32 0
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+  ; check: v2 = f32const 0.0
+  ; check: return v2
+}
+
+function %u32_neg1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i32 -1
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+  ; check: v2 = f32const 0x1.000000p32
+  ; check: return v2
+}
+
+function %u32_1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i32 1
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+  ; check: v2 = f32const 0x1.000000p0
+  ; check: return v2
+}
+
+function %i32_0_to_f64() -> f64 {
+block0:
+  v0 = iconst.i32 0
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+  ; check: v2 = f64const 0.0
+  ; check: return v2
+}
+
+function %i32_neg1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i32 -1
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+  ; check: v2 = f64const -0x1.0000000000000p0
+  ; check: return v2
+}
+
+function %i32_1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i32 1
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+  ; check: v2 = f64const 0x1.0000000000000p0
+  ; check: return v2
+}
+
+function %u32_0_to_f64() -> f64 {
+block0:
+  v0 = iconst.i32 0
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+  ; check: v2 = f64const 0.0
+  ; check: return v2
+}
+
+function %u32_neg1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i32 -1
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+  ; check: v2 = f64const 0x1.fffffffe00000p31
+  ; check: return v2
+}
+
+function %u32_1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i32 1
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+  ; check: v2 = f64const 0x1.0000000000000p0
+  ; check: return v2
+}
+
+function %i64_0_to_f32() -> f32 {
+block0:
+  v0 = iconst.i64 0
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+  ; check: v2 = f32const 0.0
+  ; check: return v2
+}
+
+function %i64_neg1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i64 -1
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+  ; check: v2 = f32const -0x1.000000p0
+  ; check: return v2
+}
+
+function %i64_1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i64 1
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+  ; check: v2 = f32const 0x1.000000p0
+  ; check: return v2
+}
+
+function %u64_0_to_f32() -> f32 {
+block0:
+  v0 = iconst.i64 0
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+  ; check: v2 = f32const 0.0
+  ; check: return v2
+}
+
+function %u64_neg1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i64 -1
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+  ; check: v2 = f32const 0x1.000000p64
+  ; check: return v2
+}
+
+function %u64_1_to_f32() -> f32 {
+block0:
+  v0 = iconst.i64 1
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+  ; check: v2 = f32const 0x1.000000p0
+  ; check: return v2
+}
+
+function %i64_0_to_f64() -> f64 {
+block0:
+  v0 = iconst.i64 0
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+  ; check: v2 = f64const 0.0
+  ; check: return v2
+}
+
+function %i64_neg1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i64 -1
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+  ; check: v2 = f64const -0x1.0000000000000p0
+  ; check: return v2
+}
+
+function %i64_1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i64 1
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+  ; check: v2 = f64const 0x1.0000000000000p0
+  ; check: return v2
+}
+
+function %u64_0_to_f64() -> f64 {
+block0:
+  v0 = iconst.i64 0
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+  ; check: v2 = f64const 0.0
+  ; check: return v2
+}
+
+function %u64_neg1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i64 -1
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+  ; check: v2 = f64const 0x1.0000000000000p64
+  ; check: return v2
+}
+
+function %u64_1_to_f64() -> f64 {
+block0:
+  v0 = iconst.i64 1
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+  ; check: v2 = f64const 0x1.0000000000000p0
+  ; check: return v2
+}

@@ -1,12 +1,126 @@
 --------------------------------------------------------------------------------
 
-## 18.0.0
+## 20.0.0
 
 Unreleased.
 
 ### Added
 
 ### Changed
+
+--------------------------------------------------------------------------------
+
+## 19.0.0
+
+Unreleased.
+
+### Added
+
+### Changed
+
+--------------------------------------------------------------------------------
+
+## 18.0.2
+
+Released 2024-02-28.
+
+### Fixed
+
+* Fix an egraph rule bug that was permitting an incorrect `ireduce` rewrite to
+  unary and binary operations, leading to miscompilations.
+  [#8005](https://github.com/bytecodealliance/wasmtime/pull/8005)
+
+--------------------------------------------------------------------------------
+
+## 18.0.1
+
+Released 2024-02-20.
+
+### Fixed
+
+* Fixed a mistake in the CI release process that caused the crates.io
+  publication of the 18.0.0 release to not succeed.
+  [#7966](https://github.com/bytecodealliance/wasmtime/pull/7966)
+
+--------------------------------------------------------------------------------
+
+## 18.0.0
+
+Released 2024-02-20
+
+### Added
+
+* The `wasmtime-c-api-impl` crate is now published on crates.io.
+  [#7837](https://github.com/bytecodealliance/wasmtime/pull/7837)
+
+* A new `EngineWeak` type enables holding a weak pointer to an engine with the
+  ability to dynamically and fallibly upgrade it to an `Engine`.
+  [#7797](https://github.com/bytecodealliance/wasmtime/pull/7797)
+
+* The WebAssembly tail calls proposal can now be enabled through the C API.
+  [#7811](https://github.com/bytecodealliance/wasmtime/pull/7811)
+
+* The import and export types of a `Component` can now be inspected at runtime.
+  [#7804](https://github.com/bytecodealliance/wasmtime/pull/7804)
+
+* New APIs/types have been added to support a faster version of looking up
+  module exports without using string lookups with `Module::get_export_index`.
+  [#7828](https://github.com/bytecodealliance/wasmtime/pull/7828)
+
+### Changed
+
+* Owned resources represented with `ResourceAny` can now be passed as arguments
+  to functions that require a `borrow<T>` parameter.
+  [#7783](https://github.com/bytecodealliance/wasmtime/pull/7783)
+
+* Generated structures from `wasmtime::component::bindgen!` for exported
+  interfaces are now all renamed to `Guest` to avoid conflicting with WIT names.
+  [#7794](https://github.com/bytecodealliance/wasmtime/pull/7794)
+
+* Guest profiler output will now automatically demangle symbols.
+  [#7809](https://github.com/bytecodealliance/wasmtime/pull/7809)
+
+* The `wasmtime` crate now has a `runtime` Cargo feature which, if disabled,
+  enables building Wasmtime with only the ability to compile WebAssembly
+  modules. This enables compiling Wasmtime's compilation infrastructure, for
+  example, to WebAssembly itself.
+  [#7766](https://github.com/bytecodealliance/wasmtime/pull/7766)
+
+* Support for the old `wasi-common` crate and the original implementation of
+  "WASIp1" aka "preview1" is being deprecated in the `wasmtime-wasi` crate.
+  Users should migrate to the  `wasmtime_wasi::preview2` implementation, which
+  supports both WASIp1 and WASIp2, as in the next release the
+  `wasi-common`-based reexports of `wasmtime-wasi` will be deleted.
+  [#7881](https://github.com/bytecodealliance/wasmtime/pull/7881)
+
+--------------------------------------------------------------------------------
+
+## 17.0.2
+
+Released 2024-02-28
+
+### Fixed
+
+* Fix an egraph rule bug that was permitting an incorrect `ireduce` rewrite to
+  unary and binary operations, leading to miscompilations.
+  [#8005](https://github.com/bytecodealliance/wasmtime/pull/8005)
+
+--------------------------------------------------------------------------------
+
+## 17.0.1
+
+Released 2024-02-07
+
+### Fixed
+
+* Fix an egraph elaboration fuzzbug that was allowing values with dependencies
+  that shouldn't be duplicated to be chosen in a context that would make them
+  invalid.
+  [#7859](https://github.com/bytecodealliance/wasmtime/pull/7859)
+  [#7879](https://github.com/bytecodealliance/wasmtime/pull/7879)
+* Fix an egraph rule bug that was allowing unconstrained recursion through the
+  DFG to run away on large functions.
+  [#7882](https://github.com/bytecodealliance/wasmtime/pull/7882)
 
 --------------------------------------------------------------------------------
 

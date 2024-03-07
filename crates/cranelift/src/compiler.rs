@@ -20,11 +20,10 @@ use cranelift_wasm::{
     WasmValType,
 };
 use object::write::{Object, StandardSegment, SymbolId};
-use object::{RelocationEncoding, RelocationKind, SectionKind};
+use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
 use std::any::Any;
 use std::cmp;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::mem;
 use std::path;
 use std::sync::{Arc, Mutex};
@@ -614,11 +613,13 @@ impl wasmtime_environ::Compiler for Compiler {
                     section_id,
                     object::write::Relocation {
                         offset: u64::from(reloc.offset),
-                        size: reloc.size << 3,
-                        kind: RelocationKind::Absolute,
-                        encoding: RelocationEncoding::Generic,
                         symbol: target_symbol,
                         addend: i64::from(reloc.addend),
+                        flags: RelocationFlags::Generic {
+                            size: reloc.size << 3,
+                            kind: RelocationKind::Absolute,
+                            encoding: RelocationEncoding::Generic,
+                        },
                     },
                 )?;
             }

@@ -3,12 +3,10 @@
 use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
-use crate::binemit::{Reloc, StackMap};
-use crate::ir::{self, types::*, MemFlags, RelSourceLoc, TrapCode};
+use crate::binemit::StackMap;
+use crate::ir::{self, types::*, RelSourceLoc, TrapCode};
 use crate::isa::aarch64::inst::*;
-use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use crate::trace;
-use core::convert::TryFrom;
 
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
 /// generic arbitrary stack offset) into real addressing modes, possibly by

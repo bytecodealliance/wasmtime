@@ -5,7 +5,7 @@ use crate::{
     masm::OperandSize,
 };
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmValType};
 
 /// Helper environment to track argument-register
 /// assignment in x64.
@@ -36,11 +36,11 @@ impl RegIndexEnv {
 }
 
 impl RegIndexEnv {
-    fn next_gpr(&mut self) -> u8 {
+    fn next_gpr(&mut self) -> Option<u8> {
         Self::increment(&mut self.gpr_or_absolute_count)
     }
 
-    fn next_fpr(&mut self) -> u8 {
+    fn next_fpr(&mut self) -> Option<u8> {
         if self.absolute_count {
             Self::increment(&mut self.gpr_or_absolute_count)
         } else {
@@ -48,10 +48,15 @@ impl RegIndexEnv {
         }
     }
 
-    fn increment(index: &mut u8) -> u8 {
+    fn increment(index: &mut u8) -> Option<u8> {
         let current = *index;
-        *index += 1;
-        current
+        match index.checked_add(1) {
+            Some(next) => {
+                *index = next;
+                Some(current)
+            }
+            None => None,
+        }
     }
 }
 
@@ -93,7 +98,7 @@ impl ABI for X64ABI {
         8
     }
 
-    fn word_bits() -> u32 {
+    fn word_bits() -> u8 {
         64
     }
 
@@ -131,10 +136,6 @@ impl ABI for X64ABI {
         );
 
         ABISig::new(params, results)
-    }
-
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
-        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
     }
 
     fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults {
@@ -178,11 +179,11 @@ impl ABI for X64ABI {
         regs::callee_saved(call_conv)
     }
 
-    fn stack_slot_size() -> u32 {
+    fn stack_slot_size() -> u8 {
         Self::word_bytes()
     }
 
-    fn sizeof(ty: &WasmValType) -> u32 {
+    fn sizeof(ty: &WasmValType) -> u8 {
         match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
@@ -227,37 +228,42 @@ impl X64ABI {
 
         let ty_size = <Self as ABI>::sizeof(wasm_arg);
         let default = || {
-            let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size);
+            let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size as u32);
             let slot_size = Self::stack_slot_size();
             // Stack slots for parameters are aligned to a fixed slot size,
             // in the case of x64, 8 bytes.
             // Stack slots for returns are type-size aligned.
             let next_stack = if params_or_returns == ParamsOrReturns::Params {
-                align_to(stack_offset, slot_size) + slot_size
+                align_to(stack_offset, slot_size as u32) + (slot_size as u32)
             } else {
                 // For the default calling convention, we don't type-size align,
                 // given that results on the stack must match spills generated
                 // from within the compiler, which are not type-size aligned.
                 if call_conv.is_default() {
-                    stack_offset + ty_size
+                    stack_offset + (ty_size as u32)
                 } else {
-                    align_to(stack_offset, ty_size) + ty_size
+                    align_to(stack_offset, ty_size as u32) + (ty_size as u32)
                 }
             };
             (arg, next_stack)
         };
 
         reg.map_or_else(default, |reg| {
-            (ABIOperand::reg(reg, *ty, ty_size), stack_offset)
+            (ABIOperand::reg(reg, *ty, ty_size as u32), stack_offset)
         })
     }
 
     fn int_reg_for(
-        index: u8,
+        index: Option<u8>,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> Option<Reg> {
         use ParamsOrReturns::*;
+
+        let index = match index {
+            None => return None,
+            Some(index) => index,
+        };
 
         if call_conv.is_fastcall() {
             return match (index, params_or_returns) {
@@ -287,11 +293,17 @@ impl X64ABI {
     }
 
     fn float_reg_for(
-        index: u8,
+        index: Option<u8>,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
     ) -> Option<Reg> {
         use ParamsOrReturns::*;
+
+        let index = match index {
+            None => return None,
+            Some(index) => index,
+        };
+
         if call_conv.is_fastcall() {
             return match (index, params_or_returns) {
                 (0, Params) => Some(regs::xmm0()),
@@ -339,21 +351,21 @@ mod tests {
     #[test]
     fn test_get_next_reg_index() {
         let mut index_env = RegIndexEnv::default();
-        assert_eq!(index_env.next_fpr(), 0);
-        assert_eq!(index_env.next_gpr(), 0);
-        assert_eq!(index_env.next_fpr(), 1);
-        assert_eq!(index_env.next_gpr(), 1);
-        assert_eq!(index_env.next_fpr(), 2);
-        assert_eq!(index_env.next_gpr(), 2);
+        assert_eq!(index_env.next_fpr(), Some(0));
+        assert_eq!(index_env.next_gpr(), Some(0));
+        assert_eq!(index_env.next_fpr(), Some(1));
+        assert_eq!(index_env.next_gpr(), Some(1));
+        assert_eq!(index_env.next_fpr(), Some(2));
+        assert_eq!(index_env.next_gpr(), Some(2));
     }
 
     #[test]
     fn test_reg_index_env_absolute_count() {
         let mut e = RegIndexEnv::with_absolute_count();
-        assert!(e.next_gpr() == 0);
-        assert!(e.next_fpr() == 1);
-        assert!(e.next_gpr() == 2);
-        assert!(e.next_fpr() == 3);
+        assert!(e.next_gpr() == Some(0));
+        assert!(e.next_fpr() == Some(1));
+        assert!(e.next_gpr() == Some(2));
+        assert!(e.next_fpr() == Some(3));
     }
 
     #[test]

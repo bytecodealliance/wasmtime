@@ -59,7 +59,6 @@ impl fmt::Debug for ProgramPoint {
 mod tests {
     use super::*;
     use crate::entity::EntityRef;
-    use crate::ir::{Block, Inst};
     use alloc::string::ToString;
 
     #[test]

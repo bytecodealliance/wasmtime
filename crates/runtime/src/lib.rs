@@ -14,7 +14,7 @@ mod arch;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod export;
-mod externref;
+mod gc;
 mod imports;
 mod instance;
 mod memory;
@@ -38,7 +38,7 @@ pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
 pub use crate::arch::{get_stack_pointer, V128Abi};
 pub use crate::export::*;
-pub use crate::externref::*;
+pub use crate::gc::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
     Instance, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl, InstanceHandle,

@@ -14,17 +14,17 @@ impl Drop for SetFlagOnDrop {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn smoke_test_gc() -> anyhow::Result<()> {
+fn smoke_test_gc() -> Result<()> {
     smoke_test_gc_impl(false)
 }
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn smoke_test_gc_epochs() -> anyhow::Result<()> {
+fn smoke_test_gc_epochs() -> Result<()> {
     smoke_test_gc_impl(true)
 }
 
-fn smoke_test_gc_impl(use_epochs: bool) -> anyhow::Result<()> {
+fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
     let (mut store, module) = ref_types_module(
         use_epochs,
         r#"
@@ -56,23 +56,26 @@ fn smoke_test_gc_impl(use_epochs: bool) -> anyhow::Result<()> {
     let func = instance.get_func(&mut store, "func").unwrap();
 
     let inner_dropped = Arc::new(AtomicBool::new(false));
-    let r = ExternRef::new(SetFlagOnDrop(inner_dropped.clone()));
+
     {
-        let args = [Val::I32(5), Val::ExternRef(Some(r.clone()))];
-        func.call(&mut store, &args, &mut [Val::I32(0)])?;
+        let mut scope = RootScope::new(&mut store);
+
+        let r = ExternRef::new(&mut scope, SetFlagOnDrop(inner_dropped.clone()));
+        {
+            let args = [Val::I32(5), Val::ExternRef(Some(r.clone()))];
+            func.call(&mut scope, &args, &mut [Val::I32(0)])?;
+        }
+
+        // Doing a GC should see that there aren't any `externref`s on the stack in
+        // Wasm frames anymore.
+        scope.as_context_mut().gc();
+
+        // But the scope should still be rooting `r`.
+        assert!(!inner_dropped.load(SeqCst));
     }
 
-    // Still held alive by the `VMExternRefActivationsTable` (potentially in
-    // multiple slots within the table) and by this `r` local.
-    assert!(r.strong_count() >= 2);
-
-    // Doing a GC should see that there aren't any `externref`s on the stack in
-    // Wasm frames anymore.
-    store.gc();
-    assert_eq!(r.strong_count(), 1);
-
-    // Dropping `r` should drop the inner `SetFlagOnDrop` value.
-    drop(r);
+    // Exiting the scope and unrooting `r` should have dropped the inner
+    // `SetFlagOnDrop` value.
     assert!(inner_dropped.load(SeqCst));
 
     Ok(())
@@ -80,7 +83,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn wasm_dropping_refs() -> anyhow::Result<()> {
+fn wasm_dropping_refs() -> Result<()> {
     let (mut store, module) = ref_types_module(
         false,
         r#"
@@ -100,9 +103,10 @@ fn wasm_dropping_refs() -> anyhow::Result<()> {
     // NB: 4096 is greater than the initial `VMExternRefActivationsTable`
     // capacity, so this will trigger at least one GC.
     for _ in 0..4096 {
-        let r = ExternRef::new(CountDrops(num_refs_dropped.clone()));
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, CountDrops(num_refs_dropped.clone()));
         let args = [Val::ExternRef(Some(r))];
-        drop_ref.call(&mut store, &args, &mut [])?;
+        drop_ref.call(&mut scope, &args, &mut [])?;
     }
 
     assert!(num_refs_dropped.load(SeqCst) > 0);
@@ -124,7 +128,7 @@ fn wasm_dropping_refs() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn many_live_refs() -> anyhow::Result<()> {
+fn many_live_refs() -> Result<()> {
     let mut wat = r#"
         (module
             ;; Make new `externref`s.
@@ -166,21 +170,33 @@ fn many_live_refs() -> anyhow::Result<()> {
 
     let make_ref = Func::wrap(&mut store, {
         let live_refs = live_refs.clone();
-        move || Some(ExternRef::new(CountLiveRefs::new(live_refs.clone())))
+        move |mut caller: Caller<'_, _>| {
+            Some(ExternRef::new(
+                &mut caller,
+                CountLiveRefs::new(live_refs.clone()),
+            ))
+        }
     });
 
-    let observe_ref = Func::wrap(&mut store, |r: Option<ExternRef>| {
-        let r = r.unwrap();
-        let r = r.data().downcast_ref::<CountLiveRefs>().unwrap();
-        assert!(r.live_refs.load(SeqCst) > 0);
-    });
+    let observe_ref = Func::wrap(
+        &mut store,
+        |caller: Caller<'_, _>, r: Option<Rooted<ExternRef>>| {
+            let r = r
+                .unwrap()
+                .data(&caller)
+                .unwrap()
+                .downcast_ref::<CountLiveRefs>()
+                .unwrap();
+            assert!(r.live_refs.load(SeqCst) > 0);
+        },
+    );
 
     let instance = Instance::new(&mut store, &module, &[make_ref.into(), observe_ref.into()])?;
     let many_live_refs = instance.get_func(&mut store, "many_live_refs").unwrap();
 
     many_live_refs.call(&mut store, &[], &mut [])?;
 
-    store.gc();
+    store.as_context_mut().gc();
     assert_eq!(live_refs.load(SeqCst), 0);
 
     return Ok(());
@@ -205,7 +221,7 @@ fn many_live_refs() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn drop_externref_via_table_set() -> anyhow::Result<()> {
+fn drop_externref_via_table_set() -> Result<()> {
     let (mut store, module) = ref_types_module(
         false,
         r#"
@@ -225,21 +241,27 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
     let foo_is_dropped = Arc::new(AtomicBool::new(false));
     let bar_is_dropped = Arc::new(AtomicBool::new(false));
 
-    let foo = ExternRef::new(SetFlagOnDrop(foo_is_dropped.clone()));
-    let bar = ExternRef::new(SetFlagOnDrop(bar_is_dropped.clone()));
-
     {
-        let args = vec![Val::ExternRef(Some(foo))];
-        table_set.call(&mut store, &args, &mut [])?;
-    }
-    store.gc();
-    assert!(!foo_is_dropped.load(SeqCst));
-    assert!(!bar_is_dropped.load(SeqCst));
+        let mut scope = RootScope::new(&mut store);
 
-    {
-        let args = vec![Val::ExternRef(Some(bar))];
-        table_set.call(&mut store, &args, &mut [])?;
+        let foo = ExternRef::new(&mut scope, SetFlagOnDrop(foo_is_dropped.clone()));
+        let bar = ExternRef::new(&mut scope, SetFlagOnDrop(bar_is_dropped.clone()));
+
+        {
+            let args = vec![Val::ExternRef(Some(foo))];
+            table_set.call(&mut scope, &args, &mut [])?;
+        }
+
+        scope.as_context_mut().gc();
+        assert!(!foo_is_dropped.load(SeqCst));
+        assert!(!bar_is_dropped.load(SeqCst));
+
+        {
+            let args = vec![Val::ExternRef(Some(bar))];
+            table_set.call(&mut scope, &args, &mut [])?;
+        }
     }
+
     store.gc();
     assert!(foo_is_dropped.load(SeqCst));
     assert!(!bar_is_dropped.load(SeqCst));
@@ -253,7 +275,8 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn global_drops_externref() -> anyhow::Result<()> {
+fn global_drops_externref() -> Result<()> {
+    let _ = env_logger::try_init();
     test_engine(&Engine::default())?;
 
     if !skip_pooling_allocator_tests() {
@@ -264,13 +287,13 @@ fn global_drops_externref() -> anyhow::Result<()> {
 
     return Ok(());
 
-    fn test_engine(engine: &Engine) -> anyhow::Result<()> {
+    fn test_engine(engine: &Engine) -> Result<()> {
         let mut store = Store::new(&engine, ());
         let flag = Arc::new(AtomicBool::new(false));
-        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        let externref = ExternRef::new(&mut store, SetFlagOnDrop(flag.clone()));
         Global::new(
             &mut store,
-            GlobalType::new(ValType::ExternRef, Mutability::Const),
+            GlobalType::new(ValType::EXTERNREF, Mutability::Const),
             externref.into(),
         )?;
         drop(store);
@@ -291,9 +314,9 @@ fn global_drops_externref() -> anyhow::Result<()> {
             "#,
         )?;
         let instance = Instance::new(&mut store, &module, &[])?;
-        let run = instance.get_typed_func::<Option<ExternRef>, ()>(&mut store, "run")?;
+        let run = instance.get_typed_func::<Option<Rooted<ExternRef>>, ()>(&mut store, "run")?;
         let flag = Arc::new(AtomicBool::new(false));
-        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        let externref = ExternRef::new(&mut store, SetFlagOnDrop(flag.clone()));
         run.call(&mut store, Some(externref))?;
         drop(store);
         assert!(flag.load(SeqCst));
@@ -303,7 +326,7 @@ fn global_drops_externref() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn table_drops_externref() -> anyhow::Result<()> {
+fn table_drops_externref() -> Result<()> {
     test_engine(&Engine::default())?;
 
     if !skip_pooling_allocator_tests() {
@@ -314,13 +337,13 @@ fn table_drops_externref() -> anyhow::Result<()> {
 
     return Ok(());
 
-    fn test_engine(engine: &Engine) -> anyhow::Result<()> {
+    fn test_engine(engine: &Engine) -> Result<()> {
         let mut store = Store::new(&engine, ());
         let flag = Arc::new(AtomicBool::new(false));
-        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        let externref = ExternRef::new(&mut store, SetFlagOnDrop(flag.clone()));
         Table::new(
             &mut store,
-            TableType::new(ValType::ExternRef, 1, None),
+            TableType::new(RefType::EXTERNREF, 1, None),
             externref.into(),
         )?;
         drop(store);
@@ -342,9 +365,9 @@ fn table_drops_externref() -> anyhow::Result<()> {
         "#,
         )?;
         let instance = Instance::new(&mut store, &module, &[])?;
-        let run = instance.get_typed_func::<Option<ExternRef>, ()>(&mut store, "run")?;
+        let run = instance.get_typed_func::<Option<Rooted<ExternRef>>, ()>(&mut store, "run")?;
         let flag = Arc::new(AtomicBool::new(false));
-        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        let externref = ExternRef::new(&mut store, SetFlagOnDrop(flag.clone()));
         run.call(&mut store, Some(externref))?;
         drop(store);
         assert!(flag.load(SeqCst));
@@ -353,72 +376,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, ignore)]
-fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
-    let mut config = Config::new();
-    config.wasm_reference_types(true);
-    config.epoch_interruption(true);
-    let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (global (mut externref) (ref.null extern))
-                (table 1 externref)
-
-                (func (export "run") (param externref)
-                    local.get 0
-                    global.set 0
-                    i32.const 0
-                    local.get 0
-                    table.set 0
-                    loop
-                        global.get 0
-                        global.set 0
-
-                        i32.const 0
-                        i32.const 0
-                        table.get
-                        table.set
-
-                        local.get 0
-                        call $f
-
-                        br 0
-                    end
-                )
-
-                (func $f (param externref))
-            )
-        "#,
-    )?;
-
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let run = instance.get_typed_func::<Option<ExternRef>, ()>(&mut store, "run")?;
-
-    let flag = Arc::new(AtomicBool::new(false));
-    let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
-    let externref2 = externref.clone();
-
-    let child = std::thread::spawn(move || run.call(&mut store, Some(externref2)));
-
-    for _ in 0..10000 {
-        drop(externref.clone());
-    }
-    engine.increment_epoch();
-
-    assert!(child.join().unwrap().is_err());
-    assert!(!flag.load(SeqCst));
-    assert_eq!(externref.strong_count(), 1);
-    drop(externref);
-    assert!(flag.load(SeqCst));
-
-    Ok(())
-}
-
-#[test]
-fn global_init_no_leak() -> anyhow::Result<()> {
+fn global_init_no_leak() -> Result<()> {
     let (mut store, module) = ref_types_module(
         false,
         r#"
@@ -429,22 +387,23 @@ fn global_init_no_leak() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let externref = ExternRef::new(());
+    let flag = Arc::new(AtomicBool::new(false));
+    let externref = ExternRef::new(&mut store, SetFlagOnDrop(flag.clone()));
     let global = Global::new(
         &mut store,
-        GlobalType::new(ValType::ExternRef, Mutability::Const),
+        GlobalType::new(ValType::EXTERNREF, Mutability::Const),
         externref.clone().into(),
     )?;
     Instance::new(&mut store, &module, &[global.into()])?;
     drop(store);
-    assert_eq!(externref.strong_count(), 1);
+    assert!(flag.load(SeqCst));
 
     Ok(())
 }
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn no_gc_middle_of_args() -> anyhow::Result<()> {
+fn no_gc_middle_of_args() -> Result<()> {
     let (mut store, module) = ref_types_module(
         false,
         r#"
@@ -470,23 +429,43 @@ fn no_gc_middle_of_args() -> anyhow::Result<()> {
     )?;
 
     let mut linker = Linker::new(store.engine());
-    linker.func_wrap("", "return_some", || {
-        (
-            Some(ExternRef::new("a".to_string())),
-            Some(ExternRef::new("b".to_string())),
-            Some(ExternRef::new("c".to_string())),
-        )
+    linker.func_wrap("", "return_some", |mut caller: Caller<'_, _>| {
+        let a = Some(ExternRef::new(&mut caller, String::from("a")));
+        let b = Some(ExternRef::new(&mut caller, String::from("b")));
+        let c = Some(ExternRef::new(&mut caller, String::from("c")));
+        (a, b, c)
     })?;
     linker.func_wrap(
         "",
         "take_some",
-        |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
+        |caller: Caller<'_, _>,
+         a: Option<Rooted<ExternRef>>,
+         b: Option<Rooted<ExternRef>>,
+         c: Option<Rooted<ExternRef>>| {
             let a = a.unwrap();
             let b = b.unwrap();
             let c = c.unwrap();
-            assert_eq!(a.data().downcast_ref::<String>().unwrap(), "a");
-            assert_eq!(b.data().downcast_ref::<String>().unwrap(), "b");
-            assert_eq!(c.data().downcast_ref::<String>().unwrap(), "c");
+            assert_eq!(
+                a.data(&caller)
+                    .expect("rooted")
+                    .downcast_ref::<String>()
+                    .expect("is string"),
+                "a"
+            );
+            assert_eq!(
+                b.data(&caller)
+                    .expect("rooted")
+                    .downcast_ref::<String>()
+                    .expect("is string"),
+                "b"
+            );
+            assert_eq!(
+                c.data(&caller)
+                    .expect("rooted")
+                    .downcast_ref::<String>()
+                    .expect("is string"),
+                "c"
+            );
         },
     )?;
 
@@ -503,7 +482,7 @@ fn no_gc_middle_of_args() -> anyhow::Result<()> {
     // TODO(6530): s390x doesn't support tail calls yet.
     target_arch = "s390x"
 ), ignore)]
-fn gc_and_tail_calls_and_stack_arguments() -> anyhow::Result<()> {
+fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
     // Test that GC refs in tail-calls' stack arguments get properly accounted
     // for in stack maps.
     //
@@ -622,23 +601,35 @@ fn gc_and_tail_calls_and_stack_arguments() -> anyhow::Result<()> {
     )?;
 
     let mut linker = Linker::new(store.engine());
-    linker.func_wrap("", "make_some", || {
+    linker.func_wrap("", "make_some", |mut caller: Caller<'_, _>| {
         (
-            Some(ExternRef::new("a".to_string())),
-            Some(ExternRef::new("b".to_string())),
-            Some(ExternRef::new("c".to_string())),
+            Some(ExternRef::new(&mut caller, "a".to_string())),
+            Some(ExternRef::new(&mut caller, "b".to_string())),
+            Some(ExternRef::new(&mut caller, "c".to_string())),
         )
     })?;
     linker.func_wrap(
         "",
         "take_some",
-        |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
+        |caller: Caller<'_, _>,
+         a: Option<Rooted<ExternRef>>,
+         b: Option<Rooted<ExternRef>>,
+         c: Option<Rooted<ExternRef>>| {
             let a = a.unwrap();
             let b = b.unwrap();
             let c = c.unwrap();
-            assert_eq!(a.data().downcast_ref::<String>().unwrap(), "a");
-            assert_eq!(b.data().downcast_ref::<String>().unwrap(), "b");
-            assert_eq!(c.data().downcast_ref::<String>().unwrap(), "c");
+            assert_eq!(
+                a.data(&caller).unwrap().downcast_ref::<String>().unwrap(),
+                "a"
+            );
+            assert_eq!(
+                b.data(&caller).unwrap().downcast_ref::<String>().unwrap(),
+                "b"
+            );
+            assert_eq!(
+                c.data(&caller).unwrap().downcast_ref::<String>().unwrap(),
+                "c"
+            );
         },
     )?;
     linker.func_wrap("", "gc", |mut caller: Caller<()>| {
@@ -648,6 +639,122 @@ fn gc_and_tail_calls_and_stack_arguments() -> anyhow::Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     func.call(&mut store, ())?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn no_leak_with_global_get_elem_segment() -> anyhow::Result<()> {
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (global $init externref))
+                (start $f)
+                (table $t 1 externref)
+                (elem $e externref (global.get $init))
+
+                (func $f
+                    i32.const 0
+                    i32.const 0
+                    i32.const 1
+                    table.init $t $e
+
+                    i32.const 0
+                    i32.const 0
+                    i32.const 1
+                    table.init $t $e
+                )
+            )
+        "#,
+    )?;
+
+    let externref = ExternRef::new(&mut store, SetFlagOnDrop(dropped.clone()));
+    let global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::EXTERNREF, Mutability::Const),
+        externref.into(),
+    )?;
+
+    Instance::new(&mut store, &module, &[global.into()])?;
+
+    drop(store);
+
+    assert!(dropped.load(SeqCst));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn table_init_with_externref_global_get() -> anyhow::Result<()> {
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (global $init externref))
+                (table $t 1 externref (global.get $init))
+            )
+        "#,
+    )?;
+
+    let externref = ExternRef::new(&mut store, SetFlagOnDrop(dropped.clone()));
+    let global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::EXTERNREF, Mutability::Const),
+        externref.into(),
+    )?;
+
+    Instance::new(&mut store, &module, &[global.into()])?;
+
+    drop(store);
+
+    assert!(dropped.load(SeqCst));
+    Ok(())
+}
+
+#[test]
+fn rooted_gets_collected_after_scope_exit() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let flag = Arc::new(AtomicBool::new(false));
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let _externref = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()));
+
+        scope.as_context_mut().gc();
+        assert!(!flag.load(SeqCst), "not dropped when still rooted");
+    }
+
+    store.as_context_mut().gc();
+    assert!(flag.load(SeqCst), "dropped after being unrooted");
+
+    Ok(())
+}
+
+#[test]
+fn manually_rooted_gets_collected_after_unrooting() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let flag = Arc::new(AtomicBool::new(false));
+
+    let externref = ExternRef::new_manually_rooted(&mut store, SetFlagOnDrop(flag.clone()));
+
+    store.gc();
+    assert!(!flag.load(SeqCst), "not dropped when still rooted");
+
+    externref.unroot(&mut store);
+    store.gc();
+    assert!(flag.load(SeqCst), "dropped after being unrooted");
 
     Ok(())
 }

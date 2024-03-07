@@ -502,6 +502,11 @@ impl ComponentInstance {
         self.runtime_info.component_types()
     }
 
+    /// Get the canonical ABI's `realloc` function's runtime type.
+    pub fn realloc_func_ty(&self) -> &Arc<dyn std::any::Any + Send + Sync> {
+        self.runtime_info.realloc_func_type()
+    }
+
     /// Returns a reference to the resource type information as a `dyn Any`.
     ///
     /// Wasmtime is the one which then downcasts this to the appropriate type.
@@ -526,7 +531,7 @@ impl ComponentInstance {
 
     /// Implementation of the `resource.new` intrinsic for `i32`
     /// representations.
-    pub fn resource_new32(&mut self, resource: TypeResourceTableIndex, rep: u32) -> u32 {
+    pub fn resource_new32(&mut self, resource: TypeResourceTableIndex, rep: u32) -> Result<u32> {
         self.resource_tables().resource_new(Some(resource), rep)
     }
 
@@ -595,7 +600,7 @@ impl ComponentInstance {
     ) -> Result<u32> {
         let mut tables = self.resource_tables();
         let rep = tables.resource_lift_own(Some(src), idx)?;
-        Ok(tables.resource_lower_own(Some(dst), rep))
+        tables.resource_lower_own(Some(dst), rep)
     }
 
     pub(crate) fn resource_transfer_borrow(
@@ -618,7 +623,7 @@ impl ComponentInstance {
         if dst_owns_resource {
             return Ok(rep);
         }
-        Ok(tables.resource_lower_borrow(Some(dst), rep))
+        tables.resource_lower_borrow(Some(dst), rep)
     }
 
     pub(crate) fn resource_enter_call(&mut self) {
@@ -850,6 +855,10 @@ impl InstanceFlags {
 pub trait ComponentRuntimeInfo: Send + Sync + 'static {
     /// Returns the type information about the compiled component.
     fn component(&self) -> &Component;
+
     /// Returns a handle to the tables of type information for this component.
     fn component_types(&self) -> &Arc<ComponentTypes>;
+
+    /// Get the `wasmtime::FuncType` for the canonical ABI's `realloc` function.
+    fn realloc_func_type(&self) -> &Arc<dyn std::any::Any + Send + Sync>;
 }

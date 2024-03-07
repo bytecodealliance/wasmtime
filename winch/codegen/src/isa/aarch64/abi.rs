@@ -3,7 +3,7 @@ use crate::abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrRe
 use crate::isa::{reg::Reg, CallingConvention};
 use crate::masm::OperandSize;
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
@@ -79,12 +79,8 @@ impl ABI for Aarch64ABI {
         8
     }
 
-    fn word_bits() -> u32 {
+    fn word_bits() -> u8 {
         64
-    }
-
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
-        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
     }
 
     fn sig_from(
@@ -147,11 +143,11 @@ impl ABI for Aarch64ABI {
         regs::callee_saved()
     }
 
-    fn stack_slot_size() -> u32 {
+    fn stack_slot_size() -> u8 {
         Self::word_bytes()
     }
 
-    fn sizeof(ty: &WasmValType) -> u32 {
+    fn sizeof(ty: &WasmValType) -> u8 {
         match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
@@ -185,20 +181,20 @@ impl Aarch64ABI {
 
         let ty_size = <Self as ABI>::sizeof(wasm_arg);
         let default = || {
-            let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size);
+            let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size as u32);
             let slot_size = Self::stack_slot_size();
             // Stack slots for parameters are aligned to a fixed slot size,
             // in the case of Aarch64, 8 bytes.
             // Stack slots for returns are type-size aligned.
             let next_stack = if params_or_returns == ParamsOrReturns::Params {
-                align_to(stack_offset, slot_size) + slot_size
+                align_to(stack_offset, slot_size as u32) + (slot_size as u32)
             } else {
-                align_to(stack_offset, ty_size) + ty_size
+                align_to(stack_offset, ty_size as u32) + (ty_size as u32)
             };
             (arg, next_stack)
         };
         reg.map_or_else(default, |reg| {
-            (ABIOperand::reg(reg, *ty, ty_size), stack_offset)
+            (ABIOperand::reg(reg, *ty, ty_size as u32), stack_offset)
         })
     }
 }

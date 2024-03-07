@@ -2,7 +2,7 @@ use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle};
 use crate::memory::Memory;
 use crate::mpk::ProtectionKey;
-use crate::table::Table;
+use crate::table::{Table, TableElementType};
 use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Result};
 use std::{alloc, any::Any, mem, ptr, sync::Arc};
@@ -507,7 +507,7 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
         let table = unsafe { &*instance.get_table(segment.table_index) };
         let start = get_table_init_start(segment, instance)?;
         let start = usize::try_from(start).unwrap();
-        let end = start.checked_add(segment.elements.len());
+        let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
         match end {
             Some(end) if end <= table.size() as usize => {
@@ -531,8 +531,26 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
             TableInitialValue::FuncRef(idx) => {
                 let funcref = instance.get_func_ref(*idx).unwrap();
                 let table = unsafe { &mut *instance.get_defined_table(table) };
-                table.init_func(funcref)?;
+                let init = (0..table.size()).map(|_| funcref);
+                table.init_func(0, init)?;
             }
+
+            TableInitialValue::GlobalGet(idx) => unsafe {
+                let global = instance.defined_or_imported_global_ptr(*idx);
+                let table = &mut *instance.get_defined_table(table);
+                match table.element_type() {
+                    TableElementType::Func => {
+                        let funcref = (*global).as_func_ref();
+                        let init = (0..table.size()).map(|_| funcref);
+                        table.init_func(0, init)?;
+                    }
+                    TableElementType::Extern => {
+                        let externref = (*global).as_externref();
+                        let init = (0..table.size()).map(|_| externref.clone());
+                        table.init_extern(0, init)?;
+                    }
+                }
+            },
         }
     }
 
@@ -550,7 +568,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
             &segment.elements,
             start,
             0,
-            segment.elements.len() as u32,
+            segment.elements.len(),
         )?;
     }
 

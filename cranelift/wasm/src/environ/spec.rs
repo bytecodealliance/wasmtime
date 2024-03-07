@@ -12,7 +12,6 @@ use crate::{
     MemoryIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
     WasmHeapType, WasmResult,
 };
-use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder, Type};

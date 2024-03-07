@@ -6,7 +6,6 @@
 
 // You can execute this example with `cargo run --example example`
 
-use anyhow::Result;
 use wasmtime::*;
 
 fn main() -> Result<()> {

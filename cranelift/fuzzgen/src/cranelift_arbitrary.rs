@@ -2,7 +2,7 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use anyhow::Result;
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
-use cranelift::codegen::ir::{AbiParam, Signature, Type};
+use cranelift::codegen::ir::{AbiParam, Signature};
 use cranelift::codegen::isa::CallConv;
 
 use arbitrary::Unstructured;

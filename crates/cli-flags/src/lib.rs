@@ -39,7 +39,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 wasmtime_option_group! {
     #[derive(PartialEq, Clone)]
     pub struct OptimizeOptions {
-        /// Optimization level of generated code (0-2, s; default: 0)
+        /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
         /// Byte size of the guard region after dynamic memories are allocated
@@ -59,6 +59,10 @@ wasmtime_option_group! {
         /// memories.
         pub dynamic_memory_reserved_for_growth: Option<u64>,
 
+        /// Indicates whether an unmapped region of memory is placed before all
+        /// linear memories.
+        pub guard_before_linear_memory: Option<bool>,
+
         /// Enable the pooling allocator, in place of the on-demand allocator.
         pub pooling_allocator: Option<bool>,
 
@@ -77,6 +81,26 @@ wasmtime_option_group! {
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
         pub memory_init_cow: Option<bool>,
+
+        /// The maximum number of WebAssembly instances which can be created
+        /// with the pooling allocator.
+        pub pooling_total_core_instances: Option<u32>,
+
+        /// The maximum number of WebAssembly components which can be created
+        /// with the pooling allocator.
+        pub pooling_total_component_instances: Option<u32>,
+
+        /// The maximum number of WebAssembly memories which can be created with
+        /// the pooling allocator.
+        pub pooling_total_memories: Option<u32>,
+
+        /// The maximum number of WebAssembly tables which can be created with
+        /// the pooling allocator.
+        pub pooling_total_tables: Option<u32>,
+
+        /// The maximum number of WebAssembly stacks which can be created with
+        /// the pooling allocator.
+        pub pooling_total_stacks: Option<u32>,
     }
 
     enum Optimize {
@@ -494,6 +518,9 @@ impl CommonOptions {
         if let Some(size) = self.opts.dynamic_memory_reserved_for_growth {
             config.dynamic_memory_reserved_for_growth(size);
         }
+        if let Some(enable) = self.opts.guard_before_linear_memory {
+            config.guard_before_linear_memory(enable);
+        }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
         if self.wasm.fuel.is_some() {
@@ -520,6 +547,21 @@ impl CommonOptions {
                     }
                     if let Some(size) = self.opts.pooling_table_keep_resident {
                         cfg.table_keep_resident(size);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_core_instances {
+                        cfg.total_core_instances(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_component_instances {
+                        cfg.total_component_instances(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_memories {
+                        cfg.total_memories(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_tables {
+                        cfg.total_tables(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_stacks {
+                        cfg.total_stacks(limit);
                     }
                     if let Some(enable) = self.opts.memory_protection_keys {
                         if enable {

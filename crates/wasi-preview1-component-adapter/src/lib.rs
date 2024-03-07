@@ -79,7 +79,7 @@ pub mod bindings {
 
     #[cfg(feature = "proxy")]
     wit_bindgen::generate!({
-        path: "./crates/wasi/wit",
+        path: "../wasi-http/wit",
         inline: r#"
             package wasmtime:adapter;
 
@@ -905,6 +905,13 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
         get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
+        return ERRNO_BADF;
+    }
+
+    // For the proxy adapter don't return `ERRNO_NOTSUP` through below, instead
+    // always return `ERRNO_BADF` which is the indicator that prestats aren't
+    // available.
+    if cfg!(feature = "proxy") {
         return ERRNO_BADF;
     }
 

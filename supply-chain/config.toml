@@ -76,13 +76,7 @@ audit-as-crates-io = true
 [policy.isle-fuzz]
 criteria = "safe-to-run"
 
-[policy.wasi-cap-std-sync]
-audit-as-crates-io = true
-
 [policy.wasi-common]
-audit-as-crates-io = true
-
-[policy.wasi-tokio]
 audit-as-crates-io = true
 
 [policy.wasmtime]
@@ -90,6 +84,12 @@ audit-as-crates-io = true
 
 [policy.wasmtime-asm-macros]
 audit-as-crates-io = true
+
+[policy.wasmtime-c-api-impl]
+audit-as-crates-io = false
+
+[policy.wasmtime-c-api-macros]
+audit-as-crates-io = false
 
 [policy.wasmtime-cache]
 audit-as-crates-io = true
@@ -184,9 +184,6 @@ audit-as-crates-io = true
 [policy.winch-codegen]
 audit-as-crates-io = true
 
-[policy.witx]
-audit-as-crates-io = false
-
 [[exemptions.addr2line]]
 version = "0.17.0"
 criteria = "safe-to-deploy"
@@ -208,11 +205,11 @@ version = "1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.capstone]]
-version = "0.9.0"
+version = "0.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.capstone-sys]]
-version = "0.13.0"
+version = "0.16.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.cast]]
@@ -630,6 +627,14 @@ criteria = "safe-to-deploy"
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.zerocopy]]
+version = "0.7.32"
+criteria = "safe-to-deploy"
+
+[[exemptions.zerocopy-derive]]
+version = "0.7.32"
+criteria = "safe-to-deploy"
+
 [[exemptions.zstd]]
 version = "0.11.1+zstd.1.5.2"
 criteria = "safe-to-deploy"
@@ -639,5 +644,5 @@ version = "5.0.1+zstd.1.5.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.zstd-sys]]
-version = "2.0.1+zstd.1.5.2"
+version = "2.0.9+zstd.1.5.5"
 criteria = "safe-to-deploy"

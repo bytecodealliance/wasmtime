@@ -6,7 +6,6 @@ use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
     CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
 };
-use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
 use regalloc2::Allocation;

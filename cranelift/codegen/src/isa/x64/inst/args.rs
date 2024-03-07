@@ -4,7 +4,7 @@ use super::regs::{self};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
-use crate::ir::{MemFlags, Type};
+use crate::ir::MemFlags;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
@@ -329,7 +329,8 @@ impl Amode {
         Self::RipRelative { target }
     }
 
-    pub(crate) fn with_flags(&self, flags: MemFlags) -> Self {
+    /// Set the specified [MemFlags] to the [Amode].
+    pub fn with_flags(&self, flags: MemFlags) -> Self {
         match self {
             &Self::ImmReg { simm32, base, .. } => Self::ImmReg {
                 simm32,
@@ -817,8 +818,6 @@ pub enum AluRmiROpcode {
     Or,
     /// Bitwise exclusive OR.
     Xor,
-    /// The signless, non-extending (N x N -> N, for N in {32,64}) variant.
-    Mul,
 }
 
 impl fmt::Debug for AluRmiROpcode {
@@ -831,7 +830,6 @@ impl fmt::Debug for AluRmiROpcode {
             AluRmiROpcode::And => "and",
             AluRmiROpcode::Or => "or",
             AluRmiROpcode::Xor => "xor",
-            AluRmiROpcode::Mul => "imul",
         };
         write!(fmt, "{}", name)
     }

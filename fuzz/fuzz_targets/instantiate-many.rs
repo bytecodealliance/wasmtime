@@ -5,6 +5,7 @@
 
 use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
+use wasmtime_fuzzing::single_module_fuzzer::KnownValid;
 use wasmtime_fuzzing::{generators, oracles};
 
 const MAX_MODULES: usize = 5;
@@ -56,7 +57,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
             .collect::<Result<Vec<_>>>()?,
     );
 
-    oracles::instantiate_many(&modules, true, &config, &commands);
+    oracles::instantiate_many(&modules, KnownValid::Yes, &config, &commands);
 
     Ok(())
 }

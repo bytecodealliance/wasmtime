@@ -739,14 +739,17 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f87dc800100         	ja	0x180f4
-;;   18:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
-;;      	 4c893424             	mov	qword ptr [rsp], r14
-;;      	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
+;;      	 0f87e9800100         	ja	0x18104
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 89542404             	mov	dword ptr [rsp + 4], edx
+;;      	 8b442404             	mov	eax, dword ptr [rsp + 4]
 ;;      	 b927600000           	mov	ecx, 0x6027
 ;;      	 39c1                 	cmp	ecx, eax
 ;;      	 0f42c1               	cmovb	eax, ecx
@@ -754,7 +757,7 @@
 ;;      	 49630c83             	movsxd	rcx, dword ptr [r11 + rax*4]
 ;;      	 4901cb               	add	r11, rcx
 ;;      	 41ffe3               	jmp	r11
-;;   3f:	 a0800100aa800100a0   	
+;;   4f:	 a0800100aa800100a0   	
 ;; 				movabs	al, byte ptr [0xa0000180aa000180]
 ;;      	 800100               	add	byte ptr [rcx], 0
 ;;      	 aa                   	stosb	byte ptr [rdi], al
@@ -31525,9 +31528,9 @@
 ;;      	 aa                   	stosb	byte ptr [rdi], al
 ;;      	 800100               	add	byte ptr [rcx], 0
 ;;      	 b800000000           	mov	eax, 0
-;;      	 e905000000           	jmp	0x180ee
-;; 180e9:	 b801000000           	mov	eax, 1
-;;      	 4883c410             	add	rsp, 0x10
+;;      	 e905000000           	jmp	0x180fe
+;; 180f9:	 b801000000           	mov	eax, 1
+;;      	 4883c418             	add	rsp, 0x18
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;; 180f4:	 0f0b                 	ud2	
+;; 18104:	 0f0b                 	ud2	

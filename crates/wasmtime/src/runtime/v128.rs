@@ -3,8 +3,8 @@
     allow(unused_imports)
 )]
 
-use crate::store::StoreOpaque;
-use crate::{ValRaw, ValType, WasmTy};
+use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::{Result, ValRaw, ValType, WasmTy};
 use std::cmp::Ordering;
 use std::fmt;
 use wasmtime_runtime::V128Abi;
@@ -95,6 +95,15 @@ unsafe impl WasmTy for V128 {
         true
     }
 
+    fn dynamic_concrete_type_check(
+        &self,
+        _: &StoreOpaque,
+        _: bool,
+        _: &crate::FuncType,
+    ) -> anyhow::Result<()> {
+        unreachable!()
+    }
+
     #[inline]
     fn is_externref(&self) -> bool {
         false
@@ -111,12 +120,12 @@ unsafe impl WasmTy for V128 {
     }
 
     #[inline]
-    fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
-        self.0
+    fn into_abi(self, _store: &mut AutoAssertNoGc<'_>) -> Result<Self::Abi> {
+        Ok(self.0)
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
+    unsafe fn from_abi(abi: Self::Abi, _store: &mut AutoAssertNoGc<'_>) -> Self {
         V128(abi)
     }
 }

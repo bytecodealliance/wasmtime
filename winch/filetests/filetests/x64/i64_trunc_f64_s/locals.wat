@@ -10,32 +10,34 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f875c000000         	ja	0x74
-;;   18:	 48c744240800000000   	
-;; 				mov	qword ptr [rsp + 8], 0
-;;      	 4c893424             	mov	qword ptr [rsp], r14
-;;      	 f20f10442408         	movsd	xmm0, qword ptr [rsp + 8]
+;;      	 0f8767000000         	ja	0x82
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
+;;      	 f20f100424           	movsd	xmm0, qword ptr [rsp]
 ;;      	 f2480f2cc0           	cvttsd2si	rax, xmm0
 ;;      	 4883f801             	cmp	rax, 1
-;;      	 0f8134000000         	jno	0x6e
-;;   3a:	 660f2ec0             	ucomisd	xmm0, xmm0
-;;      	 0f8a32000000         	jp	0x76
-;;   44:	 49bb000000000000e0c3 	
+;;      	 0f8134000000         	jno	0x7c
+;;   48:	 660f2ec0             	ucomisd	xmm0, xmm0
+;;      	 0f8a32000000         	jp	0x84
+;;   52:	 49bb000000000000e0c3 	
 ;; 				movabs	r11, 0xc3e0000000000000
 ;;      	 664d0f6efb           	movq	xmm15, r11
 ;;      	 66410f2ec7           	ucomisd	xmm0, xmm15
-;;      	 0f821a000000         	jb	0x78
-;;   5e:	 66450f57ff           	xorpd	xmm15, xmm15
+;;      	 0f821a000000         	jb	0x86
+;;   6c:	 66450f57ff           	xorpd	xmm15, xmm15
 ;;      	 66440f2ef8           	ucomisd	xmm15, xmm0
-;;      	 0f820c000000         	jb	0x7a
-;;   6e:	 4883c410             	add	rsp, 0x10
+;;      	 0f820c000000         	jb	0x88
+;;   7c:	 4883c418             	add	rsp, 0x18
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   74:	 0f0b                 	ud2	
-;;   76:	 0f0b                 	ud2	
-;;   78:	 0f0b                 	ud2	
-;;   7a:	 0f0b                 	ud2	
+;;   82:	 0f0b                 	ud2	
+;;   84:	 0f0b                 	ud2	
+;;   86:	 0f0b                 	ud2	
+;;   88:	 0f0b                 	ud2	

@@ -1,10 +1,10 @@
 use crate::{
-    abi::ABI,
+    abi::{wasm_sig, ABI},
     codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv},
 };
 
 use crate::frame::{DefinedLocals, Frame};
-use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
+use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
@@ -105,9 +105,17 @@ impl TargetIsa for X64 {
             self.isa_flags.clone(),
         );
         let stack = Stack::new();
-        let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
-        let env = FuncEnv::new(&vmoffsets, translation, types);
+        let abi_sig = wasm_sig::<abi::X64ABI>(sig);
+
+        let env = FuncEnv::new(
+            &vmoffsets,
+            translation,
+            types,
+            builtins,
+            self,
+            abi::X64ABI::ptr_type(),
+        );
         let defined_locals = DefinedLocals::new::<abi::X64ABI>(&env, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
@@ -122,7 +130,7 @@ impl TargetIsa for X64 {
         );
 
         let regalloc = RegAlloc::from(gpr, fpr);
-        let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
+        let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
@@ -153,7 +161,7 @@ impl TargetIsa for X64 {
         );
         let call_conv = self.wasmtime_call_conv();
 
-        let mut trampoline = Trampoline::new(
+        let trampoline = Trampoline::new(
             &mut masm,
             regs::scratch(),
             regs::argv(),

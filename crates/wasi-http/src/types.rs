@@ -15,7 +15,7 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::preview2::{self, AbortOnDropJoinHandle, Subscribe};
+use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, Subscribe};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;
@@ -77,7 +77,7 @@ pub trait WasiHttpView: Send {
 
 /// Returns `true` when the header is forbidden according to this [`WasiHttpView`] implementation.
 pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName) -> bool {
-    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
+    static FORBIDDEN_HEADERS: [HeaderName; 10] = [
         hyper::header::CONNECTION,
         HeaderName::from_static("keep-alive"),
         hyper::header::PROXY_AUTHENTICATE,
@@ -86,6 +86,7 @@ pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName
         hyper::header::TE,
         hyper::header::TRANSFER_ENCODING,
         hyper::header::UPGRADE,
+        hyper::header::HOST,
         HeaderName::from_static("http2-settings"),
     ];
 
@@ -121,7 +122,7 @@ pub fn default_send_request(
         between_bytes_timeout,
     }: OutgoingRequest,
 ) -> wasmtime::Result<Resource<HostFutureIncomingResponse>> {
-    let handle = preview2::spawn(async move {
+    let handle = wasmtime_wasi::runtime::spawn(async move {
         let resp = handler(
             authority,
             use_tls,
@@ -211,7 +212,7 @@ async fn handler(
             .map_err(|_| types::ErrorCode::ConnectionTimeout)?
             .map_err(hyper_request_error)?;
 
-            let worker = preview2::spawn(async move {
+            let worker = wasmtime_wasi::runtime::spawn(async move {
                 match conn.await {
                     Ok(()) => {}
                     // TODO: shouldn't throw away this error and ideally should
@@ -233,7 +234,7 @@ async fn handler(
         .map_err(|_| types::ErrorCode::ConnectionTimeout)?
         .map_err(hyper_request_error)?;
 
-        let worker = preview2::spawn(async move {
+        let worker = wasmtime_wasi::runtime::spawn(async move {
             match conn.await {
                 Ok(()) => {}
                 // TODO: same as above, shouldn't throw this error away.

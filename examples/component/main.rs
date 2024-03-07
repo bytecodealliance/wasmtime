@@ -1,6 +1,5 @@
 use anyhow::Context;
 use std::{fs, path::Path};
-use wit_component;
 
 use wasmtime::{
     component::{bindgen, Component, Linker},

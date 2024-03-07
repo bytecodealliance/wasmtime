@@ -62,7 +62,7 @@ impl ModuleConfig {
         let mut module = wasm_smith::Module::new(self.config.clone(), input)?;
 
         if let Some(default_fuel) = default_fuel {
-            module.ensure_termination(default_fuel);
+            module.ensure_termination(default_fuel).unwrap();
         }
 
         Ok(module)

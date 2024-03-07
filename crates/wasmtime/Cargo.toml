@@ -14,7 +14,6 @@ rust-version.workspace = true
 workspace = true
 
 [package.metadata.docs.rs]
-rustdoc-args = ["--cfg", "nightlydoc"]
 # Docs.rs will use the `component-model` feature for documentation;
 # so this feature also passed in to the `cargo doc` invocation in CI.
 # See .github/workflows/main.yml
@@ -33,6 +32,7 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
+wasmtime-slab = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
@@ -61,6 +61,7 @@ thiserror = { workspace = true }
 # Support address-to-file/line information in traps when wasm files have DWARF
 # debugging information.
 addr2line = { version = "0.21.0", default-features = false, optional = true }
+semver = { version = "1.0.17", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -74,8 +75,7 @@ rustix = { workspace = true, features = ['thread'] }
 
 [dev-dependencies]
 tempfile = "3.0"
-wasmtime-wasi = { path = "../wasi", default-features = true }
-wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
+wasi-common = { path = "../wasi-common", default-features = true }
 
 # =============================================================================
 #
@@ -90,6 +90,7 @@ wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 default = [
   'async',
   'cache',
+  'gc',
   'wat',
   'profiling',
   'parallel-compilation',
@@ -159,6 +160,7 @@ component-model = [
   "dep:wasmtime-component-macro",
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
+  "dep:semver",
 ]
 
 wmemcheck = ["wasmtime-runtime?/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
@@ -175,4 +177,20 @@ coredump = ["dep:wasm-encoder", "runtime"]
 debug-builtins = ["wasmtime-runtime?/debug-builtins"]
 
 # Enable support for executing compiled Wasm modules.
-runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence"]
+runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence", "dep:wasmtime-slab"]
+
+# Enable support for garbage collection-related things.
+#
+# This Cargo feature is required to compile or run Wasm that uses any of the
+# following Wasm proposals:
+#
+# * Reference types: https://github.com/WebAssembly/reference-types/
+# * Typed function references: https://github.com/WebAssembly/function-references/
+# * Garbage collection: https://github.com/WebAssembly/gc
+#
+# When a compiler Cargo feature (`cranelift` or `winch`) is enabled, this
+# feature gates the ability to compile Wasm that uses those proposals.
+#
+# When the `runtime` Cargo feature is enabled, this feature gates the ability to
+# load and run Wasm that uses those proposals.
+gc = ["wasmtime-environ/gc", "wasmtime-runtime?/gc", "wasmtime-cranelift?/gc"]

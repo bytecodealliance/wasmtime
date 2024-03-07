@@ -189,16 +189,15 @@ fn bench_host_to_wasm<Params, Results>(
             let mut space = vec![ValRaw::i32(0); params.len().max(results.len())];
             b.iter(|| unsafe {
                 for (i, param) in params.iter().enumerate() {
-                    space[i] = param.to_raw(&mut *store);
+                    space[i] = param.to_raw(&mut *store).unwrap();
                 }
                 untyped
                     .call_unchecked(&mut *store, space.as_mut_ptr(), space.len())
                     .unwrap();
                 for (i, expected) in results.iter().enumerate() {
-                    assert_vals_eq(
-                        expected,
-                        &Val::from_raw(&mut *store, space[i], expected.ty()),
-                    );
+                    let ty = expected.ty(&store);
+                    let actual = Val::from_raw(&mut *store, space[i], ty);
+                    assert_vals_eq(expected, &actual);
                 }
             })
         },
@@ -302,9 +301,9 @@ fn wasm_to_host(c: &mut Criterion) {
 
         let mut untyped = Linker::new(&engine);
         untyped
-            .func_new("", "nop", FuncType::new([], []), |_, _, _| Ok(()))
+            .func_new("", "nop", FuncType::new(&engine, [], []), |_, _, _| Ok(()))
             .unwrap();
-        let ty = FuncType::new([ValType::I32, ValType::I64], [ValType::F32]);
+        let ty = FuncType::new(&engine, [ValType::I32, ValType::I64], [ValType::F32]);
         untyped
             .func_new(
                 "",
@@ -336,9 +335,9 @@ fn wasm_to_host(c: &mut Criterion) {
         unsafe {
             let mut unchecked = Linker::new(&engine);
             unchecked
-                .func_new_unchecked("", "nop", FuncType::new([], []), |_, _| Ok(()))
+                .func_new_unchecked("", "nop", FuncType::new(&engine, [], []), |_, _| Ok(()))
                 .unwrap();
-            let ty = FuncType::new([ValType::I32, ValType::I64], [ValType::F32]);
+            let ty = FuncType::new(&engine, [ValType::I32, ValType::I64], [ValType::F32]);
             unchecked
                 .func_new_unchecked("", "nop-params-and-results", ty, |mut caller, space| {
                     match Val::from_raw(&mut caller, space[0], ValType::I32) {
@@ -349,7 +348,7 @@ fn wasm_to_host(c: &mut Criterion) {
                         Val::I64(0) => {}
                         _ => unreachable!(),
                     }
-                    space[0] = Val::F32(0).to_raw(&mut caller);
+                    space[0] = Val::F32(0).to_raw(&mut caller).unwrap();
                     Ok(())
                 })
                 .unwrap();

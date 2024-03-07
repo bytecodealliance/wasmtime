@@ -753,7 +753,7 @@ impl ControlStackFrame {
     // frame pointer (less) than the destination, perform a memory move of
     // the bytes to its destination, else stop, because the memory values
     // are in place.
-    // * Lastly, iterate over the top `n` elements of the value stack which
+    // * Lastly, iterate over the top `n` elements of the value stack,
     // and spill any constant values, placing them in their respective
     // memory location.
     //

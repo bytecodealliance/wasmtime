@@ -59,6 +59,11 @@ pub fn allow(mask: ProtectionMask) {
     log::trace!("PKRU change: {:#034b} => {:#034b}", previous, pkru::read());
 }
 
+/// Retrieve the current protection mask.
+pub fn current_mask() -> ProtectionMask {
+    ProtectionMask(pkru::read())
+}
+
 /// An MPK protection key.
 ///
 /// The expected usage is:

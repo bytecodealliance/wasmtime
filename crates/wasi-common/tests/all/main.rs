@@ -5,7 +5,7 @@ use wasi_common::pipe::WritePipe;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 
 pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
-    let prefix = format!("wasi_cap_std_sync_{}_", exe_name);
+    let prefix = format!("wasi_common_{}_", exe_name);
     let tempdir = tempfile::Builder::new().prefix(&prefix).tempdir()?;
     Ok(tempdir)
 }

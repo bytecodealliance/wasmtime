@@ -1,4 +1,3 @@
-use anyhow::Result;
 use wasmtime::*;
 
 #[test]

@@ -25,7 +25,6 @@ use gimli::RunTimeEndian;
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::ops::Range;
 use wasmtime_environ::{Compiler, FuncIndex};
 
@@ -184,12 +183,12 @@ impl<'a> ModuleTextBuilder<'a> {
                             flags: SymbolFlags::None,
                         })
                     });
-                    let (encoding, kind, size) = match r.reloc {
-                        Reloc::Abs8 => (
-                            object::RelocationEncoding::Generic,
-                            object::RelocationKind::Absolute,
-                            8,
-                        ),
+                    let flags = match r.reloc {
+                        Reloc::Abs8 => object::RelocationFlags::Generic {
+                            encoding: object::RelocationEncoding::Generic,
+                            kind: object::RelocationKind::Absolute,
+                            size: 8,
+                        },
                         other => unimplemented!("unimplemented relocation kind {other:?}"),
                     };
                     self.obj
@@ -197,9 +196,7 @@ impl<'a> ModuleTextBuilder<'a> {
                             self.text_section,
                             object::write::Relocation {
                                 symbol,
-                                size,
-                                kind,
-                                encoding,
+                                flags,
                                 offset: off + u64::from(r.offset),
                                 addend: r.addend,
                             },

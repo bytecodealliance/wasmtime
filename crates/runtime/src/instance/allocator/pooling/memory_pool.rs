@@ -752,9 +752,8 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InstanceLimits, PoolingInstanceAllocator};
+    use crate::PoolingInstanceAllocator;
     use proptest::prelude::*;
-    use wasmtime_environ::WASM_PAGE_SIZE;
 
     #[cfg(target_pointer_width = "64")]
     #[test]
@@ -774,7 +773,7 @@ mod tests {
             &Tunables {
                 static_memory_bound: 1,
                 static_memory_offset_guard_size: 0,
-                ..Tunables::default()
+                ..Tunables::default_host()
             },
         )?;
 
@@ -808,7 +807,7 @@ mod tests {
             &Tunables {
                 static_memory_bound: 1,
                 static_memory_offset_guard_size: 0,
-                ..Tunables::default()
+                ..Tunables::default_host()
             },
         )
         .unwrap();
@@ -828,7 +827,7 @@ mod tests {
             memory_protection_keys: MpkEnabled::Enable,
             ..PoolingInstanceAllocatorConfig::default()
         };
-        let pool = MemoryPool::new(&config, &Tunables::default()).unwrap();
+        let pool = MemoryPool::new(&config, &Tunables::default_host()).unwrap();
         assert!(pool.stripes.len() >= 2);
 
         let max_memory_slots = config.limits.total_memories;

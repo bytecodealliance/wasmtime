@@ -1,6 +1,6 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::ir::{self, types, LibCall, MemFlags, Opcode, Signature, TrapCode, Type};
+use crate::ir::{self, types, LibCall, MemFlags, Opcode, Signature, TrapCode};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
@@ -13,7 +13,6 @@ use alloc::vec::Vec;
 use args::*;
 use regalloc2::{MachineEnv, PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
-use std::convert::TryFrom;
 use std::sync::OnceLock;
 
 /// This is the limit for the size of argument and return-value areas on the
@@ -506,17 +505,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::rax()),
         ));
         insts.push(Inst::CallKnown {
+            opcode: Opcode::Call,
             dest: ExternalName::LibCall(LibCall::Probestack),
-            info: Box::new(CallInfo {
+            info: Some(Box::new(CallInfo {
                 // No need to include arg here: we are post-regalloc
                 // so no constraints will be seen anyway.
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::Call,
                 callee_pop_size: 0,
                 callee_conv: CallConv::Probestack,
-            }),
+            })),
         });
     }
 

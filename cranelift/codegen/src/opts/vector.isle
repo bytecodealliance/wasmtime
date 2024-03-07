@@ -1,8 +1,9 @@
 ;; For various ops lift a splat outside of the op to try to open up
 ;; optimization opportunities with scalars.
-;;
+
 ;; NB: for int-to-float conversion op this simplification is also
-;; required for correctness at this time due to #6562
+;; required for the x64 backend because it doesn't fully implement int-to-float
+;; conversions for 64x2 vectors, for more information see #6562
 (rule (simplify (fcvt_from_uint float_vector_ty (splat _ x)))
       (splat float_vector_ty (fcvt_from_uint (lane_type float_vector_ty) x)))
 (rule (simplify (fcvt_from_sint float_vector_ty (splat _ x)))

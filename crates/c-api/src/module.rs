@@ -1,6 +1,6 @@
 use crate::{
     handle_result, wasm_byte_vec_t, wasm_engine_t, wasm_exporttype_t, wasm_exporttype_vec_t,
-    wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
+    wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t, CExternType,
 };
 use anyhow::Context;
 use std::ffi::CStr;
@@ -53,7 +53,7 @@ fn fill_exports(module: &Module, out: &mut wasm_exporttype_vec_t) {
         .map(|e| {
             Some(Box::new(wasm_exporttype_t::new(
                 e.name().to_owned(),
-                e.ty(),
+                CExternType::new(e.ty()),
             )))
         })
         .collect::<Vec<_>>();
@@ -67,7 +67,7 @@ fn fill_imports(module: &Module, out: &mut wasm_importtype_vec_t) {
             Some(Box::new(wasm_importtype_t::new(
                 i.module().to_owned(),
                 i.name().to_owned(),
-                i.ty(),
+                CExternType::new(i.ty()),
             )))
         })
         .collect::<Vec<_>>();
@@ -186,8 +186,8 @@ pub extern "C" fn wasmtime_module_serialize(
 #[no_mangle]
 pub extern "C" fn wasmtime_module_image_range(
     module: &wasmtime_module_t,
-    start: &mut usize,
-    end: &mut usize,
+    start: &mut *const u8,
+    end: &mut *const u8,
 ) {
     let range = module.module.image_range();
     *start = range.start;

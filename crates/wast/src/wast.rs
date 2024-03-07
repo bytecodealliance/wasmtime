@@ -2,7 +2,7 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{anyhow, bail, Context as _, Error, Result};
+use anyhow::{anyhow, bail, Context as _};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str;
@@ -173,12 +173,12 @@ where
                     .args
                     .iter()
                     .map(|v| match v {
-                        WastArg::Core(v) => core::val(v),
+                        WastArg::Core(v) => core::val(&mut self.store, v),
                         WastArg::Component(_) => bail!("expected component function, found core"),
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut results = vec![Val::null(); func.ty(&self.store).results().len()];
+                let mut results = vec![Val::null_func_ref(); func.ty(&self.store).results().len()];
                 Ok(match func.call(&mut self.store, &values, &mut results) {
                     Ok(()) => Outcome::Ok(Results::Core(results.into())),
                     Err(e) => Outcome::Trap(e),
@@ -309,7 +309,8 @@ where
                             bail!("expected component value found core value")
                         }
                     };
-                    core::match_val(v, e).with_context(|| format!("result {} didn't match", i))?;
+                    core::match_val(&self.store, v, e)
+                        .with_context(|| format!("result {} didn't match", i))?;
                 }
             }
             #[cfg(feature = "component-model")]

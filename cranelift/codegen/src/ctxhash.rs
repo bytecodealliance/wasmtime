@@ -125,7 +125,6 @@ impl<K, V> CtxHashMap<K, V> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::hash::Hash;
 
     #[derive(Clone, Copy, Debug)]
     struct Key {

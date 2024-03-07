@@ -4,7 +4,6 @@
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 #![cfg(not(miri))]
 
-use anyhow::Result;
 use rustix::mm::{mprotect, MprotectFlags};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

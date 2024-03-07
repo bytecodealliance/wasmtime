@@ -9,7 +9,7 @@
 //! "region" refers to the type of memory that this address points to.
 //! "entry" refers to which instance of this memory the address points to (e.g table1 would be
 //! "entry" 1 of a `Table` region address).
-//! The last field is the "offset", which refers to the offset within the entry.  
+//! The last field is the "offset", which refers to the offset within the entry.
 //!
 //! The address has the "region" field as the 2 most significant bits. The following bits
 //! are the "entry" field, the amount of "entry" bits depends on the size of the address and
@@ -35,7 +35,6 @@
 use crate::state::MemoryError;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{types, Type};
-use std::convert::TryFrom;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AddressSize {
@@ -243,7 +242,6 @@ impl From<u64> for AddressFunctionEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::TryInto;
 
     #[test]
     fn address_region_roundtrip_encode_decode() {

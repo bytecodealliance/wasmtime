@@ -1,11 +1,10 @@
 //! Data structures for representing decoded wasm modules.
 
-use crate::{ModuleTranslation, PrimaryMap, Tunables, WasmHeapType, WASM_PAGE_SIZE};
+use crate::{ModuleTranslation, PrimaryMap, Tunables, WASM_PAGE_SIZE};
 use cranelift_entity::{packed_option::ReservedValue, EntityRef};
 use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::mem;
 use std::ops::Range;
 use wasmtime_types::*;
@@ -460,7 +459,7 @@ impl ModuleTranslation<'_> {
             // Get the end of this segment. If out-of-bounds, or too
             // large for our dense table representation, then skip the
             // segment.
-            let top = match segment.offset.checked_add(segment.elements.len() as u32) {
+            let top = match segment.offset.checked_add(segment.elements.len()) {
                 Some(top) => top,
                 None => break,
             };
@@ -474,7 +473,7 @@ impl ModuleTranslation<'_> {
                 .wasm_ty
                 .heap_type
             {
-                WasmHeapType::Func | WasmHeapType::TypedFunc(_) => {}
+                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {}
                 // If this is not a funcref table, then we can't support a
                 // pre-computed table of function indices. Technically this
                 // initializer won't trap so we could continue processing
@@ -482,6 +481,13 @@ impl ModuleTranslation<'_> {
                 // necessary.
                 WasmHeapType::Extern => break,
             }
+
+            // Function indices can be optimized here, but fully general
+            // expressions are deferred to get evaluated at runtime.
+            let function_elements = match &segment.elements {
+                TableSegmentElements::Functions(indices) => indices,
+                TableSegmentElements::Expressions(_) => break,
+            };
 
             let precomputed =
                 match &mut self.module.table_initialization.initial_values[defined_index] {
@@ -493,7 +499,7 @@ impl ModuleTranslation<'_> {
                     // Technically this won't trap so it's possible to process
                     // further initializers, but that's left as a future
                     // optimization.
-                    TableInitialValue::FuncRef(_) => break,
+                    TableInitialValue::FuncRef(_) | TableInitialValue::GlobalGet(_) => break,
                 };
 
             // At this point we're committing to pre-initializing the table
@@ -505,7 +511,7 @@ impl ModuleTranslation<'_> {
                 precomputed.resize(top as usize, FuncIndex::reserved_value());
             }
             let dst = &mut precomputed[(segment.offset as usize)..(top as usize)];
-            dst.copy_from_slice(&segment.elements[..]);
+            dst.copy_from_slice(&function_elements);
 
             // advance the iterator to see the next segment
             let _ = segments.next();
@@ -758,6 +764,10 @@ pub enum TableInitialValue {
     /// Initialize each table element to the function reference given
     /// by the `FuncIndex`.
     FuncRef(FuncIndex),
+
+    /// At instantiation time this global is loaded and the funcref value is
+    /// used to initialize the table.
+    GlobalGet(GlobalIndex),
 }
 
 /// A WebAssembly table initializer segment.
@@ -770,7 +780,39 @@ pub struct TableSegment {
     /// The offset to add to the base.
     pub offset: u32,
     /// The values to write into the table elements.
-    pub elements: Box<[FuncIndex]>,
+    pub elements: TableSegmentElements,
+}
+
+/// Elements of a table segment, either a list of functions or list of arbitrary
+/// expressions.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TableSegmentElements {
+    /// A sequential list of functions where `FuncIndex::reserved_value()`
+    /// indicates a null function.
+    Functions(Box<[FuncIndex]>),
+    /// Arbitrary expressions, aka either functions, null or a load of a global.
+    Expressions(Box<[TableElementExpression]>),
+}
+
+impl TableSegmentElements {
+    /// Returns the number of elements in this segment.
+    pub fn len(&self) -> u32 {
+        match self {
+            Self::Functions(s) => s.len() as u32,
+            Self::Expressions(s) => s.len() as u32,
+        }
+    }
+}
+
+/// Different kinds of expression that can initialize table elements.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TableElementExpression {
+    /// `ref.func $f`
+    Function(FuncIndex),
+    /// `global.get $g`
+    GlobalGet(GlobalIndex),
+    /// `ref.null $ty`
+    Null,
 }
 
 /// Different types that can appear in a module.
@@ -816,7 +858,7 @@ pub struct Module {
     pub memory_initialization: MemoryInitialization,
 
     /// WebAssembly passive elements.
-    pub passive_elements: Vec<Box<[FuncIndex]>>,
+    pub passive_elements: Vec<TableSegmentElements>,
 
     /// The map from passive element index (element segment index space) to index in `passive_elements`.
     pub passive_elements_map: BTreeMap<ElemIndex, usize>,

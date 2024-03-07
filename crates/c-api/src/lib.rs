@@ -1,8 +1,11 @@
 //! This crate is the implementation of Wasmtime's C API.
 //!
-//! This crate is not intended to be used from Rust itself, for that see the
-//! `wasmtime` crate. Otherwise this is typically compiled as a
-//! cdylib/staticlib. Documentation for this crate largely lives in the header
+//! This crate is normally not intended to be used from Rust itself. For that,
+//! see the `wasmtime` crate. It is possible to use this crate via Cargo, for
+//! Rust crates that wrap C libraries that use wasmtime. Most often, this crate
+//! is compiled as a cdylib or staticlib, via the `wasmtime-c-api` crate.
+//!
+//! Documentation for this crate largely lives in the header
 //! files of the `include` directory for this crate.
 //!
 //! At a high level this crate implements the `wasm.h` API with some gymnastics,
@@ -23,6 +26,8 @@ mod instance;
 mod linker;
 mod memory;
 mod module;
+#[cfg(feature = "profiling")]
+mod profiling;
 mod r#ref;
 mod store;
 mod table;
@@ -113,4 +118,9 @@ unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a mut [T
     } else {
         std::slice::from_raw_parts_mut(ptr, len)
     }
+}
+
+pub(crate) fn abort(name: &str) -> ! {
+    eprintln!("`{}` is not implemented", name);
+    std::process::abort();
 }

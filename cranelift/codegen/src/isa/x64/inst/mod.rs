@@ -41,8 +41,6 @@ pub struct CallInfo {
     pub defs: CallRetList,
     /// Registers clobbered by this call, as per its calling convention.
     pub clobbers: PRegSet,
-    /// The opcode of this call.
-    pub opcode: Opcode,
     /// The number of bytes that the callee will pop from the stack for the
     /// caller, if any. (Used for popping stack arguments with the `tail`
     /// calling convention.)
@@ -130,8 +128,10 @@ impl Inst {
             | Inst::MovToPReg { .. }
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
-            | Inst::MulHi { .. }
-            | Inst::UMulLo { .. }
+            | Inst::Mul { .. }
+            | Inst::Mul8 { .. }
+            | Inst::IMul { .. }
+            | Inst::IMulImm { .. }
             | Inst::Neg { .. }
             | Inst::Not { .. }
             | Inst::Nop { .. }
@@ -554,14 +554,14 @@ impl Inst {
     ) -> Inst {
         Inst::CallKnown {
             dest,
-            info: Box::new(CallInfo {
+            opcode,
+            info: Some(Box::new(CallInfo {
                 uses,
                 defs,
                 clobbers,
-                opcode,
                 callee_pop_size,
                 callee_conv,
-            }),
+            })),
         }
     }
 
@@ -577,14 +577,14 @@ impl Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
             dest,
-            info: Box::new(CallInfo {
+            opcode,
+            info: Some(Box::new(CallInfo {
                 uses,
                 defs,
                 clobbers,
-                opcode,
                 callee_pop_size,
                 callee_conv,
-            }),
+            })),
         }
     }
 
@@ -857,7 +857,7 @@ impl PrettyPrint for Inst {
                 format!("{op} {dividend}, {divisor}, {dst} ; trap={trap}")
             }
 
-            Inst::MulHi {
+            Inst::Mul {
                 size,
                 signed,
                 src1,
@@ -869,15 +869,33 @@ impl PrettyPrint for Inst {
                 let dst_lo = pretty_print_reg(dst_lo.to_reg().to_reg(), size.to_bytes(), allocs);
                 let dst_hi = pretty_print_reg(dst_hi.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src2 = src2.pretty_print(size.to_bytes(), allocs);
+                let suffix = suffix_bwlq(*size);
                 let op = ljustify(if *signed {
-                    "imul".to_string()
+                    format!("imul{suffix}")
                 } else {
-                    "mul".to_string()
+                    format!("mul{suffix}")
                 });
                 format!("{op} {src1}, {src2}, {dst_lo}, {dst_hi}")
             }
 
-            Inst::UMulLo {
+            Inst::Mul8 {
+                signed,
+                src1,
+                src2,
+                dst,
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 1, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
+                let src2 = src2.pretty_print(1, allocs);
+                let op = ljustify(if *signed {
+                    "imulb".to_string()
+                } else {
+                    "mulb".to_string()
+                });
+                format!("{op} {src1}, {src2}, {dst}")
+            }
+
+            Inst::IMul {
                 size,
                 src1,
                 src2,
@@ -886,8 +904,22 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src2 = src2.pretty_print(size.to_bytes(), allocs);
-                let op = ljustify2("mul".to_string(), suffix_bwlq(*size));
+                let suffix = suffix_bwlq(*size);
+                let op = ljustify(format!("imul{suffix}"));
                 format!("{op} {src1}, {src2}, {dst}")
+            }
+
+            Inst::IMulImm {
+                size,
+                src1,
+                src2,
+                dst,
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
+                let src1 = src1.pretty_print(size.to_bytes(), allocs);
+                let suffix = suffix_bwlq(*size);
+                let op = ljustify(format!("imul{suffix}"));
+                format!("{op} {src1}, {src2:#x}, {dst}")
             }
 
             Inst::CheckedSRemSeq {
@@ -1902,23 +1934,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
     // method above.
     match inst {
         Inst::AluRmiR {
-            size,
-            op,
-            src1,
-            src2,
-            dst,
-            ..
+            src1, src2, dst, ..
         } => {
-            if *size == OperandSize::Size8 && *op == AluRmiROpcode::Mul {
-                // 8-bit imul has RAX as a fixed input/output
-                collector.reg_fixed_use(src1.to_reg(), regs::rax());
-                collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
-                src2.get_operands(collector);
-            } else {
-                collector.reg_use(src1.to_reg());
-                collector.reg_reuse_def(dst.to_writable_reg(), 0);
-                src2.get_operands(collector);
-            }
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
         }
         Inst::AluConstOp { dst, .. } => collector.reg_def(dst.to_writable_reg()),
         Inst::AluRM { src1_dst, src2, .. } => {
@@ -1973,7 +1993,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_use(dividend.to_reg(), regs::rax());
             collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
         }
-        Inst::MulHi {
+        Inst::Mul {
             src1,
             src2,
             dst_lo,
@@ -1985,19 +2005,23 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_def(dst_hi.to_writable_reg(), regs::rdx());
             src2.get_operands(collector);
         }
-        Inst::UMulLo {
-            size,
-            src1,
-            src2,
-            dst,
-            ..
+        Inst::Mul8 {
+            src1, src2, dst, ..
         } => {
             collector.reg_fixed_use(src1.to_reg(), regs::rax());
             collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
-            if *size != OperandSize::Size8 {
-                collector.reg_clobbers(PRegSet::empty().with(regs::gpr_preg(regs::ENC_RDX)));
-            }
             src2.get_operands(collector);
+        }
+        Inst::IMul {
+            src1, src2, dst, ..
+        } => {
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
+        }
+        Inst::IMulImm { src1, dst, .. } => {
+            collector.reg_def(dst.to_writable_reg());
+            src1.get_operands(collector);
         }
         Inst::SignExtendData { size, src, dst } => {
             match size {
@@ -2322,11 +2346,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_early_def(*tmp);
         }
 
-        Inst::CallKnown { dest, ref info, .. } => {
+        Inst::CallKnown { dest, info, .. } => {
             // Probestack is special and is only inserted after
             // regalloc, so we do not need to represent its ABI to the
             // register allocator. Assert that we don't alter that
             // arrangement.
+            let info = info.as_ref().expect("CallInfo is expected in this path");
             debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
@@ -2337,7 +2362,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(info.clobbers);
         }
 
-        Inst::CallUnknown { ref info, dest, .. } => {
+        Inst::CallUnknown { info, dest, .. } => {
+            let info = info.as_ref().expect("CallInfo is expected in this path");
             match dest {
                 RegMem::Reg { reg } if info.callee_conv == CallConv::Tail => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):

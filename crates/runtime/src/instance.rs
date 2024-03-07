@@ -3,7 +3,7 @@
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
 use crate::export::Export;
-use crate::externref::VMExternRefActivationsTable;
+use crate::gc::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement, TableElementType};
 use crate::vmcontext::{
@@ -20,7 +20,6 @@ use anyhow::Result;
 use sptr::Strict;
 use std::alloc::{self, Layout};
 use std::any::Any;
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
@@ -30,8 +29,9 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableIndex,
-    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmValType, VMCONTEXT_MAGIC,
+    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableElementExpression,
+    TableIndex, TableInitialValue, TableSegmentElements, Trap, VMOffsets, WasmHeapType,
+    WasmRefType, WasmValType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -233,6 +233,7 @@ impl Instance {
     /// and that it's valid to acquire `&mut Instance` at this time. For example
     /// this can't be called twice on the same `VMContext` to get two active
     /// pointers to the same `Instance`.
+    #[inline]
     pub unsafe fn from_vmctx<R>(vmctx: *mut VMContext, f: impl FnOnce(&mut Instance) -> R) -> R {
         let ptr = vmctx
             .cast::<u8>()
@@ -476,6 +477,7 @@ impl Instance {
 
             *self.runtime_limits() = ptr::null_mut();
             *self.epoch_ptr() = ptr::null_mut();
+
             *self.externref_activations_table() = ptr::null_mut();
         }
     }
@@ -803,11 +805,12 @@ impl Instance {
         // disconnected from the lifetime of `self`.
         let module = self.module().clone();
 
+        let empty = TableSegmentElements::Functions(Box::new([]));
         let elements = match module.passive_elements_map.get(&elem_index) {
             Some(index) if !self.dropped_elements.contains(elem_index) => {
-                module.passive_elements[*index].as_ref()
+                &module.passive_elements[*index]
             }
-            _ => &[],
+            _ => &empty,
         };
         self.table_init_segment(table_index, elements, dst, src, len)
     }
@@ -815,7 +818,7 @@ impl Instance {
     pub(crate) fn table_init_segment(
         &mut self,
         table_index: TableIndex,
-        elements: &[FuncIndex],
+        elements: &TableSegmentElements,
         dst: u32,
         src: u32,
         len: u32,
@@ -823,30 +826,61 @@ impl Instance {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
         let table = unsafe { &mut *self.get_table(table_index) };
+        let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
+        let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-        let elements = match elements
-            .get(usize::try_from(src).unwrap()..)
-            .and_then(|s| s.get(..usize::try_from(len).unwrap()))
-        {
-            Some(elements) => elements,
-            None => return Err(Trap::TableOutOfBounds),
-        };
-
-        match table.element_type() {
-            TableElementType::Func => {
-                table.init_funcs(
+        match elements {
+            TableSegmentElements::Functions(funcs) => {
+                let elements = funcs
+                    .get(src..)
+                    .and_then(|s| s.get(..len))
+                    .ok_or(Trap::TableOutOfBounds)?;
+                table.init_func(
                     dst,
                     elements
                         .iter()
                         .map(|idx| self.get_func_ref(*idx).unwrap_or(std::ptr::null_mut())),
                 )?;
             }
-
-            TableElementType::Extern => {
-                debug_assert!(elements.iter().all(|e| *e == FuncIndex::reserved_value()));
-                table.fill(dst, TableElement::ExternRef(None), len)?;
+            TableSegmentElements::Expressions(exprs) => {
+                let ty = table.element_type();
+                let exprs = exprs
+                    .get(src..)
+                    .and_then(|s| s.get(..len))
+                    .ok_or(Trap::TableOutOfBounds)?;
+                match ty {
+                    TableElementType::Func => {
+                        table.init_func(
+                            dst,
+                            exprs.iter().map(|expr| match expr {
+                                TableElementExpression::Null => std::ptr::null_mut(),
+                                TableElementExpression::Function(idx) => {
+                                    self.get_func_ref(*idx).unwrap()
+                                }
+                                TableElementExpression::GlobalGet(idx) => {
+                                    let global = self.defined_or_imported_global_ptr(*idx);
+                                    unsafe { (*global).as_func_ref() }
+                                }
+                            }),
+                        )?;
+                    }
+                    TableElementType::Extern => {
+                        table.init_extern(
+                            dst,
+                            exprs.iter().map(|expr| match expr {
+                                TableElementExpression::Null => None,
+                                TableElementExpression::Function(_) => unreachable!(),
+                                TableElementExpression::GlobalGet(idx) => {
+                                    let global = self.defined_or_imported_global_ptr(*idx);
+                                    unsafe { (*global).as_externref().clone() }
+                                }
+                            }),
+                        )?;
+                    }
+                }
             }
         }
+
         Ok(())
     }
 
@@ -1059,7 +1093,9 @@ impl Instance {
                 let module = self.module();
                 let precomputed = match &module.table_initialization.initial_values[idx] {
                     TableInitialValue::Null { precomputed } => precomputed,
-                    TableInitialValue::FuncRef(_) => unreachable!(),
+                    TableInitialValue::FuncRef(_) | TableInitialValue::GlobalGet(_) => {
+                        unreachable!()
+                    }
                 };
                 let func_index = precomputed.get(i as usize).cloned();
                 let func_ref = func_index
@@ -1239,6 +1275,7 @@ impl Instance {
                             heap_type: WasmHeapType::Extern,
                             ..
                         }) => *(*to).as_externref_mut() = from.as_externref().clone(),
+
                         _ => ptr::copy_nonoverlapping(from, to, 1),
                     }
                 }
@@ -1286,11 +1323,11 @@ impl Drop for Instance {
                 WasmValType::Ref(WasmRefType {
                     heap_type: WasmHeapType::Extern,
                     ..
-                }) => {}
+                }) => unsafe {
+                    drop((*self.global_ptr(idx)).as_externref_mut().take());
+                },
+
                 _ => continue,
-            }
-            unsafe {
-                drop((*self.global_ptr(idx)).as_externref_mut().take());
             }
         }
     }

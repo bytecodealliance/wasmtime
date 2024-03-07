@@ -18,10 +18,10 @@ use cranelift_entity::EntityRef;
 use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
-    self, Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind,
-    ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
-    GlobalSectionReader, ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader,
-    Naming, Operator, TableSectionReader, TagSectionReader, TagType, TypeRef, TypeSectionReader,
+    Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind, ElementSectionReader,
+    Export, ExportSectionReader, ExternalKind, FunctionSectionReader, GlobalSectionReader,
+    ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator,
+    TableSectionReader, TagSectionReader, TagType, TypeRef, TypeSectionReader,
 };
 
 fn memory(ty: MemoryType) -> Memory {

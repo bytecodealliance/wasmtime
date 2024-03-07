@@ -5,7 +5,6 @@ mod not_for_windows {
 
     use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
-    use std::convert::TryFrom;
     use std::ops::Range;
     use std::ptr::null_mut;
     use std::sync::{Arc, Mutex};

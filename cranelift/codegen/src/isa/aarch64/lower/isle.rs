@@ -17,6 +17,7 @@ use crate::ir::{condcodes, ArgumentExtension};
 use crate::isa;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
 use crate::isa::aarch64::AArch64Backend;
+use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
 use crate::machinst::valueregs;
 use crate::{
@@ -28,14 +29,10 @@ use crate::{
     isa::aarch64::abi::AArch64CallSite,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::inst::SImm7Scaled,
-    machinst::{
-        abi::ArgPair, ty_bits, InstOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
-    },
+    machinst::{abi::ArgPair, ty_bits, InstOutput, MachInst, VCodeConstant, VCodeConstantData},
 };
-use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
-use std::convert::TryFrom;
 use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;

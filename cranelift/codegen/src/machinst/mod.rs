@@ -430,7 +430,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
                 let end = i.address() + i.bytes().len() as u64;
                 let contains = |off| i.address() <= off && off < end;
 
-                if let Some(reloc) = relocs.iter().find(|reloc| contains(reloc.offset as u64)) {
+                for reloc in relocs.iter().filter(|reloc| contains(reloc.offset as u64)) {
                     write!(
                         buf,
                         " ; reloc_external {} {} {}",

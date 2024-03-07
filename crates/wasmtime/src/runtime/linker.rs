@@ -140,7 +140,7 @@ macro_rules! generate_wrap_async_func {
         /// [`Func::wrapN_async`](crate::Func::wrap1_async).
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
-        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
         pub fn [<func_wrap $num _async>]<$($args,)* R>(
             &mut self,
             module: &str,
@@ -275,7 +275,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
@@ -311,15 +311,24 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_default_values(
         &mut self,
         module: &Module,
     ) -> anyhow::Result<()> {
+        use crate::HeapType;
+
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
                 if let ExternType::Func(func_ty) = import_err.ty() {
                     let result_tys: Vec<_> = func_ty.results().collect();
+
+                    for ty in &result_tys {
+                        if ty.as_ref().map_or(false, |r| !r.is_nullable()) {
+                            bail!("no default value exists for type `{ty}`")
+                        }
+                    }
+
                     self.func_new(
                         import.module(),
                         import.name(),
@@ -332,8 +341,15 @@ impl<T> Linker<T> {
                                     ValType::F32 => Val::F32(0.0_f32.to_bits()),
                                     ValType::F64 => Val::F64(0.0_f64.to_bits()),
                                     ValType::V128 => Val::V128(0_u128.into()),
-                                    ValType::FuncRef => Val::FuncRef(None),
-                                    ValType::ExternRef => Val::ExternRef(None),
+                                    ValType::Ref(r) => {
+                                        debug_assert!(r.is_nullable());
+                                        match r.heap_type() {
+                                            HeapType::Func
+                                            | HeapType::Concrete(_)
+                                            | HeapType::NoFunc => Val::null_func_ref(),
+                                            HeapType::Extern => Val::null_extern_ref(),
+                                        }
+                                    }
                                 };
                             }
                             Ok(())
@@ -415,8 +431,13 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with the same engine
+    /// as this linker.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn func_new(
         &mut self,
         module: &str,
@@ -424,6 +445,7 @@ impl<T> Linker<T> {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
+        assert!(ty.comes_from_same_engine(self.engine()));
         let func = HostFunc::new(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
@@ -433,8 +455,13 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new_unchecked`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given function type is not associated with the same engine
+    /// as this linker.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn func_new_unchecked(
         &mut self,
         module: &str,
@@ -442,6 +469,7 @@ impl<T> Linker<T> {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
+        assert!(ty.comes_from_same_engine(self.engine()));
         let func = HostFunc::new_unchecked(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
@@ -451,8 +479,18 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new_async`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
+    ///
+    /// # Panics
+    ///
+    /// This method panics in the following situations:
+    ///
+    /// * This linker is not associated with an [async
+    ///   config](crate::Config::async_support).
+    ///
+    /// * If the given function type is not associated with the same engine as
+    ///   this linker.
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn func_new_async<F>(
         &mut self,
         module: &str,
@@ -474,6 +512,7 @@ impl<T> Linker<T> {
             self.engine.config().async_support,
             "cannot use `func_new_async` without enabling async support in the config"
         );
+        assert!(ty.comes_from_same_engine(self.engine()));
         self.func_new(module, name, ty, move |mut caller, params, results| {
             let async_cx = caller
                 .store
@@ -754,7 +793,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn module(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -825,7 +864,7 @@ impl<T> Linker<T> {
     ///
     /// This is the same as [`Linker::module`], except for async `Store`s.
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub async fn module_async(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -1098,7 +1137,7 @@ impl<T> Linker<T> {
     /// Attempts to instantiate the `module` provided. This is the same as
     /// [`Linker::instantiate`], except for async `Store`s.
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1366,7 +1405,7 @@ impl DefinitionType {
     pub(crate) fn from(store: &StoreOpaque, item: &Extern) -> DefinitionType {
         let data = store.store_data();
         match item {
-            Extern::Func(f) => DefinitionType::Func(f.sig_index(data)),
+            Extern::Func(f) => DefinitionType::Func(f.type_index(data)),
             Extern::Table(t) => DefinitionType::Table(*t.wasmtime_ty(data), t.internal_size(store)),
             Extern::Global(t) => DefinitionType::Global(*t.wasmtime_ty(data)),
             Extern::Memory(t) => {

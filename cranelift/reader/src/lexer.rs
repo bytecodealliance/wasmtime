@@ -515,11 +515,7 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::trailing_digits;
     use super::*;
-    use crate::error::Location;
-    use cranelift_codegen::ir::types;
-    use cranelift_codegen::ir::{Block, Value};
 
     #[test]
     fn digits() {

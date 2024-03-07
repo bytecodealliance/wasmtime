@@ -49,9 +49,21 @@ const array = [
     "rust": "msrv",
   },
   {
+    "os": "ubuntu-latest",
+    "name": "Test Linux x86_64 with MPK",
+    "filter": "linux-x64",
+    "isa": "x64"
+  },
+  {
     "os": "macos-latest",
     "name": "Test macOS x86_64",
     "filter": "macos-x64"
+  },
+  {
+    "os": "macos-14",
+    "name": "Test macOS arm64",
+    "filter": "macos-arm64",
+    "target": "aarch64-apple-darwin"
   },
   {
     "os": "windows-latest",

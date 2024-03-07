@@ -167,17 +167,19 @@
 
 ;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 2 (lower (umul_overflow x y @ (value_type (fits_in_64 ty))))
-      (construct_overflow_op (CC.O) (x64_umullo_with_flags_paired ty x y)))
+(rule 2 (lower (umul_overflow x y @ (value_type $I8)))
+      (construct_overflow_op (CC.O) (x64_mul8_with_flags_paired $false x y)))
+
+(rule 3 (lower (umul_overflow x y @ (value_type (ty_int_ref_16_to_64 ty))))
+      (construct_overflow_op (CC.O) (x64_mul_lo_with_flags_paired ty $false x y)))
 
 ;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 2 (lower (smul_overflow x y @ (value_type (ty_int_ref_16_to_64 ty))))
-      (construct_overflow_op_alu ty (CC.O) (AluRmiROpcode.Mul) x y))
+(rule 2 (lower (smul_overflow x y @ (value_type $I8)))
+      (construct_overflow_op (CC.O) (x64_mul8_with_flags_paired $true x y)))
 
-;; there is no 8bit imul with an immediate operand so we need to put it in a register or memory
-(rule 1 (lower (smul_overflow x y @ (value_type $I8)))
-      (construct_overflow_op (CC.O) (x64_alurmi_with_flags_paired (AluRmiROpcode.Mul) $I8 x (reg_mem_to_reg_mem_imm (put_in_reg_mem y)))))
+(rule 3 (lower (smul_overflow x y @ (value_type (ty_int_ref_16_to_64 ty))))
+      (construct_overflow_op (CC.O) (x64_mul_lo_with_flags_paired ty $true x y)))
 
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -965,19 +967,22 @@
 
 ;; `i64` and smaller.
 
-;; Multiply two registers.
-(rule -5 (lower (has_type (fits_in_64 ty) (imul x y)))
-      (x64_mul ty x y))
+;; 8-bit base case, needs a special instruction encoding and additionally
+;; move sinkable loads to the right.
+(rule -7 (lower (has_type $I8 (imul x y))) (x64_mul8 $false x y))
+(rule -6 (lower (has_type $I8 (imul (sinkable_load x) y))) (x64_mul8 $false y x))
 
-;; Handle multiplication where the lhs is an immediate or sinkable load in
-;; addition to the automatic rhs handling above.
+;; 16-to-64-bit base cases, same as above by moving sinkable loads to the right.
+(rule -5 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x y)))
+         (x64_imul ty x y))
+(rule -4 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (sinkable_load x) y)))
+         (x64_imul ty y x))
 
-(rule -4 (lower (has_type (fits_in_64 ty)
-                       (imul (simm32_from_value x) y)))
-      (x64_mul ty y x))
-(rule -3 (lower (has_type (fits_in_64 ty)
-                       (imul (sinkable_load x) y)))
-      (x64_mul ty y x))
+;; lift out constants to use 3-operand form
+(rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (iconst (simm32 y)))))
+         (x64_imul_imm ty x y))
+(rule -2 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (iconst (simm32 x)) y)))
+         (x64_imul_imm ty y x))
 
 ;; `i128`.
 
@@ -1004,13 +1009,13 @@
             (y_lo Gpr (value_regs_get_gpr y_regs 0))
             (y_hi Gpr (value_regs_get_gpr y_regs 1))
             ;; lo_hi = mul x_lo, y_hi
-            (lo_hi Gpr (x64_mul $I64 x_lo y_hi))
+            (lo_hi Gpr (x64_imul $I64 x_lo y_hi))
             ;; hi_lo = mul x_hi, y_lo
-            (hi_lo Gpr (x64_mul $I64 x_hi y_lo))
+            (hi_lo Gpr (x64_imul $I64 x_hi y_lo))
             ;; hilo_hilo = add lo_hi, hi_lo
             (hilo_hilo Gpr (x64_add $I64 lo_hi hi_lo))
-            ;; dst_lo:hi_lolo = mulhi_u x_lo, y_lo
-            (mul_regs ValueRegs (mulhi_u $I64 x_lo y_lo))
+            ;; dst_lo:hi_lolo = x64_mul x_lo, y_lo
+            (mul_regs ValueRegs (x64_mul $I64 $false x_lo y_lo))
             (dst_lo Gpr (value_regs_get_gpr mul_regs 0))
             (hi_lolo Gpr (value_regs_get_gpr mul_regs 1))
             ;; dst_hi = add hilo_hilo, hi_lolo
@@ -2258,7 +2263,7 @@
             ;; top byte: it is the sum of the bytes (masked4 >> 56) *
             ;; 0x01 + (masked4 >> 48) * 0x01 + (masked4 >> 40) * 0x01
             ;; + ... + (masked4 >> 0).
-            (mul Gpr (x64_mul $I64 masked4 ones))
+            (mul Gpr (x64_imul $I64 masked4 ones))
             ;; Now take that top byte and return it as the popcount.
             (final Gpr (x64_shr $I64 mul (Imm8Reg.Imm8 56))))
         final))
@@ -2280,7 +2285,7 @@
                            (x64_shr $I32 diff3 (Imm8Reg.Imm8 4))
                            diff3))
             (masked4 Gpr (x64_and $I32 sum1 (RegMemImm.Imm 0x0f0f0f0f)))
-            (mul Gpr (x64_mul $I32 masked4 (RegMemImm.Imm 0x01010101)))
+            (mul Gpr (x64_imul_imm $I32 masked4 0x01010101))
             (final Gpr (x64_shr $I32 mul (Imm8Reg.Imm8 24))))
         final))
 
@@ -3412,6 +3417,45 @@
 (rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
       (cvt_u64_to_float_seq ty val))
 
+;; Base case of u64x2 being converted to f64x2. No native instruction for this
+;; is available so it's emulated through a series of instructions that exploit
+;; the binary representation of 64-bit floats. This sequence of instructions is
+;; copied from LLVM and my understanding of the general idea is to roughly:
+;;
+;; * For each bullet below operate in parallel on the left and right lanes.
+;; * Move the low 32 bits of the input into one register and the upper
+;;   32-bits into a different register, where both have all 0s for the upper
+;;   32-bits. (e.g. split the 64-bit input into two locations)
+;; * For the low bits, create `1.<twenty-zeros><low32>p52` via bit tricks.
+;; * For the high bits, create `1.<twenty-zeros><high32>p84` via bit tricks.
+;; * Create the constant `1.0p84 + 1.0p52`
+;; * Add the two high halves and subtract the constant.
+;;
+;; Apply some math and this should produce the same result as the native
+;; conversion.
+;;
+;; As for the bit tricks a float is represented where the low 53 bits are the
+;; decimal of the float, basically:
+;;
+;;  f = 1.<fraction> ^ (<exponent> - 1023)
+;;
+;; where `<fraction>` is the low 53 bits. By placing the 32-bit halves from
+;; the original integer into the low 53 bits and setting the exponent right it
+;; means that each 32-bit half can become part of a 64-bit floating point
+;; number. The final step in combining via float arithmetic will chop off the
+;; leading `1.` at the start of the float that we constructed, one for the low
+;; half and one for the upper half.
+(rule -1 (lower (has_type $F64X2 (fcvt_from_uint val @ (value_type $I64X2))))
+  (let ((low32_mask XmmMem (emit_u128_le_const 0x00000000ffffffff_00000000ffffffff))
+        (float_1p52 XmmMem (emit_u128_le_const 0x4330000000000000_4330000000000000))
+        (float_1p84 XmmMem (emit_u128_le_const 0x4530000000000000_4530000000000000))
+        (float_1p84_plus_1p52 XmmMem (emit_u128_le_const 0x4530000000100000_4530000000100000))
+        (low32 Xmm (x64_pand val low32_mask))
+        (low32_as_float Xmm (x64_por low32 float_1p52))
+        (high32 Xmm (x64_psrlq val (xmi_imm 32)))
+        (high32_as_float Xmm (x64_por high32 float_1p84)))
+    (x64_addpd low32_as_float (x64_subpd high32_as_float float_1p84_plus_1p52))))
+
 ;; Algorithm uses unpcklps to help create a float that is equivalent
 ;; 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent
 ;; every value of the mantissa represents a corresponding uint32 number.
@@ -4159,37 +4203,19 @@
 
 ;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (umulhi a @ (value_type $I16) b))
-      (let ((res ValueRegs (mul_hi $I16 $false a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
+(rule 0 (lower (umulhi a @ (value_type $I8) b))
+        (x64_shr $I16 (x64_mul8 $false a b) (imm8_to_imm8_gpr 8)))
 
-(rule (lower (umulhi a @ (value_type $I32) b))
-      (let ((res ValueRegs (mul_hi $I32 $false a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
-
-(rule (lower (umulhi a @ (value_type $I64) b))
-      (let ((res ValueRegs (mul_hi $I64 $false a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
+(rule 1 (lower (umulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
+        (value_regs_get_gpr (x64_mul ty $false a b) 1))
 
 ;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (smulhi a @ (value_type $I16) b))
-      (let ((res ValueRegs (mul_hi $I16 $true a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
+(rule 0 (lower (smulhi a @ (value_type $I8) b))
+        (x64_sar $I16 (x64_mul8 $true a b) (imm8_to_imm8_gpr 8)))
 
-(rule (lower (smulhi a @ (value_type $I32) b))
-      (let ((res ValueRegs (mul_hi $I32 $true a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
-
-(rule (lower (smulhi a @ (value_type $I64) b))
-      (let ((res ValueRegs (mul_hi $I64 $true a b))
-            (hi Gpr (value_regs_get_gpr res 1)))
-        hi))
+(rule 1 (lower (smulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
+        (value_regs_get_gpr (x64_mul ty $true a b) 1))
 
 ;; Rules for `get_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

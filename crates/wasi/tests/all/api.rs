@@ -6,11 +6,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock;
-use wasmtime_wasi::preview2::bindings::wasi::filesystem::types as filesystem;
-use wasmtime_wasi::preview2::command::{add_to_linker, Command};
-use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
+use wasmtime_wasi::{
+    bindings::wasi::{clocks::wall_clock, filesystem::types as filesystem},
+    command::{add_to_linker, Command},
+    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct CommandCtx {
@@ -127,19 +126,19 @@ wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
     with: {
-       "wasi:io/streams": preview2::bindings::io::streams,
-       "wasi:filesystem/types": preview2::bindings::filesystem::types,
-       "wasi:filesystem/preopens": preview2::bindings::filesystem::preopens,
-       "wasi:cli/environment": preview2::bindings::cli::environment,
-       "wasi:cli/exit": preview2::bindings::cli::exit,
-       "wasi:cli/stdin": preview2::bindings::cli::stdin,
-       "wasi:cli/stdout": preview2::bindings::cli::stdout,
-       "wasi:cli/stderr": preview2::bindings::cli::stderr,
-       "wasi:cli/terminal_input": preview2::bindings::cli::terminal_input,
-       "wasi:cli/terminal_output": preview2::bindings::cli::terminal_output,
-       "wasi:cli/terminal_stdin": preview2::bindings::cli::terminal_stdin,
-       "wasi:cli/terminal_stdout": preview2::bindings::cli::terminal_stdout,
-       "wasi:cli/terminal_stderr": preview2::bindings::cli::terminal_stderr,
+       "wasi:io/streams": wasmtime_wasi::bindings::io::streams,
+       "wasi:filesystem/types": wasmtime_wasi::bindings::filesystem::types,
+       "wasi:filesystem/preopens": wasmtime_wasi::bindings::filesystem::preopens,
+       "wasi:cli/environment": wasmtime_wasi::bindings::cli::environment,
+       "wasi:cli/exit": wasmtime_wasi::bindings::cli::exit,
+       "wasi:cli/stdin": wasmtime_wasi::bindings::cli::stdin,
+       "wasi:cli/stdout": wasmtime_wasi::bindings::cli::stdout,
+       "wasi:cli/stderr": wasmtime_wasi::bindings::cli::stderr,
+       "wasi:cli/terminal_input": wasmtime_wasi::bindings::cli::terminal_input,
+       "wasi:cli/terminal_output": wasmtime_wasi::bindings::cli::terminal_output,
+       "wasi:cli/terminal_stdin": wasmtime_wasi::bindings::cli::terminal_stdin,
+       "wasi:cli/terminal_stdout": wasmtime_wasi::bindings::cli::terminal_stdout,
+       "wasi:cli/terminal_stderr": wasmtime_wasi::bindings::cli::terminal_stderr,
     },
     ownership: Borrowing {
         duplicate_if_necessary: false
@@ -176,8 +175,8 @@ async fn api_reactor() -> Result<()> {
     // `host` and `wasi-common` crate.
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
-    let writepipe = preview2::pipe::MemoryOutputPipe::new(4096);
-    let stream: preview2::OutputStream = Box::new(writepipe.clone());
+    let writepipe = wasmtime_wasi::pipe::MemoryOutputPipe::new(4096);
+    let stream: wasmtime_wasi::OutputStream = Box::new(writepipe.clone());
     let table_ix = store.data_mut().table().push(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));

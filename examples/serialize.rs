@@ -3,7 +3,6 @@
 
 // You can execute this example with `cargo run --example serialize`
 
-use anyhow::Result;
 use wasmtime::*;
 
 fn serialize() -> Result<Vec<u8>> {

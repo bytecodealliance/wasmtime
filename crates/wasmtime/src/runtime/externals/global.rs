@@ -1,7 +1,9 @@
-use crate::store::{StoreData, StoreOpaque, Stored};
-use crate::trampoline::generate_global_export;
-use crate::{AsContext, AsContextMut, ExternRef, Func, GlobalType, Mutability, Val, ValType};
-use anyhow::{bail, Result};
+use crate::{
+    store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
+    trampoline::generate_global_export,
+    AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref, Val, ValType,
+};
+use anyhow::{bail, Context, Result};
 use std::mem;
 use std::ptr;
 
@@ -71,14 +73,11 @@ impl Global {
     }
 
     fn _new(store: &mut StoreOpaque, ty: GlobalType, val: Val) -> Result<Global> {
-        if !val.comes_from_same_store(store) {
-            bail!("cross-`Store` globals are not supported");
-        }
-        if val.ty() != *ty.content() {
-            bail!("value provided does not match the type of this global");
-        }
+        val.ensure_matches_ty(store, ty.content()).context(
+            "type mismatch: initial value provided does not match the type of this global",
+        )?;
         unsafe {
-            let wasmtime_export = generate_global_export(store, ty, val);
+            let wasmtime_export = generate_global_export(store, ty, val)?;
             Ok(Global::from_wasmtime_global(wasmtime_export, store))
         }
     }
@@ -89,9 +88,12 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn ty(&self, store: impl AsContext) -> GlobalType {
-        let store = store.as_context();
+        self._ty(store.as_context().0)
+    }
+
+    pub(crate) fn _ty(&self, store: &StoreOpaque) -> GlobalType {
         let ty = &store[self.0].global;
-        GlobalType::from_wasmtime_global(&ty)
+        GlobalType::from_wasmtime_global(store.engine(), &ty)
     }
 
     /// Returns the current [`Val`] of this global.
@@ -102,22 +104,35 @@ impl Global {
     pub fn get(&self, mut store: impl AsContextMut) -> Val {
         unsafe {
             let store = store.as_context_mut();
+            let mut store = AutoAssertNoGc::new(store.0);
             let definition = &*store[self.0].definition;
-            match self.ty(&store).content() {
+            match self._ty(&store).content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
                 ValType::F64 => Val::F64(*definition.as_u64()),
-                ValType::ExternRef => Val::ExternRef(
-                    definition
-                        .as_externref()
-                        .clone()
-                        .map(|inner| ExternRef { inner }),
-                ),
-                ValType::FuncRef => {
-                    Val::FuncRef(Func::from_raw(store, definition.as_func_ref().cast()))
-                }
                 ValType::V128 => Val::V128((*definition.as_u128()).into()),
+                ValType::Ref(ref_ty) => {
+                    let reference = match ref_ty.heap_type() {
+                        HeapType::Func | HeapType::Concrete(_) => {
+                            Ref::Func(Func::_from_raw(&mut store, definition.as_func_ref().cast()))
+                        }
+
+                        HeapType::NoFunc => Ref::Func(None),
+
+                        HeapType::Extern => Ref::Extern(
+                            definition
+                                .as_externref()
+                                .clone()
+                                .map(|inner| ExternRef::from_vm_extern_ref(&mut store, inner)),
+                        ),
+                    };
+                    debug_assert!(
+                        ref_ty.is_nullable() || !reference.is_null(),
+                        "if the type is non-nullable, we better have a non-null reference"
+                    );
+                    reference.into()
+                }
             }
         }
     }
@@ -134,18 +149,13 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
-        let store = store.as_context_mut().0;
-        let ty = self.ty(&store);
-        if ty.mutability() != Mutability::Var {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        let global_ty = self._ty(&store);
+        if global_ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
-        let ty = ty.content();
-        if val.ty() != *ty {
-            bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
-        }
-        if !val.comes_from_same_store(store) {
-            bail!("cross-`Store` values are not supported");
-        }
+        val.ensure_matches_ty(&store, global_ty.content())
+            .context("type mismatch: attempt to set global to value of wrong type")?;
         unsafe {
             let definition = &mut *store[self.0].definition;
             match val {
@@ -153,15 +163,22 @@ impl Global {
                 Val::I64(i) => *definition.as_i64_mut() = i,
                 Val::F32(f) => *definition.as_u32_mut() = f,
                 Val::F64(f) => *definition.as_u64_mut() = f,
+                Val::V128(i) => *definition.as_u128_mut() = i.into(),
                 Val::FuncRef(f) => {
-                    *definition.as_func_ref_mut() =
-                        f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr().cast());
+                    *definition.as_func_ref_mut() = f.map_or(ptr::null_mut(), |f| {
+                        f.vm_func_ref(&mut store).as_ptr().cast()
+                    });
                 }
-                Val::ExternRef(x) => {
-                    let old = mem::replace(definition.as_externref_mut(), x.map(|x| x.inner));
+                Val::ExternRef(e) => {
+                    let new = match e {
+                        None => None,
+                        Some(e) => Some(e.try_to_vm_extern_ref(&mut store)?),
+                    };
+                    // Take care to invoke the `Drop` implementation of the
+                    // existing `VMExternRef` so that it doesn't leak.
+                    let old = mem::replace(definition.as_externref_mut(), new);
                     drop(old);
                 }
-                Val::V128(i) => *definition.as_u128_mut() = i.into(),
             }
         }
         Ok(())

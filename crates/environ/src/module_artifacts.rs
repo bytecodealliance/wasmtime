@@ -9,7 +9,6 @@ use anyhow::{bail, Result};
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use object::SectionKind;
 use serde_derive::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::str;
 use wasmtime_types::ModuleInternedTypeIndex;

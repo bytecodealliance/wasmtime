@@ -167,12 +167,10 @@
        (bxor ty (bxor ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
       (bxor ty x (bxor ty k1 k2)))
 
-(rule (simplify
-       (select ty (iconst_u _ (u64_nonzero _)) x y))
-      x)
-(rule (simplify
-       (select ty (iconst_u _ 0) x y))
-      y)
+(rule (simplify (select ty (iconst_u _ (u64_nonzero _)) x _))
+      (subsume x))
+(rule (simplify (select ty (iconst_u _ 0) _ y))
+      (subsume y))
 
 ;; Replace subtraction by a "negative" constant with addition.
 ;; Notably, this gives `x - (-1) == x + 1`, so other patterns don't have to
@@ -246,3 +244,23 @@
                       (bxor ty a b@(iconst _ _))
                       (bxor ty c d@(iconst _ _))))
       (bxor ty (bxor ty a c) (bxor ty b d)))
+
+
+;; Constant fold int-to-float conversions.
+(rule (simplify (fcvt_from_uint $F32 (iconst_u _ n)))
+      (f32const $F32 (f32_from_uint n)))
+(rule (simplify (fcvt_from_uint $F64 (iconst_u _ n)))
+      (f64const $F64 (f64_from_uint n)))
+(rule (simplify (fcvt_from_sint $F32 (iconst_s _ n)))
+      (f32const $F32 (f32_from_sint n)))
+(rule (simplify (fcvt_from_sint $F64 (iconst_s _ n)))
+      (f64const $F64 (f64_from_sint n)))
+
+(decl f32_from_uint (u64) Ieee32)
+(extern constructor f32_from_uint f32_from_uint)
+(decl f64_from_uint (u64) Ieee64)
+(extern constructor f64_from_uint f64_from_uint)
+(decl f32_from_sint (i64) Ieee32)
+(extern constructor f32_from_sint f32_from_sint)
+(decl f64_from_sint (i64) Ieee64)
+(extern constructor f64_from_sint f64_from_sint)

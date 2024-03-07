@@ -1,7 +1,10 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData};
+use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
 use crate::isa::reg::Reg;
-use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
+use cranelift_codegen::{
+    ir::{Endianness, LibCall, MemFlags},
+    Final, MachBufferFinalized, MachLabel,
+};
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
 
@@ -34,6 +37,25 @@ pub(crate) enum MemMoveDirection {
     /// Invariant: the source location is closer to the SP than the destination
     /// location, which will be closer to the FP.
     LowToHigh,
+}
+
+/// Classifies how to treat float-to-int conversions.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum TruncKind {
+    /// Saturating conversion. If the source value is greater than the maximum
+    /// value of the destination type, the result is clamped to the
+    /// destination maximum value.
+    Checked,
+    /// An exception is raised if the source value is greater than the maximum
+    /// value of the destination type.
+    Unchecked,
+}
+
+impl TruncKind {
+    /// Returns true if the truncation kind is checked.
+    pub(crate) fn is_checked(&self) -> bool {
+        *self == TruncKind::Checked
+    }
 }
 
 /// Representation of the stack pointer offset.
@@ -127,7 +149,7 @@ pub(crate) enum ShiftKind {
     Rotr,
 }
 
-/// Kinds of extends in WebAssembly. The [`masm`] implementation for each ISA
+/// Kinds of extends in WebAssembly. Each MacroAssembler implementation
 /// is responsible for emitting the correct sequence of instructions when
 /// lowering to machine code.
 pub(crate) enum ExtendKind {
@@ -150,6 +172,10 @@ pub(crate) enum ExtendKind {
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
+    /// 8 bits.
+    S8,
+    /// 16 bits.
+    S16,
     /// 32 bits.
     S32,
     /// 64 bits.
@@ -160,8 +186,10 @@ pub(crate) enum OperandSize {
 
 impl OperandSize {
     /// The number of bits in the operand.
-    pub fn num_bits(&self) -> i32 {
+    pub fn num_bits(&self) -> u8 {
         match self {
+            OperandSize::S8 => 8,
+            OperandSize::S16 => 16,
             OperandSize::S32 => 32,
             OperandSize::S64 => 64,
             OperandSize::S128 => 128,
@@ -171,6 +199,8 @@ impl OperandSize {
     /// The number of bytes in the operand.
     pub fn bytes(&self) -> u32 {
         match self {
+            Self::S8 => 1,
+            Self::S16 => 2,
             Self::S32 => 4,
             Self::S64 => 8,
             Self::S128 => 16,
@@ -180,6 +210,8 @@ impl OperandSize {
     /// The binary logarithm of the number of bits in the operand.
     pub fn log2(&self) -> u8 {
         match self {
+            OperandSize::S8 => 3,
+            OperandSize::S16 => 4,
             OperandSize::S32 => 5,
             OperandSize::S64 => 6,
             OperandSize::S128 => 7,
@@ -232,15 +264,11 @@ impl Imm {
     }
 
     /// Create a new F32 immediate.
-    // Temporary until support for f32.const is added.
-    #[allow(dead_code)]
     pub fn f32(bits: u32) -> Self {
         Self::F32(bits)
     }
 
     /// Create a new F64 immediate.
-    // Temporary until support for f64.const is added.
-    #[allow(dead_code)]
     pub fn f64(bits: u64) -> Self {
         Self::F64(bits)
     }
@@ -251,6 +279,83 @@ impl Imm {
             Self::I32(v) => Some(*v as i32),
             Self::I64(v) => i32::try_from(*v as i64).ok(),
             _ => None,
+        }
+    }
+}
+
+/// The location of the [VMcontext] used for function calls.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum VMContextLoc {
+    /// Dynamic, stored in the given register.
+    Reg(Reg),
+    /// The pinned [VMContext] register.
+    Pinned,
+}
+
+/// The maximum number of context arguments currently used across the compiler.
+pub(crate) const MAX_CONTEXT_ARGS: usize = 2;
+
+/// Out-of-band special purpose arguments used for function call emission.
+///
+/// We cannot rely on the value stack for these values given that inserting
+/// register or memory values at arbitrary locations of the value stack has the
+/// potential to break the stack ordering principle, which states that older
+/// values must always precede newer values, effectively simulating the order of
+/// values in the machine stack.
+/// The [ContextArgs] are meant to be resolved at every callsite; in some cases
+/// it might be possible to construct it early on, but given that it might
+/// contain allocatable registers, it's preferred to construct it in
+/// [FnCall::emit].
+#[derive(Clone, Debug)]
+pub(crate) enum ContextArgs {
+    /// No context arguments required. This is used for libcalls that don't
+    /// require any special context arguments. For example builtin functions
+    /// that perform float calculations.
+    None,
+    /// A single context argument is required; the current pinned [VMcontext]
+    /// register must be passed as the first argument of the function call.
+    VMContext([VMContextLoc; 1]),
+    /// The callee and caller context arguments are required. In this case, the
+    /// callee context argument is usually stored into an allocatable register
+    /// and the caller is always the current pinned [VMContext] pointer.
+    CalleeAndCallerVMContext([VMContextLoc; MAX_CONTEXT_ARGS]),
+}
+
+impl ContextArgs {
+    /// Construct an empty [ContextArgs].
+    pub fn none() -> Self {
+        Self::None
+    }
+
+    /// Construct a [ContextArgs] declaring the usage of the pinned [VMContext]
+    /// register as both the caller and callee context arguments.
+    pub fn pinned_callee_and_caller_vmctx() -> Self {
+        Self::CalleeAndCallerVMContext([VMContextLoc::Pinned, VMContextLoc::Pinned])
+    }
+
+    /// Construct a [ContextArgs] that declares the usage of the pinned
+    /// [VMContext] register as the only context argument.
+    pub fn pinned_vmctx() -> Self {
+        Self::VMContext([VMContextLoc::Pinned])
+    }
+
+    /// Construct a [ContextArgs] that declares a dynamic callee context and the
+    /// pinned [VMContext] register as the context arguments.
+    pub fn with_callee_and_pinned_caller(callee_vmctx: Reg) -> Self {
+        Self::CalleeAndCallerVMContext([VMContextLoc::Reg(callee_vmctx), VMContextLoc::Pinned])
+    }
+
+    /// Get the length of the [ContextArgs].
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    /// Get a slice of the context arguments.
+    pub fn as_slice(&self) -> &[VMContextLoc] {
+        match self {
+            Self::None => &[],
+            Self::VMContext(a) => a.as_slice(),
+            Self::CalleeAndCallerVMContext(a) => a.as_slice(),
         }
     }
 }
@@ -326,6 +431,14 @@ pub enum RoundingMode {
     Zero,
 }
 
+/// Memory flags for trusted loads/stores.
+pub const TRUSTED_FLAGS: MemFlags = MemFlags::trusted();
+
+/// Flags used for WebAssembly loads / stores.
+/// Untrusted by default so we don't set `no_trap`.
+/// We also ensure that the endianess is the right one for WebAssembly.
+pub const UNTRUSTED_FLAGS: MemFlags = MemFlags::new().with_endianness(Endianness::Little);
+
 /// Generic MacroAssembler interface used by the code generation.
 ///
 /// The MacroAssembler trait aims to expose an interface, high-level enough,
@@ -355,13 +468,43 @@ pub(crate) trait MacroAssembler {
     type ABI: abi::ABI;
 
     /// Emit the function prologue.
-    fn prologue(&mut self);
+    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)]) {
+        self.frame_setup();
+        self.check_stack(vmctx);
+        self.save_clobbers(clobbers);
+    }
+
+    /// Generate the frame setup sequence.
+    fn frame_setup(&mut self);
+
+    /// Generate the frame restore sequence.
+    fn frame_restore(&mut self);
+
+    /// Save all the given clobbered registers to the stack. By default this is the same as pushing
+    /// the registers, however it's present in the [`MacroAssembler`] trait to ensure that it's
+    /// possible to add unwind info for register saves in backends.
+    fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        for &(reg, size) in clobbers {
+            self.push(reg, size);
+        }
+    }
+
+    /// Restore all clobbered registers, assumed to be passed in the same order as to
+    /// [`save_clobbers`].
+    fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        for &(reg, size) in clobbers.iter().rev() {
+            self.pop(reg, size);
+        }
+    }
 
     /// Emit a stack check.
-    fn check_stack(&mut self);
+    fn check_stack(&mut self, vmctx: Reg);
 
     /// Emit the function epilogue.
-    fn epilogue(&mut self, locals_size: u32);
+    fn epilogue(&mut self, clobbers: &[(Reg, OperandSize)]) {
+        self.restore_clobbers(clobbers);
+        self.frame_restore();
+    }
 
     /// Reserve stack space.
     fn reserve_stack(&mut self, bytes: u32);
@@ -421,8 +564,38 @@ pub(crate) trait MacroAssembler {
     /// Perform a stack store.
     fn store(&mut self, src: RegImm, dst: Self::Address, size: OperandSize);
 
-    /// Perform a stack load.
+    /// Alias for `MacroAssembler::store` with the operand size corresponding
+    /// to the pointer size of the target.
+    fn store_ptr(&mut self, src: Reg, dst: Self::Address);
+
+    /// Perform a WebAssembly store.
+    /// A WebAssebly store introduces several additional invariants compared to
+    /// [Self::store], more precisely, it can implicitly trap, in certain
+    /// circumstances, even if explicit bounds checks are elided, in that sense,
+    /// we consider this type of load as untrusted. It can also differ with
+    /// regards to the endianess depending on the target ISA. For this reason,
+    /// [Self::wasm_store], should be explicitly used when emitting WebAssembly
+    /// stores.
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize);
+
+    /// Perform a zero-extended stack load.
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
+
+    /// Perform a WebAssembly load.
+    /// A WebAssebly load introduces several additional invariants compared to
+    /// [Self::load], more precisely, it can implicitly trap, in certain
+    /// circumstances, even if explicit bounds checks are elided, in that sense,
+    /// we consider this type of load as untrusted. It can also differ with
+    /// regards to the endianess depending on the target ISA. For this reason,
+    /// [Self::wasm_load], should be explicitly used when emitting WebAssembly
+    /// loads.
+    fn wasm_load(
+        &mut self,
+        src: Self::Address,
+        dst: Reg,
+        size: OperandSize,
+        kind: Option<ExtendKind>,
+    );
 
     /// Alias for `MacroAssembler::load` with the operand size corresponding
     /// to the pointer size of the target.
@@ -430,10 +603,6 @@ pub(crate) trait MacroAssembler {
 
     /// Loads the effective address into destination.
     fn load_addr(&mut self, _src: Self::Address, _dst: Reg, _size: OperandSize);
-
-    /// Alias for `MacroAssembler::store` with the operand size corresponding
-    /// to the pointer size of the target.
-    fn store_ptr(&mut self, src: Reg, dst: Self::Address);
 
     /// Pop a value from the machine stack into the given register.
     fn pop(&mut self, dst: Reg, size: OperandSize);
@@ -456,25 +625,20 @@ pub(crate) trait MacroAssembler {
         let mut remaining = bytes;
         let word_bytes = <Self::ABI as abi::ABI>::word_bytes();
         let scratch = <Self::ABI as abi::ABI>::scratch_reg();
-        let ptr_size: OperandSize = ptr_type_from_ptr_size(word_bytes as u8).into();
 
         let mut dst_offs = dst.as_u32() - bytes;
         let mut src_offs = src.as_u32() - bytes;
 
+        let word_bytes = word_bytes as u32;
         while remaining >= word_bytes {
             remaining -= word_bytes;
             dst_offs += word_bytes;
             src_offs += word_bytes;
 
-            self.load(
-                self.address_from_sp(SPOffset::from_u32(src_offs)),
-                scratch,
-                ptr_size,
-            );
-            self.store(
+            self.load_ptr(self.address_from_sp(SPOffset::from_u32(src_offs)), scratch);
+            self.store_ptr(
                 scratch.into(),
                 self.address_from_sp(SPOffset::from_u32(dst_offs)),
-                ptr_size,
             );
         }
 
@@ -500,6 +664,10 @@ pub(crate) trait MacroAssembler {
 
     /// Perform add operation.
     fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
+
+    /// Perform a checked unsigned integer addition, emitting the provided trap
+    /// if the addition overflows.
+    fn checked_uadd(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize, trap: TrapCode);
 
     /// Perform subtraction operation.
     fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
@@ -538,7 +706,14 @@ pub(crate) trait MacroAssembler {
     fn float_neg(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a floating point floor operation.
-    fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize);
+    fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
+        &mut self,
+        mode: RoundingMode,
+        env: &mut FuncEnv<Self::Ptr>,
+        context: &mut CodeGenContext,
+        size: OperandSize,
+        fallback: F,
+    );
 
     /// Perform a floating point square root operation.
     fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize);
@@ -630,7 +805,14 @@ pub(crate) trait MacroAssembler {
 
     /// Emits one or more instructions to perform a signed truncation of a
     /// float into an integer.
-    fn signed_truncate(&mut self, src: Reg, dst: Reg, src_size: OperandSize, dst_size: OperandSize);
+    fn signed_truncate(
+        &mut self,
+        src: Reg,
+        dst: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
+    );
 
     /// Emits one or more instructions to perform an unsigned truncation of a
     /// float into an integer.
@@ -641,6 +823,7 @@ pub(crate) trait MacroAssembler {
         tmp_fpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
+        kind: TruncKind,
     );
 
     /// Emits one or more instructions to perform a signed convert of an
@@ -676,7 +859,7 @@ pub(crate) trait MacroAssembler {
     /// into word-sized slots. Then it unrolls a series of store
     /// instructions, effectively assigning zero to each slot.
     fn zero_mem_range(&mut self, mem: &Range<u32>) {
-        let word_size = <Self::ABI as abi::ABI>::word_bytes();
+        let word_size = <Self::ABI as abi::ABI>::word_bytes() as u32;
         if mem.is_empty() {
             return;
         }
@@ -748,6 +931,9 @@ pub(crate) trait MacroAssembler {
     /// Emit an unreachable code trap.
     fn unreachable(&mut self);
 
+    /// Emit an unconditional trap.
+    fn trap(&mut self, code: TrapCode);
+
     /// Traps if the condition code is met.
     fn trapif(&mut self, cc: IntCmpKind, code: TrapCode);
 
@@ -765,12 +951,5 @@ pub(crate) trait MacroAssembler {
         if bytes > 0 {
             self.free_stack(bytes);
         }
-    }
-
-    /// Save the value of this register to the stack. By default this is the same as pushing the
-    /// register, however it's present in the [`MacroAssembler`] trait to ensure that it's possible
-    /// to add unwind info for register saves in backends.
-    fn save(&mut self, _off: u32, src: Reg, size: OperandSize) -> StackSlot {
-        self.push(src, size)
     }
 }

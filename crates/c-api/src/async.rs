@@ -113,7 +113,12 @@ async fn invoke_c_async_callback<'a>(
     let mut hostcall_val_storage = mem::take(&mut caller.data_mut().hostcall_val_storage);
     debug_assert!(hostcall_val_storage.is_empty());
     hostcall_val_storage.reserve(params.len() + results.len());
-    hostcall_val_storage.extend(params.iter().cloned().map(|p| wasmtime_val_t::from_val(p)));
+    hostcall_val_storage.extend(
+        params
+            .iter()
+            .cloned()
+            .map(|p| wasmtime_val_t::from_val(&mut caller, p)),
+    );
     hostcall_val_storage.extend((0..results.len()).map(|_| wasmtime_val_t {
         kind: WASMTIME_I32,
         of: wasmtime_val_union { i32: 0 },
@@ -151,7 +156,7 @@ async fn invoke_c_async_callback<'a>(
     // Translate the `wasmtime_val_t` results into the `results` space
     for (i, result) in out_results.iter().enumerate() {
         unsafe {
-            results[i] = result.to_val();
+            results[i] = result.to_val(&mut caller.caller);
         }
     }
     // Move our `vals` storage back into the store now that we no longer
@@ -229,7 +234,7 @@ async fn do_func_call_async(
     match result {
         Ok(()) => {
             for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
-                crate::initialize(slot, wasmtime_val_t::from_val(val.clone()));
+                crate::initialize(slot, wasmtime_val_t::from_val(&mut store, val.clone()));
             }
             params.truncate(0);
             store.data_mut().wasm_val_storage = params;
@@ -240,7 +245,7 @@ async fn do_func_call_async(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
-    store: CStoreContextMut<'a>,
+    mut store: CStoreContextMut<'a>,
     func: &'a Func,
     args: *const wasmtime_val_t,
     nargs: usize,
@@ -251,10 +256,16 @@ pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
 ) -> Box<wasmtime_call_future_t<'a>> {
     let args = crate::slice_from_raw_parts(args, nargs)
         .iter()
-        .map(|i| i.to_val());
+        .map(|i| i.to_val(&mut store))
+        .collect::<Vec<_>>();
     let results = crate::slice_from_raw_parts_mut(results, nresults);
     let fut = Box::pin(do_func_call_async(
-        store, func, args, results, trap_ret, err_ret,
+        store,
+        func,
+        args.into_iter(),
+        results,
+        trap_ret,
+        err_ret,
     ));
     Box::new(wasmtime_call_future_t { underlying: fut })
 }
@@ -271,7 +282,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_async_func(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let ty = ty.ty().ty.clone();
+    let ty = ty.ty().ty(linker.linker.engine());
     let module = to_str!(module, module_len);
     let name = to_str!(name, name_len);
     let cb = c_async_callback_to_rust_fn(callback, data, finalizer);

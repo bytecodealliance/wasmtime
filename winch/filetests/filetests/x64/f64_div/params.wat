@@ -9,19 +9,22 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c320000000       	add	r11, 0x20
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f872a000000         	ja	0x42
-;;   18:	 f20f11442410         	movsd	qword ptr [rsp + 0x10], xmm0
-;;      	 f20f114c2408         	movsd	qword ptr [rsp + 8], xmm1
-;;      	 4c893424             	mov	qword ptr [rsp], r14
-;;      	 f20f10442408         	movsd	xmm0, qword ptr [rsp + 8]
-;;      	 f20f104c2410         	movsd	xmm1, qword ptr [rsp + 0x10]
+;;      	 0f8735000000         	ja	0x50
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec20             	sub	rsp, 0x20
+;;      	 48897c2418           	mov	qword ptr [rsp + 0x18], rdi
+;;      	 4889742410           	mov	qword ptr [rsp + 0x10], rsi
+;;      	 f20f11442408         	movsd	qword ptr [rsp + 8], xmm0
+;;      	 f20f110c24           	movsd	qword ptr [rsp], xmm1
+;;      	 f20f100424           	movsd	xmm0, qword ptr [rsp]
+;;      	 f20f104c2408         	movsd	xmm1, qword ptr [rsp + 8]
 ;;      	 f20f5ec8             	divsd	xmm1, xmm0
 ;;      	 660f28c1             	movapd	xmm0, xmm1
-;;      	 4883c418             	add	rsp, 0x18
+;;      	 4883c420             	add	rsp, 0x20
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   42:	 0f0b                 	ud2	
+;;   50:	 0f0b                 	ud2	

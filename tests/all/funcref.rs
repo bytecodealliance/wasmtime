@@ -31,7 +31,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();
-        assert_eq!(func.ty(&store), result_func.ty(&store));
+        assert!(FuncType::eq(&func.ty(&store), &result_func.ty(&store)));
     }
 
     // Pass in a null funcref.
@@ -57,7 +57,10 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();
-        assert_eq!(other_instance_func.ty(&store), result_func.ty(&store));
+        assert!(FuncType::eq(
+            &other_instance_func.ty(&store),
+            &result_func.ty(&store),
+        ));
     }
 
     // Passing in a `funcref` from another store fails.
@@ -141,14 +144,11 @@ fn func_new_returns_wrong_store() -> anyhow::Result<()> {
         let f1 = Func::wrap(&mut store1, move || {
             let _ = &set;
         });
-        let f2 = Func::new(
-            &mut store2,
-            FuncType::new(None, Some(ValType::FuncRef)),
-            move |_, _, results| {
-                results[0] = f1.clone().into();
-                Ok(())
-            },
-        );
+        let func_ty = FuncType::new(store2.engine(), None, Some(ValType::FUNCREF));
+        let f2 = Func::new(&mut store2, func_ty, move |_, _, results| {
+            results[0] = f1.clone().into();
+            Ok(())
+        });
         assert!(f2.call(&mut store2, &[], &mut [Val::I32(0)]).is_err());
     }
     assert!(dropped.load(SeqCst));

@@ -148,3 +148,17 @@ mod trappable_errors {
     #[allow(dead_code)]
     type MyX = u32;
 }
+
+mod interface_name_with_rust_keyword {
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface crate { }
+
+            world foo {
+                export crate;
+            }
+        "
+    });
+}

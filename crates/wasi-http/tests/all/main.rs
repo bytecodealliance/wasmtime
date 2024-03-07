@@ -11,7 +11,7 @@ use wasmtime::{
     component::{Component, Linker, Resource, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
     body::HyperIncomingBody,
@@ -35,6 +35,7 @@ struct Ctx {
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
     send_request: Option<RequestSender>,
+    rejected_authority: Option<String>,
 }
 
 impl WasiView for Ctx {
@@ -59,6 +60,12 @@ impl WasiHttpView for Ctx {
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Resource<HostFutureIncomingResponse>> {
+        if let Some(rejected_authority) = &self.rejected_authority {
+            let (auth, _port) = request.authority.split_once(':').unwrap();
+            if auth == rejected_authority {
+                return Err(ErrorCode::HttpRequestDenied.into());
+            }
+        }
         if let Some(send_request) = self.send_request.clone() {
             send_request(self, request)
         } else {
@@ -87,6 +94,7 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
         stderr,
         stdout,
         send_request: None,
+        rejected_authority: None,
     };
 
     Store::new(&engine, ctx)
@@ -121,6 +129,7 @@ async fn run_wasi_http(
     component_filename: &str,
     req: hyper::Request<HyperIncomingBody>,
     send_request: Option<RequestSender>,
+    rejected_authority: Option<String>,
 ) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
@@ -146,6 +155,7 @@ async fn run_wasi_http(
         stderr,
         stdout,
         send_request,
+        rejected_authority,
     };
     let mut store = Store::new(&engine, ctx);
 
@@ -160,7 +170,7 @@ async fn run_wasi_http(
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let out = store.data_mut().new_response_outparam(sender)?;
 
-    let handle = preview2::spawn(async move {
+    let handle = wasmtime_wasi::runtime::spawn(async move {
         proxy
             .wasi_http_incoming_handler()
             .call_handle(&mut store, req, out)
@@ -174,20 +184,20 @@ async fn run_wasi_http(
             use http_body_util::BodyExt;
             let (parts, body) = resp.into_parts();
             let collected = BodyExt::collect(body).await?;
-            Ok(hyper::Response::from_parts(parts, collected))
+            Some(Ok(hyper::Response::from_parts(parts, collected)))
         }
+        Ok(Err(e)) => Some(Err(e)),
 
-        Ok(Err(e)) => Err(e),
-
-        // This happens if the wasm never calls `set-response-outparam`
-        Err(e) => panic!("Failed to receive a response: {e:?}"),
+        // Fall through below to the `resp.expect(...)` which will hopefully
+        // return a more specific error from `handle.await`.
+        Err(_) => None,
     };
 
-    // Now that the response has been processed, we can wait on the wasm to finish without
-    // deadlocking.
+    // Now that the response has been processed, we can wait on the wasm to
+    // finish without deadlocking.
     handle.await.context("Component execution")?;
 
-    Ok(resp)
+    Ok(resp.expect("wasm never called set-response-outparam"))
 }
 
 #[test_log::test(tokio::test)]
@@ -200,6 +210,7 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
     let resp = run_wasi_http(
         test_programs_artifacts::API_PROXY_COMPONENT,
         req.body(body::empty())?,
+        None,
         None,
     )
     .await?;
@@ -267,7 +278,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponseInternal {
                         resp,
-                        worker: Arc::new(preview2::spawn(future::ready(()))),
+                        worker: Arc::new(wasmtime_wasi::runtime::spawn(future::ready(()))),
                         between_bytes_timeout,
                     })
                 });
@@ -329,6 +340,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
         request,
         send_request,
+        None,
     )
     .await??;
 
@@ -356,6 +368,39 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
             hash,
             base64::engine::general_purpose::STANDARD_NO_PAD.encode(hasher.finalize())
         );
+    }
+
+    Ok(())
+}
+
+// ensure the runtime rejects the outgoing request
+#[test_log::test(tokio::test)]
+async fn wasi_http_hash_all_with_reject() -> Result<()> {
+    let request = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri("http://example.com:8080/hash-all");
+    let request = request.header("url", format!("http://forbidden.com"));
+    let request = request.header("url", format!("http://localhost"));
+    let request = request.body(body::empty())?;
+
+    let response = run_wasi_http(
+        test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
+        request,
+        None,
+        Some("forbidden.com".to_string()),
+    )
+    .await??;
+
+    let body = response.into_body().to_bytes();
+    let body = str::from_utf8(&body).unwrap();
+    for line in body.lines() {
+        println!("{}", line);
+        if line.contains("forbidden.com") {
+            assert!(line.contains("HttpRequestDenied"));
+        }
+        if line.contains("localhost") {
+            assert!(!line.contains("HttpRequestDenied"));
+        }
     }
 
     Ok(())
@@ -460,6 +505,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
     let response = run_wasi_http(
         test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
         request,
+        None,
         None,
     )
     .await??;

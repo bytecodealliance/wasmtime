@@ -22,7 +22,7 @@
 //! using wasmtime artifacts across versions.
 
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use object::write::{Object, StandardSegment};
 use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
 use serde_derive::{Deserialize, Serialize};
@@ -191,6 +191,7 @@ struct WasmFeatures {
     relaxed_simd: bool,
     extended_const: bool,
     function_references: bool,
+    gc: bool,
 }
 
 impl Metadata<'_> {
@@ -223,7 +224,6 @@ impl Metadata<'_> {
         } = engine.config().features;
 
         assert!(!memory_control);
-        assert!(!gc);
         assert!(!component_model_values);
         assert!(!component_model_nested_names);
 
@@ -231,7 +231,7 @@ impl Metadata<'_> {
             target: engine.compiler().triple().to_string(),
             shared_flags: engine.compiler().flags(),
             isa_flags: engine.compiler().isa_flags(),
-            tunables: engine.config().tunables.clone(),
+            tunables: engine.tunables().clone(),
             features: WasmFeatures {
                 reference_types,
                 multi_value,
@@ -246,6 +246,7 @@ impl Metadata<'_> {
                 relaxed_simd,
                 extended_const,
                 function_references,
+                gc,
             },
         }
     }
@@ -254,7 +255,7 @@ impl Metadata<'_> {
         self.check_triple(engine)?;
         self.check_shared_flags(engine)?;
         self.check_isa_flags(engine)?;
-        self.check_tunables(&engine.config().tunables)?;
+        self.check_tunables(&engine.tunables())?;
         self.check_features(&engine.config().features)?;
         Ok(())
     }
@@ -405,6 +406,27 @@ impl Metadata<'_> {
         Ok(())
     }
 
+    fn check_cfg_bool(
+        cfg: bool,
+        cfg_str: &str,
+        found: bool,
+        expected: bool,
+        feature: &str,
+    ) -> Result<()> {
+        if cfg {
+            Self::check_bool(found, expected, feature)
+        } else {
+            assert!(!expected);
+            ensure!(
+                !found,
+                "Module was compiled with {feature} but support in the host \
+                 was disabled at compile time because the `{cfg_str}` Cargo \
+                 feature was not enabled",
+            );
+            Ok(())
+        }
+    }
+
     fn check_features(&mut self, other: &wasmparser::WasmFeatures) -> Result<()> {
         let WasmFeatures {
             reference_types,
@@ -420,13 +442,31 @@ impl Metadata<'_> {
             relaxed_simd,
             extended_const,
             function_references,
+            gc,
         } = self.features;
 
-        Self::check_bool(
+        Self::check_cfg_bool(
+            cfg!(feature = "gc"),
+            "gc",
             reference_types,
             other.reference_types,
             "WebAssembly reference types support",
         )?;
+        Self::check_cfg_bool(
+            cfg!(feature = "gc"),
+            "gc",
+            function_references,
+            other.function_references,
+            "WebAssembly function-references support",
+        )?;
+        Self::check_cfg_bool(
+            cfg!(feature = "gc"),
+            "gc",
+            gc,
+            other.gc,
+            "WebAssembly garbage collection support",
+        )?;
+
         Self::check_bool(
             multi_value,
             other.multi_value,
@@ -470,11 +510,6 @@ impl Metadata<'_> {
             other.relaxed_simd,
             "WebAssembly relaxed-simd support",
         )?;
-        Self::check_bool(
-            function_references,
-            other.function_references,
-            "WebAssembly function-references support",
-        )?;
 
         Ok(())
     }
@@ -483,16 +518,12 @@ impl Metadata<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    use crate::{Config, Engine, Module, ModuleVersionStrategy, OptLevel};
-
-    use anyhow::Result;
-    use tempfile::TempDir;
-
+    use crate::{Config, Module, OptLevel};
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
     };
+    use tempfile::TempDir;
 
     #[test]
     fn test_architecture_mismatch() -> Result<()> {

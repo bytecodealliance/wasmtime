@@ -1,4 +1,4 @@
-use crate::{FuzzGen, Type};
+use crate::FuzzGen;
 use anyhow::Result;
 use cranelift::codegen::cursor::{Cursor, FuncCursor};
 use cranelift::codegen::ir::{Function, Inst, Opcode};

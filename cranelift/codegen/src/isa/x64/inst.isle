@@ -90,20 +90,34 @@
              (dividend Gpr)
              (dst WritableGpr))
 
-       ;; The high (and low) bits of a (un)signed multiply: `RDX:RAX := RAX *
-       ;; rhs`.
-       (MulHi (size OperandSize)
-              (signed bool)
-              (src1 Gpr)
-              (src2 GprMem)
-              (dst_lo WritableGpr)
-              (dst_hi WritableGpr))
+       ;; Unsigned multiplication producing the high bits of the result in one
+       ;; register and the low bits in another register.
+       (Mul (size OperandSize)
+            (signed bool)
+            (src1 Gpr)
+            (src2 GprMem)
+            (dst_lo WritableGpr)
+            (dst_hi WritableGpr))
 
-       ;; x64 'mul' instruction but it only outputs the low half
-       (UMulLo    (size OperandSize)
-                  (src1 Gpr)
-                  (src2 GprMem)
-                  (dst WritableGpr))
+       ;; Same as `Mul` but the 16-bit multiplication result is stored in `AX`.
+       (Mul8 (signed bool)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst WritableGpr))
+
+       ;; The two-operand form of `imul` which produces a truncated same-size
+       ;; result as the operands.
+       (IMul (size OperandSize)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst WritableGpr))
+
+       ;; The three-operand form of `imul` where the third operand must be
+       ;; a constant.
+       (IMulImm (size OperandSize)
+                (src1 GprMem)
+                (src2 i32)
+                (dst WritableGpr))
 
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
@@ -511,10 +525,12 @@
 
        ;; Direct call: call simm32.
        (CallKnown (dest ExternalName)
+                  (opcode Opcode)
                   (info BoxCallInfo))
 
        ;; Indirect call: callq (reg mem)
        (CallUnknown (dest RegMem)
+                    (opcode Opcode)
                     (info BoxCallInfo))
 
        ;; Tail call to a direct destination.
@@ -750,8 +766,7 @@
             Sbb
             And
             Or
-            Xor
-            Mul))
+            Xor))
 
 (type AluRmROpcode
       (enum Andn
@@ -2046,22 +2061,6 @@
             (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
         dst))
 
-;; Helper for creating `MInst.MulHi` instructions.
-;;
-;; Returns the (lo, hi) register halves of the multiplication.
-(decl mul_hi (Type bool Gpr GprMem) ValueRegs)
-(rule (mul_hi ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.MulHi size
-                                       signed
-                                       src1
-                                       src2
-                                       dst_lo
-                                       dst_hi))))
-        (value_gprs dst_lo dst_hi)))
-
 ;; Helper for creating `MInst.UnaryRmR` instructions.
 (decl unary_rm_r (UnaryRmROpcode Gpr OperandSize) Gpr)
 (rule (unary_rm_r op src size)
@@ -2559,31 +2558,55 @@
                         dst)
          dst)))
 
-;; Helper for creating `mul` instructions.
-(decl x64_mul (Type Gpr GprMemImm) Gpr)
-(rule (x64_mul ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Mul)
-                 src1
-                 src2))
-
-;; Helper for creating `umullo` instructions.
-(decl x64_umullo (Type Gpr GprMem) Gpr)
-(rule (x64_umullo ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`)
+(decl x64_mul (Type bool Gpr GprMem) ValueRegs)
+(rule (x64_mul ty signed src1 src2)
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
             (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.UMulLo size src1 src2 dst))))
+            (_ Unit (emit (MInst.Mul size signed src1 src2 dst_lo dst_hi))))
+        (value_gprs dst_lo dst_hi)))
+
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`) for 8-bit operands.
+(decl x64_mul8 (bool Gpr GprMem) Gpr)
+(rule (x64_mul8 signed src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Mul8 signed src1 src2 dst))))
         dst))
 
-(decl x64_umullo_with_flags_paired (Type Gpr GprMem) ProducesFlags)
-(rule (x64_umullo_with_flags_paired ty src1 src2)
+;; Helper for creating `imul` instructions.
+(decl x64_imul (Type Gpr GprMem) Gpr)
+(rule (x64_imul ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.IMul size src1 src2 dst))))
+        dst))
+
+;; Helper for creating `imul` instructions with an immediate operand.
+(decl x64_imul_imm (Type GprMem i32) Gpr)
+(rule (x64_imul_imm ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.IMulImm size src1 src2 dst))))
+        dst))
+
+(decl x64_mul8_with_flags_paired (bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul8_with_flags_paired signed src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
            (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-                 (MInst.UMulLo (raw_operand_size_of_type ty)
-                               src1
-                               src2
-                               dst)
-                  dst)))
+                 (MInst.Mul8 signed src1 src2 dst)
+                 dst)))
+
+(decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty)))
+           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+                 (MInst.Mul size signed src1 src2 dst_lo dst_hi)
+                 dst_lo)))
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
@@ -3890,12 +3913,6 @@
                                              src3
                                              dst))))
         dst))
-
-;; Helper for creating `mul` instructions that return both the lower and
-;; (unsigned) higher halves of the result.
-(decl mulhi_u (Type Gpr GprMem) ValueRegs)
-(rule (mulhi_u ty src1 src2)
-      (mul_hi ty $false src1 src2))
 
 ;; Helper for creating `psllw` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)

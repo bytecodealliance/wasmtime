@@ -2,8 +2,7 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{ABIOperand, ABIResults, RetArea, ABI},
-    codegen::BuiltinFunctions,
+    abi::{vmctx, ABIOperand, ABIResults, RetArea, ABI},
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm, SPOffset, StackSlot},
@@ -27,7 +26,7 @@ use crate::{
 /// generation process. The code generation context should
 /// be generally used as the single entry point to access
 /// the compound functionality provided by its elements.
-pub(crate) struct CodeGenContext<'a, 'builtins: 'a> {
+pub(crate) struct CodeGenContext<'a> {
     /// The register allocator.
     pub regalloc: RegAlloc,
     /// The value stack.
@@ -36,19 +35,16 @@ pub(crate) struct CodeGenContext<'a, 'builtins: 'a> {
     pub frame: Frame,
     /// Reachability state.
     pub reachable: bool,
-    /// The built-in functions available to the JIT code.
-    pub builtins: &'builtins mut BuiltinFunctions,
     /// A reference to the VMOffsets.
     pub vmoffsets: &'a VMOffsets<u8>,
 }
 
-impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
+impl<'a> CodeGenContext<'a> {
     /// Create a new code generation context.
     pub fn new(
         regalloc: RegAlloc,
         stack: Stack,
         frame: Frame,
-        builtins: &'builtins mut BuiltinFunctions,
         vmoffsets: &'a VMOffsets<u8>,
     ) -> Self {
         Self {
@@ -56,7 +52,6 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             stack,
             frame,
             reachable: true,
-            builtins,
             vmoffsets,
         }
     }
@@ -95,6 +90,12 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     /// request the next available general purpose register.
     pub fn any_gpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
         self.reg_for_class(RegClass::Int, masm)
+    }
+
+    /// Convenience wrapper around `CodeGenContext::reg_for_class`, to
+    /// request the next available floating point register.
+    pub fn any_fpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
+        self.reg_for_class(RegClass::Float, masm)
     }
 
     /// Executes the provided function, guaranteeing that the specified set of
@@ -183,10 +184,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             Val::F32(v) => masm.store(RegImm::f32(v.bits()), addr, size),
             Val::F64(v) => masm.store(RegImm::f64(v.bits()), addr, size),
             Val::Local(local) => {
-                let slot = self
-                    .frame
-                    .get_local(local.index)
-                    .unwrap_or_else(|| panic!("invalid local at index = {}", local.index));
+                let slot = self.frame.get_wasm_local(local.index);
                 let scratch = <M::ABI as ABI>::scratch_reg();
                 let local_addr = masm.local_address(&slot);
                 masm.load(local_addr, scratch, size);
@@ -210,12 +208,9 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             Val::F32(imm) => masm.mov(RegImm::f32(imm.bits()), dst, size),
             Val::F64(imm) => masm.mov(RegImm::f64(imm.bits()), dst, size),
             Val::Local(local) => {
-                let slot = self
-                    .frame
-                    .get_local(local.index)
-                    .unwrap_or_else(|| panic!("invalid local at index = {}", local.index));
+                let slot = self.frame.get_wasm_local(local.index);
                 let addr = masm.local_address(&slot);
-                masm.load(addr, dst, slot.ty.into());
+                masm.load(addr, dst, size);
             }
             Val::Memory(mem) => {
                 let addr = masm.address_from_sp(mem.slot.offset);
@@ -268,7 +263,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         let dst = match size {
             OperandSize::S32 => TypedReg::i32(dst),
             OperandSize::S64 => TypedReg::i64(dst),
-            OperandSize::S128 => unreachable!(),
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
         self.stack.push(dst.into());
     }
@@ -499,6 +494,15 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         }
     }
 
+    /// Load the [VMContext] pointer into the designated pinned register.
+    pub fn load_vmctx<M>(&mut self, masm: &mut M)
+    where
+        M: MacroAssembler,
+    {
+        let addr = masm.local_address(&self.frame.vmctx_slot);
+        masm.load_ptr(addr, vmctx!(M));
+    }
+
     /// Spill locals and registers to memory.
     // TODO: optimize the spill range;
     // At any point in the program, the stack might already contain memory
@@ -517,7 +521,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                 *v = Val::mem(r.ty, slot);
             }
             Val::Local(local) => {
-                let slot = frame.get_local(local.index).expect("valid local at slot");
+                let slot = frame.get_wasm_local(local.index);
                 let addr = masm.local_address(&slot);
                 let scratch = <M::ABI as ABI>::scratch_for(&slot.ty);
                 masm.load(addr, scratch, slot.ty.into());

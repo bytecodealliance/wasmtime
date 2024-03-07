@@ -1,7 +1,7 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::preview2::command::sync::{add_to_linker, Command};
+use wasmtime_wasi::command::sync::{add_to_linker, Command};
 
 fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
@@ -295,6 +295,18 @@ fn preview2_stream_pollable_traps() {
     assert_eq!(
         format!("{}", e.source().expect("trap source")),
         "resource has children"
+    )
+}
+#[test_log::test]
+fn preview2_pollable_correct() {
+    run(PREVIEW2_POLLABLE_CORRECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_pollable_traps() {
+    let e = run(PREVIEW2_POLLABLE_TRAPS_COMPONENT, false).unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "empty poll list"
     )
 }
 #[test_log::test]

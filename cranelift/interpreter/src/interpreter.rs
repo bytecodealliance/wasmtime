@@ -16,7 +16,6 @@ use cranelift_codegen::ir::{
 };
 use log::trace;
 use smallvec::SmallVec;
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::iter;
 use thiserror::Error;
@@ -556,7 +555,6 @@ mod tests {
     use super::*;
     use crate::step::CraneliftTrap;
     use cranelift_codegen::ir::immediates::Ieee32;
-    use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
     use smallvec::smallvec;
 

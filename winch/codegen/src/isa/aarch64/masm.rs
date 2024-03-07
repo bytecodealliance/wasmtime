@@ -1,12 +1,12 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, HeapData, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv, HeapData, TableData},
     isa::reg::Reg,
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
         MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
-        StackSlot, TrapCode,
+        StackSlot, TrapCode, TruncKind,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -38,7 +38,7 @@ impl Masm for MacroAssembler {
     type Ptr = u8;
     type ABI = Aarch64ABI;
 
-    fn prologue(&mut self) {
+    fn frame_setup(&mut self) {
         let lr = regs::lr();
         let fp = regs::fp();
         let sp = regs::sp();
@@ -49,19 +49,12 @@ impl Masm for MacroAssembler {
         self.move_sp_to_shadow_sp();
     }
 
-    fn check_stack(&mut self) {
-        // TODO: implement when we have more complete assembler support
+    fn check_stack(&mut self, _vmctx: Reg) {
+        // TODO: Implement when we have more complete assembler support.
     }
 
-    fn epilogue(&mut self, locals_size: u32) {
-        assert!(self.sp_offset == locals_size);
-
-        let sp = regs::sp();
-        if locals_size > 0 {
-            self.asm
-                .add_ir(locals_size as u64, sp, sp, OperandSize::S64);
-            self.move_sp_to_shadow_sp();
-        }
+    fn frame_restore(&mut self) {
+        assert_eq!(self.sp_offset, 0);
 
         let lr = regs::lr();
         let fp = regs::fp();
@@ -83,8 +76,16 @@ impl Masm for MacroAssembler {
         self.increment_sp(bytes);
     }
 
-    fn free_stack(&mut self, _bytes: u32) {
-        todo!()
+    fn free_stack(&mut self, bytes: u32) {
+        if bytes == 0 {
+            return;
+        }
+
+        let sp = regs::sp();
+        self.asm.add_ir(bytes as u64, sp, sp, OperandSize::S64);
+        self.move_sp_to_shadow_sp();
+
+        self.decrement_sp(bytes);
     }
 
     fn reset_stack_pointer(&mut self, offset: SPOffset) {
@@ -158,6 +159,10 @@ impl Masm for MacroAssembler {
         self.asm.str(src, dst, size);
     }
 
+    fn wasm_store(&mut self, _src: Reg, _dst: Self::Address, _size: OperandSize) {
+        todo!()
+    }
+
     fn call(
         &mut self,
         _stack_args_size: u32,
@@ -171,6 +176,16 @@ impl Masm for MacroAssembler {
     }
 
     fn load_ptr(&mut self, _src: Self::Address, _dst: Reg) {
+        todo!()
+    }
+
+    fn wasm_load(
+        &mut self,
+        _src: Self::Address,
+        _dst: Reg,
+        _size: OperandSize,
+        _kind: Option<ExtendKind>,
+    ) {
         todo!()
     }
 
@@ -229,6 +244,17 @@ impl Masm for MacroAssembler {
                 self.asm.add_rrr(rm, rn, rd, size);
             }
         }
+    }
+
+    fn checked_uadd(
+        &mut self,
+        _dst: Reg,
+        _lhs: Reg,
+        _rhs: RegImm,
+        _size: OperandSize,
+        _trap: TrapCode,
+    ) {
+        todo!()
     }
 
     fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
@@ -303,11 +329,13 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn float_round(
+    fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
         &mut self,
         _mode: RoundingMode,
+        _env: &mut FuncEnv<Self::Ptr>,
         _context: &mut CodeGenContext,
         _size: OperandSize,
+        _fallback: F,
     ) {
         todo!();
     }
@@ -354,6 +382,7 @@ impl Masm for MacroAssembler {
         _dst: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
+        _kind: TruncKind,
     ) {
         todo!()
     }
@@ -365,6 +394,7 @@ impl Masm for MacroAssembler {
         _tmp_fpr: Reg,
         _src_size: OperandSize,
         _dst_size: OperandSize,
+        _kind: TruncKind,
     ) {
         todo!()
     }
@@ -408,13 +438,13 @@ impl Masm for MacroAssembler {
 
     fn push(&mut self, reg: Reg, _size: OperandSize) -> StackSlot {
         let size = <Self::ABI as abi::ABI>::word_bytes();
-        self.reserve_stack(size);
+        self.reserve_stack(size as u32);
         let address = Address::from_shadow_sp(size as i64);
         self.asm.str(reg, address, OperandSize::S64);
 
         StackSlot {
             offset: SPOffset::from_u32(self.sp_offset),
-            size,
+            size: size as u32,
         }
     }
 
@@ -489,6 +519,10 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn trap(&mut self, _code: TrapCode) {
+        todo!()
+    }
+
     fn trapz(&mut self, _src: Reg, _code: TrapCode) {
         todo!()
     }
@@ -501,6 +535,10 @@ impl Masm for MacroAssembler {
 impl MacroAssembler {
     fn increment_sp(&mut self, bytes: u32) {
         self.sp_offset += bytes;
+    }
+
+    fn decrement_sp(&mut self, bytes: u32) {
+        self.sp_offset -= bytes;
     }
 
     // Copies the value of the stack pointer to the shadow stack

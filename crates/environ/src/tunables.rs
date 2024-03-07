@@ -1,7 +1,7 @@
 use serde_derive::{Deserialize, Serialize};
 
 /// Tunable parameters for WebAssembly compilation.
-#[derive(Clone, Hash, Serialize, Deserialize)]
+#[derive(Clone, Hash, Serialize, Deserialize, Debug)]
 pub struct Tunables {
     /// For static heaps, the size in wasm pages of the heap protected by bounds
     /// checking.
@@ -56,52 +56,32 @@ pub struct Tunables {
     pub tail_callable: bool,
 }
 
-impl Default for Tunables {
-    fn default() -> Self {
-        let (static_memory_bound, static_memory_offset_guard_size) = if cfg!(miri) {
-            // No virtual memory tricks are available on miri so make these
-            // limits quite conservative.
-            ((1 << 20) / crate::WASM_PAGE_SIZE as u64, 0)
-        } else if cfg!(target_pointer_width = "64") {
-            // 64-bit has tons of address space to static memories can have 4gb
-            // address space reservations liberally by default, allowing us to
-            // help eliminate bounds checks.
-            //
-            // Coupled with a 2 GiB address space guard it lets us translate
-            // wasm offsets into x86 offsets as aggressively as we can.
-            (0x1_0000, 0x8000_0000)
+impl Tunables {
+    /// Returns a `Tunables` configuration assumed for running code on the host.
+    pub fn default_host() -> Self {
+        if cfg!(miri) {
+            Tunables::default_miri()
         } else if cfg!(target_pointer_width = "32") {
-            // For 32-bit we scale way down to 10MB of reserved memory. This
-            // impacts performance severely but allows us to have more than a
-            // few instances running around.
-            ((10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64, 0x1_0000)
+            Tunables::default_u32()
+        } else if cfg!(target_pointer_width = "64") {
+            Tunables::default_u64()
         } else {
             panic!("unsupported target_pointer_width");
-        };
-        Self {
-            static_memory_bound,
-            static_memory_offset_guard_size,
+        }
+    }
 
-            // Size in bytes of the offset guard for dynamic memories.
-            //
-            // Allocate a small guard to optimize common cases but without
-            // wasting too much memory.
-            dynamic_memory_offset_guard_size: if cfg!(miri) { 0 } else { 0x1_0000 },
+    /// Returns the default set of tunables for running under MIRI.
+    pub fn default_miri() -> Tunables {
+        Tunables {
+            // No virtual memory tricks are available on miri so make these
+            // limits quite conservative.
+            static_memory_bound: (1 << 20) / crate::WASM_PAGE_SIZE as u64,
+            static_memory_offset_guard_size: 0,
+            dynamic_memory_offset_guard_size: 0,
+            dynamic_memory_growth_reserve: 0,
 
-            // We've got lots of address space on 64-bit so use a larger
-            // grow-into-this area, but on 32-bit we aren't as lucky. Miri is
-            // not exactly fast so reduce memory consumption instead of trying
-            // to avoid memory movement.
-            dynamic_memory_growth_reserve: if cfg!(miri) {
-                0
-            } else if cfg!(target_pointer_width = "64") {
-                2 << 30 // 2GB
-            } else if cfg!(target_pointer_width = "32") {
-                1 << 20 // 1MB
-            } else {
-                panic!("unsupported target_pointer_width");
-            },
-
+            // General options which have the same defaults regardless of
+            // architecture.
             generate_native_debuginfo: false,
             parse_wasm_debuginfo: true,
             consume_fuel: false,
@@ -112,6 +92,49 @@ impl Default for Tunables {
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
             tail_callable: false,
+        }
+    }
+
+    /// Returns the default set of tunables for running under a 32-bit host.
+    pub fn default_u32() -> Tunables {
+        Tunables {
+            // For 32-bit we scale way down to 10MB of reserved memory. This
+            // impacts performance severely but allows us to have more than a
+            // few instances running around.
+            static_memory_bound: (10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64,
+            static_memory_offset_guard_size: 0x1_0000,
+            dynamic_memory_offset_guard_size: 0x1_0000,
+            dynamic_memory_growth_reserve: 1 << 20, // 1MB
+
+            ..Tunables::default_miri()
+        }
+    }
+
+    /// Returns the default set of tunables for running under a 64-bit host.
+    pub fn default_u64() -> Tunables {
+        Tunables {
+            // 64-bit has tons of address space to static memories can have 4gb
+            // address space reservations liberally by default, allowing us to
+            // help eliminate bounds checks.
+            //
+            // Coupled with a 2 GiB address space guard it lets us translate
+            // wasm offsets into x86 offsets as aggressively as we can.
+            static_memory_bound: 0x1_0000,
+            static_memory_offset_guard_size: 0x8000_0000,
+
+            // Size in bytes of the offset guard for dynamic memories.
+            //
+            // Allocate a small guard to optimize common cases but without
+            // wasting too much memory.
+            dynamic_memory_offset_guard_size: 0x1_0000,
+
+            // We've got lots of address space on 64-bit so use a larger
+            // grow-into-this area, but on 32-bit we aren't as lucky. Miri is
+            // not exactly fast so reduce memory consumption instead of trying
+            // to avoid memory movement.
+            dynamic_memory_growth_reserve: 2 << 30, // 2GB
+
+            ..Tunables::default_miri()
         }
     }
 }

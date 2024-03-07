@@ -82,25 +82,15 @@ jobs:
           echo "PR_TITLE=Bump Wasmtime to $num" >> $GITHUB_ENV
           echo "PR_BASE=main" >> $GITHUB_ENV
           cat > pr-body <<-EOF
-          This is an [automated pull request][process] from CI which indicates
-          that the next [\`release-$cur\` branch][branch] has been created and
-          the \`main\` branch is getting its version number bumped from $cur to
-          $num.
+          This is an [automated pull request][process] from CI which indicates that the next [\`release-$cur\` branch][branch] has been created and the \`main\` branch is getting its version number bumped from $cur to $num.
 
-          Maintainers should take a moment to review the [release
-          notes][RELEASES.md] for $cur, and if any changes are necessary send
-          PRs to the \`main\` branch to update [RELEASES.md] and then backport
-          these PRs to the [release branch][branch].
+          Maintainers should take a moment to review the [release notes][RELEASES.md] for $cur, and if any changes are necessary send PRs to the \`main\` branch to update [RELEASES.md] and then backport these PRs to the [release branch][branch].
 
-          Maintainers should also review that aarch64-apple-darwin builds
-          are passing via [embark's CI](https://buildkite.com/embark-studios/wasmtime-aarch64-apple-darwin).
+          Maintainers should also review that aarch64-apple-darwin builds are passing via [embark's CI](https://buildkite.com/embark-studios/wasmtime-aarch64-apple-darwin).
 
-          Another automated PR will be made in roughly 2 weeks time when for
-          the actual release itself.
+          Another automated PR will be made in roughly 2 weeks time when for the actual release itself.
 
-          If any issues arise on the \`main\` branch before the release is made
-          then the issue should first be fixed on \`main\` and then backported
-          to the \`release-$cur\` branch.
+          If any issues arise on the \`main\` branch before the release is made then the issue should first be fixed on \`main\` and then backport to the \`release-$cur\` branch.
 
           [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
           [branch]: https://github.com/${{ github.repository }}/tree/release-$cur
@@ -132,10 +122,7 @@ jobs:
           # make a second PR to the `main` branch to note the release date in
           # the release notes.
           cat > pr-body <<-EOF
-          This is an [automated pull request][process] from CI which is updating
-          the release date of Wasmtime $cur to today. This PR's base branch
-          is \`main\` and a second PR will be coming to perform the actual
-          release which will be targeted at \`release-$cur\`.
+          This is an [automated pull request][process] from CI which is updating the release date of Wasmtime $cur to today. This PR's base branch is \`main\` and a second PR will be coming to perform the actual release which will be targeted at \`release-$cur\`.
 
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           EOF
@@ -172,15 +159,9 @@ jobs:
           echo "PR_TITLE=Release Wasmtime $cur" >> $GITHUB_ENV
           echo "PR_BASE=release-$cur" >> $GITHUB_ENV
           cat > pr-body <<-EOF
-          This is an [automated pull request][process] from CI which is
-          intended to notify maintainers that it's time to release Wasmtime
-          $cur. The [release branch][branch] was created roughly two weeks ago
-          and it's now time for it to be published and released.
+          This is an [automated pull request][process] from CI which is intended to notify maintainers that it's time to release Wasmtime $cur. The [release branch][branch] was created roughly two weeks ago and it's now time for it to be published and released.
 
-          It's recommended that maintainers double-check that [RELEASES.md]
-          is up-to-date and that there are no known issues before merging this
-          PR. When this PR is merged a release tag will automatically be
-          created, crates will be published, and CI artifacts will be produced.
+          It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically created, crates will be published, and CI artifacts will be produced.
 
           [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
@@ -214,13 +195,9 @@ jobs:
           echo "PR_TITLE=Release Wasmtime $num" >> $GITHUB_ENV
           echo "PR_BASE=${{ github.ref_name }}" >> $GITHUB_ENV
           cat > pr-body <<-EOF
-          This is an [automated pull request][process] from CI to create a patch
-          release for Wasmtime $num, requested by @${{ github.actor }}.
+          This is an [automated pull request][process] from CI to create a patch release for Wasmtime $num, requested by @${{ github.actor }}.
 
-          It's recommended that maintainers double-check that [RELEASES.md]
-          is up-to-date and that there are no known issues before merging this
-          PR. When this PR is merged a release tag will automatically be
-          created, crates will be published, and CI artifacts will be produced.
+          It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically be created, crates will be published, and CI artifacts will be produced.
 
           [RELEASES.md]: https://github.com/${{ github.repository }}/blob/main/RELEASES.md
           [process]: https://docs.wasmtime.dev/contributing-release-process.html

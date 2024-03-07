@@ -2,9 +2,11 @@ use crate::{
     code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
     type_registry::TypeCollection, Engine, Module, ResourcesRequired,
 };
+use crate::{FuncType, ValType};
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::mem;
+use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -20,8 +22,36 @@ use wasmtime_runtime::{
 };
 
 /// A compiled WebAssembly Component.
-//
-// FIXME: need to write more docs here.
+///
+/// This structure represents a compiled component that is ready to be
+/// instantiated. This owns a region of virtual memory which contains executable
+/// code compiled from a WebAssembly binary originally. This is the analog of
+/// [`Module`](crate::Module) in the component embedding API.
+///
+/// A [`Component`] can be turned into an
+/// [`Instance`](crate::component::Instance) through a
+/// [`Linker`](crate::component::Linker). [`Component`]s are safe to share
+/// across threads. The compilation model of a component is the same as that of
+/// [a module](crate::Module) which is to say:
+///
+/// * Compilation happens synchronously during [`Component::new`].
+/// * The result of compilation can be saved into storage with
+///   [`Component::serialize`].
+/// * A previously compiled artifact can be parsed with
+///   [`Component::deserialize`].
+/// * No compilation happens at runtime for a component — everything is done
+///   by the time [`Component::new`] returns.
+///
+/// ## Components and `Clone`
+///
+/// Using `clone` on a `Component` is a cheap operation. It will not create an
+/// entirely new component, but rather just a new reference to the existing
+/// component. In other words it's a shallow copy, not a deep copy.
+///
+/// ## Examples
+///
+/// For example usage see the documentation of [`Module`](crate::Module) as
+/// [`Component`] has the same high-level API.
 #[derive(Clone)]
 pub struct Component {
     inner: Arc<ComponentInner>,
@@ -44,6 +74,11 @@ struct ComponentInner {
 
     /// Metadata produced during compilation.
     info: CompiledComponentInfo,
+
+    /// A cached handle to the `wasmtime::FuncType` for the canonical ABI's
+    /// `realloc`, to avoid the need to look up types in the registry and take
+    /// locks when calling `realloc` via `TypedFunc::call_raw`.
+    realloc_func_type: Arc<dyn std::any::Any + Send + Sync>,
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -53,12 +88,66 @@ pub(crate) struct AllCallFuncPointers {
 }
 
 impl Component {
-    /// Compiles a new WebAssembly component from the in-memory wasm image
+    /// Compiles a new WebAssembly component from the in-memory list of bytes
     /// provided.
-    //
-    // FIXME: need to write more docs here.
+    ///
+    /// The `bytes` provided can either be the binary or text format of a
+    /// [WebAssembly component]. Note that the text format requires the `wat`
+    /// feature of this crate to be enabled. This API does not support
+    /// streaming compilation.
+    ///
+    /// This function will synchronously validate the entire component,
+    /// including all core modules, and then compile all components, modules,
+    /// etc., found within the provided bytes.
+    ///
+    /// [WebAssembly component]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md
+    ///
+    /// # Errors
+    ///
+    /// This function may fail and return an error. Errors may include
+    /// situations such as:
+    ///
+    /// * The binary provided could not be decoded because it's not a valid
+    ///   WebAssembly binary
+    /// * The WebAssembly binary may not validate (e.g. contains type errors)
+    /// * Implementation-specific limits were exceeded with a valid binary (for
+    ///   example too many locals)
+    /// * The wasm binary may use features that are not enabled in the
+    ///   configuration of `engine`
+    /// * If the `wat` feature is enabled and the input is text, then it may be
+    ///   rejected if it fails to parse.
+    ///
+    /// The error returned should contain full information about why compilation
+    /// failed.
+    ///
+    /// # Examples
+    ///
+    /// The `new` function can be invoked with a in-memory array of bytes:
+    ///
+    /// ```no_run
+    /// # use wasmtime::*;
+    /// # use wasmtime::component::Component;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let engine = Engine::default();
+    /// # let wasm_bytes: Vec<u8> = Vec::new();
+    /// let component = Component::new(&engine, &wasm_bytes)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Or you can also pass in a string to be parsed as the wasm text
+    /// format:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # use wasmtime::component::Component;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let engine = Engine::default();
+    /// let component = Component::new(&engine, "(component (core module))")?;
+    /// # Ok(())
+    /// # }
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -66,12 +155,13 @@ impl Component {
         Component::from_binary(engine, &bytes)
     }
 
-    /// Compiles a new WebAssembly component from a wasm file on disk pointed to
-    /// by `file`.
-    //
-    // FIXME: need to write more docs here.
+    /// Compiles a new WebAssembly component from a wasm file on disk pointed
+    /// to by `file`.
+    ///
+    /// This is a convenience function for reading the contents of `file` on
+    /// disk and then calling [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
         match Self::new(
             engine,
@@ -94,10 +184,15 @@ impl Component {
 
     /// Compiles a new WebAssembly component from the in-memory wasm image
     /// provided.
-    //
-    // FIXME: need to write more docs here.
+    ///
+    /// This function is the same as [`Component::new`] except that it does not
+    /// accept the text format of WebAssembly. Even if the `wat` feature
+    /// is enabled an error will be returned here if `binary` is the text
+    /// format.
+    ///
+    /// For more information on semantics and errors see [`Component::new`].
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
         use crate::compile::build_component_artifacts;
         use crate::module::HashedEngineCompileEnv;
@@ -154,11 +249,16 @@ impl Component {
 
     /// Same as [`Module::deserialize`], but for components.
     ///
-    /// Note that the file referenced here must contain contents previously
+    /// Note that the bytes referenced here must contain contents previously
     /// produced by [`Engine::precompile_component`] or
     /// [`Component::serialize`].
     ///
     /// For more information see the [`Module::deserialize`] method.
+    ///
+    /// # Unsafety
+    ///
+    /// The unsafety of this method is the same as that of the
+    /// [`Module::deserialize`] method.
     ///
     /// [`Module::deserialize`]: crate::Module::deserialize
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
@@ -168,8 +268,16 @@ impl Component {
 
     /// Same as [`Module::deserialize_file`], but for components.
     ///
-    /// For more information see the [`Component::deserialize`] and
-    /// [`Module::deserialize_file`] methods.
+    /// Note that the file referenced here must contain contents previously
+    /// produced by [`Engine::precompile_component`] or
+    /// [`Component::serialize`].
+    ///
+    /// For more information see the [`Module::deserialize_file`] method.
+    ///
+    /// # Unsafety
+    ///
+    /// The unsafety of this method is the same as that of the
+    /// [`Module::deserialize_file`] method.
     ///
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Component> {
@@ -207,7 +315,7 @@ impl Component {
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the
         // component and for all included core wasm modules.
-        let signatures = TypeCollection::new_for_module(engine.signatures(), types.module_types());
+        let signatures = TypeCollection::new_for_module(engine, types.module_types());
 
         // Assemble the `CodeObject` artifact which is shared by all core wasm
         // modules as well as the final component.
@@ -222,12 +330,19 @@ impl Component {
             .map(|(_, info)| Module::from_parts_raw(engine, code.clone(), info, false))
             .collect::<Result<_>>()?;
 
+        let realloc_func_type = Arc::new(FuncType::new(
+            engine,
+            [ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+            [ValType::I32],
+        )) as _;
+
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 ty,
                 static_modules,
                 code,
                 info,
+                realloc_func_type,
             }),
         })
     }
@@ -410,6 +525,15 @@ impl Component {
         }
         Some(resources)
     }
+
+    /// Returns the range, in the host's address space, that this module's
+    /// compiled code resides at.
+    ///
+    /// For more information see
+    /// [`Module;:image_range`](crate::Module::image_range).
+    pub fn image_range(&self) -> Range<*const u8> {
+        self.inner.code.code_memory().mmap().image_range()
+    }
 }
 
 impl ComponentRuntimeInfo for ComponentInner {
@@ -424,6 +548,10 @@ impl ComponentRuntimeInfo for ComponentInner {
             // variant, so this shouldn't be possible.
             crate::code::Types::Module(_) => unreachable!(),
         }
+    }
+
+    fn realloc_func_type(&self) -> &Arc<dyn std::any::Any + Send + Sync> {
+        &self.realloc_func_type
     }
 }
 

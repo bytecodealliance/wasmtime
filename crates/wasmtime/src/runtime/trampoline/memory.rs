@@ -3,7 +3,6 @@ use crate::module::BareModuleInfo;
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use anyhow::{anyhow, Result};
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::sync::Arc;
 use wasmtime_environ::{
@@ -40,7 +39,7 @@ pub fn create_memory(
     // preallocated (i.e., shared memory) or allocated manually below.
     let plan = wasmtime_environ::MemoryPlan::for_memory(
         memory_ty.wasmtime_memory().clone(),
-        &store.engine().config().tunables,
+        store.engine().tunables(),
     );
     let memory_id = module.memory_plans.push(plan.clone());
 

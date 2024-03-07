@@ -7,8 +7,8 @@ pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm}
 use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
-    dynamic_to_fixed, AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue,
-    Immediate, InstructionData, MemFlags, Opcode, StackSlot, Table, TrapCode, Type, Value,
+    AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue, Immediate,
+    InstructionData, MemFlags, Opcode, StackSlot, Table, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
@@ -261,5 +261,24 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     type uextend_maybe_etor_returns = MaybeUnaryEtorIter<'a, 'b, 'c>;
     fn uextend_maybe_etor(&mut self, value: Value, returns: &mut Self::uextend_maybe_etor_returns) {
         *returns = MaybeUnaryEtorIter::new(Opcode::Uextend, value);
+    }
+
+    // NB: Cranelift's defined semantics for `fcvt_from_{s,u}int` match Rust's
+    // own semantics for converting an integer to a float, so these are all
+    // implemented with `as` conversions in Rust.
+    fn f32_from_uint(&mut self, n: u64) -> Ieee32 {
+        Ieee32::with_float(n as f32)
+    }
+
+    fn f64_from_uint(&mut self, n: u64) -> Ieee64 {
+        Ieee64::with_float(n as f64)
+    }
+
+    fn f32_from_sint(&mut self, n: i64) -> Ieee32 {
+        Ieee32::with_float(n as f32)
+    }
+
+    fn f64_from_sint(&mut self, n: i64) -> Ieee64 {
+        Ieee64::with_float(n as f64)
     }
 }

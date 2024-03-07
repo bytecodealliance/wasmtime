@@ -1,8 +1,6 @@
 use crate::ir::{MemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::settings;
-use alloc::vec::Vec;
 use smallvec::smallvec;
 
 #[cfg(test)]

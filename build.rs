@@ -203,17 +203,42 @@ fn write_testsuite_tests(
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     assert!(strategy == "Cranelift" || strategy == "Winch");
 
-    // Ignore everything except the winch misc test suite.
+    // Ignore some tests for when testing Winch.
     if strategy == "Winch" {
         if testsuite == "misc_testsuite" {
-            // The misc/call_indirect is fully supported by Winch.
-            if testname != "call_indirect" {
-                return true;
-            }
+            let denylist = [
+                "externref_id_function",
+                "int_to_float_splat",
+                "issue6562",
+                "many_table_gets_lead_to_gc",
+                "mutable_externref_globals",
+                "no_mixup_stack_maps",
+                "no_panic",
+                "simple_ref_is_null",
+                "table_grow_with_funcref",
+            ];
+            return denylist.contains(&testname);
         }
         if testsuite == "spec_testsuite" {
-            // The official following tests are supported.
-            return !["table_init", "table_copy"].contains(&testname);
+            let denylist = [
+                "br_table",
+                "global",
+                "table_fill",
+                "table_get",
+                "table_set",
+                "table_grow",
+                "table_size",
+                "elem",
+                "select",
+                "unreached_invalid",
+                "linking",
+            ]
+            .contains(&testname);
+
+            let ref_types = testname.starts_with("ref_");
+            let simd = testname.starts_with("simd_");
+
+            return denylist || ref_types || simd;
         }
 
         if testsuite != "winch" {

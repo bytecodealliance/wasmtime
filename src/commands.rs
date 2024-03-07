@@ -1,6 +1,8 @@
 //! The module for the Wasmtime CLI commands.
 
+#[cfg(feature = "run")]
 mod run;
+#[cfg(feature = "run")]
 pub use self::run::*;
 
 #[cfg(feature = "serve")]

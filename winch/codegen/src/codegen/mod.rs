@@ -1,14 +1,20 @@
 use crate::{
-    abi::{ABIOperand, ABISig, RetArea, ABI},
+    abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
     codegen::BlockSig,
     isa::reg::Reg,
-    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
+    masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::TypedReg,
 };
+
 use anyhow::Result;
 use smallvec::SmallVec;
-use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
-use wasmtime_environ::{PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType, FUNCREF_MASK};
+use wasmparser::{
+    BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
+};
+use wasmtime_environ::{
+    GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType,
+    FUNCREF_MASK,
+};
 
 mod context;
 pub(crate) use context::*;
@@ -20,6 +26,9 @@ mod control;
 pub(crate) use control::*;
 mod builtin;
 pub use builtin::*;
+pub(crate) mod bounds;
+
+use bounds::{Bounds, ImmOffset, Index};
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M>
@@ -30,7 +39,7 @@ where
     pub sig: ABISig,
 
     /// The code generation context.
-    pub context: CodeGenContext<'a, 'translation>,
+    pub context: CodeGenContext<'a>,
 
     /// A reference to the function compilation environment.
     pub env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
@@ -50,7 +59,7 @@ where
 {
     pub fn new(
         masm: &'a mut M,
-        context: CodeGenContext<'a, 'translation>,
+        context: CodeGenContext<'a>,
         env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
         sig: ABISig,
     ) -> Self {
@@ -77,12 +86,23 @@ where
     }
 
     fn emit_start(&mut self) -> Result<()> {
-        self.masm.prologue();
-        self.masm.reserve_stack(self.context.frame.locals_size);
+        let vmctx = self
+            .sig
+            .params()
+            .first()
+            .expect("VMContext argument")
+            .unwrap_reg()
+            .into();
 
-        // Check for stack overflow after reserving space, so that we get the most up-to-date view
-        // of the stack pointer. This assumes that no writes to the stack occur in `reserve_stack`.
-        self.masm.check_stack();
+        // We need to use the vmctx paramter before pinning it for stack checking, and we don't
+        // have any callee save registers in the winch calling convention.
+        self.masm.prologue(vmctx, &[]);
+
+        // Pin the `VMContext` pointer.
+        self.masm
+            .mov(vmctx.into(), vmctx!(M), self.env.ptr_type().into());
+
+        self.masm.reserve_stack(self.context.frame.locals_size);
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
@@ -151,12 +171,6 @@ where
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
         self.masm.zero_mem_range(defined_locals_range.as_range());
-
-        // Save the vmctx pointer to its local slot in case we need to reload it
-        // at any point.
-        let vmctx_addr = self.masm.local_address(&self.context.frame.vmctx_slot);
-        self.masm
-            .store_ptr(<M::ABI as ABI>::vmctx_reg().into(), vmctx_addr);
 
         // Save the results base parameter register into its slot.
         self.sig.params.has_retptr().then(|| {
@@ -302,7 +316,8 @@ where
             self.masm.reset_stack_pointer(base);
         }
         debug_assert_eq!(self.context.stack.len(), 0);
-        self.masm.epilogue(self.context.frame.locals_size);
+        self.masm.free_stack(self.context.frame.locals_size);
+        self.masm.epilogue(&[]);
         Ok(())
     }
 
@@ -317,11 +332,7 @@ where
             .filter(|(_, a)| a.is_reg())
             .for_each(|(index, arg)| {
                 let ty = arg.ty();
-                let local = self
-                    .context
-                    .frame
-                    .get_local(index as u32)
-                    .expect("valid local slot at location");
+                let local = self.context.frame.get_frame_local(index);
                 let addr = self.masm.local_address(local);
                 let src = arg
                     .get_reg()
@@ -357,19 +368,35 @@ where
         src
     }
 
+    /// Loads the address of the given global.
+    pub fn emit_get_global_addr(&mut self, index: GlobalIndex) -> (WasmValType, M::Address) {
+        let data = self.env.resolve_global(index);
+
+        let addr = if data.imported {
+            let global_base = self.masm.address_at_reg(vmctx!(M), data.offset);
+            let scratch = <M::ABI as ABI>::scratch_reg();
+            self.masm.load_ptr(global_base, scratch);
+            self.masm.address_at_reg(scratch, 0)
+        } else {
+            self.masm.address_at_reg(vmctx!(M), data.offset)
+        };
+
+        (data.ty, addr)
+    }
+
     pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) {
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
         let builtin = self
-            .context
+            .env
             .builtins
             .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
 
-        // Request the builtin's  result register and use it to hold the
-        // table element value. We preemptively request this register to
-        // avoid conflict at the control flow merge below.
-        // Requesting the result register is safe since we know ahead-of-time
-        // the builtin's signature.
+        // Request the builtin's  result register and use it to hold the table
+        // element value. We preemptively spill and request this register to
+        // avoid conflict at the control flow merge below. Requesting the result
+        // register is safe since we know ahead-of-time the builtin's signature.
+        self.context.spill(self.masm);
         let elem_value: Reg = self
             .context
             .reg(
@@ -392,11 +419,9 @@ where
         let (defined, cont) = (self.masm.get_label(), self.masm.get_label());
 
         // Push the built-in arguments to the stack.
-        self.context.stack.extend([
-            TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into(),
-            table_index.as_u32().try_into().unwrap(),
-            index.into(),
-        ]);
+        self.context
+            .stack
+            .extend([table_index.as_u32().try_into().unwrap(), index.into()]);
 
         self.masm.branch(
             IntCmpKind::Ne,
@@ -409,9 +434,11 @@ where
         // This is safe since the FnCall::emit call below, will ensure
         // that the result register is placed on the value stack.
         self.context.free_reg(elem_value);
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
-            Callee::Builtin(builtin.clone())
-        });
+        FnCall::emit::<M, M::Ptr>(
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin.clone()),
+        );
 
         // We know the signature of the libcall in this case, so we assert that there's
         // one element in the stack and that it's  the ABI signature's result register.
@@ -429,6 +456,210 @@ where
         self.masm.and(dst, dst, imm, top.ty.into());
 
         self.masm.bind(cont);
+    }
+
+    /// Emits a series of instructions to bounds check and calculate the address
+    /// of the given WebAssembly memory.
+    /// This function returns a register containing the requested address.
+    ///
+    /// In essence, when computing the heap address for a WebAssembly load or
+    /// store instruction the objective is to ensure that such access is safe,
+    /// but also to perform the least amount of checks, and rely on the system to
+    /// detect illegal memory accesses where applicable.
+    ///
+    /// Winch follows almost the same principles as Cranelift when it comes to
+    /// bounds checks, for a more detailed explanation refer to
+    /// [cranelift_wasm::code_translator::prepare_addr].
+    ///
+    /// Winch implementation differs in that, it defaults to the general case
+    /// for dynamic heaps rather than optimizing for doing the least amount of
+    /// work possible at runtime, this is done to align with Winch's principle
+    /// of doing the least amount of work possible at compile time. For static
+    /// heaps, Winch does a bit more of work, given that some of the cases that
+    /// are checked against, can benefit compilation times, like for example,
+    /// detecting an out of bouds access at compile time.
+    pub fn emit_compute_heap_address(
+        &mut self,
+        memarg: &MemArg,
+        access_size: OperandSize,
+    ) -> Option<Reg> {
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+        let enable_spectre_mitigation = self.env.heap_access_spectre_mitigation();
+        let add_offset_and_access_size = |offset: ImmOffset, access_size: OperandSize| {
+            (access_size.bytes() as u64) + (offset.as_u32() as u64)
+        };
+
+        let memory_index = MemoryIndex::from_u32(memarg.memory);
+        let heap = self.env.resolve_heap(memory_index);
+        let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None));
+        let offset = bounds::ensure_index_and_offset(self.masm, index, memarg.offset, ptr_size);
+        let offset_with_access_size = add_offset_and_access_size(offset, access_size);
+        let scratch = <M::ABI as ABI>::scratch_reg();
+
+        let addr = match heap.style {
+            // == Dynamic Heaps ==
+
+            // Account for the general case for dynamic memories. The access is
+            // out of bounds if:
+            // * index + offset + access_size overflows
+            //   OR
+            // * index + offset + access_size > bound
+            HeapStyle::Dynamic => {
+                let bounds =
+                    bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
+
+                let index_reg = index.as_typed_reg().reg;
+
+                // Move the value of the index to the scratch register
+                // to perform the overflow check to avoid clobbering the
+                // initial index value.
+                self.masm.mov(index_reg.into(), scratch, heap.ty.into());
+                // Perform
+                // index = index + offset + access_size, trapping if the
+                // addition overflows.
+                self.masm.checked_uadd(
+                    scratch,
+                    scratch,
+                    RegImm::i64(offset_with_access_size as i64),
+                    ptr_size,
+                    TrapCode::HeapOutOfBounds,
+                );
+
+                let addr = bounds::load_heap_addr_checked(
+                    self.masm,
+                    &mut self.context,
+                    ptr_size,
+                    &heap,
+                    enable_spectre_mitigation,
+                    bounds,
+                    index,
+                    offset,
+                    |masm, bounds, index| {
+                        let index_reg = index.as_typed_reg().reg;
+                        let bounds_reg = bounds.as_typed_reg().reg;
+                        masm.cmp(bounds_reg.into(), index_reg.into(), heap.ty.into());
+                        IntCmpKind::GtU
+                    },
+                );
+                self.context.free_reg(bounds.as_typed_reg().reg);
+                Some(addr)
+            }
+
+            // == Static Heaps ==
+
+            // Detect at compile time if the access is out of bounds.
+            // Doing so will put the compiler in an unreachable code state,
+            // optimizing the work that the compiler has to do until the
+            // reachability is restored or when reaching the end of the
+            // function.
+            HeapStyle::Static { bound } if offset_with_access_size > bound => {
+                self.masm.trap(TrapCode::HeapOutOfBounds);
+                self.context.reachable = false;
+                None
+            }
+
+            // Account for the case in which we can completely elide the bounds
+            // checks.
+            //
+            // This case, makes use of the fact that if a memory access uses
+            // a 32-bit index, then we be certain that
+            //
+            //      index <= u32::MAX
+            //
+            // Therfore if any 32-bit index access occurs in the region
+            // represented by
+            //
+            //      bound + guard_size - (offset + access_size)
+            //
+            // We are certain that it's in bounds or that the underlying virtual
+            // memory subsystem will report an illegal access at runtime.
+            //
+            // Note:
+            //
+            // * bound - (offset + access_size) cannot wrap, because it's checked
+            // in the condition above.
+            // * bound + heap.offset_guard_size is guaranteed to not overflow if
+            // the heap configuration is correct, given that it's address must
+            // fit in 64-bits.
+            // * If the heap type is 32-bits, the offset is at most u32::MAX, so
+            // no  adjustment is needed as part of
+            // [bounds::ensure_index_and_offset].
+            HeapStyle::Static { bound }
+                if heap.ty == WasmValType::I32
+                    && u64::from(u32::MAX)
+                        <= u64::from(bound) + u64::from(heap.offset_guard_size)
+                            - offset_with_access_size =>
+            {
+                let addr = self.context.any_gpr(self.masm);
+                bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size);
+                Some(addr)
+            }
+
+            // Account for the general case of static memories. The access is out
+            // of bounds if:
+            //
+            // index > bound - (offset + access_size)
+            //
+            // bound - (offset + access_size) cannot wrap, because we already
+            // checked that (offset + access_size) > bound, above.
+            HeapStyle::Static { bound } => {
+                let bounds = Bounds::from_u64(bound);
+                let addr = bounds::load_heap_addr_checked(
+                    self.masm,
+                    &mut self.context,
+                    ptr_size,
+                    &heap,
+                    enable_spectre_mitigation,
+                    bounds,
+                    index,
+                    offset,
+                    |masm, bounds, index| {
+                        let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
+                        let index_reg = index.as_typed_reg().reg;
+                        masm.cmp(RegImm::i64(adjusted_bounds as i64), index_reg, ptr_size);
+                        IntCmpKind::GtU
+                    },
+                );
+                Some(addr)
+            }
+        };
+
+        self.context.free_reg(index.as_typed_reg().reg);
+        addr
+    }
+
+    /// Emit a WebAssembly load.
+    pub fn emit_wasm_load(
+        &mut self,
+        arg: &MemArg,
+        ty: WasmValType,
+        size: OperandSize,
+        sextend: Option<ExtendKind>,
+    ) {
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size) {
+            let dst = match ty {
+                WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm),
+                WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm),
+                _ => unreachable!(),
+            };
+
+            let src = self.masm.address_at_reg(addr, 0);
+            self.masm.wasm_load(src, dst, size, sextend);
+            self.context.stack.push(TypedReg::new(ty, dst).into());
+            self.context.free_reg(addr);
+        }
+    }
+
+    /// Emit a WebAssembly store.
+    pub fn emit_wasm_store(&mut self, arg: &MemArg, size: OperandSize) {
+        let src = self.context.pop_to_reg(self.masm, None);
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size) {
+            self.masm
+                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0), size);
+
+            self.context.free_reg(addr);
+        }
+        self.context.free_reg(src);
     }
 }
 

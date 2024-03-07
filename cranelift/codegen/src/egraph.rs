@@ -3,8 +3,7 @@
 use crate::alias_analysis::{AliasAnalysis, LastStores};
 use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
-use crate::dominator_tree::DominatorTree;
-use crate::egraph::domtree::DomTreeWithChildren;
+use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::egraph::elaborate::Elaborator;
 use crate::fx::FxHashSet;
 use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
@@ -16,13 +15,13 @@ use crate::opts::IsleContext;
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::trace;
 use crate::unionfind::UnionFind;
+use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
 use smallvec::SmallVec;
 use std::hash::Hasher;
 
 mod cost;
-mod domtree;
 mod elaborate;
 
 /// Pass over a Function that does the whole aegraph thing.
@@ -46,17 +45,18 @@ mod elaborate;
 pub struct EgraphPass<'a> {
     /// The function we're operating on.
     func: &'a mut Function,
-    /// Dominator tree, used for elaboration pass.
-    domtree: &'a DominatorTree,
+    /// Dominator tree for the CFG, used to visit blocks in pre-order
+    /// so we see value definitions before their uses, and also used for
+    /// O(1) dominance checks.
+    domtree: DominatorTreePreorder,
     /// Alias analysis, used during optimization.
     alias_analysis: &'a mut AliasAnalysis<'a>,
-    /// "Domtree with children": like `domtree`, but with an explicit
-    /// list of children, complementing the parent pointers stored
-    /// in `domtree`.
-    domtree_children: DomTreeWithChildren,
     /// Loop analysis results, used for built-in LICM during
     /// elaboration.
     loop_analysis: &'a LoopAnalysis,
+    /// Chaos-mode control-plane so we can test that we still get
+    /// correct results when our heuristics make bad decisions.
+    ctrl_plane: &'a mut ControlPlane,
     /// Which canonical Values do we want to rematerialize in each
     /// block where they're used?
     ///
@@ -67,7 +67,7 @@ pub struct EgraphPass<'a> {
     pub(crate) stats: Stats,
     /// Union-find that maps all members of a Union tree (eclass) back
     /// to the *oldest* (lowest-numbered) `Value`.
-    eclasses: UnionFind<Value>,
+    pub(crate) eclasses: UnionFind<Value>,
 }
 
 // The maximum number of rewrites we will take from a single call into ISLE.
@@ -88,6 +88,7 @@ where
     pub(crate) stats: &'opt mut Stats,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
+    ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
     pub(crate) subsume_values: FxHashSet<Value>,
@@ -109,7 +110,7 @@ impl NewOrExistingInst {
             NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
                 let ty = dfg.ctrl_typevar(*inst);
-                (ty, dfg.insts[*inst].clone())
+                (ty, dfg.insts[*inst])
             }
         }
     }
@@ -195,15 +196,17 @@ where
             };
 
             let opt_value = self.optimize_pure_enode(inst);
+
+            for &argument in self.func.dfg.inst_args(inst) {
+                self.eclasses.pin_index(argument);
+            }
+
             let gvn_context = GVNContext {
                 union_find: self.eclasses,
                 value_lists: &self.func.dfg.value_lists,
             };
-            self.gvn_map.insert(
-                (ty, self.func.dfg.insts[inst].clone()),
-                opt_value,
-                &gvn_context,
-            );
+            self.gvn_map
+                .insert((ty, self.func.dfg.insts[inst]), opt_value, &gvn_context);
             self.value_to_opt_value[result] = opt_value;
             opt_value
         }
@@ -219,7 +222,6 @@ where
         let orig_value = self.func.dfg.first_result(inst);
 
         let mut optimized_values = std::mem::take(&mut self.optimized_values);
-        let mut isle_ctx = IsleContext { ctx: self };
 
         // Limit rewrite depth. When we apply optimization rules, they
         // may create new nodes (values) and those are, recursively,
@@ -231,34 +233,37 @@ where
         // infinite or problematic recursion, we bound the rewrite
         // depth to a small constant here.
         const REWRITE_LIMIT: usize = 5;
-        if isle_ctx.ctx.rewrite_depth > REWRITE_LIMIT {
-            isle_ctx.ctx.stats.rewrite_depth_limit += 1;
+        if self.rewrite_depth > REWRITE_LIMIT {
+            self.stats.rewrite_depth_limit += 1;
             return orig_value;
         }
-        isle_ctx.ctx.rewrite_depth += 1;
-        trace!(
-            "Incrementing rewrite depth; now {}",
-            isle_ctx.ctx.rewrite_depth
-        );
+        self.rewrite_depth += 1;
+        trace!("Incrementing rewrite depth; now {}", self.rewrite_depth);
 
         // Invoke the ISLE toplevel constructor, getting all new
         // values produced as equivalents to this value.
         trace!("Calling into ISLE with original value {}", orig_value);
-        isle_ctx.ctx.stats.rewrite_rule_invoked += 1;
+        self.stats.rewrite_rule_invoked += 1;
         debug_assert!(optimized_values.is_empty());
         crate::opts::generated_code::constructor_simplify(
-            &mut isle_ctx,
+            &mut IsleContext { ctx: self },
             orig_value,
             &mut optimized_values,
         );
-        trace!(
-            "  -> returned from ISLE, generated {} optimized values",
-            optimized_values.len()
-        );
-        if optimized_values.len() > MATCHES_LIMIT {
-            trace!("Reached maximum matches limit; too many optimized values, ignoring rest.");
+
+        // It's not supposed to matter what order `simplify` returns values in.
+        self.ctrl_plane.shuffle(&mut optimized_values);
+
+        let num_matches = optimized_values.len();
+        if num_matches > MATCHES_LIMIT {
+            trace!(
+                "Reached maximum matches limit; too many optimized values \
+                 ({num_matches} > {MATCHES_LIMIT}); ignoring rest.",
+            );
             optimized_values.truncate(MATCHES_LIMIT);
         }
+
+        trace!("  -> returned from ISLE: {orig_value} -> {optimized_values:?}");
 
         // Create a union of all new values with the original (or
         // maybe just one new value marked as "subsuming" the
@@ -274,45 +279,31 @@ where
                 trace!(" -> same as orig value; skipping");
                 continue;
             }
-            if isle_ctx.ctx.subsume_values.contains(&optimized_value) {
+            if self.subsume_values.contains(&optimized_value) {
                 // Merge in the unionfind so canonicalization
                 // still works, but take *only* the subsuming
                 // value, and break now.
-                isle_ctx.ctx.eclasses.union(optimized_value, union_value);
-                isle_ctx
-                    .ctx
-                    .func
-                    .dfg
-                    .merge_facts(optimized_value, union_value);
+                self.eclasses.union(optimized_value, union_value);
+                self.func.dfg.merge_facts(optimized_value, union_value);
                 union_value = optimized_value;
                 break;
             }
 
             let old_union_value = union_value;
-            union_value = isle_ctx
-                .ctx
-                .func
-                .dfg
-                .union(old_union_value, optimized_value);
-            isle_ctx.ctx.stats.union += 1;
+            union_value = self.func.dfg.union(old_union_value, optimized_value);
+            self.stats.union += 1;
             trace!(" -> union: now {}", union_value);
-            isle_ctx.ctx.eclasses.add(union_value);
-            isle_ctx
-                .ctx
-                .eclasses
-                .union(old_union_value, optimized_value);
-            isle_ctx
-                .ctx
-                .func
-                .dfg
-                .merge_facts(old_union_value, optimized_value);
-            isle_ctx.ctx.eclasses.union(old_union_value, union_value);
+            self.eclasses.add(union_value);
+            self.eclasses.union(old_union_value, optimized_value);
+            self.func.dfg.merge_facts(old_union_value, optimized_value);
+            self.eclasses.union(old_union_value, union_value);
         }
 
-        isle_ctx.ctx.rewrite_depth -= 1;
+        self.rewrite_depth -= 1;
+        trace!("Decrementing rewrite depth; now {}", self.rewrite_depth);
 
-        debug_assert!(isle_ctx.ctx.optimized_values.is_empty());
-        isle_ctx.ctx.optimized_values = optimized_values;
+        debug_assert!(self.optimized_values.is_empty());
+        self.optimized_values = optimized_values;
 
         union_value
     }
@@ -399,18 +390,20 @@ impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTree,
+        raw_domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
         alias_analysis: &'a mut AliasAnalysis<'a>,
+        ctrl_plane: &'a mut ControlPlane,
     ) -> Self {
         let num_values = func.dfg.num_values();
-        let domtree_children = DomTreeWithChildren::new(func, domtree);
+        let mut domtree = DominatorTreePreorder::new();
+        domtree.compute(raw_domtree, &func.layout);
         Self {
             func,
             domtree,
-            domtree_children,
             loop_analysis,
             alias_analysis,
+            ctrl_plane,
             stats: Stats::default(),
             eclasses: UnionFind::with_capacity(num_values),
             remat_values: FxHashSet::default(),
@@ -434,6 +427,7 @@ impl<'a> EgraphPass<'a> {
             }
         }
         trace!("stats: {:#?}", self.stats);
+        trace!("pinned_union_count: {}", self.eclasses.pinned_union_count);
         self.elaborate();
     }
 
@@ -494,7 +488,7 @@ impl<'a> EgraphPass<'a> {
 
         // In domtree preorder, visit blocks. (TODO: factor out an
         // iterator from this and elaborator.)
-        let root = self.domtree_children.root();
+        let root = cursor.layout().entry_block().unwrap();
         enum StackEntry {
             Visit(Block),
             Pop,
@@ -506,8 +500,11 @@ impl<'a> EgraphPass<'a> {
                     // We popped this block; push children
                     // immediately, then process this block.
                     block_stack.push(StackEntry::Pop);
-                    block_stack
-                        .extend(self.domtree_children.children(block).map(StackEntry::Visit));
+                    block_stack.extend(
+                        self.ctrl_plane
+                            .shuffled(self.domtree.children(block))
+                            .map(StackEntry::Visit),
+                    );
                     effectful_gvn_map.increment_depth();
 
                     trace!("Processing block {}", block);
@@ -559,6 +556,7 @@ impl<'a> EgraphPass<'a> {
                             stats: &mut self.stats,
                             alias_analysis: self.alias_analysis,
                             alias_analysis_state: &mut alias_analysis_state,
+                            ctrl_plane: self.ctrl_plane,
                             optimized_values: Default::default(),
                         };
 
@@ -612,12 +610,11 @@ impl<'a> EgraphPass<'a> {
     fn elaborate(&mut self) {
         let mut elaborator = Elaborator::new(
             self.func,
-            self.domtree,
-            &self.domtree_children,
+            &self.domtree,
             self.loop_analysis,
             &mut self.remat_values,
-            &mut self.eclasses,
             &mut self.stats,
+            self.ctrl_plane,
         );
         elaborator.elaborate();
 
@@ -701,4 +698,5 @@ pub(crate) struct Stats {
     pub(crate) elaborate_func: u64,
     pub(crate) elaborate_func_pre_insts: u64,
     pub(crate) elaborate_func_post_insts: u64,
+    pub(crate) elaborate_best_cost_fixpoint_iters: u64,
 }

@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::gc::RootSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::{BareModuleInfo, RegisteredModuleId};
@@ -95,10 +96,11 @@ use std::ptr;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use wasmtime_runtime::mpk::{self, ProtectionKey, ProtectionMask};
 use wasmtime_runtime::{
-    mpk::ProtectionKey, ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    ModuleInfo, OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext,
-    VMExternRef, VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
+    ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef,
+    VMRuntimeLimits, WasmFault,
 };
 
 mod context;
@@ -120,8 +122,8 @@ use func_refs::FuncRefs;
 /// [`Store`] it will not be deallocated until the [`Store`] itself is dropped.
 /// This makes [`Store`] unsuitable for creating an unbounded number of
 /// instances in it because [`Store`] will never release this memory. It's
-/// recommended to have a [`Store`] correspond roughly to the lifetime of a "main
-/// instance" that an embedding is interested in executing.
+/// recommended to have a [`Store`] correspond roughly to the lifetime of a
+/// "main instance" that an embedding is interested in executing.
 ///
 /// ## Type parameter `T`
 ///
@@ -158,6 +160,18 @@ use func_refs::FuncRefs;
 /// You can create a store with default configuration settings using
 /// `Store::default()`. This will create a brand new [`Engine`] with default
 /// configuration (see [`Config`](crate::Config) for more information).
+///
+/// ## Cross-store usage of items
+///
+/// In `wasmtime` wasm items such as [`Global`] and [`Memory`] "belong" to a
+/// [`Store`]. The store they belong to is the one they were created with
+/// (passed in as a parameter) or instantiated with. This store is the only
+/// store that can be used to interact with wasm items after they're created.
+///
+/// The `wasmtime` crate will panic if the [`Store`] argument passed in to these
+/// operations is incorrect. In other words it's considered a programmer error
+/// rather than a recoverable error for the wrong [`Store`] to be used when
+/// calling APIs.
 pub struct Store<T> {
     // for comments about `ManuallyDrop`, see `Store::into_data`
     inner: ManuallyDrop<Box<StoreInner<T>>>,
@@ -294,7 +308,8 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
     signal_handler: Option<Box<SignalHandler<'static>>>,
-    externref_activations_table: VMExternRefActivationsTable,
+    externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable,
+    gc_roots: RootSet,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
     host_globals: Vec<StoreBox<VMHostGlobalContext>>,
@@ -357,6 +372,8 @@ pub struct StoreOpaque {
     component_host_table: wasmtime_runtime::component::ResourceTable,
     #[cfg(feature = "component-model")]
     component_calls: wasmtime_runtime::component::CallContexts,
+    #[cfg(feature = "component-model")]
+    host_resource_data: crate::component::HostResourceData,
 }
 
 #[cfg(feature = "async")]
@@ -373,59 +390,48 @@ unsafe impl Send for AsyncState {}
 unsafe impl Sync for AsyncState {}
 
 /// An RAII type to automatically mark a region of code as unsafe for GC.
-pub(crate) struct AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
-    #[cfg(debug_assertions)]
+#[doc(hidden)]
+pub struct AutoAssertNoGc<'a> {
+    #[cfg(all(debug_assertions, feature = "gc"))]
     prev_okay: bool,
-    store: T,
+    store: &'a mut StoreOpaque,
 }
 
-impl<T> AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
-    pub fn new(mut store: T) -> Self {
-        let _ = &mut store;
-        #[cfg(debug_assertions)]
+impl<'a> AutoAssertNoGc<'a> {
+    #[inline]
+    pub fn new(store: &'a mut StoreOpaque) -> Self {
+        #[cfg(all(debug_assertions, feature = "gc"))]
         {
             let prev_okay = store.externref_activations_table.set_gc_okay(false);
             return AutoAssertNoGc { store, prev_okay };
         }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(all(debug_assertions, feature = "gc")))]
         {
             return AutoAssertNoGc { store };
         }
     }
 }
 
-impl<T> std::ops::Deref for AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
-    type Target = T;
+impl std::ops::Deref for AutoAssertNoGc<'_> {
+    type Target = StoreOpaque;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.store
+        &*self.store
     }
 }
 
-impl<T> std::ops::DerefMut for AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
+impl std::ops::DerefMut for AutoAssertNoGc<'_> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.store
+        &mut *self.store
     }
 }
 
-impl<T> Drop for AutoAssertNoGc<T>
-where
-    T: std::ops::DerefMut<Target = StoreOpaque>,
-{
+impl Drop for AutoAssertNoGc<'_> {
+    #[inline]
     fn drop(&mut self) {
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, feature = "gc"))]
         {
             self.store
                 .externref_activations_table
@@ -481,7 +487,8 @@ impl<T> Store<T> {
                 #[cfg(feature = "component-model")]
                 num_component_instances: 0,
                 signal_handler: None,
-                externref_activations_table: VMExternRefActivationsTable::new(),
+                externref_activations_table: wasmtime_runtime::VMExternRefActivationsTable::new(),
+                gc_roots: RootSet::default(),
                 modules: ModuleRegistry::default(),
                 func_refs: FuncRefs::default(),
                 host_globals: Vec::new(),
@@ -508,6 +515,8 @@ impl<T> Store<T> {
                 component_host_table: Default::default(),
                 #[cfg(feature = "component-model")]
                 component_calls: Default::default(),
+                #[cfg(feature = "component-model")]
+                host_resource_data: Default::default(),
             },
             limiter: None,
             call_hook: None,
@@ -700,7 +709,7 @@ impl<T> Store<T> {
     /// [`Store`] configured via
     /// [`Config::async_support`](crate::Config::async_support).
     #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn limiter_async(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
@@ -724,7 +733,7 @@ impl<T> Store<T> {
         inner.limiter = Some(ResourceLimiterInner::Async(Box::new(limiter)));
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Configures an async function that runs on calls and returns between
     /// WebAssembly and host code. For the non-async equivalent of this method,
     /// see [`Store::call_hook`].
@@ -776,6 +785,9 @@ impl<T> Store<T> {
     /// Note that it is not required to actively call this function. GC will
     /// automatically happen when internal buffers fill up. This is provided if
     /// fine-grained control over the GC is desired.
+    ///
+    /// This method is only available when the `gc` Cargo feature is enabled.
+    #[cfg(feature = "gc")]
     pub fn gc(&mut self) {
         self.inner.gc()
     }
@@ -940,7 +952,7 @@ impl<T> Store<T> {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Configures epoch-deadline expiration to yield to the async
     /// caller and the update the deadline.
     ///
@@ -1018,6 +1030,9 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Perform garbage collection of `ExternRef`s.
     ///
     /// Same as [`Store::gc`].
+    ///
+    /// This method is only available when the `gc` Cargo feature is enabled.
+    #[cfg(feature = "gc")]
     pub fn gc(&mut self) {
         self.0.gc()
     }
@@ -1057,7 +1072,7 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.epoch_deadline_trap();
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Configures epoch-deadline expiration to yield to the async
     /// caller and the update the deadline.
     ///
@@ -1080,7 +1095,16 @@ impl<T> StoreInner<T> {
         &mut self.data
     }
 
+    #[inline]
     pub fn call_hook(&mut self, s: CallHook) -> Result<()> {
+        if self.inner.pkey.is_none() && self.call_hook.is_none() {
+            Ok(())
+        } else {
+            self.call_hook_slow_path(s)
+        }
+    }
+
+    fn call_hook_slow_path(&mut self, s: CallHook) -> Result<()> {
         if let Some(pkey) = &self.inner.pkey {
             let allocator = self.engine().allocator();
             match s {
@@ -1347,8 +1371,20 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn externref_activations_table(&mut self) -> &mut VMExternRefActivationsTable {
+    pub fn externref_activations_table(
+        &mut self,
+    ) -> &mut wasmtime_runtime::VMExternRefActivationsTable {
         &mut self.externref_activations_table
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots(&self) -> &RootSet {
+        &self.gc_roots
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots_mut(&mut self) -> &mut RootSet {
+        &mut self.gc_roots
     }
 
     pub fn gc(&mut self) {
@@ -1385,12 +1421,13 @@ impl StoreOpaque {
         Some(AsyncCx {
             current_suspend: self.async_state.current_suspend.get(),
             current_poll_cx: poll_cx_box_ptr,
+            track_pkey_context_switch: self.pkey.is_some(),
         })
     }
 
     pub fn get_fuel(&self) -> Result<u64> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         let injected_fuel = unsafe { *self.runtime_limits.fuel_consumed.get() };
@@ -1408,7 +1445,7 @@ impl StoreOpaque {
 
     pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         let injected_fuel = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
@@ -1423,7 +1460,7 @@ impl StoreOpaque {
 
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
+            self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
         anyhow::ensure!(
@@ -1495,7 +1532,7 @@ impl StoreOpaque {
         &self.runtime_limits as *const VMRuntimeLimits as *mut VMRuntimeLimits
     }
 
-    pub unsafe fn insert_vmexternref_without_gc(&mut self, r: VMExternRef) {
+    pub unsafe fn insert_vmexternref_without_gc(&mut self, r: wasmtime_runtime::VMExternRef) {
         self.externref_activations_table.insert_without_gc(r);
     }
 
@@ -1615,13 +1652,18 @@ at https://bytecodealliance.org/security.
 
     #[inline]
     #[cfg(feature = "component-model")]
-    pub(crate) fn component_calls_and_host_table(
+    pub(crate) fn component_resource_state(
         &mut self,
     ) -> (
         &mut wasmtime_runtime::component::CallContexts,
         &mut wasmtime_runtime::component::ResourceTable,
+        &mut crate::component::HostResourceData,
     ) {
-        (&mut self.component_calls, &mut self.component_host_table)
+        (
+            &mut self.component_calls,
+            &mut self.component_host_table,
+            &mut self.host_resource_data,
+        )
     }
 
     #[cfg(feature = "component-model")]
@@ -1917,6 +1959,7 @@ impl<T> StoreContextMut<'_, T> {
 pub struct AsyncCx {
     current_suspend: *mut *const wasmtime_fiber::Suspend<Result<()>, (), Result<()>>,
     current_poll_cx: *mut *mut Context<'static>,
+    track_pkey_context_switch: bool,
 }
 
 #[cfg(feature = "async")]
@@ -1977,7 +2020,21 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
+            // In order to prevent this fiber's MPK state from being munged by
+            // other fibers while it is suspended, we save and restore it once
+            // once execution resumes. Note that when MPK is not supported,
+            // these are noops.
+            let previous_mask = if self.track_pkey_context_switch {
+                let previous_mask = mpk::current_mask();
+                mpk::allow(ProtectionMask::all());
+                previous_mask
+            } else {
+                ProtectionMask::all()
+            };
             (*suspend).suspend(())?;
+            if self.track_pkey_context_switch {
+                mpk::allow(previous_mask);
+            }
         }
     }
 }
@@ -1994,7 +2051,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     fn externref_activations_table(
         &mut self,
     ) -> (
-        &mut VMExternRefActivationsTable,
+        &mut wasmtime_runtime::VMExternRefActivationsTable,
         &dyn wasmtime_runtime::ModuleInfoLookup,
     ) {
         let inner = &mut self.inner;
@@ -2251,7 +2308,7 @@ impl Drop for StoreOpaque {
 }
 
 impl wasmtime_runtime::ModuleInfoLookup for ModuleRegistry {
-    fn lookup(&self, pc: usize) -> Option<&dyn ModuleInfo> {
+    fn lookup(&self, pc: usize) -> Option<&dyn wasmtime_runtime::ModuleInfo> {
         self.lookup_module_info(pc)
     }
 }

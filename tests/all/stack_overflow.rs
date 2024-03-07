@@ -1,6 +1,5 @@
 #![cfg(not(miri))]
 
-use anyhow::Result;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 

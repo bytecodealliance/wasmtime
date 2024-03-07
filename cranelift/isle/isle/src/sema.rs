@@ -2390,7 +2390,7 @@ impl TermEnv {
 mod test {
     use super::*;
     use crate::ast::Ident;
-    use crate::lexer::{Lexer, Pos};
+    use crate::lexer::Lexer;
     use crate::parser::parse;
 
     #[test]

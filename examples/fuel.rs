@@ -2,7 +2,6 @@
 
 // You can execute this example with `cargo run --example fuel`
 
-use anyhow::Result;
 use wasmtime::*;
 
 fn main() -> Result<()> {

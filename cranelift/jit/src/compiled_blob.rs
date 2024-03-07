@@ -1,7 +1,6 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_module::ModuleReloc;
 use cranelift_module::ModuleRelocTarget;
-use std::convert::TryFrom;
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`

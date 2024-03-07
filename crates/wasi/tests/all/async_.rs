@@ -1,7 +1,7 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::preview2::command::{add_to_linker, Command};
+use wasmtime_wasi::command::{add_to_linker, Command};
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
@@ -356,6 +356,22 @@ async fn preview2_stream_pollable_traps() {
     assert_eq!(
         format!("{}", e.source().expect("trap source")),
         "resource has children"
+    )
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_pollable_correct() {
+    run(PREVIEW2_POLLABLE_CORRECT_COMPONENT, false)
+        .await
+        .unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_pollable_traps() {
+    let e = run(PREVIEW2_POLLABLE_TRAPS_COMPONENT, false)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "empty poll list"
     )
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

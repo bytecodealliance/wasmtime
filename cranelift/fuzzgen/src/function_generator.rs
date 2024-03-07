@@ -10,7 +10,7 @@ use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
     types::*, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef, Function,
-    LibCall, Opcode, SigRef, Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
+    LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -523,8 +523,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 rets,
                 (Opcode::UmulOverflow | Opcode::SmulOverflow, &[I128, I128]),
                 (Opcode::Imul, &[I8X16, I8X16]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5468
-                (Opcode::Smulhi | Opcode::Umulhi, &[I8, I8]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4756
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5474

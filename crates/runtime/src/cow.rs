@@ -5,9 +5,9 @@ use crate::sys::vm::{self, MemoryImageSource};
 use crate::{MmapVec, SendSyncPtr};
 use anyhow::Result;
 use std::ffi::c_void;
+use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use std::{convert::TryFrom, ops::Range};
 use wasmtime_environ::{
     DefinedMemoryIndex, MemoryInitialization, MemoryPlan, MemoryStyle, Module, PrimaryMap,
 };

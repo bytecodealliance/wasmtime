@@ -9,7 +9,6 @@ use crate::{MemoryImage, MemoryImageSlot, SendSyncPtr, Store, WaitResult};
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use std::cell::RefCell;
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};

@@ -4,7 +4,6 @@ use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
-use std::convert::TryFrom;
 use std::ops::Range;
 use std::slice;
 use std::time::Instant;
@@ -238,7 +237,7 @@ impl Memory {
         Self::_new(store.as_context_mut().0, ty)
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Memory::new`]. You must use this variant with
     /// [`Store`](`crate::Store`)s which have a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
@@ -520,7 +519,7 @@ impl Memory {
         }
     }
 
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     /// Async variant of [`Memory::grow`]. Required when using a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
@@ -732,7 +731,7 @@ impl SharedMemory {
         }
         debug_assert!(ty.maximum().is_some());
 
-        let tunables = &engine.config().tunables;
+        let tunables = engine.tunables();
         let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
         let memory = wasmtime_runtime::SharedMemory::new(plan)?;
         Ok(Self(memory, engine.clone()))

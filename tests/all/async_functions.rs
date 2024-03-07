@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -25,11 +25,10 @@ async fn run_smoke_typed_test(store: &mut Store<()>, func: Func) {
 #[tokio::test]
 async fn smoke() {
     let mut store = async_store();
-    let func = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        move |_caller, _params, _results| Box::new(async { Ok(()) }),
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let func = Func::new_async(&mut store, func_ty, move |_caller, _params, _results| {
+        Box::new(async { Ok(()) })
+    });
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 
@@ -46,7 +45,7 @@ async fn smoke_host_func() -> Result<()> {
     linker.func_new_async(
         "",
         "first",
-        FuncType::new(None, None),
+        FuncType::new(store.engine(), None, None),
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     )?;
 
@@ -74,16 +73,13 @@ async fn smoke_host_func() -> Result<()> {
 #[tokio::test]
 async fn smoke_with_suspension() {
     let mut store = async_store();
-    let func = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        move |_caller, _params, _results| {
-            Box::new(async {
-                tokio::task::yield_now().await;
-                Ok(())
-            })
-        },
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let func = Func::new_async(&mut store, func_ty, move |_caller, _params, _results| {
+        Box::new(async {
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    });
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
 
@@ -105,7 +101,7 @@ async fn smoke_host_func_with_suspension() -> Result<()> {
     linker.func_new_async(
         "",
         "first",
-        FuncType::new(None, None),
+        FuncType::new(store.engine(), None, None),
         move |_caller, _params, _results| {
             Box::new(async {
                 tokio::task::yield_now().await;
@@ -143,32 +139,26 @@ async fn smoke_host_func_with_suspension() -> Result<()> {
 #[tokio::test]
 async fn recursive_call() {
     let mut store = async_store();
-    let async_wasm_func = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        |_caller, _params, _results| {
-            Box::new(async {
-                tokio::task::yield_now().await;
-                Ok(())
-            })
-        },
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let async_wasm_func = Func::new_async(&mut store, func_ty, |_caller, _params, _results| {
+        Box::new(async {
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    });
 
     // Create an imported function which recursively invokes another wasm
     // function asynchronously, although this one is just our own host function
     // which suffices for this test.
-    let func2 = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        move |mut caller, _params, _results| {
-            Box::new(async move {
-                async_wasm_func
-                    .call_async(&mut caller, &[], &mut [])
-                    .await?;
-                Ok(())
-            })
-        },
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let func2 = Func::new_async(&mut store, func_ty, move |mut caller, _params, _results| {
+        Box::new(async move {
+            async_wasm_func
+                .call_async(&mut caller, &[], &mut [])
+                .await?;
+            Ok(())
+        })
+    });
 
     // Create an instance which calls an async import twice.
     let module = Module::new(
@@ -204,36 +194,30 @@ async fn suspend_while_suspending() {
     // The purpose of this test is intended to stress various cases in how
     // we manage pointers in ways that are not necessarily common but are still
     // possible in safe code.
-    let async_thunk = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        |_caller, _params, _results| Box::new(async { Ok(()) }),
-    );
-    let sync_call_async_thunk = Func::new(
-        &mut store,
-        FuncType::new(None, None),
-        move |mut caller, _params, _results| {
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let async_thunk = Func::new_async(&mut store, func_ty, |_caller, _params, _results| {
+        Box::new(async { Ok(()) })
+    });
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let sync_call_async_thunk =
+        Func::new(&mut store, func_ty, move |mut caller, _params, _results| {
             let mut future = Box::pin(async_thunk.call_async(&mut caller, &[], &mut []));
             let poll = future
                 .as_mut()
                 .poll(&mut Context::from_waker(&noop_waker()));
             assert!(poll.is_ready());
             Ok(())
-        },
-    );
+        });
 
     // A small async function that simply awaits once to pump the loops and
     // then finishes.
-    let async_import = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        move |_caller, _params, _results| {
-            Box::new(async move {
-                tokio::task::yield_now().await;
-                Ok(())
-            })
-        },
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let async_import = Func::new_async(&mut store, func_ty, move |_caller, _params, _results| {
+        Box::new(async move {
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    });
 
     let module = Module::new(
         store.engine(),
@@ -264,23 +248,20 @@ async fn suspend_while_suspending() {
 async fn cancel_during_run() {
     let mut store = Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), 0);
 
-    let async_thunk = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        move |mut caller, _params, _results| {
-            assert_eq!(*caller.data(), 0);
-            *caller.data_mut() = 1;
-            let dtor = SetOnDrop(caller);
-            Box::new(async move {
-                // SetOnDrop is not destroyed when dropping the reference of it
-                // here. Instead, it is moved into the future where it's forced
-                // to live in and will be destroyed at the end of the future.
-                let _ = &dtor;
-                tokio::task::yield_now().await;
-                Ok(())
-            })
-        },
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let async_thunk = Func::new_async(&mut store, func_ty, move |mut caller, _params, _results| {
+        assert_eq!(*caller.data(), 0);
+        *caller.data_mut() = 1;
+        let dtor = SetOnDrop(caller);
+        Box::new(async move {
+            // SetOnDrop is not destroyed when dropping the reference of it
+            // here. Instead, it is moved into the future where it's forced
+            // to live in and will be destroyed at the end of the future.
+            let _ = &dtor;
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    });
     // Shouldn't have called anything yet...
     assert_eq!(*store.data(), 0);
 
@@ -373,11 +354,10 @@ async fn async_with_pooling_stacks() {
 
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
-    let func = Func::new_async(
-        &mut store,
-        FuncType::new(None, None),
-        move |_caller, _params, _results| Box::new(async { Ok(()) }),
-    );
+    let func_ty = FuncType::new(store.engine(), None, None);
+    let func = Func::new_async(&mut store, func_ty, move |_caller, _params, _results| {
+        Box::new(async { Ok(()) })
+    });
 
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
@@ -399,13 +379,91 @@ async fn async_host_func_with_pooling_stacks() -> Result<()> {
     linker.func_new_async(
         "",
         "",
-        FuncType::new(None, None),
+        FuncType::new(store.engine(), None, None),
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     )?;
 
     let func = linker.get(&mut store, "", "").unwrap().into_func().unwrap();
     run_smoke_test(&mut store, func).await;
     run_smoke_typed_test(&mut store, func).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn async_mpk_protection() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    // Construct a pool with MPK protection enabled; note that the MPK
+    // protection is configured in `small_pool_config`.
+    let mut pooling = crate::small_pool_config();
+    pooling
+        .total_memories(10)
+        .total_stacks(2)
+        .memory_pages(1)
+        .table_elements(0);
+    let mut config = Config::new();
+    config.async_support(true);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));
+    config.static_memory_maximum_size(1 << 26);
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+
+    // Craft a module that loops for several iterations and checks whether it
+    // has access to its memory range (0x0-0x10000).
+    const WAT: &str = "
+    (module
+        (func $start
+            (local $i i32)
+            (local.set $i (i32.const 3))
+            (loop $cont
+                (drop (i32.load (i32.const 0)))
+                (drop (i32.load (i32.const 0xfffc)))
+                (br_if $cont (local.tee $i (i32.sub (local.get $i) (i32.const 1))))))
+        (memory 1)
+        (start $start))
+    ";
+
+    // Start two instances of the module in separate fibers, `a` and `b`.
+    async fn run_instance(engine: &Engine, name: &str) -> Instance {
+        let mut store = Store::new(&engine, ());
+        store.set_epoch_deadline(0);
+        store.epoch_deadline_async_yield_and_update(0);
+        let module = Module::new(store.engine(), WAT).unwrap();
+        println!("[{name}] building instance");
+        Instance::new_async(&mut store, &module, &[]).await.unwrap()
+    }
+    let mut a = Box::pin(run_instance(&engine, "a"));
+    let mut b = Box::pin(run_instance(&engine, "b"));
+
+    // Alternately poll each instance until completion. This should exercise
+    // fiber suspensions requiring the `Store` to appropriately save and restore
+    // the PKRU context between suspensions (see `AsyncCx::block_on`).
+    for i in 0..10 {
+        if i % 2 == 0 {
+            match PollOnce::new(a).await {
+                Ok(_) => {
+                    println!("[a] done");
+                    break;
+                }
+                Err(a_) => {
+                    println!("[a] not done");
+                    a = a_;
+                }
+            }
+        } else {
+            match PollOnce::new(b).await {
+                Ok(_) => {
+                    println!("[b] done");
+                    break;
+                }
+                Err(b_) => {
+                    println!("[b] not done");
+                    b = b_;
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -565,6 +623,8 @@ async fn recursive_async() -> Result<()> {
     let overflow = i.get_typed_func::<(), ()>(&mut store, "overflow")?;
     let normal = i.get_typed_func::<(), ()>(&mut store, "normal")?;
     let f2 = Func::wrap0_async(&mut store, move |mut caller| {
+        let normal = normal.clone();
+        let overflow = overflow.clone();
         Box::new(async move {
             // recursive async calls shouldn't immediately stack overflow...
             normal.call_async(&mut caller, ()).await?;
@@ -588,6 +648,7 @@ async fn recursive_async() -> Result<()> {
 async fn linker_module_command() -> Result<()> {
     let mut store = async_store();
     let mut linker = Linker::new(store.engine());
+
     let module1 = Module::new(
         store.engine(),
         r#"
@@ -603,6 +664,7 @@ async fn linker_module_command() -> Result<()> {
             )
         "#,
     )?;
+
     let module2 = Module::new(
         store.engine(),
         r#"
@@ -860,6 +922,8 @@ async fn non_stacky_async_activations() -> Result<()> {
 
 #[tokio::test]
 async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
+    let _ = env_logger::try_init();
+
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config)?;
@@ -890,27 +954,30 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
         "#,
     )?;
 
-    type F = TypedFunc<(i32, Option<ExternRef>), ()>;
+    type F = TypedFunc<(i32, Option<Rooted<ExternRef>>), ()>;
 
     let mut store = Store::new(&engine, None);
     let mut linker = Linker::<Option<F>>::new(&engine);
     linker.func_wrap("", "gc", |mut cx: Caller<'_, _>| cx.gc())?;
-    linker.func_wrap("", "test", |val: i32, handle: Option<ExternRef>| {
-        assert_eq!(handle.unwrap().data().downcast_ref(), Some(&val));
-    })?;
+    linker.func_wrap(
+        "",
+        "test",
+        |cx: Caller<'_, _>, val: i32, handle: Option<Rooted<ExternRef>>| -> Result<()> {
+            assert_eq!(handle.unwrap().data(&cx)?.downcast_ref(), Some(&val));
+            Ok(())
+        },
+    )?;
     linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, _>, val: i32| {
-        let func = cx.data().unwrap();
-        Box::new(async move {
-            func.call_async(&mut cx, (val, Some(ExternRef::new(val))))
-                .await
-        })
+        let func = cx.data().clone().unwrap();
+        let r = Some(ExternRef::new(&mut cx, val));
+        Box::new(async move { func.call_async(&mut cx, (val, r)).await })
     })?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let func: F = instance.get_typed_func(&mut store, "run")?;
-    *store.data_mut() = Some(func);
+    *store.data_mut() = Some(func.clone());
 
-    func.call_async(&mut store, (5, Some(ExternRef::new(5))))
-        .await?;
+    let r = Some(ExternRef::new(&mut store, 5));
+    func.call_async(&mut store, (5, r)).await?;
 
     Ok(())
 }

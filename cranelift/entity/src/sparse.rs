@@ -235,7 +235,6 @@ pub type SparseSet<T> = SparseMap<T, T>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::EntityRef;
 
     /// An opaque reference to an instruction in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

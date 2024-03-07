@@ -3,7 +3,6 @@
 
 #![allow(trivial_numeric_casts)]
 
-use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};

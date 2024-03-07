@@ -44,6 +44,7 @@ use mach::port::*;
 use mach::thread_act::*;
 use mach::traps::*;
 use std::mem;
+use std::ptr::addr_of_mut;
 use std::thread;
 
 /// Other `mach` declarations awaiting <https://github.com/fitzgen/mach/pull/64>
@@ -180,7 +181,7 @@ pub unsafe fn platform_init() {
     // Allocate our WASMTIME_PORT and make sure that it can be sent to so we
     // can receive exceptions.
     let me = mach_task_self();
-    let kret = mach_port_allocate(me, MACH_PORT_RIGHT_RECEIVE, &mut WASMTIME_PORT);
+    let kret = mach_port_allocate(me, MACH_PORT_RIGHT_RECEIVE, addr_of_mut!(WASMTIME_PORT));
     assert_eq!(kret, KERN_SUCCESS, "failed to allocate port");
     let kret = mach_port_insert_right(me, WASMTIME_PORT, WASMTIME_PORT, MACH_MSG_TYPE_MAKE_SEND);
     assert_eq!(kret, KERN_SUCCESS, "failed to insert right");

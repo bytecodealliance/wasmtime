@@ -2,7 +2,6 @@
 // but the original author did not have a machine available to test it.
 #![cfg(target_os = "linux")]
 
-use anyhow::Result;
 use wasmtime::*;
 
 #[derive(Default)]

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use wasmtime::*;
 
 /// Return an instance implementing the "spectest" interface used in the
@@ -31,15 +30,15 @@ pub fn link_spectest<T>(
     linker.define(&mut *store, "spectest", "global_i64", g)?;
 
     let ty = GlobalType::new(ValType::F32, Mutability::Const);
-    let g = Global::new(&mut *store, ty, Val::F32(0x4426_8000))?;
+    let g = Global::new(&mut *store, ty, Val::F32(0x4426_a666))?;
     linker.define(&mut *store, "spectest", "global_f32", g)?;
 
     let ty = GlobalType::new(ValType::F64, Mutability::Const);
-    let g = Global::new(&mut *store, ty, Val::F64(0x4084_d000_0000_0000))?;
+    let g = Global::new(&mut *store, ty, Val::F64(0x4084_d4cc_cccc_cccd))?;
     linker.define(&mut *store, "spectest", "global_f64", g)?;
 
-    let ty = TableType::new(ValType::FuncRef, 10, Some(20));
-    let table = Table::new(&mut *store, ty, Val::FuncRef(None))?;
+    let ty = TableType::new(RefType::FUNCREF, 10, Some(20));
+    let table = Table::new(&mut *store, ty, Ref::Func(None))?;
     linker.define(&mut *store, "spectest", "table", table)?;
 
     let ty = MemoryType::new(1, Some(2));

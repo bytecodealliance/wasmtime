@@ -2,7 +2,6 @@ use clap::Parser;
 use cranelift_isle::compile;
 use cranelift_isle::error::Errors;
 use std::{
-    default::Default,
     fs,
     io::{self, Write},
     path::PathBuf,

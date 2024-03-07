@@ -93,6 +93,7 @@ macro_rules! declare_function_sig {
             /// F64 Nearest.
             nearest_f64: Option<BuiltinFunction>,
             $(
+                $( #[ $attr ] )*
                 $name: Option<BuiltinFunction>,
             )*
         }
@@ -102,6 +103,7 @@ macro_rules! declare_function_sig {
         impl BuiltinFunctions {
             pub fn new<P: PtrSize>(vmoffsets: &VMOffsets<P>, call_conv: CallingConvention) -> Self {
                 let size = vmoffsets.ptr.size();
+                #[allow(unused_doc_comments)]
                 Self {
                     ptr_size: size,
                     call_conv,
@@ -116,6 +118,7 @@ macro_rules! declare_function_sig {
                     nearest_f32: None,
                     nearest_f64: None,
                     $(
+                        $( #[ $attr ] )*
                         $name: None,
                     )*
                 }
@@ -246,6 +249,7 @@ macro_rules! declare_function_sig {
             }
 
             $(
+                $( #[ $attr ] )*
                 pub(crate) fn $name<A: ABI, P: PtrSize>(&mut self) -> BuiltinFunction {
                     if self.$name.is_none() {
                         let params = vec![ $(self.$param() ),* ];

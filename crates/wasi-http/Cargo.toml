@@ -25,9 +25,7 @@ http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
 tracing = { workspace = true }
-wasmtime-wasi = { workspace = true, default-features = false, features = [
-    "preview2",
-] }
+wasmtime-wasi = { workspace = true }
 wasmtime = { workspace = true, features = ['component-model'] }
 
 # The `ring` crate, used to implement TLS, does not build on riscv64 or s390x
@@ -45,7 +43,3 @@ tokio = { workspace = true, features = ['macros'] }
 futures = { workspace = true, default-features = false, features = ['alloc'] }
 sha2 = "0.10.2"
 base64 = "0.21.0"
-
-[features]
-default = ["sync"]
-sync = ["wasmtime-wasi/sync"]

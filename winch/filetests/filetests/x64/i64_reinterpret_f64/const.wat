@@ -8,22 +8,21 @@
 )
 ;;      	 55                   	push	rbp
 ;;      	 4889e5               	mov	rbp, rsp
-;;      	 4883ec08             	sub	rsp, 8
-;;      	 4d8b5e08             	mov	r11, qword ptr [r14 + 8]
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f8717000000         	ja	0x2f
-;;   18:	 4c893424             	mov	qword ptr [rsp], r14
-;;      	 f20f100514000000     	movsd	xmm0, qword ptr [rip + 0x14]
+;;      	 0f8723000000         	ja	0x3e
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
+;;      	 48893424             	mov	qword ptr [rsp], rsi
+;;      	 f20f10050d000000     	movsd	xmm0, qword ptr [rip + 0xd]
 ;;      	 66480f7ec0           	movq	rax, xmm0
-;;      	 4883c408             	add	rsp, 8
+;;      	 4883c410             	add	rsp, 0x10
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   2f:	 0f0b                 	ud2	
-;;   31:	 0000                 	add	byte ptr [rax], al
-;;   33:	 0000                 	add	byte ptr [rax], al
-;;   35:	 0000                 	add	byte ptr [rax], al
-;;   37:	 0000                 	add	byte ptr [rax], al
-;;   39:	 0000                 	add	byte ptr [rax], al
-;;   3b:	 0000                 	add	byte ptr [rax], al
-;;   3d:	 00f0                 	add	al, dh
+;;   3e:	 0f0b                 	ud2	
+;;   40:	 0000                 	add	byte ptr [rax], al
+;;   42:	 0000                 	add	byte ptr [rax], al
+;;   44:	 0000                 	add	byte ptr [rax], al

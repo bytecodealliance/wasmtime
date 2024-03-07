@@ -33,7 +33,7 @@ pub use crate::ref_bits::*;
 pub use crate::scopevec::ScopeVec;
 pub use crate::stack_map::StackMap;
 pub use crate::trap_encoding::*;
-pub use crate::tunables::Tunables;
+pub use crate::tunables::*;
 pub use crate::vmoffsets::*;
 pub use object;
 

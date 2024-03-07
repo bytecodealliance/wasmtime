@@ -1,9 +1,10 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
-use crate::generators::{self, DiffValue, DiffValueType, WasmtimeConfig};
+use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType, WasmtimeConfig};
 use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
+use crate::single_module_fuzzer::KnownValid;
 use anyhow::{Context, Error, Result};
 use arbitrary::Unstructured;
 use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, Val};
@@ -18,9 +19,18 @@ impl WasmtimeEngine {
     /// later. Ideally the store and engine could be built here but
     /// `compile_module` takes a [`generators::Config`]; TODO re-factor this if
     /// that ever changes.
-    pub fn new(u: &mut Unstructured<'_>, config: &generators::Config) -> arbitrary::Result<Self> {
+    pub fn new(
+        u: &mut Unstructured<'_>,
+        config: &mut generators::Config,
+        compiler_strategy: CompilerStrategy,
+    ) -> arbitrary::Result<Self> {
+        if let CompilerStrategy::Winch = compiler_strategy {
+            config.disable_unimplemented_winch_proposals();
+        }
         let mut new_config = u.arbitrary::<WasmtimeConfig>()?;
+        new_config.compiler_strategy = compiler_strategy;
         new_config.make_compatible_with(&config.wasmtime);
+
         let config = generators::Config {
             wasmtime: new_config,
             module_config: config.module_config.clone(),
@@ -31,12 +41,15 @@ impl WasmtimeEngine {
 
 impl DiffEngine for WasmtimeEngine {
     fn name(&self) -> &'static str {
-        "wasmtime"
+        match self.config.wasmtime.compiler_strategy {
+            CompilerStrategy::Cranelift => "wasmtime",
+            CompilerStrategy::Winch => "winch",
+        }
     }
 
     fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         let store = self.config.to_store();
-        let module = compile_module(store.engine(), wasm, true, &self.config).unwrap();
+        let module = compile_module(store.engine(), wasm, KnownValid::Yes, &self.config).unwrap();
         let instance = WasmtimeInstance::new(store, module)?;
         Ok(Box::new(instance))
     }
@@ -217,13 +230,25 @@ impl Into<DiffValue> for Val {
             Val::F32(n) => DiffValue::F32(n),
             Val::F64(n) => DiffValue::F64(n),
             Val::V128(n) => DiffValue::V128(n.into()),
-            Val::FuncRef(f) => DiffValue::FuncRef { null: f.is_none() },
-            Val::ExternRef(e) => DiffValue::ExternRef { null: e.is_none() },
+            Val::ExternRef(r) => DiffValue::ExternRef { null: r.is_none() },
+            Val::FuncRef(r) => DiffValue::FuncRef { null: r.is_none() },
         }
     }
 }
 
 #[test]
-fn smoke() {
-    crate::oracles::engine::smoke_test_engine(|u, config| WasmtimeEngine::new(u, config))
+fn smoke_cranelift() {
+    crate::oracles::engine::smoke_test_engine(|u, config| {
+        WasmtimeEngine::new(u, config, CompilerStrategy::Cranelift)
+    })
+}
+
+#[test]
+fn smoke_winch() {
+    if !cfg!(target_arch = "x86_64") {
+        return;
+    }
+    crate::oracles::engine::smoke_test_engine(|u, config| {
+        WasmtimeEngine::new(u, config, CompilerStrategy::Winch)
+    })
 }

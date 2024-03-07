@@ -1,4 +1,4 @@
-#![cfg_attr(nightlydoc, doc(cfg(feature = "runtime")))]
+#![cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
 
 #[macro_use]
 pub(crate) mod func;
@@ -7,6 +7,7 @@ pub(crate) mod code;
 pub(crate) mod code_memory;
 pub(crate) mod debug;
 pub(crate) mod externals;
+pub(crate) mod gc;
 pub(crate) mod instance;
 pub(crate) mod instantiate;
 pub(crate) mod limits;
@@ -14,13 +15,13 @@ pub(crate) mod linker;
 pub(crate) mod memory;
 pub(crate) mod module;
 pub(crate) mod profiling;
-pub(crate) mod r#ref;
 pub(crate) mod resources;
 pub(crate) mod store;
 pub(crate) mod trampoline;
 pub(crate) mod trap;
 pub(crate) mod type_registry;
 pub(crate) mod types;
+pub(crate) mod uninhabited;
 pub(crate) mod v128;
 pub(crate) mod values;
 
@@ -48,13 +49,13 @@ cfg_if::cfg_if! {
 pub use code_memory::CodeMemory;
 pub use externals::*;
 pub use func::*;
+pub use gc::*;
 pub use instance::{Instance, InstancePre};
 pub use instantiate::CompiledModule;
 pub use limits::*;
 pub use linker::*;
 pub use memory::*;
 pub use module::{Module, ModuleExport};
-pub use r#ref::ExternRef;
 pub use resources::*;
 #[cfg(feature = "async")]
 pub use store::CallHookHandler;
@@ -65,6 +66,8 @@ pub use trap::*;
 pub use types::*;
 pub use v128::V128;
 pub use values::*;
+
+pub(crate) use uninhabited::*;
 
 #[cfg(feature = "profiling")]
 pub use profiling::GuestProfiler;

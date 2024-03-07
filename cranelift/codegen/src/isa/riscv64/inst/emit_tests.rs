@@ -1,8 +1,6 @@
 #[allow(unused)]
 use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
-use crate::settings;
-use alloc::vec::Vec;
 use std::borrow::Cow;
 
 fn fa7() -> Reg {

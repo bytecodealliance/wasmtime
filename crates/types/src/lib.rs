@@ -10,6 +10,26 @@ use std::fmt;
 mod error;
 pub use error::*;
 
+/// A trait for things that can trace all type-to-type edges, aka all type
+/// indices within this thing.
+pub trait TypeTrace {
+    /// Visit each edge.
+    ///
+    /// The function can break out of tracing by returning `Err(E)`.
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>;
+
+    /// Visit each edge, mutably.
+    ///
+    /// Allows updating edges.
+    ///
+    /// The function can break out of tracing by returning `Err(E)`.
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>;
+}
+
 /// WebAssembly value type -- equivalent of `wasmparser::ValType`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WasmValType {
@@ -40,11 +60,57 @@ impl fmt::Display for WasmValType {
     }
 }
 
+impl TypeTrace for WasmValType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            WasmValType::Ref(r) => r.trace(func),
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::F32
+            | WasmValType::F64
+            | WasmValType::V128 => Ok(()),
+        }
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            WasmValType::Ref(r) => r.trace_mut(func),
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::F32
+            | WasmValType::F64
+            | WasmValType::V128 => Ok(()),
+        }
+    }
+}
+
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WasmRefType {
     pub nullable: bool,
     pub heap_type: WasmHeapType,
+}
+
+impl TypeTrace for WasmRefType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        self.heap_type.trace(func)
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        self.heap_type.trace_mut(func)
+    }
 }
 
 impl WasmRefType {
@@ -74,30 +140,67 @@ impl fmt::Display for WasmRefType {
     }
 }
 
+/// An interned type index, either at the module or engine level.
+///
+/// Roughly equivalent to `wasmparser::UnpackedIndex`, although doesn't have to
+/// concern itself with recursion-group-local indices.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EngineOrModuleTypeIndex {
+    /// An index within a global namespace across all modules that can interact
+    /// with each other (in practice this is a `VMSharedTypeIndex` at the per
+    /// `wasmtime::Engine` level).
+    Engine(u32),
+    /// An index within the current Wasm module.
+    Module(ModuleInternedTypeIndex),
+}
+
+impl fmt::Display for EngineOrModuleTypeIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Engine(i) => write!(f, "(engine {i})"),
+            Self::Module(i) => write!(f, "(module {})", i.as_u32()),
+        }
+    }
+}
+
 /// WebAssembly heap type -- equivalent of `wasmparser`'s HeapType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WasmHeapType {
-    Func,
     Extern,
-    // FIXME: the `TypeIndex` payload here is not suitable given all the
-    // contexts that this type is used within. For example the Engine in
-    // wasmtime hashes this index which is not appropriate because the index is
-    // not globally unique.
-    //
-    // This probably needs to become `WasmHeapType<T>` where all of translation
-    // uses `WasmHeapType<TypeIndex>` and all of engine-level "stuff"  uses
-    // `WasmHeapType<VMSharedTypeIndex>`. This `<T>` would need to be
-    // propagated to quite a few locations though so it's left for a future
-    // refactoring at this time.
-    TypedFunc(ModuleInternedTypeIndex),
+    Func,
+    Concrete(EngineOrModuleTypeIndex),
+    NoFunc,
 }
 
 impl fmt::Display for WasmHeapType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Func => write!(f, "func"),
             Self::Extern => write!(f, "extern"),
-            Self::TypedFunc(i) => write!(f, "func_sig{}", i.as_u32()),
+            Self::Func => write!(f, "func"),
+            Self::Concrete(i) => write!(f, "{i}"),
+            Self::NoFunc => write!(f, "nofunc"),
+        }
+    }
+}
+
+impl TypeTrace for WasmHeapType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match *self {
+            Self::Concrete(i) => func(i),
+            Self::Func | Self::NoFunc | Self::Extern => Ok(()),
+        }
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            Self::Concrete(i) => func(i),
+            Self::Func | Self::NoFunc | Self::Extern => Ok(()),
         }
     }
 }
@@ -109,6 +212,34 @@ pub struct WasmFuncType {
     externref_params_count: usize,
     returns: Box<[WasmValType]>,
     externref_returns_count: usize,
+}
+
+impl TypeTrace for WasmFuncType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for p in self.params.iter() {
+            p.trace(func)?;
+        }
+        for r in self.returns.iter() {
+            r.trace(func)?;
+        }
+        Ok(())
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for p in self.params.iter_mut() {
+            p.trace_mut(func)?;
+        }
+        for r in self.returns.iter_mut() {
+            r.trace_mut(func)?;
+        }
+        Ok(())
+    }
 }
 
 impl WasmFuncType {
@@ -485,15 +616,15 @@ pub trait TypeConvert {
     /// Converts a wasmparser heap type to a wasmtime type
     fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmHeapType {
         match ty {
-            wasmparser::HeapType::Func => WasmHeapType::Func,
             wasmparser::HeapType::Extern => WasmHeapType::Extern,
+            wasmparser::HeapType::Func => WasmHeapType::Func,
+            wasmparser::HeapType::NoFunc => WasmHeapType::NoFunc,
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
 
             wasmparser::HeapType::Any
             | wasmparser::HeapType::Exn
             | wasmparser::HeapType::None
             | wasmparser::HeapType::NoExtern
-            | wasmparser::HeapType::NoFunc
             | wasmparser::HeapType::Eq
             | wasmparser::HeapType::Struct
             | wasmparser::HeapType::Array
