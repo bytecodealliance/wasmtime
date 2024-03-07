@@ -236,6 +236,11 @@ impl ABIMachineSpec for S390xMachineDeps {
             isa::CallConv::Tail,
             "s390x does not support the 'tail' calling convention yet"
         );
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "s390x does not support the 'winch' calling convention yet"
+        );
 
         let mut next_gpr = 0;
         let mut next_fpr = 0;
