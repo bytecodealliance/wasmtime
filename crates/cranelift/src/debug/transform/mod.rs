@@ -6,9 +6,10 @@ use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctionsMetadata;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
+use fallible_iterator::FallibleIterator;
 use gimli::{
     write, DebugAddr, DebugLine, DebugLineStr, DebugStr, DebugStrOffsets, Dwarf, DwarfPackage,
-    LocationLists, RangeLists, Unit, UnitSectionOffset,
+    DwoId, EndianSlice, LocationLists, RangeLists, Unit, UnitSectionOffset,
 };
 use std::{
     borrow::Cow,
@@ -16,9 +17,10 @@ use std::{
     fmt::Debug,
     fs, mem,
     path::PathBuf,
+    result::Result,
 };
 use thiserror::Error;
-use wasmtime_environ::{dwarf_relocate::Relocate, DebugInfoData};
+use wasmtime_environ::DebugInfoData;
 
 pub use address_transform::AddressTransform;
 
@@ -64,7 +66,7 @@ pub fn transform_dwarf(
     memory_offset: &ModuleMemoryOffset,
 ) -> Result<write::Dwarf, Error> {
     let addr_tr = AddressTransform::new(funcs, &di.wasm_file);
-    let reachable = build_dependencies(&di.dwarf, &addr_tr)?.get_reachable();
+    let reachable = build_dependencies(&di.dwarf, &di.dwarf_package, &addr_tr)?.get_reachable();
 
     let context = DebugInputContext {
         debug_str: &di.dwarf.debug_str,
@@ -93,22 +95,38 @@ pub fn transform_dwarf(
 
     let mut translated = HashSet::new();
     let mut iter = di.dwarf.debug_info.units();
+
     while let Some(header) = iter.next().unwrap_or(None) {
-        let mut unit = di.dwarf.unit(header)?;
+        let unit = di.dwarf.unit(header)?;
+
+        let resolved_unit;
+
+        let mut split_dwarf = None;
 
         if let gimli::UnitType::Skeleton(dwo_id) = unit.header.type_() {
             if di.dwarf_package.is_some() {
-                let mut unit = replace_unit_from_split_dwarf(
+                if let Some((fused, fused_dwarf)) = replace_unit_from_split_dwarf(
                     &unit,
                     di.dwarf_package.as_ref().unwrap(),
                     &di.dwarf,
-                );
+                ) {
+                    resolved_unit = Some(fused);
+                    split_dwarf = Some(fused_dwarf);
+                } else {
+                    resolved_unit = None;
+                }
+            } else {
+                resolved_unit = None;
             }
+        } else {
+            resolved_unit = None;
         }
 
         if let Some((id, ref_map, pending_refs)) = clone_unit(
             &di.dwarf,
-            unit,
+            &unit,
+            resolved_unit.as_ref(),
+            split_dwarf.as_ref(),
             &context,
             &addr_tr,
             funcs,
@@ -147,14 +165,31 @@ pub fn transform_dwarf(
 
 fn replace_unit_from_split_dwarf<'a>(
     unit: &'a Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize>,
-    dwp: &DwarfPackage<Relocate<gimli::EndianSlice<'a, gimli::LittleEndian>>>,
+    dwp: &DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>,
     parent: &Dwarf<gimli::EndianSlice<'a, gimli::LittleEndian>>,
-) -> &'a Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize> {
-    // if let Some(dwoId) = unit.dwo_id {
-    //     match dwp.find_cu(dwoId, parent) {
-    //         _ => {}
-    //     }
-    // }
+) -> Option<(
+    Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize>,
+    Dwarf<gimli::EndianSlice<'a, gimli::LittleEndian>>,
+)> {
+    if let Some(dwo_id) = unit.dwo_id {
+        return match dwp.find_cu(dwo_id, parent) {
+            Ok(cu) => match cu {
+                Some(split_unit_dwarf) => match split_unit_dwarf.debug_info.units().next() {
+                    Ok(Some(unit_header)) => Some((
+                        split_unit_dwarf.unit(unit_header).unwrap(),
+                        split_unit_dwarf,
+                    )),
+                    Err(err) => {
+                        eprintln!("Failed to get unit header from compilation unit {}", err);
+                        return None;
+                    }
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        };
+    }
 
-    unit
+    None
 }

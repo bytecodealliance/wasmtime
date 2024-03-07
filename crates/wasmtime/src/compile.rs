@@ -34,10 +34,10 @@ use std::{
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    dwarf_relocate::Relocate, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex,
-    FinishedObject, FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
-    StaticModuleIndex, WasmFunctionInfo,
+    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
+    FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex, ModuleTranslation,
+    ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex,
+    WasmFunctionInfo,
 };
 
 /// Converts an input binary-encoded WebAssembly module to compilation
@@ -55,7 +55,7 @@ use wasmtime_environ::{
 pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
-    dwarf_package: Option<gimli::DwarfPackage<Relocate<'_, EndianSlice<'_, LittleEndian>>>>,
+    dwarf_package: Option<gimli::DwarfPackage<EndianSlice<'_, LittleEndian>>>,
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
     let tunables = &engine.config().tunables;
 

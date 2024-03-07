@@ -245,7 +245,7 @@ wit-component = "0.20.1"
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
 object = { version = "0.32", default-features = false, features = ['read_core', 'elf', 'std', 'wasm'] }
-gimli = { version = "0.28.0", default-features = false, features = ['read', 'std'] }
+gimli = { version = "0.28.1" }
 anyhow = "1.0.22"
 windows-sys = "0.52.0"
 env_logger = "0.10"

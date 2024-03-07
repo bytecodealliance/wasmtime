@@ -3460,6 +3460,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
+ "fallible-iterator",
  "gimli",
  "log",
  "object",

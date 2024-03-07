@@ -6,7 +6,6 @@ use anyhow::{bail, Context, Result};
 use std::fs;
 use std::mem;
 use std::path::Path;
-use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
@@ -60,15 +59,11 @@ impl Component {
     // FIXME: need to write more docs here.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn new(
-        engine: &Engine,
-        bytes: impl AsRef<[u8]>,
-        wasm_path: Option<PathBuf>,
-    ) -> Result<Component> {
+    pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes)?;
-        Component::from_binary(engine, &bytes, wasm_path)
+        Component::from_binary(engine, &bytes)
     }
 
     /// Compiles a new WebAssembly component from a wasm file on disk pointed to
@@ -81,7 +76,6 @@ impl Component {
         match Self::new(
             engine,
             &fs::read(&file).with_context(|| "failed to read input file")?,
-            Some(file.as_ref().to_path_buf()),
         ) {
             Ok(m) => Ok(m),
             Err(e) => {
@@ -104,11 +98,7 @@ impl Component {
     // FIXME: need to write more docs here.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn from_binary(
-        engine: &Engine,
-        binary: &[u8],
-        wasm_path: Option<PathBuf>,
-    ) -> Result<Component> {
+    pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
         use crate::compile::build_component_artifacts;
         use crate::module::HashedEngineCompileEnv;
         use wasmtime_runtime::MmapVec;

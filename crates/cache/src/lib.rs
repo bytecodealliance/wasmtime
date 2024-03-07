@@ -2,7 +2,6 @@ use base64::Engine;
 use gimli::DwarfPackage;
 use gimli::EndianSlice;
 use gimli::LittleEndian;
-use gimli::Reader;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -11,7 +10,6 @@ use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use wasmtime_environ::dwarf_relocate::Relocate;
 
 #[macro_use] // for tests
 mod config;
@@ -54,10 +52,7 @@ impl<'config> ModuleCacheEntry<'config> {
     pub fn get_data<T, U, E>(
         &self,
         state: T,
-        compute: fn(
-            &T,
-            Option<DwarfPackage<Relocate<EndianSlice<'_, LittleEndian>>>>,
-        ) -> Result<U, E>,
+        compute: fn(&T, Option<DwarfPackage<EndianSlice<'_, LittleEndian>>>) -> Result<U, E>,
     ) -> Result<U, E>
     where
         T: Hash,
@@ -84,13 +79,10 @@ impl<'config> ModuleCacheEntry<'config> {
         state: &T,
         // NOTE: These are function pointers instead of closures so that they
         // don't accidentally close over something not accounted in the cache.
-        compute: fn(
-            &T,
-            Option<DwarfPackage<Relocate<'_, EndianSlice<'_, LittleEndian>>>>,
-        ) -> Result<U, E>,
+        compute: fn(&T, Option<DwarfPackage<EndianSlice<'_, LittleEndian>>>) -> Result<U, E>,
         serialize: fn(&T, &U) -> Option<Vec<u8>>,
         deserialize: fn(&T, Vec<u8>) -> Option<U>,
-        dwarf_package: Option<DwarfPackage<Relocate<'_, EndianSlice<'_, LittleEndian>>>>,
+        dwarf_package: Option<DwarfPackage<EndianSlice<'_, LittleEndian>>>,
     ) -> Result<U, E>
     where
         T: Hash,

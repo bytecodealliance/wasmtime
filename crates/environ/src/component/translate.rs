@@ -5,13 +5,9 @@ use crate::{
     TypeConvert, WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
-use gimli::DwarfPackage;
-use gimli::EndianSlice;
-use gimli::LittleEndian;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
-use std::path::PathBuf;
 use wasmparser::types::{
     AliasableResourceId, ComponentEntityType, ComponentFuncTypeId, ComponentInstanceTypeId, Types,
 };

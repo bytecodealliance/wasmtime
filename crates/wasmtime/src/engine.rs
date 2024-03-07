@@ -9,7 +9,6 @@ use once_cell::sync::OnceCell;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use wasmtime_environ::dwarf_relocate::Relocate;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind};
 
@@ -508,7 +507,7 @@ impl Engine {
     pub fn precompile_module(
         &self,
         bytes: &[u8],
-        dwarf_package: Option<DwarfPackage<Relocate<EndianSlice<'_, gimli::LittleEndian>>>>,
+        dwarf_package: Option<DwarfPackage<EndianSlice<'_, gimli::LittleEndian>>>,
     ) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
@@ -520,11 +519,7 @@ impl Engine {
     /// [`Component`](crate::component::Component)
     #[cfg(feature = "component-model")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
-    pub fn precompile_component(
-        &self,
-        bytes: &[u8],
-        dwarf_package: Option<Vec<u8>>,
-    ) -> Result<Vec<u8>> {
+    pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
         let (v, _) = crate::compile::build_component_artifacts::<Vec<u8>>(self, &bytes)?;

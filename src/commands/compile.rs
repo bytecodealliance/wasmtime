@@ -100,7 +100,7 @@ impl CompileCommand {
         });
 
         let output_bytes = if wasmparser::Parser::is_component(&input) {
-            engine.precompile_component(&input, None)?
+            engine.precompile_component(&input)?
         } else {
             engine.precompile_module(&input, None)?
         };

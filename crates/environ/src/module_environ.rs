@@ -1,4 +1,3 @@
-use crate::dwarf_relocate::Relocate;
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
     ModuleType, TablePlan, TableSegment,
@@ -128,14 +127,13 @@ pub struct DebugInfoData<'a> {
     debug_loclists: gimli::DebugLocLists<Reader<'a>>,
     pub debug_ranges: gimli::DebugRanges<Reader<'a>>,
     pub debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
-    pub dwarf_package: Option<DwarfPackage<RelocateReader<'a>>>,
+    pub dwarf_package: Option<DwarfPackage<Reader<'a>>>,
 }
 
 #[allow(missing_docs)]
 pub type Dwarf<'input> = gimli::Dwarf<Reader<'input>>;
 
 type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
-type RelocateReader<'input> = Relocate<'input, gimli::EndianSlice<'input, gimli::LittleEndian>>;
 
 #[derive(Debug, Default)]
 #[allow(missing_docs)]

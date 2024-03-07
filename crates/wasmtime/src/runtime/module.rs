@@ -33,8 +33,8 @@ use std::collections::HashMap;
 use typed_arena::Arena;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    dwarf_relocate::Relocate, CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex,
-    EntityIndex, HostPtr, ModuleTypes, ObjectKind, VMOffsets,
+    CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
+    ObjectKind, VMOffsets,
 };
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
@@ -305,7 +305,7 @@ impl Module {
         buffer: &'a mut Vec<u8>,
         arena_data: &'a Arena<Cow<'a, [u8]>>,
         arena_relocations: &'a Arena<RelocationMap>,
-    ) -> Option<DwarfPackage<Relocate<'a, gimli::EndianSlice<'a, gimli::LittleEndian>>>> {
+    ) -> Option<DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>> {
         let dwp_path = wasm_file.with_extension("dwp");
 
         match fs::File::open(&dwp_path) {
@@ -323,7 +323,7 @@ impl Module {
                     }
                 };
 
-                match Module::load_dwp(object_file, &arena_data, &arena_relocations) {
+                match Module::load_dwp(object_file, &arena_data, &arena_relocations, buffer) {
                     Ok(package) => Some(package),
                     Err(err) => {
                         eprintln!("Failed to load Dwarf package '{:?}': {}", dwp_path, err);
@@ -373,8 +373,6 @@ impl Module {
         binary: &[u8],
         wasm_path: Option<PathBuf>,
     ) -> Result<Module> {
-        use wasm_encoder::Component;
-
         use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
 
         engine
@@ -383,10 +381,6 @@ impl Module {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
-                if wasm_path.is_some()
-                {
-                    println!("hello");
-                }
                 let state = (HashedEngineCompileEnv(engine), binary);
 
                 let mut buffer = Vec::new();
@@ -493,7 +487,7 @@ impl Module {
         is_dwo: bool,
         arena_data: &'arena Arena<Cow<'input, [u8]>>,
         arena_relocations: &'arena Arena<RelocationMap>,
-    ) -> Result<Relocate<'input, gimli::EndianSlice<'input, Endian>>>
+    ) -> Result<gimli::EndianSlice<'input, Endian>>
     where
         'arena: 'input,
     {
@@ -520,33 +514,22 @@ impl Module {
         let data_ref = arena_data.alloc(data);
         let reader = gimli::EndianSlice::new(data_ref, endian);
         let section = reader;
-        let relocations = arena_relocations.alloc(relocations);
-        Ok(Relocate {
-            relocations,
-            section,
-            reader,
-        })
-    }
-
-    fn empty_file_section<'input, 'arena>(
-        arena_relocations: &'arena Arena<RelocationMap>,
-    ) -> Relocate<'arena, gimli::EndianSlice<'arena, gimli::LittleEndian>> {
-        let reader = gimli::EndianSlice::new(&[], gimli::LittleEndian);
-        let section = reader;
-        let relocations = RelocationMap::default();
-        let relocations = arena_relocations.alloc(relocations);
-        Relocate {
-            relocations,
-            section,
-            reader,
-        }
+        Ok(section)
     }
 
     fn load_dwp<'a>(
         file: File<'a>,
         arena_data: &'a Arena<Cow<'a, [u8]>>,
         arena_relocations: &'a Arena<RelocationMap>,
-    ) -> Result<DwarfPackage<Relocate<'a, gimli::EndianSlice<'a, gimli::LittleEndian>>>> {
+        buffer: &'a Vec<u8>,
+    ) -> Result<DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>> {
+        // Read the file contents into a Vec<u8>
+        // let file_contents = std::fs::read(file_path)?;
+
+        // Create a gimli::EndianSlice from the file contents
+
+        let endian_slice = gimli::EndianSlice::new(buffer, LittleEndian);
+
         let mut load_section = |id: gimli::SectionId| -> Result<_> {
             Module::load_file_section(
                 id,
@@ -558,8 +541,13 @@ impl Module {
             )
         };
 
-        let empty = Module::empty_file_section(&arena_relocations);
-        gimli::DwarfPackage::load(&mut load_section, empty)
+        // Load the DwarfPackage from the EndianSlice
+        let dwarf_package = DwarfPackage::load(&mut load_section, endian_slice)?;
+
+        Ok(dwarf_package)
+
+        // let empty = Module::empty_file_section(&arena_relocations);
+        // gimli::DwarfPackage::load(&mut load_section, empty)
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given `file`

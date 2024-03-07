@@ -3,8 +3,8 @@ use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
 use anyhow::{Context, Error};
 use gimli::{
-    write, DebugLine, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
-    DebuggingInformationEntry, LineEncoding, Unit,
+    write, AttributeValue::DebugLineRef, DebugLine, DebugLineOffset, DebugLineStr, DebugStr,
+    DebugStrOffsets, DebuggingInformationEntry, LineEncoding, Unit,
 };
 use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
@@ -39,9 +39,16 @@ enum ReadLineProgramState {
     IgnoreSequence,
 }
 
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>())
+}
+
 pub(crate) fn clone_line_program<R>(
+    dwarf: &gimli::Dwarf<R>,
+    skeleton_dwarf: &gimli::Dwarf<R>,
     unit: &Unit<R, R::Offset>,
     root: &DebuggingInformationEntry<R>,
+    skeleton_die: Option<&DebuggingInformationEntry<R>>,
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
     debug_str: &DebugStr<R>,
@@ -53,22 +60,28 @@ pub(crate) fn clone_line_program<R>(
 where
     R: Reader,
 {
-    let offset = match root.attr_value(gimli::DW_AT_stmt_list)? {
-        Some(gimli::AttributeValue::DebugLineRef(offset)) => offset,
+    // Where are the "location" attributes
+    let (location_die, location_dwarf) = match skeleton_die {
+        Some(die) => (die, skeleton_dwarf),
+        _ => (root, dwarf),
+    };
+
+    let offset = match location_die.attr_value(gimli::DW_AT_stmt_list)? {
+        Some(DebugLineRef(offset)) => offset,
+        Some(gimli::AttributeValue::SecOffset(offset)) => DebugLineOffset(offset),
         _ => {
             return Err(TransformError("Debug line offset is not found").into());
         }
     };
-    let comp_dir = root.attr_value(gimli::DW_AT_comp_dir)?;
+
+    let comp_dir = location_die.attr_value(gimli::DW_AT_comp_dir)?;
     let comp_name = root.attr_value(gimli::DW_AT_name)?;
     let out_comp_dir = match &comp_dir {
         Some(comp_dir) => Some(clone_attr_string(
             comp_dir,
             gimli::DW_FORM_strp,
             unit,
-            debug_str,
-            debug_str_offsets,
-            debug_line_str,
+            location_dwarf,
             out_strings,
         )?),
         None => None,
@@ -77,9 +90,7 @@ where
         comp_name.as_ref().context("missing DW_AT_name attribute")?,
         gimli::DW_FORM_strp,
         unit,
-        debug_str,
-        debug_str_offsets,
-        debug_line_str,
+        dwarf,
         out_strings,
     )?;
 
@@ -114,9 +125,7 @@ where
                 dir_attr,
                 gimli::DW_FORM_string,
                 unit,
-                debug_str,
-                debug_str_offsets,
-                debug_line_str,
+                location_dwarf,
                 out_strings,
             )?);
             dirs.push(dir_id);
@@ -132,9 +141,7 @@ where
                     &file_entry.path_name(),
                     gimli::DW_FORM_string,
                     unit,
-                    debug_str,
-                    debug_str_offsets,
-                    debug_line_str,
+                    location_dwarf,
                     out_strings,
                 )?,
                 dir_id,
