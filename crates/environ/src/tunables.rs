@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use serde_derive::{Deserialize, Serialize};
-use target_lexicon::Triple;
+use target_lexicon::{PointerWidth, Triple};
 
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize, Debug)]
@@ -77,10 +77,9 @@ impl Tunables {
         match target
             .pointer_width()
             .map_err(|_| anyhow!("failed to retrieve target pointer width"))?
-            .bits()
         {
-            32 => Ok(Tunables::default_u32()),
-            64 => Ok(Tunables::default_u64()),
+            PointerWidth::U32 => Ok(Tunables::default_u32()),
+            PointerWidth::U64 => Ok(Tunables::default_u64()),
             _ => bail!("unsupported target pointer width"),
         }
     }
