@@ -292,6 +292,14 @@ pub unsafe extern "C" fn wasi_config_preopen_socket(
     fd_num: u32,
     host_port: *const c_char,
 ) -> bool {
+    const VAR: &str = "WASMTIME_WASI_CONFIG_PREOPEN_SOCKET_ALLOW";
+    if std::env::var(VAR).is_err() {
+        panic!(
+            "wasmtime c-api: wasi_config_preopen_socket will be deprecated in the \
+            wasmtime 20.0.0 release. set {VAR} to enable temporarily"
+        );
+    }
+
     let address = match cstr_to_str(host_port) {
         Some(s) => s,
         None => return false,
