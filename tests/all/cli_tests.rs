@@ -1588,3 +1588,10 @@ mod test_programs {
         Ok(())
     }
 }
+
+#[test]
+fn settings_command() -> Result<()> {
+    let output = run_wasmtime(&["settings"])?;
+    assert!(output.contains("Cranelift settings for target"));
+    Ok(())
+}

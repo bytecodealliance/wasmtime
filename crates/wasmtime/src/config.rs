@@ -6,7 +6,7 @@ use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use target_lexicon::{Architecture, PointerWidth};
+use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -1684,11 +1684,7 @@ impl Config {
         let mut tunables = Tunables::default_host();
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let mut tunables = match &self.compiler_config.target.as_ref() {
-            Some(target) => match target.pointer_width() {
-                Ok(PointerWidth::U32) => Tunables::default_u32(),
-                Ok(PointerWidth::U64) => Tunables::default_u64(),
-                _ => bail!("unknown pointer width"),
-            },
+            Some(target) => Tunables::default_for_target(target)?,
             None => Tunables::default_host(),
         };
 
