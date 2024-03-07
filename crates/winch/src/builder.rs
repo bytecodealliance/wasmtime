@@ -9,12 +9,15 @@ use winch_codegen::{isa, TargetIsa};
 /// Compiler builder.
 struct Builder {
     inner: IsaBuilder<Result<Box<dyn TargetIsa>>>,
+    cranelift: Box<dyn CompilerBuilder>,
 }
 
 pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
-    Ok(Box::new(Builder {
-        inner: IsaBuilder::new(triple, |triple| isa::lookup(triple).map_err(|e| e.into()))?,
-    }))
+    let inner = IsaBuilder::new(triple.clone(), |triple| {
+        isa::lookup(triple).map_err(|e| e.into())
+    })?;
+    let cranelift = wasmtime_cranelift::builder(triple)?;
+    Ok(Box::new(Builder { inner, cranelift }))
 }
 
 impl CompilerBuilder for Builder {
@@ -23,16 +26,21 @@ impl CompilerBuilder for Builder {
     }
 
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {
-        self.inner.target(target)?;
+        self.inner.target(target.clone())?;
+        self.cranelift.target(target)?;
         Ok(())
     }
 
     fn set(&mut self, name: &str, value: &str) -> Result<()> {
-        self.inner.set(name, value)
+        self.inner.set(name, value)?;
+        self.cranelift.set(name, value)?;
+        Ok(())
     }
 
     fn enable(&mut self, name: &str) -> Result<()> {
-        self.inner.enable(name)
+        self.inner.enable(name)?;
+        self.cranelift.enable(name)?;
+        Ok(())
     }
 
     fn settings(&self) -> Vec<Setting> {
@@ -40,14 +48,14 @@ impl CompilerBuilder for Builder {
     }
 
     fn set_tunables(&mut self, tunables: wasmtime_environ::Tunables) -> Result<()> {
-        let _ = tunables;
+        self.cranelift.set_tunables(tunables)?;
         Ok(())
     }
 
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self.inner.build()?;
-
-        Ok(Box::new(Compiler::new(isa)))
+        let cranelift = self.cranelift.build()?;
+        Ok(Box::new(Compiler::new(isa, cranelift)))
     }
 
     fn enable_incremental_compilation(

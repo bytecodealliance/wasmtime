@@ -13,7 +13,7 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
-use crate::{CompiledFuncEnv, CompiledFunction, RelocationTarget};
+use crate::{CompiledFunction, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::LibCall;
@@ -107,7 +107,7 @@ impl<'a> ModuleTextBuilder<'a> {
     pub fn append_func(
         &mut self,
         name: &str,
-        compiled_func: &'a CompiledFunction<impl CompiledFuncEnv>,
+        compiled_func: &'a CompiledFunction,
         resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body = compiled_func.buffer.data();

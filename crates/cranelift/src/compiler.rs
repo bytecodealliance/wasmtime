@@ -65,7 +65,7 @@ impl Default for CompilerContext {
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
-pub(crate) struct Compiler {
+pub struct Compiler {
     tunables: Tunables,
     contexts: Mutex<Vec<CompilerContext>>,
     isa: OwnedTargetIsa,
@@ -104,7 +104,7 @@ impl Drop for Compiler {
 }
 
 impl Compiler {
-    pub(crate) fn new(
+    pub fn new(
         tunables: Tunables,
         isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
@@ -460,9 +460,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = func
-                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
-                .unwrap();
+            let func = func.downcast_ref::<CompiledFunction>().unwrap();
             let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
             if self.tunables.generate_address_map {
                 let addr = func.address_map();
@@ -575,7 +573,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let functions_info = funcs
             .iter()
             .map(|(_, (_, func))| {
-                let f: &CompiledFunction<CompiledFuncEnv> = func.downcast_ref().unwrap();
+                let f = func.downcast_ref::<CompiledFunction>().unwrap();
                 f.metadata()
             })
             .collect();
@@ -725,7 +723,7 @@ impl Compiler {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-    ) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
+    ) -> Result<CompiledFunction, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let native_call_sig = native_call_signature(isa, ty);
@@ -788,7 +786,7 @@ impl Compiler {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-    ) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
+    ) -> Result<CompiledFunction, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_call_sig = wasm_call_signature(isa, ty, &self.tunables);
@@ -1012,7 +1010,7 @@ impl FunctionCompiler<'_> {
         (builder, block0)
     }
 
-    fn finish(self) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
+    fn finish(self) -> Result<CompiledFunction, CompileError> {
         let (info, func) = self.finish_with_info(None)?;
         assert!(info.stack_maps.is_empty());
         Ok(func)
@@ -1021,7 +1019,7 @@ impl FunctionCompiler<'_> {
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
-    ) -> Result<(WasmFunctionInfo, CompiledFunction<CompiledFuncEnv>), CompileError> {
+    ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
         let (_, _code_buf) =

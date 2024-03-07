@@ -3803,6 +3803,7 @@ dependencies = [
  "object 0.33.0",
  "target-lexicon",
  "wasmparser",
+ "wasmtime-cranelift",
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "winch-codegen",
