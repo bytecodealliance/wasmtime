@@ -804,8 +804,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         match call_conv_of_callee {
-            isa::CallConv::Tail => TAIL_CLOBBERS,
-            isa::CallConv::Winch => WINCH_CLOBBERS,
+            isa::CallConv::Tail => ALL_CLOBBERS,
+            isa::CallConv::Winch => ALL_CLOBBERS,
             _ if call_conv_of_callee.extends_windows_fastcall() => WINDOWS_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }
@@ -1158,8 +1158,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
-const TAIL_CLOBBERS: PRegSet = tail_clobbers();
-const WINCH_CLOBBERS: PRegSet = winch_clobbers();
+const ALL_CLOBBERS: PRegSet = all_clobbers();
 
 const fn windows_clobbers() -> PRegSet {
     PRegSet::empty()
@@ -1207,41 +1206,8 @@ const fn sysv_clobbers() -> PRegSet {
         .with(regs::fpr_preg(15))
 }
 
-const fn tail_clobbers() -> PRegSet {
-    PRegSet::empty()
-        .with(regs::gpr_preg(regs::ENC_RAX))
-        .with(regs::gpr_preg(regs::ENC_RCX))
-        .with(regs::gpr_preg(regs::ENC_RDX))
-        .with(regs::gpr_preg(regs::ENC_RBX))
-        .with(regs::gpr_preg(regs::ENC_RSI))
-        .with(regs::gpr_preg(regs::ENC_RDI))
-        .with(regs::gpr_preg(regs::ENC_R8))
-        .with(regs::gpr_preg(regs::ENC_R9))
-        .with(regs::gpr_preg(regs::ENC_R10))
-        .with(regs::gpr_preg(regs::ENC_R11))
-        .with(regs::gpr_preg(regs::ENC_R12))
-        .with(regs::gpr_preg(regs::ENC_R13))
-        .with(regs::gpr_preg(regs::ENC_R14))
-        .with(regs::gpr_preg(regs::ENC_R15))
-        .with(regs::fpr_preg(0))
-        .with(regs::fpr_preg(1))
-        .with(regs::fpr_preg(2))
-        .with(regs::fpr_preg(3))
-        .with(regs::fpr_preg(4))
-        .with(regs::fpr_preg(5))
-        .with(regs::fpr_preg(6))
-        .with(regs::fpr_preg(7))
-        .with(regs::fpr_preg(8))
-        .with(regs::fpr_preg(9))
-        .with(regs::fpr_preg(10))
-        .with(regs::fpr_preg(11))
-        .with(regs::fpr_preg(12))
-        .with(regs::fpr_preg(13))
-        .with(regs::fpr_preg(14))
-        .with(regs::fpr_preg(15))
-}
-
-const fn winch_clobbers() -> PRegSet {
+/// For calling conventions that clobber all registers.
+const fn all_clobbers() -> PRegSet {
     PRegSet::empty()
         .with(regs::gpr_preg(regs::ENC_RAX))
         .with(regs::gpr_preg(regs::ENC_RCX))

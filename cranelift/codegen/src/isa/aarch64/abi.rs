@@ -1107,8 +1107,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         match call_conv_of_callee {
-            isa::CallConv::Tail => TAIL_CLOBBERS,
-            isa::CallConv::Winch => WINCH_CLOBBERS,
+            isa::CallConv::Tail => ALL_CLOBBERS,
+            isa::CallConv::Winch => ALL_CLOBBERS,
             _ => DEFAULT_AAPCS_CLOBBERS,
         }
     }
@@ -1299,7 +1299,7 @@ fn compute_arg_locs_tail<'a, I>(
 where
     I: IntoIterator<Item = &'a ir::AbiParam>,
 {
-    let mut xregs = TAIL_CLOBBERS
+    let mut xregs = ALL_CLOBBERS
         .into_iter()
         .filter(|r| r.class() == RegClass::Int)
         // We reserve `x0` for the return area pointer. For simplicity, we
@@ -1313,7 +1313,7 @@ where
         // indirect calls. So skip `x1` also, reserving it for that role.
         .skip(2);
 
-    let mut vregs = TAIL_CLOBBERS
+    let mut vregs = ALL_CLOBBERS
         .into_iter()
         .filter(|r| r.class() == RegClass::Float);
 
@@ -1542,8 +1542,8 @@ const fn default_aapcs_clobbers() -> PRegSet {
 
 const DEFAULT_AAPCS_CLOBBERS: PRegSet = default_aapcs_clobbers();
 
-// NB: The `tail` calling convention clobbers all allocatable registers.
-const TAIL_CLOBBERS: PRegSet = PRegSet::empty()
+// For calling conventions that clobber all registers.
+const ALL_CLOBBERS: PRegSet = PRegSet::empty()
     .with(xreg_preg(0))
     .with(xreg_preg(1))
     .with(xreg_preg(2))
@@ -1608,71 +1608,6 @@ const TAIL_CLOBBERS: PRegSet = PRegSet::empty()
     .with(vreg_preg(30))
     .with(vreg_preg(31));
 
-// NB: The `winch` calling convention clobbers all allocatable registers.
-const WINCH_CLOBBERS: PRegSet = PRegSet::empty()
-    .with(xreg_preg(0))
-    .with(xreg_preg(1))
-    .with(xreg_preg(2))
-    .with(xreg_preg(3))
-    .with(xreg_preg(4))
-    .with(xreg_preg(5))
-    .with(xreg_preg(6))
-    .with(xreg_preg(7))
-    .with(xreg_preg(8))
-    .with(xreg_preg(9))
-    .with(xreg_preg(10))
-    .with(xreg_preg(11))
-    .with(xreg_preg(12))
-    .with(xreg_preg(13))
-    .with(xreg_preg(14))
-    .with(xreg_preg(15))
-    // Cranelift reserves x16 and x17 as unallocatable scratch registers.
-    //
-    // x18 can be used by the platform and therefore is not allocatable.
-    .with(xreg_preg(19))
-    .with(xreg_preg(20))
-    .with(xreg_preg(21))
-    .with(xreg_preg(22))
-    .with(xreg_preg(23))
-    .with(xreg_preg(24))
-    .with(xreg_preg(25))
-    .with(xreg_preg(26))
-    .with(xreg_preg(27))
-    .with(xreg_preg(28))
-    // NB: x29 is the FP, x30 is the link register, and x31 is the SP. None of
-    // these are allocatable.
-    .with(vreg_preg(0))
-    .with(vreg_preg(1))
-    .with(vreg_preg(2))
-    .with(vreg_preg(3))
-    .with(vreg_preg(4))
-    .with(vreg_preg(5))
-    .with(vreg_preg(6))
-    .with(vreg_preg(7))
-    .with(vreg_preg(8))
-    .with(vreg_preg(9))
-    .with(vreg_preg(10))
-    .with(vreg_preg(11))
-    .with(vreg_preg(12))
-    .with(vreg_preg(13))
-    .with(vreg_preg(14))
-    .with(vreg_preg(15))
-    .with(vreg_preg(16))
-    .with(vreg_preg(17))
-    .with(vreg_preg(18))
-    .with(vreg_preg(19))
-    .with(vreg_preg(20))
-    .with(vreg_preg(21))
-    .with(vreg_preg(22))
-    .with(vreg_preg(23))
-    .with(vreg_preg(24))
-    .with(vreg_preg(25))
-    .with(vreg_preg(26))
-    .with(vreg_preg(27))
-    .with(vreg_preg(28))
-    .with(vreg_preg(29))
-    .with(vreg_preg(30))
-    .with(vreg_preg(31));
 fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
     fn preg(r: Reg) -> PReg {
         r.to_real_reg().unwrap().into()
