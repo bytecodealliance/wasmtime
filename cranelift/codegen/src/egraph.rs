@@ -15,6 +15,7 @@ use crate::opts::IsleContext;
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::trace;
 use crate::unionfind::UnionFind;
+use core::cmp::Ordering;
 use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
@@ -83,9 +84,11 @@ where
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
     pub(crate) effectful_gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Value>,
+    available_block: &'opt mut SecondaryMap<Value, Block>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
+    domtree: &'opt DominatorTreePreorder,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
     ctrl_plane: &'opt mut ControlPlane,
@@ -166,14 +169,19 @@ where
             if let NewOrExistingInst::Existing(inst) = inst {
                 debug_assert_eq!(self.func.dfg.inst_results(inst).len(), 1);
                 let result = self.func.dfg.first_result(inst);
+                debug_assert!(
+                    self.domtree.dominates(
+                        self.available_block[orig_result],
+                        self.get_available_block(inst)
+                    ),
+                    "GVN shouldn't replace {result} (available in {}) with non-dominating {orig_result} (available in {})",
+                    self.get_available_block(inst),
+                    self.available_block[orig_result],
+                );
                 self.value_to_opt_value[result] = orig_result;
-                self.eclasses.union(result, orig_result);
                 self.func.dfg.merge_facts(result, orig_result);
-                self.stats.union += 1;
-                result
-            } else {
-                orig_result
             }
+            orig_result
         } else {
             // Now actually insert the InstructionData and attach
             // result value (exactly one).
@@ -195,6 +203,7 @@ where
                 }
             };
 
+            self.available_block[result] = self.get_available_block(inst);
             let opt_value = self.optimize_pure_enode(inst);
 
             for &argument in self.func.dfg.inst_args(inst) {
@@ -210,6 +219,45 @@ where
             self.value_to_opt_value[result] = opt_value;
             opt_value
         }
+    }
+
+    /// Find the block where a pure instruction first becomes available,
+    /// defined as the block that is closest to the root where all of
+    /// its arguments are available. In the unusual case where a pure
+    /// instruction has no arguments (e.g. get_return_address), we can
+    /// place it anywhere, so it is available in the entry block.
+    ///
+    /// This function does not compute available blocks recursively.
+    /// All of the instruction's arguments must have had their available
+    /// blocks assigned already.
+    fn get_available_block(&self, inst: Inst) -> Block {
+        // Side-effecting instructions have different rules for where
+        // they become available, so this function does not apply.
+        debug_assert!(is_pure_for_egraph(self.func, inst));
+
+        // Note that the def-point of all arguments to an instruction
+        // in SSA lie on a line of direct ancestors in the domtree, and
+        // so do their available-blocks. This means that for any pair of
+        // arguments, their available blocks are either the same or one
+        // strictly dominates the other. We just need to find any argument
+        // whose available block is deepest in the domtree.
+        self.func.dfg.insts[inst]
+            .arguments(&self.func.dfg.value_lists)
+            .iter()
+            .map(|&v| {
+                let block = self.available_block[v];
+                debug_assert!(!block.is_reserved_value());
+                block
+            })
+            .max_by(|&x, &y| {
+                if self.domtree.dominates(x, y) {
+                    Ordering::Less
+                } else {
+                    debug_assert!(self.domtree.dominates(y, x));
+                    Ordering::Greater
+                }
+            })
+            .unwrap_or(self.func.layout.entry_block().unwrap())
     }
 
     /// Optimizes an enode by applying any matching mid-end rewrite
@@ -251,6 +299,43 @@ where
             &mut optimized_values,
         );
 
+        optimized_values.push(orig_value);
+
+        // Remove any values from optimized_values that do not have
+        // the highest possible available block in the domtree, in
+        // O(n) time. This loop scans in reverse, establishing the
+        // loop invariant that all values at indices >= idx have the
+        // same available block, which is the best available block
+        // seen so far. Note that orig_value must also be removed if
+        // it isn't in the best block, so we push it above, which means
+        // optimized_values is never empty: there's always at least one
+        // value in best_block.
+        let mut best_block = self.available_block[*optimized_values.last().unwrap()];
+        for idx in (0..optimized_values.len() - 1).rev() {
+            // At the beginning of each iteration, there is a non-empty
+            // collection of values after idx, which are all available
+            // at best_block.
+            let this_block = self.available_block[optimized_values[idx]];
+            if this_block != best_block {
+                if self.domtree.dominates(this_block, best_block) {
+                    // If the available block for this value dominates
+                    // the best block we've seen so far, discard all
+                    // the values we already checked and leave only this
+                    // value in the tail of the vector.
+                    optimized_values.truncate(idx + 1);
+                    best_block = this_block;
+                } else {
+                    // Otherwise the tail of the vector contains values
+                    // which are all better than this value, so we can
+                    // swap any of them in place of this value to delete
+                    // this one in O(1) time.
+                    debug_assert!(self.domtree.dominates(best_block, this_block));
+                    optimized_values.swap_remove(idx);
+                    debug_assert!(optimized_values.len() > idx);
+                }
+            }
+        }
+
         // It's not supposed to matter what order `simplify` returns values in.
         self.ctrl_plane.shuffle(&mut optimized_values);
 
@@ -268,7 +353,7 @@ where
         // Create a union of all new values with the original (or
         // maybe just one new value marked as "subsuming" the
         // original, if present.)
-        let mut union_value = orig_value;
+        let mut union_value = optimized_values.pop().unwrap();
         for optimized_value in optimized_values.drain(..) {
             trace!(
                 "Returned from ISLE for {}, got {:?}",
@@ -291,6 +376,7 @@ where
 
             let old_union_value = union_value;
             union_value = self.func.dfg.union(old_union_value, optimized_value);
+            self.available_block[union_value] = best_block;
             self.stats.union += 1;
             trace!(" -> union: now {}", union_value);
             self.eclasses.add(union_value);
@@ -313,6 +399,10 @@ where
     /// the layout.
     fn optimize_skeleton_inst(&mut self, inst: Inst) -> bool {
         self.stats.skeleton_inst += 1;
+
+        for &result in self.func.dfg.inst_results(inst) {
+            self.available_block[result] = self.func.layout.inst_block(inst).unwrap();
+        }
 
         // First, can we try to deduplicate? We need to keep some copy
         // of the instruction around because it's side-effecting, but
@@ -340,7 +430,6 @@ where
                     let orig_result = *o.get();
                     // Hit in GVN map -- reuse value.
                     self.value_to_opt_value[result] = orig_result;
-                    self.eclasses.union(orig_result, result);
                     trace!(" -> merges result {} to {}", result, orig_result);
                     true
                 }
@@ -486,6 +575,20 @@ impl<'a> EgraphPass<'a> {
         let mut effectful_gvn_map: ScopedHashMap<(Type, InstructionData), Value> =
             ScopedHashMap::new();
 
+        // We assign an "available block" to every value. Values tied to
+        // the side-effecting skeleton are available in the block where
+        // they're defined. Results from pure instructions could legally
+        // float up the domtree so they are available as soon as all
+        // their arguments are available. Values which identify union
+        // nodes are available in the same block as all values in the
+        // eclass, enforced by optimize_pure_enode.
+        let mut available_block: SecondaryMap<Value, Block> =
+            SecondaryMap::with_default(Block::reserved_value());
+        // This is an initial guess at the size we'll need, but we add
+        // more values as we build simplified alternative expressions so
+        // this is likely to realloc again later.
+        available_block.resize(cursor.func.dfg.num_values());
+
         // In domtree preorder, visit blocks. (TODO: factor out an
         // iterator from this and elaborator.)
         let root = cursor.layout().entry_block().unwrap();
@@ -516,6 +619,7 @@ impl<'a> EgraphPass<'a> {
                         trace!("creating initial singleton eclass for blockparam {}", param);
                         self.eclasses.add(param);
                         value_to_opt_value[param] = param;
+                        available_block[param] = block;
                     }
                     while let Some(inst) = cursor.next_inst() {
                         trace!("Processing inst {}", inst);
@@ -549,11 +653,13 @@ impl<'a> EgraphPass<'a> {
                             value_to_opt_value: &mut value_to_opt_value,
                             gvn_map: &mut gvn_map,
                             effectful_gvn_map: &mut effectful_gvn_map,
+                            available_block: &mut available_block,
                             eclasses: &mut self.eclasses,
                             rewrite_depth: 0,
                             subsume_values: FxHashSet::default(),
                             remat_values: &mut self.remat_values,
                             stats: &mut self.stats,
+                            domtree: &self.domtree,
                             alias_analysis: self.alias_analysis,
                             alias_analysis_state: &mut alias_analysis_state,
                             ctrl_plane: self.ctrl_plane,
