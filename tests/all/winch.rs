@@ -340,3 +340,57 @@ fn static_oob() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+#[cfg_attr(windows, ignore)]
+fn dynamic_heap_with_zero_max_size() -> Result<()> {
+    let mut c = Config::new();
+    c.static_memory_maximum_size(0);
+    c.strategy(Strategy::Winch);
+    let engine = Engine::new(&c)?;
+    let wat = r#"
+        (module
+          (type (;0;) (func (result i64)))
+          (type (;1;) (func (param f32)))
+          (func (;0;) (type 0) (result i64)
+            (local i32 i32 i32 i32 i32 i32 f32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)
+            global.get 0
+            i32.eqz
+            if ;; label = @1
+              unreachable
+            end
+            global.get 0
+            i32.const 1
+            i32.sub
+            global.set 0
+            memory.size
+            f64.load offset=3598476644
+            loop (result i32) ;; label = @1
+              global.get 0
+              i32.eqz
+              if ;; label = @2
+                unreachable
+              end
+              global.get 0
+              i32.const 1
+              i32.sub
+              global.set 0
+              unreachable
+            end
+            unreachable
+          )
+          (memory (;0;) 0 8)
+          (global (;0;) (mut i32) i32.const 1000)
+          (export "" (func 0))
+        )
+    "#;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(&engine, wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i64>(&mut store, "")?;
+    let result = f.call(&mut store, ()).unwrap_err();
+    assert!(result.downcast_ref::<WasmBacktrace>().is_some());
+
+    Ok(())
+}
