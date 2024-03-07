@@ -207,7 +207,7 @@ impl RunCommon {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    RunTarget::Core(Module::new(engine, &bytes, Some(PathBuf::from(path))?)
+                    RunTarget::Core(Module::new(engine, &bytes, Some(PathBuf::from(path)))?)
                 }
             }
             #[cfg(not(any(feature = "cranelift", feature = "winch")))]
