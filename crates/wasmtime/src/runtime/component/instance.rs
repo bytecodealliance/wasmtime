@@ -561,18 +561,6 @@ impl<T> InstancePre<T> {
         }
     }
 
-    pub(crate) fn resource_import_index(
-        &self,
-        path: ResourceImportIndex,
-    ) -> Option<RuntimeImportIndex> {
-        *self.resource_imports.get(path)?
-    }
-
-    pub(crate) fn resource_import(&self, path: ResourceImportIndex) -> Option<&RuntimeImport> {
-        let idx = self.resource_import_index(path)?;
-        self.imports.get(idx)
-    }
-
     /// Returns the underlying component that will be instantiated.
     pub fn component(&self) -> &Component {
         &self.component
