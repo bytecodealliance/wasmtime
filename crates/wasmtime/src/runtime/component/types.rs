@@ -1,18 +1,15 @@
 //! This module defines the `Type` type, representing the dynamic form of a component interface type.
 
 use crate::component::matching::InstanceType;
-use crate::component::values::{self, Val};
 use crate::{Engine, ExternType, FuncType};
-use anyhow::{anyhow, Result};
 use std::fmt;
-use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, ResourceIndex, TypeComponentIndex,
-    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex,
-    TypeListIndex, TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex,
-    TypeResultIndex, TypeTupleIndex, TypeVariantIndex,
+    ComponentTypes, InterfaceType, ResourceIndex, TypeComponentIndex, TypeComponentInstanceIndex,
+    TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex, TypeListIndex, TypeModuleIndex,
+    TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex,
+    TypeVariantIndex,
 };
 use wasmtime_environ::PrimaryMap;
 
@@ -183,18 +180,21 @@ impl TypeChecker<'_> {
         if a.cases.len() != b.cases.len() {
             return false;
         }
-        a.cases.iter().zip(b.cases.iter()).all(|(a_case, b_case)| {
-            if a_case.name != b_case.name {
-                return false;
-            }
-            match (a_case.ty, b_case.ty) {
-                (Some(a_case_ty), Some(b_case_ty)) => {
-                    self.interface_types_equal(a_case_ty, b_case_ty)
+        a.cases
+            .iter()
+            .zip(b.cases.iter())
+            .all(|((a_name, a_ty), (b_name, b_ty))| {
+                if a_name != b_name {
+                    return false;
                 }
-                (None, None) => true,
-                _ => false,
-            }
-        })
+                match (a_ty, b_ty) {
+                    (Some(a_case_ty), Some(b_case_ty)) => {
+                        self.interface_types_equal(*a_case_ty, *b_case_ty)
+                    }
+                    (None, None) => true,
+                    _ => false,
+                }
+            })
     }
 
     fn results_equal(&self, r1: TypeResultIndex, r2: TypeResultIndex) -> bool {
@@ -259,11 +259,6 @@ impl PartialEq for List {
 impl Eq for List {}
 
 impl List {
-    /// Instantiate this type with the specified `values`.
-    pub fn new_val(&self, values: Box<[Val]>) -> Result<Val> {
-        Ok(Val::List(values::List::new(self, values)?))
-    }
-
     pub(crate) fn from(index: TypeListIndex, ty: &InstanceType<'_>) -> Self {
         List(Handle::new(index, ty))
     }
@@ -288,11 +283,6 @@ pub struct Field<'a> {
 pub struct Record(Handle<TypeRecordIndex>);
 
 impl Record {
-    /// Instantiate this type with the specified `values`.
-    pub fn new_val<'a>(&self, values: impl IntoIterator<Item = (&'a str, Val)>) -> Result<Val> {
-        Ok(Val::Record(values::Record::new(self, values)?))
-    }
-
     pub(crate) fn from(index: TypeRecordIndex, ty: &InstanceType<'_>) -> Self {
         Record(Handle::new(index, ty))
     }
@@ -319,11 +309,6 @@ impl Eq for Record {}
 pub struct Tuple(Handle<TypeTupleIndex>);
 
 impl Tuple {
-    /// Instantiate this type ith the specified `values`.
-    pub fn new_val(&self, values: Box<[Val]>) -> Result<Val> {
-        Ok(Val::Tuple(values::Tuple::new(self, values)?))
-    }
-
     pub(crate) fn from(index: TypeTupleIndex, ty: &InstanceType<'_>) -> Self {
         Tuple(Handle::new(index, ty))
     }
@@ -358,24 +343,19 @@ pub struct Case<'a> {
 pub struct Variant(Handle<TypeVariantIndex>);
 
 impl Variant {
-    /// Instantiate this type with the specified case `name` and `value`.
-    pub fn new_val(&self, name: &str, value: Option<Val>) -> Result<Val> {
-        Ok(Val::Variant(values::Variant::new(self, name, value)?))
-    }
-
     pub(crate) fn from(index: TypeVariantIndex, ty: &InstanceType<'_>) -> Self {
         Variant(Handle::new(index, ty))
     }
 
     /// Retrieve the cases of this `variant` in declaration order.
     pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
-        self.0.types[self.0.index].cases.iter().map(|case| Case {
-            name: &case.name,
-            ty: case
-                .ty
-                .as_ref()
-                .map(|ty| Type::from(ty, &self.0.instance())),
-        })
+        self.0.types[self.0.index]
+            .cases
+            .iter()
+            .map(|(name, ty)| Case {
+                name: name,
+                ty: ty.as_ref().map(|ty| Type::from(ty, &self.0.instance())),
+            })
     }
 }
 
@@ -392,11 +372,6 @@ impl Eq for Variant {}
 pub struct Enum(Handle<TypeEnumIndex>);
 
 impl Enum {
-    /// Instantiate this type with the specified case `name`.
-    pub fn new_val(&self, name: &str) -> Result<Val> {
-        Ok(Val::Enum(values::Enum::new(self, name)?))
-    }
-
     pub(crate) fn from(index: TypeEnumIndex, ty: &InstanceType<'_>) -> Self {
         Enum(Handle::new(index, ty))
     }
@@ -423,11 +398,6 @@ impl Eq for Enum {}
 pub struct OptionType(Handle<TypeOptionIndex>);
 
 impl OptionType {
-    /// Instantiate this type with the specified `value`.
-    pub fn new_val(&self, value: Option<Val>) -> Result<Val> {
-        Ok(Val::Option(values::OptionVal::new(self, value)?))
-    }
-
     pub(crate) fn from(index: TypeOptionIndex, ty: &InstanceType<'_>) -> Self {
         OptionType(Handle::new(index, ty))
     }
@@ -451,11 +421,6 @@ impl Eq for OptionType {}
 pub struct ResultType(Handle<TypeResultIndex>);
 
 impl ResultType {
-    /// Instantiate this type with the specified `value`.
-    pub fn new_val(&self, value: Result<Option<Val>, Option<Val>>) -> Result<Val> {
-        Ok(Val::Result(values::ResultVal::new(self, value)?))
-    }
-
     pub(crate) fn from(index: TypeResultIndex, ty: &InstanceType<'_>) -> Self {
         ResultType(Handle::new(index, ty))
     }
@@ -490,11 +455,6 @@ impl Eq for ResultType {}
 pub struct Flags(Handle<TypeFlagsIndex>);
 
 impl Flags {
-    /// Instantiate this type with the specified flag `names`.
-    pub fn new_val(&self, names: &[&str]) -> Result<Val> {
-        Ok(Val::Flags(values::Flags::new(self, names)?))
-    }
-
     pub(crate) fn from(index: TypeFlagsIndex, ty: &InstanceType<'_>) -> Self {
         Flags(Handle::new(index, ty))
     }
@@ -505,10 +465,6 @@ impl Flags {
             .names
             .iter()
             .map(|name| name.deref())
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -675,31 +631,6 @@ impl Type {
         match self {
             Type::Borrow(ty) => ty,
             _ => panic!("attempted to unwrap a {} as a own", self.desc()),
-        }
-    }
-
-    /// Checks whether type of `value` is a subtype of `self`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error in case of a type mismatch
-    pub(crate) fn is_supertype_of(&self, value: &Val) -> Result<()> {
-        let other = &value.ty();
-        if self == other
-            || matches!((self, other), (Self::Borrow(s), Self::Own(other)) if s == other)
-        {
-            Ok(())
-        } else if mem::discriminant(self) != mem::discriminant(other) {
-            Err(anyhow!(
-                "type mismatch: expected {}, got {}",
-                self.desc(),
-                other.desc()
-            ))
-        } else {
-            Err(anyhow!(
-                "type mismatch for {}, possibly due to mixing distinct composite types",
-                self.desc()
-            ))
         }
     }
 

@@ -706,7 +706,7 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
         .root()
         .func_new(&component, "f2", |_, args, results| {
             if let Val::Tuple(tuple) = &args[0] {
-                if let Val::String(s) = &tuple.values()[0] {
+                if let Val::String(s) = &tuple[0] {
                     assert_eq!(s.deref(), "abc");
                     results[0] = Val::U32(3);
                     Ok(())
@@ -732,7 +732,7 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
         .root()
         .func_new(&component, "f4", |_, args, results| {
             if let Val::Tuple(tuple) = &args[0] {
-                if let Val::String(s) = &tuple.values()[0] {
+                if let Val::String(s) = &tuple[0] {
                     assert_eq!(s.deref(), "abc");
                     results[0] = Val::String("xyz".into());
                     Ok(())

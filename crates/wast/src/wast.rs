@@ -186,16 +186,11 @@ where
             }
             #[cfg(feature = "component-model")]
             Export::Component(func) => {
-                let params = func.params(&self.store);
-                if exec.args.len() != params.len() {
-                    bail!("mismatched number of parameters")
-                }
                 let values = exec
                     .args
                     .iter()
-                    .zip(params.iter())
-                    .map(|(v, t)| match v {
-                        WastArg::Component(v) => component::val(v, t),
+                    .map(|v| match v {
+                        WastArg::Component(v) => component::val(v),
                         WastArg::Core(_) => bail!("expected core function, found component"),
                     })
                     .collect::<Result<Vec<_>>>()?;

@@ -1,639 +1,13 @@
-use crate::component::func::{bad_type_info, Lift, LiftContext, Lower, LowerContext};
-use crate::component::types::{self, Type};
+use crate::component::func::{desc, Lift, LiftContext, Lower, LowerContext};
 use crate::component::ResourceAny;
 use crate::ValRaw;
-use anyhow::{anyhow, bail, Context, Error, Result};
-use std::collections::HashMap;
-use std::fmt;
-use std::iter;
+use anyhow::{anyhow, bail, Result};
 use std::mem::MaybeUninit;
-use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeListIndex, VariantInfo,
+    CanonicalAbiInfo, InterfaceType, TypeEnum, TypeFlags, TypeListIndex, TypeOption, TypeResult,
+    TypeVariant, VariantInfo,
 };
-
-/// Dynamic representation of `list<T>` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that `Vec<T>` is also supported for component model lists when
-/// using [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct List {
-    ty: types::List,
-    values: Box<[Val]>,
-}
-
-impl List {
-    /// Creates a new list with the specified type with the specified `values`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any value in `values` does not have the element
-    /// type of `ty` specified.
-    pub fn new(ty: &types::List, values: Box<[Val]>) -> Result<Self> {
-        let element_type = ty.ty();
-        for (index, value) in values.iter().enumerate() {
-            element_type
-                .is_supertype_of(value)
-                .with_context(|| format!("type mismatch for element {index} of list"))?;
-        }
-
-        Ok(Self {
-            ty: ty.clone(),
-            values,
-        })
-    }
-
-    /// Returns the corresponding type of this list
-    pub fn ty(&self) -> &types::List {
-        &self.ty
-    }
-}
-
-impl Deref for List {
-    type Target = [Val];
-
-    fn deref(&self) -> &[Val] {
-        &self.values
-    }
-}
-
-impl fmt::Debug for List {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut f = f.debug_list();
-        for val in self.iter() {
-            f.entry(val);
-        }
-        f.finish()
-    }
-}
-
-/// Dynamic representation of `record` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that records can also be mapped to Rust `struct`s through the
-/// [`#[derive(ComponentType)]`](macro@crate::component::ComponentType) macro
-/// and using [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct Record {
-    ty: types::Record,
-    values: Box<[Val]>,
-}
-
-impl Record {
-    /// Creates a new record with the specified `ty` and the `values` for fields.
-    ///
-    /// Note that the `values` specified for fields must list fields in the
-    /// same order that the `ty` lists them in.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any of the `values` specified are in the wrong order
-    /// field-wise or have the wrong type relative to what's specified in `ty`.
-    pub fn new<'a>(
-        ty: &types::Record,
-        values: impl IntoIterator<Item = (&'a str, Val)>,
-    ) -> Result<Self> {
-        let mut fields = ty.fields();
-        let expected_len = fields.len();
-        let mut iter = values.into_iter();
-        let mut values = Vec::with_capacity(expected_len);
-        loop {
-            match (fields.next(), iter.next()) {
-                (Some(field), Some((name, value))) => {
-                    if name == field.name {
-                        field
-                            .ty
-                            .is_supertype_of(&value)
-                            .with_context(|| format!("type mismatch for field {name} of record"))?;
-
-                        values.push(value);
-                    } else {
-                        bail!("field name mismatch: expected {}; got {name}", field.name)
-                    }
-                }
-                (None, Some((_, value))) => values.push(value),
-                _ => break,
-            }
-        }
-
-        if values.len() != expected_len {
-            bail!("expected {} value(s); got {}", expected_len, values.len());
-        }
-
-        Ok(Self {
-            ty: ty.clone(),
-            values: values.into(),
-        })
-    }
-
-    /// Returns the corresponding type of this record.
-    pub fn ty(&self) -> &types::Record {
-        &self.ty
-    }
-
-    /// Returns the list of fields that this struct contains with their name
-    /// and value.
-    pub fn fields(&self) -> impl ExactSizeIterator<Item = (&str, &Val)> {
-        assert_eq!(self.values.len(), self.ty.fields().len());
-        self.ty
-            .fields()
-            .zip(self.values.iter())
-            .map(|(ty, val)| (ty.name, val))
-    }
-}
-
-impl fmt::Debug for Record {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut f = f.debug_struct("Record");
-        for (name, val) in self.fields() {
-            f.field(name, val);
-        }
-        f.finish()
-    }
-}
-
-/// Dynamic representation of `tuple<...>` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that tuples are also mapped to Rust tuples when using
-/// [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct Tuple {
-    ty: types::Tuple,
-    values: Box<[Val]>,
-}
-
-impl Tuple {
-    /// Creates a new tuple with the `ty` specified and `values` for each
-    /// entry.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `values` does not match the `ty` specified, such as
-    /// if it has the wrong length or if any field has the wrong type.
-    pub fn new(ty: &types::Tuple, values: Box<[Val]>) -> Result<Self> {
-        if values.len() != ty.types().len() {
-            bail!(
-                "expected {} value(s); got {}",
-                ty.types().len(),
-                values.len()
-            );
-        }
-
-        for (index, (value, ty)) in values.iter().zip(ty.types()).enumerate() {
-            ty.is_supertype_of(value)
-                .with_context(|| format!("type mismatch for field {index} of tuple"))?;
-        }
-
-        Ok(Self {
-            ty: ty.clone(),
-            values,
-        })
-    }
-
-    /// Returns the type of this tuple.
-    pub fn ty(&self) -> &types::Tuple {
-        &self.ty
-    }
-
-    /// Returns the list of values that this tuple contains.
-    pub fn values(&self) -> &[Val] {
-        &self.values
-    }
-}
-
-impl fmt::Debug for Tuple {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut tuple = f.debug_tuple("");
-        for val in self.values() {
-            tuple.field(val);
-        }
-        tuple.finish()
-    }
-}
-
-/// Dynamic representation of `variant` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that variants can also be mapped to Rust `enum`s through the
-/// [`#[derive(ComponentType)]`](macro@crate::component::ComponentType) macro
-/// and using [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct Variant {
-    ty: types::Variant,
-    discriminant: u32,
-    value: Option<Box<Val>>,
-}
-
-impl Variant {
-    /// Creates a new variant with the specified `ty` and the case `name` and
-    /// `value` provided.
-    ///
-    /// This will create a instance of a variant with the case `name` which has
-    /// the optional payload of `value`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `name` doesn't match any case of `ty` or if
-    /// `value` is of the wrong type. Note that `ty` must match the payload
-    /// type exactly, in that if the case for `name` doesn't have a type then
-    /// `value` must be `None`.
-    pub fn new(ty: &types::Variant, name: &str, value: Option<Val>) -> Result<Self> {
-        let (discriminant, case_type) = ty
-            .cases()
-            .enumerate()
-            .find_map(|(index, case)| {
-                if case.name == name {
-                    Some((index, case.ty))
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| anyhow!("unknown variant case: {name}"))?;
-
-        typecheck_payload(name, case_type.as_ref(), value.as_ref())?;
-
-        Ok(Self {
-            ty: ty.clone(),
-            discriminant: u32::try_from(discriminant)?,
-            value: value.map(Box::new),
-        })
-    }
-
-    /// Returns the type of this variant.
-    pub fn ty(&self) -> &types::Variant {
-        &self.ty
-    }
-
-    /// Returns name of the discriminant of this value within the variant type.
-    pub fn discriminant(&self) -> &str {
-        self.ty
-            .cases()
-            .nth(self.discriminant as usize)
-            .unwrap()
-            .name
-    }
-
-    /// Returns the payload value for this variant.
-    pub fn payload(&self) -> Option<&Val> {
-        self.value.as_deref()
-    }
-
-    fn as_generic<'a>(
-        &'a self,
-        types: &'a ComponentTypes,
-        ty: InterfaceType,
-    ) -> GenericVariant<'a> {
-        let ty = match ty {
-            InterfaceType::Variant(i) => &types[i],
-            _ => bad_type_info(),
-        };
-        GenericVariant {
-            discriminant: self.discriminant,
-            abi: &ty.abi,
-            info: &ty.info,
-            payload: self
-                .value
-                .as_deref()
-                .zip(ty.cases[self.discriminant as usize].ty),
-        }
-    }
-}
-
-fn typecheck_payload(name: &str, case_type: Option<&Type>, value: Option<&Val>) -> Result<()> {
-    match (case_type, value) {
-        (Some(expected), Some(actual)) => expected
-            .is_supertype_of(&actual)
-            .with_context(|| format!("type mismatch for case {name} of variant")),
-        (None, None) => Ok(()),
-        (Some(_), None) => bail!("expected a payload for case `{name}`"),
-        (None, Some(_)) => bail!("did not expect payload for case `{name}`"),
-    }
-}
-
-impl fmt::Debug for Variant {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple(self.discriminant())
-            .field(&self.payload())
-            .finish()
-    }
-}
-
-/// Dynamic representation of `enum` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that enums can also be mapped to Rust `enum`s through the
-/// [`#[derive(ComponentType)]`](macro@crate::component::ComponentType) macro
-/// and using [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct Enum {
-    ty: types::Enum,
-    discriminant: u32,
-}
-
-impl Enum {
-    /// Creates a new enum value with the `ty` specified selecting the
-    /// specified variant called `name`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `name` isn't listed within `ty`.
-    pub fn new(ty: &types::Enum, name: &str) -> Result<Self> {
-        let discriminant = u32::try_from(
-            ty.names()
-                .position(|n| n == name)
-                .ok_or_else(|| anyhow!("unknown enum case: {name}"))?,
-        )?;
-
-        Ok(Self {
-            ty: ty.clone(),
-            discriminant,
-        })
-    }
-
-    /// Returns the type of this value.
-    pub fn ty(&self) -> &types::Enum {
-        &self.ty
-    }
-
-    /// Returns name of this enum value.
-    pub fn discriminant(&self) -> &str {
-        self.ty.names().nth(self.discriminant as usize).unwrap()
-    }
-
-    fn as_generic<'a>(
-        &'a self,
-        types: &'a ComponentTypes,
-        ty: InterfaceType,
-    ) -> GenericVariant<'a> {
-        let ty = match ty {
-            InterfaceType::Enum(i) => &types[i],
-            _ => bad_type_info(),
-        };
-        GenericVariant {
-            discriminant: self.discriminant,
-            abi: &ty.abi,
-            info: &ty.info,
-            payload: None,
-        }
-    }
-}
-
-impl fmt::Debug for Enum {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.discriminant(), f)
-    }
-}
-
-/// Dynamic representation of `option<T>` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that options are also mapped to Rust `Option<T>` when using
-/// [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct OptionVal {
-    ty: types::OptionType,
-    discriminant: u32,
-    value: Option<Box<Val>>,
-}
-
-impl OptionVal {
-    /// Creates a new value with the `ty` specified holding the payload `value`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `value` is `Some` and the payload has the wrong
-    /// type for `ty`.
-    pub fn new(ty: &types::OptionType, value: Option<Val>) -> Result<Self> {
-        let value = value
-            .map(|value| {
-                ty.ty()
-                    .is_supertype_of(&value)
-                    .context("type mismatch for option")?;
-
-                Ok::<_, Error>(value)
-            })
-            .transpose()?;
-
-        Ok(Self {
-            ty: ty.clone(),
-            discriminant: if value.is_none() { 0 } else { 1 },
-            value: value.map(Box::new),
-        })
-    }
-
-    /// Returns the type of this value.
-    pub fn ty(&self) -> &types::OptionType {
-        &self.ty
-    }
-
-    /// Returns the optional value contained within.
-    pub fn value(&self) -> Option<&Val> {
-        self.value.as_deref()
-    }
-
-    fn as_generic<'a>(
-        &'a self,
-        types: &'a ComponentTypes,
-        ty: InterfaceType,
-    ) -> GenericVariant<'a> {
-        let ty = match ty {
-            InterfaceType::Option(i) => &types[i],
-            _ => bad_type_info(),
-        };
-        GenericVariant {
-            discriminant: self.discriminant,
-            abi: &ty.abi,
-            info: &ty.info,
-            payload: self.value.as_deref().zip(Some(ty.ty)),
-        }
-    }
-}
-
-impl fmt::Debug for OptionVal {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.value().fmt(f)
-    }
-}
-
-/// Dynamic representation of `result<T, E>` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that tuples are also mapped to Rust's `Result<T, E>` when using
-/// [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct ResultVal {
-    ty: types::ResultType,
-    discriminant: u32,
-    value: Option<Box<Val>>,
-}
-
-impl ResultVal {
-    /// Creates a new `Result` from the specified `ty` and `value`.
-    ///
-    /// Note that the `value` uses `Option<Val>` for payloads to map to the
-    /// optional payload value of the component model within each variant.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the `value` payload has the wrong type for `ty`.
-    pub fn new(ty: &types::ResultType, value: Result<Option<Val>, Option<Val>>) -> Result<Self> {
-        Ok(Self {
-            ty: ty.clone(),
-            discriminant: if value.is_ok() { 0 } else { 1 },
-            value: match value {
-                Ok(value) => {
-                    typecheck_payload("ok", ty.ok().as_ref(), value.as_ref())?;
-                    value.map(Box::new)
-                }
-                Err(value) => {
-                    typecheck_payload("err", ty.err().as_ref(), value.as_ref())?;
-                    value.map(Box::new)
-                }
-            },
-        })
-    }
-
-    /// Returns the type of this value.
-    pub fn ty(&self) -> &types::ResultType {
-        &self.ty
-    }
-
-    /// Returns the result value contained within.
-    pub fn value(&self) -> Result<Option<&Val>, Option<&Val>> {
-        if self.discriminant == 0 {
-            Ok(self.value.as_deref())
-        } else {
-            Err(self.value.as_deref())
-        }
-    }
-
-    fn as_generic<'a>(
-        &'a self,
-        types: &'a ComponentTypes,
-        ty: InterfaceType,
-    ) -> GenericVariant<'a> {
-        let ty = match ty {
-            InterfaceType::Result(i) => &types[i],
-            _ => bad_type_info(),
-        };
-        GenericVariant {
-            discriminant: self.discriminant,
-            abi: &ty.abi,
-            info: &ty.info,
-            payload: self.value.as_deref().zip(if self.discriminant == 0 {
-                ty.ok
-            } else {
-                ty.err
-            }),
-        }
-    }
-}
-
-impl fmt::Debug for ResultVal {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.value().fmt(f)
-    }
-}
-
-/// Dynamic representation of `flags` in the component model.
-///
-/// This structure is part of the dynamically-typed [`Val`] which represents
-/// all possible values in the component model. This is often used in
-/// conjunction with [`Func::call`](crate::component::Func::call).
-///
-/// Note that flags can also be mapped to Rust structures through the
-/// [`flags!`](crate::component::flags) macro and using
-/// [`TypedFunc`](crate::component::TypedFunc).
-#[derive(PartialEq, Eq, Clone)]
-pub struct Flags {
-    ty: types::Flags,
-    count: u32,
-    value: Box<[u32]>,
-}
-
-impl Flags {
-    /// Creates a new set of flags with the `ty` specified and the `names` as
-    /// members of the flags.
-    ///
-    /// # Errors
-    ///
-    /// An error is returned if any of `names` aren't present within the `ty`
-    /// specified.
-    pub fn new(ty: &types::Flags, names: &[&str]) -> Result<Self> {
-        let map = ty
-            .names()
-            .enumerate()
-            .map(|(index, name)| (name, index))
-            .collect::<HashMap<_, _>>();
-
-        let count = usize::from(ty.canonical_abi().flat_count.unwrap());
-        let mut values = vec![0_u32; count];
-
-        for name in names {
-            let index = map
-                .get(name)
-                .ok_or_else(|| anyhow!("unknown flag: {name}"))?;
-            values[index / 32] |= 1 << (index % 32);
-        }
-
-        Ok(Self {
-            ty: ty.clone(),
-            count: u32::try_from(map.len())?,
-            value: values.into(),
-        })
-    }
-
-    /// Returns the type of this value.
-    pub fn ty(&self) -> &types::Flags {
-        &self.ty
-    }
-
-    /// Returns an iterator over the set of names that this flags set contains.
-    pub fn flags(&self) -> impl Iterator<Item = &str> {
-        (0..self.count).filter_map(|i| {
-            let (idx, bit) = ((i / 32) as usize, i % 32);
-            if self.value[idx] & (1 << bit) != 0 {
-                Some(self.ty.names().nth(i as usize).unwrap())
-            } else {
-                None
-            }
-        })
-    }
-}
-
-impl fmt::Debug for Flags {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut set = f.debug_set();
-        for flag in self.flags() {
-            set.entry(&flag);
-        }
-        set.finish()
-    }
-}
 
 /// Represents possible runtime values which a component function can either
 /// consume or produce
@@ -647,7 +21,7 @@ impl fmt::Debug for Flags {
 /// This type is used in conjunction with [`Func::call`] for example if the
 /// signature of a component is not statically known ahead of time.
 ///
-/// # Notes on Equality
+/// # Equality and `Val`
 ///
 /// This type implements both the Rust `PartialEq` and `Eq` traits. This type
 /// additionally contains values which are not necessarily easily equated,
@@ -673,6 +47,18 @@ impl fmt::Debug for Flags {
 /// recommended to "build your own" as this equality intended for fuzzing
 /// Wasmtime may not be suitable for you.
 ///
+/// # Component model types and `Val`
+///
+/// The `Val` type here does not contain enough information to say what the
+/// component model type of a `Val` is. This is instead more of an AST of sorts.
+/// For example the `Val::Enum` only carries information about a single
+/// discriminant, not the entire enumeration or what it's a discriminant of.
+///
+/// This means that when a `Val` is passed to Wasmtime, for example as a
+/// function parameter when calling a function or as a return value from an
+/// host-defined imported function, then it must pass a type-check. Instances of
+/// `Val` are type-checked against what's required by the component itself.
+///
 /// [`Func::call`]: crate::component::Func::call
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
@@ -689,53 +75,19 @@ pub enum Val {
     Float32(f32),
     Float64(f64),
     Char(char),
-    String(Box<str>),
-    List(List),
-    Record(Record),
-    Tuple(Tuple),
-    Variant(Variant),
-    Enum(Enum),
-    Option(OptionVal),
-    Result(ResultVal),
-    Flags(Flags),
+    String(String),
+    List(Vec<Val>),
+    Record(Vec<(String, Val)>),
+    Tuple(Vec<Val>),
+    Variant(String, Option<Box<Val>>),
+    Enum(String),
+    Option(Option<Box<Val>>),
+    Result(Result<Option<Box<Val>>, Option<Box<Val>>>),
+    Flags(Vec<String>),
     Resource(ResourceAny),
 }
 
 impl Val {
-    /// Retrieve the [`Type`] of this value.
-    pub fn ty(&self) -> Type {
-        match self {
-            Val::Bool(_) => Type::Bool,
-            Val::S8(_) => Type::S8,
-            Val::U8(_) => Type::U8,
-            Val::S16(_) => Type::S16,
-            Val::U16(_) => Type::U16,
-            Val::S32(_) => Type::S32,
-            Val::U32(_) => Type::U32,
-            Val::S64(_) => Type::S64,
-            Val::U64(_) => Type::U64,
-            Val::Float32(_) => Type::Float32,
-            Val::Float64(_) => Type::Float64,
-            Val::Char(_) => Type::Char,
-            Val::String(_) => Type::String,
-            Val::List(List { ty, .. }) => Type::List(ty.clone()),
-            Val::Record(Record { ty, .. }) => Type::Record(ty.clone()),
-            Val::Tuple(Tuple { ty, .. }) => Type::Tuple(ty.clone()),
-            Val::Variant(Variant { ty, .. }) => Type::Variant(ty.clone()),
-            Val::Enum(Enum { ty, .. }) => Type::Enum(ty.clone()),
-            Val::Option(OptionVal { ty, .. }) => Type::Option(ty.clone()),
-            Val::Result(ResultVal { ty, .. }) => Type::Result(ty.clone()),
-            Val::Flags(Flags { ty, .. }) => Type::Flags(ty.clone()),
-            Val::Resource(r) => {
-                if r.owned() {
-                    Type::Own(r.ty())
-                } else {
-                    Type::Borrow(r.ty())
-                }
-            }
-        }
-    }
-
     /// Deserialize a value of this type from core Wasm stack values.
     pub(crate) fn lift(
         cx: &mut LiftContext<'_>,
@@ -758,71 +110,62 @@ impl Val {
             InterfaceType::Own(_) | InterfaceType::Borrow(_) => {
                 Val::Resource(ResourceAny::lift(cx, ty, next(src))?)
             }
-            InterfaceType::String => {
-                Val::String(Box::<str>::lift(cx, ty, &[*next(src), *next(src)])?)
-            }
+            InterfaceType::String => Val::String(<_>::lift(cx, ty, &[*next(src), *next(src)])?),
             InterfaceType::List(i) => {
                 // FIXME: needs memory64 treatment
                 let ptr = u32::lift(cx, InterfaceType::U32, next(src))? as usize;
                 let len = u32::lift(cx, InterfaceType::U32, next(src))? as usize;
                 load_list(cx, i, ptr, len)?
             }
-            InterfaceType::Record(i) => Val::Record(Record {
-                ty: types::Record::from(i, &cx.instance_type()),
-                values: cx.types[i]
+            InterfaceType::Record(i) => Val::Record(
+                cx.types[i]
                     .fields
                     .iter()
-                    .map(|field| Self::lift(cx, field.ty, src))
+                    .map(|field| {
+                        let val = Self::lift(cx, field.ty, src)?;
+                        Ok((field.name.to_string(), val))
+                    })
                     .collect::<Result<_>>()?,
-            }),
-            InterfaceType::Tuple(i) => Val::Tuple(Tuple {
-                ty: types::Tuple::from(i, &cx.instance_type()),
-                values: cx.types[i]
+            ),
+            InterfaceType::Tuple(i) => Val::Tuple(
+                cx.types[i]
                     .types
                     .iter()
                     .map(|ty| Self::lift(cx, *ty, src))
                     .collect::<Result<_>>()?,
-            }),
+            ),
             InterfaceType::Variant(i) => {
+                let vty = &cx.types[i];
                 let (discriminant, value) = lift_variant(
                     cx,
                     cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap(),
-                    cx.types[i].cases.iter().map(|case| case.ty),
+                    vty.cases.values().copied(),
                     src,
                 )?;
 
-                Val::Variant(Variant {
-                    ty: types::Variant::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
-                })
+                let (k, _) = vty.cases.get_index(discriminant as usize).unwrap();
+                Val::Variant(k.clone(), value)
             }
             InterfaceType::Enum(i) => {
+                let ety = &cx.types[i];
                 let (discriminant, _) = lift_variant(
                     cx,
                     cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap(),
-                    cx.types[i].names.iter().map(|_| None),
+                    ety.names.iter().map(|_| None),
                     src,
                 )?;
 
-                Val::Enum(Enum {
-                    ty: types::Enum::from(i, &cx.instance_type()),
-                    discriminant,
-                })
+                Val::Enum(ety.names[discriminant as usize].clone())
             }
             InterfaceType::Option(i) => {
-                let (discriminant, value) = lift_variant(
+                let (_discriminant, value) = lift_variant(
                     cx,
                     cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap(),
                     [None, Some(cx.types[i].ty)].into_iter(),
                     src,
                 )?;
 
-                Val::Option(OptionVal {
-                    ty: types::OptionType::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
-                })
+                Val::Option(value)
             }
             InterfaceType::Result(i) => {
                 let result_ty = &cx.types[i];
@@ -833,24 +176,26 @@ impl Val {
                     src,
                 )?;
 
-                Val::Result(ResultVal {
-                    ty: types::ResultType::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
+                Val::Result(if discriminant == 0 {
+                    Ok(value)
+                } else {
+                    Err(value)
                 })
             }
             InterfaceType::Flags(i) => {
-                let count = u32::try_from(cx.types[i].names.len()).unwrap();
                 let u32_count = cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap();
-                let value = iter::repeat_with(|| u32::lift(cx, InterfaceType::U32, next(src)))
-                    .take(u32_count)
-                    .collect::<Result<_>>()?;
+                let ty = &cx.types[i];
+                let mut flags = Vec::new();
+                for i in 0..u32_count {
+                    push_flags(
+                        ty,
+                        &mut flags,
+                        (i as u32) * 32,
+                        u32::lift(cx, InterfaceType::U32, next(src))?,
+                    );
+                }
 
-                Val::Flags(Flags {
-                    ty: types::Flags::from(i, &cx.instance_type()),
-                    count,
-                    value,
-                })
+                Val::Flags(flags.into())
             }
         })
     }
@@ -870,7 +215,7 @@ impl Val {
             InterfaceType::Float32 => Val::Float32(f32::load(cx, ty, bytes)?),
             InterfaceType::Float64 => Val::Float64(f64::load(cx, ty, bytes)?),
             InterfaceType::Char => Val::Char(char::load(cx, ty, bytes)?),
-            InterfaceType::String => Val::String(<Box<str>>::load(cx, ty, bytes)?),
+            InterfaceType::String => Val::String(<_>::load(cx, ty, bytes)?),
             InterfaceType::Own(_) | InterfaceType::Borrow(_) => {
                 Val::Resource(ResourceAny::load(cx, ty, bytes)?)
             }
@@ -881,79 +226,98 @@ impl Val {
                 load_list(cx, i, ptr, len)?
             }
 
-            InterfaceType::Record(i) => Val::Record(Record {
-                ty: types::Record::from(i, &cx.instance_type()),
-                values: load_record(cx, cx.types[i].fields.iter().map(|field| field.ty), bytes)?,
-            }),
-            InterfaceType::Tuple(i) => Val::Tuple(Tuple {
-                ty: types::Tuple::from(i, &cx.instance_type()),
-                values: load_record(cx, cx.types[i].types.iter().copied(), bytes)?,
-            }),
+            InterfaceType::Record(i) => {
+                let mut offset = 0;
+                let fields = cx.types[i].fields.iter();
+                Val::Record(
+                    fields
+                        .map(|field| -> Result<(String, Val)> {
+                            let abi = cx.types.canonical_abi(&field.ty);
+                            let offset = abi.next_field32(&mut offset);
+                            let offset = usize::try_from(offset).unwrap();
+                            let size = usize::try_from(abi.size32).unwrap();
+                            Ok((
+                                field.name.to_string(),
+                                Val::load(cx, field.ty, &bytes[offset..][..size])?,
+                            ))
+                        })
+                        .collect::<Result<_>>()?,
+                )
+            }
+            InterfaceType::Tuple(i) => {
+                let types = cx.types[i].types.iter().copied();
+                let mut offset = 0;
+                Val::Tuple(
+                    types
+                        .map(|ty| {
+                            let abi = cx.types.canonical_abi(&ty);
+                            let offset = abi.next_field32(&mut offset);
+                            let offset = usize::try_from(offset).unwrap();
+                            let size = usize::try_from(abi.size32).unwrap();
+                            Val::load(cx, ty, &bytes[offset..][..size])
+                        })
+                        .collect::<Result<_>>()?,
+                )
+            }
             InterfaceType::Variant(i) => {
                 let ty = &cx.types[i];
                 let (discriminant, value) =
-                    load_variant(cx, &ty.info, ty.cases.iter().map(|case| case.ty), bytes)?;
+                    load_variant(cx, &ty.info, ty.cases.values().copied(), bytes)?;
 
-                Val::Variant(Variant {
-                    ty: types::Variant::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
-                })
+                let (k, _) = ty.cases.get_index(discriminant as usize).unwrap();
+                Val::Variant(k.clone(), value)
             }
             InterfaceType::Enum(i) => {
                 let ty = &cx.types[i];
                 let (discriminant, _) =
                     load_variant(cx, &ty.info, ty.names.iter().map(|_| None), bytes)?;
 
-                Val::Enum(Enum {
-                    ty: types::Enum::from(i, &cx.instance_type()),
-                    discriminant,
-                })
+                Val::Enum(ty.names[discriminant as usize].clone())
             }
             InterfaceType::Option(i) => {
                 let ty = &cx.types[i];
-                let (discriminant, value) =
+                let (_discriminant, value) =
                     load_variant(cx, &ty.info, [None, Some(ty.ty)].into_iter(), bytes)?;
 
-                Val::Option(OptionVal {
-                    ty: types::OptionType::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
-                })
+                Val::Option(value)
             }
             InterfaceType::Result(i) => {
                 let ty = &cx.types[i];
                 let (discriminant, value) =
                     load_variant(cx, &ty.info, [ty.ok, ty.err].into_iter(), bytes)?;
 
-                Val::Result(ResultVal {
-                    ty: types::ResultType::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
+                Val::Result(if discriminant == 0 {
+                    Ok(value)
+                } else {
+                    Err(value)
                 })
             }
-            InterfaceType::Flags(i) => Val::Flags(Flags {
-                ty: types::Flags::from(i, &cx.instance_type()),
-                count: u32::try_from(cx.types[i].names.len())?,
-                value: match FlagsSize::from_count(cx.types[i].names.len()) {
-                    FlagsSize::Size0 => Box::new([]),
+            InterfaceType::Flags(i) => {
+                let ty = &cx.types[i];
+                let mut flags = Vec::new();
+                match FlagsSize::from_count(ty.names.len()) {
+                    FlagsSize::Size0 => {}
                     FlagsSize::Size1 => {
-                        iter::once(u8::load(cx, InterfaceType::U8, bytes)?.into()).collect()
+                        let bits = u8::load(cx, InterfaceType::U8, bytes)?;
+                        push_flags(ty, &mut flags, 0, u32::from(bits));
                     }
                     FlagsSize::Size2 => {
-                        iter::once(u16::load(cx, InterfaceType::U16, bytes)?.into()).collect()
+                        let bits = u16::load(cx, InterfaceType::U16, bytes)?;
+                        push_flags(ty, &mut flags, 0, u32::from(bits));
                     }
-                    FlagsSize::Size4Plus(n) => (0..n)
-                        .map(|index| {
-                            u32::load(
+                    FlagsSize::Size4Plus(n) => {
+                        for i in 0..n {
+                            let bits = u32::load(
                                 cx,
                                 InterfaceType::U32,
-                                &bytes[usize::from(index) * 4..][..4],
-                            )
-                        })
-                        .collect::<Result<_>>()?,
-                },
-            }),
+                                &bytes[usize::from(i) * 4..][..4],
+                            )?;
+                            push_flags(ty, &mut flags, u32::from(i) * 32, bits);
+                        }
+                    }
+                }
+                Val::Flags(flags.into())
+            }
         })
     }
 
@@ -964,68 +328,107 @@ impl Val {
         ty: InterfaceType,
         dst: &mut std::slice::IterMut<'_, MaybeUninit<ValRaw>>,
     ) -> Result<()> {
-        match self {
-            Val::Bool(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::S8(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::U8(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::S16(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::U16(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::S32(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::U32(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::S64(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::U64(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::Float32(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::Float64(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::Char(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::Resource(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::String(value) => {
+        match (ty, self) {
+            (InterfaceType::Bool, Val::Bool(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::Bool, _) => unexpected(ty, self),
+            (InterfaceType::S8, Val::S8(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::S8, _) => unexpected(ty, self),
+            (InterfaceType::U8, Val::U8(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::U8, _) => unexpected(ty, self),
+            (InterfaceType::S16, Val::S16(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::S16, _) => unexpected(ty, self),
+            (InterfaceType::U16, Val::U16(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::U16, _) => unexpected(ty, self),
+            (InterfaceType::S32, Val::S32(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::S32, _) => unexpected(ty, self),
+            (InterfaceType::U32, Val::U32(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::U32, _) => unexpected(ty, self),
+            (InterfaceType::S64, Val::S64(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::S64, _) => unexpected(ty, self),
+            (InterfaceType::U64, Val::U64(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::U64, _) => unexpected(ty, self),
+            (InterfaceType::Float32, Val::Float32(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::Float32, _) => unexpected(ty, self),
+            (InterfaceType::Float64, Val::Float64(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::Float64, _) => unexpected(ty, self),
+            (InterfaceType::Char, Val::Char(value)) => value.lower(cx, ty, next_mut(dst)),
+            (InterfaceType::Char, _) => unexpected(ty, self),
+            // NB: `lower` on `ResourceAny` does its own type-checking, so skip
+            // looking at it here.
+            (InterfaceType::Borrow(_) | InterfaceType::Own(_), Val::Resource(value)) => {
+                value.lower(cx, ty, next_mut(dst))
+            }
+            (InterfaceType::Borrow(_) | InterfaceType::Own(_), _) => unexpected(ty, self),
+            (InterfaceType::String, Val::String(value)) => {
                 let my_dst = &mut MaybeUninit::<[ValRaw; 2]>::uninit();
                 value.lower(cx, ty, my_dst)?;
                 let my_dst = unsafe { my_dst.assume_init() };
                 next_mut(dst).write(my_dst[0]);
                 next_mut(dst).write(my_dst[1]);
+                Ok(())
             }
-            Val::List(List { values, .. }) => {
-                let ty = match ty {
-                    InterfaceType::List(i) => &cx.types[i],
-                    _ => bad_type_info(),
-                };
+            (InterfaceType::String, _) => unexpected(ty, self),
+            (InterfaceType::List(ty), Val::List(values)) => {
+                let ty = &cx.types[ty];
                 let (ptr, len) = lower_list(cx, ty.element, values)?;
                 next_mut(dst).write(ValRaw::i64(ptr as i64));
                 next_mut(dst).write(ValRaw::i64(len as i64));
+                Ok(())
             }
-            Val::Record(Record { values, .. }) => {
-                let ty = match ty {
-                    InterfaceType::Record(i) => &cx.types[i],
-                    _ => bad_type_info(),
-                };
-                for (value, field) in values.iter().zip(ty.fields.iter()) {
+            (InterfaceType::List(_), _) => unexpected(ty, self),
+            (InterfaceType::Record(ty), Val::Record(values)) => {
+                let ty = &cx.types[ty];
+                if ty.fields.len() != values.len() {
+                    bail!("expected {} fields, got {}", ty.fields.len(), values.len());
+                }
+                for ((name, value), field) in values.iter().zip(ty.fields.iter()) {
+                    if *name != field.name {
+                        bail!("expected field `{}`, got `{name}`", field.name);
+                    }
                     value.lower(cx, field.ty, dst)?;
                 }
+                Ok(())
             }
-            Val::Tuple(Tuple { values, .. }) => {
-                let ty = match ty {
-                    InterfaceType::Tuple(i) => &cx.types[i],
-                    _ => bad_type_info(),
-                };
+            (InterfaceType::Record(_), _) => unexpected(ty, self),
+            (InterfaceType::Tuple(ty), Val::Tuple(values)) => {
+                let ty = &cx.types[ty];
+                if ty.types.len() != values.len() {
+                    bail!("expected {} types, got {}", ty.types.len(), values.len());
+                }
                 for (value, ty) in values.iter().zip(ty.types.iter()) {
                     value.lower(cx, *ty, dst)?;
                 }
+                Ok(())
             }
-            Val::Variant(v) => v.as_generic(cx.types, ty).lower(cx, dst)?,
-            Val::Option(v) => v.as_generic(cx.types, ty).lower(cx, dst)?,
-            Val::Result(v) => v.as_generic(cx.types, ty).lower(cx, dst)?,
-            Val::Enum(Enum { discriminant, .. }) => {
-                next_mut(dst).write(ValRaw::u32(*discriminant));
+            (InterfaceType::Tuple(_), _) => unexpected(ty, self),
+            (InterfaceType::Variant(ty), Val::Variant(n, v)) => {
+                GenericVariant::variant(&cx.types[ty], n, v)?.lower(cx, dst)
             }
-            Val::Flags(Flags { value, .. }) => {
-                for value in value.deref() {
-                    next_mut(dst).write(ValRaw::u32(*value));
+            (InterfaceType::Variant(_), _) => unexpected(ty, self),
+            (InterfaceType::Option(ty), Val::Option(v)) => {
+                GenericVariant::option(&cx.types[ty], v).lower(cx, dst)
+            }
+            (InterfaceType::Option(_), _) => unexpected(ty, self),
+            (InterfaceType::Result(ty), Val::Result(v)) => {
+                GenericVariant::result(&cx.types[ty], v)?.lower(cx, dst)
+            }
+            (InterfaceType::Result(_), _) => unexpected(ty, self),
+            (InterfaceType::Enum(ty), Val::Enum(discriminant)) => {
+                let discriminant = get_enum_discriminant(&cx.types[ty], discriminant)?;
+                next_mut(dst).write(ValRaw::u32(discriminant));
+                Ok(())
+            }
+            (InterfaceType::Enum(_), _) => unexpected(ty, self),
+            (InterfaceType::Flags(ty), Val::Flags(value)) => {
+                let ty = &cx.types[ty];
+                let storage = flags_to_storage(ty, value)?;
+                for value in storage {
+                    next_mut(dst).write(ValRaw::u32(value));
                 }
+                Ok(())
             }
+            (InterfaceType::Flags(_), _) => unexpected(ty, self),
         }
-
-        Ok(())
     }
 
     /// Serialize this value to the heap at the specified memory location.
@@ -1037,38 +440,58 @@ impl Val {
     ) -> Result<()> {
         debug_assert!(offset % usize::try_from(cx.types.canonical_abi(&ty).align32)? == 0);
 
-        match self {
-            Val::Bool(value) => value.store(cx, ty, offset)?,
-            Val::U8(value) => value.store(cx, ty, offset)?,
-            Val::S8(value) => value.store(cx, ty, offset)?,
-            Val::U16(value) => value.store(cx, ty, offset)?,
-            Val::S16(value) => value.store(cx, ty, offset)?,
-            Val::U32(value) => value.store(cx, ty, offset)?,
-            Val::S32(value) => value.store(cx, ty, offset)?,
-            Val::U64(value) => value.store(cx, ty, offset)?,
-            Val::S64(value) => value.store(cx, ty, offset)?,
-            Val::Float32(value) => value.store(cx, ty, offset)?,
-            Val::Float64(value) => value.store(cx, ty, offset)?,
-            Val::Char(value) => value.store(cx, ty, offset)?,
-            Val::String(value) => value.store(cx, ty, offset)?,
-            Val::Resource(value) => value.store(cx, ty, offset)?,
-            Val::List(List { values, .. }) => {
-                let ty = match ty {
-                    InterfaceType::List(i) => &cx.types[i],
-                    _ => bad_type_info(),
-                };
+        match (ty, self) {
+            (InterfaceType::Bool, Val::Bool(value)) => value.store(cx, ty, offset),
+            (InterfaceType::Bool, _) => unexpected(ty, self),
+            (InterfaceType::U8, Val::U8(value)) => value.store(cx, ty, offset),
+            (InterfaceType::U8, _) => unexpected(ty, self),
+            (InterfaceType::S8, Val::S8(value)) => value.store(cx, ty, offset),
+            (InterfaceType::S8, _) => unexpected(ty, self),
+            (InterfaceType::U16, Val::U16(value)) => value.store(cx, ty, offset),
+            (InterfaceType::U16, _) => unexpected(ty, self),
+            (InterfaceType::S16, Val::S16(value)) => value.store(cx, ty, offset),
+            (InterfaceType::S16, _) => unexpected(ty, self),
+            (InterfaceType::U32, Val::U32(value)) => value.store(cx, ty, offset),
+            (InterfaceType::U32, _) => unexpected(ty, self),
+            (InterfaceType::S32, Val::S32(value)) => value.store(cx, ty, offset),
+            (InterfaceType::S32, _) => unexpected(ty, self),
+            (InterfaceType::U64, Val::U64(value)) => value.store(cx, ty, offset),
+            (InterfaceType::U64, _) => unexpected(ty, self),
+            (InterfaceType::S64, Val::S64(value)) => value.store(cx, ty, offset),
+            (InterfaceType::S64, _) => unexpected(ty, self),
+            (InterfaceType::Float32, Val::Float32(value)) => value.store(cx, ty, offset),
+            (InterfaceType::Float32, _) => unexpected(ty, self),
+            (InterfaceType::Float64, Val::Float64(value)) => value.store(cx, ty, offset),
+            (InterfaceType::Float64, _) => unexpected(ty, self),
+            (InterfaceType::Char, Val::Char(value)) => value.store(cx, ty, offset),
+            (InterfaceType::Char, _) => unexpected(ty, self),
+            (InterfaceType::String, Val::String(value)) => value.store(cx, ty, offset),
+            (InterfaceType::String, _) => unexpected(ty, self),
+
+            // NB: resources do type-checking when they lower.
+            (InterfaceType::Borrow(_) | InterfaceType::Own(_), Val::Resource(value)) => {
+                value.store(cx, ty, offset)
+            }
+            (InterfaceType::Borrow(_) | InterfaceType::Own(_), _) => unexpected(ty, self),
+            (InterfaceType::List(ty), Val::List(values)) => {
+                let ty = &cx.types[ty];
                 let (ptr, len) = lower_list(cx, ty.element, values)?;
                 // FIXME: needs memory64 handling
                 *cx.get(offset + 0) = (ptr as i32).to_le_bytes();
                 *cx.get(offset + 4) = (len as i32).to_le_bytes();
+                Ok(())
             }
-            Val::Record(Record { values, .. }) => {
-                let ty = match ty {
-                    InterfaceType::Record(i) => &cx.types[i],
-                    _ => bad_type_info(),
-                };
+            (InterfaceType::List(_), _) => unexpected(ty, self),
+            (InterfaceType::Record(ty), Val::Record(values)) => {
+                let ty = &cx.types[ty];
+                if ty.fields.len() != values.len() {
+                    bail!("expected {} fields, got {}", ty.fields.len(), values.len());
+                }
                 let mut offset = offset;
-                for (value, field) in values.iter().zip(ty.fields.iter()) {
+                for ((name, value), field) in values.iter().zip(ty.fields.iter()) {
+                    if *name != field.name {
+                        bail!("expected field `{}`, got `{name}`", field.name);
+                    }
                     value.store(
                         cx,
                         field.ty,
@@ -1077,12 +500,14 @@ impl Val {
                             .next_field32_size(&mut offset),
                     )?;
                 }
+                Ok(())
             }
-            Val::Tuple(Tuple { values, .. }) => {
-                let ty = match ty {
-                    InterfaceType::Tuple(i) => &cx.types[i],
-                    _ => bad_type_info(),
-                };
+            (InterfaceType::Record(_), _) => unexpected(ty, self),
+            (InterfaceType::Tuple(ty), Val::Tuple(values)) => {
+                let ty = &cx.types[ty];
+                if ty.types.len() != values.len() {
+                    bail!("expected {} types, got {}", ty.types.len(), values.len());
+                }
                 let mut offset = offset;
                 for (value, ty) in values.iter().zip(ty.types.iter()) {
                     value.store(
@@ -1091,38 +516,81 @@ impl Val {
                         cx.types.canonical_abi(ty).next_field32_size(&mut offset),
                     )?;
                 }
+                Ok(())
             }
+            (InterfaceType::Tuple(_), _) => unexpected(ty, self),
 
-            Val::Variant(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
-            Val::Enum(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
-            Val::Option(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
-            Val::Result(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
+            (InterfaceType::Variant(ty), Val::Variant(n, v)) => {
+                GenericVariant::variant(&cx.types[ty], n, v)?.store(cx, offset)
+            }
+            (InterfaceType::Variant(_), _) => unexpected(ty, self),
+            (InterfaceType::Enum(ty), Val::Enum(v)) => {
+                GenericVariant::enum_(&cx.types[ty], v)?.store(cx, offset)
+            }
+            (InterfaceType::Enum(_), _) => unexpected(ty, self),
+            (InterfaceType::Option(ty), Val::Option(v)) => {
+                GenericVariant::option(&cx.types[ty], v).store(cx, offset)
+            }
+            (InterfaceType::Option(_), _) => unexpected(ty, self),
+            (InterfaceType::Result(ty), Val::Result(v)) => {
+                GenericVariant::result(&cx.types[ty], v)?.store(cx, offset)
+            }
+            (InterfaceType::Result(_), _) => unexpected(ty, self),
 
-            Val::Flags(Flags { count, value, .. }) => {
-                match FlagsSize::from_count(*count as usize) {
+            (InterfaceType::Flags(ty), Val::Flags(flags)) => {
+                let ty = &cx.types[ty];
+                let storage = flags_to_storage(ty, flags)?;
+                match FlagsSize::from_count(ty.names.len()) {
                     FlagsSize::Size0 => {}
                     FlagsSize::Size1 => {
-                        u8::try_from(value[0])
+                        u8::try_from(storage[0])
                             .unwrap()
                             .store(cx, InterfaceType::U8, offset)?
                     }
                     FlagsSize::Size2 => {
-                        u16::try_from(value[0])
+                        u16::try_from(storage[0])
                             .unwrap()
                             .store(cx, InterfaceType::U16, offset)?
                     }
                     FlagsSize::Size4Plus(_) => {
                         let mut offset = offset;
-                        for value in value.deref() {
+                        for value in storage {
                             value.store(cx, InterfaceType::U32, offset)?;
                             offset += 4;
                         }
                     }
                 }
+                Ok(())
             }
+            (InterfaceType::Flags(_), _) => unexpected(ty, self),
         }
+    }
 
-        Ok(())
+    fn desc(&self) -> &'static str {
+        match self {
+            Val::Bool(_) => "bool",
+            Val::U8(_) => "u8",
+            Val::S8(_) => "s8",
+            Val::U16(_) => "u16",
+            Val::S16(_) => "s16",
+            Val::U32(_) => "u32",
+            Val::S32(_) => "s32",
+            Val::U64(_) => "u64",
+            Val::S64(_) => "s64",
+            Val::Float32(_) => "f32",
+            Val::Float64(_) => "f64",
+            Val::Char(_) => "char",
+            Val::List(_) => "list",
+            Val::String(_) => "string",
+            Val::Record(_) => "record",
+            Val::Enum(_) => "enum",
+            Val::Variant(..) => "variant",
+            Val::Tuple(_) => "tuple",
+            Val::Option(_) => "option",
+            Val::Result(_) => "result",
+            Val::Resource(_) => "resource",
+            Val::Flags(_) => "flags",
+        }
     }
 }
 
@@ -1175,8 +643,8 @@ impl PartialEq for Val {
             (Self::Record(_), _) => false,
             (Self::Tuple(l), Self::Tuple(r)) => l == r,
             (Self::Tuple(_), _) => false,
-            (Self::Variant(l), Self::Variant(r)) => l == r,
-            (Self::Variant(_), _) => false,
+            (Self::Variant(ln, lv), Self::Variant(rn, rv)) => ln == rn && lv == rv,
+            (Self::Variant(..), _) => false,
             (Self::Enum(l), Self::Enum(r)) => l == r,
             (Self::Enum(_), _) => false,
             (Self::Option(l), Self::Option(r)) => l == r,
@@ -1201,6 +669,92 @@ struct GenericVariant<'a> {
 }
 
 impl GenericVariant<'_> {
+    fn result<'a>(
+        ty: &'a TypeResult,
+        r: &'a Result<Option<Box<Val>>, Option<Box<Val>>>,
+    ) -> Result<GenericVariant<'a>> {
+        let (discriminant, payload) = match r {
+            Ok(val) => {
+                let payload = match (val, ty.ok) {
+                    (Some(val), Some(ty)) => Some((&**val, ty)),
+                    (None, None) => None,
+                    (Some(_), None) => {
+                        bail!("payload provided to `ok` but not expected");
+                    }
+                    (None, Some(_)) => {
+                        bail!("payload expected to `ok` but not provided");
+                    }
+                };
+                (0, payload)
+            }
+            Err(val) => {
+                let payload = match (val, ty.err) {
+                    (Some(val), Some(ty)) => Some((&**val, ty)),
+                    (None, None) => None,
+                    (Some(_), None) => {
+                        bail!("payload provided to `err` but not expected");
+                    }
+                    (None, Some(_)) => {
+                        bail!("payload expected to `err` but not provided");
+                    }
+                };
+                (1, payload)
+            }
+        };
+        Ok(GenericVariant {
+            discriminant,
+            payload,
+            abi: &ty.abi,
+            info: &ty.info,
+        })
+    }
+
+    fn option<'a>(ty: &'a TypeOption, r: &'a Option<Box<Val>>) -> GenericVariant<'a> {
+        let (discriminant, payload) = match r {
+            None => (0, None),
+            Some(val) => (1, Some((&**val, ty.ty))),
+        };
+        GenericVariant {
+            discriminant,
+            payload,
+            abi: &ty.abi,
+            info: &ty.info,
+        }
+    }
+
+    fn enum_<'a>(ty: &'a TypeEnum, discriminant: &str) -> Result<GenericVariant<'a>> {
+        let discriminant = get_enum_discriminant(ty, discriminant)?;
+
+        Ok(GenericVariant {
+            discriminant,
+            payload: None,
+            abi: &ty.abi,
+            info: &ty.info,
+        })
+    }
+
+    fn variant<'a>(
+        ty: &'a TypeVariant,
+        discriminant_name: &str,
+        payload: &'a Option<Box<Val>>,
+    ) -> Result<GenericVariant<'a>> {
+        let (discriminant, payload_ty) = get_variant_discriminant(ty, discriminant_name)?;
+
+        let payload = match (payload, payload_ty) {
+            (Some(val), Some(ty)) => Some((&**val, *ty)),
+            (None, None) => None,
+            (Some(_), None) => bail!("did not expect a payload for case `{discriminant_name}`"),
+            (None, Some(_)) => bail!("expected a payload for case `{discriminant_name}`"),
+        };
+
+        Ok(GenericVariant {
+            discriminant,
+            payload,
+            abi: &ty.abi,
+            info: &ty.info,
+        })
+    }
+
     fn lower<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
@@ -1266,9 +820,8 @@ fn load_list(cx: &mut LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize
         bail!("list pointer is not aligned")
     }
 
-    Ok(Val::List(List {
-        ty: types::List::from(ty, &cx.instance_type()),
-        values: (0..len)
+    Ok(Val::List(
+        (0..len)
             .map(|index| {
                 Val::load(
                     cx,
@@ -1277,24 +830,7 @@ fn load_list(cx: &mut LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize
                 )
             })
             .collect::<Result<_>>()?,
-    }))
-}
-
-fn load_record(
-    cx: &mut LiftContext<'_>,
-    types: impl Iterator<Item = InterfaceType>,
-    bytes: &[u8],
-) -> Result<Box<[Val]>> {
-    let mut offset = 0;
-    types
-        .map(|ty| {
-            let abi = cx.types.canonical_abi(&ty);
-            let offset = abi.next_field32(&mut offset);
-            let offset = usize::try_from(offset).unwrap();
-            let size = usize::try_from(abi.size32).unwrap();
-            Val::load(cx, ty, &bytes[offset..][..size])
-        })
-        .collect()
+    ))
 }
 
 fn load_variant(
@@ -1377,6 +913,51 @@ fn lower_list<T>(
     Ok((ptr, items.len()))
 }
 
+fn push_flags(ty: &TypeFlags, flags: &mut Vec<String>, mut offset: u32, mut bits: u32) {
+    while bits > 0 {
+        if bits & 1 != 0 {
+            flags.push(ty.names[offset as usize].clone());
+        }
+        bits >>= 1;
+        offset += 1;
+    }
+}
+
+fn flags_to_storage(ty: &TypeFlags, flags: &[String]) -> Result<Vec<u32>> {
+    let mut storage = match FlagsSize::from_count(ty.names.len()) {
+        FlagsSize::Size0 => Vec::new(),
+        FlagsSize::Size1 | FlagsSize::Size2 => vec![0],
+        FlagsSize::Size4Plus(n) => vec![0; n.into()],
+    };
+
+    for flag in flags {
+        let bit = ty
+            .names
+            .get_index_of(flag)
+            .ok_or_else(|| anyhow::anyhow!("unknown flag: `{flag}`"))?;
+        storage[bit / 32] |= 1 << (bit % 32);
+    }
+    Ok(storage)
+}
+
+fn get_enum_discriminant(ty: &TypeEnum, n: &str) -> Result<u32> {
+    ty.names
+        .get_index_of(n)
+        .ok_or_else(|| anyhow::anyhow!("enum variant name `{n}` is not valid"))
+        .map(|i| i as u32)
+}
+
+fn get_variant_discriminant<'a>(
+    ty: &'a TypeVariant,
+    name: &str,
+) -> Result<(u32, &'a Option<InterfaceType>)> {
+    let (i, _, ty) = ty
+        .cases
+        .get_full(name)
+        .ok_or_else(|| anyhow::anyhow!("unknown variant case: `{name}`"))?;
+    Ok((i as u32, ty))
+}
+
 fn next<'a>(src: &mut std::slice::Iter<'a, ValRaw>) -> &'a ValRaw {
     src.next().unwrap()
 }
@@ -1385,4 +966,13 @@ fn next_mut<'a>(
     dst: &mut std::slice::IterMut<'a, MaybeUninit<ValRaw>>,
 ) -> &'a mut MaybeUninit<ValRaw> {
     dst.next().unwrap()
+}
+
+#[cold]
+fn unexpected<T>(ty: InterfaceType, val: &Val) -> Result<T> {
+    bail!(
+        "type mismatch: expected {}, found {}",
+        desc(&ty),
+        val.desc()
+    )
 }
