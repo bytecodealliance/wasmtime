@@ -3,8 +3,8 @@ use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
 use anyhow::{Context, Error};
 use gimli::{
-    write, AttributeValue::DebugLineRef, DebugLine, DebugLineOffset, DebugLineStr, DebugStr,
-    DebugStrOffsets, DebuggingInformationEntry, LineEncoding, Unit,
+    write, AttributeValue::DebugLineRef, DebugLine, DebugLineOffset, DebugStr,
+    DebuggingInformationEntry, LineEncoding, Unit,
 };
 use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
@@ -39,10 +39,6 @@ enum ReadLineProgramState {
     IgnoreSequence,
 }
 
-fn print_type_of<T>(_: &T) {
-    println!("{}", std::any::type_name::<T>())
-}
-
 pub(crate) fn clone_line_program<R>(
     dwarf: &gimli::Dwarf<R>,
     skeleton_dwarf: &gimli::Dwarf<R>,
@@ -52,8 +48,6 @@ pub(crate) fn clone_line_program<R>(
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
     debug_str: &DebugStr<R>,
-    debug_str_offsets: &DebugStrOffsets<R>,
-    debug_line_str: &DebugLineStr<R>,
     debug_line: &DebugLine<R>,
     out_strings: &mut write::StringTable,
 ) -> Result<(write::LineProgram, DebugLineOffset, Vec<write::FileId>, u64), Error>

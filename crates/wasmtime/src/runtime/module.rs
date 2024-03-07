@@ -8,8 +8,7 @@ use crate::{
     Engine,
 };
 use anyhow::{bail, Context, Result};
-use gimli::{DwarfPackage, EndianSlice, LittleEndian, RunTimeEndian};
-use memmap2::Mmap;
+use gimli::{DwarfPackage, LittleEndian};
 use object::{File, Object, ObjectSection, ObjectSymbol};
 use once_cell::sync::OnceCell;
 use std::borrow::Cow;
@@ -21,14 +20,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use thiserror::Error;
 
-// use std::{
-//     collections::{HashMap, HashSet},
-//     fmt::Debug,
-//     fs, mem,
-//     path::PathBuf,
-// };
 use std::collections::HashMap;
 use typed_arena::Arena;
 use wasmparser::{Parser, ValidPayload, Validator};
@@ -278,7 +270,7 @@ impl Module {
             Some(file.to_path_buf()),
         ) {
             Ok(mut m) => {
-                let mut dwp_path = file.with_extension("dwp");
+                let dwp_path = file.with_extension("dwp");
                 let file = fs::read(dwp_path).ok();
                 m.dwarf_package_bytes = file;
                 Ok(m)
@@ -304,7 +296,6 @@ impl Module {
         wasm_file: PathBuf,
         buffer: &'a mut Vec<u8>,
         arena_data: &'a Arena<Cow<'a, [u8]>>,
-        arena_relocations: &'a Arena<RelocationMap>,
     ) -> Option<DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>> {
         let dwp_path = wasm_file.with_extension("dwp");
 
@@ -323,7 +314,7 @@ impl Module {
                     }
                 };
 
-                match Module::load_dwp(object_file, &arena_data, &arena_relocations, buffer) {
+                match Module::load_dwp(object_file, &arena_data, buffer) {
                     Ok(package) => Some(package),
                     Err(err) => {
                         eprintln!("Failed to load Dwarf package '{:?}': {}", dwp_path, err);
@@ -385,7 +376,6 @@ impl Module {
 
                 let mut buffer = Vec::new();
                 let arena_data = Arena::new();
-                let arena_relocations = Arena::new();
 
                 let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
@@ -412,7 +402,7 @@ impl Module {
                         Some((code, None))
                     },
 
-                    wasm_path.map(|path|Module::read_dwarf_package(path, &mut buffer, &arena_data, &arena_relocations)).flatten()
+                    wasm_path.map(|path|Module::read_dwarf_package(path, &mut buffer, &arena_data)).flatten()
                 )?;
             } else {
                 let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary, wasm_path)?;
@@ -439,7 +429,6 @@ impl Module {
             if offset as u64 != offset64 {
                 continue;
             }
-            let offset = offset as usize;
             match relocation.kind() {
                 object::RelocationKind::Absolute => {
                     match relocation.target() {
@@ -486,7 +475,6 @@ impl Module {
         endian: Endian,
         is_dwo: bool,
         arena_data: &'arena Arena<Cow<'input, [u8]>>,
-        arena_relocations: &'arena Arena<RelocationMap>,
     ) -> Result<gimli::EndianSlice<'input, Endian>>
     where
         'arena: 'input,
@@ -520,7 +508,6 @@ impl Module {
     fn load_dwp<'a>(
         file: File<'a>,
         arena_data: &'a Arena<Cow<'a, [u8]>>,
-        arena_relocations: &'a Arena<RelocationMap>,
         buffer: &'a Vec<u8>,
     ) -> Result<DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>> {
         // Read the file contents into a Vec<u8>
@@ -531,14 +518,7 @@ impl Module {
         let endian_slice = gimli::EndianSlice::new(buffer, LittleEndian);
 
         let mut load_section = |id: gimli::SectionId| -> Result<_> {
-            Module::load_file_section(
-                id,
-                &file,
-                gimli::LittleEndian,
-                true,
-                arena_data,
-                arena_relocations,
-            )
+            Module::load_file_section(id, &file, gimli::LittleEndian, true, arena_data)
         };
 
         // Load the DwarfPackage from the EndianSlice

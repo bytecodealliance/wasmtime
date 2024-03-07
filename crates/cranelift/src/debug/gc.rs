@@ -94,7 +94,7 @@ fn build_unit_dependencies<R: Reader<Offset = usize>>(
         if let Some(dwo_id) = unit.dwo_id {
             if let Some(cu) = dwarf_package.find_cu(dwo_id, dwarf)? {
                 if let Some(unit_header) = cu.debug_info.units().next()? {
-                    build_unit_dependencies(unit_header, &cu, &None, at, deps);
+                    build_unit_dependencies(unit_header, &cu, &None, at, deps)?;
                 }
             }
         }

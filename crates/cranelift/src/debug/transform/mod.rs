@@ -6,19 +6,11 @@ use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctionsMetadata;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
-use fallible_iterator::FallibleIterator;
 use gimli::{
-    write, DebugAddr, DebugLine, DebugLineStr, DebugStr, DebugStrOffsets, Dwarf, DwarfPackage,
-    DwoId, EndianSlice, LocationLists, RangeLists, Unit, UnitSectionOffset,
+    write, DebugAddr, DebugLine, DebugStr, Dwarf, DwarfPackage, LocationLists, RangeLists, Unit,
+    UnitSectionOffset,
 };
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    fs, mem,
-    path::PathBuf,
-    result::Result,
-};
+use std::{collections::HashSet, fmt::Debug, result::Result};
 use thiserror::Error;
 use wasmtime_environ::DebugInfoData;
 
@@ -50,8 +42,6 @@ where
     R: Reader,
 {
     debug_str: &'a DebugStr<R>,
-    debug_str_offsets: &'a DebugStrOffsets<R>,
-    debug_line_str: &'a DebugLineStr<R>,
     debug_line: &'a DebugLine<R>,
     debug_addr: &'a DebugAddr<R>,
     rnglists: &'a RangeLists<R>,
@@ -70,8 +60,6 @@ pub fn transform_dwarf(
 
     let context = DebugInputContext {
         debug_str: &di.dwarf.debug_str,
-        debug_str_offsets: &di.dwarf.debug_str_offsets,
-        debug_line_str: &di.dwarf.debug_line_str,
         debug_line: &di.dwarf.debug_line,
         debug_addr: &di.dwarf.debug_addr,
         rnglists: &di.dwarf.ranges,
@@ -103,7 +91,7 @@ pub fn transform_dwarf(
 
         let mut split_dwarf = None;
 
-        if let gimli::UnitType::Skeleton(dwo_id) = unit.header.type_() {
+        if let gimli::UnitType::Skeleton(_dwo_id) = unit.header.type_() {
             if di.dwarf_package.is_some() {
                 if let Some((fused, fused_dwarf)) = replace_unit_from_split_dwarf(
                     &unit,

@@ -199,7 +199,7 @@ impl RunCommon {
                     #[cfg(feature = "component-model")]
                     {
                         self.ensure_allow_components()?;
-                        RunTarget::Component(Component::new(engine, &bytes, None)?)
+                        RunTarget::Component(Component::new(engine, &bytes)?)
                     }
                     #[cfg(not(feature = "component-model"))]
                     {

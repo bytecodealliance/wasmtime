@@ -5,10 +5,7 @@ use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
 use cranelift_codegen::isa::TargetIsa;
-use gimli::{
-    write, AttributeValue, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
-    DebuggingInformationEntry, Unit,
-};
+use gimli::{write, AttributeValue, DebugLineOffset, DebuggingInformationEntry, Unit};
 
 #[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {
