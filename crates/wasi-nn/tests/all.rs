@@ -13,7 +13,7 @@ const PREOPENED_DIR_NAME: &str = "fixture";
 /// Run a wasi-nn test program. This is modeled after
 /// `crates/wasi/tests/all/main.rs` but still uses the older preview1 API for
 /// file reads.
-fn run(path: &str, preload_model: bool) -> Result<()> {
+fn run(path: &str, backend: Backend, preload_model: bool) -> Result<()> {
     wasmtime_wasi_nn::check_test!();
     let path = Path::new(path);
     let engine = Engine::new(&Config::new())?;
@@ -21,28 +21,13 @@ fn run(path: &str, preload_model: bool) -> Result<()> {
     wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi_nn)?;
     wasi_common::sync::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi)?;
     let module = Module::from_file(&engine, path)?;
-    let mut backends = vec![];
-    #[cfg(feature = "openvino")]
-    {
-        backends.push(Backend::from(backend::openvino::OpenvinoBackend::default()));
-    }
-    #[cfg(feature = "winml")]
-    {
-        backends.push(Backend::from(backend::winml::WinMLBackend::default()));
-    }
-    #[cfg(feature = "onnx")]
-    {
-        backends.push(Backend::from(backend::onnxruntime::OnnxBackend::default()));
-    }
-    for backend in backends {
-        let mut store = Store::new(
-            &engine,
-            Ctx::new(&testing::artifacts_dir(), preload_model, backend)?,
-        );
-        let instance = linker.instantiate(&mut store, &module)?;
-        let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
-        start.call(&mut store, ())?;
-    }
+    let mut store = Store::new(
+        &engine,
+        Ctx::new(&testing::artifacts_dir(), preload_model, backend)?,
+    );
+    let instance = linker.instantiate(&mut store, &module)?;
+    let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
+    start.call(&mut store, ())?;
     Ok(())
 }
 
@@ -92,7 +77,8 @@ foreach_nn!(assert_test_exists);
 )]
 #[test]
 fn nn_image_classification() {
-    run(NN_IMAGE_CLASSIFICATION, false).unwrap()
+    let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
+    run(NN_IMAGE_CLASSIFICATION, backend, false).unwrap()
 }
 
 #[cfg_attr(
@@ -104,24 +90,30 @@ fn nn_image_classification() {
 )]
 #[test]
 fn nn_image_classification_named() {
-    run(NN_IMAGE_CLASSIFICATION_NAMED, true).unwrap()
+    let backend = Backend::from(backend::openvino::OpenvinoBackend::default());
+    run(NN_IMAGE_CLASSIFICATION_NAMED, backend, true).unwrap()
 }
 
-#[cfg_attr(not(feature = "winml"), ignore)]
+#[cfg_attr(not(all(feature = "winml", target_os = "windows")), ignore)]
 #[test]
 fn nn_image_classification_winml() {
-    run(NN_IMAGE_CLASSIFICATION_WINML, true).unwrap()
+    #[cfg(feature = "winml")]
+    {
+        let backend = Backend::from(backend::winml::WinMLBackend::default());
+        run(NN_IMAGE_CLASSIFICATION_WINML, backend, true).unwrap()
+    }
 }
 
 #[cfg_attr(
     not(all(
-        not(feature = "onnx"),
-        target_arch = "x86_64",
-        any(target_os = "linux", target_os = "windows")
+        feature = "onnx",
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "linux", target_os = "windows", target_os = "macos")
     )),
     ignore
 )]
 #[test]
 fn nn_image_classification_onnx() {
-    run(NN_IMAGE_CLASSIFICATION_ONNX, false).unwrap()
+    let backend = Backend::from(backend::onnxruntime::OnnxBackend::default());
+    run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false).unwrap()
 }

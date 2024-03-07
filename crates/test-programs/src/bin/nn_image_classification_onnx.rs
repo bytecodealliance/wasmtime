@@ -20,7 +20,7 @@ pub fn main() -> Result<()> {
     // Prepare WASI-NN tensor - Tensor data is always a bytes vector
     // Load a tensor that precisely matches the graph input tensor
     let data = fs::read("fixture/tensor.bgr").unwrap();
-    println!("Read input tensor, size in bytes: {}", data.len());
+    println!("[ONNX] Read input tensor, size in bytes: {}", data.len());
     context.set_input(0, wasi_nn::TensorType::F32, &[1, 3, 224, 224], &data)?;
 
     // Execute the inferencing
@@ -41,13 +41,10 @@ pub fn main() -> Result<()> {
 // Sort the buffer of probabilities. The graph places the match probability for
 // each class at the index for that class (e.g. the probability of class 42 is
 // placed at buffer[42]). Here we convert to a wrapping InferenceResult and sort
-// the results. It is unclear why the MobileNet output indices are "off by one"
-// but the `.skip(1)` below seems necessary to get results that make sense (e.g.
-// 763 = "revolver" vs 762 = "restaurant").
+// the results.
 fn sort_results(buffer: &[f32]) -> Vec<InferenceResult> {
     let mut results: Vec<InferenceResult> = buffer
         .iter()
-        .skip(1)
         .enumerate()
         .map(|(c, p)| InferenceResult(c, *p))
         .collect();

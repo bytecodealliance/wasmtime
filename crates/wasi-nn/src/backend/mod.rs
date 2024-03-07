@@ -6,14 +6,14 @@
 pub mod onnxruntime;
 #[cfg(feature = "openvino")]
 pub mod openvino;
-#[cfg(feature = "winml")]
+#[cfg(all(feature = "winml", target_os = "windows"))]
 pub mod winml;
 
 #[cfg(feature = "onnx")]
 use self::onnxruntime::OnnxBackend;
 #[cfg(feature = "openvino")]
 use self::openvino::OpenvinoBackend;
-#[cfg(feature = "winml")]
+#[cfg(all(feature = "winml", target_os = "windows"))]
 use self::winml::WinMLBackend;
 
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
@@ -31,7 +31,7 @@ pub fn list() -> Vec<Backend> {
     {
         backends.push(Backend::from(OpenvinoBackend::default()));
     }
-    #[cfg(feature = "winml")]
+    #[cfg(all(feature = "winml", target_os = "windows"))]
     {
         backends.push(Backend::from(WinMLBackend::default()));
     }

@@ -3857,7 +3857,6 @@ dependencies = [
  "walkdir",
  "wasi-common",
  "wasmtime",
- "wasmtime-wasi",
  "wiggle",
  "windows",
 ]

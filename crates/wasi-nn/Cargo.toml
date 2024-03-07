@@ -47,7 +47,6 @@ walkdir = { workspace = true }
 cap-std = { workspace = true }
 test-programs-artifacts = { workspace = true }
 wasi-common = { workspace = true, features = ["sync"] }
-wasmtime-wasi = { workspace = true }
 wasmtime = { workspace = true, features = ["cranelift"] }
 
 [features]
@@ -58,4 +57,3 @@ openvino = ["dep:openvino"]
 onnx = ["dep:ort"]
 # winml is only available on Windows 10 1809 and later.
 winml = ["dep:windows"]
-

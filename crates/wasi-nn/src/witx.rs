@@ -44,10 +44,7 @@ mod gen {
             match e {
                 WasiNnError::BackendError(_) => unimplemented!(),
                 WasiNnError::GuestError(_) => unimplemented!(),
-                WasiNnError::UsageError(e) => {
-                    println!("[OUCH!!!] {:?}", e);
-                    unimplemented!();
-                }
+                WasiNnError::UsageError(_) => unimplemented!(),
             }
         }
     }
