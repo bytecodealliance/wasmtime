@@ -114,7 +114,7 @@ impl HostTimezone for Timezone {
     }
 }
 
-pub fn monotonic_clock() -> Box<dyn HostMonotonicClock + Send + Sync> {
+pub fn monotonic_clock() -> Box<dyn HostMonotonicClock + Send> {
     Box::new(MonotonicClock::new(ambient_authority()))
 }
 
@@ -122,6 +122,6 @@ pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
     Box::new(WallClock::new(ambient_authority()))
 }
 
-pub fn timezone() -> Box<dyn HostTimezone + Send + Sync> {
+pub fn timezone() -> Box<dyn HostTimezone + Send> {
     Box::new(Timezone::new(ambient_authority()))
 }
