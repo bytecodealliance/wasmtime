@@ -22,9 +22,9 @@ pub struct MemoryInputPipe {
 }
 
 impl MemoryInputPipe {
-    pub fn new(bytes: Bytes) -> Self {
+    pub fn new(bytes: impl Into<Bytes>) -> Self {
         Self {
-            buffer: Arc::new(Mutex::new(bytes)),
+            buffer: Arc::new(Mutex::new(bytes.into())),
         }
     }
 

@@ -490,18 +490,19 @@ trait WasiPreview1ViewExt:
 
 impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
 
-pub fn add_to_linker_async<T: WasiPreview1View>(
+pub fn add_to_linker_async<T: Send, W: WasiPreview1View>(
     linker: &mut wasmtime::Linker<T>,
+    f: impl Fn(&mut T) -> &mut W + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
-    wasi_snapshot_preview1::add_to_linker(linker, |t| t)
+    crate::preview1::wasi_snapshot_preview1::add_to_linker(linker, f)
 }
 
-pub fn add_to_linker_sync<T: WasiPreview1View>(
+pub fn add_to_linker_sync<T: Send, W: WasiPreview1View>(
     linker: &mut wasmtime::Linker<T>,
+    f: impl Fn(&mut T) -> &mut W + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
-    sync::add_wasi_snapshot_preview1_to_linker(linker, |t| t)
+    crate::preview1::sync::add_wasi_snapshot_preview1_to_linker(linker, f)
 }
-
 // Generate the wasi_snapshot_preview1::WasiSnapshotPreview1 trait,
 // and the module types.
 // None of the generated modules, traits, or types should be used externally
@@ -520,7 +521,7 @@ wiggle::from_witx!({
     errors: { errno => trappable Error },
 });
 
-mod sync {
+pub(crate) mod sync {
     use anyhow::Result;
     use std::future::Future;
 
