@@ -628,9 +628,9 @@ impl RunCommand {
                         // default-disabled in the future.
                         (Some(true), _) | (None, Some(false) | None) => {
                             if self.run.common.wasi.preview0 != Some(false) {
-                                wasmtime_wasi::preview0::add_to_linker_sync(linker)?;
+                                wasmtime_wasi::preview0::add_to_linker_sync(linker, |t| t)?;
                             }
-                            wasmtime_wasi::preview1::add_to_linker_sync(linker)?;
+                            wasmtime_wasi::preview1::add_to_linker_sync(linker, |t| t)?;
                             self.set_preview2_ctx(store)?;
                         }
                     }

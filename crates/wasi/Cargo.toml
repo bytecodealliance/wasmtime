@@ -37,7 +37,7 @@ url = { workspace = true }
 once_cell = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }
+tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros", "fs"] }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 test-programs-artifacts = { workspace = true }
