@@ -584,7 +584,7 @@ fn dynamic_val() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    let idx = linker
+    linker
         .root()
         .resource("t1", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i_pre = linker.instantiate_pre(&c)?;
@@ -614,14 +614,14 @@ fn dynamic_val() -> Result<()> {
             assert_eq!(resource.rep(), 100);
             assert!(resource.owned());
 
-            let resource = resource.try_into_resource_any(&mut store, &i_pre, idx)?;
+            let resource = resource.try_into_resource_any(&mut store)?;
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
             assert!(resource.owned());
         }
         _ => unreachable!(),
     }
 
-    let t1_any = Resource::<MyType>::new_own(100).try_into_resource_any(&mut store, &i_pre, idx)?;
+    let t1_any = Resource::<MyType>::new_own(100).try_into_resource_any(&mut store)?;
     let mut results = [Val::Bool(false)];
     a.call(&mut store, &[Val::Resource(t1_any)], &mut results)?;
     a.post_return(&mut store)?;
@@ -634,7 +634,7 @@ fn dynamic_val() -> Result<()> {
             assert_eq!(resource.rep(), 100);
             assert!(resource.owned());
 
-            let resource = resource.try_into_resource_any(&mut store, &i_pre, idx)?;
+            let resource = resource.try_into_resource_any(&mut store)?;
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
             assert!(resource.owned());
         }
@@ -642,7 +642,7 @@ fn dynamic_val() -> Result<()> {
     }
 
     let t1 = Resource::<MyType>::new_own(100)
-        .try_into_resource_any(&mut store, &i_pre, idx)?
+        .try_into_resource_any(&mut store)?
         .try_into_resource(&mut store)?;
     let (t1,) = a_typed_result.call(&mut store, (t1,))?;
     a_typed_result.post_return(&mut store)?;
@@ -650,9 +650,9 @@ fn dynamic_val() -> Result<()> {
     assert!(t1.owned());
 
     let t1_any = t1
-        .try_into_resource_any(&mut store, &i_pre, idx)?
+        .try_into_resource_any(&mut store)?
         .try_into_resource::<MyType>(&mut store)?
-        .try_into_resource_any(&mut store, &i_pre, idx)?;
+        .try_into_resource_any(&mut store)?;
     let mut results = [Val::Bool(false)];
     a.call(&mut store, &[Val::Resource(t1_any)], &mut results)?;
     a.post_return(&mut store)?;
@@ -665,7 +665,7 @@ fn dynamic_val() -> Result<()> {
             assert_eq!(resource.rep(), 100);
             assert!(resource.owned());
 
-            let resource = resource.try_into_resource_any(&mut store, &i_pre, idx)?;
+            let resource = resource.try_into_resource_any(&mut store)?;
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
             assert!(resource.owned());
         }
@@ -915,7 +915,7 @@ fn can_use_own_for_borrow() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    let ty_idx = linker
+    linker
         .root()
         .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
     let i_pre = linker.instantiate_pre(&c)?;
@@ -932,8 +932,7 @@ fn can_use_own_for_borrow() -> Result<()> {
     f_typed.call(&mut store, (&resource,))?;
     f_typed.post_return(&mut store)?;
 
-    let resource =
-        Resource::<MyType>::new_own(300).try_into_resource_any(&mut store, &i_pre, ty_idx)?;
+    let resource = Resource::<MyType>::new_own(300).try_into_resource_any(&mut store)?;
     f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
     f.post_return(&mut store)?;
     resource.resource_drop(&mut store)?;

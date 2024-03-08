@@ -16,7 +16,7 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime_environ::component::TypeDef;
-use wasmtime_environ::{EntityRef, PrimaryMap};
+use wasmtime_environ::PrimaryMap;
 
 /// A type used to instantiate [`Component`]s.
 ///
@@ -64,7 +64,6 @@ pub struct Linker<T> {
     strings: Strings,
     map: NameMap,
     path: Vec<usize>,
-    resource_imports: usize,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -76,7 +75,6 @@ impl<T> Clone for Linker<T> {
             strings: self.strings.clone(),
             map: self.map.clone(),
             path: self.path.clone(),
-            resource_imports: self.resource_imports.clone(),
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -100,48 +98,8 @@ pub struct LinkerInstance<'a, T> {
     path_len: usize,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
-    resource_imports: &'a mut usize,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
-}
-
-/// Index correlating a resource definition to the import path.
-/// This is assigned by [`Linker::resource`] and may be used to associate it to
-/// [`RuntimeImportIndex`](wasmtime_environ::component::RuntimeImportIndex)
-/// at a later stage
-///
-/// [`Linker::resource`]: crate::component::LinkerInstance::resource
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ResourceImportIndex(usize);
-
-impl EntityRef for ResourceImportIndex {
-    fn new(idx: usize) -> Self {
-        Self(idx)
-    }
-
-    fn index(self) -> usize {
-        self.0
-    }
-}
-
-impl Deref for ResourceImportIndex {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<usize> for ResourceImportIndex {
-    fn from(idx: usize) -> Self {
-        Self(idx)
-    }
-}
-
-impl From<ResourceImportIndex> for usize {
-    fn from(idx: ResourceImportIndex) -> Self {
-        idx.0
-    }
 }
 
 #[derive(Clone, Default)]
@@ -184,11 +142,7 @@ pub(crate) enum Definition {
     Instance(NameMap),
     Func(Arc<HostFunc>),
     Module(Module),
-    Resource(
-        ResourceImportIndex,
-        ResourceType,
-        Arc<crate::func::HostFunc>,
-    ),
+    Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
 impl<T> Linker<T> {
@@ -201,7 +155,6 @@ impl<T> Linker<T> {
             map: NameMap::default(),
             allow_shadowing: false,
             path: Vec::new(),
-            resource_imports: 0,
             _marker: marker::PhantomData,
         }
     }
@@ -229,7 +182,6 @@ impl<T> Linker<T> {
             path_len: 0,
             strings: &mut self.strings,
             map: &mut self.map,
-            resource_imports: &mut self.resource_imports,
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -304,7 +256,6 @@ impl<T> Linker<T> {
         // component-compile-time.
         let env_component = component.env_component();
         let mut imports = PrimaryMap::with_capacity(env_component.imports.len());
-        let mut resource_imports = PrimaryMap::from(vec![None; self.resource_imports]);
         for (idx, (import, names)) in env_component.imports.iter() {
             let (root, _) = &env_component.import_types[*import];
 
@@ -321,14 +272,11 @@ impl<T> Linker<T> {
             let import = match cur {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
-                Definition::Resource(res_idx, t, dtor) => {
-                    resource_imports[*res_idx] = Some(idx);
-                    RuntimeImport::Resource {
-                        ty: t.clone(),
-                        _dtor: dtor.clone(),
-                        dtor_funcref: component.resource_drop_func_ref(dtor),
-                    }
-                }
+                Definition::Resource(t, dtor) => RuntimeImport::Resource {
+                    ty: t.clone(),
+                    _dtor: dtor.clone(),
+                    dtor_funcref: component.resource_drop_func_ref(dtor),
+                },
 
                 // This is guaranteed by the compilation process that "leaf"
                 // runtime imports are never instances.
@@ -337,7 +285,7 @@ impl<T> Linker<T> {
             let i = imports.push(import);
             assert_eq!(i, idx);
         }
-        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports, resource_imports) })
+        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports) })
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.
@@ -402,7 +350,6 @@ impl<T> LinkerInstance<'_, T> {
             path_len: self.path_len,
             strings: self.strings,
             map: self.map,
-            resource_imports: self.resource_imports,
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -581,18 +528,13 @@ impl<T> LinkerInstance<'_, T> {
         name: &str,
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
-    ) -> Result<ResourceImportIndex> {
+    ) -> Result<()> {
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
         ));
-        let idx = ResourceImportIndex::new(*self.resource_imports);
-        *self.resource_imports = self
-            .resource_imports
-            .checked_add(1)
-            .context("resource import count would overflow")?;
-        self.insert(name, Definition::Resource(idx, ty, dtor))?;
-        Ok(idx)
+        self.insert(name, Definition::Resource(ty, dtor))?;
+        Ok(())
     }
 
     /// Defines a nested instance within this instance.
