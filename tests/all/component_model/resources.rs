@@ -1471,3 +1471,60 @@ fn guest_different_host_same() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn resource_any_to_typed_handles_borrow() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+
+                (import "f" (func $f (param "a" (borrow $t))))
+
+                (core func $f (canon lower (func $f)))
+
+                (core module $m
+                    (import "" "f" (func $f (param i32)))
+
+                    (func (export "f") (param i32)
+                        (call $f (local.get 0))
+                    )
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "f" (func $f))
+                    ))
+                ))
+
+                (func (export "f") (param "a" (own $t))
+                    (canon lift (core func $i "f")))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
+    linker
+        .root()
+        .func_wrap("f", |mut cx, (r,): (ResourceAny,)| {
+            let r = r.try_into_resource::<MyType>(&mut cx).unwrap();
+            assert_eq!(r.rep(), 100);
+            assert!(!r.owned());
+            Ok(())
+        })?;
+    let i = linker.instantiate(&mut store, &c)?;
+    let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f")?;
+
+    let resource = Resource::new_own(100);
+    f.call(&mut store, (&resource,))?;
+    f.post_return(&mut store)?;
+
+    Ok(())
+}

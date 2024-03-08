@@ -771,7 +771,17 @@ where
             let rep = tables.host_resource_lift_own(idx)?;
             (AtomicResourceState::NOT_IN_TABLE, rep)
         } else {
+            // For borrowed handles, first acquire the `rep` via lifting the
+            // borrow. Afterwards though remove any dynamic state associated
+            // with this borrow. `Resource<T>` doesn't participate in dynamic
+            // state tracking and it's assumed embedders know what they're
+            // doing, so the drop call will clear out that a borrow is active
+            //
+            // Note that the result of `drop` should always be `None` as it's a
+            // borrowed handle, so assert so.
             let rep = tables.host_resource_lift_borrow(idx)?;
+            let res = tables.host_resource_drop(idx)?;
+            assert!(res.is_none());
             (AtomicResourceState::BORROW, rep)
         };
         Ok(Resource {
