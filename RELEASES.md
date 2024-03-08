@@ -6,7 +6,15 @@ Unreleased.
 
 ### Added
 
+* Add the WasiP1Ctx to ease the use of `wasmtime-wasi` in place of `wasi-common`
+  [#8053](https://github.com/bytecodealliance/wasmtime/pull/8053)
+
 ### Changed
+
+* Require the `WASMTIME_WASI_CONFIG_PREOPEN_SOCKET_ALLOW` environment variable
+  to bet set to allow the use of `wasi_config_preopen_socket` via the c api, as
+  it will be deprecated in `20.0.0`.
+  [#8053](https://github.com/bytecodealliance/wasmtime/pull/8053)
 
 --------------------------------------------------------------------------------
 
