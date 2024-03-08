@@ -803,12 +803,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Tail {
-            TAIL_CLOBBERS
-        } else if call_conv_of_callee.extends_windows_fastcall() {
-            WINDOWS_CLOBBERS
-        } else {
-            SYSV_CLOBBERS
+        match call_conv_of_callee {
+            isa::CallConv::Tail => ALL_CLOBBERS,
+            isa::CallConv::Winch => ALL_CLOBBERS,
+            _ if call_conv_of_callee.extends_windows_fastcall() => WINDOWS_CLOBBERS,
+            _ => SYSV_CLOBBERS,
         }
     }
 
@@ -833,6 +832,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // The `tail` calling convention doesn't have any callee-save
             // registers.
             CallConv::Tail => vec![],
+            // The `winch` calling convention doesn't have any callee-save
+            // registers.
+            CallConv::Winch => vec![],
             CallConv::Fast | CallConv::Cold | CallConv::SystemV => regs
                 .iter()
                 .cloned()
@@ -1068,6 +1070,10 @@ fn get_intreg_for_retval(
             1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
             _ => None,
         },
+        CallConv::Winch => match intreg_idx {
+            0 => Some(regs::rax()),
+            _ => None,
+        },
         CallConv::Probestack => todo!(),
         CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1091,7 +1097,7 @@ fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize) -> Option<Reg>
             1 => Some(regs::xmm1()),
             _ => None,
         },
-        CallConv::WindowsFastcall => match fltreg_idx {
+        CallConv::WindowsFastcall | CallConv::Winch => match fltreg_idx {
             0 => Some(regs::xmm0()),
             _ => None,
         },
@@ -1152,7 +1158,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
-const TAIL_CLOBBERS: PRegSet = tail_clobbers();
+const ALL_CLOBBERS: PRegSet = all_clobbers();
 
 const fn windows_clobbers() -> PRegSet {
     PRegSet::empty()
@@ -1200,7 +1206,8 @@ const fn sysv_clobbers() -> PRegSet {
         .with(regs::fpr_preg(15))
 }
 
-const fn tail_clobbers() -> PRegSet {
+/// For calling conventions that clobber all registers.
+const fn all_clobbers() -> PRegSet {
     PRegSet::empty()
         .with(regs::gpr_preg(regs::ENC_RAX))
         .with(regs::gpr_preg(regs::ENC_RCX))
