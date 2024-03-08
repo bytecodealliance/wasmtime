@@ -147,7 +147,6 @@ fn simple() -> Result<()> {
     *store.data_mut() = None;
     let mut linker = Linker::new(&engine);
     linker.root().func_new(
-        &component,
         "a",
         |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
             if let Val::String(s) = &args[0] {
@@ -249,7 +248,6 @@ fn functions_in_instances() -> Result<()> {
     *store.data_mut() = None;
     let mut linker = Linker::new(&engine);
     linker.instance("test:test/foo")?.func_new(
-        &component,
         "a",
         |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
             if let Val::String(s) = &args[0] {
@@ -468,7 +466,6 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     let mut store = Store::new(&engine, DynamicState { func: None });
     let mut linker = Linker::new(&engine);
     linker.root().func_new(
-        &component,
         "thunk",
         |mut store: StoreContextMut<'_, DynamicState>, _, _| {
             let func = store.data_mut().func.take().unwrap();
@@ -691,58 +688,50 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
     // Next, test the dynamic API
 
     let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_new(&component, "f1", |_, args, results| {
-            if let Val::U32(x) = &args[0] {
-                assert_eq!(*x, 1);
-                results[0] = Val::U32(2);
+    linker.root().func_new("f1", |_, args, results| {
+        if let Val::U32(x) = &args[0] {
+            assert_eq!(*x, 1);
+            results[0] = Val::U32(2);
+            Ok(())
+        } else {
+            panic!()
+        }
+    })?;
+    linker.root().func_new("f2", |_, args, results| {
+        if let Val::Tuple(tuple) = &args[0] {
+            if let Val::String(s) = &tuple[0] {
+                assert_eq!(s.deref(), "abc");
+                results[0] = Val::U32(3);
                 Ok(())
             } else {
                 panic!()
             }
-        })?;
-    linker
-        .root()
-        .func_new(&component, "f2", |_, args, results| {
-            if let Val::Tuple(tuple) = &args[0] {
-                if let Val::String(s) = &tuple[0] {
-                    assert_eq!(s.deref(), "abc");
-                    results[0] = Val::U32(3);
-                    Ok(())
-                } else {
-                    panic!()
-                }
-            } else {
-                panic!()
-            }
-        })?;
-    linker
-        .root()
-        .func_new(&component, "f3", |_, args, results| {
-            if let Val::U32(x) = &args[0] {
-                assert_eq!(*x, 8);
+        } else {
+            panic!()
+        }
+    })?;
+    linker.root().func_new("f3", |_, args, results| {
+        if let Val::U32(x) = &args[0] {
+            assert_eq!(*x, 8);
+            results[0] = Val::String("xyz".into());
+            Ok(())
+        } else {
+            panic!();
+        }
+    })?;
+    linker.root().func_new("f4", |_, args, results| {
+        if let Val::Tuple(tuple) = &args[0] {
+            if let Val::String(s) = &tuple[0] {
+                assert_eq!(s.deref(), "abc");
                 results[0] = Val::String("xyz".into());
                 Ok(())
             } else {
-                panic!();
-            }
-        })?;
-    linker
-        .root()
-        .func_new(&component, "f4", |_, args, results| {
-            if let Val::Tuple(tuple) = &args[0] {
-                if let Val::String(s) = &tuple[0] {
-                    assert_eq!(s.deref(), "abc");
-                    results[0] = Val::String("xyz".into());
-                    Ok(())
-                } else {
-                    panic!()
-                }
-            } else {
                 panic!()
             }
-        })?;
+        } else {
+            panic!()
+        }
+    })?;
     let instance = linker.instantiate(&mut store, &component)?;
     instance
         .get_func(&mut store, "run")
@@ -906,14 +895,12 @@ fn no_actual_wasm_code() -> Result<()> {
 
     *store.data_mut() = 0;
     let mut linker = Linker::new(&engine);
-    linker.root().func_new(
-        &component,
-        "f",
-        |mut store: StoreContextMut<'_, u32>, _, _| {
+    linker
+        .root()
+        .func_new("f", |mut store: StoreContextMut<'_, u32>, _, _| {
             *store.data_mut() += 1;
             Ok(())
-        },
-    )?;
+        })?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let thunk = instance.get_func(&mut store, "thunk").unwrap();

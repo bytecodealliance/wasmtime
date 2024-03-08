@@ -883,7 +883,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
     linker
         .root()
-        .func_new(&component, IMPORT_FUNCTION, {
+        .func_new(IMPORT_FUNCTION, {
             move |mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
                   params: &[Val],
                   results: &mut [Val]|
