@@ -35,7 +35,7 @@ pub enum CallConv {
     WasmtimeSystemV,
     /// The winch calling convention, not ABI-stable.
     ///
-    /// The main difference to [`WasmtimeSystemV`] is that the winch calling
+    /// The main difference to WasmtimeSystemV is that the winch calling
     /// convention defines no callee-save registers, and restricts the number
     /// of return registers to one integer, and one floating point.
     Winch,
