@@ -48,7 +48,7 @@ fn wizen_and_run_wasm(
     config.wasm_multi_value(true);
 
     let engine = wasmtime::Engine::new(&config)?;
-    let wasi_ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build();
+    let wasi_ctx = wasmtime_wasi::WasiCtxBuilder::new().build();
     let mut store = wasmtime::Store::new(&engine, wasi_ctx);
     let module =
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
