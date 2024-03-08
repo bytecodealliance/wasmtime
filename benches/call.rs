@@ -798,30 +798,23 @@ mod component {
             bench_instance(group, store, &instance, "typed", is_async);
 
             let mut untyped = component::Linker::new(&engine);
+            untyped.root().func_new("nop", |_, _, _| Ok(())).unwrap();
             untyped
                 .root()
-                .func_new(&component, "nop", |_, _, _| Ok(()))
-                .unwrap();
-            untyped
-                .root()
-                .func_new(
-                    &component,
-                    "nop-params-and-results",
-                    |_caller, params, results| {
-                        assert_eq!(params.len(), 2);
-                        match params[0] {
-                            component::Val::U32(0) => {}
-                            _ => unreachable!(),
-                        }
-                        match params[1] {
-                            component::Val::U64(0) => {}
-                            _ => unreachable!(),
-                        }
-                        assert_eq!(results.len(), 1);
-                        results[0] = component::Val::Float32(0.0);
-                        Ok(())
-                    },
-                )
+                .func_new("nop-params-and-results", |_caller, params, results| {
+                    assert_eq!(params.len(), 2);
+                    match params[0] {
+                        component::Val::U32(0) => {}
+                        _ => unreachable!(),
+                    }
+                    match params[1] {
+                        component::Val::U64(0) => {}
+                        _ => unreachable!(),
+                    }
+                    assert_eq!(results.len(), 1);
+                    results[0] = component::Val::Float32(0.0);
+                    Ok(())
+                })
                 .unwrap();
             let instance = if is_async.use_async() {
                 run_await(untyped.instantiate_async(&mut *store, &component)).unwrap()
