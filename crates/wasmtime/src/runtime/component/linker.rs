@@ -417,10 +417,11 @@ impl<T> LinkerInstance<'_, T> {
     /// function is called.
     ///
     /// This function is the "dynamic" version of defining a host function as
-    /// compared to [`Linker::func_wrap`]. With [`Linker::func_wrap`] a
-    /// function's type is statically known but with this method the `func`
-    /// argument's type isn't known ahead of time. That means that `func` can
-    /// be by imported component so long as it's imported as a matching name.
+    /// compared to [`LinkerInstance::func_wrap`]. With
+    /// [`LinkerInstance::func_wrap`] a function's type is statically known but
+    /// with this method the `func` argument's type isn't known ahead of time.
+    /// That means that `func` can be by imported component so long as it's
+    /// imported as a matching name.
     ///
     /// Type information will be available at execution time, however. For
     /// example when `func` is invoked the second argument, a `&[Val]` list,
