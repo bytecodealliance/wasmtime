@@ -1787,12 +1787,12 @@ pub fn typecheck_variant(
                 );
             }
 
-            for (case, &(name, check)) in cases.iter().zip(expected) {
-                if case.name != name {
-                    bail!("expected variant case named {name}, found {}", case.name);
+            for ((case_name, case_ty), &(name, check)) in cases.iter().zip(expected) {
+                if *case_name != name {
+                    bail!("expected variant case named {name}, found {case_name}");
                 }
 
-                match (check, &case.ty) {
+                match (check, case_ty) {
                     (Some(check), Some(ty)) => check(ty, types)
                         .with_context(|| format!("type mismatch for case {name}"))?,
                     (None, None) => {}

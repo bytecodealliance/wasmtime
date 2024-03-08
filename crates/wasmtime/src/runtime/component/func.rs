@@ -395,11 +395,6 @@ impl Func {
             );
         }
 
-        for (param, ty) in params.iter().zip(param_tys.iter()) {
-            ty.is_supertype_of(param)
-                .context("type mismatch with parameters")?;
-        }
-
         self.call_raw(
             store,
             params,

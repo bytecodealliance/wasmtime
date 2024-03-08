@@ -1,7 +1,7 @@
 use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
-use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Type, Val};
+use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
 use std::any::Any;
@@ -383,10 +383,6 @@ where
     flags.set_may_leave(false);
 
     let mut cx = LowerContext::new(store, &options, types, instance);
-    let instance = cx.instance_type();
-    for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-        Type::from(ty, &instance).is_supertype_of(val)?;
-    }
     if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
         let mut dst = storage[..cnt].iter_mut();
         for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {

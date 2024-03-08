@@ -1,13 +1,13 @@
 use crate::core;
-use anyhow::{anyhow, bail, Context, Result};
-use std::collections::{BTreeSet, HashMap};
+use anyhow::{bail, Context, Result};
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use wast::component::WastVal;
 use wast::core::NanPattern;
 
 pub use wasmtime::component::*;
 
-pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
+pub fn val(v: &WastVal<'_>) -> Result<Val> {
     Ok(match v {
         WastVal::Bool(b) => Val::Bool(*b),
         WastVal::U8(b) => Val::U8(*b),
@@ -22,104 +22,44 @@ pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
         WastVal::Float64(b) => Val::Float64(f64::from_bits(b.bits)),
         WastVal::Char(b) => Val::Char(*b),
         WastVal::String(s) => Val::String(s.to_string().into()),
-        WastVal::List(vals) => match ty {
-            Type::List(t) => {
-                let element = t.ty();
-                let vals = vals
-                    .iter()
-                    .map(|v| val(v, &element))
-                    .collect::<Result<Vec<_>>>()?;
-                t.new_val(vals.into())?
+        WastVal::List(vals) => {
+            let vals = vals.iter().map(|v| val(v)).collect::<Result<Vec<_>>>()?;
+            Val::List(vals.into())
+        }
+        WastVal::Record(vals) => {
+            let mut fields = Vec::new();
+            for (name, v) in vals {
+                fields.push((name.to_string(), val(v)?));
             }
-            _ => bail!("expected a list value"),
-        },
-        WastVal::Record(fields) => match ty {
-            Type::Record(t) => {
-                let mut fields_by_name = HashMap::new();
-                for (name, val) in fields {
-                    let prev = fields_by_name.insert(*name, val);
-                    if prev.is_some() {
-                        bail!("field `{name}` specified twice");
-                    }
-                }
-                let mut values = Vec::new();
-                for field in t.fields() {
-                    let name = field.name;
-                    let v = fields_by_name
-                        .remove(name)
-                        .ok_or_else(|| anyhow!("field `{name}` not specified"))?;
-                    values.push((name, val(v, &field.ty)?));
-                }
-                if let Some((field, _)) = fields_by_name.iter().next() {
-                    bail!("extra field `{field}` specified");
-                }
-                t.new_val(values)?
-            }
-            _ => bail!("expected a record value"),
-        },
-        WastVal::Tuple(vals) => match ty {
-            Type::Tuple(t) => {
-                if vals.len() != t.types().len() {
-                    bail!("expected {} values got {}", t.types().len(), vals.len());
-                }
-                t.new_val(
-                    vals.iter()
-                        .zip(t.types())
-                        .map(|(v, ty)| val(v, &ty))
-                        .collect::<Result<Vec<_>>>()?
-                        .into(),
-                )?
-            }
-            _ => bail!("expected a tuple value"),
-        },
-        WastVal::Enum(name) => match ty {
-            Type::Enum(t) => t.new_val(name)?,
-            _ => bail!("expected an enum value"),
-        },
-        WastVal::Variant(name, payload) => match ty {
-            Type::Variant(t) => {
-                let case = match t.cases().find(|c| c.name == *name) {
-                    Some(case) => case,
-                    None => bail!("no case named `{}", name),
-                };
-                let payload = payload_val(case.name, payload.as_deref(), case.ty.as_ref())?;
-                t.new_val(name, payload)?
-            }
-            _ => bail!("expected a variant value"),
-        },
-        WastVal::Option(v) => match ty {
-            Type::Option(t) => {
-                let v = match v {
-                    Some(v) => Some(val(v, &t.ty())?),
-                    None => None,
-                };
-                t.new_val(v)?
-            }
-            _ => bail!("expected an option value"),
-        },
-        WastVal::Result(v) => match ty {
-            Type::Result(t) => {
-                let v = match v {
-                    Ok(v) => Ok(payload_val("ok", v.as_deref(), t.ok().as_ref())?),
-                    Err(v) => Err(payload_val("err", v.as_deref(), t.err().as_ref())?),
-                };
-                t.new_val(v)?
-            }
-            _ => bail!("expected an expected value"),
-        },
-        WastVal::Flags(v) => match ty {
-            Type::Flags(t) => t.new_val(v)?,
-            _ => bail!("expected a flags value"),
-        },
+            Val::Record(fields.into())
+        }
+        WastVal::Tuple(vals) => Val::Tuple(
+            vals.iter()
+                .map(|v| val(v))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        ),
+        WastVal::Enum(name) => Val::Enum(name.to_string()),
+        WastVal::Variant(name, payload) => {
+            let payload = payload_val(payload.as_deref())?;
+            Val::Variant(name.to_string(), payload)
+        }
+        WastVal::Option(v) => Val::Option(match v {
+            Some(v) => Some(Box::new(val(v)?)),
+            None => None,
+        }),
+        WastVal::Result(v) => Val::Result(match v {
+            Ok(v) => Ok(payload_val(v.as_deref())?),
+            Err(v) => Err(payload_val(v.as_deref())?),
+        }),
+        WastVal::Flags(v) => Val::Flags(v.iter().map(|s| s.to_string()).collect()),
     })
 }
 
-fn payload_val(name: &str, v: Option<&WastVal<'_>>, ty: Option<&Type>) -> Result<Option<Val>> {
-    match (v, ty) {
-        (Some(v), Some(ty)) => Ok(Some(val(v, ty)?)),
-        (None, None) => Ok(None),
-        (Some(_), None) => bail!("expected payload for case `{name}`"),
-        (None, Some(_)) => bail!("unexpected payload for case `{name}`"),
+fn payload_val(v: Option<&WastVal<'_>>) -> Result<Option<Box<Val>>> {
+    match v {
+        Some(v) => Ok(Some(Box::new(val(v)?))),
+        None => Ok(None),
     }
 }
 
@@ -192,22 +132,15 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         },
         WastVal::Record(e) => match actual {
             Val::Record(a) => {
-                let mut fields_by_name = HashMap::new();
-                for (name, val) in e {
-                    let prev = fields_by_name.insert(*name, val);
-                    if prev.is_some() {
-                        bail!("field `{name}` specified twice");
+                if e.len() != e.len() {
+                    bail!("mismatched number of record fields");
+                }
+                for ((e_name, e_val), (a_name, a_val)) in e.iter().zip(a.iter()) {
+                    if e_name != a_name {
+                        bail!("expected field `{e_name}` got `{a_name}`");
                     }
-                }
-                for (name, actual) in a.fields() {
-                    let expected = fields_by_name
-                        .remove(name)
-                        .ok_or_else(|| anyhow!("field `{name}` not specified"))?;
-                    match_val(expected, actual)
-                        .with_context(|| format!("failed to match field `{name}`"))?;
-                }
-                if let Some((field, _)) = fields_by_name.iter().next() {
-                    bail!("extra field `{field}` specified");
+                    match_val(e_val, a_val)
+                        .with_context(|| format!("failed to match field `{e_name}`"))?;
                 }
                 Ok(())
             }
@@ -215,14 +148,10 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         },
         WastVal::Tuple(e) => match actual {
             Val::Tuple(a) => {
-                if e.len() != a.values().len() {
-                    bail!(
-                        "expected {}-tuple, found {}-tuple",
-                        e.len(),
-                        a.values().len()
-                    );
+                if e.len() != a.len() {
+                    bail!("expected {}-tuple, found {}-tuple", e.len(), a.len());
                 }
-                for (i, (expected, actual)) in e.iter().zip(a.values()).enumerate() {
+                for (i, (expected, actual)) in e.iter().zip(a.iter()).enumerate() {
                     match_val(expected, actual)
                         .with_context(|| format!("failed to match tuple element {i}"))?;
                 }
@@ -231,18 +160,18 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             _ => mismatch(expected, actual),
         },
         WastVal::Variant(name, e) => match actual {
-            Val::Variant(a) => {
-                if a.discriminant() != *name {
-                    bail!("expected discriminant `{name}` got `{}`", a.discriminant());
+            Val::Variant(discr, payload) => {
+                if *discr != *name {
+                    bail!("expected discriminant `{name}` got `{discr}`");
                 }
-                match_payload_val(name, e.as_deref(), a.payload())
+                match_payload_val(name, e.as_deref(), payload.as_deref())
             }
             _ => mismatch(expected, actual),
         },
         WastVal::Enum(name) => match actual {
             Val::Enum(a) => {
-                if a.discriminant() != *name {
-                    bail!("expected discriminant `{name}` got `{}`", a.discriminant());
+                if *a != *name {
+                    bail!("expected discriminant `{name}` got `{a}`");
                 } else {
                     Ok(())
                 }
@@ -250,7 +179,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             _ => mismatch(expected, actual),
         },
         WastVal::Option(e) => match actual {
-            Val::Option(a) => match (e, a.value()) {
+            Val::Option(a) => match (e, a) {
                 (None, None) => Ok(()),
                 (Some(expected), Some(actual)) => match_val(expected, actual),
                 (None, Some(_)) => bail!("expected `none`, found `some`"),
@@ -259,18 +188,18 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             _ => mismatch(expected, actual),
         },
         WastVal::Result(e) => match actual {
-            Val::Result(a) => match (e, a.value()) {
+            Val::Result(a) => match (e, a) {
                 (Ok(_), Err(_)) => bail!("expected `ok`, found `err`"),
                 (Err(_), Ok(_)) => bail!("expected `err`, found `ok`"),
-                (Err(e), Err(a)) => match_payload_val("err", e.as_deref(), a),
-                (Ok(e), Ok(a)) => match_payload_val("ok", e.as_deref(), a),
+                (Err(e), Err(a)) => match_payload_val("err", e.as_deref(), a.as_deref()),
+                (Ok(e), Ok(a)) => match_payload_val("ok", e.as_deref(), a.as_deref()),
             },
             _ => mismatch(expected, actual),
         },
         WastVal::Flags(e) => match actual {
             Val::Flags(a) => {
                 let expected = e.iter().copied().collect::<BTreeSet<_>>();
-                let actual = a.flags().collect::<BTreeSet<_>>();
+                let actual = a.iter().map(|s| s.as_str()).collect::<BTreeSet<_>>();
                 match_debug(&actual, &expected)
             }
             _ => mismatch(expected, actual),

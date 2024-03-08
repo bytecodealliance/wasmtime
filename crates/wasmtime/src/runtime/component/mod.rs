@@ -61,7 +61,7 @@ pub use self::linker::{Linker, LinkerInstance, ResourceImportIndex};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};
-pub use self::values::{Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Val, Variant};
+pub use self::values::Val;
 
 pub(crate) use self::resources::HostResourceData;
 
