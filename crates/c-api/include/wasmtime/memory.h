@@ -55,6 +55,11 @@ WASM_API_EXTERN bool wasmtime_memorytype_maximum(const wasm_memorytype_t *ty,
 WASM_API_EXTERN bool wasmtime_memorytype_is64(const wasm_memorytype_t *ty);
 
 /**
+ * \brief Returns whether this type of memory represents a shared memory.
+ */
+WASM_API_EXTERN bool wasmtime_memorytype_isshared(const wasm_memorytype_t *ty);
+
+/**
  * \brief Creates a new WebAssembly linear memory
  *
  * \param store the store to create the memory within
