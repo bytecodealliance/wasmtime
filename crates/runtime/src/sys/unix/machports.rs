@@ -43,7 +43,6 @@ use mach2::mach_port::*;
 use mach2::message::*;
 use mach2::ndr::*;
 use mach2::port::*;
-use mach2::structs::*;
 use mach2::thread_act::*;
 use mach2::thread_status::*;
 use mach2::traps::*;
@@ -265,7 +264,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
             };
             let mut thread_state = ThreadState::new();
         } else if #[cfg(target_arch = "aarch64")] {
-            type ThreadState = arm_thread_state64_t;
+            type ThreadState = mach2::structs::arm_thread_state64_t;
 
             let thread_state_flavor = ARM_THREAD_STATE64;
 
