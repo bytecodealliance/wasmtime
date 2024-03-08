@@ -8,10 +8,10 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
     let mut config = Config::new();
-    config.async_support(true).wasm_component_model(true);
+    config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker)?;
+    add_to_linker_async(&mut linker, |t| t)?;
 
     let module = Module::from_file(&engine, path)?;
     let (mut store, _td) = store(&engine, name, inherit_stdio)?;

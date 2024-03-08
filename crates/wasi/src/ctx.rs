@@ -1,3 +1,5 @@
+#[cfg(feature = "preview1")]
+use crate::WasiP1Ctx;
 use crate::{
     clocks::{
         host::{monotonic_clock, wall_clock},
@@ -127,6 +129,10 @@ impl WasiCtxBuilder {
         self
     }
 
+    pub fn inherit_env(&mut self) -> &mut Self {
+        self.envs(&std::env::vars().collect::<Vec<(String, String)>>())
+    }
+
     pub fn args(&mut self, args: &[impl AsRef<str>]) -> &mut Self {
         self.args.extend(args.iter().map(|a| a.as_ref().to_owned()));
         self
@@ -135,6 +141,10 @@ impl WasiCtxBuilder {
     pub fn arg(&mut self, arg: impl AsRef<str>) -> &mut Self {
         self.args.push(arg.as_ref().to_owned());
         self
+    }
+
+    pub fn inherit_args(&mut self) -> &mut Self {
+        self.args(&std::env::args().collect::<Vec<String>>())
     }
 
     pub fn preopened_dir(
@@ -272,6 +282,12 @@ impl WasiCtxBuilder {
             monotonic_clock,
             allowed_network_uses,
         }
+    }
+
+    #[cfg(feature = "preview1")]
+    pub fn build_p1(&mut self) -> WasiP1Ctx {
+        let wasi = self.build();
+        WasiP1Ctx::new(wasi)
     }
 }
 

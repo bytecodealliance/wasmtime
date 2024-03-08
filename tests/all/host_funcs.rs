@@ -1,7 +1,5 @@
 use anyhow::bail;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use wasi_common::sync::WasiCtxBuilder;
-use wasi_common::I32Exit;
 use wasmtime::*;
 
 #[test]
@@ -717,7 +715,7 @@ fn store_with_context() -> Result<()> {
 fn wasi_imports() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasi_common::sync::add_to_linker(&mut linker, |s| s)?;
+    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |t| t)?;
 
     let wasm = wat::parse_str(
         r#"
@@ -730,14 +728,14 @@ fn wasi_imports() -> Result<()> {
     )?;
 
     let module = Module::new(&engine, wasm)?;
-    let mut store = Store::new(&engine, WasiCtxBuilder::new().build());
+    let mut store = Store::new(&engine, wasmtime_wasi::WasiCtxBuilder::new().build_p1());
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
     let exit = start
         .call(&mut store, ())
         .unwrap_err()
-        .downcast::<I32Exit>()?;
+        .downcast::<wasmtime_wasi::I32Exit>()?;
     assert_eq!(exit.0, 123);
 
     Ok(())
