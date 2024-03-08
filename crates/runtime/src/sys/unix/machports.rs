@@ -80,6 +80,38 @@ pub unsafe fn platform_init() {
     thread::spawn(|| handler_thread());
 }
 
+// Note that this is copied from Gecko at
+//
+// https://searchfox.org/mozilla-central/rev/ed93119be4818da1509bbcb7b28e245853eeedd5/js/src/wasm/WasmSignalHandlers.cpp#583-601
+//
+// which distinctly diverges from the actual version of this in the header
+// files provided by macOS, notably in the `code` field which uses `i64`
+// instead of `i32`.
+//
+// Also note the `packed(4)` here which forcibly decreases alignment to 4 to
+// additionally match what mach expects (apparently, I wish I had a better
+// reference for this).
+#[repr(C, packed(4))]
+#[allow(dead_code)]
+#[derive(Copy, Clone, Debug)]
+struct __Request__exception_raise_t {
+    Head: mach_msg_header_t,
+    /* start of the kernel processed data */
+    msgh_body: mach_msg_body_t,
+    thread: mach_msg_port_descriptor_t,
+    task: mach_msg_port_descriptor_t,
+    /* end of the kernel processed data */
+    NDR: NDR_record_t,
+    exception: exception_type_t,
+    codeCnt: mach_msg_type_number_t,
+
+    // Note that this is a divergence from the C headers which use
+    // `integer_t` here for this field which is a `c_int`. That isn't
+    // actually reflecting reality apparently though because if `c_int` is
+    // used here then the structure is too small to receive a message.
+    code: [i64; 2],
+}
+
 // This is largely just copied from SpiderMonkey.
 #[repr(C)]
 #[allow(dead_code)]
