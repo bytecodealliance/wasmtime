@@ -1436,45 +1436,53 @@ pub unsafe extern "C" fn fd_write(
         return ERRNO_SUCCESS;
     }
 
-    let ptr = (*iovs_ptr).buf;
-    let len = (*iovs_ptr).buf_len;
-    let bytes = slice::from_raw_parts(ptr, len);
-
     State::with(|state| {
         let ds = state.descriptors();
         match ds.get(fd)? {
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_write_stream()?;
 
-                #[cfg(not(feature = "proxy"))]
-                let nbytes = if let StreamType::File(file) = &streams.type_ {
-                    file.blocking_mode.write(wasi_stream, bytes)?
-                } else {
-                    // Use blocking writes on non-file streams (stdout, stderr, as sockets
-                    // aren't currently used).
-                    BlockingMode::Blocking.write(wasi_stream, bytes)?
-                };
-                #[cfg(feature = "proxy")]
-                let nbytes = BlockingMode::Blocking.write(wasi_stream, bytes)?;
+                *nwritten = 0;
 
-                // If this is a file, keep the current-position pointer up
-                // to date. Note that for files that perform appending
-                // writes this function will always update the current
-                // position to the end of the file.
-                //
-                // NB: this isn't "atomic" as it doesn't necessarily account
-                // for concurrent writes, but there's not much that can be
-                // done about that.
-                #[cfg(not(feature = "proxy"))]
-                if let StreamType::File(file) = &streams.type_ {
-                    if file.append {
-                        file.position.set(file.fd.stat()?.size);
+                while iovs_len != 0 {
+                    let ptr = (*iovs_ptr).buf;
+                    let len = (*iovs_ptr).buf_len;
+                    let bytes = slice::from_raw_parts(ptr, len);
+
+                    #[cfg(not(feature = "proxy"))]
+                    let nbytes = if let StreamType::File(file) = &streams.type_ {
+                        file.blocking_mode.write(wasi_stream, bytes)?
                     } else {
-                        file.position.set(file.position.get() + nbytes as u64);
+                        // Use blocking writes on non-file streams (stdout, stderr, as sockets
+                        // aren't currently used).
+                        BlockingMode::Blocking.write(wasi_stream, bytes)?
+                    };
+                    #[cfg(feature = "proxy")]
+                    let nbytes = BlockingMode::Blocking.write(wasi_stream, bytes)?;
+
+                    // If this is a file, keep the current-position pointer up
+                    // to date. Note that for files that perform appending
+                    // writes this function will always update the current
+                    // position to the end of the file.
+                    //
+                    // NB: this isn't "atomic" as it doesn't necessarily account
+                    // for concurrent writes, but there's not much that can be
+                    // done about that.
+                    #[cfg(not(feature = "proxy"))]
+                    if let StreamType::File(file) = &streams.type_ {
+                        if file.append {
+                            file.position.set(file.fd.stat()?.size);
+                        } else {
+                            file.position.set(file.position.get() + nbytes as u64);
+                        }
                     }
+
+                    *nwritten += nbytes;
+
+                    iovs_ptr = iovs_ptr.add(1);
+                    iovs_len -= 1;
                 }
 
-                *nwritten = nbytes;
                 Ok(())
             }
             Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
