@@ -233,6 +233,22 @@ impl ServeCommand {
         use hyper::server::conn::http1;
 
         let mut config = self.run.common.config(None)?;
+        match self.run.common.opts.pooling_allocator {
+            // If explicitly enabled on the CLI then the pooling allocator was
+            // already configured in the `config` method above. If the allocator
+            // is explicitly disabled, then we don't want it. In both cases do
+            // nothing.
+            Some(true) | Some(false) => {}
+
+            // Otherwise though if not explicitly specified then always enable
+            // the pooling allocator. The `wasmtime serve` use case is
+            // tailor-made for pooling allocation and there's no downside to
+            // enabling it.
+            None => {
+                let cfg = wasmtime::PoolingAllocationConfig::default();
+                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
+            }
+        }
         config.wasm_component_model(true);
         config.async_support(true);
 
