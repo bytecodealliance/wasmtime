@@ -131,12 +131,15 @@ fn type_section<'a>(
 
     // Parse out types, as we will need them later when processing
     // instance imports.
-    for ty in types {
-        match ty? {
-            ty @ wasmparser::Type::Func(_) => {
-                module.push_type(cx, ty);
+    for group in types {
+        for ty in group?.into_types() {
+            match ty.composite_type {
+                ty @ wasmparser::CompositeType::Func(_) => {
+                    module.push_type(cx, ty);
+                }
+                wasmparser::CompositeType::Array(_) => todo!(),
+                wasmparser::CompositeType::Struct(_) => todo!(),
             }
-            wasmparser::Type::Array(_) => todo!(),
         }
     }
 

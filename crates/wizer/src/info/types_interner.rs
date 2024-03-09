@@ -59,10 +59,15 @@ impl TypesInterner {
     ///
     /// If the type has already been inserted and assigned an id before, then
     /// that entry and its id are reused.
-    pub fn insert_wasmparser(&mut self, ty: wasmparser::Type, _types_space: &[TypeId]) -> TypeId {
+    pub fn insert_wasmparser(
+        &mut self,
+        ty: wasmparser::CompositeType,
+        _types_space: &[TypeId],
+    ) -> TypeId {
         match ty {
-            wasmparser::Type::Func(func_ty) => self.insert(Type::Func(func_ty)),
-            wasmparser::Type::Array(_) => todo!(),
+            wasmparser::CompositeType::Func(func_ty) => self.insert(Type::Func(func_ty)),
+            wasmparser::CompositeType::Array(_) => todo!(),
+            wasmparser::CompositeType::Struct(_) => todo!(),
         }
     }
 

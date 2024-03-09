@@ -637,6 +637,8 @@ impl Wizer {
             saturating_float_to_int: true,
             sign_extension: true,
             floats: true,
+            component_model_values: false,
+            component_model_nested_names: false,
 
             // Proposals that we support.
             multi_memory: self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
