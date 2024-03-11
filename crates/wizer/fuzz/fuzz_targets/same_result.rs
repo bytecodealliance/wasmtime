@@ -55,6 +55,9 @@ fuzz_target!(|data: &[u8]| {
     // frequent.
     config.memory_offset_choices = MemoryOffsetChoices(1, 0, 0);
 
+    config.reference_types_enabled = false;
+    config.bulk_memory_enabled = false;
+
     let Ok(mut module) = wasm_smith::Module::new(config, &mut u) else {
         return;
     };
