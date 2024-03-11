@@ -212,7 +212,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-02-22
+        toolchain: nightly-2024-03-11
 
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -397,7 +397,7 @@ jobs:
     # happen upstream. This is periodically updated through a PR.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-02-22
+        toolchain: nightly-2024-03-11
 
     # Ensure that fuzzers sitll build.
     #
@@ -723,7 +723,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-02-22
+        toolchain: nightly-2024-03-11
     - run: rustup component add rust-src miri
     - uses: actions/cache@v4
       with:
