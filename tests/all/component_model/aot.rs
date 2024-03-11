@@ -136,7 +136,6 @@ fn detect_precompiled() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, ignore)]
 fn reflect_resource_import() -> Result<()> {
     let engine = super::engine();
     let c = Component::new(
