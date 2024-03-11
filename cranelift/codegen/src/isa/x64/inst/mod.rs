@@ -2370,6 +2370,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                     // This shouldn't be a fixed register constraint.
                     collector.reg_fixed_use(*reg, regs::r15())
                 }
+                RegMem::Reg { reg } if info.callee_conv == CallConv::Winch => {
+                    // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+                    // This shouldn't be a fixed register constraint.
+                    collector.reg_fixed_use(*reg, regs::r15())
+                }
                 _ => dest.get_operands(collector),
             }
             for u in &info.uses {
