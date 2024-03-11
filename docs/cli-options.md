@@ -54,12 +54,12 @@ $ wasmtime run foo.wasm --invoke initialize
 
 ## `serve`
 
-The `serve` subcommand runs a WebAssembly module in the `wasi:http/proxy` world
-via the WASI HTTP API, which is available since Wasmtime 18.0.0. The goal of
-this world is to support sending and receiving HTTP requests.
+The `serve` subcommand runs a WebAssembly component in the `wasi:http/proxy`
+world via the WASI HTTP API, which is available since Wasmtime 18.0.0. The goal
+of this world is to support sending and receiving HTTP requests.
 
-The `serve` command takes one positional argument which is the name of the module
-to run:
+The `serve` command takes one positional argument which is the name of the
+component to run:
 
 ```sh
 $ wasmtime serve foo.wasm
