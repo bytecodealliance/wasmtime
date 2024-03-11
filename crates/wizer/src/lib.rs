@@ -29,8 +29,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
+use wasi_common::WasiCtx;
 use wasmtime::{Engine, Extern};
-use wasmtime_wasi::WasiCtx;
+use wasmtime_wasi::WasiCtxBuilder;
 
 const DEFAULT_INHERIT_STDIO: bool = true;
 const DEFAULT_INHERIT_ENV: bool = false;
@@ -636,6 +637,8 @@ impl Wizer {
             saturating_float_to_int: true,
             sign_extension: true,
             floats: true,
+            component_model_values: false,
+            component_model_nested_names: false,
 
             // Proposals that we support.
             multi_memory: self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
@@ -764,7 +767,7 @@ impl Wizer {
             return Ok(None);
         }
 
-        let mut ctx = wasi_cap_std_sync::WasiCtxBuilder::new();
+        let mut ctx = WasiCtxBuilder::new();
         if self.inherit_stdio.unwrap_or(DEFAULT_INHERIT_STDIO) {
             ctx.inherit_stdio();
         }

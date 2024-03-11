@@ -10,9 +10,9 @@ crate-type = ["cdylib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.117", features = ["derive"] }
-regex = "1.4.2"
-serde_yaml = "0.8.14"
+serde = { version = "1.0.197", features = ["derive"] }
+regex = "1.10.3"
+serde_yaml = "0.9.32"
 
 [features]
 wizer = []

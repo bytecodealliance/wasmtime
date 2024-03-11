@@ -2,9 +2,9 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::convert::TryFrom;
 
 fn run_iter(
-    linker: &wasmtime::Linker<wasmtime_wasi::WasiCtx>,
+    linker: &wasmtime::Linker<wasi_common::WasiCtx>,
     module: &wasmtime::Module,
-    mut store: &mut wasmtime::Store<wasmtime_wasi::WasiCtx>,
+    mut store: &mut wasmtime::Store<wasi_common::WasiCtx>,
 ) {
     let instance = linker.instantiate(&mut store, module).unwrap();
 

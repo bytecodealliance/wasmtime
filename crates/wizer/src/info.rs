@@ -146,7 +146,7 @@ impl Module {
     }
 
     /// Push a new type into this module's types space.
-    pub fn push_type<'a>(self, cx: &mut ModuleContext<'a>, ty: wasmparser::Type) {
+    pub fn push_type<'a>(self, cx: &mut ModuleContext<'a>, ty: wasmparser::CompositeType) {
         let types_space = match &cx.arena[self.id] {
             ModuleInfo::Defined(d) => &d.types,
         };

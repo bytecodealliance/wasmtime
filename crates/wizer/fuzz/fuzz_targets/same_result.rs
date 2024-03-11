@@ -15,16 +15,53 @@
 
 #![no_main]
 
-use libfuzzer_sys::{arbitrary, fuzz_target};
+use libfuzzer_sys::{
+    arbitrary::{Arbitrary, Unstructured},
+    fuzz_target,
+};
+use wasm_smith::MemoryOffsetChoices;
 use wasmtime::*;
 
 const FUEL: u32 = 1_000;
 
-fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
+fuzz_target!(|data: &[u8]| {
     let _ = env_logger::try_init();
 
-    let mut module = module;
-    module.ensure_termination(FUEL);
+    let mut u = Unstructured::new(data);
+
+    let mut config = wasm_smith::Config::arbitrary(&mut u).unwrap();
+    config.max_memories = 10;
+
+    // We want small memories that are quick to compare, but we also want to
+    // allow memories to grow so we can shake out any memory-growth-related
+    // bugs, so we choose `2` instead of `1`.
+    config.max_memory32_pages = 2;
+    config.max_memory64_pages = 2;
+
+    // Always generate at least one function that we can hopefully use as an
+    // initialization function.
+    config.min_funcs = 1;
+
+    config.max_funcs = 10;
+
+    // Always at least one export, hopefully a function we can use as an
+    // initialization routine.
+    config.min_exports = 1;
+
+    config.max_exports = 10;
+
+    // Always use an offset immediate that is within the memory's minimum
+    // size. This should make trapping on loads/stores a little less
+    // frequent.
+    config.memory_offset_choices = MemoryOffsetChoices(1, 0, 0);
+
+    config.reference_types_enabled = false;
+    config.bulk_memory_enabled = false;
+
+    let Ok(mut module) = wasm_smith::Module::new(config, &mut u) else {
+        return;
+    };
+    module.ensure_termination(FUEL).unwrap();
     let wasm = module.to_bytes();
 
     if log::log_enabled!(log::Level::Debug) {
@@ -183,46 +220,5 @@ fn assert_val_eq(a: &Val, b: &Val) {
         }),
         (Val::V128(a), Val::V128(b)) => assert_eq!(a, b),
         _ => panic!("{:?} != {:?}", a, b),
-    }
-}
-
-#[derive(Clone, Default, Debug)]
-struct WasmConfig;
-
-impl<'a> arbitrary::Arbitrary<'a> for WasmConfig {
-    fn arbitrary(_: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(WasmConfig)
-    }
-}
-
-impl wasm_smith::Config for WasmConfig {
-    fn max_memories(&self) -> usize {
-        10
-    }
-
-    fn max_memory_pages(&self) -> u32 {
-        // We want small memories that are quick to compare, but we also want to
-        // allow memories to grow so we can shake out any memory-growth-related
-        // bugs, so we choose `2` instead of `1`.
-        2
-    }
-
-    fn min_funcs(&self) -> usize {
-        // Always generate at least one function that we can hopefully use as an
-        // initialization function.
-        1
-    }
-
-    fn min_exports(&self) -> usize {
-        // Always at least one export, hopefully a function we can use as an
-        // initialization routine.
-        1
-    }
-
-    fn memory_offset_choices(&self) -> (u32, u32, u32) {
-        // Always use an offset immediate that is within the memory's minimum
-        // size. This should make trapping on loads/stores a little less
-        // frequent.
-        (1, 0, 0)
     }
 }
