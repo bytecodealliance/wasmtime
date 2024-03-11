@@ -2,6 +2,9 @@
 name = "classification-component-onnx"
 version = "0.1.0"
 edition = "2021"
+authors = ["The Wasmtime Project Developers"]
+readme = "README.md"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]

@@ -3,8 +3,6 @@ use std::fs;
 use wasi_nn::*;
 
 pub fn main() -> Result<()> {
-    // Load the ONNX model - SqueezeNet 1.1-7
-    // Full details: https://github.com/onnx/models/tree/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/squeezenet
     let model = fs::read("fixture/model.onnx").unwrap();
     println!("[ONNX] Read model, size in bytes: {}", model.len());
 
