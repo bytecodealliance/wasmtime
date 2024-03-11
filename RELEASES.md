@@ -22,9 +22,9 @@ Unreleased.
 * Add the WasiP1Ctx to ease the use of `wasmtime-wasi` in place of `wasi-common`
   [#8053](https://github.com/bytecodealliance/wasmtime/pull/8053)
 
-* The Winch compiler backend is now feature-complete. Note that minor issues and
-  fuzz bugs are still being addressed, but now's a good time to test if you're
-  interested.
+* The Winch compiler backend is now feature-complete for x64. Note that minor
+  issues and fuzz bugs are still being addressed, but now's a good time to test
+  if you're interested.
   [#7894](https://github.com/bytecodealliance/wasmtime/pull/7894)
   [#7909](https://github.com/bytecodealliance/wasmtime/pull/7909)
   [#7927](https://github.com/bytecodealliance/wasmtime/pull/7927)
@@ -56,7 +56,7 @@ Unreleased.
 
 ### Changed
 
-* The `wasmtime serve` command no longer bits its port with `SO_REUSEADDR`
+* The `wasmtime serve` command no longer binds its port with `SO_REUSEADDR`
   meaning that if it is invoked twice only one will succeed.
   [#7863](https://github.com/bytecodealliance/wasmtime/pull/7863)
 
