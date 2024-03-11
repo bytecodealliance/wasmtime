@@ -110,7 +110,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
-        if call_conv == isa::CallConv::Tail {
+        if matches!(call_conv, isa::CallConv::Tail | isa::CallConv::Winch) {
             return compute_arg_locs_tail(params, add_ret_area_ptr, args);
         }
 
