@@ -42,16 +42,22 @@ fuzz_target!(|data: &[u8]| {
     // initialization function.
     config.min_funcs = 1;
 
+    config.max_funcs = 10;
+
     // Always at least one export, hopefully a function we can use as an
     // initialization routine.
     config.min_exports = 1;
+
+    config.max_exports = 10;
 
     // Always use an offset immediate that is within the memory's minimum
     // size. This should make trapping on loads/stores a little less
     // frequent.
     config.memory_offset_choices = MemoryOffsetChoices(1, 0, 0);
 
-    let mut module = wasm_smith::Module::new(config, &mut u).unwrap();
+    let Ok(mut module) = wasm_smith::Module::new(config, &mut u) else {
+        return;
+    };
     module.ensure_termination(FUEL).unwrap();
     let wasm = module.to_bytes();
 
