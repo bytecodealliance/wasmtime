@@ -15,15 +15,43 @@
 
 #![no_main]
 
-use libfuzzer_sys::fuzz_target;
+use libfuzzer_sys::{
+    arbitrary::{Arbitrary, Unstructured},
+    fuzz_target,
+};
+use wasm_smith::MemoryOffsetChoices;
 use wasmtime::*;
 
 const FUEL: u32 = 1_000;
 
-fuzz_target!(|module: wasm_smith::Module| {
+fuzz_target!(|data: &[u8]| {
     let _ = env_logger::try_init();
 
-    let mut module = module;
+    let mut u = Unstructured::new(data);
+
+    let mut config = wasm_smith::Config::arbitrary(&mut u).unwrap();
+    config.max_memories = 10;
+
+    // We want small memories that are quick to compare, but we also want to
+    // allow memories to grow so we can shake out any memory-growth-related
+    // bugs, so we choose `2` instead of `1`.
+    config.max_memory32_pages = 2;
+    config.max_memory64_pages = 2;
+
+    // Always generate at least one function that we can hopefully use as an
+    // initialization function.
+    config.min_funcs = 1;
+
+    // Always at least one export, hopefully a function we can use as an
+    // initialization routine.
+    config.min_exports = 1;
+
+    // Always use an offset immediate that is within the memory's minimum
+    // size. This should make trapping on loads/stores a little less
+    // frequent.
+    config.memory_offset_choices = MemoryOffsetChoices(1, 0, 0);
+
+    let mut module = wasm_smith::Module::new(config, &mut u).unwrap();
     module.ensure_termination(FUEL).unwrap();
     let wasm = module.to_bytes();
 
