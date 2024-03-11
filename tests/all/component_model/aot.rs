@@ -1,5 +1,6 @@
 use anyhow::Result;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::types::ComponentItem;
+use wasmtime::component::{Component, Linker, Type};
 use wasmtime::{Module, Precompiled, Store};
 
 #[test]
@@ -131,5 +132,35 @@ fn detect_precompiled() -> Result<()> {
         engine.detect_precompiled(&buffer),
         Some(Precompiled::Component)
     );
+    Ok(())
+}
+
+#[test]
+fn reflect_resource_import() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+        (component
+            (import "x" (type $x (sub resource)))
+            (import "y" (func (result (own $x))))
+        )
+        "#,
+    )?;
+    let ty = c.component_type();
+    let mut imports = ty.imports(&engine);
+    let (_, x) = imports.next().unwrap();
+    let (_, y) = imports.next().unwrap();
+    let x = match x {
+        ComponentItem::Resource(t) => t,
+        _ => unreachable!(),
+    };
+    let y = match y {
+        ComponentItem::ComponentFunc(t) => t,
+        _ => unreachable!(),
+    };
+    let result = y.results().next().unwrap();
+    assert_eq!(result, Type::Own(x));
+
     Ok(())
 }

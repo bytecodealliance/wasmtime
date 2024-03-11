@@ -195,7 +195,10 @@ impl<'a> InstanceType<'a> {
 
     pub fn resource_type(&self, index: TypeResourceTableIndex) -> ResourceType {
         let index = self.types[index].ty;
-        self.resources[index]
+        self.resources
+            .get(index)
+            .copied()
+            .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, index))
     }
 }
 
