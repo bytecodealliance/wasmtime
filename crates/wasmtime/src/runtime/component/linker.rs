@@ -208,7 +208,7 @@ impl<T> Linker<T> {
         for (_idx, (name, ty)) in env_component.import_types.iter() {
             let import = self.map.get(name, &self.strings);
             cx.definition(ty, import)
-                .with_context(|| format!("import `{name}` has the wrong type"))?;
+                .with_context(|| format!("component imports {desc} `{name}`, but a matching implementation was not found in the linker", desc = ty.desc()))?;
         }
         Ok(cx)
     }

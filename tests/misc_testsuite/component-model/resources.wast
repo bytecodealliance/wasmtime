@@ -167,7 +167,7 @@
       (export "missing" (type (sub resource)))
     ))
   )
-  "expected resource found nothing")
+  "was not found")
 (assert_unlinkable
   (component
     (import "host" (instance

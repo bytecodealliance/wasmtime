@@ -36,19 +36,27 @@ impl TypeChecker<'_> {
         match *expected {
             TypeDef::Module(t) => match actual {
                 Some(Definition::Module(actual)) => self.module(&self.types[t], actual),
-                _ => bail!("expected module found {}", desc(actual)),
+                Some(actual) => bail!("expected module found {}", actual.desc()),
+                None => bail!("module implementation is missing"),
             },
             TypeDef::ComponentInstance(t) => match actual {
                 Some(Definition::Instance(actual)) => self.instance(&self.types[t], Some(actual)),
                 None => self.instance(&self.types[t], None),
-                _ => bail!("expected instance found {}", desc(actual)),
+                Some(actual) => bail!("expected instance found {}", actual.desc()),
             },
             TypeDef::ComponentFunc(t) => match actual {
                 Some(Definition::Func(actual)) => self.func(t, actual),
-                _ => bail!("expected func found {}", desc(actual)),
+                Some(actual) => bail!("expected function found {}", actual.desc()),
+                None => bail!("function implementation is missing"),
             },
-            TypeDef::Component(_) => bail!("expected component found {}", desc(actual)),
-            TypeDef::Interface(_) => bail!("expected type found {}", desc(actual)),
+            TypeDef::Component(_) => match actual {
+                Some(actual) => bail!("expected component found {}", actual.desc()),
+                None => bail!("component implementation is missing"),
+            },
+            TypeDef::Interface(_) => match actual {
+                Some(actual) => bail!("expected type found {}", actual.desc()),
+                None => bail!("type implementation is missing"),
+            },
 
             TypeDef::Resource(i) => {
                 let i = self.types[i].ty;
@@ -63,7 +71,8 @@ impl TypeChecker<'_> {
                     // Wasmtime API.
                     None if self.imported_resources.get(i).is_some() => return Ok(()),
 
-                    _ => bail!("expected resource found {}", desc(actual)),
+                    Some(actual) => bail!("expected resource found {}", actual.desc()),
+                    None => bail!("resource implementation is missing"),
                 };
 
                 match self.imported_resources.get(i) {
@@ -162,13 +171,6 @@ impl TypeChecker<'_> {
             resources: &self.imported_resources,
         };
         actual.typecheck(expected, &instance_type)
-    }
-}
-
-fn desc(def: Option<&Definition>) -> &'static str {
-    match def {
-        Some(def) => def.desc(),
-        None => "nothing",
     }
 }
 
