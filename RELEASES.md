@@ -2,6 +2,8 @@
 
 ## 18.0.3
 
+Released 2024-03-12
+
 ### Fixed
 
 * Fix inferring native flags when a compilation target is specified.
