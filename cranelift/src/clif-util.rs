@@ -84,6 +84,10 @@ struct CompiledWithoutSupportOptions {}
 fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
+    let recorder = metrics_util::debugging::DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    recorder.install().unwrap();
+
     match Commands::parse() {
         Commands::Cat(c) => cat::run(&c)?,
         Commands::Run(r) => run::run(&r)?,
@@ -124,6 +128,24 @@ fn main() -> anyhow::Result<()> {
                 &p.file.display().to_string(),
             )?;
         }
+    }
+
+    for (key, _, _, value) in snapshotter.snapshot().into_vec() {
+        print!("{}: ", key.key());
+
+        match value {
+        metrics_util::debugging::DebugValue::Histogram(vec) => {
+            let mut summary = metrics_util::Summary::with_defaults();
+            for item in vec { summary.add(item.into_inner()); }
+            print!("0.0: {} ", summary.quantile(0.0).unwrap());
+            print!("0.5: {} ", summary.quantile(0.5).unwrap());
+            print!("0.9: {} ", summary.quantile(0.9).unwrap());
+            print!("1.0: {}", summary.quantile(1.0).unwrap());
+        },
+        _ => {}
+        }
+
+        println!();
     }
 
     Ok(())

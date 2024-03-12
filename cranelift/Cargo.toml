@@ -37,6 +37,8 @@ cranelift-jit = { workspace = true }
 cranelift = { workspace = true }
 filecheck = { workspace = true }
 log = { workspace = true }
+metrics = { workspace = true }
+metrics-util = "0.16"
 termcolor = "1.1.2"
 capstone = { workspace = true, optional = true }
 wat = { workspace = true, optional = true }

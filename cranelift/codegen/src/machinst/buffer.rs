@@ -1508,6 +1508,11 @@ impl<I: VCodeInst> MachBuffer<I> {
         constants: &VCodeConstants,
         ctrl_plane: &mut ControlPlane,
     ) -> MachBufferFinalized<Stencil> {
+        metrics::histogram!("machinst.buffer.data").record(f64::try_from(self.data.len() as u32).unwrap());
+        metrics::histogram!("machinst.buffer.relocs").record(f64::try_from(self.relocs.len() as u32).unwrap());
+        metrics::histogram!("machinst.buffer.traps").record(f64::try_from(self.traps.len() as u32).unwrap());
+        metrics::histogram!("machinst.buffer.call_sites").record(f64::try_from(self.call_sites.len() as u32).unwrap());
+
         let _tt = timing::vcode_emit_finish();
 
         self.finish_emission_maybe_forcing_veneers(ForceVeneers::No, ctrl_plane);
