@@ -594,20 +594,30 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         builder: &mut FunctionBuilder,
         _table_index: TableIndex,
-        _table: ir::Table,
-        _index: ir::Value,
+        table: ir::Table,
+        index: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Ok(builder.ins().null(self.reference_type()))
+        let pointer_type = self.pointer_type();
+        let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+        let flags = ir::MemFlags::trusted().with_table();
+        let value = builder
+            .ins()
+            .load(self.reference_type(), flags, table_entry_addr, 0);
+        Ok(value)
     }
 
     fn translate_table_set(
         &mut self,
-        _builder: &mut FunctionBuilder,
+        builder: &mut FunctionBuilder,
         _table_index: TableIndex,
-        _table: ir::Table,
-        _value: ir::Value,
-        _index: ir::Value,
+        table: ir::Table,
+        value: ir::Value,
+        index: ir::Value,
     ) -> WasmResult<()> {
+        let pointer_type = self.pointer_type();
+        let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+        let flags = ir::MemFlags::trusted().with_table();
+        builder.ins().store(flags, value, table_entry_addr, 0);
         Ok(())
     }
 
