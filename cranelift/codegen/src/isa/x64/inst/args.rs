@@ -1151,6 +1151,7 @@ pub enum SseOpcode {
     Ucomiss,
     Ucomisd,
     Unpcklps,
+    Unpcklpd,
     Unpckhps,
     Xorps,
     Xorpd,
@@ -1309,7 +1310,8 @@ impl SseOpcode {
             | SseOpcode::Punpcklqdq
             | SseOpcode::Punpckhqdq
             | SseOpcode::Pshuflw
-            | SseOpcode::Pshufhw => SSE2,
+            | SseOpcode::Pshufhw
+            | SseOpcode::Unpcklpd => SSE2,
 
             SseOpcode::Pabsb
             | SseOpcode::Pabsw
@@ -1566,6 +1568,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",
             SseOpcode::Movddup => "movddup",
+            SseOpcode::Unpcklpd => "unpcklpd",
         };
         write!(fmt, "{}", name)
     }
@@ -1767,7 +1770,8 @@ impl AvxOpcode {
             | AvxOpcode::Vsqrtss
             | AvxOpcode::Vsqrtsd
             | AvxOpcode::Vroundss
-            | AvxOpcode::Vroundsd => {
+            | AvxOpcode::Vroundsd
+            | AvxOpcode::Vunpcklpd => {
                 smallvec![InstructionSet::AVX]
             }
 
