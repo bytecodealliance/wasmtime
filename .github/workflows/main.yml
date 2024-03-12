@@ -559,7 +559,7 @@ jobs:
         fi
 
     # Build and test all features
-    - run: ./ci/run-tests.sh --locked
+    - run: ./ci/run-tests.sh ${{ matrix.extra_features }} --locked
       env:
         RUST_BACKTRACE: 1
 
