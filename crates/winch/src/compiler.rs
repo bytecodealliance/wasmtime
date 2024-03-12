@@ -25,6 +25,11 @@ struct CompilationContext {
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
+
+    /// The trampoline compiler is only used for the component model currently, but will soon be
+    /// used for all winch trampolines. For now, mark it as unused to handle the situation where
+    /// the component-model feature is disabled.
+    #[allow(unused)]
     trampolines: Box<dyn wasmtime_environ::Compiler>,
     contexts: Mutex<Vec<CompilationContext>>,
 }
