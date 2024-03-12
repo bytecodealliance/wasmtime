@@ -25,6 +25,12 @@ struct CompilationContext {
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
+
+    /// The trampoline compiler is only used for the component model currently, but will soon be
+    /// used for all winch trampolines. For now, mark it as unused to handle the situation where
+    /// the component-model feature is disabled.
+    #[allow(unused)]
+    trampolines: Box<dyn wasmtime_environ::Compiler>,
     contexts: Mutex<Vec<CompilationContext>>,
 }
 
@@ -40,9 +46,10 @@ impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
 }
 
 impl Compiler {
-    pub fn new(isa: Box<dyn TargetIsa>) -> Self {
+    pub fn new(isa: Box<dyn TargetIsa>, trampolines: Box<dyn wasmtime_environ::Compiler>) -> Self {
         Self {
             isa,
+            trampolines,
             contexts: Mutex::new(Vec::new()),
         }
     }
@@ -68,7 +75,7 @@ impl Compiler {
     /// Emit unwind info into the [`CompiledFunction`].
     fn emit_unwind_info(
         &self,
-        compiled_function: &mut CompiledFunction<CompiledFuncEnv>,
+        compiled_function: &mut CompiledFunction,
     ) -> Result<(), CompileError> {
         let kind = match self.isa.triple().operating_system {
             target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
@@ -217,9 +224,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = func
-                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
-                .unwrap();
+            let func = func.downcast_ref::<CompiledFunction>().unwrap();
 
             let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
             traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
@@ -265,7 +270,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
     #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
-        todo!()
+        self.trampolines.component_compiler()
     }
 
     fn append_dwarf(

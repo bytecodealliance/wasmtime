@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::{mach_reloc_to_reloc, mach_trap_to_trap, Relocation};
 use cranelift_codegen::{
     ir, ir::UserExternalNameRef, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo, Final,
@@ -59,11 +61,11 @@ pub struct CompiledFunctionMetadata {
 }
 
 /// Compiled function: machine code body, jump table offsets, and unwind information.
-pub struct CompiledFunction<E: CompiledFuncEnv> {
+pub struct CompiledFunction {
     /// The machine code buffer for this function.
     pub buffer: MachBufferFinalized<Final>,
     /// The environment for the compiled function.
-    env: E,
+    env: Box<dyn CompiledFuncEnv + Send + 'static>,
     /// The alignment for the compiled function.
     pub alignment: u32,
     /// The metadata for the compiled function, including unwind information
@@ -71,17 +73,17 @@ pub struct CompiledFunction<E: CompiledFuncEnv> {
     metadata: CompiledFunctionMetadata,
 }
 
-impl<E: CompiledFuncEnv> CompiledFunction<E>
-where
-    E: CompiledFuncEnv,
-{
+impl CompiledFunction {
     /// Creates a [CompiledFunction] from a [cranelift_codegen::MachBufferFinalized<Final>]
     /// This function uses the information in the machine buffer to derive the traps and relocations
     /// fields. The compiled function metadata is loaded with the default values.
-    pub fn new(buffer: MachBufferFinalized<Final>, env: E, alignment: u32) -> Self {
+    pub fn new<E>(buffer: MachBufferFinalized<Final>, env: E, alignment: u32) -> Self
+    where
+        E: Any + CompiledFuncEnv + Send + 'static,
+    {
         Self {
             buffer,
-            env,
+            env: Box::new(env),
             alignment,
             metadata: Default::default(),
         }

@@ -56,6 +56,9 @@ pub struct Tunables {
 
     /// Whether or not Wasm functions can be tail-called or not.
     pub tail_callable: bool,
+
+    /// Whether or not Wasm functions target the winch abi.
+    pub winch_callable: bool,
 }
 
 impl Tunables {
@@ -106,6 +109,7 @@ impl Tunables {
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
             tail_callable: false,
+            winch_callable: false,
         }
     }
 
