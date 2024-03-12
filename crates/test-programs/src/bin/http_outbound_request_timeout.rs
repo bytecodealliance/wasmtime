@@ -33,6 +33,6 @@ fn main() {
 
     let actual = start.elapsed();
     let tolerance = Duration::from_millis(100);
-    let expected: Duration = timeout + tolerance;
-    assert!(actual < expected);
+    let upper_bound = timeout + tolerance;
+    assert!(actual < upper_bound);
 }
