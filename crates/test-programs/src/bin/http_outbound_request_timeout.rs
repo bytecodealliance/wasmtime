@@ -1,7 +1,7 @@
 use anyhow::Context;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-use test_programs::wasi::http::types::{Method, Scheme};
+use test_programs::wasi::http::types::{ErrorCode, Method, Scheme};
 
 fn main() {
     // This address inside the TEST-NET-3 address block is expected to time out.
@@ -23,6 +23,13 @@ fn main() {
     .context("/get");
 
     assert!(res.is_err());
+    assert!(
+        matches!(
+            res.unwrap_err().downcast_ref::<ErrorCode>(),
+            Some(ErrorCode::ConnectionTimeout)
+        ),
+        "expected connection timeout"
+    );
 
     let actual = start.elapsed();
     let tolerance = Duration::from_millis(100);
