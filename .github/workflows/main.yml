@@ -268,7 +268,6 @@ jobs:
   # double-check that Rust code compiles and is likely to work everywhere else.
   checks:
     needs: determine
-    if: needs.determine.outputs.run-full
     name: Check
     runs-on: ubuntu-latest
     env:
