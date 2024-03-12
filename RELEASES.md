@@ -6,15 +6,97 @@ Unreleased.
 
 ### Added
 
+* C API bindings for the sampling-based profiler in Wasmtime have been added.
+  [#7854](https://github.com/bytecodealliance/wasmtime/pull/7854)
+
 * Add the WasiP1Ctx to ease the use of `wasmtime-wasi` in place of `wasi-common`
   [#8053](https://github.com/bytecodealliance/wasmtime/pull/8053)
 
+* The Winch compiler backend is now feature-complete for x64. Note that minor
+  issues and fuzz bugs are still being addressed, but now's a good time to test
+  if you're interested.
+  [#7894](https://github.com/bytecodealliance/wasmtime/pull/7894)
+  [#7909](https://github.com/bytecodealliance/wasmtime/pull/7909)
+  [#7927](https://github.com/bytecodealliance/wasmtime/pull/7927)
+  [#7932](https://github.com/bytecodealliance/wasmtime/pull/7932)
+  [#7949](https://github.com/bytecodealliance/wasmtime/pull/7949)
+  [#7974](https://github.com/bytecodealliance/wasmtime/pull/7974)
+  [#8001](https://github.com/bytecodealliance/wasmtime/pull/8001)
+
+* The typed function references proposal to WebAssembly is now fully
+  implemented.
+  [#7943](https://github.com/bytecodealliance/wasmtime/pull/7943)
+
+* The `component::Linker` type is now "semver aware" in that it enables loading
+  components referring to past or future versions of interfaces so long as the
+  types are compatible.
+  [#7994](https://github.com/bytecodealliance/wasmtime/pull/7994)
+
+* Wasmtime can now be built for "custom platforms" which is intended for
+  bare-metal builds.
+  [#7995](https://github.com/bytecodealliance/wasmtime/pull/7995)
+
+* The `wasmtime-wasi-nn` crate now has a backend based on WinML.
+  [#7807](https://github.com/bytecodealliance/wasmtime/pull/7807)
+
+* The `wasmtime` CLI now has flags for configuring limits of the pooling
+  allocator.
+  [#8027](https://github.com/bytecodealliance/wasmtime/pull/8027)
+
+
 ### Changed
+
+* The `wasmtime serve` command no longer binds its port with `SO_REUSEADDR`
+  meaning that if it is invoked twice only one will succeed.
+  [#7863](https://github.com/bytecodealliance/wasmtime/pull/7863)
+
+* The sampling-based profiler in Wasmtime now takes an explicit argument of
+  the time delta between samples.
+  [#7873](https://github.com/bytecodealliance/wasmtime/pull/7873)
+
+* Many accessors for type information now require an `&Engine` argument to be
+  specified in preparation for an implementation of wasm GC.
+  [#7892](https://github.com/bytecodealliance/wasmtime/pull/7892)
+
+* The `host` header is now forbidden in wasi-http.
+  [#7905](https://github.com/bytecodealliance/wasmtime/pull/7905)
+
+* Stronger type-checks are now performed for host-owned resources when
+  interacting with the component model to help catch mistakes earlier.
+  [#7902](https://github.com/bytecodealliance/wasmtime/pull/7902)
+
+* Demangling Rust and C/C++ symbols in WebAssembly modules is now done by
+  default in the C API.
+  [#7962](https://github.com/bytecodealliance/wasmtime/pull/7962)
+
+* Preview2-based APIs are now located at the root of the `wasmtime_wasi` crate
+  instead of a submodule.
+  [#7933](https://github.com/bytecodealliance/wasmtime/pull/7933)
+
+* Components now reserve index 0 for handle tables to match the component model
+  specification.
+  [#7661](https://github.com/bytecodealliance/wasmtime/pull/7661)
+
+* Support for `externref` has been moved behind a new `gc` Cargo feature. This
+  will also gate support for wasm gc in the future.
+  [#7975](https://github.com/bytecodealliance/wasmtime/pull/7975)
 
 * Require the `WASMTIME_WASI_CONFIG_PREOPEN_SOCKET_ALLOW` environment variable
   to bet set to allow the use of `wasi_config_preopen_socket` via the c api, as
   it will be deprecated in `20.0.0`.
   [#8053](https://github.com/bytecodealliance/wasmtime/pull/8053)
+
+### Fixed
+
+* WIT interface names that are Rust keywords now correctly generate bindings.
+  [#7790](https://github.com/bytecodealliance/wasmtime/pull/7790)
+
+* PKRU state is now restored across await points.
+  [#7789](https://github.com/bytecodealliance/wasmtime/pull/7789)
+
+* Wasmtime now correctly supports `global.get` in all constant expressions
+  within a module.
+  [#7996](https://github.com/bytecodealliance/wasmtime/pull/7996)
 
 --------------------------------------------------------------------------------
 
