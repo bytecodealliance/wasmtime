@@ -361,14 +361,6 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         self.inner.make_global(func, index)
     }
 
-    fn make_table(
-        &mut self,
-        func: &mut ir::Function,
-        index: cranelift_wasm::TableIndex,
-    ) -> cranelift_wasm::WasmResult<ir::Table> {
-        self.inner.make_table(func, index)
-    }
-
     fn make_indirect_sig(
         &mut self,
         func: &mut ir::Function,
@@ -389,7 +381,6 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         builder: &mut cranelift_frontend::FunctionBuilder,
         table_index: cranelift_wasm::TableIndex,
-        table: ir::Table,
         sig_index: cranelift_wasm::TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
@@ -398,7 +389,6 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         self.inner.translate_call_indirect(
             builder,
             table_index,
-            table,
             sig_index,
             sig_ref,
             callee,
@@ -410,7 +400,6 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         builder: &mut cranelift_frontend::FunctionBuilder,
         table_index: cranelift_wasm::TableIndex,
-        table: ir::Table,
         sig_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
@@ -419,7 +408,6 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         self.inner.translate_return_call_indirect(
             builder,
             table_index,
-            table,
             sig_index,
             sig_ref,
             callee,
@@ -511,67 +499,52 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         index: cranelift_wasm::TableIndex,
-        table: ir::Table,
     ) -> cranelift_wasm::WasmResult<ir::Value> {
-        self.inner.translate_table_size(pos, index, table)
+        self.inner.translate_table_size(pos, index)
     }
 
     fn translate_table_grow(
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         table_index: cranelift_wasm::TableIndex,
-        table: ir::Table,
         delta: ir::Value,
         init_value: ir::Value,
     ) -> cranelift_wasm::WasmResult<ir::Value> {
         self.inner
-            .translate_table_grow(pos, table_index, table, delta, init_value)
+            .translate_table_grow(pos, table_index, delta, init_value)
     }
 
     fn translate_table_get(
         &mut self,
         builder: &mut cranelift_frontend::FunctionBuilder,
         table_index: cranelift_wasm::TableIndex,
-        table: ir::Table,
         index: ir::Value,
     ) -> cranelift_wasm::WasmResult<ir::Value> {
-        self.inner
-            .translate_table_get(builder, table_index, table, index)
+        self.inner.translate_table_get(builder, table_index, index)
     }
 
     fn translate_table_set(
         &mut self,
         builder: &mut cranelift_frontend::FunctionBuilder,
         table_index: cranelift_wasm::TableIndex,
-        table: ir::Table,
         value: ir::Value,
         index: ir::Value,
     ) -> cranelift_wasm::WasmResult<()> {
         self.inner
-            .translate_table_set(builder, table_index, table, value, index)
+            .translate_table_set(builder, table_index, value, index)
     }
 
     fn translate_table_copy(
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         dst_table_index: cranelift_wasm::TableIndex,
-        dst_table: ir::Table,
         src_table_index: cranelift_wasm::TableIndex,
-        src_table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
     ) -> cranelift_wasm::WasmResult<()> {
-        self.inner.translate_table_copy(
-            pos,
-            dst_table_index,
-            dst_table,
-            src_table_index,
-            src_table,
-            dst,
-            src,
-            len,
-        )
+        self.inner
+            .translate_table_copy(pos, dst_table_index, src_table_index, dst, src, len)
     }
 
     fn translate_table_fill(
@@ -591,13 +564,12 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         pos: cranelift_codegen::cursor::FuncCursor,
         seg_index: u32,
         table_index: cranelift_wasm::TableIndex,
-        table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
     ) -> cranelift_wasm::WasmResult<()> {
         self.inner
-            .translate_table_init(pos, seg_index, table_index, table, dst, src, len)
+            .translate_table_init(pos, seg_index, table_index, dst, src, len)
     }
 
     fn translate_elem_drop(
