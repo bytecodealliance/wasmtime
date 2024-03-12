@@ -8,7 +8,7 @@ use crate::{
     regalloc::RegAlloc,
     regset::RegBitSet,
     stack::Stack,
-    BuiltinFunctions, TrampolineKind,
+    BuiltinFunctions,
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
@@ -134,14 +134,6 @@ impl TargetIsa for Aarch64 {
     fn function_alignment(&self) -> u32 {
         // See `cranelift_codegen::isa::TargetIsa::function_alignment`.
         32
-    }
-
-    fn compile_trampoline(
-        &self,
-        _ty: &WasmFuncType,
-        _kind: TrampolineKind,
-    ) -> Result<MachBufferFinalized<Final>> {
-        todo!()
     }
 
     fn emit_unwind_info(

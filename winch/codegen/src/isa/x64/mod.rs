@@ -8,7 +8,6 @@ use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
-use crate::trampoline::{Trampoline, TrampolineKind};
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegBitSet,
@@ -147,37 +146,6 @@ impl TargetIsa for X64 {
     fn function_alignment(&self) -> u32 {
         // See `cranelift_codegen`'s value of this for more information.
         16
-    }
-
-    fn compile_trampoline(
-        &self,
-        ty: &WasmFuncType,
-        kind: TrampolineKind,
-    ) -> Result<MachBufferFinalized<Final>> {
-        use TrampolineKind::*;
-
-        let mut masm = X64Masm::new(
-            self.pointer_bytes(),
-            self.shared_flags.clone(),
-            self.isa_flags.clone(),
-        );
-        let call_conv = self.wasmtime_call_conv();
-
-        let trampoline = Trampoline::new(
-            &mut masm,
-            regs::scratch(),
-            regs::argv(),
-            &call_conv,
-            self.pointer_bytes(),
-        );
-
-        match kind {
-            ArrayToWasm(idx) => trampoline.emit_array_to_wasm(ty, idx)?,
-            NativeToWasm(idx) => trampoline.emit_native_to_wasm(ty, idx)?,
-            WasmToNative => trampoline.emit_wasm_to_native(ty)?,
-        }
-
-        Ok(masm.finalize())
     }
 
     fn emit_unwind_info(
