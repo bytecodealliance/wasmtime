@@ -27,6 +27,12 @@ async fn http_outbound_request_get() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn http_outbound_request_timeout() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_post() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_POST_COMPONENT, &server).await

@@ -148,8 +148,9 @@ async fn handler(
     mut request: http::Request<HyperOutgoingBody>,
     between_bytes_timeout: Duration,
 ) -> Result<IncomingResponseInternal, types::ErrorCode> {
-    let tcp_stream = TcpStream::connect(authority.clone())
+    let tcp_stream = timeout(connect_timeout, TcpStream::connect(authority.clone()))
         .await
+        .map_err(|_| types::ErrorCode::ConnectionTimeout)?
         .map_err(|e| match e.kind() {
             std::io::ErrorKind::AddrNotAvailable => {
                 dns_error("address not available".to_string(), 0)
