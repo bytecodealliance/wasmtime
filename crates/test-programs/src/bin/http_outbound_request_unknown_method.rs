@@ -8,6 +8,9 @@ fn main() {
         "/",
         None,
         None,
+        None,
+        None,
+        None,
     );
 
     // This error arises from input validation in the `set_method` function on `OutgoingRequest`.

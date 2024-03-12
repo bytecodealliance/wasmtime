@@ -4,9 +4,19 @@ use test_programs::wasi::http::types::{Method, Scheme};
 fn main() {
     let addr = std::env::var("HTTP_SERVER").unwrap();
     let res =
-        test_programs::http::request(Method::Put, Scheme::Http, &addr, "/put", Some(&[]), None)
-            .context("/put")
-            .unwrap();
+        test_programs::http::request(
+            Method::Put,
+            Scheme::Http,
+            &addr,
+            "/put",
+            Some(&[]),
+            None,
+            None,
+            None,
+            None,
+        )
+        .context("/put")
+        .unwrap();
 
     println!("/put: {res:?}");
     assert_eq!(res.status, 200);

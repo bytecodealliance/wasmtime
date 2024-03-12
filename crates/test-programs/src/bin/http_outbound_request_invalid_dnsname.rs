@@ -8,6 +8,9 @@ fn main() {
         "/",
         None,
         None,
+        None,
+        None,
+        None,
     );
 
     let e = res.unwrap_err();

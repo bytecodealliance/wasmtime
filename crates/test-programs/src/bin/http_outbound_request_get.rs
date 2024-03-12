@@ -10,6 +10,9 @@ fn main() {
         "/get?some=arg&goes=here",
         None,
         None,
+        None,
+        None,
+        None,
     )
     .context("/get")
     .unwrap();
