@@ -1,5 +1,14 @@
 --------------------------------------------------------------------------------
 
+## 18.0.3
+
+### Fixed
+
+* Fix inferring native flags when a compilation target is specified.
+  https://github.com/bytecodealliance/wasmtime/pull/7991
+
+--------------------------------------------------------------------------------
+
 ## 18.0.2
 
 Released 2024-02-28.
