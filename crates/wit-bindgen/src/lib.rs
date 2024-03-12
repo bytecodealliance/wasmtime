@@ -48,7 +48,6 @@ struct Wasmtime {
     types: Types,
     sizes: SizeAlign,
     interface_names: HashMap<InterfaceId, InterfaceName>,
-    with_name_counter: usize,
     interface_last_seen_as_import: HashMap<InterfaceId, bool>,
     trappable_errors: IndexMap<TypeId, String>,
 }
@@ -188,13 +187,9 @@ impl Wasmtime {
                 path.push(to_rust_ident(iface.name.as_ref().unwrap()));
             }
         }
-        let entry = if let Some(remapped_path) = self.lookup_replacement(resolve, name, None) {
-            let remapped_path = remapped_path.to_string();
-            let name = format!("__with_name{}", self.with_name_counter);
-            self.with_name_counter += 1;
-            uwriteln!(self.src, "use {remapped_path} as {name};");
+        let entry = if let Some(name_at_root) = self.lookup_replacement(resolve, name, None) {
             InterfaceName::Remapped {
-                name_at_root: name,
+                name_at_root,
                 local_path: path,
             }
         } else {
@@ -261,6 +256,18 @@ impl Wasmtime {
             uwriteln!(self.src, "type {name} = {};", te.rust_type_name);
             let prev = self.trappable_errors.insert(id, name);
             assert!(prev.is_none());
+        }
+
+        // Convert all entries in `with` as relative to the root of where the
+        // macro itself is invoked. This emits a `pub use` to bring the name
+        // into scope under an "anonymous name" which then replaces the `with`
+        // map entry.
+        let mut with = self.opts.with.iter_mut().collect::<Vec<_>>();
+        with.sort();
+        for (i, (_k, v)) in with.into_iter().enumerate() {
+            let name = format!("__with_name{i}");
+            uwriteln!(self.src, "#[doc(hidden)]\npub use {v} as {name};");
+            *v = name;
         }
 
         let world = &resolve.worlds[id];
@@ -666,42 +673,144 @@ impl Wasmtime {
         }
     }
 
+    /// Attempts to find the `key`, possibly with the resource projection
+    /// `item`, within the `with` map provided to bindings configuration.
     fn lookup_replacement(
         &self,
         resolve: &Resolve,
         key: &WorldKey,
         item: Option<&str>,
-    ) -> Option<&str> {
-        // First try to lookup the exact name of the interface as specified
-        // via `name_world_key`.
-        let name = resolve.name_world_key(key);
-        let candidate1 = match item {
-            Some(item) => format!("{name}/{item}"),
-            None => name.clone(),
-        };
-        if let Some(ret) = self.opts.with.get(&candidate1) {
-            return Some(ret);
+    ) -> Option<String> {
+        struct Name<'a> {
+            prefix: Prefix,
+            item: Option<&'a str>,
         }
 
-        // .. if the above failed allow omitting the `@...` version information
-        // and see if there's a `with` key for that.
+        #[derive(Copy, Clone)]
+        enum Prefix {
+            Namespace(PackageId),
+            UnversionedPackage(PackageId),
+            VersionedPackage(PackageId),
+            UnversionedInterface(InterfaceId),
+            VersionedInterface(InterfaceId),
+        }
+
+        let prefix = match key {
+            WorldKey::Interface(id) => Prefix::VersionedInterface(*id),
+
+            // Non-interface-keyed names don't get the lookup logic below,
+            // they're relatively uncommon so only lookup the precise key here.
+            WorldKey::Name(key) => {
+                let to_lookup = match item {
+                    Some(item) => format!("{key}/{item}"),
+                    None => key.to_string(),
+                };
+                return self.opts.with.get(&to_lookup).cloned();
+            }
+        };
+
+        // Here names are iteratively attempted as `key` + `item` is "walked to
+        // its root" and each attempt is consulted in `self.opts.with`. This
+        // loop will start at the leaf, the most specific path, and then walk to
+        // the root, popping items, trying to find a result.
         //
-        // NB: this means that in a scenario where there's packages with the
-        // same name/namespace where one has a version and one doesn't there's
-        // no way to use `with` to specify just one and not the other. That
-        // should be ok for now, but this should ideally detect a situation like
-        // that and omit this fallback in such a situation.
-        let version_start = name.find('@')?;
-        let name = &name[..version_start];
-        let candidate2 = match item {
-            Some(item) => format!("{name}/{item}"),
-            None => name.to_string(),
-        };
-        if let Some(ret) = self.opts.with.get(&candidate2) {
-            return Some(ret);
+        // Each time a name is "popped" the projection from the next path is
+        // pushed onto `projection`. This means that if we actually find a match
+        // then `projection` is a collection of namespaces that results in the
+        // final replacement name.
+        let mut name = Name { prefix, item };
+        let mut projection = Vec::new();
+        loop {
+            let lookup = name.lookup_key(resolve);
+            if let Some(renamed) = self.opts.with.get(&lookup) {
+                projection.push(renamed.clone());
+                projection.reverse();
+                return Some(projection.join("::"));
+            }
+            if !name.pop(resolve, &mut projection) {
+                return None;
+            }
         }
 
-        None
+        impl<'a> Name<'a> {
+            fn lookup_key(&self, resolve: &Resolve) -> String {
+                let mut s = self.prefix.lookup_key(resolve);
+                if let Some(item) = self.item {
+                    s.push_str("/");
+                    s.push_str(item);
+                }
+                s
+            }
+
+            fn pop(&mut self, resolve: &'a Resolve, projection: &mut Vec<String>) -> bool {
+                match (self.item, self.prefix) {
+                    // If this is a versioned resource name, try the unversioned
+                    // resource name next.
+                    (Some(_), Prefix::VersionedInterface(id)) => {
+                        self.prefix = Prefix::UnversionedInterface(id);
+                        true
+                    }
+                    // If this is an unversioned resource name then time to
+                    // ignore the resource itself and move on to the next most
+                    // specific item, versioned interface names.
+                    (Some(item), Prefix::UnversionedInterface(id)) => {
+                        self.prefix = Prefix::VersionedInterface(id);
+                        self.item = None;
+                        projection.push(item.to_upper_camel_case());
+                        true
+                    }
+                    (Some(_), _) => unreachable!(),
+                    (None, _) => self.prefix.pop(resolve, projection),
+                }
+            }
+        }
+
+        impl Prefix {
+            fn lookup_key(&self, resolve: &Resolve) -> String {
+                match *self {
+                    Prefix::Namespace(id) => resolve.packages[id].name.namespace.clone(),
+                    Prefix::UnversionedPackage(id) => {
+                        let mut name = resolve.packages[id].name.clone();
+                        name.version = None;
+                        name.to_string()
+                    }
+                    Prefix::VersionedPackage(id) => resolve.packages[id].name.to_string(),
+                    Prefix::UnversionedInterface(id) => {
+                        let id = resolve.id_of(id).unwrap();
+                        match id.find('@') {
+                            Some(i) => id[..i].to_string(),
+                            None => id,
+                        }
+                    }
+                    Prefix::VersionedInterface(id) => resolve.id_of(id).unwrap(),
+                }
+            }
+
+            fn pop(&mut self, resolve: &Resolve, projection: &mut Vec<String>) -> bool {
+                *self = match *self {
+                    // try the unversioned interface next
+                    Prefix::VersionedInterface(id) => Prefix::UnversionedInterface(id),
+                    // try this interface's versioned package next
+                    Prefix::UnversionedInterface(id) => {
+                        let iface = &resolve.interfaces[id];
+                        let name = iface.name.as_ref().unwrap();
+                        projection.push(to_rust_ident(name));
+                        Prefix::VersionedPackage(iface.package.unwrap())
+                    }
+                    // try the unversioned package next
+                    Prefix::VersionedPackage(id) => Prefix::UnversionedPackage(id),
+                    // try this package's namespace next
+                    Prefix::UnversionedPackage(id) => {
+                        let name = &resolve.packages[id].name;
+                        projection.push(to_rust_ident(&name.name));
+                        Prefix::Namespace(id)
+                    }
+                    // nothing left to try any more
+                    Prefix::Namespace(_) => return false,
+                };
+                true
+            }
+        }
     }
 }
 
@@ -960,7 +1069,7 @@ impl<'a> InterfaceGenerator<'a> {
 
             let replacement = match self.current_interface {
                 Some((_, key, _)) => self.gen.lookup_replacement(self.resolve, key, Some(name)),
-                None => self.gen.opts.with.get(name).map(|s| s.as_str()),
+                None => self.gen.opts.with.get(name).cloned(),
             };
             match replacement {
                 Some(path) => {
