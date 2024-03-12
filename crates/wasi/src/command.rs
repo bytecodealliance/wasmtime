@@ -12,6 +12,7 @@ wasmtime::component::bindgen!({
        "wasi:io/poll": crate::bindings::io::poll,
        "wasi:io/streams": crate::bindings::io::streams,
        "wasi:clocks/wall_clock": crate::bindings::clocks::wall_clock,
+       "wasi:clocks/timezone": crate::bindings::clocks::timezone,
        "wasi:random/random": crate::bindings::random::random,
        "wasi:cli/environment": crate::bindings::cli::environment,
        "wasi:cli/exit": crate::bindings::cli::exit,
@@ -29,6 +30,7 @@ wasmtime::component::bindgen!({
 pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()> {
     crate::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
     crate::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
+    crate::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
     crate::bindings::filesystem::types::add_to_linker(l, |t| t)?;
     crate::bindings::filesystem::preopens::add_to_linker(l, |t| t)?;
     crate::bindings::io::error::add_to_linker(l, |t| t)?;
@@ -73,6 +75,7 @@ pub mod sync {
            "wasi:io/poll": crate::bindings::sync_io::io::poll,
            "wasi:io/streams": crate::bindings::sync_io::io::streams,
            "wasi:clocks/wall_clock": crate::bindings::clocks::wall_clock,
+           "wasi:clocks/timezone": crate::bindings::clocks::timezone,
            "wasi:random/random": crate::bindings::random::random,
            "wasi:cli/environment": crate::bindings::cli::environment,
            "wasi:cli/exit": crate::bindings::cli::exit,
@@ -92,6 +95,7 @@ pub mod sync {
     ) -> anyhow::Result<()> {
         crate::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
         crate::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
+        crate::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
         crate::bindings::sync_io::filesystem::types::add_to_linker(l, |t| t)?;
         crate::bindings::filesystem::preopens::add_to_linker(l, |t| t)?;
         crate::bindings::io::error::add_to_linker(l, |t| t)?;

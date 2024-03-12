@@ -6,7 +6,7 @@ package wasi:http@0.2.0;
 /// outgoing HTTP requests.
 world proxy {
   /// HTTP proxies have access to time and randomness.
-  include wasi:clocks/imports@0.2.0;
+  include wasi:clocks/imports@0.2.1;
   import wasi:random/random@0.2.0;
 
   /// Proxies have standard output and error streams which are expected to

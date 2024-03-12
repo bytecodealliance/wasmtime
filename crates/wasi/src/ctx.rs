@@ -2,8 +2,8 @@
 use crate::WasiP1Ctx;
 use crate::{
     clocks::{
-        host::{monotonic_clock, wall_clock},
-        HostMonotonicClock, HostWallClock,
+        host::{monotonic_clock, timezone, wall_clock},
+        HostMonotonicClock, HostTimezone, HostWallClock,
     },
     filesystem::{Dir, OpenMode},
     network::{SocketAddrCheck, SocketAddrUse},
@@ -30,6 +30,7 @@ pub struct WasiCtxBuilder {
     wall_clock: Box<dyn HostWallClock + Send>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     allowed_network_uses: AllowedNetworkUses,
+    timezone: Box<dyn HostTimezone + Send>,
     built: bool,
 }
 
@@ -80,6 +81,7 @@ impl WasiCtxBuilder {
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
             allowed_network_uses: AllowedNetworkUses::default(),
+            timezone: timezone(),
             built: false,
         }
     }
@@ -263,6 +265,7 @@ impl WasiCtxBuilder {
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
+            timezone,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -281,6 +284,7 @@ impl WasiCtxBuilder {
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
+            timezone,
         }
     }
 
@@ -302,6 +306,7 @@ pub struct WasiCtx {
     pub(crate) insecure_random_seed: u128,
     pub(crate) wall_clock: Box<dyn HostWallClock + Send>,
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send>,
+    pub(crate) timezone: Box<dyn HostTimezone + Send>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
     pub(crate) preopens: Vec<(Dir, String)>,
