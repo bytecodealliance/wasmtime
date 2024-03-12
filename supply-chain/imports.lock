@@ -13,6 +13,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-bforest]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -24,6 +28,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-bforest]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-bforest]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.cranelift-codegen]]
 version = "0.105.0"
@@ -37,6 +45,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-codegen]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-codegen-meta]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -48,6 +60,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-codegen-meta]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-codegen-meta]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.cranelift-codegen-shared]]
 version = "0.105.0"
@@ -61,6 +77,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-codegen-shared]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-control]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -72,6 +92,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-control]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-control]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.cranelift-entity]]
 version = "0.105.0"
@@ -85,6 +109,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-entity]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-frontend]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -96,6 +124,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-frontend]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-frontend]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.cranelift-interpreter]]
 version = "0.105.0"
@@ -109,6 +141,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-interpreter]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-isle]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -120,6 +156,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-isle]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-isle]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.cranelift-jit]]
 version = "0.105.0"
@@ -133,6 +173,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-jit]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-module]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -144,6 +188,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-module]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-module]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.cranelift-native]]
 version = "0.105.0"
@@ -157,6 +205,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-native]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-object]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -168,6 +220,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-object]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-object]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.cranelift-reader]]
 version = "0.105.0"
@@ -181,6 +237,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-reader]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-serde]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -193,6 +253,10 @@ audited_as = "0.105.0"
 version = "0.105.2"
 audited_as = "0.105.1"
 
+[[unpublished.cranelift-serde]]
+version = "0.105.3"
+audited_as = "0.105.2"
+
 [[unpublished.cranelift-wasm]]
 version = "0.105.0"
 audited_as = "0.104.0"
@@ -204,6 +268,10 @@ audited_as = "0.105.0"
 [[unpublished.cranelift-wasm]]
 version = "0.105.2"
 audited_as = "0.105.1"
+
+[[unpublished.cranelift-wasm]]
+version = "0.105.3"
+audited_as = "0.105.2"
 
 [[unpublished.wasi-cap-std-sync]]
 version = "18.0.0"
@@ -221,6 +289,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasi-common]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasi-tokio]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -237,6 +309,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-asm-macros]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -249,9 +325,17 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-asm-macros]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-c-api-impl]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-c-api-impl]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-c-api-impl]]
 version = "19.0.0"
@@ -262,6 +346,10 @@ version = "18.0.2"
 audited_as = "18.0.1"
 
 [[unpublished.wasmtime-c-api-macros]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
+[[unpublished.wasmtime-c-api-macros]]
 version = "19.0.0"
 audited_as = "18.0.1"
 
@@ -277,6 +365,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-cache]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-cli]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -288,6 +380,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-cli]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-cli]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "18.0.0"
@@ -301,6 +397,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-cli-flags]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-component-macro]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -312,6 +412,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-component-macro]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-component-macro]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-component-util]]
 version = "18.0.0"
@@ -325,6 +429,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-component-util]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-cranelift]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -336,6 +444,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-cranelift]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-cranelift]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-cranelift-shared]]
 version = "18.0.0"
@@ -349,6 +461,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-cranelift-shared]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-environ]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -360,6 +476,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-environ]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-environ]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-explorer]]
 version = "18.0.0"
@@ -373,6 +493,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-explorer]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-fiber]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -384,6 +508,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-fiber]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-fiber]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-jit-debug]]
 version = "18.0.0"
@@ -397,6 +525,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-jit-debug]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -408,6 +540,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-jit-icache-coherence]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-runtime]]
 version = "18.0.0"
@@ -421,6 +557,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-runtime]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-types]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -432,6 +572,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-types]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-types]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-wasi]]
 version = "18.0.0"
@@ -445,6 +589,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-wasi]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-wasi-http]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -456,6 +604,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-wasi-http]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-wasi-http]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "18.0.0"
@@ -469,6 +621,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-wasi-nn]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-wasi-threads]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -480,6 +636,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-wasi-threads]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-wasi-threads]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-wast]]
 version = "18.0.0"
@@ -493,6 +653,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-wast]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-winch]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -504,6 +668,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-winch]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-winch]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wasmtime-wit-bindgen]]
 version = "18.0.0"
@@ -517,6 +685,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wasmtime-wit-bindgen]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wasmtime-wmemcheck]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -528,6 +700,10 @@ audited_as = "18.0.0"
 [[unpublished.wasmtime-wmemcheck]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wasmtime-wmemcheck]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wiggle]]
 version = "18.0.0"
@@ -541,6 +717,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wiggle]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wiggle-generate]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -553,6 +733,10 @@ audited_as = "18.0.0"
 version = "18.0.2"
 audited_as = "18.0.1"
 
+[[unpublished.wiggle-generate]]
+version = "18.0.3"
+audited_as = "18.0.2"
+
 [[unpublished.wiggle-macro]]
 version = "18.0.0"
 audited_as = "17.0.0"
@@ -564,6 +748,10 @@ audited_as = "18.0.0"
 [[unpublished.wiggle-macro]]
 version = "18.0.2"
 audited_as = "18.0.1"
+
+[[unpublished.wiggle-macro]]
+version = "18.0.3"
+audited_as = "18.0.2"
 
 [[unpublished.wiggle-test]]
 version = "0.0.0"
@@ -580,6 +768,10 @@ audited_as = "0.16.0"
 [[unpublished.winch-codegen]]
 version = "0.16.2"
 audited_as = "0.16.1"
+
+[[unpublished.winch-codegen]]
+version = "0.16.3"
+audited_as = "0.16.2"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
@@ -767,6 +959,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-bforest]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -782,6 +980,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-bforest]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-bforest]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -803,6 +1007,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-codegen]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-codegen-meta]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -818,6 +1028,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-codegen-meta]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-codegen-meta]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -839,6 +1055,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-codegen-shared]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-control]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -854,6 +1076,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-control]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-control]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -875,6 +1103,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-entity]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-frontend]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -890,6 +1124,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-frontend]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-frontend]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -911,6 +1151,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-interpreter]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-isle]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -926,6 +1172,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-isle]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-isle]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -947,6 +1199,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-jit]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-module]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -962,6 +1220,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-module]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-module]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -983,6 +1247,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-native]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-object]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -998,6 +1268,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-object]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-object]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1019,6 +1295,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-reader]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-serde]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -1037,6 +1319,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-serde]]
+version = "0.105.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.cranelift-wasm]]
 version = "0.104.0"
 when = "2024-01-25"
@@ -1052,6 +1340,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-wasm]]
 version = "0.105.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-wasm]]
+version = "0.105.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1387,6 +1681,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasi-common]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasm-bindgen]]
 version = "0.2.87"
 when = "2023-06-12"
@@ -1496,6 +1796,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-asm-macros]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1511,6 +1817,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-asm-macros]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-asm-macros]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1520,12 +1832,24 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-c-api-impl]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-c-api-macros]]
 version = "18.0.1"
 when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-c-api-macros]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-cache]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1541,6 +1865,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-cache]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cache]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1562,6 +1892,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-cli]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-cli-flags]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1577,6 +1913,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-cli-flags]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cli-flags]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1598,6 +1940,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-component-macro]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-component-util]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1613,6 +1961,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-component-util]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-component-util]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1634,6 +1988,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-cranelift]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-cranelift-shared]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1649,6 +2009,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-cranelift-shared]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cranelift-shared]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1670,6 +2036,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-environ]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-explorer]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1685,6 +2057,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-explorer]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-explorer]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1706,6 +2084,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-fiber]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-jit-debug]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1721,6 +2105,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-jit-debug]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-jit-debug]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1742,6 +2132,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-jit-icache-coherence]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-runtime]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1757,6 +2153,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-runtime]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-runtime]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1778,6 +2180,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-types]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-wasi]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1793,6 +2201,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wasi]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1814,6 +2228,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-wasi-http]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-wasi-nn]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1829,6 +2249,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wasi-nn]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-nn]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1850,6 +2276,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-wasi-threads]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-wast]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1865,6 +2297,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wast]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wast]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1886,6 +2324,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-winch]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-wit-bindgen]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1904,6 +2348,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-wit-bindgen]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-wmemcheck]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1919,6 +2369,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wmemcheck]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wmemcheck]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1954,6 +2410,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wiggle]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wiggle-generate]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1972,6 +2434,12 @@ when = "2024-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wiggle-generate]]
+version = "18.0.2"
+when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wiggle-macro]]
 version = "17.0.0"
 when = "2024-01-25"
@@ -1987,6 +2455,12 @@ user-login = "wasmtime-publish"
 [[publisher.wiggle-macro]]
 version = "18.0.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wiggle-macro]]
+version = "18.0.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -2019,6 +2493,12 @@ user-login = "wasmtime-publish"
 [[publisher.winch-codegen]]
 version = "0.16.1"
 when = "2024-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.winch-codegen]]
+version = "0.16.2"
+when = "2024-02-28"
 user-id = 73222
 user-login = "wasmtime-publish"
 
