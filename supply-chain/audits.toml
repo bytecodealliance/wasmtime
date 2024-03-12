@@ -3739,6 +3739,12 @@ user-id = 73222 # wasmtime-publish
 start = "2024-02-23"
 end = "2025-02-23"
 
+[[trusted.wit-bindgen-rt]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-03-04"
+end = "2025-03-11"
+
 [[trusted.wit-bindgen-rust]]
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
