@@ -3403,6 +3403,18 @@
 (rule 0 (lower (fcvt_from_sint a @ (value_type $I32X4)))
       (x64_cvtdq2ps a))
 
+;; Base case: decompose the i64x2 input into two scalar registers and convert
+;; each of those into a float. Afterwards re-pack the two results into the final
+;; destination.
+(rule 0 (lower (fcvt_from_sint a @ (value_type $I64X2)))
+      (let (
+          (a Xmm a)
+          (zero Xmm (xmm_zero $F64X2))
+          (f0 Xmm (x64_cvtsi2sd $I64 zero (x64_movq_to_gpr a)))
+          (f1 Xmm (x64_cvtsi2sd $I64 zero (x64_movq_to_gpr (x64_pshufd a 0b11_10_11_10))))
+        )
+        (x64_unpcklpd f0 f1)))
+
 (rule 1 (lower (has_type $F64X2 (fcvt_from_sint (swiden_low a @ (value_type $I32X4)))))
       (x64_cvtdq2pd a))
 

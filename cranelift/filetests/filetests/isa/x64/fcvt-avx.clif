@@ -155,3 +155,41 @@ block0(v0: i64x2):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 
+function %i64x2_to_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_sint.f64x2 v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm2
+;   vxorpd  %xmm2, %xmm2, %xmm4
+;   vmovq   %xmm0, %r9
+;   vcvtsi2sd %xmm4, %r9, %xmm1
+;   vpshufd $238, %xmm0, %xmm2
+;   vmovq   %xmm2, %rcx
+;   vcvtsi2sd %xmm4, %rcx, %xmm6
+;   vunpcklpd %xmm1, %xmm6, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vxorpd %xmm2, %xmm2, %xmm4
+;   vmovq %xmm0, %r9
+;   vcvtsi2sdq %r9, %xmm4, %xmm1
+;   vpshufd $0xee, %xmm0, %xmm2
+;   vmovq %xmm2, %rcx
+;   vcvtsi2sdq %rcx, %xmm4, %xmm6
+;   vunpcklpd %xmm6, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

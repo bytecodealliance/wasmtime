@@ -2226,6 +2226,7 @@ pub(crate) fn emit(
                 SseOpcode::Cvtsd2ss => (LegacyPrefixes::_F2, 0x0F5A, 2),
                 SseOpcode::Sqrtss => (LegacyPrefixes::_F3, 0x0F51, 2),
                 SseOpcode::Sqrtsd => (LegacyPrefixes::_F2, 0x0F51, 2),
+                SseOpcode::Unpcklpd => (LegacyPrefixes::_66, 0x0F14, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -2451,6 +2452,7 @@ pub(crate) fn emit(
                 AvxOpcode::Vcvtsd2ss => (LP::_F2, OM::_0F, 0x5A),
                 AvxOpcode::Vsqrtss => (LP::_F3, OM::_0F, 0x51),
                 AvxOpcode::Vsqrtsd => (LP::_F2, OM::_0F, 0x51),
+                AvxOpcode::Vunpcklpd => (LP::_66, OM::_0F, 0x14),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()
