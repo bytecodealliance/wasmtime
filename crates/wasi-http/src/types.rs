@@ -148,27 +148,24 @@ async fn handler(
     mut request: http::Request<HyperOutgoingBody>,
     between_bytes_timeout: Duration,
 ) -> Result<IncomingResponseInternal, types::ErrorCode> {
-    let tcp_stream = timeout(
-        connect_timeout,
-        TcpStream::connect(authority.clone())
-    )
-    .await
-    .map_err(|_| types::ErrorCode::ConnectionTimeout)?
-    .map_err(|e| match e.kind() {
-        std::io::ErrorKind::AddrNotAvailable => {
-            dns_error("address not available".to_string(), 0)
-        }
-
-        _ => {
-            if e.to_string()
-                .starts_with("failed to lookup address information")
-            {
+    let tcp_stream = timeout(connect_timeout, TcpStream::connect(authority.clone()))
+        .await
+        .map_err(|_| types::ErrorCode::ConnectionTimeout)?
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::AddrNotAvailable => {
                 dns_error("address not available".to_string(), 0)
-            } else {
-                types::ErrorCode::ConnectionRefused
             }
-        }
-    })?;
+
+            _ => {
+                if e.to_string()
+                    .starts_with("failed to lookup address information")
+                {
+                    dns_error("address not available".to_string(), 0)
+                } else {
+                    types::ErrorCode::ConnectionRefused
+                }
+            }
+        })?;
 
     let (mut sender, worker) = if use_tls {
         #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]

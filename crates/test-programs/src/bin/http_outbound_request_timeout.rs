@@ -8,7 +8,7 @@ fn main() {
     let addr = SocketAddr::from(([203, 0, 113, 12], 80)).to_string();
     let timeout = Duration::from_millis(200);
     let start = Instant::now();
-    let connect_timeout : Option<u64> = Some(timeout.as_nanos() as u64);
+    let connect_timeout: Option<u64> = Some(timeout.as_nanos() as u64);
     let res = test_programs::http::request(
         Method::Get,
         Scheme::Http,
