@@ -19,7 +19,13 @@ pub mod sync_io {
                 "wasi:filesystem/types/error-code" => FsError,
             },
             with: {
-                "wasi:clocks/wall-clock": crate::bindings::clocks::wall_clock,
+                // This interface comes from the outer module, as it's
+                // sync/async agnostic.
+                "wasi:clocks": crate::bindings::clocks,
+
+                // Configure the resource types of the bound interfaces here
+                // to be the same as the async versions of the resources, that
+                // way everything has the same type.
                 "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
                 "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
                 "wasi:io/poll/pollable": super::super::io::poll::Pollable,
@@ -100,6 +106,9 @@ wasmtime::component::bindgen!({
         "wasi:sockets/network/error-code" => crate::SocketError,
     },
     with: {
+        // Configure all resources to be concrete types defined in this crate,
+        // so that way we get to use nice typed helper methods with
+        // `ResourceTable`.
         "wasi:sockets/network/network": super::network::Network,
         "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
         "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
