@@ -48,6 +48,7 @@ impl CompilerBuilder for Builder {
     }
 
     fn set_tunables(&mut self, tunables: wasmtime_environ::Tunables) -> Result<()> {
+        assert!(tunables.winch_callable);
         self.cranelift.set_tunables(tunables)?;
         Ok(())
     }

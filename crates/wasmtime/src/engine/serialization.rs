@@ -341,6 +341,7 @@ impl Metadata<'_> {
             guard_before_linear_memory,
             relaxed_simd_deterministic,
             tail_callable,
+            winch_callable,
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
@@ -402,6 +403,11 @@ impl Metadata<'_> {
             "relaxed simd deterministic semantics",
         )?;
         Self::check_bool(tail_callable, other.tail_callable, "WebAssembly tail calls")?;
+        Self::check_bool(
+            winch_callable,
+            other.winch_callable,
+            "Winch calling convention",
+        )?;
 
         Ok(())
     }

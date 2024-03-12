@@ -1719,6 +1719,13 @@ impl Config {
             tail_callable
         }
 
+        // If we're going to compile with winch, we must use the winch calling convention.
+        tunables.winch_callable = match self.compiler_config.strategy {
+            Strategy::Auto => !cfg!(feature = "cranelift") && cfg!(feature = "winch"),
+            Strategy::Cranelift => false,
+            Strategy::Winch => true,
+        };
+
         if tunables.static_memory_offset_guard_size < tunables.dynamic_memory_offset_guard_size {
             bail!("static memory guard size cannot be smaller than dynamic memory guard size");
         }

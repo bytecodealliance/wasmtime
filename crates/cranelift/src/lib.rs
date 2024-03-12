@@ -153,6 +153,15 @@ fn wasm_call_signature(
             CallConv::Tail
         }
 
+        // The winch calling convention is only implemented for x64 and aarch64
+        arch if tunables.tail_callable => {
+            assert!(
+                matches!(arch, Architecture::X86_64 | Architecture::Aarch64(_)),
+                "https://github.com/bytecodealliance/wasmtime/issues/6530"
+            );
+            CallConv::Winch
+        }
+
         // On s390x the "wasmtime" calling convention is used to give vectors
         // little-endian lane order at the ABI layer which should reduce the
         // need for conversion when operating on vector function arguments. By
