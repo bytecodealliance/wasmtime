@@ -50,7 +50,7 @@ impl TableData {
         mut index: ir::Value,
         addr_ty: ir::Type,
         enable_table_access_spectre_mitigation: bool,
-    ) -> ir::Value {
+    ) -> (ir::Value, ir::MemFlags) {
         let index_ty = pos.func.dfg.value_type(index);
 
         // Start with the bounds check. Trap if `index + 1 > bound`.
@@ -60,16 +60,10 @@ impl TableData {
         let oob = pos
             .ins()
             .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
-        pos.ins().trapnz(oob, ir::TrapCode::TableOutOfBounds);
 
-        // If Spectre mitigations are enabled, we will use a comparison to
-        // short-circuit the computed table element address to the start
-        // of the table on the misspeculation path when out-of-bounds.
-        let spectre_oob_cmp = if enable_table_access_spectre_mitigation {
-            Some((index, bound))
-        } else {
-            None
-        };
+        if !enable_table_access_spectre_mitigation {
+            pos.ins().trapnz(oob, ir::TrapCode::TableOutOfBounds);
+        }
 
         // Convert `index` to `addr_ty`.
         if index_ty != addr_ty {
@@ -91,14 +85,20 @@ impl TableData {
 
         let element_addr = pos.ins().iadd(base, offset);
 
-        if let Some((index, bound)) = spectre_oob_cmp {
-            let cond = pos
-                .ins()
-                .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
-            // If out-of-bounds, choose the table base on the misspeculation path.
-            pos.ins().select_spectre_guard(cond, base, element_addr)
+        let base_flags = ir::MemFlags::new()
+            .with_aligned()
+            .with_alias_region(Some(ir::AliasRegion::Table));
+        if enable_table_access_spectre_mitigation {
+            // Short-circuit the computed table element address to a null pointer
+            // when out-of-bounds. The consumer of this address will trap when
+            // trying to access it.
+            let zero = pos.ins().iconst(addr_ty, 0);
+            (
+                pos.ins().select_spectre_guard(oob, zero, element_addr),
+                base_flags.with_trap_code(Some(ir::TrapCode::TableOutOfBounds)),
+            )
         } else {
-            element_addr
+            (element_addr, base_flags.with_trap_code(None))
         }
     }
 }
