@@ -1644,7 +1644,7 @@
 ;; Helper for emitting the `min` instruction.
 (decl rv_min (XReg XReg) XReg)
 (rule (rv_min rs1 rs2)
-  (alu_rrr (AluOPRRR.Max) rs1 rs2))
+  (alu_rrr (AluOPRRR.Min) rs1 rs2))
 
 ;; Helper for emitting the `minu` instruction.
 (decl rv_minu (XReg XReg) XReg)
