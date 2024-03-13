@@ -93,6 +93,9 @@ tokio = [
 ]
 exit = [ "wasmtime", "dep:libc" ]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [[test]]
 name = "all"
 required-features = ["wasmtime", "sync", "tokio"]
