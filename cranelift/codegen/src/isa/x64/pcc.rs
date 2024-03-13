@@ -514,19 +514,7 @@ pub(crate) fn check(
             _ => undefined_result(ctx, vcode, dst, 64, 64),
         },
 
-        Inst::XmmCmove {
-            dst,
-            ref consequent,
-            ..
-        } => {
-            match <&RegMem>::from(consequent) {
-                RegMem::Mem { ref addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
+        Inst::XmmCmove { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 
         Inst::Push64 { ref src } => match <&RegMemImm>::from(src) {
             RegMemImm::Mem { ref addr } => {
