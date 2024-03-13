@@ -2880,7 +2880,14 @@
       (cmove ty cc consequent alternative))
 
 (rule (cmove_from_values (is_xmm_type ty) cc consequent alternative)
-      (cmove_xmm ty cc consequent alternative))
+      ;; force the `Value`s to `Xmm`s (in-register values) here:
+      ;; `cmove_xmm` can take an `XmmMemAligned`, but we don't want to
+      ;; allow load fusion here because `ty` may not be
+      ;; XMM-register-wide even if it is `is_xmm_type`. (E.g.,
+      ;; consider a cmove of `f64` values.)
+      (let ((cons Xmm consequent)
+            (alt Xmm alternative))
+        (cmove_xmm ty cc cons alt)))
 
 ;; Helper for creating `cmove` instructions with the logical OR of multiple
 ;; flags. Note that these instructions will always result in more than one
