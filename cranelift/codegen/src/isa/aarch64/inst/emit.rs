@@ -4,7 +4,7 @@ use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 use crate::binemit::StackMap;
-use crate::ir::{self, types::*, RelSourceLoc, TrapCode};
+use crate::ir::{self, types::*, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::trace;
 
@@ -655,8 +655,6 @@ pub struct EmitState {
     pub(crate) nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
-    /// Current source-code location corresponding to instruction to be emitted.
-    cur_srcloc: RelSourceLoc,
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
@@ -668,17 +666,12 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: Default::default(),
             ctrl_plane,
         }
     }
 
     fn pre_safepoint(&mut self, stack_map: StackMap) {
         self.stack_map = Some(stack_map);
-    }
-
-    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
-        self.cur_srcloc = srcloc;
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -697,10 +690,6 @@ impl EmitState {
 
     fn clear_post_insn(&mut self) {
         self.stack_map = None;
-    }
-
-    fn cur_srcloc(&self) -> RelSourceLoc {
-        self.cur_srcloc
     }
 }
 
@@ -1016,8 +1005,7 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1152,8 +1140,7 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1232,8 +1219,7 @@ impl MachInstEmit for Inst {
                 let rt = allocs.next(rt);
                 let rt2 = allocs.next(rt2);
                 let mem = mem.with_allocs(&mut allocs);
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1264,8 +1250,7 @@ impl MachInstEmit for Inst {
                 let rt = allocs.next(rt.to_reg());
                 let rt2 = allocs.next(rt2.to_reg());
                 let mem = mem.with_allocs(&mut allocs);
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1303,9 +1288,8 @@ impl MachInstEmit for Inst {
                 let rt = allocs.next(rt.to_reg());
                 let rt2 = allocs.next(rt2.to_reg());
                 let mem = mem.with_allocs(&mut allocs);
-                let srcloc = state.cur_srcloc();
 
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1349,9 +1333,8 @@ impl MachInstEmit for Inst {
                 let rt = allocs.next(rt);
                 let rt2 = allocs.next(rt2);
                 let mem = mem.with_allocs(&mut allocs);
-                let srcloc = state.cur_srcloc();
 
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1511,8 +1494,7 @@ impl MachInstEmit for Inst {
                 let rt = allocs.next_writable(rt);
                 let rn = allocs.next(rn);
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
@@ -1552,8 +1534,7 @@ impl MachInstEmit for Inst {
                 // again:
                 sink.bind_label(again_label, &mut state.ctrl_plane);
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
@@ -1677,8 +1658,7 @@ impl MachInstEmit for Inst {
                     }
                 }
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 if op == AtomicRMWLoopOp::Xchg {
@@ -1719,8 +1699,7 @@ impl MachInstEmit for Inst {
                     _ => panic!("Unsupported type: {}", ty),
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
@@ -1754,8 +1733,7 @@ impl MachInstEmit for Inst {
                 // again:
                 sink.bind_label(again_label, &mut state.ctrl_plane);
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
@@ -1782,8 +1760,7 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
@@ -1812,8 +1789,7 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rt = allocs.next_writable(rt);
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
@@ -1828,8 +1804,7 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rt = allocs.next(rt);
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
@@ -3002,8 +2977,7 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let (q, size) = size.enc_size();
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
