@@ -1,5 +1,32 @@
-use cranelift_codegen::ir::{self, condcodes::IntCC, InstBuilder};
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::{self, condcodes::IntCC, immediates::Imm64, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
+
+/// Size of a WebAssembly table, in elements.
+#[derive(Clone)]
+pub enum TableSize {
+    /// Non-resizable table.
+    Static {
+        /// Non-resizable tables have a constant size known at compile time.
+        bound: u32,
+    },
+    /// Resizable table.
+    Dynamic {
+        /// Resizable tables declare a Cranelift global value to load the
+        /// current size from.
+        bound_gv: ir::GlobalValue,
+    },
+}
+
+impl TableSize {
+    /// Get a CLIF value representing the current bounds of this table.
+    pub fn bound(&self, mut pos: FuncCursor, index_ty: ir::Type) -> ir::Value {
+        match *self {
+            TableSize::Static { bound } => pos.ins().iconst(index_ty, Imm64::new(i64::from(bound))),
+            TableSize::Dynamic { bound_gv } => pos.ins().global_value(index_ty, bound_gv),
+        }
+    }
+}
 
 /// An implementation of a WebAssembly table.
 #[derive(Clone)]
@@ -7,8 +34,8 @@ pub struct TableData {
     /// Global value giving the address of the start of the table.
     pub base_gv: ir::GlobalValue,
 
-    /// Global value giving the current bound of the table, in elements.
-    pub bound_gv: ir::GlobalValue,
+    /// The size of the table, in elements.
+    pub bound: TableSize,
 
     /// The size of a table element, in bytes.
     pub element_size: u32,
@@ -27,7 +54,7 @@ impl TableData {
         let index_ty = pos.func.dfg.value_type(index);
 
         // Start with the bounds check. Trap if `index + 1 > bound`.
-        let bound = pos.ins().global_value(index_ty, self.bound_gv);
+        let bound = self.bound.bound(pos.cursor(), index_ty);
 
         // `index > bound - 1` is the same as `index >= bound`.
         let oob = pos

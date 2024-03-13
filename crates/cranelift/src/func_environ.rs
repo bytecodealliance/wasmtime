@@ -14,8 +14,8 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
     FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
-    MemoryIndex, TableData, TableIndex, TargetEnvironment, TypeIndex, WasmHeapType, WasmRefType,
-    WasmResult, WasmValType,
+    MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment, TypeIndex, WasmHeapType,
+    WasmRefType, WasmResult, WasmValType,
 };
 use std::mem;
 use wasmparser::Operator;
@@ -912,23 +912,31 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             global_type: pointer_type,
             flags: MemFlags::trusted(),
         });
-        let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
-            offset: Offset32::new(current_elements_offset),
-            global_type: ir::Type::int(
-                u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
-            )
-            .unwrap(),
-            flags: MemFlags::trusted(),
-        });
 
-        let element_size = self
-            .reference_type(self.module.table_plans[index].table.wasm_ty.heap_type)
-            .bytes();
+        let table = &self.module.table_plans[index].table;
+        let element_size = self.reference_type(table.wasm_ty.heap_type).bytes();
+
+        let bound = if Some(table.minimum) == table.maximum {
+            TableSize::Static {
+                bound: table.minimum,
+            }
+        } else {
+            TableSize::Dynamic {
+                bound_gv: func.create_global_value(ir::GlobalValueData::Load {
+                    base: ptr,
+                    offset: Offset32::new(current_elements_offset),
+                    global_type: ir::Type::int(
+                        u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
+                    )
+                    .unwrap(),
+                    flags: MemFlags::trusted(),
+                }),
+            }
+        };
 
         self.tables[index] = Some(TableData {
             base_gv,
-            bound_gv,
+            bound,
             element_size,
         });
     }
@@ -2494,12 +2502,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_table_size(
         &mut self,
-        mut pos: FuncCursor,
+        pos: FuncCursor,
         table_index: TableIndex,
     ) -> WasmResult<ir::Value> {
         self.ensure_table_exists(pos.func, table_index);
         let table_data = self.tables[table_index].as_ref().unwrap();
-        Ok(pos.ins().global_value(ir::types::I32, table_data.bound_gv))
+        Ok(table_data.bound.bound(pos, ir::types::I32))
     }
 
     fn translate_table_copy(

@@ -10,7 +10,7 @@ use crate::func_translator::FuncTranslator;
 use crate::state::FuncTranslationState;
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap,
-    HeapData, HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeConvert, TypeIndex,
+    HeapData, HeapStyle, Memory, MemoryIndex, Table, TableIndex, TableSize, TypeConvert, TypeIndex,
     WasmFuncType, WasmHeapType, WasmResult,
 };
 use crate::{TableData, WasmValType};
@@ -263,16 +263,27 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
             // When tables in wasm become "growable", revisit whether this can be readonly or not.
             flags: ir::MemFlags::trusted().with_readonly(),
         });
-        let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
-            base: vmctx,
-            offset: Offset32::new(0),
-            global_type: I32,
-            flags: ir::MemFlags::trusted().with_readonly(),
-        });
+
+        let table = &self.mod_info.tables[index].entity;
+
+        let bound = if Some(table.minimum) == table.maximum {
+            TableSize::Static {
+                bound: table.minimum,
+            }
+        } else {
+            TableSize::Dynamic {
+                bound_gv: func.create_global_value(ir::GlobalValueData::Load {
+                    base: vmctx,
+                    offset: Offset32::new(0),
+                    global_type: I32,
+                    flags: ir::MemFlags::trusted().with_readonly(),
+                }),
+            }
+        };
 
         self.tables[index] = Some(TableData {
             base_gv,
-            bound_gv,
+            bound,
             element_size: u32::from(self.pointer_bytes()) * 2,
         });
     }
