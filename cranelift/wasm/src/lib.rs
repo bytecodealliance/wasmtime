@@ -50,7 +50,7 @@ pub use crate::func_translator::FuncTranslator;
 pub use crate::heap::{Heap, HeapData, HeapStyle};
 pub use crate::module_translator::translate_module;
 pub use crate::state::FuncTranslationState;
-pub use crate::table::TableData;
+pub use crate::table::{TableData, TableSize};
 pub use crate::translation_utils::*;
 pub use cranelift_frontend::FunctionBuilder;
 pub use wasmtime_types::*;
