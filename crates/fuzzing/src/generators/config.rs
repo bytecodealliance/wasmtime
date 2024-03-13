@@ -100,12 +100,12 @@ impl Config {
         self.module_config.generate(input, default_fuel)
     }
 
-    /// Tests whether this configuration is capable of running all spec tests.
-    pub fn is_spectest_compliant(&self) -> bool {
+    /// Tests whether this configuration is capable of running all wast tests.
+    pub fn is_wast_test_compliant(&self) -> bool {
         let config = &self.module_config.config;
 
         // Check for wasm features that must be disabled to run spec tests
-        if config.memory64_enabled || config.threads_enabled {
+        if config.memory64_enabled {
             return false;
         }
 
@@ -114,6 +114,8 @@ impl Config {
             || !config.reference_types_enabled
             || !config.multi_value_enabled
             || !config.simd_enabled
+            || !config.threads_enabled
+            || config.max_memories <= 1
         {
             return false;
         }
@@ -412,7 +414,7 @@ pub struct WasmtimeConfig {
     canonicalize_nans: bool,
     interruptable: bool,
     pub(crate) consume_fuel: bool,
-    epoch_interruption: bool,
+    pub(crate) epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
     pub memory_config: MemoryConfig,
     force_jump_veneers: bool,

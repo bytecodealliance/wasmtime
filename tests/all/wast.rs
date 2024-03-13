@@ -8,7 +8,7 @@ use wasmtime::{
 };
 use wasmtime_environ::WASM_PAGE_SIZE;
 use wasmtime_runtime::MpkEnabled;
-use wasmtime_wast::WastContext;
+use wasmtime_wast::{SpectestConfig, WastContext};
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 
@@ -162,7 +162,10 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     for (engine, desc) in engines {
         let store = Store::new(&engine, ());
         let mut wast_context = WastContext::new(store);
-        wast_context.register_spectest(use_shared_memory)?;
+        wast_context.register_spectest(&SpectestConfig {
+            use_shared_memory,
+            suppress_prints: false,
+        })?;
         wast_context
             .run_buffer(wast.to_str().unwrap(), &wast_bytes)
             .with_context(|| format!("failed to run spec test with {desc} engine"))?;

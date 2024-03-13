@@ -68,8 +68,8 @@ test = false
 doc = false
 
 [[bin]]
-name = "spectests"
-path = "fuzz_targets/spectests.rs"
+name = "wast_tests"
+path = "fuzz_targets/wast_tests.rs"
 test = false
 doc = false
 
