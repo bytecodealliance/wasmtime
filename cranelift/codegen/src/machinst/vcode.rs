@@ -842,7 +842,6 @@ impl<I: VCodeInst> VCode<I> {
             if block == self.entry {
                 trace!(" -> entry block");
                 buffer.start_srcloc(Default::default());
-                state.pre_sourceloc(Default::default());
                 for inst in &self.abi.gen_prologue() {
                     do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                 }
@@ -910,7 +909,6 @@ impl<I: VCodeInst> VCode<I> {
                             buffer.start_srcloc(srcloc);
                             cur_srcloc = Some(srcloc);
                         }
-                        state.pre_sourceloc(cur_srcloc.unwrap_or_default());
 
                         // If this is a safepoint, compute a stack map
                         // and pass it to the emit state.

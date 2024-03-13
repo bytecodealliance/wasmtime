@@ -14,7 +14,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlr x0, [x1]
+;   stlr x0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i32(i32, i64) {
@@ -30,7 +30,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlr w0, [x1]
+;   stlr w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i16(i16, i64) {
@@ -46,7 +46,7 @@ block0(v0: i16, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlrh w0, [x1]
+;   stlrh w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i8(i8, i64) {
@@ -62,7 +62,7 @@ block0(v0: i8, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlrb w0, [x1]
+;   stlrb w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i64_i32(i64, i64) {
@@ -79,7 +79,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlr w0, [x1]
+;   stlr w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i64_i16(i64, i64) {
@@ -96,7 +96,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlrh w0, [x1]
+;   stlrh w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i64_i8(i64, i64) {
@@ -113,7 +113,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlrb w0, [x1]
+;   stlrb w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i32_i16(i32, i64) {
@@ -130,7 +130,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlrh w0, [x1]
+;   stlrh w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i32_i8(i32, i64) {
@@ -147,6 +147,6 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stlrb w0, [x1]
+;   stlrb w0, [x1] ; trap: heap_oob
 ;   ret
 

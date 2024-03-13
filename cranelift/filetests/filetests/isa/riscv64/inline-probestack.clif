@@ -144,7 +144,7 @@ block0:
 ;   lui t3, 1
 ;   bgeu t3, t6, 0x14
 ;   sub t5, sp, t6
-;   sb zero, 0(t5)
+;   sb zero, 0(t5) ; trap: heap_oob
 ;   sub t6, t6, t3
 ;   j -0x10
 ;   lui t6, 0xfffe8

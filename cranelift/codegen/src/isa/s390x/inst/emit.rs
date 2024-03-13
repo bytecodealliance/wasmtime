@@ -1,7 +1,7 @@
 //! S390x ISA: binary code emission.
 
 use crate::binemit::StackMap;
-use crate::ir::{MemFlags, RelSourceLoc, TrapCode};
+use crate::ir::{MemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::trace;
@@ -185,10 +185,7 @@ pub fn mem_emit(
     }
 
     if add_trap && mem.can_trap() {
-        let srcloc = state.cur_srcloc();
-        if !srcloc.is_default() {
-            sink.add_trap(TrapCode::HeapOutOfBounds);
-        }
+        sink.add_trap(TrapCode::HeapOutOfBounds);
     }
 
     match &mem {
@@ -249,10 +246,7 @@ pub fn mem_rs_emit(
     }
 
     if add_trap && mem.can_trap() {
-        let srcloc = state.cur_srcloc();
-        if !srcloc.is_default() {
-            sink.add_trap(TrapCode::HeapOutOfBounds);
-        }
+        sink.add_trap(TrapCode::HeapOutOfBounds);
     }
 
     match &mem {
@@ -301,10 +295,7 @@ pub fn mem_imm8_emit(
     }
 
     if add_trap && mem.can_trap() {
-        let srcloc = state.cur_srcloc();
-        if !srcloc.is_default() {
-            sink.add_trap(TrapCode::HeapOutOfBounds);
-        }
+        sink.add_trap(TrapCode::HeapOutOfBounds);
     }
 
     match &mem {
@@ -349,10 +340,7 @@ pub fn mem_imm16_emit(
     }
 
     if add_trap && mem.can_trap() {
-        let srcloc = state.cur_srcloc();
-        if !srcloc.is_default() {
-            sink.add_trap(TrapCode::HeapOutOfBounds);
-        }
+        sink.add_trap(TrapCode::HeapOutOfBounds);
     }
 
     match &mem {
@@ -373,13 +361,10 @@ pub fn mem_mem_emit(
     opcode_ss: u8,
     add_trap: bool,
     sink: &mut MachBuffer<Inst>,
-    state: &mut EmitState,
+    _state: &mut EmitState,
 ) {
     if add_trap && (dst.can_trap() || src.can_trap()) {
-        let srcloc = state.cur_srcloc();
-        if srcloc != Default::default() {
-            sink.add_trap(TrapCode::HeapOutOfBounds);
-        }
+        sink.add_trap(TrapCode::HeapOutOfBounds);
     }
 
     put(
@@ -421,10 +406,7 @@ pub fn mem_vrx_emit(
     }
 
     if add_trap && mem.can_trap() {
-        let srcloc = state.cur_srcloc();
-        if !srcloc.is_default() {
-            sink.add_trap(TrapCode::HeapOutOfBounds);
-        }
+        sink.add_trap(TrapCode::HeapOutOfBounds);
     }
 
     match &mem {
@@ -1317,8 +1299,6 @@ pub struct EmitState {
     pub(crate) virtual_sp_offset: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
-    /// Current source-code location corresponding to instruction to be emitted.
-    cur_srcloc: RelSourceLoc,
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
@@ -1330,17 +1310,12 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             initial_sp_offset: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: Default::default(),
             ctrl_plane,
         }
     }
 
     fn pre_safepoint(&mut self, stack_map: StackMap) {
         self.stack_map = Some(stack_map);
-    }
-
-    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
-        self.cur_srcloc = srcloc;
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -1359,10 +1334,6 @@ impl EmitState {
 
     fn clear_post_insn(&mut self) {
         self.stack_map = None;
-    }
-
-    fn cur_srcloc(&self) -> RelSourceLoc {
-        self.cur_srcloc
     }
 }
 

@@ -16,7 +16,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, rw
-;   ld a0, 0(a0)
+;   ld a0, 0(a0) ; trap: heap_oob
 ;   fence r, rw
 ;   ret
 
@@ -34,7 +34,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, rw
-;   lw a0, 0(a0)
+;   lw a0, 0(a0) ; trap: heap_oob
 ;   fence r, rw
 ;   ret
 
@@ -55,7 +55,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, rw
-;   lw a4, 0(a0)
+;   lw a4, 0(a0) ; trap: heap_oob
 ;   fence r, rw
 ;   slli a3, a4, 0x20
 ;   srli a0, a3, 0x20

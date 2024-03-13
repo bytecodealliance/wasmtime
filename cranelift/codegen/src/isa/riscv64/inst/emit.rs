@@ -1,7 +1,7 @@
 //! Riscv64 ISA: binary code emission.
 
 use crate::binemit::StackMap;
-use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
+use crate::ir::{self, LibCall, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
     CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
@@ -52,8 +52,6 @@ pub struct EmitState {
     pub(crate) nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
-    /// Current source-code location corresponding to instruction to be emitted.
-    cur_srcloc: RelSourceLoc,
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
@@ -66,10 +64,6 @@ impl EmitState {
     fn take_stack_map(&mut self) -> Option<StackMap> {
         self.stack_map.take()
     }
-
-    fn cur_srcloc(&self) -> RelSourceLoc {
-        self.cur_srcloc
-    }
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -81,7 +75,6 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: RelSourceLoc::default(),
             ctrl_plane,
             vstate: EmitVState::Unknown,
         }
@@ -89,10 +82,6 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_safepoint(&mut self, stack_map: StackMap) {
         self.stack_map = Some(stack_map);
-    }
-
-    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
-        self.cur_srcloc = srcloc;
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -641,8 +630,7 @@ impl Inst {
                     _ => return None,
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -713,8 +701,7 @@ impl Inst {
                     encode_cl_type(op, rd, base, imm5)
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -745,8 +732,7 @@ impl Inst {
                     _ => return None,
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -813,8 +799,7 @@ impl Inst {
                     encode_cs_type(op, src, base, imm5)
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -954,8 +939,7 @@ impl Inst {
                     | reg_to_gpr_num(rs) << 15
                     | alu_op.rs2_funct5() << 20
                     | alu_op.funct7() << 25;
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && alu_op.is_convert_to_int() {
+                if alu_op.is_convert_to_int() {
                     sink.add_trap(TrapCode::BadConversionToInteger);
                 }
                 sink.put4(x);
@@ -1093,8 +1077,7 @@ impl Inst {
                     }
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1117,8 +1100,7 @@ impl Inst {
                     }
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -1510,10 +1492,7 @@ impl Inst {
                 src,
                 amo,
             } => {
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() {
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
+                sink.add_trap(TrapCode::HeapOutOfBounds);
                 let x = op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | op.funct3() << 12
@@ -2739,8 +2718,7 @@ impl Inst {
                     }
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -2787,8 +2765,7 @@ impl Inst {
                     }
                 };
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
+                if !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
