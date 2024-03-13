@@ -15,8 +15,8 @@ filesystems, Berkely sockets, clocks, and random numbers.
 
 [The Component Model] is a Wasm architecture that provides a binary format for
 portable, cross-language composition. More specifically, it supports the use of
-interfaces via which components can communicate with each other. The main
-interfaces that the component model supports are those from WASI.
+interfaces via which components can communicate with each other. WASI
+is defined in terms of component model interfaces.
 
 Wasmtime runs WebAssembly code [outside of the Web], and can be used both as a
 command-line utility or as a library embedded in a larger application. It
