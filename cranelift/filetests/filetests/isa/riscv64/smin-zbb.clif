@@ -12,14 +12,14 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   sext.b a3,a0
 ;   sext.b a5,a1
-;   max a0,a3,a5
+;   min a0,a3,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x16, 0x45, 0x60
 ;   .byte 0x93, 0x97, 0x45, 0x60
-;   .byte 0x33, 0xe5, 0xf6, 0x0a
+;   .byte 0x33, 0xc5, 0xf6, 0x0a
 ;   ret
 
 function %smin_i16(i16, i16) -> i16{
@@ -32,14 +32,14 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   sext.h a3,a0
 ;   sext.h a5,a1
-;   max a0,a3,a5
+;   min a0,a3,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x16, 0x55, 0x60
 ;   .byte 0x93, 0x97, 0x55, 0x60
-;   .byte 0x33, 0xe5, 0xf6, 0x0a
+;   .byte 0x33, 0xc5, 0xf6, 0x0a
 ;   ret
 
 function %smin_i32(i32, i32) -> i32{
@@ -52,14 +52,14 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   sext.w a3,a0
 ;   sext.w a5,a1
-;   max a0,a3,a5
+;   min a0,a3,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a3, a0
 ;   sext.w a5, a1
-;   .byte 0x33, 0xe5, 0xf6, 0x0a
+;   .byte 0x33, 0xc5, 0xf6, 0x0a
 ;   ret
 
 function %smin_i64(i64, i64) -> i64{
@@ -70,12 +70,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   max a0,a0,a1
+;   min a0,a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x33, 0x65, 0xb5, 0x0a
+;   .byte 0x33, 0x45, 0xb5, 0x0a
 ;   ret
 
 function %smin_i128(i128, i128) -> i128{
