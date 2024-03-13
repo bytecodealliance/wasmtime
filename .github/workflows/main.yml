@@ -354,6 +354,12 @@ jobs:
     - run: rustup component add clippy
     - run: cargo clippy --workspace
 
+    # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
+    # that there's no git changes.
+    - name: Re-vendor WIT
+      run: ./ci/vendor-wit.sh
+    - run: git diff --exit-code
+
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
       if: failure() && github.event_name != 'pull_request'
@@ -525,12 +531,6 @@ jobs:
       env:
         RUST_BACKTRACE: 1
       if: matrix.target == '' && matrix.os != 'windows-latest' && needs.determine.outputs.test-capi
-
-    # Ensure wit definitions are in sync: both wasmtime-wasi and wasmtime-wasi-http need their own
-    # copy of the wit definitions so publishing works, but we need to ensure they are identical copies.
-    - name: Check that the wasi and wasi-http wit directories agree
-      run: |
-        diff -ru crates/wasi/wit crates/wasi-http/wit
 
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
