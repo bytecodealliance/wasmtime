@@ -588,8 +588,9 @@ dependencies = [
  "cranelift-isle",
  "criterion",
  "gimli",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "log",
+ "metrics",
  "regalloc2",
  "serde",
  "serde_derive",
@@ -662,7 +663,7 @@ name = "cranelift-frontend"
 version = "0.107.0"
 dependencies = [
  "cranelift-codegen",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "log",
  "similar",
  "smallvec",
@@ -732,7 +733,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-control",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "serde",
  "serde_derive",
 ]
@@ -805,6 +806,8 @@ dependencies = [
  "fxhash",
  "indicatif",
  "log",
+ "metrics",
+ "metrics-util",
  "pretty_env_logger",
  "rayon",
  "regalloc2",
@@ -825,7 +828,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "itertools 0.12.1",
  "log",
  "serde",
@@ -1051,6 +1054,12 @@ checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
 ]
+
+[[package]]
+name = "endian-type"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "env_logger"
@@ -1308,7 +1317,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fb8d784f27acf97159b40fc4db5ecd8aa23b9ad5ef69cdd136d3bc80665f0c0"
 dependencies = [
  "fallible-iterator",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "stable_deref_trait",
 ]
 
@@ -1330,7 +1339,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "slab",
  "tokio",
  "tokio-util",
@@ -1360,9 +1369,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.14.0"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
  "ahash",
 ]
@@ -1505,12 +1514,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.0.0"
+version = "2.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5477fe2230a79769d8dc68e0eabf5437907c0457a5614a9e8dddb67f65eb65d"
+checksum = "7b0b929d511467233429c45a44ac1dcaa21ba0f5ba11e4879e6ed28ddb4f9df4"
 dependencies = [
  "equivalent",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "serde",
 ]
 
@@ -1793,6 +1802,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrics"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd71d9db2e4287c3407fa04378b8c2ee570aebe0854431562cdd89ca091854f4"
+dependencies = [
+ "ahash",
+ "portable-atomic",
+]
+
+[[package]]
+name = "metrics-util"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ece71ab046dcf45604e573329966ec1db5ff4b81cfa170a924ff4c959ab5451a"
+dependencies = [
+ "aho-corasick",
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "hashbrown 0.14.3",
+ "indexmap 2.2.5",
+ "metrics",
+ "num_cpus",
+ "ordered-float",
+ "quanta",
+ "radix_trie",
+ "sketches-ddsketch",
+]
+
+[[package]]
 name = "min-platform-host"
 version = "20.0.0"
 dependencies = [
@@ -1819,6 +1857,15 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "nibble_vec"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43"
+dependencies = [
+ "smallvec",
 ]
 
 [[package]]
@@ -1872,8 +1919,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8dd6c0cdf9429bce006e1362bfce61fa1bfd8c898a643ed8d2b471934701d3d"
 dependencies = [
  "crc32fast",
- "hashbrown 0.14.0",
- "indexmap 2.0.0",
+ "hashbrown 0.14.3",
+ "indexmap 2.2.5",
  "memchr",
 ]
 
@@ -1952,6 +1999,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ordered-float"
+version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a76df7075c7d4d01fdcb46c912dd17fba5b60c78ea480b475f2b6ab6f666584e"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2016,6 +2072,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2070,6 +2132,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ca0b7bac0b97248c40bb77288fc52029cf1459c0461ea1b05ee32ccf011de2c"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "once_cell",
+ "raw-cpuid",
+ "wasi",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2088,6 +2165,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "573015e8ab27661678357f27dc26460738fd2b6c86e46f386fde94cb5d913105"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "radix_trie"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c069c179fcdc6a2fe24d8d18305cf085fdbd4f922c041943e203685d6a1c58fd"
+dependencies = [
+ "endian-type",
+ "nibble_vec",
 ]
 
 [[package]]
@@ -2127,6 +2214,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
  "rand_core",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d86a7c4638d42c44551f4791a20e687dbb4c3de1f33c43dd71e355cd429def1"
+dependencies = [
+ "bitflags 2.4.1",
 ]
 
 [[package]]
@@ -2463,6 +2559,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62ac7f900db32bf3fd12e0117dd3dc4da74bc52ebaac97f39668446d89694803"
 
 [[package]]
+name = "sketches-ddsketch"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85636c14b73d81f541e525f585c0a2109e6744e1565b5c1668e31c70c10ed65c"
+
+[[package]]
 name = "slab"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2558,13 +2660,13 @@ checksum = "7c68d531d83ec6c531150584c42a4290911964d5f0d79132b193b67252a23b71"
 
 [[package]]
 name = "syn"
-version = "1.0.92"
+version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ff7c592601f11445996a06f8ad0c27f094a58857c2f89e97974ab9235b92c52"
+checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
 dependencies = [
  "proc-macro2",
  "quote",
- "unicode-xid",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -2640,7 +2742,7 @@ checksum = "38f0c854faeb68a048f0f2dc410c5ddae3bf83854ef0e4977d58306a5edef50e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.92",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2803,7 +2905,7 @@ version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ffdf896f8daaabf9b66ba8e77ea1ed5ed0f72821b398aba62352e95062951"
 dependencies = [
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -3140,7 +3242,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fd83062c17b9f4985d438603cde0a5e8c5c8198201a6937f778b607924c7da2"
 dependencies = [
  "anyhow",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3172,7 +3274,7 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "flagset",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "leb128",
  "wasm-encoder",
 ]
@@ -3224,7 +3326,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84e5df6dba6c0d7fafc63a450f1738451ed7a0b52295d83e868218fa286bf708"
 dependencies = [
  "bitflags 2.4.1",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "semver",
 ]
 
@@ -3260,7 +3362,7 @@ dependencies = [
  "encoding_rs",
  "fxprof-processed-profile",
  "gimli",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "ittapi",
  "libc",
  "log",
@@ -3509,7 +3611,7 @@ dependencies = [
  "cranelift-entity",
  "env_logger",
  "gimli",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "log",
  "object 0.33.0",
  "rustc-demangle",
@@ -3649,7 +3751,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "encoding_rs",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "libc",
  "log",
  "mach2",
@@ -3815,7 +3917,7 @@ version = "20.0.0"
 dependencies = [
  "anyhow",
  "heck",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "wit-parser",
 ]
 
@@ -4235,7 +4337,7 @@ checksum = "d8a39a15d1ae2077688213611209849cad40e9e5cccf6e61951a425850677ff3"
 dependencies = [
  "anyhow",
  "heck",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "wasm-metadata",
  "wit-bindgen-core",
  "wit-component",
@@ -4263,7 +4365,7 @@ checksum = "421c0c848a0660a8c22e2fd217929a0191f14476b68962afd2af89fd22e39825"
 dependencies = [
  "anyhow",
  "bitflags 2.4.1",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "log",
  "serde",
  "serde_derive",
@@ -4282,7 +4384,7 @@ checksum = "196d3ecfc4b759a8573bf86a9b3f8996b304b3732e4c7de81655f875f6efdca6"
 dependencies = [
  "anyhow",
  "id-arena",
- "indexmap 2.0.0",
+ "indexmap 2.2.5",
  "log",
  "semver",
  "serde",
