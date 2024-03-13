@@ -1384,8 +1384,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: ir::Value,
     ) -> WasmResult<ir::Value> {
         let plan = &self.module.table_plans[table_index];
-        self.ensure_table_exists(builder.func, table_index);
-        let table = self.tables[table_index];
         match plan.table.wasm_ty.heap_type {
             WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
                 match plan.style {
@@ -1431,6 +1429,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder.insert_block_after(continue_block, gc_block);
 
                 // Load the table element.
+                self.ensure_table_exists(builder.func, table_index);
+                let table = self.tables[table_index];
                 let elem_addr = builder.ins().table_addr(pointer_type, table, index, 0);
                 let flags = ir::MemFlags::trusted().with_table();
                 let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
