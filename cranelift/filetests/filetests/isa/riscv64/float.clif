@@ -280,7 +280,7 @@ block0(v0: f32):
 ;   fabs.s fa0, fa5
 ;   flt.s a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.s a3, fa5, rup
+;   fcvt.l.s a3, fa5, rup ; trap: bad_toint
 ;   fcvt.s.l fa0, a3, rup
 ;   fsgnj.s fa0, fa0, fa5
 ;   j 0x10
@@ -307,7 +307,7 @@ block0(v0: f64):
 ;   feq.d a3, fa5, fa5
 ;   beqz a3, 0x38
 ;   auipc t6, 0
-;   ld t6, 0xc(t6)
+;   ld t6, 0xc(t6) ; trap: heap_oob
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x40, 0x43
@@ -315,7 +315,7 @@ block0(v0: f64):
 ;   fabs.d fa0, fa5
 ;   flt.d a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.d a3, fa5, rup
+;   fcvt.l.d a3, fa5, rup ; trap: bad_toint
 ;   fcvt.d.l fa0, a3, rup
 ;   fsgnj.d fa0, fa0, fa5
 ;   j 0x10
@@ -346,7 +346,7 @@ block0(v0: f32):
 ;   fabs.s fa0, fa5
 ;   flt.s a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.s a3, fa5, rdn
+;   fcvt.l.s a3, fa5, rdn ; trap: bad_toint
 ;   fcvt.s.l fa0, a3, rdn
 ;   fsgnj.s fa0, fa0, fa5
 ;   j 0x10
@@ -373,7 +373,7 @@ block0(v0: f64):
 ;   feq.d a3, fa5, fa5
 ;   beqz a3, 0x38
 ;   auipc t6, 0
-;   ld t6, 0xc(t6)
+;   ld t6, 0xc(t6) ; trap: heap_oob
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x40, 0x43
@@ -381,7 +381,7 @@ block0(v0: f64):
 ;   fabs.d fa0, fa5
 ;   flt.d a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.d a3, fa5, rdn
+;   fcvt.l.d a3, fa5, rdn ; trap: bad_toint
 ;   fcvt.d.l fa0, a3, rdn
 ;   fsgnj.d fa0, fa0, fa5
 ;   j 0x10
@@ -412,7 +412,7 @@ block0(v0: f32):
 ;   fabs.s fa0, fa5
 ;   flt.s a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.s a3, fa5, rtz
+;   fcvt.l.s a3, fa5, rtz ; trap: bad_toint
 ;   fcvt.s.l fa0, a3, rtz
 ;   fsgnj.s fa0, fa0, fa5
 ;   j 0x10
@@ -439,7 +439,7 @@ block0(v0: f64):
 ;   feq.d a3, fa5, fa5
 ;   beqz a3, 0x38
 ;   auipc t6, 0
-;   ld t6, 0xc(t6)
+;   ld t6, 0xc(t6) ; trap: heap_oob
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x40, 0x43
@@ -447,7 +447,7 @@ block0(v0: f64):
 ;   fabs.d fa0, fa5
 ;   flt.d a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.d a3, fa5, rtz
+;   fcvt.l.d a3, fa5, rtz ; trap: bad_toint
 ;   fcvt.d.l fa0, a3, rtz
 ;   fsgnj.d fa0, fa0, fa5
 ;   j 0x10
@@ -478,7 +478,7 @@ block0(v0: f32):
 ;   fabs.s fa0, fa5
 ;   flt.s a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.s a3, fa5, rne
+;   fcvt.l.s a3, fa5, rne ; trap: bad_toint
 ;   fcvt.s.l fa0, a3, rne
 ;   fsgnj.s fa0, fa0, fa5
 ;   j 0x10
@@ -505,7 +505,7 @@ block0(v0: f64):
 ;   feq.d a3, fa5, fa5
 ;   beqz a3, 0x38
 ;   auipc t6, 0
-;   ld t6, 0xc(t6)
+;   ld t6, 0xc(t6) ; trap: heap_oob
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x40, 0x43
@@ -513,7 +513,7 @@ block0(v0: f64):
 ;   fabs.d fa0, fa5
 ;   flt.d a3, fa4, fa0
 ;   bnez a3, 0x1c
-;   fcvt.l.d a3, fa5, rne
+;   fcvt.l.d a3, fa5, rne ; trap: bad_toint
 ;   fcvt.d.l fa0, a3, rne
 ;   fsgnj.d fa0, fa0, fa5
 ;   j 0x10
@@ -622,7 +622,7 @@ block0(v0: f32):
 ;   fle.s a4, fa2, fa0
 ;   beqz a4, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.s a0, fa0, rtz
+;   fcvt.wu.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function %f34(f32) -> i32 {
@@ -663,7 +663,7 @@ block0(v0: f32):
 ;   fle.s a0, fa4, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.w.s a0, fa0, rtz
+;   fcvt.w.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function %f35(f32) -> i64 {
@@ -702,7 +702,7 @@ block0(v0: f32):
 ;   fle.s a4, fa2, fa0
 ;   beqz a4, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.lu.s a0, fa0, rtz
+;   fcvt.lu.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function %f36(f32) -> i64 {
@@ -743,7 +743,7 @@ block0(v0: f32):
 ;   fle.s a0, fa4, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.l.s a0, fa0, rtz
+;   fcvt.l.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function %f37(f64) -> i32 {
@@ -786,7 +786,7 @@ block0(v0: f64):
 ;   fle.d a2, fa1, fa0
 ;   beqz a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.d a0, fa0, rtz
+;   fcvt.wu.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function %f38(f64) -> i32 {
@@ -828,7 +828,7 @@ block0(v0: f64):
 ;   fle.d a0, fa4, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.w.d a0, fa0, rtz
+;   fcvt.w.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x20, 0x00
@@ -874,7 +874,7 @@ block0(v0: f64):
 ;   fle.d a2, fa1, fa0
 ;   beqz a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.lu.d a0, fa0, rtz
+;   fcvt.lu.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function %f40(f64) -> i64 {
@@ -916,7 +916,7 @@ block0(v0: f64):
 ;   fle.d a0, fa4, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.l.d a0, fa0, rtz
+;   fcvt.l.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x01, 0x00, 0x00, 0x00
@@ -1066,7 +1066,7 @@ block0(v0: f32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.wu.s a2, fa0, rtz
+;   fcvt.wu.s a2, fa0, rtz ; trap: bad_toint
 ;   feq.s a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0
@@ -1088,7 +1088,7 @@ block0(v0: f32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.w.s a2, fa0, rtz
+;   fcvt.w.s a2, fa0, rtz ; trap: bad_toint
 ;   feq.s a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0
@@ -1110,7 +1110,7 @@ block0(v0: f32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.lu.s a2, fa0, rtz
+;   fcvt.lu.s a2, fa0, rtz ; trap: bad_toint
 ;   feq.s a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0
@@ -1132,7 +1132,7 @@ block0(v0: f32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.l.s a2, fa0, rtz
+;   fcvt.l.s a2, fa0, rtz ; trap: bad_toint
 ;   feq.s a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0
@@ -1154,7 +1154,7 @@ block0(v0: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.wu.d a2, fa0, rtz
+;   fcvt.wu.d a2, fa0, rtz ; trap: bad_toint
 ;   feq.d a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0
@@ -1176,7 +1176,7 @@ block0(v0: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.w.d a2, fa0, rtz
+;   fcvt.w.d a2, fa0, rtz ; trap: bad_toint
 ;   feq.d a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0
@@ -1198,7 +1198,7 @@ block0(v0: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.lu.d a2, fa0, rtz
+;   fcvt.lu.d a2, fa0, rtz ; trap: bad_toint
 ;   feq.d a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0
@@ -1220,7 +1220,7 @@ block0(v0: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.l.d a2, fa0, rtz
+;   fcvt.l.d a2, fa0, rtz ; trap: bad_toint
 ;   feq.d a4, fa0, fa0
 ;   neg a0, a4
 ;   and a0, a2, a0

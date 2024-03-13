@@ -91,8 +91,8 @@ block0(v0: i64, v1: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.fsd fa0, 0x10(a0)
-;   fsd fa0, -0x10(a0)
+;   c.fsd fa0, 0x10(a0) ; trap: heap_oob
+;   fsd fa0, -0x10(a0) ; trap: heap_oob
 ;   c.jr ra
 
 function %c_fld(i64) -> f64 {
@@ -108,6 +108,6 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.fld fa0, 0x40(a0)
+;   c.fld fa0, 0x40(a0) ; trap: heap_oob
 ;   c.jr ra
 

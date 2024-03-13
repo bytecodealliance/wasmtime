@@ -78,7 +78,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld1r {v0.16b}, [x0]
+;   ld1r {v0.16b}, [x0] ; trap: heap_oob
 ;   ret
 
 function %f6(i64, i64) -> i8x16, i8x16 {
@@ -98,8 +98,8 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld1r {v0.16b}, [x0]
-;   ld1r {v1.16b}, [x1]
+;   ld1r {v0.16b}, [x0] ; trap: heap_oob
+;   ld1r {v1.16b}, [x1] ; trap: heap_oob
 ;   ret
 
 function %f7(i64, i64) -> i8x16, i8x16 {
@@ -120,8 +120,8 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrb w5, [x0]
-;   ld1r {v0.16b}, [x1]
+;   ldrb w5, [x0] ; trap: heap_oob
+;   ld1r {v0.16b}, [x1] ; trap: heap_oob
 ;   dup v1.16b, w5
 ;   ret
 
@@ -142,7 +142,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrb w5, [x0]
+;   ldrb w5, [x0] ; trap: heap_oob
 ;   dup v0.16b, w5
 ;   dup v1.16b, w5
 ;   ret
@@ -214,6 +214,6 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr d0, [x0, #0x800]
+;   ldr d0, [x0, #0x800] ; trap: heap_oob
 ;   ret
 

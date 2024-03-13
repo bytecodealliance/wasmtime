@@ -15,7 +15,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuplhb %v24, %v2
 ;   br %r14
 
@@ -33,7 +33,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuplhh %v24, %v2
 ;   br %r14
 
@@ -51,7 +51,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuplhf %v24, %v2
 ;   br %r14
 
@@ -69,7 +69,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuphb %v24, %v2
 ;   br %r14
 
@@ -87,7 +87,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuphh %v24, %v2
 ;   br %r14
 
@@ -105,7 +105,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuphf %v24, %v2
 ;   br %r14
 
@@ -122,7 +122,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v24, 0(%r2)
+;   vl %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i16x8_big(i64) -> i16x8 {
@@ -138,7 +138,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v24, 0(%r2)
+;   vl %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i32x4_big(i64) -> i32x4 {
@@ -154,7 +154,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v24, 0(%r2)
+;   vl %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i64x2_big(i64) -> i64x2 {
@@ -170,7 +170,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v24, 0(%r2)
+;   vl %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i128_big(i64) -> i128 {
@@ -187,7 +187,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v3, 0(%r3)
+;   vl %v3, 0(%r3) ; trap: heap_oob
 ;   vst %v3, 0(%r2)
 ;   br %r14
 
@@ -204,7 +204,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v24, 0(%r2)
+;   vl %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_f64x2_big(i64) -> f64x2 {
@@ -220,7 +220,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v24, 0(%r2)
+;   vl %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i8x16_big(i8x16, i64) {
@@ -236,7 +236,7 @@ block0(v0: i8x16, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vst %v24, 0(%r2)
+;   vst %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i16x8_big(i16x8, i64) {
@@ -252,7 +252,7 @@ block0(v0: i16x8, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vst %v24, 0(%r2)
+;   vst %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i32x4_big(i32x4, i64) {
@@ -268,7 +268,7 @@ block0(v0: i32x4, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vst %v24, 0(%r2)
+;   vst %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i64x2_big(i64x2, i64) {
@@ -284,7 +284,7 @@ block0(v0: i64x2, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vst %v24, 0(%r2)
+;   vst %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i128_big(i128, i64) {
@@ -302,7 +302,7 @@ block0(v0: i128, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
-;   vst %v1, 0(%r3)
+;   vst %v1, 0(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %store_f32x4_big(f32x4, i64) {
@@ -318,7 +318,7 @@ block0(v0: f32x4, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vst %v24, 0(%r2)
+;   vst %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_f64x2_big(f64x2, i64) {
@@ -334,7 +334,7 @@ block0(v0: f64x2, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vst %v24, 0(%r2)
+;   vst %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %uload8x8_little(i64) -> i16x8 {
@@ -351,7 +351,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuplhb %v24, %v2
 ;   br %r14
 
@@ -370,7 +370,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   verllh %v4, %v2, 8
 ;   vuplhh %v24, %v4
 ;   br %r14
@@ -390,7 +390,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x20
+;   .byte 0xe6, 0x20 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   .byte 0x00, 0x02
 ;   verllg %v4, %v2, 0x20
@@ -411,7 +411,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   vuphb %v24, %v2
 ;   br %r14
 
@@ -430,7 +430,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f2, 0(%r2)
+;   ld %f2, 0(%r2) ; trap: heap_oob
 ;   verllh %v4, %v2, 8
 ;   vuphh %v24, %v4
 ;   br %r14
@@ -450,7 +450,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x20
+;   .byte 0xe6, 0x20 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   .byte 0x00, 0x02
 ;   verllg %v4, %v2, 0x20
@@ -470,7 +470,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vl %v24, 0(%r2)
+;   vl %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i16x8_little(i64) -> i16x8 {
@@ -486,7 +486,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   lr %r0, %r6
 ;   br %r14
@@ -504,7 +504,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ldr %f0, %f6
 ;   br %r14
@@ -522,7 +522,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ler %f0, %f6
 ;   br %r14
@@ -541,7 +541,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x30
+;   .byte 0xe6, 0x30 ; trap: heap_oob
 ;   lper %f0, %f0
 ;   sth %r0, 0x730(%r6, %r14)
 ;   lpdr %f0, %f0
@@ -561,7 +561,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ldr %f0, %f6
 ;   br %r14
@@ -579,7 +579,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ler %f0, %f6
 ;   br %r14
@@ -597,7 +597,7 @@ block0(v0: i8x16, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vst %v24, 0(%r2)
+;   vst %v24, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i16x8_little(i16x8, i64) {
@@ -613,7 +613,7 @@ block0(v0: i16x8, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   lr %r0, %r14
 ;   br %r14
@@ -631,7 +631,7 @@ block0(v0: i32x4, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ldr %f0, %f14
 ;   br %r14
@@ -649,7 +649,7 @@ block0(v0: i64x2, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ler %f0, %f14
 ;   br %r14
@@ -669,7 +669,7 @@ block0(v0: i128, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
-;   .byte 0xe6, 0x10
+;   .byte 0xe6, 0x10 ; trap: heap_oob
 ;   lper %f0, %f0
 ;   sth %r0, 0x7fe(%r14)
 
@@ -686,7 +686,7 @@ block0(v0: f32x4, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ldr %f0, %f14
 ;   br %r14
@@ -704,7 +704,7 @@ block0(v0: f64x2, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x80
+;   .byte 0xe6, 0x80 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   ler %f0, %f14
 ;   br %r14

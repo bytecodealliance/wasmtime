@@ -14,7 +14,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lg %r2, 0(%r2)
+;   lg %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i64_sym() -> i64 {
@@ -32,7 +32,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %uload8_i64(i64) -> i64 {
@@ -48,7 +48,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llgc %r2, 0(%r2)
+;   llgc %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %sload8_i64(i64) -> i64 {
@@ -64,7 +64,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgb %r2, 0(%r2)
+;   lgb %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %uload16_i64(i64) -> i64 {
@@ -80,7 +80,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llgh %r2, 0(%r2)
+;   llgh %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %uload16_i64_sym() -> i64 {
@@ -98,7 +98,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   llghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %sload16_i64(i64) -> i64 {
@@ -114,7 +114,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgh %r2, 0(%r2)
+;   lgh %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %sload16_i64_sym() -> i64 {
@@ -132,7 +132,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %uload32_i64(i64) -> i64 {
@@ -148,7 +148,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llgf %r2, 0(%r2)
+;   llgf %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %uload32_i64_sym() -> i64 {
@@ -166,7 +166,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   llgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %sload32_i64(i64) -> i64 {
@@ -182,7 +182,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgf %r2, 0(%r2)
+;   lgf %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %sload32_i64_sym() -> i64 {
@@ -200,7 +200,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %load_i32(i64) -> i32 {
@@ -216,7 +216,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   l %r2, 0(%r2)
+;   l %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i32_sym() -> i32 {
@@ -234,7 +234,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %load_i32_off(i64) -> i32 {
@@ -250,7 +250,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ly %r2, 0x1000(%r2)
+;   ly %r2, 0x1000(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %uload8_i32(i64) -> i32 {
@@ -266,7 +266,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llc %r2, 0(%r2)
+;   llc %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %sload8_i32(i64) -> i32 {
@@ -282,7 +282,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lb %r2, 0(%r2)
+;   lb %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %uload16_i32(i64) -> i32 {
@@ -298,7 +298,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llh %r2, 0(%r2)
+;   llh %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %uload16_i32_sym() -> i32 {
@@ -316,7 +316,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   llhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %sload16_i32(i64) -> i32 {
@@ -332,7 +332,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lh %r2, 0(%r2)
+;   lh %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %sload16_i32_off(i64) -> i32 {
@@ -348,7 +348,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhy %r2, 0x1000(%r2)
+;   lhy %r2, 0x1000(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %sload16_i32_sym() -> i32 {
@@ -366,7 +366,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %load_i16(i64) -> i16 {
@@ -382,7 +382,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llh %r2, 0(%r2)
+;   llh %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i16_sym() -> i16 {
@@ -400,7 +400,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   llhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   br %r14
 
 function %uload8_i16(i64) -> i16 {
@@ -416,7 +416,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llc %r2, 0(%r2)
+;   llc %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %sload8_i16(i64) -> i16 {
@@ -432,7 +432,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lb %r2, 0(%r2)
+;   lb %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_i8(i64) -> i8 {
@@ -448,6 +448,6 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llc %r2, 0(%r2)
+;   llc %r2, 0(%r2) ; trap: heap_oob
 ;   br %r14
 

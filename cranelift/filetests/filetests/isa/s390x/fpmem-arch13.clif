@@ -14,7 +14,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x00
+;   .byte 0xe6, 0x00 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   .byte 0x00, 0x02
 ;   br %r14
@@ -32,7 +32,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x00
+;   .byte 0xe6, 0x00 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   .byte 0x00, 0x03
 ;   br %r14
@@ -50,7 +50,7 @@ block0(v0: f64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x00
+;   .byte 0xe6, 0x00 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   .byte 0x00, 0x0a
 ;   br %r14
@@ -68,7 +68,7 @@ block0(v0: f32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe6, 0x00
+;   .byte 0xe6, 0x00 ; trap: heap_oob
 ;   lpdr %f0, %f0
 ;   .byte 0x00, 0x0b
 ;   br %r14

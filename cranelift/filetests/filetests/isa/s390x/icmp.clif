@@ -100,7 +100,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cg %r2, 0(%r3)
+;   cg %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -123,7 +123,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   cgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -144,7 +144,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cgh %r2, 0(%r3)
+;   cgh %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -167,7 +167,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   cghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -188,7 +188,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cgf %r2, 0(%r3)
+;   cgf %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -211,7 +211,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   cgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -294,7 +294,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c %r2, 0(%r3)
+;   c %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -315,7 +315,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cy %r2, 0x1000(%r3)
+;   cy %r2, 0x1000(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -338,7 +338,7 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   crl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   crl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -359,7 +359,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ch %r2, 0(%r3)
+;   ch %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -380,7 +380,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   chy %r2, 0x1000(%r3)
+;   chy %r2, 0x1000(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -403,7 +403,7 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   chrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   chrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -473,7 +473,7 @@ block0(v0: i16, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lhr %r5, %r2
-;   ch %r5, 0(%r3)
+;   ch %r5, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -498,7 +498,7 @@ block0(v0: i16):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lhr %r4, %r2
-;   chrl %r4, 4 ; reloc_external PCRel32Dbl %sym 2
+;   chrl %r4, 4 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -569,7 +569,7 @@ block0(v0: i8, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lbr %r5, %r2
-;   lb %r3, 0(%r3)
+;   lb %r3, 0(%r3) ; trap: heap_oob
 ;   cr %r5, %r3
 ;   lhi %r2, 0
 ;   lochil %r2, 1
@@ -653,7 +653,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clg %r2, 0(%r3)
+;   clg %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -676,7 +676,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   clgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -697,7 +697,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clgf %r2, 0(%r3)
+;   clgf %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -720,7 +720,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   clgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -742,7 +742,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llgh %r3, 0(%r3)
+;   llgh %r3, 0(%r3) ; trap: heap_oob
 ;   clgr %r2, %r3
 ;   lhi %r2, 0
 ;   lochil %r2, 1
@@ -766,7 +766,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   clghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -828,7 +828,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cl %r2, 0(%r3)
+;   cl %r2, 0(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -849,7 +849,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   cly %r2, 0x1000(%r3)
+;   cly %r2, 0x1000(%r3) ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -872,7 +872,7 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   clrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -894,7 +894,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llh %r3, 0(%r3)
+;   llh %r3, 0(%r3) ; trap: heap_oob
 ;   clr %r2, %r3
 ;   lhi %r2, 0
 ;   lochil %r2, 1
@@ -918,7 +918,7 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
+;   clhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -989,7 +989,7 @@ block0(v0: i16, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llhr %r5, %r2
-;   llh %r3, 0(%r3)
+;   llh %r3, 0(%r3) ; trap: heap_oob
 ;   clr %r5, %r3
 ;   lhi %r2, 0
 ;   lochil %r2, 1
@@ -1015,7 +1015,7 @@ block0(v0: i16):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llhr %r4, %r2
-;   clhrl %r4, 4 ; reloc_external PCRel32Dbl %sym 2
+;   clhrl %r4, 4 ; reloc_external PCRel32Dbl %sym 2 ; trap: heap_oob
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -1086,7 +1086,7 @@ block0(v0: i8, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llcr %r5, %r2
-;   llc %r3, 0(%r3)
+;   llc %r3, 0(%r3) ; trap: heap_oob
 ;   clr %r5, %r3
 ;   lhi %r2, 0
 ;   lochil %r2, 1
