@@ -114,6 +114,9 @@ fn nn_image_classification_winml() {
 )]
 #[test]
 fn nn_image_classification_onnx() {
-    let backend = Backend::from(backend::onnxruntime::OnnxBackend::default());
-    run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false).unwrap()
+    #[cfg(feature = "onnx")]
+    {
+        let backend = Backend::from(backend::onnxruntime::OnnxBackend::default());
+        run(NN_IMAGE_CLASSIFICATION_ONNX, backend, false).unwrap()
+    }
 }

@@ -6,9 +6,11 @@
 //! - that WinML is available
 //! - that some ML model artifacts can be downloaded and cached.
 
+#[allow(unused_imports)]
 use anyhow::{anyhow, Context, Result};
 use std::{env, fs, path::Path, path::PathBuf, process::Command, sync::Mutex};
-#[cfg(all(feature = "winml", target_os = "windows"))]
+
+#[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
 use windows::AI::MachineLearning::{LearningModelDevice, LearningModelDeviceKind};
 
 /// Return the directory in which the test artifacts are stored.
@@ -37,16 +39,21 @@ macro_rules! check_test {
 
 /// Return `Ok` if all checks pass.
 pub fn check() -> Result<()> {
-    #[cfg(feature = "openvino")]
+    #[cfg(all(
+        feature = "openvino",
+        target_arch = "x86_64",
+        any(target_os = "linux", target_os = "windows")
+    ))]
     {
         check_openvino_is_installed()?;
-        check_openvino_artifacts_are_available()?;
     }
+    #[cfg(feature = "openvino")]
+    check_openvino_artifacts_are_available()?;
+
     #[cfg(feature = "onnx")]
-    {
-        check_onnx_artifacts_are_available()?;
-    }
-    #[cfg(all(feature = "winml", target_os = "windows"))]
+    check_onnx_artifacts_are_available()?;
+
+    #[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
     {
         check_winml_is_available()?;
         check_winml_artifacts_are_available()?;
@@ -54,8 +61,17 @@ pub fn check() -> Result<()> {
     Ok(())
 }
 
+/// Protect `check_openvino_artifacts_are_available` from concurrent access;
+/// when running tests in parallel, we want to avoid two threads attempting to
+/// create the same directory or download the same file.
+static ARTIFACTS: Mutex<()> = Mutex::new(());
+
 /// Return `Ok` if we find a working OpenVINO installation.
-#[cfg(feature = "openvino")]
+#[cfg(all(
+    feature = "openvino",
+    target_arch = "x86_64",
+    any(target_os = "linux", target_os = "windows")
+))]
 fn check_openvino_is_installed() -> Result<()> {
     match std::panic::catch_unwind(|| println!("> found openvino version: {}", openvino::version()))
     {
@@ -63,24 +79,6 @@ fn check_openvino_is_installed() -> Result<()> {
         Err(e) => Err(anyhow!("unable to find an OpenVINO installation: {:?}", e)),
     }
 }
-
-#[cfg(all(feature = "winml", target_os = "windows"))]
-fn check_winml_is_available() -> Result<()> {
-    match std::panic::catch_unwind(|| {
-        println!(
-            "> WinML learning device is available: {:?}",
-            LearningModelDevice::Create(LearningModelDeviceKind::Default)
-        )
-    }) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(anyhow!("WinML learning device is not available: {:?}", e)),
-    }
-}
-
-/// Protect `check_openvino_artifacts_are_available` from concurrent access;
-/// when running tests in parallel, we want to avoid two threads attempting to
-/// create the same directory or download the same file.
-static ARTIFACTS: Mutex<()> = Mutex::new(());
 
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
@@ -108,6 +106,19 @@ fn check_openvino_artifacts_are_available() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
+fn check_winml_is_available() -> Result<()> {
+    match std::panic::catch_unwind(|| {
+        println!(
+            "> WinML learning device is available: {:?}",
+            LearningModelDevice::Create(LearningModelDeviceKind::Default)
+        )
+    }) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(anyhow!("WinML learning device is not available: {:?}", e)),
+    }
 }
 
 #[cfg(feature = "onnx")]
@@ -141,7 +152,7 @@ fn check_onnx_artifacts_are_available() -> Result<()> {
     Ok(())
 }
 
-#[cfg(all(feature = "winml", target_os = "windows"))]
+#[cfg(all(feature = "winml", target_arch = "x86_64", target_os = "windows"))]
 fn check_winml_artifacts_are_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = ARTIFACTS.lock().unwrap();
     let artifacts_dir = artifacts_dir();

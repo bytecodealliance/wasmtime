@@ -90,7 +90,6 @@ const array = [
     "name": "Test Linux arm64",
     "filter": "linux-arm64",
     "isa": "aarch64",
-    "extra_features": "--features wasmtime-wasi-nn/onnx"
   },
   {
     "os": "ubuntu-latest",
