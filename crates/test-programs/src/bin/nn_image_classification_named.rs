@@ -3,8 +3,9 @@ use std::fs;
 use wasi_nn::*;
 
 pub fn main() -> Result<()> {
+    // Load model from preloaded directory named "fixtures" which contains a model.[bin|xml] mobilenet model.
     let graph = GraphBuilder::new(GraphEncoding::Openvino, ExecutionTarget::CPU)
-        .build_from_cache("mobilenet")?;
+        .build_from_cache("fixtures")?;
     println!("Loaded a graph: {:?}", graph);
 
     let mut context = graph.init_execution_context()?;
