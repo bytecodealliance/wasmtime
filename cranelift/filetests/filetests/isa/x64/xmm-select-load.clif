@@ -1,0 +1,34 @@
+test compile precise-output
+target x86_64
+
+function %a(i32, f64, i64) -> f64 {
+block0(v0: i32, v1: f64, v2: i64):
+  v3 = load.f64 v2
+  v4 = select v0, v3, v1
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsd   0(%rsi), %xmm5
+;   testl   %edi, %edi
+;   movsd %xmm0, %xmm0; jz $next; movsd %xmm5, %xmm0; $next:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movsd (%rsi), %xmm5 ; trap: heap_oob
+;   testl %edi, %edi
+;   je 0x14
+;   movsd %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
