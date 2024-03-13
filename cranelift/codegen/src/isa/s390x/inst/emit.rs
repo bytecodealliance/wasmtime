@@ -184,8 +184,10 @@ pub fn mem_emit(
         inst.emit(&[], sink, emit_info, state);
     }
 
-    if add_trap && mem.can_trap() {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if add_trap {
+        if let Some(trap_code) = mem.get_flags().trap_code() {
+            sink.add_trap(trap_code);
+        }
     }
 
     match &mem {
@@ -245,8 +247,10 @@ pub fn mem_rs_emit(
         inst.emit(&[], sink, emit_info, state);
     }
 
-    if add_trap && mem.can_trap() {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if add_trap {
+        if let Some(trap_code) = mem.get_flags().trap_code() {
+            sink.add_trap(trap_code);
+        }
     }
 
     match &mem {
@@ -294,8 +298,10 @@ pub fn mem_imm8_emit(
         inst.emit(&[], sink, emit_info, state);
     }
 
-    if add_trap && mem.can_trap() {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if add_trap {
+        if let Some(trap_code) = mem.get_flags().trap_code() {
+            sink.add_trap(trap_code);
+        }
     }
 
     match &mem {
@@ -339,8 +345,10 @@ pub fn mem_imm16_emit(
         inst.emit(&[], sink, emit_info, state);
     }
 
-    if add_trap && mem.can_trap() {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if add_trap {
+        if let Some(trap_code) = mem.get_flags().trap_code() {
+            sink.add_trap(trap_code);
+        }
     }
 
     match &mem {
@@ -363,8 +371,10 @@ pub fn mem_mem_emit(
     sink: &mut MachBuffer<Inst>,
     _state: &mut EmitState,
 ) {
-    if add_trap && (dst.can_trap() || src.can_trap()) {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if add_trap {
+        if let Some(trap_code) = dst.flags.trap_code().or(src.flags.trap_code()) {
+            sink.add_trap(trap_code);
+        }
     }
 
     put(
@@ -405,8 +415,10 @@ pub fn mem_vrx_emit(
         inst.emit(&[], sink, emit_info, state);
     }
 
-    if add_trap && mem.can_trap() {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if add_trap {
+        if let Some(trap_code) = mem.get_flags().trap_code() {
+            sink.add_trap(trap_code);
+        }
     }
 
     match &mem {

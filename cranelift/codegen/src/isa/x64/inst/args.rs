@@ -405,10 +405,6 @@ impl Amode {
         }
     }
 
-    pub(crate) fn can_trap(&self) -> bool {
-        !self.get_flags().notrap()
-    }
-
     pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         // The order in which we consume allocs here must match the
         // order in which we produce operands in get_operands() above.

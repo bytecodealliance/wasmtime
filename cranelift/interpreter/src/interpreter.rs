@@ -331,7 +331,11 @@ impl<'a> State<'a> for InterpreterState<'a> {
         let src = match addr.region {
             AddressRegion::Stack => {
                 if addr_end > self.stack.len() {
-                    return Err(MemoryError::OutOfBoundsLoad { addr, load_size });
+                    return Err(MemoryError::OutOfBoundsLoad {
+                        addr,
+                        load_size,
+                        mem_flags,
+                    });
                 }
 
                 &self.stack[addr_start..addr_end]
@@ -363,7 +367,11 @@ impl<'a> State<'a> for InterpreterState<'a> {
         let dst = match addr.region {
             AddressRegion::Stack => {
                 if addr_end > self.stack.len() {
-                    return Err(MemoryError::OutOfBoundsStore { addr, store_size });
+                    return Err(MemoryError::OutOfBoundsStore {
+                        addr,
+                        store_size,
+                        mem_flags,
+                    });
                 }
 
                 &mut self.stack[addr_start..addr_end]
