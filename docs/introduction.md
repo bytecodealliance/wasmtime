@@ -11,7 +11,7 @@ extension.
 
 [WASI] (the WebAssembly System Interface) defines interfaces that provide a
 secure and portable way to access several operating-system-like features such as
-filesystems, Berkely sockets, clocks, and random numbers.
+filesystems, networking, clocks, and random numbers.
 
 [The Component Model] is a Wasm architecture that provides a binary format for
 portable, cross-language composition. More specifically, it supports the use of
