@@ -1624,7 +1624,7 @@ impl PrettyPrint for Inst {
                 let size = u8::try_from(ty.bytes()).unwrap();
                 let alternative = pretty_print_reg(alternative.to_reg(), size, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size, allocs);
-                let consequent = consequent.pretty_print(size, allocs);
+                let consequent = pretty_print_reg(consequent.to_reg(), size, allocs);
                 let suffix = match *ty {
                     types::F64 => "sd",
                     types::F32 => "ss",
@@ -2334,7 +2334,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_use(alternative.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
-            consequent.get_operands(collector);
+            collector.reg_use(consequent.to_reg());
         }
         Inst::Push64 { src } => {
             src.get_operands(collector);

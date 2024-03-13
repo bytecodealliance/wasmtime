@@ -492,7 +492,7 @@ impl Assembler {
         self.emit(Inst::XmmCmove {
             ty,
             cc: cc.into(),
-            consequent: XmmMemAligned::new(src.into()).expect("valid XmmMemAligned"),
+            consequent: Xmm::new(src.into()).expect("valid Xmm"),
             alternative: dst.into(),
             dst: dst.into(),
         })
