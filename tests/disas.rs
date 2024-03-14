@@ -52,6 +52,9 @@ use wasmtime::{Engine, OptLevel};
 use wasmtime_cli_flags::CommonOptions;
 
 fn main() {
+    if cfg!(miri) {
+        return;
+    }
     // First discover all tests ...
     let mut tests = Vec::new();
     for file in std::fs::read_dir("./tests/disas").unwrap() {
