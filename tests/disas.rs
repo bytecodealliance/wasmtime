@@ -51,22 +51,37 @@ use tempfile::TempDir;
 use wasmtime::{Engine, OptLevel};
 use wasmtime_cli_flags::CommonOptions;
 
-fn main() {
+fn main() -> Result<()> {
     if cfg!(miri) {
-        return;
+        return Ok(());
     }
+
     // First discover all tests ...
     let mut tests = Vec::new();
-    for file in std::fs::read_dir("./tests/disas").unwrap() {
-        tests.push(file.unwrap().path());
-    }
+    find_tests("./tests/disas".as_ref(), &mut tests)?;
 
     // ... then run all tests!
     for test in tests.iter() {
-        run_test(&test)
-            .with_context(|| format!("failed to run tests {test:?}"))
-            .unwrap();
+        run_test(&test).with_context(|| format!("failed to run tests {test:?}"))?;
     }
+
+    Ok(())
+}
+
+fn find_tests(path: &Path, dst: &mut Vec<PathBuf>) -> Result<()> {
+    for file in path
+        .read_dir()
+        .with_context(|| format!("failed to read {path:?}"))?
+    {
+        let file = file.context("failed to read directory entry")?;
+        let path = file.path();
+        if file.file_type()?.is_dir() {
+            find_tests(&path, dst)?;
+        } else if path.extension().and_then(|s| s.to_str()) == Some("wat") {
+            dst.push(path);
+        }
+    }
+    Ok(())
 }
 
 fn run_test(path: &Path) -> Result<()> {
