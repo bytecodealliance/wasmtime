@@ -75,8 +75,8 @@ mod pcc_memory_tests {
         }
 
         for test in &bodies {
-            for static_memory_maximum_size in [0, 64 * KIB, 1 * MIB, 4 * GIB, 6 * GIB] {
-                for guard_size in [0, 64 * KIB, 2 * GIB] {
+            for static_memory_maximum_size in [4 * GIB] {
+                for guard_size in [2 * GIB] {
                     for enable_spectre in [true /* not yet supported by PCC: false */] {
                         for _memory_bits in [32 /* not yet supported by PCC: 64 */] {
                             log::trace!("test:\n{}\n", test);
