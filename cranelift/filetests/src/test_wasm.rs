@@ -5,8 +5,12 @@ mod env;
 
 use anyhow::{bail, ensure, Context, Result};
 use config::TestConfig;
+use cranelift_codegen::ir::Function;
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_control::ControlPlane;
 use env::ModuleEnv;
+use serde::de::DeserializeOwned;
+use serde_derive::Deserialize;
 use similar::TextDiff;
 use std::{fmt::Write, path::Path};
 
@@ -53,23 +57,82 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
     cranelift_wasm::translate_module(&wasm, &mut env)
         .context("failed to translate the test case into CLIF")?;
 
+    let kind = if config.compile {
+        TestKind::Compile
+    } else if config.optimize {
+        TestKind::Optimize
+    } else {
+        TestKind::Clif
+    };
+    run_functions(
+        path,
+        wat,
+        isa,
+        kind,
+        env.inner.info.function_bodies.values().as_slice(),
+    )
+}
+
+/// Parse test configuration from the specified test, comments starting with
+/// `;;!`.
+pub fn parse_test_config<T>(wat: &str) -> Result<T>
+where
+    T: DeserializeOwned,
+{
+    // The test config source is the leading lines of the WAT file that are
+    // prefixed with `;;!`.
+    let config_lines: Vec<_> = wat
+        .lines()
+        .take_while(|l| l.starts_with(";;!"))
+        .map(|l| &l[3..])
+        .collect();
+    let config_text = config_lines.join("\n");
+
+    toml::from_str(&config_text).context("failed to parse the test configuration")
+}
+
+/// Which kind of test is being performed.
+#[derive(Default, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TestKind {
+    /// Test the CLIF output, raw from translation.
+    #[default]
+    Clif,
+    /// Compile output to machine code.
+    Compile,
+    /// Test the CLIF output, optimized.
+    Optimize,
+}
+
+/// Assert that `wat` contains the test expectations necessary for `funcs`.
+pub fn run_functions(
+    path: &Path,
+    wat: &str,
+    isa: &dyn TargetIsa,
+    kind: TestKind,
+    funcs: &[Function],
+) -> Result<()> {
     let mut actual = String::new();
-    for (_index, func) in env.inner.info.function_bodies.iter() {
-        if config.compile {
-            let mut ctx = cranelift_codegen::Context::for_function(func.clone());
-            ctx.set_disasm(true);
-            let code = ctx
-                .compile(isa, &mut Default::default())
-                .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
-            writeln!(&mut actual, "function {}:", func.name).unwrap();
-            writeln!(&mut actual, "{}", code.vcode.as_ref().unwrap()).unwrap();
-        } else if config.optimize {
-            let mut ctx = cranelift_codegen::Context::for_function(func.clone());
-            ctx.optimize(isa, &mut ControlPlane::default())
-                .map_err(|e| crate::pretty_anyhow_error(&ctx.func, e))?;
-            writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
-        } else {
-            writeln!(&mut actual, "{}", func.display()).unwrap();
+    for func in funcs {
+        match kind {
+            TestKind::Compile => {
+                let mut ctx = cranelift_codegen::Context::for_function(func.clone());
+                ctx.set_disasm(true);
+                let code = ctx
+                    .compile(isa, &mut Default::default())
+                    .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
+                writeln!(&mut actual, "function {}:", func.name).unwrap();
+                writeln!(&mut actual, "{}", code.vcode.as_ref().unwrap()).unwrap();
+            }
+            TestKind::Optimize => {
+                let mut ctx = cranelift_codegen::Context::for_function(func.clone());
+                ctx.optimize(isa, &mut ControlPlane::default())
+                    .map_err(|e| crate::pretty_anyhow_error(&ctx.func, e))?;
+                writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
+            }
+            TestKind::Clif => {
+                writeln!(&mut actual, "{}", func.display()).unwrap();
+            }
         }
     }
     let actual = actual.trim();
