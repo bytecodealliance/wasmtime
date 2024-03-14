@@ -1,5 +1,5 @@
-;;! target: aarch64
-;;! compile
+;;! target = "aarch64"
+;;! test = "compile"
 
 (module
   (func (param v128) (result v128)

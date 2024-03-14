@@ -1,7 +1,10 @@
-;;! target: x86_64
-;;! optimize
-;;! flags: -C cranelift-enable-heap-access-spectre-mitigation -O opt-level=s
-;;! flags: -O static-memory-maximum-size=0
+;;! target = "x86_64"
+;;! test = "optimize"
+;;! flags = [
+;;!   "-Ccranelift-enable-heap-access-spectre-mitigation",
+;;!   "-Oopt-level=s",
+;;!   "-Ostatic-memory-maximum-size=0",
+;;! ]
 
 (module
   (memory (export "memory") 0)

@@ -9,6 +9,8 @@ use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_control::ControlPlane;
 use env::ModuleEnv;
+use serde::de::DeserializeOwned;
+use serde_derive::Deserialize;
 use similar::TextDiff;
 use std::{fmt::Write, path::Path};
 
@@ -57,10 +59,10 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
 
     let kind = if config.compile {
         TestKind::Compile
+    } else if config.optimize {
+        TestKind::Optimize
     } else {
-        TestKind::Clif {
-            optimize: config.optimize,
-        }
+        TestKind::Clif
     };
     run_functions(
         path,
@@ -71,15 +73,35 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
     )
 }
 
+/// Parse test configuration from the specified test, comments starting with
+/// `;;!`.
+pub fn parse_test_config<T>(wat: &str) -> Result<T>
+where
+    T: DeserializeOwned,
+{
+    // The test config source is the leading lines of the WAT file that are
+    // prefixed with `;;!`.
+    let config_lines: Vec<_> = wat
+        .lines()
+        .take_while(|l| l.starts_with(";;!"))
+        .map(|l| &l[3..])
+        .collect();
+    let config_text = config_lines.join("\n");
+
+    toml::from_str(&config_text).context("failed to parse the test configuration")
+}
+
 /// Which kind of test is being performed.
+#[derive(Default, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TestKind {
+    /// Test the CLIF output, raw from translation.
+    #[default]
+    Clif,
     /// Compile output to machine code.
     Compile,
-    /// Test the CLIF output
-    Clif {
-        /// Whether or not to optimize the CLIF.
-        optimize: bool,
-    },
+    /// Test the CLIF output, optimized.
+    Optimize,
 }
 
 /// Assert that `wat` contains the test expectations necessary for `funcs`.
@@ -102,13 +124,13 @@ pub fn run_functions(
                 writeln!(&mut actual, "function {}:", func.name).unwrap();
                 writeln!(&mut actual, "{}", code.vcode.as_ref().unwrap()).unwrap();
             }
-            TestKind::Clif { optimize: true } => {
+            TestKind::Optimize => {
                 let mut ctx = cranelift_codegen::Context::for_function(func.clone());
                 ctx.optimize(isa, &mut ControlPlane::default())
                     .map_err(|e| crate::pretty_anyhow_error(&ctx.func, e))?;
                 writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
             }
-            TestKind::Clif { optimize: false } => {
+            TestKind::Clif => {
                 writeln!(&mut actual, "{}", func.display()).unwrap();
             }
         }

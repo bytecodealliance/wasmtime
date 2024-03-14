@@ -1,4 +1,4 @@
-;;! target: x86_64
+;;! target = "x86_64"
 
 (module
   (memory 0)

@@ -1,5 +1,5 @@
-;;! target: x86_64
-;;! optimize
+;;! target = "x86_64"
+;;! test = "optimize"
 
 (module
   (func (export "bswap32") (param i32) (result i32)

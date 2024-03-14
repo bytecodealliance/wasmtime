@@ -395,7 +395,7 @@ name = "host_segfault"
 harness = false
 
 [[test]]
-name = "asm"
+name = "disas"
 harness = false
 
 [[example]]

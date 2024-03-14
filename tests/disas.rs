@@ -1,13 +1,13 @@
 //! A filetest-lookalike test suite using Cranelift tooling but built on
 //! Wasmtime's code generator.
 //!
-//! This test will read the `tests/asm/*` directory and interpret all files in
+//! This test will read the `tests/disas/*` directory and interpret all files in
 //! that directory as a test. Each test must be in the wasm text format and
 //! start with directives that look like:
 //!
 //! ```wasm
-//! ;;! target: x86_64
-//! ;;! compile
+//! ;;! target = "x86_64"
+//! ;;! compile = true
 //!
 //! (module
 //!     ;; ...
@@ -18,15 +18,15 @@
 //! test:
 //!
 //! * No specifier - the output CLIF from translation is inspected.
-//! * `optimize` - CLIF is emitted, then optimized, then inspected.
-//! * `compile` - backends are run to produce machine code and that's inspected.
+//! * `optimize = true` - CLIF is emitted, then optimized, then inspected.
+//! * `compile = true` - backends are run to produce machine code and that's inspected.
 //!
 //! Tests may also have a `flags` directive which are CLI flags to Wasmtime
 //! itself:
 //!
 //! ```wasm
-//! ;;! target: x86_64
-//! ;;! flags: -O opt-level=s
+//! ;;! target = "x86_64"
+//! ;;! flags = "-O opt-level=s"
 //!
 //! (module
 //!     ;; ...
@@ -34,12 +34,17 @@
 //! ```
 //!
 //! Flags are parsed by the `wasmtime_cli_flags` crate to build a `Config`.
+//!
+//! Configuration of tests is prefixed with `;;!` comments and must be present
+//! at the start of the file. These comments are then parsed as TOML and
+//! deserialized into `TestConfig` in this crate.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
-use cranelift_filetests::test_wasm::{run_functions, TestKind};
+use cranelift_filetests::test_wasm::{parse_test_config, run_functions, TestKind};
+use serde_derive::Deserialize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -49,7 +54,7 @@ use wasmtime_cli_flags::CommonOptions;
 fn main() {
     // First discover all tests ...
     let mut tests = Vec::new();
-    for file in std::fs::read_dir("./tests/asm").unwrap() {
+    for file in std::fs::read_dir("./tests/disas").unwrap() {
         tests.push(file.unwrap().path());
     }
 
@@ -80,17 +85,36 @@ fn run_test(path: &Path) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     // And finally, use `cranelift_filetests` to perform the rest of the test.
-    run_functions(&test.path, &test.contents, &*isa, test.kind, &functions)?;
+    run_functions(
+        &test.path,
+        &test.contents,
+        &*isa,
+        test.config.test,
+        &functions,
+    )?;
 
     Ok(())
 }
+#[derive(Debug, Deserialize)]
+struct TestConfig {
+    target: String,
+    #[serde(default)]
+    test: TestKind,
+    flags: Option<TestConfigFlags>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum TestConfigFlags {
+    SpaceSeparated(String),
+    List(Vec<String>),
+}
 
 struct Test {
-    kind: TestKind,
     path: PathBuf,
     contents: String,
-    target: String,
     opts: CommonOptions,
+    config: TestConfig,
 }
 
 impl Test {
@@ -99,57 +123,19 @@ impl Test {
     fn new(path: &Path) -> Result<Test> {
         let contents =
             std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
-        let mut flags = vec!["wasmtime".to_string()];
-        let mut compile = false;
-        let mut optimize = false;
-        let mut target = None;
-        for line in contents.lines() {
-            let directive = match line.strip_prefix(";;!") {
-                Some("") | None => continue,
-                Some(s) => s.trim(),
-            };
-            if directive == "compile" {
-                compile = true;
-                continue;
-            }
-            if directive == "optimize" {
-                optimize = true;
-                continue;
-            }
-            if let Some(s) = directive.strip_prefix("flags: ") {
-                flags.extend(
-                    s.split_whitespace()
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string()),
-                );
-                continue;
-            }
-            if let Some(s) = directive.strip_prefix("target: ") {
-                if target.is_some() {
-                    bail!("two targets have been specified");
-                }
-                target = Some(s);
-                continue;
-            }
-
-            bail!("unknown directive: {directive}");
+        let config: TestConfig =
+            parse_test_config(&contents).context("failed to parse test configuration as TOML")?;
+        let mut flags = vec!["wasmtime"];
+        match &config.flags {
+            Some(TestConfigFlags::SpaceSeparated(s)) => flags.extend(s.split_whitespace()),
+            Some(TestConfigFlags::List(s)) => flags.extend(s.iter().map(|s| s.as_str())),
+            None => {}
         }
-        let kind = if compile {
-            if optimize {
-                bail!("can't be both an `optimize` and `compile` test");
-            }
-            TestKind::Compile
-        } else {
-            TestKind::Clif { optimize }
-        };
-        let target =
-            target.ok_or_else(|| anyhow!("test must specify a target with `;;! target: ...`"))?;
         let opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
 
         Ok(Test {
             path: path.to_path_buf(),
-            kind,
-            target: target.to_string(),
+            config,
             opts,
             contents,
         })
@@ -160,7 +146,7 @@ impl Test {
         // Use wasmtime::Config with its `emit_clif` option to get Wasmtime's
         // code generator to jettison CLIF out the back.
         let tempdir = TempDir::new().context("failed to make a tempdir")?;
-        let mut config = self.opts.config(Some(&self.target))?;
+        let mut config = self.opts.config(Some(&self.config.target))?;
         config.emit_clif(tempdir.path());
         let engine = Engine::new(&config).context("failed to create engine")?;
         let module = wat::parse_file(&self.path)?;
@@ -189,7 +175,7 @@ impl Test {
     /// Use the test configuration present with CLI flags to build a
     /// `TargetIsa` to compile/optimize the CLIF.
     fn build_target_isa(&self) -> Result<Arc<dyn TargetIsa>> {
-        let mut builder = lookup_by_name(&self.target)?;
+        let mut builder = lookup_by_name(&self.config.target)?;
         let mut flags = cranelift_codegen::settings::builder();
         let opt_level = match self.opts.opts.opt_level {
             None | Some(OptLevel::Speed) => "speed",
