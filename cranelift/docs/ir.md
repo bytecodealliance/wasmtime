@@ -553,36 +553,6 @@ GV = [colocated] symbol Name
     :arg Name: External name.
     :result GV: Global value.
 
-### Tables
-
-Code compiled from WebAssembly often needs access to objects outside of its
-linear memory. WebAssembly uses *tables* to allow programs to refer to opaque
-values through integer indices.
-
-A table is declared in the function preamble and can be accessed with the
-`table_addr` instruction that [traps] on out-of-bounds accesses.
-Table addresses can be smaller than the native pointer size, for example
-unsigned `i32` offsets on a 64-bit architecture.
-
-A table appears as a consecutive range of address space, conceptually
-divided into elements of fixed sizes, which are identified by their index.
-The memory is [accessible].
-
-The *table bound* is the number of elements currently in the table. This is
-the bound that `table_addr` checks against.
-
-A table can be relocated to a different base address when it is resized, and
-its bound can move dynamically. The bound of a table is stored in a global
-value.
-
-T = dynamic Base, min MinElements, bound BoundGV, element_size ElementSize
-    Declare a table in the preamble.
-
-    :arg Base: Global value holding the table's base address.
-    :arg MinElements: Guaranteed minimum table size in elements.
-    :arg BoundGV: Global value containing the current table bound in elements.
-    :arg ElementSize: Size of each element.
-
 ### Constant materialization
 
 A few instructions have variants that take immediate operands, but in general

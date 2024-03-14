@@ -63,13 +63,6 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, mt.into(), mt_data, None)?;
         }
 
-        for (table, table_data) in &func.tables {
-            if !table_data.index_type.is_invalid() {
-                any = true;
-                self.write_entity_definition(w, func, table.into(), table_data, None)?;
-            }
-        }
-
         // Write out all signatures before functions since function declarations can refer to
         // signatures.
         for (sig, sig_data) in &func.dfg.signatures {
@@ -479,15 +472,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             dynamic_stack_slot,
             ..
         } => write!(w, " {}, {}", arg, dynamic_stack_slot),
-        TableAddr {
-            table, arg, offset, ..
-        } => {
-            if i32::from(offset) == 0 {
-                write!(w, " {}, {}", table, arg)
-            } else {
-                write!(w, " {}, {}{}", table, arg, offset)
-            }
-        }
         Load {
             flags, arg, offset, ..
         } => write!(w, "{} {}{}", flags, arg, offset),

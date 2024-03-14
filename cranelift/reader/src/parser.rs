@@ -20,8 +20,7 @@ use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, JumpTableData, MemFlags, MemoryTypeData, MemoryTypeField, Opcode,
-    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, UserFuncName,
-    Value,
+    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -346,30 +345,6 @@ impl Context {
         }
     }
 
-    // Allocate a table slot.
-    fn add_table(&mut self, table: Table, data: TableData, loc: Location) -> ParseResult<()> {
-        while self.function.tables.next_key().index() <= table.index() {
-            self.function.create_table(TableData {
-                base_gv: GlobalValue::reserved_value(),
-                min_size: Uimm64::new(0),
-                bound_gv: GlobalValue::reserved_value(),
-                element_size: Uimm64::new(0),
-                index_type: INVALID,
-            });
-        }
-        self.function.tables[table] = data;
-        self.map.def_table(table, loc)
-    }
-
-    // Resolve a reference to a table.
-    fn check_table(&self, table: Table, loc: Location) -> ParseResult<()> {
-        if !self.map.contains_table(table) {
-            err!(loc, "undefined table {}", table)
-        } else {
-            Ok(())
-        }
-    }
-
     // Allocate a new signature.
     fn add_sig(
         &mut self,
@@ -659,17 +634,6 @@ impl<'a> Parser<'a> {
             self.consume();
             if let Some(sigref) = SigRef::with_number(sigref) {
                 return Ok(sigref);
-            }
-        }
-        err!(self.loc, err_msg)
-    }
-
-    // Match and consume a table reference.
-    fn match_table(&mut self, err_msg: &str) -> ParseResult<Table> {
-        if let Some(Token::Table(table)) = self.token() {
-            self.consume();
-            if let Some(table) = Table::with_number(table) {
-                return Ok(table);
             }
         }
         err!(self.loc, err_msg)
@@ -1483,11 +1447,6 @@ impl<'a> Parser<'a> {
                     self.parse_memory_type_decl()
                         .and_then(|(mt, dat)| ctx.add_mt(mt, dat, self.loc))
                 }
-                Some(Token::Table(..)) => {
-                    self.start_gathering_comments();
-                    self.parse_table_decl()
-                        .and_then(|(table, dat)| ctx.add_table(table, dat, self.loc))
-                }
                 Some(Token::SigRef(..)) => {
                     self.start_gathering_comments();
                     self.parse_signature_decl().and_then(|(sig, dat)| {
@@ -1779,71 +1738,6 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(mt);
 
         Ok((mt, data))
-    }
-
-    // Parse a table decl.
-    //
-    // table-decl ::= * Table(table) "=" table-desc
-    // table-desc ::= table-style table-base { "," table-attr }
-    // table-style ::= "dynamic"
-    // table-base ::= GlobalValue(base)
-    // table-attr ::= "min" Imm64(bytes)
-    //              | "bound" Imm64(bytes)
-    //              | "element_size" Imm64(bytes)
-    //              | "index_type" type
-    //
-    fn parse_table_decl(&mut self) -> ParseResult<(Table, TableData)> {
-        let table = self.match_table("expected table number: table«n»")?;
-        self.match_token(Token::Equal, "expected '=' in table declaration")?;
-
-        let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
-
-        // table-desc ::= table-style * table-base { "," table-attr }
-        // table-base ::= * GlobalValue(base)
-        let base = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for table base"),
-            },
-            _ => return err!(self.loc, "expected table base"),
-        };
-        self.consume();
-
-        let mut data = TableData {
-            base_gv: base,
-            min_size: 0.into(),
-            bound_gv: GlobalValue::reserved_value(),
-            element_size: 0.into(),
-            index_type: ir::types::I32,
-        };
-
-        // table-desc ::= * { "," table-attr }
-        while self.optional(Token::Comma) {
-            match self.match_any_identifier("expected table attribute name")? {
-                "min" => {
-                    data.min_size = self.match_uimm64("expected integer min size")?;
-                }
-                "bound" => {
-                    data.bound_gv = match style_name {
-                        "dynamic" => self.match_gv("expected gv bound")?,
-                        t => return err!(self.loc, "unknown table style '{}'", t),
-                    };
-                }
-                "element_size" => {
-                    data.element_size = self.match_uimm64("expected integer element size")?;
-                }
-                "index_type" => {
-                    data.index_type = self.match_type("expected index type")?;
-                }
-                t => return err!(self.loc, "unknown table attribute '{}'", t),
-            }
-        }
-
-        // Collect any trailing comments.
-        self.token();
-        self.claim_gathered_comments(table);
-
-        Ok((table, data))
     }
 
     // Parse a signature decl.
@@ -3139,19 +3033,6 @@ impl<'a> Parser<'a> {
                     opcode,
                     arg,
                     dynamic_stack_slot: dss,
-                }
-            }
-            InstructionFormat::TableAddr => {
-                let table = self.match_table("expected table identifier")?;
-                ctx.check_table(table, self.loc)?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let arg = self.match_value("expected SSA value table address")?;
-                let offset = self.optional_offset32()?;
-                InstructionData::TableAddr {
-                    opcode,
-                    table,
-                    arg,
-                    offset,
                 }
             }
             InstructionFormat::Load => {
