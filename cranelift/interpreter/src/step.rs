@@ -160,8 +160,12 @@ where
         MemoryError::InvalidAddressType(_) => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidOffset { .. } => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,
-        MemoryError::OutOfBoundsStore { .. } => TrapCode::HeapOutOfBounds,
-        MemoryError::OutOfBoundsLoad { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::OutOfBoundsStore { mem_flags, .. } => mem_flags
+            .trap_code()
+            .expect("store with notrap flag should not trap"),
+        MemoryError::OutOfBoundsLoad { mem_flags, .. } => mem_flags
+            .trap_code()
+            .expect("load with notrap flag should not trap"),
         MemoryError::MisalignedLoad { .. } => TrapCode::HeapMisaligned,
         MemoryError::MisalignedStore { .. } => TrapCode::HeapMisaligned,
     };

@@ -1,5 +1,6 @@
 //! Memory operation flags.
 
+use super::TrapCode;
 use core::fmt;
 
 #[cfg(feature = "enable-serde")]
@@ -9,6 +10,9 @@ enum FlagBit {
     /// Guaranteed not to trap. This may enable additional
     /// optimizations to be performed.
     Notrap,
+    /// If this memory access traps, use [TrapCode::TableOutOfBounds]
+    /// instead of [TrapCode::HeapOutOfBounds].
+    TableTrap,
     /// Guaranteed to use "natural alignment" for the given type. This
     /// may enable better instruction selection.
     Aligned,
@@ -36,8 +40,17 @@ enum FlagBit {
     Checked,
 }
 
-const NAMES: [&str; 9] = [
-    "notrap", "aligned", "readonly", "little", "big", "heap", "table", "vmctx", "checked",
+const NAMES: [&str; 10] = [
+    "notrap",
+    "tabletrap",
+    "aligned",
+    "readonly",
+    "little",
+    "big",
+    "heap",
+    "table",
+    "vmctx",
+    "checked",
 ];
 
 /// Endianness of a memory access.
@@ -160,6 +173,25 @@ impl MemFlags {
     /// Set the `notrap` flag, returning new flags.
     pub const fn with_notrap(self) -> Self {
         self.with(FlagBit::Notrap)
+    }
+
+    /// Test if the `tabletrap` bit is set.
+    ///
+    /// By default, if this memory access traps, the associated trap
+    /// code will be `HeapOutOfBounds`. With this flag set, the trap
+    /// code will instead be `TableOutOfBounds`.
+    pub const fn tabletrap(self) -> bool {
+        self.read(FlagBit::TableTrap)
+    }
+
+    /// Set the `tabletrap` bit.
+    pub fn set_tabletrap(&mut self) {
+        *self = self.with_tabletrap();
+    }
+
+    /// Set the `tabletrap` bit, returning new flags.
+    pub const fn with_tabletrap(self) -> Self {
+        self.with(FlagBit::TableTrap)
     }
 
     /// Test if the `aligned` flag is set.
@@ -295,6 +327,21 @@ impl MemFlags {
     /// Set the `checked` bit, returning new flags.
     pub const fn with_checked(self) -> Self {
         self.with(FlagBit::Checked)
+    }
+
+    /// Get the trap code to report if this memory access traps. If the
+    /// `notrap` flag is set, then return `None`. Otherwise, the choice
+    /// of trap code depends on the `tabletrap` flag. The default trap
+    /// code is `HeapOutOfBounds`, but with `tabletrap` set, the trap
+    /// code is instead `TableOutOfBounds`.
+    pub const fn trap_code(self) -> Option<TrapCode> {
+        if self.notrap() {
+            None
+        } else if self.tabletrap() {
+            Some(TrapCode::TableOutOfBounds)
+        } else {
+            Some(TrapCode::HeapOutOfBounds)
+        }
     }
 }
 

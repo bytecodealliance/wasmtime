@@ -10,7 +10,6 @@
 
 use crate::machinst::{Reg, RegClass};
 use crate::{
-    ir::TrapCode,
     isa::x64::inst::{
         args::{Amode, OperandSize},
         regs, Inst, LabelUse,
@@ -314,9 +313,8 @@ pub(crate) fn emit_std_enc_mem(
     // 64-bit integer registers, because they are part of an address
     // expression.  But `enc_g` can be derived from a register of any class.
 
-    let can_trap = mem_e.can_trap();
-    if can_trap {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if let Some(trap_code) = mem_e.get_flags().trap_code() {
+        sink.add_trap(trap_code);
     }
 
     prefixes.emit(sink);
