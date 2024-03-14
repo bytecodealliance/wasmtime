@@ -1,7 +1,6 @@
-# C
+# Embedding in C
 
-... more coming soon
+This section is intended to showcase the C embedding API for Wasmtime. Full
+reference documentation for the C API [can be found online][online].
 
-In the meantime, have a look at the [C API docs].
-
-[C API docs]: https://bytecodealliance.github.io/wasmtime/c-api/
+[online]: https://bytecodealliance.github.io/wasmtime/c-api/
