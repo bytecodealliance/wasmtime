@@ -5,6 +5,8 @@ mod env;
 
 use anyhow::{bail, ensure, Context, Result};
 use config::TestConfig;
+use cranelift_codegen::ir::Function;
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_control::ControlPlane;
 use env::ModuleEnv;
 use similar::TextDiff;
@@ -53,23 +55,62 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
     cranelift_wasm::translate_module(&wasm, &mut env)
         .context("failed to translate the test case into CLIF")?;
 
+    let kind = if config.compile {
+        TestKind::Compile
+    } else {
+        TestKind::Clif {
+            optimize: config.optimize,
+        }
+    };
+    run_functions(
+        path,
+        wat,
+        isa,
+        kind,
+        env.inner.info.function_bodies.values().as_slice(),
+    )
+}
+
+/// Which kind of test is being performed.
+pub enum TestKind {
+    /// Compile output to machine code.
+    Compile,
+    /// Test the CLIF output
+    Clif {
+        /// Whether or not to optimize the CLIF.
+        optimize: bool,
+    },
+}
+
+/// Assert that `wat` contains the test expectations necessary for `funcs`.
+pub fn run_functions(
+    path: &Path,
+    wat: &str,
+    isa: &dyn TargetIsa,
+    kind: TestKind,
+    funcs: &[Function],
+) -> Result<()> {
     let mut actual = String::new();
-    for (_index, func) in env.inner.info.function_bodies.iter() {
-        if config.compile {
-            let mut ctx = cranelift_codegen::Context::for_function(func.clone());
-            ctx.set_disasm(true);
-            let code = ctx
-                .compile(isa, &mut Default::default())
-                .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
-            writeln!(&mut actual, "function {}:", func.name).unwrap();
-            writeln!(&mut actual, "{}", code.vcode.as_ref().unwrap()).unwrap();
-        } else if config.optimize {
-            let mut ctx = cranelift_codegen::Context::for_function(func.clone());
-            ctx.optimize(isa, &mut ControlPlane::default())
-                .map_err(|e| crate::pretty_anyhow_error(&ctx.func, e))?;
-            writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
-        } else {
-            writeln!(&mut actual, "{}", func.display()).unwrap();
+    for func in funcs {
+        match kind {
+            TestKind::Compile => {
+                let mut ctx = cranelift_codegen::Context::for_function(func.clone());
+                ctx.set_disasm(true);
+                let code = ctx
+                    .compile(isa, &mut Default::default())
+                    .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
+                writeln!(&mut actual, "function {}:", func.name).unwrap();
+                writeln!(&mut actual, "{}", code.vcode.as_ref().unwrap()).unwrap();
+            }
+            TestKind::Clif { optimize: true } => {
+                let mut ctx = cranelift_codegen::Context::for_function(func.clone());
+                ctx.optimize(isa, &mut ControlPlane::default())
+                    .map_err(|e| crate::pretty_anyhow_error(&ctx.func, e))?;
+                writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
+            }
+            TestKind::Clif { optimize: false } => {
+                writeln!(&mut actual, "{}", func.display()).unwrap();
+            }
         }
     }
     let actual = actual.trim();
