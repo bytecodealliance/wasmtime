@@ -114,6 +114,7 @@ fn run_test(path: &Path) -> Result<()> {
     Ok(())
 }
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TestConfig {
     target: String,
     #[serde(default)]
