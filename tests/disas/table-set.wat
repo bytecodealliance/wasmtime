@@ -1,7 +1,9 @@
 ;;! target = "x86_64"
 ;;! test = "optimize"
+;;! flags = "-O opt-level=0"
 
 ;; Test basic code generation for table WebAssembly instructions.
+;; Use optimization but with `opt-level=0` to legalize away table_addr instructions.
 
 (module
   (table (export "table") 1 externref)
@@ -30,17 +32,22 @@
 ;;                                     v20 -> v0
 ;;                                     v23 -> v0
 ;;                                     v24 -> v0
-;; @0055                               v4 = load.i32 notrap aligned v0+80
 ;; @0051                               v3 = iconst.i32 0
-;;                                     v31 = icmp eq v4, v3  ; v3 = 0
-;; @0055                               brif v31, block7, block8
+;; @0055                               v4 = load.i32 notrap aligned v23+80
+;; @0055                               v5 = icmp uge v3, v4  ; v3 = 0
+;; @0055                               brif v5, block7, block8
 ;;
 ;;                                 block7 cold:
 ;; @0055                               trap table_oob
 ;;
 ;;                                 block8:
-;; @0055                               v7 = load.i64 notrap aligned v0+72
-;; @0055                               v11 = select_spectre_guard v31, v7, v7
+;; @0055                               v6 = uextend.i64 v3  ; v3 = 0
+;; @0055                               v7 = load.i64 notrap aligned v24+72
+;;                                     v25 = iconst.i64 3
+;; @0055                               v8 = ishl v6, v25  ; v25 = 3
+;; @0055                               v9 = iadd v7, v8
+;; @0055                               v10 = icmp.i32 uge v3, v4  ; v3 = 0
+;; @0055                               v11 = select_spectre_guard v10, v7, v9
 ;; @0055                               v12 = load.i64 notrap aligned table v11
 ;; @0055                               store.r64 notrap aligned table v2, v11
 ;; @0055                               v13 = is_null.r64 v2
@@ -54,8 +61,8 @@
 ;; @0055                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v34 = iconst.i64 0
-;; @0055                               v16 = icmp.i64 eq v12, v34  ; v34 = 0
+;;                                     v27 = iconst.i64 0
+;; @0055                               v16 = icmp.i64 eq v12, v27  ; v27 = 0
 ;; @0055                               brif v16, block6, block4
 ;;
 ;;                                 block4:
@@ -63,14 +70,14 @@
 ;;                                     v28 = iconst.i64 -1
 ;; @0055                               v18 = iadd v17, v28  ; v28 = -1
 ;; @0055                               store notrap aligned v18, v12
-;;                                     v35 = iconst.i64 0
-;;                                     v36 = icmp eq v18, v35  ; v35 = 0
-;; @0055                               brif v36, block5, block6
+;;                                     v29 = iconst.i64 0
+;; @0055                               v19 = icmp eq v18, v29  ; v29 = 0
+;; @0055                               brif v19, block5, block6
 ;;
 ;;                                 block5:
-;; @0055                               v21 = load.i64 notrap aligned readonly v0+56
+;; @0055                               v21 = load.i64 notrap aligned readonly v20+56
 ;; @0055                               v22 = load.i64 notrap aligned readonly v21+200
-;; @0055                               call_indirect sig0, v22(v0, v12)
+;; @0055                               call_indirect sig0, v22(v20, v12)
 ;; @0055                               jump block6
 ;;
 ;;                                 block6:
@@ -96,7 +103,7 @@
 ;;                                     v20 -> v0
 ;;                                     v23 -> v0
 ;;                                     v24 -> v0
-;; @005e                               v4 = load.i32 notrap aligned v0+80
+;; @005e                               v4 = load.i32 notrap aligned v23+80
 ;; @005e                               v5 = icmp uge v2, v4
 ;; @005e                               brif v5, block7, block8
 ;;
@@ -104,12 +111,13 @@
 ;; @005e                               trap table_oob
 ;;
 ;;                                 block8:
-;; @005e                               v7 = load.i64 notrap aligned v0+72
 ;; @005e                               v6 = uextend.i64 v2
+;; @005e                               v7 = load.i64 notrap aligned v24+72
 ;;                                     v25 = iconst.i64 3
 ;; @005e                               v8 = ishl v6, v25  ; v25 = 3
 ;; @005e                               v9 = iadd v7, v8
-;; @005e                               v11 = select_spectre_guard v5, v7, v9
+;; @005e                               v10 = icmp.i32 uge v2, v4
+;; @005e                               v11 = select_spectre_guard v10, v7, v9
 ;; @005e                               v12 = load.i64 notrap aligned table v11
 ;; @005e                               store.r64 notrap aligned table v3, v11
 ;; @005e                               v13 = is_null.r64 v3
@@ -132,14 +140,14 @@
 ;;                                     v28 = iconst.i64 -1
 ;; @005e                               v18 = iadd v17, v28  ; v28 = -1
 ;; @005e                               store notrap aligned v18, v12
-;;                                     v30 = iconst.i64 0
-;;                                     v31 = icmp eq v18, v30  ; v30 = 0
-;; @005e                               brif v31, block5, block6
+;;                                     v29 = iconst.i64 0
+;; @005e                               v19 = icmp eq v18, v29  ; v29 = 0
+;; @005e                               brif v19, block5, block6
 ;;
 ;;                                 block5:
-;; @005e                               v21 = load.i64 notrap aligned readonly v0+56
+;; @005e                               v21 = load.i64 notrap aligned readonly v20+56
 ;; @005e                               v22 = load.i64 notrap aligned readonly v21+200
-;; @005e                               call_indirect sig0, v22(v0, v12)
+;; @005e                               call_indirect sig0, v22(v20, v12)
 ;; @005e                               jump block6
 ;;
 ;;                                 block6:
