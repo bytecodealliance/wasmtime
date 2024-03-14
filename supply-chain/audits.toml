@@ -1319,6 +1319,12 @@ criteria = "safe-to-deploy"
 delta = "0.18.1 -> 0.19.1"
 notes = "Just a dependency version bump"
 
+[[audits.fslock]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.1.8 -> 0.2.1"
+notes = "Internal and external refactorings plus `unsafe` where one would expect."
+
 [[audits.futures]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1428,6 +1434,12 @@ notes = "Contains `forbid_unsafe` and only uses `std::fmt` from the standard lib
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.3.0"
+
+[[audits.home]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.5.3 -> 0.5.9"
+notes = "No major changes, just some internal refactorings."
 
 [[audits.http]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3119,6 +3131,12 @@ delta = "0.22.4 -> 0.23.0"
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.23.0 -> 0.25.2"
+
+[[audits.which]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "4.4.0 -> 5.0.0"
+notes = "Only one `unsafe` block, it's what a `which` crate is expected to be."
 
 [[audits.winx]]
 who = "Dan Gohman <dev@sunfishcode.online>"
