@@ -170,8 +170,7 @@ impl Config {
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map)
-            .cranelift_pcc(self.wasmtime.pcc);
+            .generate_address_map(self.wasmtime.generate_address_map);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -214,6 +213,8 @@ impl Config {
                     );
                 }
             }
+
+            cfg.cranelift_pcc(self.wasmtime.pcc);
         }
 
         // Vary the memory configuration, but only if threads are not enabled.
@@ -244,6 +245,14 @@ impl Config {
                         .guard_before_linear_memory(false);
                 }
             }
+        }
+
+        // If PCC is enabled, force other options to be compatible: PCC is currently only
+        // supported when bounds checks are elided.
+        if self.wasmtime.pcc {
+            cfg.static_memory_maximum_size(4 << 30); // 4 GiB
+            cfg.static_memory_guard_size(2 << 30); // 2 GiB
+            cfg.dynamic_memory_guard_size(0);
         }
 
         return cfg;
