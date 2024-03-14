@@ -37,12 +37,14 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
-use cranelift_codegen::ir::Function;
+use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use cranelift_filetests::test_wasm::{run_functions, TestKind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tempfile::TempDir;
 use wasmtime::{Engine, OptLevel};
+use wasmtime_cli_flags::CommonOptions;
 
 fn main() {
     // First discover all tests ...
@@ -60,129 +62,159 @@ fn main() {
 }
 
 fn run_test(path: &Path) -> Result<()> {
-    let contents =
-        std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
+    let mut test = Test::new(path)?;
+    let clifs = test.generate_clif()?;
+    let isa = test.build_target_isa()?;
 
-    // Parse the `contents` looking for directive-based comments starting with
-    // `;;!` near the top of the file.
-    let mut flags = vec!["wasmtime"];
-    let mut compile = false;
-    let mut optimize = false;
-    let mut target = None;
-    for line in contents.lines() {
-        let directive = match line.strip_prefix(";;!") {
-            Some("") | None => continue,
-            Some(s) => s.trim(),
-        };
-        if directive == "compile" {
-            compile = true;
-            continue;
-        }
-        if directive == "optimize" {
-            optimize = true;
-            continue;
-        }
-        if let Some(s) = directive.strip_prefix("flags: ") {
-            flags.extend(s.split_whitespace().filter(|s| !s.is_empty()));
-            continue;
-        }
-        if let Some(s) = directive.strip_prefix("target: ") {
-            if target.is_some() {
-                bail!("two targets have been specified");
-            }
-            target = Some(s);
-            continue;
-        }
-
-        bail!("unknown directive: {directive}");
-    }
-
-    // Use the file-based directives to create a `wasmtime::Config`. Note that
-    // this config is configured to emit CLIF in a temporary directory, and
-    // then the config is used to compile the input wasm file.
-    let tempdir = TempDir::new().context("failed to make a tempdir")?;
-    let target =
-        target.ok_or_else(|| anyhow!("test must specify a target with `;;! target: ...`"))?;
-    let mut opts = wasmtime_cli_flags::CommonOptions::try_parse_from(flags)?;
-    let mut config = opts.config(Some(target))?;
-    config.emit_clif(tempdir.path());
-    let engine = Engine::new(&config).context("failed to create engine")?;
-    let module = wat::parse_file(path)?;
-    engine
-        .precompile_module(&module)
-        .context("failed to compile module")?;
-
-    // Read all `*.clif` files from the clif directory that the compilation
-    // process just emitted.
-    //
-    // Afterward remove the temporary directory and then use `cranelift_reader`
-    // to parse everything into a `Function`.
-    let mut clifs = Vec::new();
-    for entry in tempdir
-        .path()
-        .read_dir()
-        .context("failed to read tempdir")?
-    {
-        let entry = entry.context("failed to iterate over tempdir")?;
-        let path = entry.path();
-        let clif = std::fs::read_to_string(&path)
-            .with_context(|| format!("failed to read clif file {path:?}"))?;
-        clifs.push(clif);
-    }
-    drop(tempdir);
-    clifs.sort();
+    // Parse the text format CLIF which is emitted by Wasmtime back into
+    // in-memory data structures.
     let functions = clifs
         .iter()
-        .map(|s| parse_clif(s))
+        .map(|clif| {
+            let mut funcs = cranelift_reader::parse_functions(clif)?;
+            if funcs.len() != 1 {
+                bail!("expected one function per clif");
+            }
+            Ok(funcs.remove(0))
+        })
         .collect::<Result<Vec<_>>>()?;
 
-    // Determine the kind of test and build a `TargetIsa` based on the `target`
-    // name and configuration settings in the CLI flags.
-    let kind = if compile {
-        if optimize {
-            bail!("can't be both an `optimize` and `compile` test");
-        }
-        TestKind::Compile
-    } else {
-        TestKind::Clif { optimize }
-    };
-    let mut builder = cranelift_codegen::isa::lookup_by_name(target)?;
-    let mut flags = cranelift_codegen::settings::builder();
-    let opt_level = match opts.opts.opt_level {
-        None | Some(OptLevel::Speed) => "speed",
-        Some(OptLevel::SpeedAndSize) => "speed_and_size",
-        Some(OptLevel::None) => "none",
-        _ => unreachable!(),
-    };
-    flags.set("opt_level", opt_level)?;
-    for (key, val) in opts.codegen.cranelift.iter() {
-        let key = &key.replace("-", "_");
-        let target_res = match val {
-            Some(val) => builder.set(key, val),
-            None => builder.enable(key),
-        };
-        match target_res {
-            Ok(()) => continue,
-            Err(SetError::BadName(_)) => {}
-            Err(e) => bail!(e),
-        }
-        match val {
-            Some(val) => flags.set(key, val)?,
-            None => flags.enable(key)?,
-        }
-    }
-    let isa = builder.finish(Flags::new(flags))?;
-
     // And finally, use `cranelift_filetests` to perform the rest of the test.
-    run_functions(path, &contents, &*isa, kind, &functions)?;
+    run_functions(&test.path, &test.contents, &*isa, test.kind, &functions)?;
 
     Ok(())
 }
 
-fn parse_clif(clif: &str) -> Result<Function> {
-    let mut funcs = cranelift_reader::parse_functions(clif)?;
-    if funcs.len() != 1 {
-        bail!("expected one function per clif");
+struct Test {
+    kind: TestKind,
+    path: PathBuf,
+    contents: String,
+    target: String,
+    opts: CommonOptions,
+}
+
+impl Test {
+    /// Parse the contents of `path` looking for directive-based comments
+    /// starting with `;;!` near the top of the file.
+    fn new(path: &Path) -> Result<Test> {
+        let contents =
+            std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
+        let mut flags = vec!["wasmtime".to_string()];
+        let mut compile = false;
+        let mut optimize = false;
+        let mut target = None;
+        for line in contents.lines() {
+            let directive = match line.strip_prefix(";;!") {
+                Some("") | None => continue,
+                Some(s) => s.trim(),
+            };
+            if directive == "compile" {
+                compile = true;
+                continue;
+            }
+            if directive == "optimize" {
+                optimize = true;
+                continue;
+            }
+            if let Some(s) = directive.strip_prefix("flags: ") {
+                flags.extend(
+                    s.split_whitespace()
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string()),
+                );
+                continue;
+            }
+            if let Some(s) = directive.strip_prefix("target: ") {
+                if target.is_some() {
+                    bail!("two targets have been specified");
+                }
+                target = Some(s);
+                continue;
+            }
+
+            bail!("unknown directive: {directive}");
+        }
+        let kind = if compile {
+            if optimize {
+                bail!("can't be both an `optimize` and `compile` test");
+            }
+            TestKind::Compile
+        } else {
+            TestKind::Clif { optimize }
+        };
+        let target =
+            target.ok_or_else(|| anyhow!("test must specify a target with `;;! target: ...`"))?;
+        let opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
+
+        Ok(Test {
+            path: path.to_path_buf(),
+            kind,
+            target: target.to_string(),
+            opts,
+            contents,
+        })
     }
-    Ok(funcs.remove(0))
+
+    /// Generates CLIF for all the wasm functions in this test.
+    fn generate_clif(&mut self) -> Result<Vec<String>> {
+        // Use wasmtime::Config with its `emit_clif` option to get Wasmtime's
+        // code generator to jettison CLIF out the back.
+        let tempdir = TempDir::new().context("failed to make a tempdir")?;
+        let mut config = self.opts.config(Some(&self.target))?;
+        config.emit_clif(tempdir.path());
+        let engine = Engine::new(&config).context("failed to create engine")?;
+        let module = wat::parse_file(&self.path)?;
+        engine
+            .precompile_module(&module)
+            .context("failed to compile module")?;
+
+        // Read all `*.clif` files from the clif directory that the compilation
+        // process just emitted.
+        let mut clifs = Vec::new();
+        for entry in tempdir
+            .path()
+            .read_dir()
+            .context("failed to read tempdir")?
+        {
+            let entry = entry.context("failed to iterate over tempdir")?;
+            let path = entry.path();
+            let clif = std::fs::read_to_string(&path)
+                .with_context(|| format!("failed to read clif file {path:?}"))?;
+            clifs.push(clif);
+        }
+        clifs.sort();
+        Ok(clifs)
+    }
+
+    /// Use the test configuration present with CLI flags to build a
+    /// `TargetIsa` to compile/optimize the CLIF.
+    fn build_target_isa(&self) -> Result<Arc<dyn TargetIsa>> {
+        let mut builder = lookup_by_name(&self.target)?;
+        let mut flags = cranelift_codegen::settings::builder();
+        let opt_level = match self.opts.opts.opt_level {
+            None | Some(OptLevel::Speed) => "speed",
+            Some(OptLevel::SpeedAndSize) => "speed_and_size",
+            Some(OptLevel::None) => "none",
+            _ => unreachable!(),
+        };
+        flags.set("opt_level", opt_level)?;
+        for (key, val) in self.opts.codegen.cranelift.iter() {
+            let key = &key.replace("-", "_");
+            let target_res = match val {
+                Some(val) => builder.set(key, val),
+                None => builder.enable(key),
+            };
+            match target_res {
+                Ok(()) => continue,
+                Err(SetError::BadName(_)) => {}
+                Err(e) => bail!(e),
+            }
+            match val {
+                Some(val) => flags.set(key, val)?,
+                None => flags.enable(key)?,
+            }
+        }
+        let isa = builder.finish(Flags::new(flags))?;
+        Ok(isa)
+    }
 }
