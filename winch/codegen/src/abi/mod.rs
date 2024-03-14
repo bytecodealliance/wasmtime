@@ -88,60 +88,6 @@ pub(crate) fn vmctx_types<A: ABI>() -> [WasmValType; 2] {
     [A::ptr_type(), A::ptr_type()]
 }
 
-/// Returns an [ABISig] for the array calling convention.
-/// The signature looks like:
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     values_ptr: *mut ValRaw,
-///     values_len: usize,
-/// )
-/// ```
-pub(crate) fn array_sig<A: ABI>(call_conv: &CallingConvention) -> ABISig {
-    let params = [A::ptr_type(), A::ptr_type(), A::ptr_type(), A::ptr_type()];
-    A::sig_from(&params, &[], call_conv)
-}
-
-/// Returns an [ABISig] that follows a variation of the system's
-/// calling convention.
-/// The main difference between the flavor of the returned signature
-/// and the vanilla signature is how multiple values are returned.
-/// Multiple returns are handled following Wasmtime's expectations:
-/// * A single value is returned via a register according to the calling
-///   convention.
-/// * More than one values are returned via a return pointer.
-/// These variations look like:
-///
-/// Single return value.
-///
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     // rest of parameters
-/// ) -> // single result
-/// ```
-///
-/// Multiple return values.
-///
-/// ```ignore
-/// unsafe extern "C" fn(
-///     callee_vmctx: *mut VMOpaqueContext,
-///     caller_vmctx: *mut VMOpaqueContext,
-///     // rest of parameters
-///     retptr: *mut (), // 2+ results
-/// ) -> // first result
-/// ```
-pub(crate) fn native_sig<A: ABI>(ty: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
-    // 6 is used semi-arbitrarily here, we can modify as we see fit.
-    let mut params: SmallVec<[WasmValType; 6]> = SmallVec::new();
-    params.extend_from_slice(&vmctx_types::<A>());
-    params.extend_from_slice(ty.params());
-
-    A::sig_from(&params, ty.returns(), call_conv)
-}
-
 /// Trait implemented by a specific ISA and used to provide
 /// information about alignment, parameter passing, usage of
 /// specific registers, etc.
@@ -609,6 +555,7 @@ impl ABIParams {
     }
 
     /// Get the [`ABIOperand`] param in the nth position.
+    #[allow(unused)]
     pub fn get(&self, n: usize) -> Option<&ABIOperand> {
         self.operands.inner.get(n)
     }
