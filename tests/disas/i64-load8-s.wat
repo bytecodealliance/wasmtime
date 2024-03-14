@@ -8,17 +8,24 @@
     local.get 0
     i64.load8_s))
 
-;; function u0:0(i32, i64 vmctx) -> i64 fast {
+;; function u0:0(i64 vmctx, i64, i32) -> i64 fast {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1
+;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
+;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     stack_limit = gv2
 ;;
-;;                                 block0(v0: i32, v1: i64):
-;; @0031                               v3 = uextend.i64 v0
-;; @0031                               v4 = global_value.i64 gv1
-;; @0031                               v5 = iadd v4, v3
-;; @0031                               v6 = sload8.i64 little heap v5
-;; @0034                               jump block1(v6)
+;;                                 block0(v0: i64, v1: i64, v2: i32):
+;; @0031                               v4 = uextend.i64 v2
+;; @0031                               v5 = global_value.i64 gv4
+;; @0031                               v6 = iadd v5, v4
+;; @0031                               v7 = sload8.i64 little heap v6
+;; @0034                               jump block1(v7)
 ;;
-;;                                 block1(v2: i64):
-;; @0034                               return v2
+;;                                 block1(v3: i64):
+;; @0034                               return v3
 ;; }

@@ -9,15 +9,22 @@
     local.get 1
     i64.store8))
 
-;; function u0:0(i32, i64, i64 vmctx) fast {
+;; function u0:0(i64 vmctx, i64, i32, i64) fast {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1
+;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
+;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     stack_limit = gv2
 ;;
-;;                                 block0(v0: i32, v1: i64, v2: i64):
-;; @0032                               v3 = uextend.i64 v0
-;; @0032                               v4 = global_value.i64 gv1
-;; @0032                               v5 = iadd v4, v3
-;; @0032                               istore8 little heap v1, v5
+;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64):
+;; @0032                               v4 = uextend.i64 v2
+;; @0032                               v5 = global_value.i64 gv4
+;; @0032                               v6 = iadd v5, v4
+;; @0032                               istore8 little heap v3, v6
 ;; @0035                               jump block1
 ;;
 ;;                                 block1:

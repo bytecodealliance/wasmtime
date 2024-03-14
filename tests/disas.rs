@@ -41,6 +41,7 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use cranelift_codegen::ir::{UserExternalName, UserFuncName};
 use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use cranelift_filetests::test_wasm::{parse_test_config, run_functions, TestKind};
@@ -91,7 +92,7 @@ fn run_test(path: &Path) -> Result<()> {
 
     // Parse the text format CLIF which is emitted by Wasmtime back into
     // in-memory data structures.
-    let functions = clifs
+    let mut functions = clifs
         .iter()
         .map(|clif| {
             let mut funcs = cranelift_reader::parse_functions(clif)?;
@@ -101,6 +102,10 @@ fn run_test(path: &Path) -> Result<()> {
             Ok(funcs.remove(0))
         })
         .collect::<Result<Vec<_>>>()?;
+    functions.sort_by_key(|f| match f.name {
+        UserFuncName::User(UserExternalName { namespace, index }) => (namespace, index),
+        UserFuncName::Testcase(_) => unreachable!(),
+    });
 
     // And finally, use `cranelift_filetests` to perform the rest of the test.
     run_functions(
@@ -187,7 +192,6 @@ impl Test {
                 .with_context(|| format!("failed to read clif file {path:?}"))?;
             clifs.push(clif);
         }
-        clifs.sort();
         Ok(clifs)
     }
 

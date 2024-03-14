@@ -1,6 +1,6 @@
-;;!target = "x86_64"
-;;!compile = true
-;;!settings = ["opt_level=speed", "has_bmi1=true"]
+;;! target = "x86_64"
+;;! test = "compile"
+;;! flags = "-C cranelift-has-bmi1"
 
 (module
   ;; this should get optimized to a `bnot` in clif
@@ -22,11 +22,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   movq    %rdi, %rax
+;;   movq    %rdx, %rax
 ;;   notl    %eax, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
@@ -36,11 +40,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   andn    %edi, %esi, %eax
+;;   andn    %edx, %ecx, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret

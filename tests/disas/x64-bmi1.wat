@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
-;;! compile = true
-;;! settings = ["has_bmi1", "opt_level=speed", "has_avx"]
+;;! test = "compile"
+;;! flags = "-Ccranelift-has-bmi1 -Ccranelift-has-avx"
 
 (module
   (func (export "blsi32") (param i32) (result i32)
@@ -49,11 +49,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   blsil   %edi, %eax
+;;   blsil   %edx, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -62,11 +66,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   blsiq   %rdi, %rax
+;;   blsiq   %rdx, %rax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -75,11 +83,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   blsrl   %edi, %eax
+;;   blsrl   %edx, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -88,11 +100,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   blsrq   %rdi, %rax
+;;   blsrq   %rdx, %rax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -101,11 +117,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   blsmskl %edi, %eax
+;;   blsmskl %edx, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -114,11 +134,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   blsmskq %rdi, %rax
+;;   blsmskq %rdx, %rax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -127,11 +151,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   tzcntl  %edi, %eax
+;;   tzcntl  %edx, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -140,11 +168,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   tzcntq  %rdi, %rax
+;;   tzcntq  %rdx, %rax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -153,11 +185,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   andn    %edi, %esi, %eax
+;;   andn    %edx, %ecx, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -166,11 +202,15 @@
 ;;   pushq   %rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;;   movq    %rsp, %rbp
+;;   movq    8(%rdi), %r10
+;;   movq    0(%r10), %r10
+;;   cmpq    %rsp, %r10
+;;   jnbe #trap=stk_ovf
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   andn    %rdi, %rsi, %rax
+;;   andn    %rdx, %rcx, %rax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret

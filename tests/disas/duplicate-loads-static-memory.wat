@@ -1,26 +1,5 @@
 ;;! target = "x86_64"
-;;!
-;;! optimize = true
-;;!
-;;! settings = [
-;;!   "enable_heap_access_spectre_mitigation=true",
-;;!   "opt_level=speed_and_size",
-;;! ]
-;;!
-;;! [globals.vmctx]
-;;! type = "i64"
-;;! vmctx = true
-;;!
-;;! [globals.heap_base]
-;;! type = "i64"
-;;! load = { base = "vmctx", offset = 0, readonly = true }
-;;!
-;;! [[heaps]]
-;;! base = "heap_base"
-;;! min_size = 0x10000
-;;! offset_guard_size = 0xffffffff
-;;! index_type = "i32"
-;;! style = { kind = "static", bound = 0x10000000 }
+;;! test = "optimize"
 
 (module
   (memory (export "memory") 1)
@@ -38,40 +17,54 @@
   )
 )
 
-;; function u0:0(i32, i64 vmctx) -> i32, i32 fast {
+;; function u0:0(i64 vmctx, i64, i32) -> i32, i32 fast {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1
+;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
+;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     stack_limit = gv2
 ;;
-;;                                 block0(v0: i32, v1: i64):
-;;                                     v12 -> v1
-;;                                     v13 -> v1
-;; @0057                               v5 = load.i64 notrap aligned readonly v1
-;; @0057                               v4 = uextend.i64 v0
-;; @0057                               v6 = iadd v5, v4
-;; @0057                               v7 = load.i32 little heap v6
-;;                                     v2 -> v7
+;;                                 block0(v0: i64, v1: i64, v2: i32):
+;;                                     v13 -> v0
+;;                                     v14 -> v0
+;; @0057                               v6 = load.i64 notrap aligned readonly checked v0+80
+;; @0057                               v5 = uextend.i64 v2
+;; @0057                               v7 = iadd v6, v5
+;; @0057                               v8 = load.i32 little heap v7
+;;                                     v3 -> v8
 ;; @005f                               jump block1
 ;;
 ;;                                 block1:
-;; @005f                               return v7, v7
+;; @005f                               return v8, v8
 ;; }
 ;;
-;; function u0:1(i32, i64 vmctx) -> i32, i32 fast {
+;; function u0:1(i64 vmctx, i64, i32) -> i32, i32 fast {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1
+;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly checked gv3+80
+;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
+;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+;;     stack_limit = gv2
 ;;
-;;                                 block0(v0: i32, v1: i64):
-;;                                     v16 -> v1
-;;                                     v17 -> v1
-;; @0064                               v5 = load.i64 notrap aligned readonly v1
-;; @0064                               v4 = uextend.i64 v0
-;; @0064                               v6 = iadd v5, v4
-;; @0064                               v7 = iconst.i64 1234
-;; @0064                               v8 = iadd v6, v7  ; v7 = 1234
-;; @0064                               v9 = load.i32 little heap v8
-;;                                     v2 -> v9
+;;                                 block0(v0: i64, v1: i64, v2: i32):
+;;                                     v17 -> v0
+;;                                     v18 -> v0
+;; @0064                               v6 = load.i64 notrap aligned readonly checked v0+80
+;; @0064                               v5 = uextend.i64 v2
+;; @0064                               v7 = iadd v6, v5
+;; @0064                               v8 = iconst.i64 1234
+;; @0064                               v9 = iadd v7, v8  ; v8 = 1234
+;; @0064                               v10 = load.i32 little heap v9
+;;                                     v3 -> v10
 ;; @006e                               jump block1
 ;;
 ;;                                 block1:
-;; @006e                               return v9, v9
+;; @006e                               return v10, v10
 ;; }
