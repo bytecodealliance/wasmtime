@@ -94,3 +94,37 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 ; run: %bitwise_bitselect_i64x2(0x11111111111111111111111111111111, 0x11111111111111111111111111111111, 0x00000000000000000000000000000000) == 0x11111111111111111111111111111111
 ; run: %bitwise_bitselect_i64x2(0x01010011000011110000000011111111, 0x11111111111111111111111111111111, 0x00000000000000000000000000000000) == 0x01010011000011110000000011111111
 ; run: %bitwise_bitselect_i64x2(0x00000000000000001111111111111111, 0x00000000000000000000000000000000, 0x11111111111111111111111111111111) == 0x11111111111111110000000000000000
+
+
+;; See issue #8131
+;;
+;; These tests test the fusion of `bitselect+bitcast+{f,i}cmp` that
+;; some backends perform. Importantly the `fcmp` and the `bitselect`
+;; have both different type sizes as well as a different number of
+;; lanes.
+
+function %bitselect_i8x16_fcmp_f64x2(i8x16) -> i8x16 fast {
+    const0 = 0x00000000000000000000000000000000
+
+block0(v0: i8x16):
+    v1 = bitcast.f64x2 little v0
+    v2 = fcmp eq v1, v1
+    v3 = bitcast.i8x16 little v2
+    v4 = vconst.i8x16 const0
+    v5 = bitselect.i8x16 v3, v0, v4  ; v3 = const0
+    return v5
+}
+; run: %bitselect_i8x16_fcmp_f64x2(0x80808080808080808080808080808080) == 0x80808080808080808080808080808080
+
+function %bitselect_i8x16_icmp_i64x2(i8x16) -> i8x16 fast {
+    const0 = 0x00000000000000000000000000000000
+
+block0(v0: i8x16):
+    v1 = bitcast.i64x2 little v0
+    v2 = icmp eq v1, v1
+    v3 = bitcast.i8x16 little v2
+    v4 = vconst.i8x16 const0
+    v5 = bitselect.i8x16 v3, v0, v4  ; v3 = const0
+    return v5
+}
+; run: %bitselect_i8x16_icmp_i64x2(0x80808080808080808080808080808080) == 0x80808080808080808080808080808080
