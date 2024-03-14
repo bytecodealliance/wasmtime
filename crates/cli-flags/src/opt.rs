@@ -301,7 +301,10 @@ impl WasmtimeOptionValue for u32 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
-        Ok(val.parse()?)
+        match val.strip_prefix("0x") {
+            Some(hex) => Ok(u32::from_str_radix(hex, 16)?),
+            None => Ok(val.parse()?),
+        }
     }
 }
 
@@ -309,7 +312,10 @@ impl WasmtimeOptionValue for u64 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
-        Ok(val.parse()?)
+        match val.strip_prefix("0x") {
+            Some(hex) => Ok(u64::from_str_radix(hex, 16)?),
+            None => Ok(val.parse()?),
+        }
     }
 }
 
@@ -317,7 +323,10 @@ impl WasmtimeOptionValue for usize {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
-        Ok(val.parse()?)
+        match val.strip_prefix("0x") {
+            Some(hex) => Ok(usize::from_str_radix(hex, 16)?),
+            None => Ok(val.parse()?),
+        }
     }
 }
 
