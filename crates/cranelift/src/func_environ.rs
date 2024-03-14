@@ -1579,10 +1579,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // pseudocode:
                 //
                 // ```
-                // if value != null:
-                //     value.ref_count += 1
                 // let current_elem = table[index]
                 // table[index] = value
+                // if value != null:
+                //     value.ref_count += 1
                 // if current_elem != null:
                 //     current_elem.ref_count -= 1
                 //     if current_elem.ref_count == 0:
@@ -1615,16 +1615,27 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let continue_block = builder.create_block();
                 builder.insert_block_after(continue_block, drop_block);
 
-                // Calculate the table address of the current element and do
-                // bounds checks. This is the first thing we do, because we
-                // don't want to modify any ref counts if this `table.set` is
-                // going to trap.
+                // Grab the current element from the table if it's in-bounds,
+                // and store the new `value` into the table. This is the first
+                // thing we do, because we don't want to modify the ref count
+                // on `value` if this `table.set` is going to trap due to an
+                // out-of-bounds index.
+                //
+                // Note that we load the current element as a pointer, not a
+                // reference. This is so that if we call out-of-line to run its
+                // destructor, and its destructor triggers GC, this reference is
+                // not recorded in the stack map (which would lead to the GC
+                // saving a reference to a deallocated object, and then using it
+                // after its been freed).
                 let table_entry_addr = table_data.prepare_table_addr(
                     builder,
                     index,
                     pointer_type,
                     self.isa.flags().enable_table_access_spectre_mitigation(),
                 );
+                let flags = ir::MemFlags::trusted().with_table();
+                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
+                builder.ins().store(flags, value, table_entry_addr, 0);
 
                 // If value is not null, increment `value`'s ref count.
                 //
@@ -1647,23 +1658,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 self.mutate_externref_ref_count(builder, value, 1);
                 builder.ins().jump(check_current_elem_block, &[]);
 
-                // Grab the current element from the table, and store the new
-                // `value` into the table.
-                //
-                // Note that we load the current element as a pointer, not a
-                // reference. This is so that if we call out-of-line to run its
-                // destructor, and its destructor triggers GC, this reference is
-                // not recorded in the stack map (which would lead to the GC
-                // saving a reference to a deallocated object, and then using it
-                // after its been freed).
-                builder.switch_to_block(check_current_elem_block);
-                let flags = ir::MemFlags::trusted().with_table();
-                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
-                builder.ins().store(flags, value, table_entry_addr, 0);
-
                 // If the current element is non-null, decrement its reference
                 // count. And if its reference count has reached zero, then make
                 // an out-of-line call to deallocate it.
+                builder.switch_to_block(check_current_elem_block);
                 let current_elem_is_null =
                     builder
                         .ins()
