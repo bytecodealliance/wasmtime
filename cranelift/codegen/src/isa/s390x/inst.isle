@@ -2872,8 +2872,8 @@
       (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
         (vec_rot_imm $I16X8 (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16) 8)))
 
-;; When passing a vector value in register to a function whose ABI uses
-;; a different lane order than the current function, we need to swap lanes.
+;; When passing a vector value to a function whose ABI uses a different
+;; lane order than the current function, we need to swap lanes.
 ;; The first operand is the lane order used by the callee.
 (decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
 (rule 4 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
@@ -2948,15 +2948,17 @@
 (rule (copy_reg_to_arg_slot uses lo _ (ABIArgSlot.Reg reg ty ext) src)
       (let ((_ Unit (args_builder_push uses (abi_vec_elt_rev lo ty src) reg)))
         (output_none)))
-(rule (copy_reg_to_arg_slot _ _ base (ABIArgSlot.Stack offset ty ext) src)
-      (side_effect (arg_store (abi_ext_ty ext ty) src (memarg_stack_off base offset))))
+(rule (copy_reg_to_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext) src)
+      (side_effect (arg_store (abi_ext_ty ext ty) (abi_vec_elt_rev lo ty src)
+                              (memarg_stack_off base offset))))
 
 ;; Copy one component of an argument/return value from its slot.
 (decl copy_reg_from_arg_slot (CallRetList LaneOrder i64 ABIArgSlot) Reg)
 (rule (copy_reg_from_arg_slot defs lo _ (ABIArgSlot.Reg reg ty ext))
       (abi_vec_elt_rev lo ty (defs_lookup defs reg)))
-(rule (copy_reg_from_arg_slot _ _ base (ABIArgSlot.Stack offset ty ext))
-      (arg_load (abi_ext_ty ext ty) (memarg_stack_off base offset)))
+(rule (copy_reg_from_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext))
+      (abi_vec_elt_rev lo ty (arg_load (abi_ext_ty ext ty)
+                                       (memarg_stack_off base offset))))
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
 (decl abi_ext_ty (ArgumentExtension Type) Type)
