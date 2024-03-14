@@ -3,18 +3,16 @@
 This document shows an example of how to embed Wasmtime using the [Rust
 API][apidoc] to execute a simple wasm program. Be sure to also check out the
 [full API documentation][apidoc] for a full listing of what the [`wasmtime`
-crate][wasmtime] has to offer and the [book examples for
-Rust](./examples-rust-embed.md) for more information.
+crate][wasmtime] has to offer.
 
 [apidoc]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/
 [wasmtime]: https://crates.io/crates/wasmtime
 
 ## Creating the WebAssembly to execute
 
-Creation of a WebAssembly file is generally covered by the [Writing
-WebAssembly chapter](./wasm.md), so we'll just assume that you've already got a
-wasm file on hand for the rest of this tutorial. To make things simple we'll
-also just assume you've got a `hello.wat` file which looks like this:
+We'll just assume that you've already got a wasm file on hand for the rest of
+this tutorial. To make things simple we'll also just assume you've got a
+`hello.wat` file which looks like this:
 
 ```wat
 (module
