@@ -1,10 +1,13 @@
 //! Common functionality shared between command implementations.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
+use std::net::TcpListener;
 use std::{path::Path, time::Duration};
+use wasi_common::sync::{ambient_authority, Dir};
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
+use wasmtime_wasi::WasiCtxBuilder;
 
 #[cfg(feature = "component-model")]
 use wasmtime::component::Component;
@@ -70,6 +73,43 @@ pub struct RunCommon {
         value_parser = Profile::parse,
     )]
     pub profile: Option<Profile>,
+
+    /// Grant access of a host directory to a guest.
+    ///
+    /// If specified as just `HOST_DIR` then the same directory name on the
+    /// host is made available within the guest. If specified as `HOST::GUEST`
+    /// then the `HOST` directory is opened and made available as the name
+    /// `GUEST` in the guest.
+    #[arg(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
+    pub dirs: Vec<(String, String)>,
+
+    /// Pass an environment variable to the program.
+    ///
+    /// The `--env FOO=BAR` form will set the environment variable named `FOO`
+    /// to the value `BAR` for the guest program using WASI. The `--env FOO`
+    /// form will set the environment variable named `FOO` to the same value it
+    /// has in the calling process for the guest, or in other words it will
+    /// cause the environment variable `FOO` to be inherited.
+    #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    pub vars: Vec<(String, Option<String>)>,
+}
+
+fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
+    let mut parts = s.splitn(2, '=');
+    Ok((
+        parts.next().unwrap().to_string(),
+        parts.next().map(|s| s.to_string()),
+    ))
+}
+
+fn parse_dirs(s: &str) -> Result<(String, String)> {
+    let mut parts = s.split("::");
+    let host = parts.next().unwrap();
+    let guest = match parts.next() {
+        Some(guest) => guest,
+        None => host,
+    };
+    Ok((host.into(), guest.into()))
 }
 
 impl RunCommon {
@@ -216,6 +256,83 @@ impl RunCommon {
                 bail!("support for compiling modules was disabled at compile time");
             }
         })
+    }
+
+    pub fn configure_wasip2(&self, builder: &mut WasiCtxBuilder) -> Result<()> {
+        for (key, value) in self.vars.iter() {
+            let value = match value {
+                Some(value) => value.clone(),
+                None => match std::env::var_os(key) {
+                    Some(val) => val
+                        .into_string()
+                        .map_err(|_| anyhow!("environment variable `{key}` not valid utf-8"))?,
+                    None => {
+                        // leave the env var un-set in the guest
+                        continue;
+                    }
+                },
+            };
+            builder.env(key, &value);
+        }
+
+        for (name, dir) in self.compute_preopen_dirs()? {
+            builder.preopened_dir(
+                dir,
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
+                name,
+            );
+        }
+
+        if self.common.wasi.listenfd == Some(true) {
+            bail!("components do not support --listenfd");
+        }
+        for _ in self.compute_preopen_sockets()? {
+            bail!("components do not support --tcplisten");
+        }
+
+        if self.common.wasi.inherit_network == Some(true) {
+            builder.inherit_network();
+        }
+        if let Some(enable) = self.common.wasi.allow_ip_name_lookup {
+            builder.allow_ip_name_lookup(enable);
+        }
+        if let Some(enable) = self.common.wasi.tcp {
+            builder.allow_tcp(enable);
+        }
+        if let Some(enable) = self.common.wasi.udp {
+            builder.allow_udp(enable);
+        }
+
+        Ok(())
+    }
+
+    pub fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
+        let mut preopen_dirs = Vec::new();
+
+        for (host, guest) in self.dirs.iter() {
+            preopen_dirs.push((
+                guest.clone(),
+                Dir::open_ambient_dir(host, ambient_authority())
+                    .with_context(|| format!("failed to open directory '{}'", host))?,
+            ));
+        }
+
+        Ok(preopen_dirs)
+    }
+
+    pub fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
+        let mut listeners = vec![];
+
+        for address in &self.common.wasi.tcplisten {
+            let listener = std::net::TcpListener::bind(address)
+                .with_context(|| format!("failed to bind to address '{}'", address))?;
+
+            let _ = listener.set_nonblocking(true)?;
+
+            listeners.push(listener)
+        }
+        Ok(listeners)
     }
 }
 

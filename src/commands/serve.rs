@@ -132,8 +132,9 @@ impl ServeCommand {
 
     fn new_store(&self, engine: &Engine, req_id: u64) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
+        self.run.configure_wasip2(&mut builder)?;
 
-        builder.envs(&[("REQUEST_ID", req_id.to_string())]);
+        builder.env("REQUEST_ID", req_id.to_string());
 
         builder.stdout(LogStream {
             prefix: format!("stdout [{req_id}] :: "),
@@ -191,20 +192,14 @@ impl ServeCommand {
     }
 
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
-        // Repurpose the `-Scommon` flag of `wasmtime run` for `wasmtime serve`
-        // to serve as a signal to enable all WASI interfaces instead of just
-        // those in the `proxy` world. If `-Scommon` is present then add all
-        // `command` APIs which includes all "common" or base WASI APIs and then
-        // additionally add in the required HTTP APIs.
-        //
-        // If `-Scommon` isn't passed then use the `proxy::add_to_linker`
-        // bindings which adds just those interfaces that the proxy interface
-        // uses.
-        if self.run.common.wasi.common == Some(true) {
+        if self.run.common.wasi.common == Some(false) {
+            // With `common` turned off only add the minimal `proxy` world.
+            wasmtime_wasi_http::proxy::add_to_linker(linker)?;
+        } else {
+            // ... otherwise without `common` explicitly turned off add all of
+            // WASI (the `command` bits) plus http.
             wasmtime_wasi::command::add_to_linker(linker)?;
             wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
-        } else {
-            wasmtime_wasi_http::proxy::add_to_linker(linker)?;
         }
 
         if self.run.common.wasi.nn == Some(true) {
