@@ -41,6 +41,7 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use cranelift_codegen::ir::{UserExternalName, UserFuncName};
 use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use cranelift_filetests::test_wasm::{parse_test_config, run_functions, TestKind};
@@ -51,22 +52,37 @@ use tempfile::TempDir;
 use wasmtime::{Engine, OptLevel};
 use wasmtime_cli_flags::CommonOptions;
 
-fn main() {
+fn main() -> Result<()> {
     if cfg!(miri) {
-        return;
+        return Ok(());
     }
+
     // First discover all tests ...
     let mut tests = Vec::new();
-    for file in std::fs::read_dir("./tests/disas").unwrap() {
-        tests.push(file.unwrap().path());
-    }
+    find_tests("./tests/disas".as_ref(), &mut tests)?;
 
     // ... then run all tests!
     for test in tests.iter() {
-        run_test(&test)
-            .with_context(|| format!("failed to run tests {test:?}"))
-            .unwrap();
+        run_test(&test).with_context(|| format!("failed to run tests {test:?}"))?;
     }
+
+    Ok(())
+}
+
+fn find_tests(path: &Path, dst: &mut Vec<PathBuf>) -> Result<()> {
+    for file in path
+        .read_dir()
+        .with_context(|| format!("failed to read {path:?}"))?
+    {
+        let file = file.context("failed to read directory entry")?;
+        let path = file.path();
+        if file.file_type()?.is_dir() {
+            find_tests(&path, dst)?;
+        } else if path.extension().and_then(|s| s.to_str()) == Some("wat") {
+            dst.push(path);
+        }
+    }
+    Ok(())
 }
 
 fn run_test(path: &Path) -> Result<()> {
@@ -76,7 +92,7 @@ fn run_test(path: &Path) -> Result<()> {
 
     // Parse the text format CLIF which is emitted by Wasmtime back into
     // in-memory data structures.
-    let functions = clifs
+    let mut functions = clifs
         .iter()
         .map(|clif| {
             let mut funcs = cranelift_reader::parse_functions(clif)?;
@@ -86,6 +102,10 @@ fn run_test(path: &Path) -> Result<()> {
             Ok(funcs.remove(0))
         })
         .collect::<Result<Vec<_>>>()?;
+    functions.sort_by_key(|f| match f.name {
+        UserFuncName::User(UserExternalName { namespace, index }) => (namespace, index),
+        UserFuncName::Testcase(_) => unreachable!(),
+    });
 
     // And finally, use `cranelift_filetests` to perform the rest of the test.
     run_functions(
@@ -99,6 +119,7 @@ fn run_test(path: &Path) -> Result<()> {
     Ok(())
 }
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TestConfig {
     target: String,
     #[serde(default)]
@@ -171,7 +192,6 @@ impl Test {
                 .with_context(|| format!("failed to read clif file {path:?}"))?;
             clifs.push(clif);
         }
-        clifs.sort();
         Ok(clifs)
     }
 
