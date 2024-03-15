@@ -1,6 +1,6 @@
 //! Trap handling on Unix based on POSIX signals.
 
-use crate::traphandlers::tls;
+use crate::traphandlers::{tls, TrapTest};
 use crate::VMContext;
 use std::cell::RefCell;
 use std::io;
@@ -111,23 +111,22 @@ unsafe extern "C" fn trap_handler(
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
         let (pc, fp) = get_pc_and_fp(context, signum);
-        let jmp_buf = info.take_jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
+        let test = info.test_if_trap(pc, |handler| handler(signum, siginfo, context));
 
         // Figure out what to do based on the result of this handling of
         // the trap. Note that our sentinel value of 1 means that the
         // exception was handled by a custom exception handler, so we
         // keep executing.
-        if jmp_buf.is_null() {
-            return false;
-        }
-        if jmp_buf as usize == 1 {
-            return true;
-        }
+        let (jmp_buf, trap) = match test {
+            TrapTest::NotWasm => return false,
+            TrapTest::HandledByEmbedder => return true,
+            TrapTest::Trap { jmp_buf, trap } => (jmp_buf, trap),
+        };
         let faulting_addr = match signum {
             libc::SIGSEGV | libc::SIGBUS => Some((*siginfo).si_addr() as usize),
             _ => None,
         };
-        info.set_jit_trap(pc, fp, faulting_addr);
+        info.set_jit_trap(pc, fp, faulting_addr, trap);
         // On macOS this is a bit special, unfortunately. If we were to
         // `siglongjmp` out of the signal handler that notably does
         // *not* reset the sigaltstack state of our signal handler. This

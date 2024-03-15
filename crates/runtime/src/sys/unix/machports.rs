@@ -49,6 +49,7 @@ use mach2::traps::*;
 use std::mem;
 use std::ptr::addr_of_mut;
 use std::thread;
+use wasmtime_environ::Trap;
 
 /// Process-global port that we use to route thread-level exceptions to.
 static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;
@@ -195,10 +196,10 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // the second `code` field. If we're ever interested in it the first code
     // field has a `kern_return_t` describing the kind of failure (e.g. SIGSEGV
     // vs SIGBUS), but we're not interested in that right now.
-    let (fault1, fault2) = if request.body.exception as u32 == EXC_BAD_ACCESS {
-        (1, request.body.code[1] as usize)
+    let faulting_addr = if request.body.exception as u32 == EXC_BAD_ACCESS {
+        Some(request.body.code[1] as usize)
     } else {
-        (0, 0)
+        None
     };
 
     // Depending on the current architecture various bits and pieces of this
@@ -232,7 +233,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rbp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize, trap: Trap| {
                 // The x86_64 ABI requires a 16-byte stack alignment for
                 // functions, so typically we'll be 16-byte aligned. In this
                 // case we simulate a `call` instruction by decrementing the
@@ -261,6 +262,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rsi = fp as u64;
                 state.__rdx = fault1 as u64;
                 state.__rcx = fault2 as u64;
+                state.__r8 = trap as u64;
             };
             let mut thread_state = ThreadState::new();
         } else if #[cfg(target_arch = "aarch64")] {
@@ -273,7 +275,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__fp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize, trap: Trap| {
                 // Clobber LR with the faulting PC, so unwinding resumes at the
                 // faulting instruction. The previous value of LR has been saved
                 // by the callee (in Cranelift generated code), so no need to
@@ -286,6 +288,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__x[1] = fp as u64;
                 state.__x[2] = fault1 as u64;
                 state.__x[3] = fault2 as u64;
+                state.__x[4] = trap as u64;
                 state.__pc = unwind as u64;
             };
             let mut thread_state = mem::zeroed::<ThreadState>();
@@ -322,15 +325,20 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // pointer value and if `MAP` changes happen after we read our entry that's
     // ok since they won't invalidate our entry.
     let (pc, fp) = get_pc_and_fp(&thread_state);
-    if !crate::traphandlers::IS_WASM_PC(pc as usize) {
-        return false;
-    }
+    let trap = match crate::traphandlers::GET_WASM_TRAP(pc as usize) {
+        Some(trap) => trap,
+        None => return false,
+    };
 
     // We have determined that this is a wasm trap and we need to actually
     // force the thread itself to trap. The thread's register state is
     // configured to resume in the `unwind` function below, we update the
     // thread's register state, and then we're off to the races.
-    resume(&mut thread_state, pc as usize, fp, fault1, fault2);
+    let (fault1, fault2) = match faulting_addr {
+        None => (0, 0),
+        Some(addr) => (1, addr),
+    };
+    resume(&mut thread_state, pc as usize, fp, fault1, fault2, trap);
     let kret = thread_set_state(
         origin_thread,
         thread_state_flavor,
@@ -350,17 +358,18 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 unsafe extern "C" fn unwind(
     wasm_pc: *const u8,
     wasm_fp: usize,
-    has_faulting_addr: usize,
-    faulting_addr: usize,
+    fault1: usize,
+    fault2: usize,
+    trap: u8,
 ) -> ! {
     let jmp_buf = tls::with(|state| {
         let state = state.unwrap();
-        let faulting_addr = if has_faulting_addr != 0 {
-            Some(faulting_addr)
-        } else {
-            None
+        let faulting_addr = match fault1 {
+            0 => None,
+            _ => Some(fault2),
         };
-        state.set_jit_trap(wasm_pc, wasm_fp, faulting_addr);
+        let trap = Trap::from_u8(trap).unwrap();
+        state.set_jit_trap(wasm_pc, wasm_fp, faulting_addr, trap);
         state.take_jmp_buf()
     });
     debug_assert!(!jmp_buf.is_null());
