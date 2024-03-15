@@ -571,7 +571,7 @@ version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.v8]]
-version = "0.74.1"
+version = "0.86.0"
 criteria = "safe-to-run"
 
 [[exemptions.wait-timeout]]
@@ -602,10 +602,6 @@ criteria = "safe-to-run"
 version = "0.3.57"
 criteria = "safe-to-deploy"
 notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
-[[exemptions.which]]
-version = "4.2.5"
-criteria = "safe-to-run"
 
 [[exemptions.winapi]]
 version = "0.3.9"
