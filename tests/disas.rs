@@ -317,7 +317,7 @@ pub fn run_functions(
         return Ok(());
     }
 
-    if std::env::var("CRANELIFT_TEST_BLESS").unwrap_or_default() == "1" {
+    if std::env::var("WASMTIME_TEST_BLESS").unwrap_or_default() == "1" {
         let old_expectation_line_count = wat
             .lines()
             .rev()
@@ -346,7 +346,7 @@ pub fn run_functions(
     bail!(
         "Did not get the expected CLIF translation:\n\n\
          {}\n\n\
-         Note: You can re-run with the `CRANELIFT_TEST_BLESS=1` environment\n\
+         Note: You can re-run with the `WASMTIME_TEST_BLESS=1` environment\n\
          variable set to update test expectations.",
         TextDiff::from_lines(expected, actual)
             .unified_diff()
