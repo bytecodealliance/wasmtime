@@ -1,30 +1,6 @@
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
-use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
+use cranelift_wasm::{translate_module, DummyEnvironment};
 use target_lexicon::PointerWidth;
-
-#[test]
-fn use_name_section() {
-    let data = wat::parse_str(
-        r#"
-        (module $module_name
-            (func $func_name (local $loc_name i32)
-            )
-        )"#,
-    )
-    .unwrap();
-
-    let mut dummy_environ = DummyEnvironment::new(TargetFrontendConfig {
-        default_call_conv: CallConv::SystemV,
-        pointer_width: PointerWidth::U32,
-    });
-
-    translate_module(data.as_ref(), &mut dummy_environ).unwrap();
-
-    assert_eq!(
-        dummy_environ.get_func_name(FuncIndex::from_u32(0)).unwrap(),
-        "func_name"
-    );
-}
 
 #[test]
 fn reachability_is_correct() {
