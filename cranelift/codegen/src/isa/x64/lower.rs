@@ -179,10 +179,7 @@ fn emit_vm_call(
     assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
 
     for (i, input) in inputs.iter().enumerate() {
-        let (insts, moves) = abi.gen_arg(ctx, i, ValueRegs::one(*input));
-        for inst in insts {
-            ctx.emit(inst);
-        }
+        let moves = abi.gen_arg(ctx, i, ValueRegs::one(*input));
         abi.emit_arg_moves(ctx, moves);
     }
 

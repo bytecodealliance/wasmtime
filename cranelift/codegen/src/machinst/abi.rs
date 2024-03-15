@@ -2327,8 +2327,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
         ctx: &mut Lower<M::I>,
         idx: usize,
         from_regs: ValueRegs<Reg>,
-    ) -> (SmallInstVec<M::I>, SmallVec<[(VReg, ArgLoc); 2]>) {
-        let mut insts = smallvec![];
+    ) -> SmallVec<[(VReg, ArgLoc); 2]> {
+        let mut insts = SmallInstVec::new();
         let mut locs = smallvec![];
         let word_rc = M::word_reg_class();
         let word_bits = M::word_bits() as usize;
@@ -2465,7 +2465,12 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 locs.push((tmp.into(), loc));
             }
         }
-        (insts, locs)
+
+        for inst in insts {
+            ctx.emit(inst);
+        }
+
+        locs
     }
 
     /// Call `gen_arg` for each non-hidden argument and emit all instructions
@@ -2483,10 +2488,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             self.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
         }
         for (i, value_regs) in arg_value_regs.iter().enumerate() {
-            let (insts, moves) = self.gen_arg(ctx, i, *value_regs);
-            for inst in insts {
-                ctx.emit(inst);
-            }
+            let moves = self.gen_arg(ctx, i, *value_regs);
             self.emit_arg_moves(ctx, moves);
         }
     }
@@ -2499,10 +2501,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 "if the tail callee has a return pointer, then the tail caller \
                  must as well",
             );
-            let (insts, moves) = self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg()));
-            for inst in insts {
-                ctx.emit(inst);
-            }
+            let moves = self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg()));
             self.emit_arg_moves(ctx, moves);
         }
     }
@@ -2609,10 +2608,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 rd,
                 I8,
             ));
-            let (insts, moves) = self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg()));
-            for inst in insts {
-                ctx.emit(inst);
-            }
+            let moves = self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg()));
             self.emit_arg_moves(ctx, moves);
         }
 
