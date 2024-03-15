@@ -30,11 +30,6 @@ pub fn run(
     let buffer =
         fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
 
-    if path.extension().map_or(false, |ext| ext == "wat") {
-        crate::test_wasm::run(path, &buffer)?;
-        return Ok(started.elapsed());
-    }
-
     let options = ParseOptions {
         target,
         passes,
