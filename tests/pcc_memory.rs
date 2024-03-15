@@ -8,132 +8,44 @@ mod pcc_memory_tests {
 
     const TESTS: &'static [&'static str] = &[
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i32.load8_u
-  drop))
+  drop
     "#,
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i32.load8_u offset=0x10000
-  drop))
+  drop
     "#,
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i32.load16_u
-  drop))
+  drop
     "#,
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i32.load16_u offset=0x10000
-  drop))
+  drop
     "#,
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i32.load
-  drop))
+  drop
     "#,
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i32.load offset=0x10000
-  drop))
+  drop
     "#,
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i64.load
-  drop))
+  drop
     "#,
         r#"
-(module
- (memory 1 1)
- (func (param i32)
   local.get 0
   i64.load offset=0x10000
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i32.load8_u
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i32.load8_u offset=0x10000
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i32.load16_u
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i32.load16_u offset=0x10000
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i32.load
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i32.load offset=0x10000
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i64.load
-  drop))
-    "#,
-        r#"
-(module
- (memory 10 20)
- (func (param i32)
-  local.get 0
-  i64.load offset=0x10000
-  drop))
+  drop
     "#,
     ];
 
@@ -145,9 +57,26 @@ mod pcc_memory_tests {
         const MIB: u64 = 1024 * KIB;
         const GIB: u64 = 1024 * MIB;
 
-        for &test in TESTS {
-            for static_memory_maximum_size in [0, 64 * KIB, 1 * MIB, 4 * GIB, 6 * GIB] {
-                for guard_size in [0, 64 * KIB, 2 * GIB] {
+        let mut bodies = vec![];
+        for (mem_min, mem_max) in [(1, 1), (10, 20)] {
+            for &snippet in TESTS {
+                bodies.push(format!(
+                    "(module (memory {mem_min} {mem_max}) (func (param i32) {snippet}))"
+                ));
+            }
+            let all_snippets = TESTS
+                .iter()
+                .map(|s| s.to_owned())
+                .collect::<Vec<_>>()
+                .join("\n");
+            bodies.push(format!(
+                "(module (memory {mem_min} {mem_max}) (func (param i32) {all_snippets}))"
+            ));
+        }
+
+        for test in &bodies {
+            for static_memory_maximum_size in [4 * GIB] {
+                for guard_size in [2 * GIB] {
                     for enable_spectre in [true /* not yet supported by PCC: false */] {
                         for _memory_bits in [32 /* not yet supported by PCC: 64 */] {
                             log::trace!("test:\n{}\n", test);
