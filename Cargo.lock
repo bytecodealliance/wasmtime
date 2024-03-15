@@ -662,7 +662,6 @@ dependencies = [
  "cranelift-module",
  "cranelift-native",
  "cranelift-reader",
- "cranelift-wasm",
  "file-per-thread-logger",
  "filecheck",
  "gimli",
@@ -675,7 +674,6 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "toml",
- "wasmparser",
  "wat",
 ]
 

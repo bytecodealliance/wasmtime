@@ -34,7 +34,5 @@ wat.workspace = true
 toml = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
-cranelift-wasm.workspace = true
-wasmparser.workspace = true
 cranelift.workspace = true
 smallvec = { workspace = true }
