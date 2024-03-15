@@ -1,3 +1,6 @@
+;; copied from a historical cranelift-wasm test and provided here as proof that
+;; this still compiles on various platforms and such
+
 (module
   (type $0 (;0;) (func (param i32 i32 i32) (result i32)))
   (type $1 (;1;) (func (param i32 i32) (result i32)))

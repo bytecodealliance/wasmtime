@@ -1,3 +1,29 @@
+;; copied from a historical cranelift-wasm test and provided here as proof that
+;; this still compiles on various platforms and such
+
+(module $env
+  (memory (export "memory") 2 2)
+  (table (export "table") 8 8 funcref)
+  (global (export "DYNAMICTOP_PTR") i32 i32.const 0)
+  (global (export "STACKTOP") i32 i32.const 0)
+  (global (export "STACK_MAX") i32 i32.const 0)
+  (global (export "memoryBase") i32 i32.const 0)
+  (global (export "tableBase") i32 i32.const 0)
+  (func (export "abort") (param i32))
+  (func (export "enlargeMemory") (result i32) unreachable)
+  (func (export "getTotalMemory") (result i32) unreachable)
+  (func (export "abortOnCannotGrowMemory") (result i32) unreachable)
+  (func (export "_pthread_cleanup_pop") (param i32))
+  (func (export "___syscall6") (param i32 i32) (result i32) unreachable)
+  (func (export "_pthread_cleanup_push") (param i32 i32))
+  (func (export "_abort"))
+  (func (export "___setErrNo") (param i32))
+  (func (export "_emscripten_memcpy_big") (param i32 i32 i32) (result i32) unreachable)
+  (func (export "___syscall54") (param i32 i32) (result i32) unreachable)
+  (func (export "___syscall140") (param i32 i32) (result i32) unreachable)
+  (func (export "___syscall146") (param i32 i32) (result i32) unreachable)
+)
+
 (module
   (type $0 (;0;) (func (param i32 i32 i32) (result i32)))
   (type $1 (;1;) (func (param i32) (result i32)))
@@ -12,7 +38,7 @@
   (type $10 (;10;) (func (param i32 i32 i32 i32 i32)))
   (type $11 (;11;) (func (param f64 i32) (result f64)))
   (type $12 (;12;) (func (param i32 i32 i32 i32) (result i32)))
-  (import "env" "memory" (memory $16 (;0;) 2048 2048))
+  (import "env" "memory" (memory $16 (;0;) 2 2))
   (import "env" "table" (table $timport$17 (;0;) 8 8 funcref))
   (import "env" "DYNAMICTOP_PTR" (global $gimport$0 (;0;) i32))
   (import "env" "STACKTOP" (global $gimport$1 (;1;) i32))
