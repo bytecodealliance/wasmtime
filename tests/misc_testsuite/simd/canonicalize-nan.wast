@@ -33,6 +33,12 @@
   (func (export "f64x2.ceil") (param v128) (result v128)
     local.get 0
     f64x2.ceil)
+
+  (func (export "reinterpret-and-demote") (param i64) (result i32)
+    local.get 0
+    f64.reinterpret_i64
+    f32.demote_f64
+    i32.reinterpret_f32)
 )
 
 (assert_return (invoke "f32x4.floor" (v128.const f32x4 1 -2.2 3.4 nan))
@@ -56,3 +62,6 @@
                (v128.const f64x2 3 nan))
 (assert_return (invoke "f64x2.ceil" (v128.const f64x2 3.4 nan))
                (v128.const f64x2 4 nan))
+
+(assert_return (invoke "reinterpret-and-demote" (i64.const 0xfffefdfccccdcecf))
+               (i32.const 0x7fc00000))
