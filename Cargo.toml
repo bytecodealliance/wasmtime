@@ -94,6 +94,8 @@ wit-component = { workspace = true }
 cranelift-filetests = { workspace = true }
 cranelift-codegen = { workspace = true }
 cranelift-reader = { workspace = true }
+toml = { workspace = true }
+similar = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }

@@ -662,7 +662,6 @@ dependencies = [
  "cranelift-module",
  "cranelift-native",
  "cranelift-reader",
- "cranelift-wasm",
  "file-per-thread-logger",
  "filecheck",
  "gimli",
@@ -675,7 +674,6 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "toml",
- "wasmparser",
  "wat",
 ]
 
@@ -3501,10 +3499,12 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "similar",
  "target-lexicon",
  "tempfile",
  "test-programs-artifacts",
  "tokio",
+ "toml",
  "tracing",
  "walkdir",
  "wasi-common",

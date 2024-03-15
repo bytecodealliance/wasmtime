@@ -101,6 +101,20 @@ impl TestFileCompiler {
                 }
             }));
         }
+
+        // On Unix platforms force `libm` to get linked into this executable
+        // because tests that use libcalls rely on this library being present.
+        // Without this it's been seen that when cross-compiled to riscv64 the
+        // final binary doesn't link in `libm`.
+        #[cfg(unix)]
+        {
+            extern "C" {
+                fn ceilf(f: f32) -> f32;
+            }
+            let f = 1.2_f32;
+            assert_eq!(f.ceil(), unsafe { ceilf(f) });
+        }
+
         let module = JITModule::new(builder);
         let ctx = module.make_context();
 
