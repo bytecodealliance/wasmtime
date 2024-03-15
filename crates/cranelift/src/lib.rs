@@ -154,7 +154,7 @@ fn wasm_call_signature(
         }
 
         // The winch calling convention is only implemented for x64 and aarch64
-        arch if tunables.tail_callable => {
+        arch if tunables.winch_callable => {
             assert!(
                 matches!(arch, Architecture::X86_64 | Architecture::Aarch64(_)),
                 "https://github.com/bytecodealliance/wasmtime/issues/6530"
