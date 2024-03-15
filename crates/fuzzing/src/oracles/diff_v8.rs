@@ -92,10 +92,7 @@ impl DiffEngine for V8Engine {
         };
         match wasmtime {
             Trap::MemoryOutOfBounds => {
-                return verify_v8(&[
-                    "memory access out of bounds",
-                    "data segment is out of bounds",
-                ])
+                return verify_v8(&["memory access out of bounds", "is out of bounds"])
             }
             Trap::UnreachableCodeReached => {
                 return verify_v8(&[
