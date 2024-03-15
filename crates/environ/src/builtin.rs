@@ -92,7 +92,7 @@ macro_rules! foreach_builtin_function {
 }
 
 /// An index type for builtin functions.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BuiltinFunctionIndex(u32);
 
 impl BuiltinFunctionIndex {
@@ -120,6 +120,17 @@ macro_rules! declare_indexes {
                 0;
                 $( $( #[$attr] )* $name; )*
             );
+
+            /// Returns a symbol name for this builtin.
+            pub fn name(&self) -> &'static str {
+                $(
+                    $( #[$attr] )*
+                    if *self == BuiltinFunctionIndex::$name() {
+                        return stringify!($name);
+                    }
+                )*
+                unreachable!()
+            }
         }
     };
 

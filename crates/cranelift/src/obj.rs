@@ -16,7 +16,6 @@
 use crate::{CompiledFunction, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
-use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::unwind::{systemv, UnwindInfo};
 use cranelift_codegen::TextSectionBuilder;
 use cranelift_control::ControlPlane;
@@ -26,7 +25,8 @@ use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, Symbol
 use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
 use std::ops::Range;
-use wasmtime_environ::{Compiler, FuncIndex};
+use wasmtime_environ::obj::LibCall;
+use wasmtime_environ::Compiler;
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -108,7 +108,7 @@ impl<'a> ModuleTextBuilder<'a> {
         &mut self,
         name: &str,
         compiled_func: &'a CompiledFunction,
-        resolve_reloc_target: impl Fn(FuncIndex) -> usize,
+        resolve_reloc_target: impl Fn(wasmtime_environ::RelocationTarget) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body = compiled_func.buffer.data();
         let alignment = compiled_func.alignment;
@@ -140,8 +140,8 @@ impl<'a> ModuleTextBuilder<'a> {
                 // resolve this relocation before we actually emit an object
                 // file, but if it can't handle it then we pass through the
                 // relocation.
-                RelocationTarget::UserFunc(index) => {
-                    let target = resolve_reloc_target(index);
+                RelocationTarget::Wasm(_) | RelocationTarget::Builtin(_) => {
+                    let target = resolve_reloc_target(r.reloc_target);
                     if self
                         .text
                         .resolve_reloc(off + u64::from(r.offset), r.reloc, r.addend, target)
@@ -157,7 +157,8 @@ impl<'a> ModuleTextBuilder<'a> {
                     // the final object file as well.
                     panic!(
                         "unresolved relocation could not be processed against \
-                         {index:?}: {r:?}"
+                         {:?}: {r:?}",
+                        r.reloc_target,
                     );
                 }
 
@@ -170,10 +171,10 @@ impl<'a> ModuleTextBuilder<'a> {
                 // 8-byte relocations so that's asserted here and then encoded
                 // directly into the object as a normal object relocation. This
                 // is processed at module load time to resolve the relocations.
-                RelocationTarget::LibCall(call) => {
+                RelocationTarget::HostLibcall(call) => {
                     let symbol = *self.libcall_symbols.entry(call).or_insert_with(|| {
                         self.obj.add_symbol(Symbol {
-                            name: libcall_name(call).as_bytes().to_vec(),
+                            name: call.symbol().as_bytes().to_vec(),
                             value: 0,
                             size: 0,
                             kind: SymbolKind::Text,
@@ -540,23 +541,4 @@ impl<'a> UnwindInfoBuilder<'a> {
             }
         }
     }
-}
-
-fn libcall_name(call: LibCall) -> &'static str {
-    use wasmtime_environ::obj::LibCall as LC;
-    let other = match call {
-        LibCall::FloorF32 => LC::FloorF32,
-        LibCall::FloorF64 => LC::FloorF64,
-        LibCall::NearestF32 => LC::NearestF32,
-        LibCall::NearestF64 => LC::NearestF64,
-        LibCall::CeilF32 => LC::CeilF32,
-        LibCall::CeilF64 => LC::CeilF64,
-        LibCall::TruncF32 => LC::TruncF32,
-        LibCall::TruncF64 => LC::TruncF64,
-        LibCall::FmaF32 => LC::FmaF32,
-        LibCall::FmaF64 => LC::FmaF64,
-        LibCall::X86Pshufb => LC::X86Pshufb,
-        _ => panic!("unknown libcall to give a name to: {call:?}"),
-    };
-    other.symbol()
 }

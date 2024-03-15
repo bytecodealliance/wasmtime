@@ -3,8 +3,8 @@
 
 use crate::{obj, Tunables};
 use crate::{
-    DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleTypesBuilder,
-    PrimaryMap, StackMap, WasmError, WasmFuncType,
+    BuiltinFunctionIndex, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, StackMap, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
@@ -63,6 +63,19 @@ pub enum CompileError {
     /// A compilation error occured.
     #[error("Debug info is not supported with this configuration")]
     DebugInfoNotSupported,
+}
+
+/// What relocations can be applied against.
+///
+/// Each wasm function may refer to various other `RelocationTarget` entries.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RelocationTarget {
+    /// This is a reference to another defined wasm function in the same module.
+    Wasm(FuncIndex),
+    /// This is a reference to a trampoline for a builtin function.
+    Builtin(BuiltinFunctionIndex),
+    /// A compiler-generated libcall.
+    HostLibcall(obj::LibCall),
 }
 
 /// Implementation of an incremental compilation's key/value cache store.
@@ -174,6 +187,12 @@ pub trait Compiler: Send + Sync {
     /// The body of the function is available in `data` and configuration
     /// values are also passed in via `tunables`. Type information in
     /// `translation` is all relative to `types`.
+    ///
+    /// This function returns a tuple:
+    ///
+    /// 1. Metadata about the wasm function itself.
+    /// 2. The function itself, as an `Any` to get downcasted later when passed
+    ///    to `append_code`.
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
@@ -216,6 +235,27 @@ pub trait Compiler: Send + Sync {
         wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
+    /// Creates a tramopline that can be used to call Wasmtime's implementation
+    /// of the builtin function specified by `index`.
+    ///
+    /// The trampoline created can technically have any ABI but currently has
+    /// the native ABI. This will then perform all the necessary duties of an
+    /// exit trampoline from wasm and then perform the actual dispatch to the
+    /// builtin function. Builtin functions in Wasmtime are stored in an array
+    /// in all `VMContext` pointers, so the call to the host is an indirect
+    /// call.
+    fn compile_wasm_to_builtin(
+        &self,
+        index: BuiltinFunctionIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError>;
+
+    /// Returns the list of relocations required for a function from one of the
+    /// previous `compile_*` functions above.
+    fn compiled_function_relocation_targets<'a>(
+        &'a self,
+        func: &'a dyn Any,
+    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a>;
+
     /// Appends a list of compiled functions to an in-memory object.
     ///
     /// This function will receive the same `Box<dyn Any>` produced as part of
@@ -238,7 +278,7 @@ pub trait Compiler: Send + Sync {
     ///
     /// 1. First, the index within `funcs` that is being resolved,
     ///
-    /// 2. and next the `FuncIndex` which is the relocation target to
+    /// 2. and next the `RelocationTarget` which is the relocation target to
     /// resolve.
     ///
     /// The return value is an index within `funcs` that the relocation points
@@ -247,7 +287,7 @@ pub trait Compiler: Send + Sync {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+        resolve_reloc: &dyn Fn(usize, RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>>;
 
     /// Inserts two trampolines into `obj` for a array-call host function:

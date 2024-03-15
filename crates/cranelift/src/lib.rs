@@ -3,6 +3,7 @@
 //! This crate provides an implementation of the `wasmtime_environ::Compiler`
 //! and `wasmtime_environ::CompilerBuilder` traits.
 
+use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Signature};
 use cranelift_codegen::{
     binemit,
     ir::{self, ExternalName, UserExternalNameRef},
@@ -12,9 +13,11 @@ use cranelift_codegen::{
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmValType};
 use target_lexicon::Architecture;
+use wasmtime_environ::{
+    BuiltinFunctionIndex, FlagValue, RelocationTarget, Trap, TrapInformation, Tunables,
+};
 
 pub use builder::builder;
-use wasmtime_environ::{FlagValue, Trap, TrapInformation, Tunables};
 
 pub mod isa_builder;
 mod obj;
@@ -203,6 +206,17 @@ fn reference_type(wasm_ht: cranelift_wasm::WasmHeapType, pointer_type: ir::Type)
     }
 }
 
+// List of namespaces which are processed in `mach_reloc_to_reloc` below.
+
+/// Namespace corresponding to wasm functions, the index is the index of the
+/// defined function that's being referenced.
+pub const NS_WASM_FUNC: u32 = 0;
+
+/// Namespace for builtin function trampolines. The index is the index of the
+/// builtin that's being referenced. These trampolines invoke the real host
+/// function through an indirect function call loaded by the `VMContext`.
+pub const NS_WASMTIME_BUILTIN: u32 = 1;
+
 /// A record of a relocation to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Relocation {
@@ -214,15 +228,6 @@ pub struct Relocation {
     pub offset: binemit::CodeOffset,
     /// The addend to add to the relocation value.
     pub addend: binemit::Addend,
-}
-
-/// Destination function. Can be either user function or some special one, like `memory.grow`.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum RelocationTarget {
-    /// The user function index.
-    UserFunc(FuncIndex),
-    /// A compiler-generated libcall.
-    LibCall(ir::LibCall),
 }
 
 /// Converts cranelift_codegen settings to the wasmtime_environ equivalent.
@@ -302,11 +307,17 @@ where
     let reloc_target = match *target {
         FinalizedRelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
             let (namespace, index) = transform_user_func_ref(user_func_ref);
-            debug_assert_eq!(namespace, 0);
-            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+            match namespace {
+                NS_WASM_FUNC => RelocationTarget::Wasm(FuncIndex::from_u32(index)),
+                NS_WASMTIME_BUILTIN => {
+                    RelocationTarget::Builtin(BuiltinFunctionIndex::from_u32(index))
+                }
+                _ => panic!("unknown namespace {namespace}"),
+            }
         }
         FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
-            RelocationTarget::LibCall(libcall)
+            let libcall = libcall_cranelift_to_wasmtime(libcall);
+            RelocationTarget::HostLibcall(libcall)
         }
         _ => panic!("unrecognized external name"),
     };
@@ -315,5 +326,105 @@ where
         reloc_target,
         offset,
         addend,
+    }
+}
+
+fn libcall_cranelift_to_wasmtime(call: ir::LibCall) -> wasmtime_environ::obj::LibCall {
+    use wasmtime_environ::obj::LibCall as LC;
+    match call {
+        ir::LibCall::FloorF32 => LC::FloorF32,
+        ir::LibCall::FloorF64 => LC::FloorF64,
+        ir::LibCall::NearestF32 => LC::NearestF32,
+        ir::LibCall::NearestF64 => LC::NearestF64,
+        ir::LibCall::CeilF32 => LC::CeilF32,
+        ir::LibCall::CeilF64 => LC::CeilF64,
+        ir::LibCall::TruncF32 => LC::TruncF32,
+        ir::LibCall::TruncF64 => LC::TruncF64,
+        ir::LibCall::FmaF32 => LC::FmaF32,
+        ir::LibCall::FmaF64 => LC::FmaF64,
+        ir::LibCall::X86Pshufb => LC::X86Pshufb,
+        _ => panic!("cranelift emitted a libcall wasmtime does not support: {call:?}"),
+    }
+}
+
+/// Helper structure for creating a `Signature` for all builtins.
+struct BuiltinFunctionSignatures {
+    pointer_type: ir::Type,
+
+    #[cfg(feature = "gc")]
+    reference_type: ir::Type,
+
+    call_conv: CallConv,
+}
+
+impl BuiltinFunctionSignatures {
+    fn new(isa: &dyn TargetIsa) -> Self {
+        Self {
+            pointer_type: isa.pointer_type(),
+            #[cfg(feature = "gc")]
+            reference_type: match isa.pointer_type() {
+                ir::types::I32 => ir::types::R32,
+                ir::types::I64 => ir::types::R64,
+                _ => panic!(),
+            },
+            call_conv: CallConv::triple_default(isa.triple()),
+        }
+    }
+
+    fn vmctx(&self) -> AbiParam {
+        AbiParam::special(self.pointer_type, ArgumentPurpose::VMContext)
+    }
+
+    #[cfg(feature = "gc")]
+    fn reference(&self) -> AbiParam {
+        AbiParam::new(self.reference_type)
+    }
+
+    fn pointer(&self) -> AbiParam {
+        AbiParam::new(self.pointer_type)
+    }
+
+    fn i32(&self) -> AbiParam {
+        // Some platform ABIs require i32 values to be zero- or sign-
+        // extended to the full register width.  We need to indicate
+        // this here by using the appropriate .uext or .sext attribute.
+        // The attribute can be added unconditionally; platforms whose
+        // ABI does not require such extensions will simply ignore it.
+        // Note that currently all i32 arguments or return values used
+        // by builtin functions are unsigned, so we always use .uext.
+        // If that ever changes, we will have to add a second type
+        // marker here.
+        AbiParam::new(ir::types::I32).uext()
+    }
+
+    fn i64(&self) -> AbiParam {
+        AbiParam::new(ir::types::I64)
+    }
+
+    fn signature(&self, builtin: BuiltinFunctionIndex) -> Signature {
+        let mut _cur = 0;
+        macro_rules! iter {
+            (
+                $(
+                    $( #[$attr:meta] )*
+                    $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
+                )*
+            ) => {
+                $(
+                    if _cur == builtin.index() {
+                        return Signature {
+                            params: vec![ $( self.$param() ),* ],
+                            returns: vec![ $( self.$result() )? ],
+                            call_conv: self.call_conv,
+                        };
+                    }
+                    _cur += 1;
+                )*
+            };
+        }
+
+        wasmtime_environ::foreach_builtin_function!(iter);
+
+        unreachable!();
     }
 }

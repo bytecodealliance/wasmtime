@@ -723,7 +723,7 @@ macro_rules! define_builtin_array {
             #[allow(unused_doc_comments)]
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
                 $(
-                    $name: crate::libcalls::trampolines::$name,
+                    $name: crate::libcalls::raw::$name,
                 )*
             };
         }

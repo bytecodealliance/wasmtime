@@ -7,9 +7,9 @@ use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, TrapEncodingBuilder, VMOffsets,
-    WasmFunctionInfo,
+    BuiltinFunctionIndex, CompileError, DefinedFuncIndex, FilePos, FunctionBodyData, FunctionLoc,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget, TrapEncodingBuilder,
+    VMOffsets, WasmFunctionInfo,
 };
 use winch_codegen::{BuiltinFunctions, TargetIsa};
 
@@ -171,7 +171,7 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+        resolve_reloc: &dyn Fn(usize, wasmtime_environ::RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
@@ -239,5 +239,19 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.isa.create_systemv_cie()
+    }
+
+    fn compile_wasm_to_builtin(
+        &self,
+        index: BuiltinFunctionIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        self.trampolines.compile_wasm_to_builtin(index)
+    }
+
+    fn compiled_function_relocation_targets<'a>(
+        &'a self,
+        func: &'a dyn Any,
+    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
+        self.trampolines.compiled_function_relocation_targets(func)
     }
 }

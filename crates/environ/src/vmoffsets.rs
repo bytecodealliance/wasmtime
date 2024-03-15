@@ -7,10 +7,10 @@
 //      magic: u32,
 //      _padding: u32, // (On 64-bit systems)
 //      runtime_limits: *const VMRuntimeLimits,
+//      builtins: *mut VMBuiltinFunctionsArray,
 //      callee: *mut VMFunctionBody,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
-//      builtins: *mut VMBuiltinFunctionsArray,
 //      type_ids: *const VMSharedTypeIndex,
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
@@ -74,11 +74,11 @@ pub struct VMOffsets<P> {
     // precalculated offsets of various member fields
     magic: u32,
     runtime_limits: u32,
+    builtin_functions: u32,
     callee: u32,
     epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
-    builtin_functions: u32,
     type_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
@@ -104,6 +104,11 @@ pub trait PtrSize {
             u32::from(self.size()),
         ))
         .unwrap()
+    }
+
+    /// The offset of the `VMContext::builtin_functions` field
+    fn vmcontext_builtin_functions(&self) -> u8 {
+        self.vmcontext_runtime_limits() + self.size()
     }
 
     /// The offset of the `native_call` field.
@@ -355,11 +360,11 @@ impl<P: PtrSize> VMOffsets<P> {
             imported_tables: "imported tables",
             imported_functions: "imported functions",
             type_ids: "module types",
-            builtin_functions: "jit builtin functions state",
             store: "jit store state",
             externref_activations_table: "jit host externref state",
             epoch_ptr: "jit current epoch state",
             callee: "callee function pointer",
+            builtin_functions: "jit builtin functions state",
             runtime_limits: "jit runtime limits state",
             magic: "magic value",
         }
@@ -381,11 +386,11 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_escaped_funcs: fields.num_escaped_funcs,
             magic: 0,
             runtime_limits: 0,
+            builtin_functions: 0,
             callee: 0,
             epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
-            builtin_functions: 0,
             type_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
@@ -432,11 +437,11 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(runtime_limits) = ret.ptr.size(),
+            size(builtin_functions) = ret.ptr.size(),
             size(callee) = ret.ptr.size(),
             size(epoch_ptr) = ret.ptr.size(),
             size(externref_activations_table) = ret.ptr.size(),
             size(store) = ret.ptr.size() * 2,
-            size(builtin_functions) = ret.pointer_size(),
             size(type_ids) = ret.ptr.size(),
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),

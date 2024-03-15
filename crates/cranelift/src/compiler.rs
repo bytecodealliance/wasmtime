@@ -1,7 +1,7 @@
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{array_call_signature, native_call_signature, DEBUG_ASSERT_TRAP_CODE};
-use crate::{builder::LinkOptions, value_type, wasm_call_signature};
+use crate::{builder::LinkOptions, value_type, wasm_call_signature, BuiltinFunctionSignatures};
 use crate::{CompiledFunction, ModuleTextBuilder};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
@@ -17,8 +17,7 @@ use cranelift_codegen::{CompiledCode, MachStackMap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
-    DefinedFuncIndex, FuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, WasmFuncType,
-    WasmValType,
+    DefinedFuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, WasmFuncType, WasmValType,
 };
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
@@ -30,9 +29,9 @@ use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
-    AddressMapSection, CacheStore, CompileError, FlagValue, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapInformation, TrapEncodingBuilder,
-    Tunables, VMOffsets, WasmFunctionInfo,
+    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, FlagValue, FunctionBodyData,
+    FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PtrSize, RelocationTarget,
+    StackMapInformation, TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
 };
 
 #[cfg(feature = "component-model")]
@@ -143,7 +142,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let context = &mut compiler.cx.codegen_context;
         context.func.signature = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
         context.func.name = UserFuncName::User(UserExternalName {
-            namespace: 0,
+            namespace: crate::NS_WASM_FUNC,
             index: func_index.as_u32(),
         });
 
@@ -448,7 +447,7 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+        resolve_reloc: &dyn Fn(usize, RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
@@ -628,6 +627,68 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.isa.create_systemv_cie()
+    }
+
+    fn compile_wasm_to_builtin(
+        &self,
+        index: BuiltinFunctionIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let isa = &*self.isa;
+        let ptr_size = isa.pointer_bytes();
+        let pointer_type = isa.pointer_type();
+        let sig = BuiltinFunctionSignatures::new(isa).signature(index);
+
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(Default::default(), sig.clone());
+        let (mut builder, block0) = compiler.builder(func);
+        let vmctx = builder.block_params(block0)[0];
+
+        // Debug-assert that this is the right kind of vmctx, and then
+        // additionally perform the "routine of the exit trampoline" of saving
+        // fp/pc/etc.
+        debug_assert_vmctx_kind(isa, &mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
+        let limits = builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            vmctx,
+            ptr_size.vmcontext_runtime_limits(),
+        );
+        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, limits);
+
+        // Now it's time to delegate to the actual builtin. Builtins are stored
+        // in an array in all `VMContext`s. First load the base pointer of the
+        // array and then load the entry of the array that correspons to this
+        // builtin.
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let array_addr = builder.ins().load(
+            pointer_type,
+            mem_flags,
+            vmctx,
+            i32::try_from(ptr_size.vmcontext_builtin_functions()).unwrap(),
+        );
+        let body_offset = i32::try_from(index.index() * pointer_type.bytes()).unwrap();
+        let func_addr = builder
+            .ins()
+            .load(pointer_type, mem_flags, array_addr, body_offset);
+
+        // Forward all our own arguments to the libcall itself, and then return
+        // all the same results as the libcall.
+        let block_params = builder.block_params(block0).to_vec();
+        let sig = builder.func.import_signature(sig);
+        let call = builder.ins().call_indirect(sig, func_addr, &block_params);
+        let results = builder.func.dfg.inst_results(call).to_vec();
+        builder.ins().return_(&results);
+        builder.finalize();
+
+        Ok(Box::new(compiler.finish()?))
+    }
+
+    fn compiled_function_relocation_targets<'a>(
+        &'a self,
+        func: &'a dyn Any,
+    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
+        let func = func.downcast_ref::<CompiledFunction>().unwrap();
+        Box::new(func.relocations().map(|r| r.reloc_target))
     }
 }
 
@@ -1131,7 +1192,7 @@ fn declare_and_call(
 ) -> ir::Inst {
     let name = ir::ExternalName::User(builder.func.declare_imported_user_function(
         ir::UserExternalName {
-            namespace: 0,
+            namespace: crate::NS_WASM_FUNC,
             index: func_index,
         },
     ));
