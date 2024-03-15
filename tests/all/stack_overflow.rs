@@ -57,7 +57,6 @@ fn host_always_has_some_stack() -> Result<()> {
                 ;; exit via a cranelift-based libcall
                 (func $recursive4 (export "f4")
                     (drop (call $f32_ceil (f32.const 0)))
-                    call $host2
                     call $recursive4)
                 (func $f32_ceil (param f32) (result f32)
                     (f32.ceil (local.get 0)))
