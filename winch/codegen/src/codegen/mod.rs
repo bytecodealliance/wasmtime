@@ -492,7 +492,8 @@ where
         let memory_index = MemoryIndex::from_u32(memarg.memory);
         let heap = self.env.resolve_heap(memory_index);
         let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None));
-        let offset = bounds::ensure_index_and_offset(self.masm, index, memarg.offset, ptr_size);
+        let offset =
+            bounds::ensure_index_and_offset(self.masm, index, memarg.offset, heap.ty.into());
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
 
         let addr = match heap.style {
@@ -528,7 +529,7 @@ where
                     index_offset_and_access_size,
                     index_offset_and_access_size,
                     RegImm::i64(offset_with_access_size as i64),
-                    ptr_size,
+                    heap.ty.into(),
                     TrapCode::HeapOutOfBounds,
                 );
 
@@ -627,7 +628,11 @@ where
                     |masm, bounds, index| {
                         let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
                         let index_reg = index.as_typed_reg().reg;
-                        masm.cmp(RegImm::i64(adjusted_bounds as i64), index_reg, ptr_size);
+                        masm.cmp(
+                            RegImm::i64(adjusted_bounds as i64),
+                            index_reg,
+                            heap.ty.into(),
+                        );
                         IntCmpKind::GtU
                     },
                 );
