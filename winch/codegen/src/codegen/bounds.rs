@@ -125,7 +125,7 @@ pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
     masm: &mut M,
     index: Index,
     offset: u64,
-    ptr_size: OperandSize,
+    heap_ty_size: OperandSize,
 ) -> ImmOffset {
     match u32::try_from(offset) {
         // If the immediate offset fits in a u32, then we simply return.
@@ -137,7 +137,7 @@ pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
                 index.as_typed_reg().into(),
                 index.as_typed_reg().into(),
                 RegImm::i64(offset as i64),
-                ptr_size,
+                heap_ty_size,
                 TrapCode::HeapOutOfBounds,
             );
 
