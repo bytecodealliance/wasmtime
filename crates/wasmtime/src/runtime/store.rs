@@ -1595,10 +1595,26 @@ impl StoreOpaque {
     /// always zero in these situations which means that the trapping context
     /// doesn't have enough information to report the fault address.
     pub(crate) fn wasm_fault(&self, pc: usize, addr: usize) -> Option<WasmFault> {
-        // Explicitly bounds-checked memories with spectre-guards enabled will
-        // cause out-of-bounds accesses to get routed to address 0, so allow
-        // wasm instructions to fault on the null address.
-        if addr == 0 {
+        // There are a few instances where a "close to zero" pointer is loaded
+        // and we expect that to happen:
+        //
+        // * Explicitly bounds-checked memories with spectre-guards enabled will
+        //   cause out-of-bounds accesses to get routed to address 0, so allow
+        //   wasm instructions to fault on the null address.
+        // * `call_indirect` when invoking a null function pointer may load data
+        //   from the a `VMFuncRef` whose address is null, meaning any field of
+        //   `VMFuncRef` could be the address of the fault.
+        //
+        // In these situations where the address is so small it won't be in any
+        // instance, so skip the checks below.
+        if addr <= mem::size_of::<VMFuncRef>() {
+            const _: () = {
+                // static-assert that `VMFuncRef` isn't too big to ensure that
+                // it lives solely within the first page as we currently only
+                // have the guarantee that the first page of memory is unmapped,
+                // no more.
+                assert!(mem::size_of::<VMFuncRef>() <= 512);
+            };
             return None;
         }
 

@@ -43,11 +43,10 @@
 ;; @0033                               jump block3(v20)
 ;;
 ;;                                 block3(v15: i64):
-;; @0033                               trapz v15, icall_null
 ;; @0033                               v21 = global_value.i64 gv3
 ;; @0033                               v22 = load.i64 notrap aligned readonly v21+64
 ;; @0033                               v23 = load.i32 notrap aligned readonly v22
-;; @0033                               v24 = load.i32 notrap aligned readonly v15+24
+;; @0033                               v24 = load.i32 icall_null aligned readonly v15+24
 ;; @0033                               v25 = icmp eq v24, v23
 ;; @0033                               trapz v25, bad_sig
 ;; @0033                               v26 = load.i64 notrap aligned readonly v15+16

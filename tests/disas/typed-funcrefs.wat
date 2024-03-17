@@ -113,22 +113,16 @@
 ;; @0036                               jump block3(v24)
 ;;
 ;;                                 block3(v19: i64):
-;; @0038                               brif v19, block9, block8
-;;
-;;                                 block8 cold:
-;; @0038                               trap null_reference
-;;
-;;                                 block9:
-;; @0038                               v25 = load.i64 notrap aligned readonly v19+16
+;; @0038                               v25 = load.i64 null_reference aligned readonly v19+16
 ;; @0038                               v26 = load.i64 notrap aligned readonly v19+32
 ;; @0038                               v27 = call_indirect sig1, v25(v26, v0, v2, v3, v4, v5)
 ;;                                     v80 = iconst.i8 0
-;; @0049                               brif v80, block10, block11  ; v80 = 0
+;; @0049                               brif v80, block8, block9  ; v80 = 0
 ;;
-;;                                 block10 cold:
+;;                                 block8 cold:
 ;; @0049                               trap table_oob
 ;;
-;;                                 block11:
+;;                                 block9:
 ;; @0049                               v38 = load.i64 notrap aligned v0+72
 ;;                                     v81 = iconst.i8 0
 ;;                                     v78 = iconst.i64 16
@@ -148,13 +142,7 @@
 ;; @0049                               jump block5(v50)
 ;;
 ;;                                 block5(v45: i64):
-;; @004b                               brif v45, block13, block12
-;;
-;;                                 block12 cold:
-;; @004b                               trap null_reference
-;;
-;;                                 block13:
-;; @004b                               v51 = load.i64 notrap aligned readonly v45+16
+;; @004b                               v51 = load.i64 null_reference aligned readonly v45+16
 ;; @004b                               v52 = load.i64 notrap aligned readonly v45+32
 ;; @004b                               v53 = call_indirect sig1, v51(v52, v0, v2, v3, v4, v5)
 ;; @0054                               jump block1

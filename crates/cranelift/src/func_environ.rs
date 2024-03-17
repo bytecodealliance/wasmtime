@@ -1155,11 +1155,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             self.env
                 .get_or_init_func_ref_table_elem(self.builder, table_index, callee);
 
-        // Check for whether the table element is null, and trap if so.
-        self.builder
-            .ins()
-            .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
-
         // If necessary, check the signature.
         match self.env.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
@@ -1188,10 +1183,13 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                         .load(sig_id_type, mem_flags, signatures, offset);
 
                 // Load the callee ID.
+                //
+                // Note that the callee may be null in which case this load may
+                // trap. If so use the `IndirectCallToNull` trap code.
                 let mem_flags = ir::MemFlags::trusted().with_readonly();
                 let callee_sig_id = self.builder.ins().load(
                     sig_id_type,
-                    mem_flags,
+                    mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull)),
                     funcref_ptr,
                     i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
                 );
@@ -1205,7 +1203,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             }
         }
 
-        self.unchecked_call(sig_ref, funcref_ptr, call_args)
+        // Note that `funcref_ptr` at this point is guaranteed to not be null as
+        // we've loaded its type which would have otherwise faulted. That means
+        // that further loads no longer need trap metadata, so use `None` here
+        // for the next trap code.
+        self.unchecked_call(sig_ref, funcref_ptr, None, call_args)
     }
 
     /// Call a typed function reference.
@@ -1215,19 +1217,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee: ir::Value,
         args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        // Check for whether the callee is null, and trap if so.
-        //
         // FIXME: the wasm type system tracks enough information to know whether
         // `callee` is a null reference or not. In some situations it can be
         // statically known here that `callee` cannot be null in which case this
-        // null check can be elided. This requires feeding type information from
+        // can be `None` instead. This requires feeding type information from
         // wasmparser's validator into this function, however, which is not
         // easily done at this time.
-        self.builder
-            .ins()
-            .trapz(callee, ir::TrapCode::NullReference);
+        let callee_load_trap_code = Some(ir::TrapCode::NullReference);
 
-        self.unchecked_call(sig_ref, callee, args)
+        self.unchecked_call(sig_ref, callee, callee_load_trap_code, args)
     }
 
     /// This calls a function by reference without checking the signature.
@@ -1239,15 +1237,22 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         &mut self,
         sig_ref: ir::SigRef,
         callee: ir::Value,
+        callee_load_trap_code: Option<ir::TrapCode>,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         let pointer_type = self.env.pointer_type();
 
         // Dereference callee pointer to get the function address.
+        //
+        // Note that this may trap if `callee` hasn't previously been verified
+        // to be non-null. This means that this load is annotated with an
+        // optional trap code provided by the caller of `unchecked_call` which
+        // will handle the case where this is either already known to be
+        // non-null or may trap.
         let mem_flags = ir::MemFlags::trusted().with_readonly();
         let func_addr = self.builder.ins().load(
             pointer_type,
-            mem_flags,
+            mem_flags.with_trap_code(callee_load_trap_code),
             callee,
             i32::from(self.env.offsets.ptr.vm_func_ref_wasm_call()),
         );
