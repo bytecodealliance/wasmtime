@@ -1,15 +1,14 @@
 use base64::Engine;
-use gimli::DwarfPackage;
-use gimli::EndianSlice;
-use gimli::LittleEndian;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use typed_arena::Arena;
 
 #[macro_use] // for tests
 mod config;
@@ -52,7 +51,7 @@ impl<'config> ModuleCacheEntry<'config> {
     pub fn get_data<T, U, E>(
         &self,
         state: T,
-        compute: fn(&T, Option<DwarfPackage<EndianSlice<'_, LittleEndian>>>) -> Result<U, E>,
+        compute: fn(&T, &Vec<u8>, &Arena<Cow<[u8]>>) -> Result<U, E>,
     ) -> Result<U, E>
     where
         T: Hash,
@@ -60,10 +59,11 @@ impl<'config> ModuleCacheEntry<'config> {
     {
         self.get_data_raw(
             &state,
+            &Vec::new(),
+            &Arena::new(),
             compute,
             |_state, data| bincode::serialize(data).ok(),
             |_state, data| bincode::deserialize(&data).ok(),
-            None,
         )
     }
 
@@ -74,22 +74,24 @@ impl<'config> ModuleCacheEntry<'config> {
     /// passed to `deserialize`, which if successful will be the returned value.
     /// When computed the `serialize` function is used to generate the bytes
     /// from the returned value.
-    pub fn get_data_raw<T, U, E>(
+    pub fn get_data_raw<'a, T, U, E>(
         &self,
         state: &T,
+        buffer: &'a Vec<u8>,
+        arena: &'a Arena<Cow<'a, [u8]>>,
+
         // NOTE: These are function pointers instead of closures so that they
         // don't accidentally close over something not accounted in the cache.
-        compute: fn(&T, Option<DwarfPackage<EndianSlice<'_, LittleEndian>>>) -> Result<U, E>,
+        compute: fn(&T, &'a Vec<u8>, &'a Arena<Cow<'a, [u8]>>) -> Result<U, E>,
         serialize: fn(&T, &U) -> Option<Vec<u8>>,
         deserialize: fn(&T, Vec<u8>) -> Option<U>,
-        dwarf_package: Option<DwarfPackage<EndianSlice<'_, LittleEndian>>>,
     ) -> Result<U, E>
     where
         T: Hash,
     {
         let inner = match &self.0 {
             Some(inner) => inner,
-            None => return compute(state, dwarf_package),
+            None => return compute(state, buffer, arena),
         };
 
         let mut hasher = Sha256Hasher(Sha256::new());
@@ -105,7 +107,7 @@ impl<'config> ModuleCacheEntry<'config> {
                 return Ok(val);
             }
         }
-        let val_to_cache = compute(state, dwarf_package)?;
+        let val_to_cache = compute(state, buffer, arena)?;
         if let Some(bytes) = serialize(state, &val_to_cache) {
             if inner.update_data(&hash, &bytes).is_some() {
                 let mod_cache_path = inner.root_path.join(&hash);

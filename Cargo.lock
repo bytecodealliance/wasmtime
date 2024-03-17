@@ -3377,6 +3377,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
+ "typed-arena",
  "wasmtime-environ",
  "windows-sys 0.52.0",
  "zstd",

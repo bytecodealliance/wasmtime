@@ -115,7 +115,7 @@ where
     }
 
     fn instantiate_module(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
-        let module = Module::new(self.store.engine(), module, None)?;
+        let module = Module::new(self.store.engine(), module)?;
         Ok(
             match self.core_linker.instantiate(&mut self.store, &module) {
                 Ok(i) => Outcome::Ok(i),

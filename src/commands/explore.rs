@@ -43,13 +43,7 @@ impl ExploreCommand {
             .with_context(|| format!("failed to create file: {}", output.display()))?;
         let mut output_file = std::io::BufWriter::new(output_file);
 
-        wasmtime_explorer::generate(
-            &config,
-            self.target.as_deref(),
-            &wasm,
-            &mut output_file,
-            None,
-        )?;
+        wasmtime_explorer::generate(&config, self.target.as_deref(), &wasm, &mut output_file)?;
         println!("Exploration written to {}", output.display());
         Ok(())
     }

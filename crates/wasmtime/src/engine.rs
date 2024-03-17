@@ -6,7 +6,7 @@ use gimli::{DwarfPackage, EndianSlice};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
 use once_cell::sync::OnceCell;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::obj;
@@ -517,14 +517,10 @@ impl Engine {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
-    pub fn precompile_module(
-        &self,
-        bytes: &[u8],
-        dwarf_package: Option<DwarfPackage<EndianSlice<'_, gimli::LittleEndian>>>,
-    ) -> Result<Vec<u8>> {
+    pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(self, &bytes, dwarf_package)?;
+        let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(self, &bytes, None)?;
         Ok(v)
     }
 
@@ -535,7 +531,7 @@ impl Engine {
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_component_artifacts::<Vec<u8>>(self, &bytes)?;
+        let (v, _) = crate::compile::build_component_artifacts::<Vec<u8>>(self, &bytes, None)?;
         Ok(v)
     }
 

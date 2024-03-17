@@ -166,6 +166,9 @@
 //! [`Func`] point within the [`Store`] and require the [`Store`] to be provided
 //! to actually access the internals of the WebAssembly function, for instance.
 //!
+//! * [`ModuleBuilder`] - a builder module that can be used to fuse DWRF `.dwp`
+//!   packages with a WebAssembly module function for the purposes of debugging.
+//!
 //! ## WASI
 //!
 //! The `wasmtime` crate does not natively provide support for WASI, but you can

@@ -24,13 +24,15 @@
 
 use crate::Engine;
 use anyhow::{Context, Result};
-use gimli::{EndianSlice, LittleEndian, Reader, RunTimeEndian};
+use gimli::{EndianSlice, LittleEndian};
 use std::{
     any::Any,
+    borrow::Cow,
     collections::{btree_map, BTreeMap, BTreeSet, HashMap},
     mem,
-    path::PathBuf,
 };
+use typed_arena::Arena;
+
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
@@ -114,9 +116,10 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 /// The output artifact here is the serialized object file contained within
 /// an owned mmap along with metadata about the compilation itself.
 #[cfg(feature = "component-model")]
-pub(crate) fn build_component_artifacts<T: FinishedObject>(
+pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
+    dwarf_package_binary: Option<&'a [u8]>,
 ) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
     use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
     use wasmtime_environ::ScopeVec;

@@ -24,6 +24,7 @@ toml = { workspace = true }
 zstd = { version = "0.13.0", default-features = false }
 gimli = { workspace = true }
 wasmtime-environ = { workspace = true }
+typed-arena = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true

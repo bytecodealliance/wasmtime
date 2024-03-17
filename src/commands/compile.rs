@@ -109,7 +109,7 @@ impl CompileCommand {
                 bail!("component model support was disabled at compile time")
             }
         } else {
-            engine.precompile_module(&input, None)?
+            engine.precompile_module(&input)?
         };
         fs::write(&output, output_bytes)
             .with_context(|| format!("failed to write output: {}", output.display()))?;

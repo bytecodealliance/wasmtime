@@ -1,14 +1,13 @@
 use anyhow::Result;
 use capstone::arch::BuildsCapstone;
 use serde_derive::Serialize;
-use std::{io::Write, path::PathBuf, str::FromStr};
+use std::{io::Write, str::FromStr};
 
 pub fn generate(
     config: &wasmtime::Config,
     target: Option<&str>,
     wasm: &[u8],
     dest: &mut dyn Write,
-    wasm_path: Option<PathBuf>,
 ) -> Result<()> {
     let target = match target {
         None => target_lexicon::Triple::host(),
@@ -17,7 +16,7 @@ pub fn generate(
 
     let wat = annotate_wat(wasm)?;
     let wat_json = serde_json::to_string(&wat)?;
-    let asm = annotate_asm(config, &target, wasm, wasm_path)?;
+    let asm = annotate_asm(config, &target, wasm)?;
     let asm_json = serde_json::to_string(&asm)?;
 
     let index_css = include_str!("./index.css");
@@ -100,10 +99,9 @@ fn annotate_asm(
     config: &wasmtime::Config,
     target: &target_lexicon::Triple,
     wasm: &[u8],
-    wasm_path: Option<PathBuf>,
 ) -> Result<AnnotatedAsm> {
     let engine = wasmtime::Engine::new(config)?;
-    let module = wasmtime::Module::new(&engine, wasm, wasm_path)?;
+    let module = wasmtime::Module::new(&engine, wasm)?;
 
     let text = module.text();
     let address_map: Vec<_> = module

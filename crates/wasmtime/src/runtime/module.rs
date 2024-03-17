@@ -139,8 +139,6 @@ pub use registry::{
 #[derive(Clone)]
 pub struct Module {
     inner: Arc<ModuleInner>,
-
-    dwarf_package_bytes: Option<Vec<u8>>,
 }
 
 type RelocationMap = HashMap<usize, object::Relocation>;
@@ -249,15 +247,12 @@ impl Module {
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn new(
-        engine: &Engine,
-        bytes: impl AsRef<[u8]>,
-        wasm_path: Option<PathBuf>,
-    ) -> Result<Module> {
+    pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes)?;
-        Self::from_binary(engine, &bytes, wasm_path)
+
+        Self::from_binary(engine, &bytes, None)
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given
@@ -296,14 +291,8 @@ impl Module {
             engine,
             &fs::read(file)
                 .with_context(|| format!("failed to read input file: {}", file.display()))?,
-            Some(file.to_path_buf()),
         ) {
-            Ok(mut m) => {
-                let dwp_path = file.with_extension("dwp");
-                let file = fs::read(dwp_path).ok();
-                m.dwarf_package_bytes = file;
-                Ok(m)
-            }
+            Ok(m) => Ok(m),
             Err(e) => {
                 cfg_if::cfg_if! {
                     if #[cfg(feature = "wat")] {
@@ -318,11 +307,36 @@ impl Module {
         }
     }
 
+    /// Attempts to load a DWARF package using the passed bytes.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn read_dwarf_package_from_bytes<'a>(
+        dwp_bytes: &'a [u8],
+        buffer: &'a mut Vec<u8>,
+        arena_data: &'a Arena<Cow<'a, [u8]>>,
+    ) -> Option<DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>> {
+        let object_file = match object::File::parse(dwp_bytes) {
+            Ok(file) => file,
+            Err(err) => {
+                eprintln!("Failed to parse file {}", err);
+                return None;
+            }
+        };
+
+        match Module::load_dwp(&object_file, &arena_data, buffer) {
+            Ok(package) => Some(package),
+            Err(err) => {
+                eprintln!("Failed to load Dwarf package {}", err);
+                None
+            }
+        }
+    }
+
     /// Attempts to load a DWARF package file (.dwp) using the passed name as
     /// the stem of the file name.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn read_dwarf_package<'a>(
         wasm_file: PathBuf,
+        dwp_buffer: &'a mut Vec<u8>,
         buffer: &'a mut Vec<u8>,
         arena_data: &'a Arena<Cow<'a, [u8]>>,
     ) -> Option<DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>> {
@@ -330,28 +344,52 @@ impl Module {
 
         match fs::File::open(&dwp_path) {
             Ok(mut file) => {
-                if let Err(err) = file.read_to_end(buffer) {
+                if let Err(err) = file.read_to_end(dwp_buffer) {
                     eprintln!("Error reading dwarf package: {}", err);
                     return None;
                 }
 
-                let object_file = match object::File::parse(&buffer[..]) {
-                    Ok(file) => file,
-                    Err(err) => {
-                        eprintln!("Failed to parse file '{:?}': {}", dwp_path, err);
-                        return None;
-                    }
-                };
-
-                match Module::load_dwp(object_file, &arena_data, buffer) {
-                    Ok(package) => Some(package),
-                    Err(err) => {
-                        eprintln!("Failed to load Dwarf package '{:?}': {}", dwp_path, err);
-                        None
-                    }
-                }
+                Self::read_dwarf_package_from_bytes(dwp_buffer, buffer, arena_data)
             }
             Err(_) => None,
+        }
+    }
+
+    fn compute_artifacts<'a>(
+        engine: &HashedEngineCompileEnv<'a>,
+        wasm: &[u8],
+        dwarf_package_binary: Option<&'a [u8]>,
+        buffer: &'a [u8],
+        arena_data: &'a Arena<Cow<'a, [u8]>>,
+    ) -> Result<(Arc<CodeMemory>, Option<(CompiledModuleInfo, ModuleTypes)>), anyhow::Error> {
+        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
+
+        let dwarf_package: Option<DwarfPackage<gimli::EndianSlice<'_, gimli::LittleEndian>>> =
+            match dwarf_package_binary {
+                Some(package_bytes) => match object::File::parse(package_bytes.as_ref()) {
+                    Ok(file) => match Module::load_dwp(&file, arena_data, buffer) {
+                        Ok(package) => Some(package),
+                        Err(err) => {
+                            eprintln!("Failed to load Dwarf package: {}", err);
+                            return Err(err);
+                        }
+                    },
+                    Err(err) => {
+                        eprintln!("Failed to parse file: {}", err);
+                        return Err(err.into());
+                    }
+                },
+                _ => None,
+            };
+
+        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm, dwarf_package)?;
+        let code = publish_mmap(mmap.0)?;
+        return Ok((code, info));
+
+        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+            let mut code = CodeMemory::new(mmap)?;
+            code.publish()?;
+            Ok(Arc::new(code))
         }
     }
 
@@ -391,20 +429,19 @@ impl Module {
     pub fn from_binary(
         engine: &Engine,
         binary: &[u8],
-        wasm_path: Option<PathBuf>,
+        dwarf_package_binary: Option<&[u8]>,
     ) -> Result<Module> {
-        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
-
         engine
             .check_compatible_with_native_host()
             .context("compilation settings are not compatible with the native host")?;
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
-                let state = (HashedEngineCompileEnv(engine), binary);
+                let state = (HashedEngineCompileEnv(engine), binary,
+                    dwarf_package_binary);
 
-                let mut buffer = Vec::new();
-                let arena_data = Arena::new();
+                let buffer = Vec::<u8>::new();
+                let arena_data = Arena::<Cow<'_, [u8]>>::new();
 
                 let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
@@ -412,26 +449,25 @@ impl Module {
                 )
                 .get_data_raw(
                     &state,
+                    &buffer,
+                    &arena_data,
 
                     // Cache miss, compute the actual artifacts
-                    |(engine, wasm), dwarf_package| -> Result<_> {
-                        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm, dwarf_package)?;
-                        let code = publish_mmap(mmap.0)?;
-                        Ok((code, info))
+                    // Implementation of how to serialize artifacts
+                    |(engine, wasm, dwarf_package), buffer, arena_data| {
+                        Self::compute_artifacts(engine, wasm, *dwarf_package, buffer, arena_data)
                     },
 
                     // Implementation of how to serialize artifacts
-                    |(_engine, _wasm), (code, _info_and_types)| {
+                    |(_engine, _wasm, _dwarf_package), (code, _info_and_types)| {
                         Some(code.mmap().to_vec())
                     },
 
                     // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm), serialized_bytes| {
+                    |(engine, _wasm, _dwarf_package), serialized_bytes| {
                         let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Module).ok()?;
                         Some((code, None))
                     },
-
-                    wasm_path.map(|path|Module::read_dwarf_package(path, &mut buffer, &arena_data)).flatten()
                 )?;
             } else {
                 let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary, wasm_path)?;
@@ -440,12 +476,6 @@ impl Module {
         };
 
         return Self::from_parts(engine, code, info_and_types);
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
     }
 
     fn add_relocations(
@@ -535,9 +565,9 @@ impl Module {
     }
 
     fn load_dwp<'a>(
-        file: File<'a>,
+        file: &File<'a>,
         arena_data: &'a Arena<Cow<'a, [u8]>>,
-        buffer: &'a Vec<u8>,
+        buffer: &'a [u8],
     ) -> Result<DwarfPackage<gimli::EndianSlice<'a, gimli::LittleEndian>>> {
         // Read the file contents into a Vec<u8>
         // let file_contents = std::fs::read(file_path)?;
@@ -589,7 +619,7 @@ impl Module {
             return Module::from_parts(engine, code, None);
         }
 
-        Module::new(engine, &*mmap, Some(file.as_ref().to_path_buf()))
+        Module::new(engine, &*mmap)
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -731,7 +761,6 @@ impl Module {
                 serializable,
                 offsets,
             }),
-            dwarf_package_bytes: None,
         })
     }
 
@@ -1256,6 +1285,11 @@ impl Module {
     pub(crate) fn id(&self) -> CompiledModuleId {
         self.inner.module.unique_id()
     }
+
+    // TODO: added this here, but not sure what the purpose is, likely I've misunderstood https://github.com/bytecodealliance/wasmtime/pull/8055#discussion_r1517064689
+    // pub fn builder<'a>() -> ModuleBuilder<'a> {
+    //     ModuleBuilder::new(&Engine::new(config)?)
+    // }
 }
 
 impl ModuleInner {
