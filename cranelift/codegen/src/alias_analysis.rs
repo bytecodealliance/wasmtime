@@ -68,7 +68,7 @@ use crate::{
     inst_predicates::{
         has_memory_fence_semantics, inst_addr_offset_type, inst_store_data, visit_block_succs,
     },
-    ir::{immediates::Offset32, Block, Function, Inst, Opcode, Type, Value},
+    ir::{immediates::Offset32, AliasRegion, Block, Function, Inst, Opcode, Type, Value},
     trace,
 };
 use cranelift_entity::{packed_option::PackedOption, EntityRef};
@@ -93,14 +93,11 @@ impl LastStores {
             self.other = inst.into();
         } else if opcode.can_store() {
             if let Some(memflags) = func.dfg.insts[inst].memflags() {
-                if memflags.heap() {
-                    self.heap = inst.into();
-                } else if memflags.table() {
-                    self.table = inst.into();
-                } else if memflags.vmctx() {
-                    self.vmctx = inst.into();
-                } else {
-                    self.other = inst.into();
+                match memflags.alias_region() {
+                    None => self.other = inst.into(),
+                    Some(AliasRegion::Heap) => self.heap = inst.into(),
+                    Some(AliasRegion::Table) => self.table = inst.into(),
+                    Some(AliasRegion::Vmctx) => self.vmctx = inst.into(),
                 }
             } else {
                 self.heap = inst.into();
@@ -113,14 +110,11 @@ impl LastStores {
 
     fn get_last_store(&self, func: &Function, inst: Inst) -> PackedOption<Inst> {
         if let Some(memflags) = func.dfg.insts[inst].memflags() {
-            if memflags.heap() {
-                self.heap
-            } else if memflags.table() {
-                self.table
-            } else if memflags.vmctx() {
-                self.vmctx
-            } else {
-                self.other
+            match memflags.alias_region() {
+                None => self.other,
+                Some(AliasRegion::Heap) => self.heap,
+                Some(AliasRegion::Table) => self.table,
+                Some(AliasRegion::Vmctx) => self.vmctx,
             }
         } else if func.dfg.insts[inst].opcode().can_load()
             || func.dfg.insts[inst].opcode().can_store()

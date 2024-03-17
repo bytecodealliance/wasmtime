@@ -53,7 +53,7 @@ pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::known_symbol::KnownSymbol;
 pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
-pub use crate::ir::memflags::{Endianness, MemFlags};
+pub use crate::ir::memflags::{AliasRegion, Endianness, MemFlags};
 pub use crate::ir::memtype::{MemoryTypeData, MemoryTypeField};
 pub use crate::ir::pcc::{BaseExpr, Expr, Fact, FactContext, PccError, PccResult};
 pub use crate::ir::progpoint::ProgramPoint;
