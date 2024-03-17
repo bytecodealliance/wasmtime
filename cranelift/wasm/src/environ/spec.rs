@@ -193,6 +193,8 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
+    /// Returns `None` if this statically traps instead of creating a call
+    /// instruction.
     fn translate_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -201,7 +203,7 @@ pub trait FuncEnvironment: TargetEnvironment {
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst>;
+    ) -> WasmResult<Option<ir::Inst>>;
 
     /// Translate a `return_call` WebAssembly instruction at the builder's
     /// current position.
