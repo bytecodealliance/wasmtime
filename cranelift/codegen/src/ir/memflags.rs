@@ -2,56 +2,10 @@
 
 use super::TrapCode;
 use core::fmt;
+use core::str::FromStr;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
-
-enum FlagBit {
-    /// Guaranteed not to trap. This may enable additional
-    /// optimizations to be performed.
-    Notrap,
-    /// If this memory access traps, use [TrapCode::TableOutOfBounds]
-    /// instead of [TrapCode::HeapOutOfBounds].
-    TableTrap,
-    /// Guaranteed to use "natural alignment" for the given type. This
-    /// may enable better instruction selection.
-    Aligned,
-    /// A load that reads data in memory that does not change for the
-    /// duration of the function's execution. This may enable
-    /// additional optimizations to be performed.
-    Readonly,
-    /// Load multi-byte values from memory in a little-endian format.
-    LittleEndian,
-    /// Load multi-byte values from memory in a big-endian format.
-    BigEndian,
-    /// Accesses only the "heap" part of abstract state. Used for
-    /// alias analysis. Mutually exclusive with "table" and "vmctx".
-    Heap,
-    /// Accesses only the "table" part of abstract state. Used for
-    /// alias analysis. Mutually exclusive with "heap" and "vmctx".
-    Table,
-    /// Accesses only the "vmctx" part of abstract state. Used for
-    /// alias analysis. Mutually exclusive with "heap" and "table".
-    Vmctx,
-    /// Check this load or store for safety when using the
-    /// proof-carrying-code framework. The address must have a
-    /// `PointsTo` fact attached with a sufficiently large valid range
-    /// for the accessed size.
-    Checked,
-}
-
-const NAMES: [&str; 10] = [
-    "notrap",
-    "tabletrap",
-    "aligned",
-    "readonly",
-    "little",
-    "big",
-    "heap",
-    "table",
-    "vmctx",
-    "checked",
-];
 
 /// Endianness of a memory access.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -60,6 +14,16 @@ pub enum Endianness {
     Little,
     /// Big-endian
     Big,
+}
+
+/// Which disjoint region of aliasing memory is accessed in this memory
+/// operation.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[allow(missing_docs)]
+pub enum AliasRegion {
+    Heap,
+    Table,
+    Vmctx,
 }
 
 /// Flags for memory operations like load/store.
@@ -75,8 +39,55 @@ pub enum Endianness {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct MemFlags {
+    // Initialized to all zeros to have all flags have their default value.
+    // This is interpreted through various methods below. Currently the bits of
+    // this are defined as:
+    //
+    // * 0 - aligned flag
+    // * 1 - readonly flag
+    // * 2 - little endian flag
+    // * 3 - big endian flag
+    // * 4 - checked flag
+    // * 5/6 - alias region
+    // * 7/8/9/10 - trap code
+    // * 11/12/13/14/15 - unallocated
+    //
+    // Current properties upheld are:
+    //
+    // * only one of little/big endian is set
+    // * only one alias region can be set - once set it cannot be changed
     bits: u16,
 }
+
+/// Guaranteed to use "natural alignment" for the given type. This
+/// may enable better instruction selection.
+const BIT_ALIGNED: u16 = 1 << 0;
+
+/// A load that reads data in memory that does not change for the
+/// duration of the function's execution. This may enable
+/// additional optimizations to be performed.
+const BIT_READONLY: u16 = 1 << 1;
+
+/// Load multi-byte values from memory in a little-endian format.
+const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
+
+/// Load multi-byte values from memory in a big-endian format.
+const BIT_BIG_ENDIAN: u16 = 1 << 3;
+
+/// Check this load or store for safety when using the
+/// proof-carrying-code framework. The address must have a
+/// `PointsTo` fact attached with a sufficiently large valid range
+/// for the accessed size.
+const BIT_CHECKED: u16 = 1 << 4;
+
+/// Used for alias analysis, indicates which disjoint part of the abstract state
+/// is being accessed.
+const MASK_ALIAS_REGION: u16 = 0b11 << ALIAS_REGION_OFFSET;
+const ALIAS_REGION_OFFSET: u16 = 5;
+
+/// Trap code, if any, for this memory operation.
+const MASK_TRAP_CODE: u16 = 0b1111 << TRAP_CODE_OFFSET;
+const TRAP_CODE_OFFSET: u16 = 7;
 
 impl MemFlags {
     /// Create a new empty set of flags.
@@ -91,35 +102,101 @@ impl MemFlags {
     }
 
     /// Read a flag bit.
-    const fn read(self, bit: FlagBit) -> bool {
-        self.bits & (1 << bit as usize) != 0
+    const fn read_bit(self, bit: u16) -> bool {
+        self.bits & bit != 0
     }
 
     /// Return a new `MemFlags` with this flag bit set.
-    const fn with(mut self, bit: FlagBit) -> Self {
-        self.bits |= 1 << bit as usize;
+    const fn with_bit(mut self, bit: u16) -> Self {
+        self.bits |= bit;
         self
+    }
+
+    /// Reads the alias region that this memory operation works with.
+    pub const fn alias_region(self) -> Option<AliasRegion> {
+        // NB: keep in sync with `with_alias_region`
+        match (self.bits & MASK_ALIAS_REGION) >> ALIAS_REGION_OFFSET {
+            0b00 => None,
+            0b01 => Some(AliasRegion::Heap),
+            0b10 => Some(AliasRegion::Table),
+            0b11 => Some(AliasRegion::Vmctx),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Sets the alias region that this works on to the specified `region`.
+    pub const fn with_alias_region(mut self, region: Option<AliasRegion>) -> Self {
+        // NB: keep in sync with `alias_region`
+        let bits = match region {
+            None => 0b00,
+            Some(AliasRegion::Heap) => 0b01,
+            Some(AliasRegion::Table) => 0b10,
+            Some(AliasRegion::Vmctx) => 0b11,
+        };
+        self.bits &= !MASK_ALIAS_REGION;
+        self.bits |= bits << ALIAS_REGION_OFFSET;
+        self
+    }
+
+    /// Sets the alias region that this works on to the specified `region`.
+    pub fn set_alias_region(&mut self, region: Option<AliasRegion>) {
+        *self = self.with_alias_region(region);
     }
 
     /// Set a flag bit by name.
     ///
-    /// Returns true if the flag was found and set, false for an unknown flag name.
-    /// Will also return false when trying to set inconsistent endianness flags.
-    pub fn set_by_name(&mut self, name: &str) -> bool {
-        match NAMES.iter().position(|&s| s == name) {
-            Some(bit) => {
-                let bits = self.bits | 1 << bit;
-                if (bits & (1 << FlagBit::LittleEndian as usize)) != 0
-                    && (bits & (1 << FlagBit::BigEndian as usize)) != 0
-                {
-                    false
-                } else {
-                    self.bits = bits;
-                    true
+    /// Returns true if the flag was found and set, false for an unknown flag
+    /// name.  Will also return false when trying to set inconsistent endianness
+    /// flags.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error message if the `name` is known but couldn't be applied
+    /// due to it being a semantic error.
+    pub fn set_by_name(&mut self, name: &str) -> Result<bool, &'static str> {
+        *self = match name {
+            "notrap" => self.with_trap_code(None),
+            "aligned" => self.with_aligned(),
+            "readonly" => self.with_readonly(),
+            "little" => {
+                if self.read_bit(BIT_BIG_ENDIAN) {
+                    return Err("cannot set both big and little endian bits");
                 }
+                self.with_endianness(Endianness::Little)
             }
-            None => false,
-        }
+            "big" => {
+                if self.read_bit(BIT_LITTLE_ENDIAN) {
+                    return Err("cannot set both big and little endian bits");
+                }
+                self.with_endianness(Endianness::Big)
+            }
+            "heap" => {
+                if self.alias_region().is_some() {
+                    return Err("cannot set more than one alias region");
+                }
+                self.with_alias_region(Some(AliasRegion::Heap))
+            }
+            "table" => {
+                if self.alias_region().is_some() {
+                    return Err("cannot set more than one alias region");
+                }
+                self.with_alias_region(Some(AliasRegion::Table))
+            }
+            "vmctx" => {
+                if self.alias_region().is_some() {
+                    return Err("cannot set more than one alias region");
+                }
+                self.with_alias_region(Some(AliasRegion::Vmctx))
+            }
+            "checked" => self.with_checked(),
+
+            other => match TrapCode::from_str(other) {
+                Ok(TrapCode::User(_)) => return Err("cannot set user trap code on mem flags"),
+                Ok(code) => self.with_trap_code(Some(code)),
+                Err(()) => return Ok(false),
+            },
+        };
+        Ok(true)
     }
 
     /// Return endianness of the memory access.  This will return the endianness
@@ -128,9 +205,9 @@ impl MemFlags {
     /// caller since it is not explicitly encoded in CLIF IR -- this allows a
     /// front end to create IR without having to know the target endianness.
     pub const fn endianness(self, native_endianness: Endianness) -> Endianness {
-        if self.read(FlagBit::LittleEndian) {
+        if self.read_bit(BIT_LITTLE_ENDIAN) {
             Endianness::Little
-        } else if self.read(FlagBit::BigEndian) {
+        } else if self.read_bit(BIT_BIG_ENDIAN) {
             Endianness::Big
         } else {
             native_endianness
@@ -145,53 +222,36 @@ impl MemFlags {
     /// Set endianness of the memory access, returning new flags.
     pub const fn with_endianness(self, endianness: Endianness) -> Self {
         let res = match endianness {
-            Endianness::Little => self.with(FlagBit::LittleEndian),
-            Endianness::Big => self.with(FlagBit::BigEndian),
+            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN),
+            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN),
         };
-        assert!(!(res.read(FlagBit::LittleEndian) && res.read(FlagBit::BigEndian)));
+        assert!(!(res.read_bit(BIT_LITTLE_ENDIAN) && res.read_bit(BIT_BIG_ENDIAN)));
         res
     }
 
-    /// Test if the `notrap` flag is set.
+    /// Test if this memory operation cannot trap.
     ///
-    /// Normally, trapping is part of the semantics of a load/store operation. If the platform
-    /// would cause a trap when accessing the effective address, the Cranelift memory operation is
-    /// also required to trap.
+    /// By default `MemFlags` will assume that any load/store can trap and is
+    /// associated with a `TrapCode::HeapOutOfBounds` code. If the trap code is
+    /// configured to `None` though then this method will return `true` and
+    /// indicates that the memory operation will not trap.
     ///
-    /// The `notrap` flag tells Cranelift that the memory is *accessible*, which means that
-    /// accesses will not trap. This makes it possible to delete an unused load or a dead store
-    /// instruction.
+    /// If this returns `true` then the memory is *accessible*, which means
+    /// that accesses will not trap. This makes it possible to delete an unused
+    /// load or a dead store instruction.
     pub const fn notrap(self) -> bool {
-        self.read(FlagBit::Notrap)
+        self.trap_code().is_none()
     }
 
-    /// Set the `notrap` flag.
+    /// Sets the trap code for this `MemFlags` to `None`.
     pub fn set_notrap(&mut self) {
         *self = self.with_notrap();
     }
 
-    /// Set the `notrap` flag, returning new flags.
+    /// Sets the trap code for this `MemFlags` to `None`, returning the new
+    /// flags.
     pub const fn with_notrap(self) -> Self {
-        self.with(FlagBit::Notrap)
-    }
-
-    /// Test if the `tabletrap` bit is set.
-    ///
-    /// By default, if this memory access traps, the associated trap
-    /// code will be `HeapOutOfBounds`. With this flag set, the trap
-    /// code will instead be `TableOutOfBounds`.
-    pub const fn tabletrap(self) -> bool {
-        self.read(FlagBit::TableTrap)
-    }
-
-    /// Set the `tabletrap` bit.
-    pub fn set_tabletrap(&mut self) {
-        *self = self.with_tabletrap();
-    }
-
-    /// Set the `tabletrap` bit, returning new flags.
-    pub const fn with_tabletrap(self) -> Self {
-        self.with(FlagBit::TableTrap)
+        self.with_trap_code(None)
     }
 
     /// Test if the `aligned` flag is set.
@@ -200,7 +260,7 @@ impl MemFlags {
     /// `aligned` flag is set, the instruction is permitted to trap or return a wrong result if the
     /// effective address is misaligned.
     pub const fn aligned(self) -> bool {
-        self.read(FlagBit::Aligned)
+        self.read_bit(BIT_ALIGNED)
     }
 
     /// Set the `aligned` flag.
@@ -210,7 +270,7 @@ impl MemFlags {
 
     /// Set the `aligned` flag, returning new flags.
     pub const fn with_aligned(self) -> Self {
-        self.with(FlagBit::Aligned)
+        self.with_bit(BIT_ALIGNED)
     }
 
     /// Test if the `readonly` flag is set.
@@ -219,7 +279,7 @@ impl MemFlags {
     /// This results in undefined behavior if the dereferenced memory is mutated at any time
     /// between when the function is called and when it is exited.
     pub const fn readonly(self) -> bool {
-        self.read(FlagBit::Readonly)
+        self.read_bit(BIT_READONLY)
     }
 
     /// Set the `readonly` flag.
@@ -229,7 +289,7 @@ impl MemFlags {
 
     /// Set the `readonly` flag, returning new flags.
     pub const fn with_readonly(self) -> Self {
-        self.with(FlagBit::Readonly)
+        self.with_bit(BIT_READONLY)
     }
 
     /// Test if the `heap` bit is set.
@@ -241,7 +301,7 @@ impl MemFlags {
     /// accessed by another load/store with one of the other
     /// alias-analysis bits (`table`, `vmctx`) set, or `heap` not set.
     pub const fn heap(self) -> bool {
-        self.read(FlagBit::Heap)
+        matches!(self.alias_region(), Some(AliasRegion::Heap))
     }
 
     /// Set the `heap` bit. See the notes about mutual exclusion with
@@ -253,7 +313,7 @@ impl MemFlags {
     /// Set the `heap` bit, returning new flags.
     pub const fn with_heap(self) -> Self {
         assert!(!self.table() && !self.vmctx());
-        self.with(FlagBit::Heap)
+        self.with_alias_region(Some(AliasRegion::Heap))
     }
 
     /// Test if the `table` bit is set.
@@ -265,7 +325,7 @@ impl MemFlags {
     /// accessed by another load/store with one of the other
     /// alias-analysis bits (`heap`, `vmctx`) set, or `table` not set.
     pub const fn table(self) -> bool {
-        self.read(FlagBit::Table)
+        matches!(self.alias_region(), Some(AliasRegion::Table))
     }
 
     /// Set the `table` bit. See the notes about mutual exclusion with
@@ -277,7 +337,7 @@ impl MemFlags {
     /// Set the `table` bit, returning new flags.
     pub const fn with_table(self) -> Self {
         assert!(!self.heap() && !self.vmctx());
-        self.with(FlagBit::Table)
+        self.with_alias_region(Some(AliasRegion::Table))
     }
 
     /// Test if the `vmctx` bit is set.
@@ -289,7 +349,7 @@ impl MemFlags {
     /// accessed by another load/store with one of the other
     /// alias-analysis bits (`heap`, `table`) set, or `vmctx` not set.
     pub const fn vmctx(self) -> bool {
-        self.read(FlagBit::Vmctx)
+        matches!(self.alias_region(), Some(AliasRegion::Vmctx))
     }
 
     /// Set the `vmctx` bit. See the notes about mutual exclusion with
@@ -301,7 +361,7 @@ impl MemFlags {
     /// Set the `vmctx` bit, returning new flags.
     pub const fn with_vmctx(self) -> Self {
         assert!(!self.heap() && !self.table());
-        self.with(FlagBit::Vmctx)
+        self.with_alias_region(Some(AliasRegion::Vmctx))
     }
 
     /// Test if the `checked` bit is set.
@@ -316,7 +376,7 @@ impl MemFlags {
     /// checker's correctness) to access valid memory. This can be
     /// used to ensure memory safety and sandboxing.
     pub const fn checked(self) -> bool {
-        self.read(FlagBit::Checked)
+        self.read_bit(BIT_CHECKED)
     }
 
     /// Set the `checked` bit.
@@ -326,32 +386,139 @@ impl MemFlags {
 
     /// Set the `checked` bit, returning new flags.
     pub const fn with_checked(self) -> Self {
-        self.with(FlagBit::Checked)
+        self.with_bit(BIT_CHECKED)
     }
 
-    /// Get the trap code to report if this memory access traps. If the
-    /// `notrap` flag is set, then return `None`. Otherwise, the choice
-    /// of trap code depends on the `tabletrap` flag. The default trap
-    /// code is `HeapOutOfBounds`, but with `tabletrap` set, the trap
-    /// code is instead `TableOutOfBounds`.
+    /// Get the trap code to report if this memory access traps.
+    ///
+    /// A `None` trap code indicates that this memory access does not trap.
     pub const fn trap_code(self) -> Option<TrapCode> {
-        if self.notrap() {
-            None
-        } else if self.tabletrap() {
-            Some(TrapCode::TableOutOfBounds)
-        } else {
-            Some(TrapCode::HeapOutOfBounds)
+        // NB: keep this encoding in sync with `with_trap_code` below.
+        //
+        // Also note that the default, all zeros, is `HeapOutOfBounds`. It is
+        // intentionally not `None` so memory operations are all considered
+        // effect-ful by default.
+        match (self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET {
+            0b0000 => Some(TrapCode::HeapOutOfBounds),
+            0b0001 => Some(TrapCode::StackOverflow),
+            0b0010 => Some(TrapCode::HeapMisaligned),
+            0b0011 => Some(TrapCode::TableOutOfBounds),
+            0b0100 => Some(TrapCode::IndirectCallToNull),
+            0b0101 => Some(TrapCode::BadSignature),
+            0b0110 => Some(TrapCode::IntegerOverflow),
+            0b0111 => Some(TrapCode::IntegerDivisionByZero),
+            0b1000 => Some(TrapCode::BadConversionToInteger),
+            0b1001 => Some(TrapCode::UnreachableCodeReached),
+            0b1010 => Some(TrapCode::Interrupt),
+            0b1011 => Some(TrapCode::NullReference),
+            // 0b1100 => {} not allocated
+            // 0b1101 => {} not allocated
+            // 0b1110 => {} not allocated
+            0b1111 => None,
+            _ => unreachable!(),
         }
+    }
+
+    /// Configures these flags with the specified trap code `code`.
+    ///
+    /// Note that `TrapCode::User(_)` cannot be set in `MemFlags`. A trap code
+    /// indicates that this memory operation cannot be optimized away and it
+    /// must "stay where it is" in the programs. Traps are considered side
+    /// effects, for example, and have meaning through the trap code that is
+    /// communicated and which instruction trapped.
+    pub const fn with_trap_code(mut self, code: Option<TrapCode>) -> Self {
+        let bits = match code {
+            Some(TrapCode::HeapOutOfBounds) => 0b0000,
+            Some(TrapCode::StackOverflow) => 0b0001,
+            Some(TrapCode::HeapMisaligned) => 0b0010,
+            Some(TrapCode::TableOutOfBounds) => 0b0011,
+            Some(TrapCode::IndirectCallToNull) => 0b0100,
+            Some(TrapCode::BadSignature) => 0b0101,
+            Some(TrapCode::IntegerOverflow) => 0b0110,
+            Some(TrapCode::IntegerDivisionByZero) => 0b0111,
+            Some(TrapCode::BadConversionToInteger) => 0b1000,
+            Some(TrapCode::UnreachableCodeReached) => 0b1001,
+            Some(TrapCode::Interrupt) => 0b1010,
+            Some(TrapCode::NullReference) => 0b1011,
+            None => 0b1111,
+
+            Some(TrapCode::User(_)) => panic!("cannot set user trap code in mem flags"),
+        };
+        self.bits &= !MASK_TRAP_CODE;
+        self.bits |= bits << TRAP_CODE_OFFSET;
+        self
     }
 }
 
 impl fmt::Display for MemFlags {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, n) in NAMES.iter().enumerate() {
-            if self.bits & (1 << i) != 0 {
-                write!(f, " {}", n)?;
-            }
+        match self.trap_code() {
+            None => write!(f, " notrap")?,
+            // This is the default trap code, so don't print anything extra
+            // for this.
+            Some(TrapCode::HeapOutOfBounds) => {}
+            Some(t) => write!(f, " {t}")?,
+        }
+        if self.aligned() {
+            write!(f, " aligned")?;
+        }
+        if self.readonly() {
+            write!(f, " readonly")?;
+        }
+        if self.read_bit(BIT_BIG_ENDIAN) {
+            write!(f, " big")?;
+        }
+        if self.read_bit(BIT_LITTLE_ENDIAN) {
+            write!(f, " little")?;
+        }
+        if self.checked() {
+            write!(f, " checked")?;
+        }
+        match self.alias_region() {
+            None => {}
+            Some(AliasRegion::Heap) => write!(f, " heap")?,
+            Some(AliasRegion::Table) => write!(f, " table")?,
+            Some(AliasRegion::Vmctx) => write!(f, " vmctx")?,
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_traps() {
+        for trap in TrapCode::non_user_traps().iter().copied() {
+            let flags = MemFlags::new().with_trap_code(Some(trap));
+            assert_eq!(flags.trap_code(), Some(trap));
+        }
+        let flags = MemFlags::new().with_trap_code(None);
+        assert_eq!(flags.trap_code(), None);
+    }
+
+    #[test]
+    fn cannot_set_big_and_little() {
+        let mut big = MemFlags::new().with_endianness(Endianness::Big);
+        assert!(big.set_by_name("little").is_err());
+
+        let mut little = MemFlags::new().with_endianness(Endianness::Little);
+        assert!(little.set_by_name("big").is_err());
+    }
+
+    #[test]
+    fn only_one_region() {
+        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Heap));
+        assert!(big.set_by_name("table").is_err());
+        assert!(big.set_by_name("vmctx").is_err());
+
+        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Table));
+        assert!(big.set_by_name("heap").is_err());
+        assert!(big.set_by_name("vmctx").is_err());
+
+        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Vmctx));
+        assert!(big.set_by_name("heap").is_err());
+        assert!(big.set_by_name("table").is_err());
     }
 }
