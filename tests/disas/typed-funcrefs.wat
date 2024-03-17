@@ -2,9 +2,20 @@
 ;;! test = "optimize"
 ;;! flags = [ "-Wfunction-references=y" ]
 
+;; This test is meant to simulate how typed funcrefs in a table may be
+;; used for ICs (inline caches) in a Wasm module compiled from a dynamic
+;; language. In native JIT engines, IC chains have head pointers that
+;; are raw code pointers and IC-using code can call each with a few ops
+;; (load pointer, call indirect). We'd like similar efficiency by
+;; storing funcrefs for the first IC in each chain in a typed-funcref
+;; table.
+
 (module
   (type $ic-stub (func (param i32 i32 i32 i32) (result i32)))
 
+  ;; This syntax declares a table that is exactly 100 elements, whose
+  ;; elements are non-nullable function references, and whose default
+  ;; value (needed because non-nullable) is a pointer to `$ic1`.
   (table $ic-sites 100 100 (ref $ic-stub) (ref.func $ic1))
 
   (func $ic1 (param i32 i32 i32 i32) (result i32)
@@ -13,6 +24,7 @@
   (func $call-ics (param i32 i32 i32 i32) (result i32)
         (local $sum i32)
 
+        ;; IC callsite index 1 (arbitrary).
         local.get 0
         local.get 1
         local.get 2
@@ -24,6 +36,7 @@
         i32.add
         local.set $sum
 
+        ;; IC callsite index 2 (arbitrary).
         local.get 0
         local.get 1
         local.get 2
