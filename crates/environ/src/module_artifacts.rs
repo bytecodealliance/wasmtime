@@ -275,15 +275,6 @@ impl<'a> ObjectBuilder<'a> {
             self.push_debug(&mut dwarf, &debuginfo.dwarf.debug_str_offsets);
             self.push_debug(&mut dwarf, &debuginfo.debug_ranges);
             self.push_debug(&mut dwarf, &debuginfo.debug_rnglists);
-
-            if let Some(dwarf_package) = debuginfo.dwarf_package {
-                self.push_debug(&mut dwarf, &dwarf_package.debug_abbrev);
-                self.push_debug(&mut dwarf, &dwarf_package.debug_info);
-                self.push_debug(&mut dwarf, &dwarf_package.debug_line);
-                self.push_debug(&mut dwarf, &dwarf_package.debug_str);
-                self.push_debug(&mut dwarf, &dwarf_package.debug_str_offsets);
-                self.push_debug(&mut dwarf, &dwarf_package.debug_rnglists);
-            }
         }
         // Sort this for binary-search-lookup later in `symbolize_context`.
         dwarf.sort_by_key(|(id, _)| *id);

@@ -534,13 +534,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     self.validator,
                     self.types.module_types_builder(),
                 )
-                .translate(
-                    parser,
-                    &component[range.start..range.end],
-                    None,
-                    None,
-                    None,
-                )?;
+                .translate(parser, &component[range.start..range.end])?;
                 let static_idx = self.static_modules.push(translation);
                 self.result
                     .initializers

@@ -69,17 +69,8 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     let parser = wasmparser::Parser::new(0);
     let mut types = Default::default();
 
-    let arena_data = Arena::new();
-    let mut buffer = Vec::new();
-
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
-        .translate(
-            parser,
-            wasm,
-            dwarf_package,
-            Some(&mut buffer),
-            Some(&arena_data),
-        )
+        .translate(parser, wasm)
         .context("failed to parse WebAssembly module")?;
     let functions = mem::take(&mut translation.function_body_inputs);
 
@@ -108,6 +99,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
         engine,
         compiled_funcs,
         std::iter::once(translation).collect(),
+        dwarf_package,
     )?;
 
     let info = compilation_artifacts.unwrap_as_module_info();
@@ -128,7 +120,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
-    _dwarf_package_binary: Option<&'a [u8]>,
+    dwarf_package_binary: Option<&'a [u8]>,
 ) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
     use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
     use wasmtime_environ::ScopeVec;
@@ -165,6 +157,7 @@ pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
         engine,
         compiled_funcs,
         module_translations,
+        dwarf_package_binary,
     )?;
     let (types, ty) = types.finish(
         &compilation_artifacts.modules,
@@ -619,6 +612,7 @@ impl FunctionIndices {
         engine: &'a Engine,
         compiled_funcs: Vec<(String, Box<dyn Any + Send>)>,
         translations: PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
+        dwarf_package_bytes: Option<&[u8]>,
     ) -> Result<(wasmtime_environ::ObjectBuilder<'a>, Artifacts)> {
         // Append all the functions to the ELF file.
         //
@@ -674,7 +668,7 @@ impl FunctionIndices {
                     })
                     .collect();
                 if !funcs.is_empty() {
-                    compiler.append_dwarf(&mut obj, translation, &funcs)?;
+                    compiler.append_dwarf(&mut obj, translation, &funcs, dwarf_package_bytes)?;
                 }
             }
         }

@@ -542,6 +542,7 @@ impl wasmtime_environ::Compiler for Compiler {
         obj: &mut Object<'_>,
         translation: &ModuleTranslation<'_>,
         funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
+        dwarf_package_bytes: Option<&[u8]>,
     ) -> Result<()> {
         let ofs = VMOffsets::new(
             self.isa
@@ -584,6 +585,7 @@ impl wasmtime_environ::Compiler for Compiler {
             &translation.debuginfo,
             &functions_info,
             &memory_offset,
+            dwarf_package_bytes,
         )
         .with_context(|| "failed to emit DWARF debug information")?;
 

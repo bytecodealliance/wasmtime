@@ -3492,6 +3492,7 @@ dependencies = [
  "object 0.33.0",
  "target-lexicon",
  "thiserror",
+ "typed-arena",
  "wasmparser",
  "wasmtime-cranelift-shared",
  "wasmtime-environ",

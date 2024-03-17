@@ -221,7 +221,7 @@ impl<'data> Translator<'_, 'data> {
                 &mut validator,
                 self.types.module_types_builder(),
             )
-            .translate(Parser::new(0), wasm, None, None, None)
+            .translate(Parser::new(0), wasm)
             .expect("invalid adapter module generated");
 
             // Record, for each adapter in this adapter module, the module that
