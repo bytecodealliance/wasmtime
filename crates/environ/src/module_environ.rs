@@ -8,11 +8,14 @@ use crate::{
     Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmValType,
     WasmparserTypeConverter,
 };
-use gimli::DwarfPackage;
+use anyhow::Result;
+use gimli::{DwarfPackage, LittleEndian};
+use object::{File, Object, ObjectSection, ObjectSymbol};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use typed_arena::Arena;
 use wasmparser::types::{CoreTypeId, Types};
 use wasmparser::{
     CompositeType, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding,
@@ -20,6 +23,8 @@ use wasmparser::{
     Payload, TypeRef, Validator, ValidatorResources,
 };
 use wasmtime_types::ModuleInternedTypeIndex;
+
+type RelocationMap = HashMap<usize, object::Relocation>;
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'a, 'data> {
@@ -172,6 +177,141 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         }
     }
 
+    fn add_relocations(
+        relocations: &mut RelocationMap,
+        file: &object::File,
+        section: &object::Section,
+    ) {
+        for (offset64, mut relocation) in section.relocations() {
+            let offset = offset64 as usize;
+            if offset as u64 != offset64 {
+                continue;
+            }
+            match relocation.kind() {
+                object::RelocationKind::Absolute => {
+                    match relocation.target() {
+                        object::RelocationTarget::Symbol(symbol_idx) => {
+                            match file.symbol_by_index(symbol_idx) {
+                                Ok(symbol) => {
+                                    let addend =
+                                        symbol.address().wrapping_add(relocation.addend() as u64);
+                                    relocation.set_addend(addend as i64);
+                                }
+                                Err(_) => {
+                                    eprintln!(
+                                        "Relocation with invalid symbol for section {} at offset 0x{:08x}",
+                                        section.name().unwrap(),
+                                        offset
+                                    );
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                    if relocations.insert(offset, relocation).is_some() {
+                        eprintln!(
+                            "Multiple relocations for section {} at offset 0x{:08x}",
+                            section.name().unwrap(),
+                            offset
+                        );
+                    }
+                }
+                _ => {
+                    eprintln!(
+                        "Unsupported relocation for section {} at offset 0x{:08x}",
+                        section.name().unwrap(),
+                        offset
+                    );
+                }
+            }
+        }
+    }
+
+    fn load_file_section<'input, 'arena, Endian: gimli::Endianity>(
+        id: gimli::SectionId,
+        file: &object::File<'input>,
+        endian: Endian,
+        is_dwo: bool,
+        arena_data: &'arena Arena<Cow<'input, [u8]>>,
+    ) -> Result<gimli::EndianSlice<'input, Endian>>
+    where
+        'arena: 'input,
+    {
+        let mut relocations = RelocationMap::default();
+        let name = if is_dwo {
+            id.dwo_name()
+        } else if file.format() == object::BinaryFormat::Xcoff {
+            id.xcoff_name()
+        } else {
+            Some(id.name())
+        };
+
+        let data = match name.and_then(|name| file.section_by_name(&name)) {
+            Some(ref section) => {
+                // DWO sections never have relocations, so don't bother.
+                if !is_dwo {
+                    Self::add_relocations(&mut relocations, file, section);
+                }
+                section.uncompressed_data()?
+            }
+            // Use a non-zero capacity so that `ReaderOffsetId`s are unique.
+            None => Cow::Owned(Vec::with_capacity(1)),
+        };
+        let data_ref = arena_data.alloc(data);
+        let reader = gimli::EndianSlice::new(data_ref, endian);
+        let section = reader;
+        Ok(section)
+    }
+
+    /// Load the DWARF package in `file`.`
+    pub fn load_dwp(
+        file: &File<'data>,
+        arena_data: &'data Arena<Cow<'data, [u8]>>,
+        buffer: &'data [u8],
+    ) -> Result<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
+        // Read the file contents into a Vec<u8>
+        // let file_contents = std::fs::read(file_path)?;
+
+        // Create a gimli::EndianSlice from the file contents
+
+        let endian_slice = gimli::EndianSlice::new(buffer, LittleEndian);
+
+        let mut load_section = |id: gimli::SectionId| -> Result<_> {
+            Self::load_file_section(id, &file, gimli::LittleEndian, true, arena_data)
+        };
+
+        // Load the DwarfPackage from the EndianSlice
+        let dwarf_package = DwarfPackage::load(&mut load_section, endian_slice)?;
+
+        Ok(dwarf_package)
+
+        // let empty = Module::empty_file_section(&arena_relocations);
+        // gimli::DwarfPackage::load(&mut load_section, empty)
+    }
+
+    /// Attempts to load a DWARF package using the passed bytes.
+    pub fn read_dwarf_package_from_bytes(
+        dwp_bytes: &'data [u8],
+        buffer: &'data mut Vec<u8>,
+        arena_data: &'data Arena<Cow<'data, [u8]>>,
+    ) -> Option<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
+        let object_file = match object::File::parse(dwp_bytes) {
+            Ok(file) => file,
+            Err(err) => {
+                eprintln!("Failed to parse file {}", err);
+                return None;
+            }
+        };
+
+        match Self::load_dwp(&object_file, &arena_data, buffer) {
+            Ok(package) => Some(package),
+            Err(err) => {
+                eprintln!("Failed to load Dwarf package {}", err);
+                None
+            }
+        }
+    }
+
     /// Translate a wasm module using this environment.
     ///
     /// This function will translate the `data` provided with `parser`,
@@ -184,12 +324,27 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         mut self,
         parser: Parser,
         data: &'data [u8],
+        dwarf_package: Option<&'data [u8]>,
+        buffer: Option<&'data mut Vec<u8>>,
+        arena_data: Option<&'data Arena<Cow<'data, [u8]>>>,
     ) -> WasmResult<ModuleTranslation<'data>> {
         self.result.wasm = data;
 
         for payload in parser.parse_all(data) {
             self.translate_payload(payload?)?;
         }
+
+        self.result.debuginfo.dwarf_package = dwarf_package
+            .map(
+                |bytes| -> Option<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
+                    Self::read_dwarf_package_from_bytes(
+                        bytes,
+                        buffer.unwrap(),
+                        &arena_data.unwrap(),
+                    )
+                },
+            )
+            .flatten();
 
         Ok(self.result)
     }

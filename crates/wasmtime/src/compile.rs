@@ -57,7 +57,7 @@ use wasmtime_environ::{
 pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
-    dwarf_package: Option<gimli::DwarfPackage<EndianSlice<'_, LittleEndian>>>,
+    dwarf_package: Option<&[u8]>,
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
     let tunables = engine.tunables();
 
@@ -68,10 +68,19 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
     let parser = wasmparser::Parser::new(0);
     let mut types = Default::default();
+
+    let arena_data = Arena::new();
+    let mut buffer = Vec::new();
+
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
-        .translate(parser, wasm)
+        .translate(
+            parser,
+            wasm,
+            dwarf_package,
+            Some(&mut buffer),
+            Some(&arena_data),
+        )
         .context("failed to parse WebAssembly module")?;
-    translation.debuginfo.dwarf_package = dwarf_package;
     let functions = mem::take(&mut translation.function_body_inputs);
 
     let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
@@ -119,7 +128,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
-    dwarf_package_binary: Option<&'a [u8]>,
+    _dwarf_package_binary: Option<&'a [u8]>,
 ) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
     use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
     use wasmtime_environ::ScopeVec;

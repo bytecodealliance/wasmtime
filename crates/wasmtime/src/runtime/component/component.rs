@@ -207,8 +207,6 @@ impl Component {
             if #[cfg(feature = "cache")] {
                 let dwarf_package : Option<&[u8]> = None;
                 let state = (HashedEngineCompileEnv(engine), binary, dwarf_package);
-                let buffer = Vec::new();
-                let arena_data = Arena::new();
 
                 let (code, artifacts) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
@@ -216,11 +214,9 @@ impl Component {
                 )
                 .get_data_raw(
                     &state,
-                    &buffer,
-                    &arena_data,
 
                     // Cache miss, compute the actual artifacts
-                    |(engine, wasm, dwarf_package), buffer, arena_data| -> Result<_> {
+                    |(engine, wasm, dwarf_package)| -> Result<_> {
                         let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine.0, wasm, *dwarf_package)?;
                         let code = publish_mmap(mmap.0)?;
                         Ok((code, Some(artifacts)))

@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::{fs, path::PathBuf};
-use typed_arena::Arena;
 
 use crate::{Engine, Module};
 
@@ -103,17 +102,11 @@ impl<'a> ModuleBuilder<'a> {
     pub fn precompile_module(&mut self, wasm: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&wasm)?;
-        let arena_data = Arena::new();
-        let mut buffer = Vec::new();
         self.read_dwarf_package();
         let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(
             &self.engine,
             &bytes,
-            Module::read_dwarf_package_from_bytes(
-                &self.dwp_bytes.as_ref().unwrap(),
-                &mut buffer,
-                &arena_data,
-            ),
+            self.dwp_bytes.as_deref(),
         )?;
         Ok(v)
     }

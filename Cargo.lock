@@ -3531,6 +3531,7 @@ dependencies = [
  "serde_derive",
  "target-lexicon",
  "thiserror",
+ "typed-arena",
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",
