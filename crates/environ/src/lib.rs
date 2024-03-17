@@ -46,9 +46,6 @@ pub mod component;
 #[cfg(feature = "component-model")]
 pub mod fact;
 
-/// TODO: docs
-pub mod dwarf_relocate;
-
 // Reexport all of these type-level since they're quite commonly used and it's
 // much easier to refer to everything through one crate rather than importing
 // one of three and making sure you're using the right one.

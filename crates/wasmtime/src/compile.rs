@@ -68,7 +68,6 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
     let parser = wasmparser::Parser::new(0);
     let mut types = Default::default();
-
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
         .translate(parser, wasm)
         .context("failed to parse WebAssembly module")?;

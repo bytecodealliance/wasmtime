@@ -314,10 +314,7 @@ where
 
                 let root_id = comp_unit.root();
                 die_ref_map.insert(entry.offset(), root_id);
-
                 let cu_low_pc = unit.low_pc;
-
-                log::debug!("{}", "CU");
 
                 clone_die_attributes(
                     split_dwarf.unwrap_or(dwarf),
@@ -367,7 +364,6 @@ where
         // the first node skipped, C be previous node, and D the current node.
         // Then `cached` is the difference from A to B, `depth` is the diffence
         // from B to C, and `depth_delta` is the differenc from C to D.
-
         let depth_delta = if let Some((depth, cached)) = skip_at_depth {
             // `new_depth` = B to D
             let new_depth = depth + depth_delta;
@@ -524,7 +520,6 @@ where
             )?;
         }
     }
-
     die_ref_map.patch(pending_die_refs, comp_unit);
     Ok(Some((unit_id, die_ref_map, pending_di_refs)))
 }

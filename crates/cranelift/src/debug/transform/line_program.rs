@@ -67,7 +67,6 @@ where
             return Err(TransformError("Debug line offset is not found").into());
         }
     };
-
     let comp_dir = location_die.attr_value(gimli::DW_AT_comp_dir)?;
     let comp_name = root.attr_value(gimli::DW_AT_name)?;
     let out_comp_dir = match &comp_dir {

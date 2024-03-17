@@ -66,10 +66,9 @@ impl<'config> ModuleCacheEntry<'config> {
     /// passed to `deserialize`, which if successful will be the returned value.
     /// When computed the `serialize` function is used to generate the bytes
     /// from the returned value.
-    pub fn get_data_raw<'a, T, U, E>(
+    pub fn get_data_raw<T, U, E>(
         &self,
         state: &T,
-
         // NOTE: These are function pointers instead of closures so that they
         // don't accidentally close over something not accounted in the cache.
         compute: fn(&T) -> Result<U, E>,

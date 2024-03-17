@@ -718,7 +718,7 @@ dependencies = [
  "cranelift-native",
  "libc",
  "log",
- "memmap2 0.2.3",
+ "memmap2",
  "region",
  "target-lexicon",
  "wasmtime-jit-icache-coherence",
@@ -1770,15 +1770,6 @@ name = "memmap2"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "723e3ebdcdc5c023db1df315364573789f8857c11b631a2fdfad7c00f5c046b4"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "memmap2"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f49388d20533534cd19360ad3d6a7dadc885944aa802ba3995040c5ec11288c6"
 dependencies = [
  "libc",
 ]
@@ -3271,7 +3262,6 @@ dependencies = [
  "ittapi",
  "libc",
  "log",
- "memmap2 0.7.1",
  "object 0.33.0",
  "once_cell",
  "paste",
@@ -3283,7 +3273,6 @@ dependencies = [
  "serde_json",
  "target-lexicon",
  "tempfile",
- "thiserror",
  "typed-arena",
  "wasi-common",
  "wasm-encoder",
@@ -3367,7 +3356,6 @@ dependencies = [
  "bincode",
  "directories-next",
  "filetime",
- "gimli",
  "log",
  "once_cell",
  "pretty_env_logger",
@@ -3377,8 +3365,6 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
- "typed-arena",
- "wasmtime-environ",
  "windows-sys 0.52.0",
  "zstd",
 ]

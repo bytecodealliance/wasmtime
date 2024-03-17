@@ -16,7 +16,6 @@ use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
-
 use typed_arena::Arena;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
@@ -244,7 +243,6 @@ impl Module {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes)?;
-
         Self::from_binary(engine, &bytes, None)
     }
 
@@ -364,7 +362,6 @@ impl Module {
             if #[cfg(feature = "cache")] {
                 let state = (HashedEngineCompileEnv(engine), binary,
                     dwarf_package_binary);
-
                 let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),

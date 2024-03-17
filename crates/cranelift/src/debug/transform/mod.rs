@@ -13,7 +13,6 @@ use gimli::{
 use object::{File, Object, ObjectSection, ObjectSymbol};
 use std::borrow::Cow;
 use std::{collections::HashMap, collections::HashSet, fmt::Debug, result::Result};
-
 use thiserror::Error;
 use typed_arena::Arena;
 use wasmtime_environ::DebugInfoData;

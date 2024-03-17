@@ -207,7 +207,6 @@ impl Component {
             if #[cfg(feature = "cache")] {
                 let dwarf_package : Option<&[u8]> = None;
                 let state = (HashedEngineCompileEnv(engine), binary, dwarf_package);
-
                 let (code, artifacts) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
