@@ -321,7 +321,7 @@ fn replace_unit_from_split_dwarf<'a>(
                     )),
                     Err(err) => {
                         eprintln!("Failed to get unit header from compilation unit {}", err);
-                        return None;
+                        None
                     }
                     _ => None,
                 },
