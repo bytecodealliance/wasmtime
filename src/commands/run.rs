@@ -607,7 +607,22 @@ impl RunCommand {
         store: &mut Store<Host>,
         module: &RunTarget,
     ) -> Result<()> {
-        if self.run.common.wasi.common != Some(false) {
+        let mut cli = self.run.common.wasi.cli;
+
+        // Accept -Scommon as a deprecated alias for -Scli.
+        if let Some(common) = self.run.common.wasi.common {
+            if cli.is_some() {
+                bail!(
+                    "The -Scommon option should not be use with -Scli as it is a deprecated alias"
+                );
+            } else {
+                // In the future, we may add a warning here to tell users to use
+                // `-S cli` instead of `-S common`.
+                cli = Some(common);
+            }
+        }
+
+        if cli != Some(false) {
             match linker {
                 CliLinker::Core(linker) => {
                     match (self.run.common.wasi.preview2, self.run.common.wasi.threads) {

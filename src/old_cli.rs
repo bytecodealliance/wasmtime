@@ -981,7 +981,7 @@ impl CommonOptions {
             ret.wasi.http = wasi_http;
             ret.wasi.nn = wasi_nn;
             ret.wasi.threads = wasi_threads;
-            ret.wasi.common = wasi_common;
+            ret.wasi.cli = wasi_common;
         }
         ret
     }

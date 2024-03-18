@@ -1499,7 +1499,7 @@ mod test_programs {
             &[
                 "-Ccache=no",
                 "-Wcomponent-model",
-                "-Scommon,http,preview2",
+                "-Scli,http,preview2",
                 HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
             ],
             None,

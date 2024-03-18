@@ -252,7 +252,9 @@ wasmtime_option_group! {
 wasmtime_option_group! {
     #[derive(PartialEq, Clone)]
     pub struct WasiOptions {
-        /// Enable support for WASI common APIs
+        /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
+        pub cli: Option<bool>,
+        /// Deprecated alias for `cli`
         pub common: Option<bool>,
         /// Enable suport for WASI neural network API (experimental)
         pub nn: Option<bool>,
@@ -265,7 +267,7 @@ wasmtime_option_group! {
         pub listenfd: Option<bool>,
         /// Grant access to the given TCP listen socket
         pub tcplisten: Vec<String>,
-        /// Implement WASI with preview2 primitives (experimental).
+        /// Implement WASI CLI APIs with preview2 primitives (experimental).
         ///
         /// Indicates that the implementation of WASI preview1 should be backed by
         /// the preview2 implementation for components.
