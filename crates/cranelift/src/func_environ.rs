@@ -1241,7 +1241,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 // If it's possible to have a null here then try to load the
                 // type information. If that fails due to the function being a
                 // null pointer, then this was a call to null. Otherwise if it
-                // succeeds then we know it wont match, so trap anyway.
+                // succeeds then we know it won't match, so trap anyway.
                 if table.table.wasm_ty.nullable {
                     let mem_flags = ir::MemFlags::trusted().with_readonly();
                     self.builder.ins().load(
