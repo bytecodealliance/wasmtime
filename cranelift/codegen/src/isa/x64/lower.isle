@@ -1485,20 +1485,12 @@
 
 ;;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (insertlane vec @ (value_type ty) val (u8_from_uimm8 idx)))
-      (vec_insert_lane ty vec val idx))
-
-;; Helper function used below for `insertlane` but also here for other
-;; lowerings.
-;;
-;; Note that the `Type` used here is the type of vector the insertion is
-;; happening into, or the type of the first `Reg` argument.
-(decl vec_insert_lane (Type Xmm RegMem u8) Xmm)
-
-;; i8x16.replace_lane
-(rule 1 (vec_insert_lane $I8X16 vec val idx)
-        (if-let $true (use_sse41))
-        (x64_pinsrb vec val idx))
+(rule 1 (lower (insertlane vec @ (value_type $I8X16) val (u8_from_uimm8 idx)))
+  (if-let $true (use_sse41))
+  (x64_pinsrb vec val idx))
+(rule 2 (lower (insertlane vec @ (value_type $I8X16) (sinkable_load_exact val) (u8_from_uimm8 idx)))
+  (if-let $true (use_sse41))
+  (x64_pinsrb vec val idx))
 
 ;; This lowering is particularly unoptimized and is mostly just here to work
 ;; rather than here to be fast. Requiring SSE 4.1 for the above lowering isn't
@@ -1524,7 +1516,7 @@
 ;; This all, laboriously, gets the `val` into the desired lane so it's then
 ;; `por`'d with the original vec-with-a-hole to produce the final result of the
 ;; insertion.
-(rule (vec_insert_lane $I8X16 vec val n)
+(rule (lower (insertlane vec @ (value_type $I8X16) val (u8_from_uimm8 n)))
       (let ((vec_with_hole Xmm (x64_pand vec (insert_i8x16_lane_hole n)))
             (val Gpr (x64_movzx (ExtMode.BL) val))
             (val Gpr (x64_shl $I32 val (Imm8Reg.Imm8 (u8_shl (u8_and n 3) 3))))
@@ -1540,102 +1532,108 @@
 (rule (insert_i8x16_lane_pshufd_imm 2) 0b01_00_01_01)
 (rule (insert_i8x16_lane_pshufd_imm 3) 0b00_01_01_01)
 
+
 ;; i16x8.replace_lane
-(rule (vec_insert_lane $I16X8 vec val idx)
-      (x64_pinsrw vec val idx))
+(rule (lower (insertlane vec @ (value_type $I16X8) val (u8_from_uimm8 idx)))
+  (x64_pinsrw vec val idx))
+(rule 1 (lower (insertlane vec @ (value_type $I16X8) (sinkable_load_exact val) (u8_from_uimm8 idx)))
+  (x64_pinsrw vec val idx))
 
 ;; i32x4.replace_lane
-(rule 1 (vec_insert_lane $I32X4 vec val idx)
+(rule 1 (lower (insertlane vec @ (value_type $I32X4) val (u8_from_uimm8 idx)))
         (if-let $true (use_sse41))
         (x64_pinsrd vec val idx))
 
-(rule (vec_insert_lane $I32X4 vec val 0)
-      (x64_movss_regmove vec (x64_movd_to_xmm val)))
+(rule (lower (insertlane vec @ (value_type $I32X4) val (u8_from_uimm8 0)))
+  (x64_movss_regmove vec (x64_movd_to_xmm val)))
 
 ;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
 ;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
-(rule (vec_insert_lane $I32X4 vec val 1)
+(rule (lower (insertlane vec @ (value_type $I32X4) val (u8_from_uimm8 1)))
       (let ((val Xmm (x64_movd_to_xmm val))
             (vec Xmm vec))
         (x64_shufps (x64_punpcklqdq val vec) vec 0b11_10_00_10)))
 
 ;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
 ;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
-(rule (vec_insert_lane $I32X4 vec val 2)
+(rule (lower (insertlane vec @ (value_type $I32X4) val (u8_from_uimm8 2)))
       (let ((val Xmm (x64_movd_to_xmm val))
             (vec Xmm vec))
         (x64_shufps vec (x64_shufps val vec 0b00_11_00_00) 0b10_00_01_00)))
 
 ;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
 ;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
-(rule (vec_insert_lane $I32X4 vec val 3)
+(rule (lower (insertlane vec @ (value_type $I32X4) val (u8_from_uimm8 3)))
       (let ((val Xmm (x64_movd_to_xmm val))
             (vec Xmm vec))
         (x64_shufps vec (x64_shufps val vec 0b11_10_01_00) 0b00_10_01_00)))
 
 ;; i64x2.replace_lane
-(rule 1 (vec_insert_lane $I64X2 vec val idx)
+(rule 1 (lower (insertlane vec @ (value_type $I64X2) val (u8_from_uimm8 idx)))
         (if-let $true (use_sse41))
         (x64_pinsrq vec val idx))
-(rule (vec_insert_lane $I64X2 vec val 0)
+(rule (lower (insertlane vec @ (value_type $I64X2) val (u8_from_uimm8 0)))
       (x64_movsd_regmove vec (x64_movq_to_xmm val)))
-(rule (vec_insert_lane $I64X2 vec val 1)
+(rule (lower (insertlane vec @ (value_type $I64X2) val (u8_from_uimm8 1)))
       (x64_punpcklqdq vec (x64_movq_to_xmm val)))
 
+(rule 1 (lower (insertlane vec @ (value_type $F32X4) (sinkable_load val) (u8_from_uimm8 idx)))
+  (if-let $true (use_sse41))
+  (x64_insertps vec val (sse_insertps_lane_imm idx)))
+(rule (lower (insertlane vec @ (value_type $F32X4) val (u8_from_uimm8 idx)))
+  (f32x4_insertlane vec val idx))
+
+;; Helper function used below for `insertlane` but also here for other
+(decl f32x4_insertlane (Xmm Xmm u8) Xmm)
+
 ;; f32x4.replace_lane
-(rule 1 (vec_insert_lane $F32X4 vec val idx)
+(rule 1 (f32x4_insertlane vec val idx)
         (if-let $true (use_sse41))
         (x64_insertps vec val (sse_insertps_lane_imm idx)))
-
-;; f32x4.replace_lane 0 - without insertps
-(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 0)
-      (x64_movss_regmove vec val))
-
-;; f32x4.replace_lane 1 - without insertps
-;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
-;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
-(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 1)
-      (let ((tmp Xmm (x64_movlhps val vec)))
-        (x64_shufps tmp vec 0b11_10_00_10)))
-
-;; f32x4.replace_lane 2 - without insertps
-;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
-;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
-(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 2)
-      (let ((tmp Xmm (x64_shufps val vec 0b00_11_00_00)))
-        (x64_shufps vec tmp 0b10_00_01_00)))
-
-;; f32x4.replace_lane 3 - without insertps
-;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
-;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
-(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 3)
-      (let ((tmp Xmm (x64_shufps val vec 0b11_10_01_00)))
-        (x64_shufps vec tmp 0b00_10_01_00)))
-
-;; Recursively delegate to the above rules by loading from memory first.
-(rule (vec_insert_lane $F32X4 vec (RegMem.Mem addr) idx)
-      (vec_insert_lane $F32X4 vec (x64_movss_load addr) idx))
 
 ;; External rust code used to calculate the immediate value to `insertps`.
 (decl sse_insertps_lane_imm (u8) u8)
 (extern constructor sse_insertps_lane_imm sse_insertps_lane_imm)
+
+;; f32x4.replace_lane 0
+(rule (f32x4_insertlane vec val 0)
+      (x64_movss_regmove vec val))
+
+;; f32x4.replace_lane 1
+;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
+;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
+(rule (f32x4_insertlane vec val 1)
+      (let ((tmp Xmm (x64_movlhps val vec)))
+        (x64_shufps tmp vec 0b11_10_00_10)))
+
+;; f32x4.replace_lane 2
+;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
+;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
+(rule (f32x4_insertlane vec val 2)
+      (let ((tmp Xmm (x64_shufps val vec 0b00_11_00_00)))
+        (x64_shufps vec tmp 0b10_00_01_00)))
+
+;; f32x4.replace_lane 3
+;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
+;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
+(rule (f32x4_insertlane vec val 3)
+      (let ((tmp Xmm (x64_shufps val vec 0b11_10_01_00)))
+        (x64_shufps vec tmp 0b00_10_01_00)))
 
 ;; f64x2.replace_lane 0
 ;;
 ;; Here the `movsd` instruction is used specifically to specialize moving
 ;; into the fist lane where unlike above cases we're not using the lane
 ;; immediate as an immediate to the instruction itself.
-(rule (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0)
+(rule (lower (insertlane vec @ (value_type $F64X2) val (u8_from_uimm8 0)))
       (x64_movsd_regmove vec val))
-(rule (vec_insert_lane $F64X2 vec (RegMem.Mem val) 0)
-      (x64_movsd_regmove vec (x64_movsd_load val)))
 
 ;; f64x2.replace_lane 1
 ;;
 ;; Here the `movlhps` instruction is used specifically to specialize moving
 ;; into the second lane where unlike above cases we're not using the lane
 ;; immediate as an immediate to the instruction itself.
-(rule (vec_insert_lane $F64X2 vec val 1)
+(rule (lower (insertlane vec @ (value_type $F64X2) val (u8_from_uimm8 1)))
       (x64_movlhps vec val))
 
 ;;;; Rules for `smin`, `smax`, `umin`, `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2804,9 +2802,9 @@
             (x64_pshufd y 3)
             (x64_pshufd z 3)))
 
-          (tmp Xmm (vec_insert_lane $F32X4 x0 x1 1))
-          (tmp Xmm (vec_insert_lane $F32X4 tmp x2 2))
-          (tmp Xmm (vec_insert_lane $F32X4 tmp x3 3))
+          (tmp Xmm (f32x4_insertlane x0 x1 1))
+          (tmp Xmm (f32x4_insertlane tmp x2 2))
+          (tmp Xmm (f32x4_insertlane tmp x3 3))
         )
         tmp))
 (rule (lower (has_type $F64X2 (fma x y z)))
@@ -2820,7 +2818,7 @@
             (x64_pshufd y 0xee)
             (x64_pshufd z 0xee)))
         )
-        (vec_insert_lane $F64X2 x0 x1 1)))
+        (x64_movlhps x0 x1)))
 
 
 ;; Special case for when the `fma` feature is active and a native instruction
@@ -4030,11 +4028,11 @@
           (libcall LibCall (round_libcall $F32 imm))
           (result Xmm (libcall_1 libcall a))
           (a1 Xmm (libcall_1 libcall (x64_pshufd a 1)))
-          (result Xmm (vec_insert_lane $F32X4 result a1 1))
+          (result Xmm (f32x4_insertlane result a1 1))
           (a2 Xmm (libcall_1 libcall (x64_pshufd a 2)))
-          (result Xmm (vec_insert_lane $F32X4 result a2 2))
+          (result Xmm (f32x4_insertlane result a2 2))
           (a3 Xmm (libcall_1 libcall (x64_pshufd a 3)))
-          (result Xmm (vec_insert_lane $F32X4 result a3 3))
+          (result Xmm (f32x4_insertlane result a3 3))
         )
         result))
 (rule (x64_round $F64X2 (RegMem.Reg a) imm)
@@ -4042,9 +4040,8 @@
           (libcall LibCall (round_libcall $F64 imm))
           (result Xmm (libcall_1 libcall a))
           (a1 Xmm (libcall_1 libcall (x64_pshufd a 0b00_00_11_10)))
-          (result Xmm (vec_insert_lane $F64X2 result a1 1))
         )
-        result))
+        (x64_movlhps result a1)))
 (rule (x64_round ty (RegMem.Mem addr) imm)
       (x64_round ty (RegMem.Reg (x64_load ty addr (ExtKind.ZeroExtend))) imm))
 
