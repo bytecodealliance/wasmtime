@@ -8,6 +8,10 @@ Unreleased.
 
 ### Changed
 
+The `-S common` flag is renamed to `-S cli`, to better reflect that it provides
+the wasi-cli APIs. `-S common` is still accepted for now, and will be deprecated
+in the future.
+
 --------------------------------------------------------------------------------
 
 ## 19.0.0

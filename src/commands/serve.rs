@@ -191,16 +191,29 @@ impl ServeCommand {
     }
 
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
-        // Repurpose the `-Scommon` flag of `wasmtime run` for `wasmtime serve`
+        let mut cli = self.run.common.wasi.cli;
+
+        // Accept -Scommon as a deprecated alias for -Scli.
+        if let Some(common) = self.run.common.wasi.common {
+            if cli.is_some() {
+                bail!(
+                    "The -Scommon option should not be use with -Scli as it is a deprecated alias"
+                );
+            } else {
+                eprintln!("warning: The -Scommon flag has been renamed to -Scli");
+                cli = Some(common);
+            }
+        }
+
+        // Repurpose the `-Scli` flag of `wasmtime run` for `wasmtime serve`
         // to serve as a signal to enable all WASI interfaces instead of just
-        // those in the `proxy` world. If `-Scommon` is present then add all
-        // `command` APIs which includes all "common" or base WASI APIs and then
-        // additionally add in the required HTTP APIs.
+        // those in the `proxy` world. If `-Scli` is present then add all
+        // `command` APIs and then additionally add in the required HTTP APIs.
         //
-        // If `-Scommon` isn't passed then use the `proxy::add_to_linker`
+        // If `-Scli` isn't passed then use the `proxy::add_to_linker`
         // bindings which adds just those interfaces that the proxy interface
         // uses.
-        if self.run.common.wasi.common == Some(true) {
+        if cli == Some(true) {
             wasmtime_wasi::command::add_to_linker(linker)?;
             wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
         } else {
