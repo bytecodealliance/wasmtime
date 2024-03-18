@@ -125,7 +125,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             next_stack = 32;
         }
 
-        for param in params {
+        for (ix, param) in params.iter().enumerate() {
+            let last_param = ix == params.len() - 1;
+
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack as i64;
                 let size = size;
@@ -210,6 +212,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 continue;
             }
 
+            debug_assert!(
+                call_conv != CallConv::Winch || rcs.len() == 1,
+                "Winch is unable to handle values wider than 64-bits"
+            );
+
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 let intreg = *rc == RegClass::Int;
@@ -218,14 +225,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Args => {
                             get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
                         }
-                        ArgsOrRets::Rets => get_intreg_for_retval(&call_conv, flags, next_gpr),
+                        ArgsOrRets::Rets => {
+                            get_intreg_for_retval(&call_conv, flags, next_gpr, last_param)
+                        }
                     }
                 } else {
                     match args_or_rets {
                         ArgsOrRets::Args => {
                             get_fltreg_for_arg(&call_conv, next_vreg, next_param_idx)
                         }
-                        ArgsOrRets::Rets => get_fltreg_for_retval(&call_conv, next_vreg),
+                        ArgsOrRets::Rets => {
+                            get_fltreg_for_retval(&call_conv, next_vreg, last_param)
+                        }
                     }
                 };
                 next_param_idx += 1;
@@ -241,8 +252,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
-                    let size = reg_ty.bits() / 8;
-                    let size = std::cmp::max(size, 8);
+                    let size = reg_ty.bytes();
+                    let size = if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
+                        size
+                    } else {
+                        std::cmp::max(size, 8)
+                    };
                     // Align.
                     debug_assert!(size.is_power_of_two());
                     next_stack = align_to(next_stack, size);
@@ -297,6 +312,23 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         } else {
             None
         };
+
+        // Winch writes the first result to the highest offset, so we need to iterate through the
+        // args and adjust the offsets down.
+        if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
+            for arg in args.args_mut() {
+                if let ABIArg::Slots { slots, .. } = arg {
+                    for slot in slots.iter_mut() {
+                        if let ABIArgSlot::Stack { offset, ty, .. } = slot {
+                            let size = i64::from(ty.bytes());
+                            *offset = i64::from(next_stack) - *offset - size;
+                        }
+                    }
+                } else {
+                    unreachable!("Winch cannot handle {arg:?}");
+                }
+            }
+        }
 
         next_stack = align_to(next_stack, 16);
 
@@ -1037,6 +1069,7 @@ fn get_intreg_for_retval(
     call_conv: &CallConv,
     flags: &settings::Flags,
     intreg_idx: usize,
+    is_last: bool,
 ) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match intreg_idx {
@@ -1067,16 +1100,13 @@ fn get_intreg_for_retval(
             1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
             _ => None,
         },
-        CallConv::Winch => match intreg_idx {
-            0 => Some(regs::rax()),
-            _ => None,
-        },
+        CallConv::Winch => is_last.then(|| regs::rax()),
         CallConv::Probestack => todo!(),
         CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
     }
 }
 
-fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize) -> Option<Reg> {
+fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize, is_last: bool) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match fltreg_idx {
             0 => Some(regs::xmm0()),
@@ -1094,10 +1124,11 @@ fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize) -> Option<Reg>
             1 => Some(regs::xmm1()),
             _ => None,
         },
-        CallConv::WindowsFastcall | CallConv::Winch => match fltreg_idx {
+        CallConv::WindowsFastcall => match fltreg_idx {
             0 => Some(regs::xmm0()),
             _ => None,
         },
+        CallConv::Winch => is_last.then(|| regs::xmm0()),
         CallConv::Probestack => todo!(),
         CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
     }
