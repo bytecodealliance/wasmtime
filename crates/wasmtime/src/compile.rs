@@ -24,14 +24,11 @@
 
 use crate::Engine;
 use anyhow::{Context, Result};
-use gimli::{EndianSlice, LittleEndian};
 use std::{
     any::Any,
-    borrow::Cow,
     collections::{btree_map, BTreeMap, BTreeSet, HashMap},
     mem,
 };
-use typed_arena::Arena;
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;

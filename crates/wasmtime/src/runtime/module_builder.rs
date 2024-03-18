@@ -70,6 +70,7 @@ impl<'a> ModuleBuilder<'a> {
     /// Finish the compilation by reading wasm from `path`
     ///
     /// Auto-loads `path.dwp` if `dwarf_package` or `dwarf_package_file`` weren't called
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn compile_path(&mut self, path: impl AsRef<Path>) -> Result<Module> {
         self.read_dwarf_package();
 
@@ -90,6 +91,7 @@ impl<'a> ModuleBuilder<'a> {
     }
 
     /// Finish compilation by using the bytes provided as wasm.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn compile(&mut self, wasm: &[u8]) -> Result<Module> {
         self.read_dwarf_package();
 
@@ -99,6 +101,7 @@ impl<'a> ModuleBuilder<'a> {
     }
 
     /// Builds the supplied WebAssembly module, combining with the DWARF package if one is found.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn precompile_module(&mut self, wasm: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&wasm)?;

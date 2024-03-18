@@ -9,14 +9,12 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use once_cell::sync::OnceCell;
-use std::borrow::Cow;
 use std::fs;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use typed_arena::Arena;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
@@ -298,6 +296,7 @@ impl Module {
         }
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     fn compute_artifacts<'a>(
         engine: &HashedEngineCompileEnv<'a>,
         wasm: &[u8],
