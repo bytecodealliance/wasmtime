@@ -957,7 +957,7 @@
       (ty Type)
       (extension ArgumentExtension))
     (Stack
-      (offset i64)
+      (offset i32)
       (ty Type)
       (extension ArgumentExtension))))
 

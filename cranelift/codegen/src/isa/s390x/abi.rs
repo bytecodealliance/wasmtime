@@ -323,7 +323,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                 let offset = (next_stack + offset) as i64;
                 next_stack += slot_size;
                 ABIArgSlot::Stack {
-                    offset,
+                    offset: i32::try_from(offset).unwrap(),
                     ty: param.value_type,
                     extension: param.extension,
                 }

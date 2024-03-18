@@ -160,7 +160,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     debug_assert!(size.is_power_of_two());
                     next_stack = align_to(next_stack, size);
                     slots.push(ABIArgSlot::Stack {
-                        offset: next_stack as i64,
+                        offset: i32::try_from(next_stack).unwrap(),
                         ty: *reg_ty,
                         extension: param.extension,
                     });
