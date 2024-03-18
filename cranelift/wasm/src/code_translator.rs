@@ -659,6 +659,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 callee,
                 state.peekn(num_args),
             )?;
+            let call = match call {
+                Some(call) => call,
+                None => {
+                    state.reachable = false;
+                    return Ok(());
+                }
+            };
             let inst_results = builder.inst_results(call);
             debug_assert_eq!(
                 inst_results.len(),

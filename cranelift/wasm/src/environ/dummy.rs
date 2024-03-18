@@ -349,7 +349,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<Option<ir::Inst>> {
         // Pass the current function's vmctx parameter on to the callee.
         let vmctx = builder
             .func
@@ -376,10 +376,12 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.extend(call_args.iter().cloned(), &mut builder.func.dfg.value_lists);
         args.push(vmctx, &mut builder.func.dfg.value_lists);
 
-        Ok(builder
-            .ins()
-            .CallIndirect(ir::Opcode::CallIndirect, INVALID, sig_ref, args)
-            .0)
+        Ok(Some(
+            builder
+                .ins()
+                .CallIndirect(ir::Opcode::CallIndirect, INVALID, sig_ref, args)
+                .0,
+        ))
     }
 
     fn translate_return_call_indirect(
