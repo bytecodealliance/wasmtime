@@ -293,6 +293,10 @@ wasmtime_option_group! {
         pub udp: Option<bool>,
         /// Allows imports from the `wasi_unstable` core wasm module.
         pub preview0: Option<bool>,
+        /// Inherit all environment variables from the parent process.
+        ///
+        /// This option can be further overwritten with `--env` flags.
+        pub inherit_env: Option<bool>,
     }
 
     enum Wasi {
