@@ -360,6 +360,11 @@ jobs:
       run: ./ci/vendor-wit.sh
     - run: git diff --exit-code
 
+    # Re-vendor the C API and make sure it's up-to-date.
+    - name: Re-vendor WIT
+      run: ./ci/vendor-c-api-headers.sh
+    - run: git diff --exit-code
+
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
       if: failure() && github.event_name != 'pull_request'

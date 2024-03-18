@@ -7,7 +7,6 @@ You can compile and run this example on Linux with:
    cargo build --release -p wasmtime-c-api
    cc examples/threads.c \
        -I crates/c-api/include \
-       -I crates/c-api/wasm-c-api/include \
        target/release/libwasmtime.a \
        -lpthread -ldl -lm \
        -o threads
