@@ -259,8 +259,8 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst_lo, 64, 64)?;
-            undefined_result(ctx, vcode, dst_hi, 64, 64)?;
+            undefined_result(ctx, vcode, dst_lo, 64, size.to_bits().into())?;
+            undefined_result(ctx, vcode, dst_hi, 64, size.to_bits().into())?;
             Ok(())
         }
         Inst::Mul8 { dst, ref src2, .. } => {
@@ -270,7 +270,7 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst, 64, 64)?;
+            undefined_result(ctx, vcode, dst, 64, 16)?;
             Ok(())
         }
         Inst::IMul {
@@ -285,7 +285,7 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst, 64, 64)?;
+            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
             Ok(())
         }
         Inst::IMulImm {
@@ -300,7 +300,7 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst, 64, 64)?;
+            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
             Ok(())
         }
         Inst::CheckedSRemSeq {
