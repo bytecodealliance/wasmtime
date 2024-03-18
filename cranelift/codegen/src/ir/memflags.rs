@@ -146,8 +146,7 @@ impl MemFlags {
     /// Set a flag bit by name.
     ///
     /// Returns true if the flag was found and set, false for an unknown flag
-    /// name.  Will also return false when trying to set inconsistent endianness
-    /// flags.
+    /// name.
     ///
     /// # Errors
     ///
