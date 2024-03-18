@@ -1,26 +1,18 @@
 use anyhow::{anyhow, bail, Result};
-use bindings::wasi::http::types::{
+use futures::{future, stream, Future, SinkExt, StreamExt, TryStreamExt};
+use test_programs::wasi::http::types::{
     Fields, IncomingRequest, IncomingResponse, Method, OutgoingBody, OutgoingRequest,
     OutgoingResponse, ResponseOutparam, Scheme,
 };
-use futures::{future, stream, Future, SinkExt, StreamExt, TryStreamExt};
 use url::Url;
-
-mod bindings {
-    wit_bindgen::generate!({
-        path: "../wasi-http/wit",
-        world: "wasi:http/proxy",
-        default_bindings_module: "bindings",
-    });
-}
 
 const MAX_CONCURRENCY: usize = 16;
 
 struct Handler;
 
-bindings::export!(Handler);
+test_programs::proxy::export!(Handler);
 
-impl bindings::exports::wasi::http::incoming_handler::Guest for Handler {
+impl test_programs::proxy::exports::wasi::http::incoming_handler::Guest for Handler {
     fn handle(request: IncomingRequest, response_out: ResponseOutparam) {
         executor::run(async move {
             handle_request(request, response_out).await;
@@ -312,16 +304,6 @@ async fn hash(url: &Url) -> Result<String> {
 fn main() {}
 
 mod executor {
-    use super::bindings::wasi::{
-        http::{
-            outgoing_handler,
-            types::{
-                self, IncomingBody, IncomingResponse, InputStream, OutgoingBody, OutgoingRequest,
-                OutputStream,
-            },
-        },
-        io::{self, streams::StreamError},
-    };
     use anyhow::{anyhow, Error, Result};
     use futures::{future, sink, stream, Sink, Stream};
     use std::{
@@ -331,6 +313,16 @@ mod executor {
         rc::Rc,
         sync::{Arc, Mutex},
         task::{Context, Poll, Wake, Waker},
+    };
+    use test_programs::wasi::{
+        http::{
+            outgoing_handler,
+            types::{
+                self, IncomingBody, IncomingResponse, InputStream, OutgoingBody, OutgoingRequest,
+                OutputStream,
+            },
+        },
+        io::{self, streams::StreamError},
     };
 
     const READ_SIZE: u64 = 16 * 1024;

@@ -816,14 +816,14 @@ impl RunCommand {
             common,
             allow_precompiled,
             profile: profile.map(|p| p.convert()),
+            dirs,
+            vars,
         };
 
         let mut module_and_args = vec![module.into()];
         module_and_args.extend(module_args.into_iter().map(|s| s.into()));
         crate::commands::RunCommand {
             run,
-            dirs,
-            vars,
             invoke,
             preloads,
             module_and_args,
