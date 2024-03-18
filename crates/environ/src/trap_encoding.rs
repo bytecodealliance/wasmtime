@@ -106,10 +106,10 @@ impl Trap {
         //
         // This simply converts from the a `u8`, to the `Trap` enum.
         macro_rules! check {
-        ($($name:ident)*) => ($(if byte == Trap::$name as u8 {
-            return Some(Trap::$name);
-        })*);
-    }
+            ($($name:ident)*) => ($(if byte == Trap::$name as u8 {
+                return Some(Trap::$name);
+            })*);
+        }
 
         check! {
             StackOverflow
