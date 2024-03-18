@@ -10,7 +10,6 @@ use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use typed_arena::Arena;
 use wasmtime_environ::component::{
     AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, GlobalInitializer,
     InstantiateModule, StaticModuleIndex, TrampolineIndex, TypeComponentIndex, VMComponentOffsets,

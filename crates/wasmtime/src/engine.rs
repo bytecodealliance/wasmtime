@@ -2,7 +2,6 @@
 use crate::runtime::type_registry::TypeRegistry;
 use crate::Config;
 use anyhow::{Context, Result};
-use gimli::{DwarfPackage, EndianSlice};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
 use once_cell::sync::OnceCell;
