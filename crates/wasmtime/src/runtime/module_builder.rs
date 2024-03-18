@@ -101,9 +101,8 @@ impl<'a> ModuleBuilder<'a> {
     }
 
     /// Builds the supplied WebAssembly module, combining with the DWARF package if one is found.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg(any(feature = "cranelift", feature = "winch", feature = "wat"))]
     pub fn precompile_module(&mut self, wasm: &[u8]) -> Result<Vec<u8>> {
-        #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&wasm)?;
         self.read_dwarf_package();
         let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(
