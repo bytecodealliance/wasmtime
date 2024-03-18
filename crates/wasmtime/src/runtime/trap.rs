@@ -109,12 +109,12 @@ pub(crate) fn from_runtime_box(
             );
             (error, None)
         }
-        wasmtime_runtime::TrapReason::Jit { pc, faulting_addr } => {
-            let code = store
-                .modules()
-                .lookup_trap_code(pc)
-                .unwrap_or(Trap::StackOverflow);
-            let mut err: Error = code.into();
+        wasmtime_runtime::TrapReason::Jit {
+            pc,
+            faulting_addr,
+            trap,
+        } => {
+            let mut err: Error = trap.into();
 
             // If a fault address was present, for example with segfaults,
             // then simultaneously assert that it's within a known linear memory

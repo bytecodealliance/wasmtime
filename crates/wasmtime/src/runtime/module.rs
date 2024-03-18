@@ -28,7 +28,7 @@ use wasmtime_runtime::{
 mod registry;
 
 pub use registry::{
-    is_wasm_trap_pc, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
+    get_wasm_trap, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
 };
 
 /// A compiled WebAssembly module, ready to be instantiated.

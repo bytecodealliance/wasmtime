@@ -86,10 +86,7 @@ impl Engine {
             // Ensure that wasmtime_runtime's signal handlers are configured. This
             // is the per-program initialization required for handling traps, such
             // as configuring signals, vectored exception handlers, etc.
-            wasmtime_runtime::init_traps(
-                crate::module::is_wasm_trap_pc,
-                config.macos_use_mach_ports,
-            );
+            wasmtime_runtime::init_traps(crate::module::get_wasm_trap, config.macos_use_mach_ports);
             #[cfg(feature = "debug-builtins")]
             wasmtime_runtime::debug_builtins::ensure_exported();
         }
