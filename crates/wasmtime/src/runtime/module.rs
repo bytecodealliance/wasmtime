@@ -369,7 +369,6 @@ impl Module {
                     &state,
 
                     // Cache miss, compute the actual artifacts
-                    // Implementation of how to serialize artifacts
                     |(engine, wasm, dwarf_package)| {
                         Self::compute_artifacts(engine, wasm, *dwarf_package)
                     },
@@ -1090,11 +1089,6 @@ impl Module {
     pub(crate) fn id(&self) -> CompiledModuleId {
         self.inner.module.unique_id()
     }
-
-    // TODO: added this here, but not sure what the purpose is, likely I've misunderstood https://github.com/bytecodealliance/wasmtime/pull/8055#discussion_r1517064689
-    // pub fn builder<'a>() -> ModuleBuilder<'a> {
-    //     ModuleBuilder::new(&Engine::new(config)?)
-    // }
 }
 
 impl ModuleInner {
