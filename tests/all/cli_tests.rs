@@ -521,6 +521,15 @@ fn specify_env() -> Result<()> {
         .output()?;
     assert!(output.status.success());
 
+    // Inherit all env vars
+    let output = get_wasmtime_command()?
+        .args(&["run", "-Sinherit-env", "tests/all/cli_tests/print_env.wat"])
+        .env("FOO", "bar")
+        .output()?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("FOO=bar"), "bad output: {stdout}");
+
     Ok(())
 }
 

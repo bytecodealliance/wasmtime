@@ -740,6 +740,11 @@ impl RunCommand {
         let mut builder = WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?)?;
 
+        if self.run.common.wasi.inherit_env == Some(true) {
+            for (k, v) in std::env::vars() {
+                builder.env(&k, &v)?;
+            }
+        }
         for (key, value) in self.vars.iter() {
             let value = match value {
                 Some(value) => value.clone(),
@@ -779,6 +784,11 @@ impl RunCommand {
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
 
+        if self.run.common.wasi.inherit_env == Some(true) {
+            for (k, v) in std::env::vars() {
+                builder.env(&k, &v);
+            }
+        }
         for (key, value) in self.vars.iter() {
             let value = match value {
                 Some(value) => value.clone(),
