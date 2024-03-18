@@ -2028,6 +2028,50 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .maximum
             .and_then(|max| max.checked_mul(u64::from(WASM_PAGE_SIZE)));
 
+        let create_vm_def_mt = |pcc_vmctx_memtype: Option<ir::MemoryType>,
+                                func: &mut ir::Function,
+                                from_offset: u32,
+                                gv: ir::GlobalValue| {
+            // Create a memtype to refer to the VMMemoryDefinition,
+            // and add a field in vmctx that points to it.
+            if let Some(vmctx_mt) = pcc_vmctx_memtype {
+                let mt = func.create_memory_type(ir::MemoryTypeData::Struct {
+                    size: 0,
+                    fields: vec![],
+                });
+                match &mut func.memory_types[vmctx_mt] {
+                    ir::MemoryTypeData::Struct { size, fields } => {
+                        fields.push(ir::MemoryTypeField {
+                            offset: from_offset.into(),
+                            ty: pointer_type,
+                            readonly: true,
+                            fact: Some(Fact::Mem {
+                                ty: mt,
+                                min_offset: 0,
+                                max_offset: 0,
+                                nullable: false,
+                            }),
+                        });
+                        *size = std::cmp::max(*size, (from_offset + pointer_type.bytes()).into());
+                    }
+                    _ => {
+                        panic!("Bad memtype");
+                    }
+                }
+
+                func.global_value_facts[gv] = Some(Fact::Mem {
+                    ty: mt,
+                    min_offset: 0,
+                    max_offset: 0,
+                    nullable: false,
+                });
+
+                Some(mt)
+            } else {
+                None
+            }
+        };
+
         let (ptr, base_offset, current_length_offset, ptr_memtype) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
@@ -2043,10 +2087,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         global_type: pointer_type,
                         flags: MemFlags::trusted().with_readonly(),
                     });
+                    let def_mt =
+                        create_vm_def_mt(self.pcc_vmctx_memtype, func, from_offset, memory);
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
                         i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                    (memory, base_offset, current_length_offset, None)
+                    (memory, base_offset, current_length_offset, def_mt)
                 } else {
                     let owned_index = self.module.owned_memory_index(def_index);
                     let owned_base_offset =
@@ -2071,10 +2117,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     global_type: pointer_type,
                     flags: MemFlags::trusted().with_readonly(),
                 });
+                let def_mt = create_vm_def_mt(self.pcc_vmctx_memtype, func, from_offset, memory);
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
                     i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                (memory, base_offset, current_length_offset, None)
+                (memory, base_offset, current_length_offset, def_mt)
             }
         };
 
@@ -2140,7 +2187,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                                 );
                                 *size = std::cmp::max(*size, fields_end);
                             }
-                            _ => {}
+                            _ => {
+                                panic!("Bad memtype");
+                            }
                         }
                         // Apply a fact to the base pointer.
                         (Some(base_fact), Some(data_mt))
@@ -2199,7 +2248,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                                     offset + u64::from(self.isa.pointer_type().bytes()),
                                 );
                             }
-                            _ => {}
+                            _ => {
+                                panic!("Bad memtype");
+                            }
                         }
                         // Apply a fact to the base pointer.
                         (Some(base_fact), Some(data_mt))
