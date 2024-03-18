@@ -1,4 +1,4 @@
-use crate::traphandlers::tls;
+use crate::traphandlers::{tls, TrapTest};
 use crate::VMContext;
 use std::mem;
 
@@ -38,12 +38,16 @@ extern "C" fn handle_trap(ip: usize, fp: usize, has_faulting_addr: bool, faultin
             None
         };
         let ip = ip as *const u8;
-        let jmp_buf = info.take_jmp_buf_if_trap(ip, |_handler| {
+        let test = info.test_if_trap(ip, |_handler| {
             panic!("custom signal handlers are not supported on this platform");
         });
-        if !jmp_buf.is_null() {
-            info.set_jit_trap(ip, fp, faulting_addr);
-            unsafe { wasmtime_longjmp(jmp_buf) }
+        match test {
+            TrapTest::NotWasm => {}
+            TrapTest::HandledByEmbedder => unreachable!(),
+            TrapTest::Trap { jmp_buf, trap } => {
+                info.set_jit_trap(ip, fp, faulting_addr, trap);
+                unsafe { wasmtime_longjmp(jmp_buf) }
+            }
         }
     })
 }
