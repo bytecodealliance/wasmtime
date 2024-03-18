@@ -41,7 +41,6 @@ mkdir tmp/$bin_pkgname
 cp LICENSE README.md tmp/$api_pkgname
 cp LICENSE README.md tmp/$bin_pkgname
 cp -r crates/c-api/include tmp/$api_pkgname
-cp crates/c-api/wasm-c-api/include/wasm.h tmp/$api_pkgname/include
 
 # For *-min builds rename artifacts with a `-min` suffix to avoid eventual
 # clashes with the normal builds when the tarballs are unioned together.
