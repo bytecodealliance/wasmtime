@@ -1595,34 +1595,28 @@
 (decl sse_insertps_lane_imm (u8) u8)
 (extern constructor sse_insertps_lane_imm sse_insertps_lane_imm)
 
-(rule (f32x4_insertlane vec val idx)
-      (f32x4_insertlane_fallback vec val idx))
-
-;; Helper function used below for `insertlane` but also here for other
-(decl f32x4_insertlane_fallback (Xmm Xmm u8) Xmm)
-
 ;; f32x4.replace_lane 0
-(rule (f32x4_insertlane_fallback vec val 0)
+(rule (f32x4_insertlane vec val 0)
       (x64_movss_regmove vec val))
 
 ;; f32x4.replace_lane 1
 ;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
 ;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
-(rule (f32x4_insertlane_fallback vec val 1)
+(rule (f32x4_insertlane vec val 1)
       (let ((tmp Xmm (x64_movlhps val vec)))
         (x64_shufps tmp vec 0b11_10_00_10)))
 
 ;; f32x4.replace_lane 2
 ;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
 ;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
-(rule (f32x4_insertlane_fallback vec val 2)
+(rule (f32x4_insertlane vec val 2)
       (let ((tmp Xmm (x64_shufps val vec 0b00_11_00_00)))
         (x64_shufps vec tmp 0b10_00_01_00)))
 
 ;; f32x4.replace_lane 3
 ;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
 ;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
-(rule (f32x4_insertlane_fallback vec val 3)
+(rule (f32x4_insertlane vec val 3)
       (let ((tmp Xmm (x64_shufps val vec 0b11_10_01_00)))
         (x64_shufps vec tmp 0b00_10_01_00)))
 
