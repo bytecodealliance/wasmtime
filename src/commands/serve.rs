@@ -200,7 +200,8 @@ impl ServeCommand {
                     "The -Scommon option should not be use with -Scli as it is a deprecated alias"
                 );
             } else {
-                eprintln!("warning: The -Scommon flag has been renamed to -Scli");
+                // In the future, we may add a warning here to tell users to use
+                // `-S cli` instead of `-S common`.
                 cli = Some(common);
             }
         }
