@@ -887,16 +887,18 @@ impl<'a> Parser<'a> {
     }
 
     // Match and a consume a possibly empty sequence of memory operation flags.
-    fn optional_memflags(&mut self) -> MemFlags {
+    fn optional_memflags(&mut self) -> ParseResult<MemFlags> {
         let mut flags = MemFlags::new();
         while let Some(Token::Identifier(text)) = self.token() {
-            if flags.set_by_name(text) {
-                self.consume();
-            } else {
-                break;
+            match flags.set_by_name(text) {
+                Ok(true) => {
+                    self.consume();
+                }
+                Ok(false) => break,
+                Err(msg) => return err!(self.loc, msg),
             }
         }
-        flags
+        Ok(flags)
     }
 
     // Match and consume an identifier.
@@ -1570,7 +1572,7 @@ impl<'a> Parser<'a> {
                     "expected '.' followed by type in load global value decl",
                 )?;
                 let global_type = self.match_type("expected load type")?;
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
 
@@ -3036,7 +3038,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Load => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::Load {
@@ -3047,7 +3049,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Store => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
@@ -3070,7 +3072,7 @@ impl<'a> Parser<'a> {
                 InstructionData::CondTrap { opcode, arg, code }
             }
             InstructionFormat::AtomicCas => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let expected = self.match_value("expected SSA value address")?;
@@ -3083,7 +3085,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::AtomicRmw => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let op = self.match_enum("expected AtomicRmwOp")?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -3096,7 +3098,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::LoadNoOffset => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let addr = self.match_value("expected SSA value address")?;
                 InstructionData::LoadNoOffset {
                     opcode,
@@ -3105,7 +3107,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::StoreNoOffset => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
