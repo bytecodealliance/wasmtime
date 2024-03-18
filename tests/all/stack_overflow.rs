@@ -51,7 +51,7 @@ fn host_always_has_some_stack() -> Result<()> {
                 ;; exit via a wasmtime-based libcall
                 (memory 1)
                 (func $recursive3 (export "f3")
-                    (drop (memory.grow (i32.const 00)))
+                    (drop (memory.grow (i32.const 0)))
                     call $recursive3)
 
                 ;; exit via a cranelift-based libcall
