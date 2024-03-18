@@ -1,0 +1,77 @@
+%global desc Standalone runtime for WebAssembly
+%global desc_c_api C API files for %{name}
+%global desc_c_api_devel C API Header files for %{name}
+
+%if 0%{?fedora} >= 36
+%global with_debug 1
+%else
+%global with_debug 0
+%endif
+
+%if 0%{?with_debug}
+%global _find_debuginfo_dwz_opts %{nil}
+%global _dwz_low_mem_die_limit 0
+%else
+%global debug_package %{nil}
+%endif
+
+Summary: %desc
+Name: wasmtime
+Epoch: 101
+Version: 0.0
+%define build_timestamp %{lua: print(os.date("%Y%m%d%H%M%S"))}
+Release: %{build_timestamp}.#GIT_COMMIT_ID#%{?dist}
+# `make tarball-prep` will generate this from HEAD commit in the repo root dir
+Source0: %{name}-HEAD.tar.gz
+License: ASL 2.0
+URL: https://github.com/bytecodealliance/%{name}
+BuildRequires: cargo
+BuildRequires: git-core
+
+%description
+%desc
+
+%package c-api
+Summary: %desc_c_api
+
+%description c-api
+%desc_c_api
+
+%package c-api-devel
+Summary: %desc_c_api_devel
+
+%description c-api-devel
+%desc_c_api_devel
+
+%prep
+%autosetup -Sgit -n %{name}-HEAD
+
+%build
+cargo build --release
+cargo build --release -p %{name}-c-api
+
+%install
+install -dp %{buildroot}%{_bindir}
+install -Dp -m0755 target/release/%{name} %{buildroot}%{_bindir}
+
+install -dp %{buildroot}%{_includedir}/%{name}
+install -Dp -m0644 crates/c-api/include/%{name}/*.h %{buildroot}%{_includedir}/%{name}
+install -Dp -m0644 crates/c-api/include/*.h %{buildroot}%{_includedir}
+install -Dp -m0644 crates/c-api/wasm-c-api/include/*.h %{buildroot}%{_includedir}
+
+install -dp %{buildroot}%{_libdir}
+install -Dp -m0755 target/release/lib%{name}.so %{buildroot}%{_libdir}
+
+%files
+%license LICENSE
+%{_bindir}/%{name}
+
+%files c-api
+%license crates/c-api/LICENSE
+%{_libdir}/lib%{name}.so
+
+%files c-api-devel
+%license crates/c-api/LICENSE
+%dir %{_includedir}/%{name}
+%{_includedir}/%{name}/*.h
+%{_includedir}/*.h
