@@ -211,6 +211,7 @@ pub(crate) enum TrapTest {
     /// This trap was handled by the embedder via custom embedding APIs.
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
+    #[cfg_attr(miri, allow(dead_code))]
     Trap {
         /// How to longjmp back to the original wasm frame.
         jmp_buf: *const u8,
