@@ -2328,42 +2328,12 @@ impl<M: ABIMachineSpec> CallSite<M> {
         idx: usize,
         from_regs: ValueRegs<Reg>,
     ) -> SmallVec<[(VReg, ArgLoc); 2]> {
-        let mut insts = SmallInstVec::new();
         let mut locs = smallvec![];
         let word_rc = M::word_reg_class();
         let word_bits = M::word_bits() as usize;
 
-        // How many temps do we need for extends? Allocate them ahead
-        // of time, since we can't do it while we're iterating over
-        // the sig and immutably borrowing `ctx`.
-        let needed_tmps = match &ctx.sigs().args(self.sig)[idx] {
-            &ABIArg::Slots { ref slots, .. } => slots
-                .iter()
-                .map(|slot| match slot {
-                    &ABIArgSlot::Reg { extension, .. }
-                        if extension != ir::ArgumentExtension::None =>
-                    {
-                        1
-                    }
-                    &ABIArgSlot::Reg { ty, .. } if ty.is_ref() => 1,
-                    &ABIArgSlot::Reg { .. } => 0,
-                    &ABIArgSlot::Stack { extension, .. }
-                        if extension != ir::ArgumentExtension::None =>
-                    {
-                        1
-                    }
-                    &ABIArgSlot::Stack { .. } => 0,
-                })
-                .sum(),
-            ABIArg::ImplicitPtrArg { .. } => 1,
-            _ => 0,
-        };
-        let mut temps: SmallVec<[Writable<Reg>; 16]> = (0..needed_tmps)
-            .map(|_| ctx.alloc_tmp(M::word_type()).only_reg().unwrap())
-            .collect();
-
-        match &ctx.sigs().args(self.sig)[idx] {
-            &ABIArg::Slots { ref slots, .. } => {
+        match ctx.sigs().args(self.sig)[idx].clone() {
+            ABIArg::Slots { ref slots, .. } => {
                 assert_eq!(from_regs.len(), slots.len());
                 for (slot, from_reg) in slots.iter().zip(from_regs.regs().iter()) {
                     match slot {
@@ -2379,8 +2349,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                     _ => unreachable!(),
                                 };
                                 let extend_result =
-                                    temps.pop().expect("Must have allocated enough temps");
-                                insts.push(M::gen_extend(
+                                    ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                                ctx.emit(M::gen_extend(
                                     extend_result,
                                     *from_reg,
                                     signed,
@@ -2393,9 +2363,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                 // passed as a copy; the original vreg
                                 // is constrained to the stack and
                                 // this copy is in a reg.
-                                let ref_copy =
-                                    temps.pop().expect("Must have allocated enough temps");
-                                insts.push(M::gen_move(ref_copy, *from_reg, M::word_type()));
+                                let ref_copy = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                                ctx.emit(M::gen_move(ref_copy, *from_reg, M::word_type()));
 
                                 locs.push((ref_copy.to_reg().into(), ArgLoc::Reg(reg.into())));
                             } else {
@@ -2418,8 +2387,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                         _ => unreachable!(),
                                     };
                                     let extend_result =
-                                        temps.pop().expect("Must have allocated enough temps");
-                                    insts.push(M::gen_extend(
+                                        ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                                    ctx.emit(M::gen_extend(
                                         extend_result,
                                         *from_reg,
                                         signed,
@@ -2439,10 +2408,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
                     }
                 }
             }
-            &ABIArg::StructArg { pointer, .. } => {
+            ABIArg::StructArg { pointer, .. } => {
                 assert!(pointer.is_none()); // Only supported via ISLE.
             }
-            &ABIArg::ImplicitPtrArg {
+            ABIArg::ImplicitPtrArg {
                 offset,
                 pointer,
                 ty,
@@ -2451,10 +2420,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 assert_eq!(from_regs.len(), 1);
                 let vreg = from_regs.regs()[0];
                 let amode = StackAMode::SPOffset(offset, ty);
-                let tmp = temps[0];
-                insts.push(M::gen_get_stack_addr(amode, tmp, ty));
+                let tmp = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                ctx.emit(M::gen_get_stack_addr(amode, tmp, ty));
                 let tmp = tmp.to_reg();
-                insts.push(M::gen_store_base_offset(tmp, 0, vreg, ty));
+                ctx.emit(M::gen_store_base_offset(tmp, 0, vreg, ty));
                 let loc = match pointer {
                     ABIArgSlot::Reg { reg, .. } => ArgLoc::Reg(reg.into()),
                     ABIArgSlot::Stack { offset, .. } => {
@@ -2464,10 +2433,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 };
                 locs.push((tmp.into(), loc));
             }
-        }
-
-        for inst in insts {
-            ctx.emit(inst);
         }
 
         locs
