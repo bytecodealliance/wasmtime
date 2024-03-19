@@ -33,7 +33,7 @@ pub unsafe extern "C" fn wasm_module_new(
     store: &mut wasm_store_t,
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasm_module_t>> {
-    match Module::from_binary(store.store.context().engine(), binary.as_slice()) {
+    match Module::from_binary(store.store.context().engine(), binary.as_slice(), None) {
         Ok(module) => Some(Box::new(wasm_module_t::new(module))),
         Err(_) => None,
     }
