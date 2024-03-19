@@ -65,6 +65,10 @@ pub use registry::{
 /// entirely new module, but rather just a new reference to the existing module.
 /// In other words it's a shallow copy, not a deep copy.
 ///
+/// ##  [`ModuleBuilder`] - a builder module that can be used to fuse DWRF `.dwp`
+/// packages with a WebAssembly module function for the purposes of debugging.
+/// TODO: more docs...
+///
 /// ## Examples
 ///
 /// There are a number of ways you can create a `Module`, for example pulling

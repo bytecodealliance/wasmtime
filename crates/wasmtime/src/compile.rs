@@ -116,7 +116,6 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
-    dwarf_package_binary: Option<&'a [u8]>,
 ) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
     use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
     use wasmtime_environ::ScopeVec;
@@ -153,7 +152,7 @@ pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
         engine,
         compiled_funcs,
         module_translations,
-        dwarf_package_binary,
+        None, // TODO: Support dwarf packages for components.
     )?;
     let (types, ty) = types.finish(
         &compilation_artifacts.modules,

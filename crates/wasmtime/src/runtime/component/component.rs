@@ -204,8 +204,7 @@ impl Component {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
-                let dwarf_package : Option<&[u8]> = None;
-                let state = (HashedEngineCompileEnv(engine), binary, dwarf_package);
+                let state = (HashedEngineCompileEnv(engine), binary);
                 let (code, artifacts) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
@@ -214,19 +213,19 @@ impl Component {
                     &state,
 
                     // Cache miss, compute the actual artifacts
-                    |(engine, wasm, dwarf_package)| -> Result<_> {
-                        let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine.0, wasm, *dwarf_package)?;
+                    |(engine, wasm)| -> Result<_> {
+                        let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
                         let code = publish_mmap(mmap.0)?;
                         Ok((code, Some(artifacts)))
                     },
 
                     // Implementation of how to serialize artifacts
-                    |(_engine, _wasm, _), (code, _info_and_types)| {
+                    |(_engine, _wasm), (code, _info_and_types)| {
                         Some(code.mmap().to_vec())
                     },
 
                     // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm, _dwarf_package), serialized_bytes| {
+                    |(engine, _wasm), serialized_bytes| {
                         let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Component).ok()?;
                         Some((code, None))
                     },

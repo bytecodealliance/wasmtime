@@ -8,7 +8,6 @@ use crate::{
     Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmValType,
     WasmparserTypeConverter,
 };
-use anyhow::Result;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
