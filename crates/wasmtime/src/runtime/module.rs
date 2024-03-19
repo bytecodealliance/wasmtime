@@ -1384,7 +1384,6 @@ mod tests {
                     (data (i32.const 100) "abcd")
                 )
             "#,
-            None,
         )
         .unwrap();
 
