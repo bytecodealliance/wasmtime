@@ -3,7 +3,7 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::{path::Path, time::Duration};
-use wasmtime::{Engine, Module, ModuleBuilder, Precompiled, StoreLimits, StoreLimitsBuilder};
+use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 
 #[cfg(feature = "component-model")]
@@ -199,7 +199,7 @@ impl RunCommon {
                     #[cfg(feature = "component-model")]
                     {
                         self.ensure_allow_components()?;
-                        let component = ModuleBuilder::new(engine)
+                        let component = wasmtime::ModuleBuilder::new(engine)
                             .wasm(&bytes, Some(path))?
                             .compile_component()?;
                         RunTarget::Component(component)
@@ -209,7 +209,7 @@ impl RunCommon {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    let module = ModuleBuilder::new(engine)
+                    let module = wasmtime::ModuleBuilder::new(engine)
                         .wasm(&bytes, Some(path))?
                         .compile_module()?;
                     RunTarget::Core(module)
