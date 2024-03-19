@@ -491,7 +491,7 @@ impl BenchState {
         );
 
         (self.compilation_start)(self.compilation_timer);
-        let module = Module::from_binary(self.linker.engine(), bytes)?;
+        let module = Module::from_binary(self.linker.engine(), bytes, None)?;
         (self.compilation_end)(self.compilation_timer);
 
         self.module = Some(module);
