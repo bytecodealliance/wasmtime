@@ -315,7 +315,7 @@ version = "0.2.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.gimli]]
-version = "0.26.1"
+version = "0.28.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.h2]]
@@ -568,6 +568,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tracing-core]]
 version = "0.1.28"
+criteria = "safe-to-deploy"
+
+[[exemptions.typed-arena]]
+version = "2.0.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.typenum]]
