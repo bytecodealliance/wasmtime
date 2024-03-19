@@ -38,6 +38,8 @@ fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
                 || opcode == Opcode::Nearest
                 || opcode == Opcode::Sqrt
                 || opcode == Opcode::Trunc
+                || opcode == Opcode::Fdemote
+                || opcode == Opcode::Fpromote
         }
         InstructionData::Binary { opcode, .. } => {
             opcode == Opcode::Fadd
@@ -48,24 +50,6 @@ fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
                 || opcode == Opcode::Fsub
         }
         InstructionData::Ternary { opcode, .. } => opcode == Opcode::Fma,
-
-        // bitcasts coming from arbitrary integers need canonicalization as the
-        // integer isn't known to necessarily be a canonical NaN
-        InstructionData::LoadNoOffset {
-            opcode: Opcode::Bitcast,
-            arg,
-            flags: _,
-        } => {
-            let ret = pos.func.dfg.first_result(inst);
-            let ret_type = pos.func.dfg.value_type(ret);
-            let arg_type = pos.func.dfg.value_type(arg);
-            match (arg_type, ret_type) {
-                (types::I32, types::F32) => true,
-                (types::I64, types::F64) => true,
-                _ => false,
-            }
-        }
-
         _ => false,
     }
 }
