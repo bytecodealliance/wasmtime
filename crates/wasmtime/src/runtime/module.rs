@@ -394,17 +394,17 @@ impl Module {
 
                 let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary, dwarf_package_binary)?;
                 let code = publish_mmap(mmap.0)?;
+
+                fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+                    let mut code = CodeMemory::new(mmap)?;
+                    code.publish()?;
+                    Ok(Arc::new(code))
+                }
             }
         };
 
         let info_and_types = info_and_types.map(|(info, types)| (info, types.into()));
         return Self::from_parts(engine, code, info_and_types);
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given `file`
