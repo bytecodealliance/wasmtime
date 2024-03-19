@@ -1,0 +1,282 @@
+test compile
+set enable_pcc=true
+set opt_level=speed
+target x86_64
+
+function u0:3(i64 vmctx, i64) fast {
+        gv0 = vmctx
+        gv1 = load.i64 notrap aligned readonly gv0+8
+        gv2 = load.i64 notrap aligned gv1
+        gv3 ! mem(mt0, 0x0, 0x0) = vmctx
+        mt0 = struct 0 { }
+        sig0 = (i64 vmctx, i32 uext) system_v
+        sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
+        sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
+        stack_limit = gv2
+    
+block0(v0 ! mem(mt0, 0x0, 0x0): i64, v1: i64):
+    v13 -> v0
+    v17 -> v0
+    v21 -> v0
+    v22 -> v0
+    v43 -> v0
+    v51 -> v0
+    v155 -> v0
+    v160 -> v0
+    v163 -> v0
+    v164 -> v0
+    v167 -> v0
+    v168 -> v0
+    v171 -> v0
+    v173 -> v0
+    v176 -> v0
+    v177 -> v0
+    v180 -> v0
+    v182 -> v0
+    v185 -> v0
+    v2 = f64const 0.0
+    v3 = iconst.i64 0
+    v4 = iconst.i64 0
+    v5 = iconst.i64 0
+    v6 = iconst.i64 0
+    v7 = iconst.i64 0
+    v8 = iconst.i64 0
+    v9 = iconst.i64 0
+    v10 = iconst.i64 0
+    v11 = iconst.i64 0
+    v12 = iconst.i64 0
+    v14 = load.i32 notrap aligned table v13+192
+    v186 = iconst.i32 0
+    v15 = icmp eq v14, v186  ; v186 = 0
+    v16 = uextend.i32 v15
+    brif v16, block2, block3
+
+block2:
+    trap unreachable
+
+block3:
+    v18 = load.i32 notrap aligned table v17+192
+    v19 = iconst.i32 1
+    v20 = isub v18, v19  ; v19 = 1
+    store notrap aligned table v20, v21+192
+    v23 = load.i32 notrap aligned table v22+128
+    v24 = f64const -0x1.3090455030609p194
+    v25 = fneg v24  ; v24 = -0x1.3090455030609p194
+    v26 = fneg v25
+    v27 = fneg v26
+    v28 = fneg v27
+    v29 = fneg v28
+    v30 = fneg v29
+    v31 = fneg v30
+    v32 = fneg v31
+    v33 = fneg v32
+    v34 = fneg v33
+    v35 = fneg v34
+    v36 = fneg v35
+    v37 = floor v36
+    v38 = f64const +NaN
+    v39 = fcmp eq v37, v37
+    v40 = uextend.i32 v39
+    v41 = select v40, v37, v38  ; v38 = +NaN
+    v42 = iconst.i32 0x1309_0455
+    v44 = load.i32 notrap aligned table v43+128
+    v45 = rotl v42, v44  ; v42 = 0x1309_0455
+    v46 = fcvt_from_sint.f32 v45
+    v47 = iconst.i64 0x2001_8113_0904_5503
+    v48 = iconst.i64 0x2001_8113_0904_5503
+    v187 = iconst.i64 0
+    v49 = icmp eq v48, v187  ; v48 = 0x2001_8113_0904_5503, v187 = 0
+    v50 = uextend.i32 v49
+    store notrap aligned table v50, v51+128
+    v52 = iconst.i32 0x2001_8113
+    v53 = iconst.i32 0x0904_5503
+    v54 = rotl v52, v53  ; v52 = 0x2001_8113, v53 = 0x0904_5503
+    v55 = fcvt_from_sint.f32 v54
+    v56 = iconst.i64 -1
+    v70 -> v56
+    v71 -> v56
+    v57 = iconst.i32 0xffff_ffff
+    v58 = uextend.i64 v57  ; v57 = 0xffff_ffff
+    v59 = iconst.i64 1
+    v188 = iconst.i64 0
+    v60 = icmp eq v58, v188  ; v188 = 0
+    v61 = uextend.i32 v60
+    v62 = select v61, v59, v58  ; v59 = 1
+    v73 -> v62
+    v63 = iconst.i64 0x8000_0000_0000_0000
+    v64 = icmp ne v56, v63  ; v56 = -1, v63 = 0x8000_0000_0000_0000
+    v65 = uextend.i32 v64
+    brif v65, block5, block6
+
+block6:
+    v66 = iconst.i64 -1
+    v67 = icmp.i64 ne v62, v66  ; v66 = -1
+    v68 = uextend.i32 v67
+    brif v68, block5, block7
+
+block7:
+    v69 = iconst.i64 1
+    jump block4(v69)  ; v69 = 1
+
+block5:
+    jump block4(v62)
+
+block4(v72: i64):
+    v74 = srem.i64 v56, v72  ; v56 = -1
+    v88 -> v74
+    v89 -> v74
+    v75 = iconst.i32 0xffff_ffff
+    v76 = uextend.i64 v75  ; v75 = 0xffff_ffff
+    v77 = iconst.i64 1
+    v189 = iconst.i64 0
+    v78 = icmp eq v76, v189  ; v189 = 0
+    v79 = uextend.i32 v78
+    v80 = select v79, v77, v76  ; v77 = 1
+    v91 -> v80
+    v81 = iconst.i64 0x8000_0000_0000_0000
+    v82 = icmp ne v74, v81  ; v81 = 0x8000_0000_0000_0000
+    v83 = uextend.i32 v82
+    brif v83, block9, block10
+
+block10:
+    v84 = iconst.i64 -1
+    v85 = icmp.i64 ne v80, v84  ; v84 = -1
+    v86 = uextend.i32 v85
+    brif v86, block9, block11
+
+block11:
+    v87 = iconst.i64 1
+    jump block8(v87)  ; v87 = 1
+
+block9:
+    jump block8(v80)
+
+block8(v90: i64):
+    v92 = srem.i64 v74, v90
+    v106 -> v92
+    v107 -> v92
+    v93 = iconst.i32 0xffff_ffff
+    v94 = uextend.i64 v93  ; v93 = 0xffff_ffff
+    v95 = iconst.i64 1
+    v190 = iconst.i64 0
+    v96 = icmp eq v94, v190  ; v190 = 0
+    v97 = uextend.i32 v96
+    v98 = select v97, v95, v94  ; v95 = 1
+    v109 -> v98
+    v99 = iconst.i64 0x8000_0000_0000_0000
+    v100 = icmp ne v92, v99  ; v99 = 0x8000_0000_0000_0000
+    v101 = uextend.i32 v100
+    brif v101, block13, block14
+
+block14:
+    v102 = iconst.i64 -1
+    v103 = icmp.i64 ne v98, v102  ; v102 = -1
+    v104 = uextend.i32 v103
+    brif v104, block13, block15
+
+block15:
+    v105 = iconst.i64 1
+    jump block12(v105)  ; v105 = 1
+
+block13:
+    jump block12(v98)
+
+block12(v108: i64):
+    v110 = srem.i64 v92, v108
+    v124 -> v110
+    v125 -> v110
+    v111 = iconst.i32 0xffff_ffff
+    v112 = uextend.i64 v111  ; v111 = 0xffff_ffff
+    v113 = iconst.i64 1
+    v191 = iconst.i64 0
+    v114 = icmp eq v112, v191  ; v191 = 0
+    v115 = uextend.i32 v114
+    v116 = select v115, v113, v112  ; v113 = 1
+    v127 -> v116
+    v117 = iconst.i64 0x8000_0000_0000_0000
+    v118 = icmp ne v110, v117  ; v117 = 0x8000_0000_0000_0000
+    v119 = uextend.i32 v118
+    brif v119, block17, block18
+
+block18:
+    v120 = iconst.i64 -1
+    v121 = icmp.i64 ne v116, v120  ; v120 = -1
+    v122 = uextend.i32 v121
+    brif v122, block17, block19
+
+block19:
+    v123 = iconst.i64 1
+    jump block16(v123)  ; v123 = 1
+
+block17:
+    jump block16(v116)
+
+block16(v126: i64):
+    v128 = srem.i64 v110, v126
+    v145 -> v128
+    v146 -> v128
+    v129 = iconst.i32 0x0944_0909
+    v130 = popcnt v129  ; v129 = 0x0944_0909
+    v131 = iconst.i32 0x3482_3582
+    v132 = imul v130, v131  ; v131 = 0x3482_3582
+    v133 = uextend.i64 v132
+    v134 = iconst.i64 1
+    v192 = iconst.i64 0
+    v135 = icmp eq v133, v192  ; v192 = 0
+    v136 = uextend.i32 v135
+    v137 = select v136, v134, v133  ; v134 = 1
+    v148 -> v137
+    v138 = iconst.i64 0x8000_0000_0000_0000
+    v139 = icmp ne v128, v138  ; v138 = 0x8000_0000_0000_0000
+    v140 = uextend.i32 v139
+    brif v140, block21, block22
+
+block22:
+    v141 = iconst.i64 -1
+    v142 = icmp.i64 ne v137, v141  ; v141 = -1
+    v143 = uextend.i32 v142
+    brif v143, block21, block23
+
+block23:
+    v144 = iconst.i64 1
+    jump block20(v144)  ; v144 = 1
+
+block21:
+    jump block20(v137)
+
+block20(v147: i64):
+    v149 = srem.i64 v128, v147
+    v150 = iconst.i32 0xb7b7_746e
+    v151 = fcvt_from_uint.f32 v150  ; v150 = 0xb7b7_746e
+    v152 = fcvt_to_sint_sat.i64 v151
+    v153 = icmp eq v149, v152
+    v154 = uextend.i32 v153
+    v156 = load.i32 notrap aligned table v155+128
+    v157 = ctz v156
+    v158 = f32const 0x1.bc0402p-124
+    v159 = bitcast.i32 v158  ; v158 = 0x1.bc0402p-124
+    v161 = load.i32 notrap aligned table v160+144
+    v162 = bxor v159, v161
+    store notrap aligned table v162, v163+144
+    v165 = load.i32 notrap aligned table v164+160
+    v166 = bxor v157, v165
+    store notrap aligned table v166, v167+160
+    v169 = load.i32 notrap aligned table v168+160
+    v170 = bxor v154, v169
+    store notrap aligned table v170, v171+160
+    v172 = bitcast.i32 v55
+    v174 = load.i32 notrap aligned table v173+144
+    v175 = bxor v172, v174
+    store notrap aligned table v175, v176+144
+    v178 = load.i64 notrap aligned table v177+176
+    v179 = bxor.i64 v47, v178  ; v47 = 0x2001_8113_0904_5503
+    store notrap aligned table v179, v180+176
+    v181 = bitcast.i32 v46
+    v183 = load.i32 notrap aligned table v182+144
+    v184 = bxor v181, v183
+    store notrap aligned table v184, v185+144
+    jump block1
+
+block1:
+    return
+}
