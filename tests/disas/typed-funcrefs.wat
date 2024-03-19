@@ -112,6 +112,7 @@
 
         local.get $sum)
 )
+
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
@@ -149,19 +150,13 @@
 ;;                                     v31 -> v3
 ;;                                     v32 -> v4
 ;;                                     v33 -> v5
-;;                                     v62 = iconst.i8 0
-;; @0048                               brif v62, block6, block7  ; v62 = 0
-;;
-;;                                 block6 cold:
-;; @0048                               trap table_oob
-;;
-;;                                 block7:
 ;; @0048                               v12 = load.i64 notrap aligned v0+72
-;;                                     v79 = iconst.i8 0
+;;                                     v62 = iconst.i8 0
+;; @0048                               v15 = iconst.i64 0
 ;;                                     v70 = iconst.i64 8
 ;; @0048                               v14 = iadd v12, v70  ; v70 = 8
-;; @0048                               v16 = select_spectre_guard v79, v12, v14  ; v79 = 0
-;; @0048                               v17 = load.i64 notrap aligned table v16
+;; @0048                               v16 = select_spectre_guard v62, v15, v14  ; v62 = 0, v15 = 0
+;; @0048                               v17 = load.i64 table_oob aligned table v16
 ;;                                     v58 = iconst.i64 -2
 ;; @0048                               v18 = band v17, v58  ; v58 = -2
 ;; @0048                               brif v17, block3(v18), block2
@@ -179,29 +174,23 @@
 ;; @004a                               v25 = load.i64 null_reference aligned readonly v19+16
 ;; @004a                               v26 = load.i64 notrap aligned readonly v19+32
 ;; @004a                               v27 = call_indirect sig1, v25(v26, v0, v2, v3, v4, v5)
-;;                                     v80 = iconst.i8 0
-;; @005b                               brif v80, block8, block9  ; v80 = 0
-;;
-;;                                 block8 cold:
-;; @005b                               trap table_oob
-;;
-;;                                 block9:
 ;; @005b                               v38 = load.i64 notrap aligned v0+72
-;;                                     v81 = iconst.i8 0
+;;                                     v79 = iconst.i8 0
+;;                                     v80 = iconst.i64 0
 ;;                                     v78 = iconst.i64 16
 ;; @005b                               v40 = iadd v38, v78  ; v78 = 16
-;; @005b                               v42 = select_spectre_guard v81, v38, v40  ; v81 = 0
-;; @005b                               v43 = load.i64 notrap aligned table v42
-;;                                     v82 = iconst.i64 -2
-;;                                     v83 = band v43, v82  ; v82 = -2
-;; @005b                               brif v43, block5(v83), block4
+;; @005b                               v42 = select_spectre_guard v79, v80, v40  ; v79 = 0, v80 = 0
+;; @005b                               v43 = load.i64 table_oob aligned table v42
+;;                                     v81 = iconst.i64 -2
+;;                                     v82 = band v43, v81  ; v81 = -2
+;; @005b                               brif v43, block5(v82), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v84 = load.i64 notrap aligned readonly v0+56
-;;                                     v85 = load.i64 notrap aligned readonly v84+72
-;;                                     v86 = iconst.i32 0
+;;                                     v83 = load.i64 notrap aligned readonly v0+56
+;;                                     v84 = load.i64 notrap aligned readonly v83+72
+;;                                     v85 = iconst.i32 0
 ;; @0059                               v34 = iconst.i32 2
-;; @005b                               v50 = call_indirect sig0, v85(v0, v86, v34)  ; v86 = 0, v34 = 2
+;; @005b                               v50 = call_indirect sig0, v84(v0, v85, v34)  ; v85 = 0, v34 = 2
 ;; @005b                               jump block5(v50)
 ;;
 ;;                                 block5(v45: i64):
@@ -237,19 +226,13 @@
 ;;                                     v31 -> v3
 ;;                                     v32 -> v4
 ;;                                     v33 -> v5
-;;                                     v62 = iconst.i8 0
-;; @0075                               brif v62, block6, block7  ; v62 = 0
-;;
-;;                                 block6 cold:
-;; @0075                               trap table_oob
-;;
-;;                                 block7:
 ;; @0075                               v12 = load.i64 notrap aligned v0+72
-;;                                     v79 = iconst.i8 0
+;;                                     v62 = iconst.i8 0
+;; @0075                               v15 = iconst.i64 0
 ;;                                     v70 = iconst.i64 8
 ;; @0075                               v14 = iadd v12, v70  ; v70 = 8
-;; @0075                               v16 = select_spectre_guard v79, v12, v14  ; v79 = 0
-;; @0075                               v17 = load.i64 notrap aligned table v16
+;; @0075                               v16 = select_spectre_guard v62, v15, v14  ; v62 = 0, v15 = 0
+;; @0075                               v17 = load.i64 table_oob aligned table v16
 ;;                                     v58 = iconst.i64 -2
 ;; @0075                               v18 = band v17, v58  ; v58 = -2
 ;; @0075                               brif v17, block3(v18), block2
@@ -267,29 +250,23 @@
 ;; @0075                               v25 = load.i64 icall_null aligned readonly v19+16
 ;; @0075                               v26 = load.i64 notrap aligned readonly v19+32
 ;; @0075                               v27 = call_indirect sig0, v25(v26, v0, v2, v3, v4, v5)
-;;                                     v80 = iconst.i8 0
-;; @0087                               brif v80, block8, block9  ; v80 = 0
-;;
-;;                                 block8 cold:
-;; @0087                               trap table_oob
-;;
-;;                                 block9:
 ;; @0087                               v38 = load.i64 notrap aligned v0+72
-;;                                     v81 = iconst.i8 0
+;;                                     v79 = iconst.i8 0
+;;                                     v80 = iconst.i64 0
 ;;                                     v78 = iconst.i64 16
 ;; @0087                               v40 = iadd v38, v78  ; v78 = 16
-;; @0087                               v42 = select_spectre_guard v81, v38, v40  ; v81 = 0
-;; @0087                               v43 = load.i64 notrap aligned table v42
-;;                                     v82 = iconst.i64 -2
-;;                                     v83 = band v43, v82  ; v82 = -2
-;; @0087                               brif v43, block5(v83), block4
+;; @0087                               v42 = select_spectre_guard v79, v80, v40  ; v79 = 0, v80 = 0
+;; @0087                               v43 = load.i64 table_oob aligned table v42
+;;                                     v81 = iconst.i64 -2
+;;                                     v82 = band v43, v81  ; v81 = -2
+;; @0087                               brif v43, block5(v82), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v84 = load.i64 notrap aligned readonly v0+56
-;;                                     v85 = load.i64 notrap aligned readonly v84+72
-;;                                     v86 = iconst.i32 0
+;;                                     v83 = load.i64 notrap aligned readonly v0+56
+;;                                     v84 = load.i64 notrap aligned readonly v83+72
+;;                                     v85 = iconst.i32 0
 ;; @0085                               v34 = iconst.i32 2
-;; @0087                               v50 = call_indirect sig1, v85(v0, v86, v34)  ; v86 = 0, v34 = 2
+;; @0087                               v50 = call_indirect sig1, v84(v0, v85, v34)  ; v85 = 0, v34 = 2
 ;; @0087                               jump block5(v50)
 ;;
 ;;                                 block5(v45: i64):

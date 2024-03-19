@@ -530,8 +530,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let pointer_type = self.pointer_type();
         self.ensure_table_exists(builder.func, table_index);
         let table = self.tables[table_index].as_ref().unwrap();
-        let table_entry_addr = table.prepare_table_addr(builder, index, pointer_type, true);
-        let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
+        let (table_entry_addr, flags) =
+            table.prepare_table_addr(builder, index, pointer_type, true);
         let value = builder
             .ins()
             .load(self.reference_type(), flags, table_entry_addr, 0);
@@ -548,8 +548,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let pointer_type = self.pointer_type();
         self.ensure_table_exists(builder.func, table_index);
         let table = self.tables[table_index].as_ref().unwrap();
-        let table_entry_addr = table.prepare_table_addr(builder, index, pointer_type, true);
-        let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
+        let (table_entry_addr, flags) =
+            table.prepare_table_addr(builder, index, pointer_type, true);
         builder.ins().store(flags, value, table_entry_addr, 0);
         Ok(())
     }

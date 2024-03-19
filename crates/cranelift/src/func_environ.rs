@@ -955,13 +955,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // contents, we check for a null entry here, and
         // if null, we take a slow-path that invokes a
         // libcall.
-        let table_entry_addr = table_data.prepare_table_addr(
+        let (table_entry_addr, flags) = table_data.prepare_table_addr(
             builder,
             index,
             pointer_type,
             self.isa.flags().enable_table_access_spectre_mitigation(),
         );
-        let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
@@ -1548,13 +1547,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // Load the table element.
                 self.ensure_table_exists(builder.func, table_index);
                 let table_data = self.tables[table_index].as_ref().unwrap();
-                let elem_addr = table_data.prepare_table_addr(
+                let (elem_addr, flags) = table_data.prepare_table_addr(
                     builder,
                     index,
                     pointer_type,
                     self.isa.flags().enable_table_access_spectre_mitigation(),
                 );
-                let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
                 let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
 
                 let elem_is_null = builder.ins().is_null(elem);
@@ -1659,7 +1657,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
                 match plan.style {
                     TableStyle::CallerChecksSignature => {
-                        let table_entry_addr = table_data.prepare_table_addr(
+                        let (table_entry_addr, flags) = table_data.prepare_table_addr(
                             builder,
                             index,
                             pointer_type,
@@ -1671,8 +1669,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         let value_with_init_bit = builder
                             .ins()
                             .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
-                        let flags =
-                            ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
                         builder
                             .ins()
                             .store(flags, value_with_init_bit, table_entry_addr, 0);
@@ -1736,14 +1732,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // not recorded in the stack map (which would lead to the GC
                 // saving a reference to a deallocated object, and then using it
                 // after its been freed).
-                let table_entry_addr = table_data.prepare_table_addr(
+                let (table_entry_addr, flags) = table_data.prepare_table_addr(
                     builder,
                     index,
                     pointer_type,
                     self.isa.flags().enable_table_access_spectre_mitigation(),
                 );
-                let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
                 let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
+
+                // After the load, a store to the same address can't trap.
+                let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
                 builder.ins().store(flags, value, table_entry_addr, 0);
 
                 // If value is not null, increment `value`'s ref count.
