@@ -40,6 +40,8 @@ fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
                 || opcode == Opcode::Trunc
                 || opcode == Opcode::Fdemote
                 || opcode == Opcode::Fpromote
+                || opcode == Opcode::FvpromoteLow
+                || opcode == Opcode::Fvdemote
         }
         InstructionData::Binary { opcode, .. } => {
             opcode == Opcode::Fadd

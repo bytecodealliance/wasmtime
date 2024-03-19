@@ -57,6 +57,14 @@
     f32.const -0x1
     f32.copysign
     f64.promote_f32)
+
+  (func (export "f32x4.demote_f64x2_zero") (param v128) (result v128)
+    local.get 0
+    f32x4.demote_f64x2_zero)
+
+  (func (export "f64x2.promote_low_f32x4") (param v128) (result v128)
+    local.get 0
+    f64x2.promote_low_f32x4)
 )
 
 (assert_return (invoke "f32x4.floor" (v128.const f32x4 1 -2.2 3.4 nan))
@@ -89,3 +97,11 @@
                (f32.const nan:0x7fc00000))
 (assert_return (invoke "copysign-and-promote" (f32.const nan))
                (f64.const nan:0x7ff8000000000000))
+
+(assert_return (invoke "f32x4.demote_f64x2_zero"
+               (v128.const i64x2 0xfffefdfccccdcecf 0xfffefdfccccdcecf))
+               (v128.const f32x4 nan:0x7fc00000 nan:0x7fc00000 0 0))
+
+(assert_return (invoke "f64x2.promote_low_f32x4"
+               (v128.const i32x4 0xfffefdfc 0xfffefdfc 0 0))
+               (v128.const f64x2 nan:0x7ff8000000000000 nan:0x7ff8000000000000))
