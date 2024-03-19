@@ -38,6 +38,9 @@ use wasmtime_environ::{
     WasmFunctionInfo,
 };
 
+mod module_builder;
+pub use self::module_builder::{HashedEngineCompileEnv, ModuleBuilder};
+
 /// Converts an input binary-encoded WebAssembly module to compilation
 /// artifacts and type information.
 ///
@@ -113,7 +116,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
-) -> Result<(T, wasmtime_environ::component::ComponentArtifacts)> {
+) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
     use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
     use wasmtime_environ::ScopeVec;
 
@@ -179,7 +182,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     object.serialize_info(&artifacts);
 
     let result = T::finish_object(object)?;
-    Ok((result, artifacts))
+    Ok((result, Some(artifacts)))
 }
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
