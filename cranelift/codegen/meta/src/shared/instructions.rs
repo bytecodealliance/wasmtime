@@ -1449,19 +1449,36 @@ pub(crate) fn define(
             Conditional select intended for Spectre guards.
 
             This operation is semantically equivalent to a select instruction.
-            However, it is guaranteed to not be removed or otherwise altered by any
-            optimization pass, and is guaranteed to result in a conditional-move
-            instruction, not a branch-based lowering.  As such, it is suitable
-            for use when producing Spectre guards. For example, a bounds-check
-            may guard against unsafe speculation past a bounds-check conditional
-            branch by passing the address or index to be accessed through a
-            conditional move, also gated on the same condition. Because no
-            Spectre-vulnerable processors are known to perform speculation on
-            conditional move instructions, this is guaranteed to pick the
-            correct input. If the selected input in case of overflow is a "safe"
-            value, for example a null pointer that causes an exception in the
-            speculative path, this ensures that no Spectre vulnerability will
-            exist.
+            However, this instruction prohibits all speculation on the
+            controlling value when determining which input to use as the result.
+            As such, it is suitable for use in Spectre guards.
+
+            For example, on a target which may speculatively execute branches,
+            the lowering of this instruction is guaranteed to not conditionally
+            branch. Instead it will typically lower to a conditional move
+            instruction. (No Spectre-vulnerable processors are known to perform
+            value speculation on conditional move instructions.)
+
+            Ensure that the instruction you're trying to protect from Spectre
+            attacks has a data dependency on the result of this instruction.
+            That prevents an out-of-order CPU from evaluating that instruction
+            until the result of this one is known, which in turn will be blocked
+            until the controlling value is known.
+
+            Typical usage is to use a bounds-check as the controlling value,
+            and select between either a null pointer if the bounds-check
+            fails, or an in-bounds address otherwise, so that dereferencing
+            the resulting address with a load or store instruction will trap if
+            the bounds-check failed. When this instruction is used in this way,
+            any microarchitectural side effects of the memory access will only
+            occur after the bounds-check finishes, which ensures that no Spectre
+            vulnerability will exist.
+
+            Optimization opportunities for this instruction are limited compared
+            to a normal select instruction, but it is allowed to be replaced
+            by other values which are functionally equivalent as long as doing
+            so does not introduce any new opportunities to speculate on the
+            controlling value.
             "#,
             &formats.ternary,
         )
@@ -1470,11 +1487,7 @@ pub(crate) fn define(
             Operand::new("x", Any).with_doc("Value to use when `c` is true"),
             Operand::new("y", Any).with_doc("Value to use when `c` is false"),
         ])
-        .operands_out(vec![Operand::new("a", Any)])
-        .other_side_effects()
-        // We can de-duplicate spectre selects since the side effect is
-        // idempotent.
-        .side_effects_idempotent(),
+        .operands_out(vec![Operand::new("a", Any)]),
     );
 
     ig.push(
