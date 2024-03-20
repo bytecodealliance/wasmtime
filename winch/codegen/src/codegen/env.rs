@@ -328,8 +328,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     current_length_offset,
                     style,
                     ty: if plan.memory.memory64 {
-                        // TODO: Add support for 64-bit memories.
-                        unimplemented!("memory64")
+                        WasmValType::I64
                     } else {
                         WasmValType::I32
                     },
