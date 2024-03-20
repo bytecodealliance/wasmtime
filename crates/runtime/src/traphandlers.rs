@@ -521,15 +521,6 @@ impl CallThreadState {
     }
 }
 
-struct ResetCell<'a, T: Copy>(&'a Cell<T>, T);
-
-impl<T: Copy> Drop for ResetCell<'_, T> {
-    #[inline]
-    fn drop(&mut self) {
-        self.0.set(self.1);
-    }
-}
-
 // A private inner module for managing the TLS state that we require across
 // calls in wasm. The WebAssembly code is called from C++ and then a trap may
 // happen which requires us to read some contextual state to figure out what to
