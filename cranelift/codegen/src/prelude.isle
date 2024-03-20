@@ -326,6 +326,11 @@
 (decl pure ty_equal (Type Type) bool)
 (extern constructor ty_equal ty_equal)
 
+(decl pure is_ref_type (Type) bool)
+(rule 1 (is_ref_type $R32) $true)
+(rule 1 (is_ref_type $R64) $true)
+(rule 0 (is_ref_type _) $false)
+
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `MemFlags::trusted`

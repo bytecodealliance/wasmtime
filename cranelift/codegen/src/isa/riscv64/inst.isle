@@ -2733,6 +2733,8 @@
 (rule 1 (gen_bitcast r $F64 $I64) (rv_fmvxd r))
 (rule 1 (gen_bitcast r $I32 $F32) (rv_fmvwx r))
 (rule 1 (gen_bitcast r $I64 $F64) (rv_fmvdx r))
+(rule 1 (gen_bitcast r $I64 $R64) (copy_reg r $I64))
+(rule 1 (gen_bitcast r $R64 $I64) (copy_reg r $I64))
 (rule (gen_bitcast r _ _) r)
 
 (decl move_f_to_x (FReg Type) XReg)
@@ -2843,6 +2845,20 @@
   (let ((rd WritableXReg (temp_writable_xreg))
         (_ Unit (emit (MInst.MovFromPReg rd rm))))
     rd))
+
+;; Copy a register of the given type to a new register.
+;;
+;; Generally, regalloc should take care of this kind of thing for us. This is
+;; only useful for implementing things like `bitcast` from an `r64` to an `i64`
+;; to avoid conflicting constraints on a single aliased value by splitting the
+;; value into two parts.
+(decl copy_reg (XReg Type) XReg)
+(rule (copy_reg src ty)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Mov dst
+                                     src
+                                     ty))))
+        dst))
 
 (decl fp_reg () PReg)
 (extern constructor fp_reg fp_reg)
