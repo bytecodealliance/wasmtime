@@ -279,3 +279,102 @@ block0:
 ;   popq %rbp
 ;   retq
 
+function %f6(i64) -> i32 {
+  sig0 = () -> i32, i32, f64 winch
+  fn0 = %g sig0
+
+block0(v0:i64):
+  v1, v2, v3 = call fn0()
+  v4 = band.i32 v1, v2
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $48, %rsp
+;   movq    %rbx, 0(%rsp)
+;   movq    %r12, 8(%rsp)
+;   movq    %r13, 16(%rsp)
+;   movq    %r14, 24(%rsp)
+;   movq    %r15, 32(%rsp)
+; block0:
+;   subq    %rsp, $16, %rsp
+;   virtual_sp_offset_adjust 16
+;   lea     0(%rsp), %rdi
+;   load_ext_name %g+0, %r15
+;   call    *%r15
+;   movq    4(%rsp), %rax
+;   movq    0(%rsp), %rdi
+;   addq    %rsp, $16, %rsp
+;   virtual_sp_offset_adjust -16
+;   andl    %eax, %edi, %eax
+;   movq    0(%rsp), %rbx
+;   movq    8(%rsp), %r12
+;   movq    16(%rsp), %r13
+;   movq    24(%rsp), %r14
+;   movq    32(%rsp), %r15
+;   addq    %rsp, $48, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rbx, (%rsp)
+;   movq %r12, 8(%rsp)
+;   movq %r13, 0x10(%rsp)
+;   movq %r14, 0x18(%rsp)
+;   movq %r15, 0x20(%rsp)
+; block1: ; offset 0x20
+;   subq $0x10, %rsp
+;   leaq (%rsp), %rdi
+;   movabsq $0, %r15 ; reloc_external Abs8 %g 0
+;   callq *%r15
+;   movq 4(%rsp), %rax
+;   movq (%rsp), %rdi
+;   addq $0x10, %rsp
+;   andl %edi, %eax
+;   movq (%rsp), %rbx
+;   movq 8(%rsp), %r12
+;   movq 0x10(%rsp), %r13
+;   movq 0x18(%rsp), %r14
+;   movq 0x20(%rsp), %r15
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %reverse_args(i32, i64, i32, i64) -> i64, i32, i64, i32 winch {
+block0(v0: i32, v1: i64, v2: i32, v3: i64):
+    return v3, v2, v1, v0
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movq    %rcx, 12(%r8)
+;   movl    %edx, 8(%r8)
+;   movq    %rsi, 0(%r8)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rcx, 0xc(%r8)
+;   movl %edx, 8(%r8)
+;   movq %rsi, (%r8)
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
