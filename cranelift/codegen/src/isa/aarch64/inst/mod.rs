@@ -873,11 +873,6 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                     // This shouldn't be a fixed register constraint.
                     collector.reg_fixed_use(info.rn, xreg(1))
                 }
-                CallConv::Winch => {
-                    // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
-                    // This shouldn't be a fixed register constraint.
-                    collector.reg_fixed_use(info.rn, xreg(1))
-                }
                 _ => collector.reg_use(info.rn),
             }
             for u in &info.uses {
