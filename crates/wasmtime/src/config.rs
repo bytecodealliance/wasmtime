@@ -1009,9 +1009,14 @@ impl Config {
     /// Configures whether Cranelift should perform a NaN-canonicalization pass.
     ///
     /// When Cranelift is used as a code generation backend this will configure
-    /// it to replace NaNs with a single canonical value. This is useful for users
-    /// requiring entirely deterministic WebAssembly computation.
-    /// This is not required by the WebAssembly spec, so it is not enabled by default.
+    /// it to replace NaNs with a single canonical value. This is useful for
+    /// users requiring entirely deterministic WebAssembly computation.  This is
+    /// not required by the WebAssembly spec, so it is not enabled by default.
+    ///
+    /// Note that this option affects not only WebAssembly's `f32` and `f64`
+    /// types but additionally the `v128` type. This option will cause
+    /// operations using any of these types to have extra checks placed after
+    /// them to normalize NaN values as needed.
     ///
     /// The default value for this is `false`
     #[cfg(any(feature = "cranelift", feature = "winch"))]
