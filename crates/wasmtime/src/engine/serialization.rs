@@ -24,6 +24,8 @@
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use object::write::{Object, StandardSegment};
+// TODO: remove workaround for NativeFile/File, see https://github.com/bytecodealliance/wasmtime/pull/8055#issuecomment-2008572665
+// and https://github.com/gimli-rs/object/pull/649
 use object::{FileFlags, NativeFile as File, Object as _, ObjectSection, SectionKind};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
