@@ -256,11 +256,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     let size = if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
                         size
                     } else {
-                        std::cmp::max(size, 8)
+                        let size = std::cmp::max(size, 8);
+
+                        // Align.
+                        debug_assert!(size.is_power_of_two());
+                        next_stack = align_to(next_stack, size);
+                        size
                     };
-                    // Align.
-                    debug_assert!(size.is_power_of_two());
-                    next_stack = align_to(next_stack, size);
+
                     slots.push(ABIArgSlot::Stack {
                         offset: next_stack as i64,
                         ty: *reg_ty,
