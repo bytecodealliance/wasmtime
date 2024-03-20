@@ -15,8 +15,7 @@ use wasmtime_runtime::MmapVec;
 /// pre-compile a module to a serialized list of bytes.
 ///
 /// This structure can be used for more advanced configuration when compiling a
-/// WebAssembly module. Less advanced configuration can use constructors such
-/// as:
+/// WebAssembly module. Most configuration can use simpler constructors such as:
 ///
 /// * [`Module::new`](crate::Module::new)
 /// * [`Module::from_file`](crate::Module::from_file)
