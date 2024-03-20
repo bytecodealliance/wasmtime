@@ -26,7 +26,7 @@ use wasmtime_runtime::MmapVec;
 /// [`Module::deserialize`](crate::Module::deserialize) instead.
 ///
 /// A [`CodeBuilder`] requires a source of WebAssembly bytes to be configured
-/// before calling [`compile_serialized`] or [`compile_module`]. This can be
+/// before calling [`compile_module_serialized`] or [`compile_module`]. This can be
 /// provided with either the [`wasm`] or [`wasm_file`] method. Note that only
 /// a single source of bytes can be provided.
 ///
@@ -40,7 +40,7 @@ use wasmtime_runtime::MmapVec;
 /// If the text format is not desired then the [`CodeBuilder::wat`] method
 /// can be used to disable this conversion.
 ///
-/// [`compile_serialized`]: CodeBuilder::compile_serialized
+/// [`compile_module_serialized`]: CodeBuilder::compile_module_serialized
 /// [`compile_module`]: CodeBuilder::compile_module
 /// [`wasm`]: CodeBuilder::wasm
 /// [`wasm_file`]: CodeBuilder::wasm_file
@@ -226,7 +226,7 @@ impl<'a> CodeBuilder<'a> {
         Ok(v)
     }
 
-    /// Same as [`CodeBuilder::compile_serialized`] except that a
+    /// Same as [`CodeBuilder::compile_module_serialized`] except that a
     /// [`Module`](crate::Module) is produced instead.
     ///
     /// Note that this method will cache compilations if the `cache` feature is
