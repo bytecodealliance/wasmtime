@@ -107,7 +107,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
-        if matches!(call_conv, isa::CallConv::Tail | isa::CallConv::Winch) {
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "aarch64 does not support the 'winch' calling convention yet"
+        );
+
+        if matches!(call_conv, isa::CallConv::Tail) {
             return compute_arg_locs_tail(params, add_ret_area_ptr, args);
         }
 
@@ -1105,7 +1111,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         match call_conv_of_callee {
             isa::CallConv::Tail => ALL_CLOBBERS,
-            isa::CallConv::Winch => ALL_CLOBBERS,
             _ => DEFAULT_AAPCS_CLOBBERS,
         }
     }
@@ -1423,7 +1428,7 @@ fn is_reg_saved_in_prologue(
     sig: &Signature,
     r: RealReg,
 ) -> bool {
-    if call_conv == isa::CallConv::Tail || call_conv == isa::CallConv::Winch {
+    if call_conv == isa::CallConv::Tail {
         return false;
     }
 
