@@ -99,17 +99,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
         16
     }
 
-    fn compute_arg_locs<'a, I>(
+    fn compute_arg_locs(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        params: I,
+        params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-        mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(u32, Option<usize>)>
-    where
-        I: IntoIterator<Item = &'a ir::AbiParam>,
-    {
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<(u32, Option<usize>)> {
         if matches!(call_conv, isa::CallConv::Tail | isa::CallConv::Winch) {
             return compute_arg_locs_tail(params, add_ret_area_ptr, args);
         }
@@ -1291,14 +1288,11 @@ impl AArch64CallSite {
     }
 }
 
-fn compute_arg_locs_tail<'a, I>(
-    params: I,
+fn compute_arg_locs_tail(
+    params: &[ir::AbiParam],
     add_ret_area_ptr: bool,
-    mut args: ArgsAccumulator<'_>,
-) -> CodegenResult<(u32, Option<usize>)>
-where
-    I: IntoIterator<Item = &'a ir::AbiParam>,
-{
+    mut args: ArgsAccumulator,
+) -> CodegenResult<(u32, Option<usize>)> {
     let mut xregs = ALL_CLOBBERS
         .into_iter()
         .filter(|r| r.class() == RegClass::Int)
