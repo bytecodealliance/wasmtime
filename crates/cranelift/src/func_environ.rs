@@ -1037,6 +1037,87 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .get(&func_index)
             .map(|s| *s)
     }
+
+    /// Proof-carrying code: create a memtype describing an empty
+    /// runtime struct (to be updated later).
+    fn create_empty_struct_memtype(&self, func: &mut ir::Function) -> ir::MemoryType {
+        func.create_memory_type(ir::MemoryTypeData::Struct {
+            size: 0,
+            fields: vec![],
+        })
+    }
+
+    /// Proof-carrying code: add a new field to a memtype used to
+    /// describe a runtime struct. A memory region of type `memtype`
+    /// will have a pointer at `offset` pointing to another memory
+    /// region of type `pointee`. `readonly` indicates whether the
+    /// PCC-checked code is expected to update this field or not.
+    fn add_field_to_memtype(
+        &self,
+        func: &mut ir::Function,
+        memtype: ir::MemoryType,
+        offset: u32,
+        pointee: ir::MemoryType,
+        readonly: bool,
+    ) {
+        let ptr_size = self.pointer_type().bytes();
+        match &mut func.memory_types[memtype] {
+            ir::MemoryTypeData::Struct { size, fields } => {
+                *size = std::cmp::max(*size, offset.checked_add(ptr_size).unwrap().into());
+                fields.push(ir::MemoryTypeField {
+                    ty: self.pointer_type(),
+                    offset: offset.into(),
+                    readonly,
+                    fact: Some(ir::Fact::Mem {
+                        ty: pointee,
+                        min_offset: 0,
+                        max_offset: 0,
+                        nullable: false,
+                    }),
+                });
+
+                // Sort fields by offset -- we need to do this now
+                // because we may create an arbitrary number of
+                // memtypes for imported memories and we don't
+                // otherwise track them.
+                fields.sort_by_key(|f| f.offset);
+            }
+            _ => panic!("Cannot add field to non-struct memtype"),
+        }
+    }
+
+    /// Add one level of indirection to a pointer-and-memtype pair:
+    /// generate a load in the code at the specified offset, and if
+    /// memtypes are in use, add a field to the original struct and
+    /// generate a new memtype for the pointee.
+    fn load_pointer_with_memtypes(
+        &self,
+        func: &mut ir::Function,
+        value: ir::GlobalValue,
+        offset: u32,
+        readonly: bool,
+        memtype: Option<ir::MemoryType>,
+    ) -> (ir::GlobalValue, Option<ir::MemoryType>) {
+        let pointee = func.create_global_value(ir::GlobalValueData::Load {
+            base: value,
+            offset: Offset32::new(i32::try_from(offset).unwrap()),
+            global_type: self.pointer_type(),
+            flags: MemFlags::trusted().with_readonly(),
+        });
+
+        let mt = memtype.map(|mt| {
+            let pointee_mt = self.create_empty_struct_memtype(func);
+            self.add_field_to_memtype(func, mt, offset, pointee_mt, readonly);
+            func.global_value_facts[pointee] = Some(Fact::Mem {
+                ty: pointee_mt,
+                min_offset: 0,
+                max_offset: 0,
+                nullable: false,
+            });
+            pointee_mt
+        });
+        (pointee, mt)
+    }
 }
 
 struct Call<'a, 'func, 'module_env> {
@@ -2037,16 +2118,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     // VMMemoryDefinition` to it and dereference that when
                     // atomically growing it.
                     let from_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
-                    let memory = func.create_global_value(ir::GlobalValueData::Load {
-                        base: vmctx,
-                        offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                        global_type: pointer_type,
-                        flags: MemFlags::trusted().with_readonly(),
-                    });
+                    let (memory, def_mt) = self.load_pointer_with_memtypes(
+                        func,
+                        vmctx,
+                        from_offset,
+                        true,
+                        self.pcc_vmctx_memtype,
+                    );
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
                         i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                    (memory, base_offset, current_length_offset, None)
+                    (memory, base_offset, current_length_offset, def_mt)
                 } else {
                     let owned_index = self.module.owned_memory_index(def_index);
                     let owned_base_offset =
@@ -2065,16 +2147,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             } else {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
-                let memory = func.create_global_value(ir::GlobalValueData::Load {
-                    base: vmctx,
-                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
-                    flags: MemFlags::trusted().with_readonly(),
-                });
+                let (memory, def_mt) = self.load_pointer_with_memtypes(
+                    func,
+                    vmctx,
+                    from_offset,
+                    true,
+                    self.pcc_vmctx_memtype,
+                );
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
                     i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                (memory, base_offset, current_length_offset, None)
+                (memory, base_offset, current_length_offset, def_mt)
             }
         };
 
@@ -2140,7 +2223,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                                 );
                                 *size = std::cmp::max(*size, fields_end);
                             }
-                            _ => {}
+                            _ => {
+                                panic!("Bad memtype");
+                            }
                         }
                         // Apply a fact to the base pointer.
                         (Some(base_fact), Some(data_mt))
@@ -2199,7 +2284,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                                     offset + u64::from(self.isa.pointer_type().bytes()),
                                 );
                             }
-                            _ => {}
+                            _ => {
+                                panic!("Bad memtype");
+                            }
                         }
                         // Apply a fact to the base pointer.
                         (Some(base_fact), Some(data_mt))
@@ -2828,16 +2915,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel && state.reachable() {
             self.fuel_function_exit(builder);
-        }
-        if let Some(pcc_vmctx_memtype) = self.pcc_vmctx_memtype {
-            // Sort the fields by offset in the struct definition for
-            // vmctx, now that we've completed it.
-            match &mut builder.func.memory_types[pcc_vmctx_memtype] {
-                ir::MemoryTypeData::Struct { fields, .. } => {
-                    fields.sort_by_key(|f| f.offset);
-                }
-                _ => {}
-            }
         }
         Ok(())
     }
