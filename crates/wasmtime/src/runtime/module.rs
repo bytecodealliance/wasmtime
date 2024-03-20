@@ -238,7 +238,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        crate::ModuleBuilder::new(engine)
+        crate::CodeBuilder::new(engine)
             .wasm(bytes.as_ref(), None)?
             .compile_module()
     }
@@ -274,7 +274,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
-        crate::ModuleBuilder::new(engine)
+        crate::CodeBuilder::new(engine)
             .wasm_file(file.as_ref())?
             .compile_module()
     }
@@ -313,7 +313,7 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        crate::ModuleBuilder::new(engine)
+        crate::CodeBuilder::new(engine)
             .wasm(binary, None)?
             .wat(false)?
             .compile_module()
@@ -349,7 +349,7 @@ impl Module {
             return Module::from_parts(engine, code, None);
         }
 
-        crate::ModuleBuilder::new(engine)
+        crate::CodeBuilder::new(engine)
             .wasm(&mmap, Some(file.as_ref()))?
             .compile_module()
     }

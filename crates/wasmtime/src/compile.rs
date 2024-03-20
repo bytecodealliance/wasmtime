@@ -38,8 +38,8 @@ use wasmtime_environ::{
     WasmFunctionInfo,
 };
 
-mod module_builder;
-pub use self::module_builder::{HashedEngineCompileEnv, ModuleBuilder};
+mod code_builder;
+pub use self::code_builder::{CodeBuilder, HashedEngineCompileEnv};
 
 /// Converts an input binary-encoded WebAssembly module to compilation
 /// artifacts and type information.

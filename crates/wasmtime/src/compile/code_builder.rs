@@ -21,11 +21,11 @@ use wasmtime_runtime::MmapVec;
 /// * [`Module::from_file`](crate::Module::from_file)
 /// * [`Module::from_binary`](crate::Module::from_binary)
 ///
-/// Note that a [`ModuleBuilder`] always involves compiling WebAssembly bytes
+/// Note that a [`CodeBuilder`] always involves compiling WebAssembly bytes
 /// to machine code. To deserialize a list of bytes use
 /// [`Module::deserialize`](crate::Module::deserialize) instead.
 ///
-/// A [`ModuleBuilder`] requires a source of WebAssembly bytes to be configured
+/// A [`CodeBuilder`] requires a source of WebAssembly bytes to be configured
 /// before calling [`compile_serialized`] or [`compile_module`]. This can be
 /// provided with either the [`wasm`] or [`wasm_file`] method. Note that only
 /// a single source of bytes can be provided.
@@ -37,25 +37,25 @@ use wasmtime_runtime::MmapVec;
 /// and then the binary is compiled. This requires the `wat` feature of the
 /// `wasmtime` crate to be enabled, and the feature is enabled by default.
 ///
-/// If the text format is not desired then the [`ModuleBuilder::wat`] method
+/// If the text format is not desired then the [`CodeBuilder::wat`] method
 /// can be used to disable this conversion.
 ///
-/// [`compile_serialized`]: ModuleBuilder::compile_serialized
-/// [`compile_module`]: ModuleBuilder::compile_module
-/// [`wasm`]: ModuleBuilder::wasm
-/// [`wasm_file`]: ModuleBuilder::wasm_file
-pub struct ModuleBuilder<'a> {
+/// [`compile_serialized`]: CodeBuilder::compile_serialized
+/// [`compile_module`]: CodeBuilder::compile_module
+/// [`wasm`]: CodeBuilder::wasm
+/// [`wasm_file`]: CodeBuilder::wasm_file
+pub struct CodeBuilder<'a> {
     engine: &'a Engine,
     wasm: Option<Cow<'a, [u8]>>,
     wasm_path: Option<Cow<'a, Path>>,
     wat: bool,
 }
 
-impl<'a> ModuleBuilder<'a> {
+impl<'a> CodeBuilder<'a> {
     /// Creates a new builder which will insert modules into the specified
     /// [`Engine`].
-    pub fn new(engine: &'a Engine) -> ModuleBuilder<'a> {
-        ModuleBuilder {
+    pub fn new(engine: &'a Engine) -> CodeBuilder<'a> {
+        CodeBuilder {
             engine,
             wasm: None,
             wasm_path: None,
@@ -67,7 +67,7 @@ impl<'a> ModuleBuilder<'a> {
     ///
     /// The `wasm_bytes` parameter is either a binary WebAssembly file or a
     /// WebAssembly module in its text format. This will be stored within the
-    /// [`ModuleBuilder`] for processing later when compilation is finalized.
+    /// [`CodeBuilder`] for processing later when compilation is finalized.
     ///
     /// The optional `wasm_path` parameter is the path to the `wasm_bytes` on
     /// disk, if any. This may be used for diagnostics and other
@@ -77,7 +77,7 @@ impl<'a> ModuleBuilder<'a> {
     /// # Errors
     ///
     /// If wasm bytes have already been configured via a call to this method or
-    /// [`ModuleBuilder::wasm_file`] then an error will be returned.
+    /// [`CodeBuilder::wasm_file`] then an error will be returned.
     pub fn wasm(&mut self, wasm_bytes: &'a [u8], wasm_path: Option<&'a Path>) -> Result<&mut Self> {
         if self.wasm.is_some() {
             bail!("cannot call `wasm` or `wasm_file` twice");
@@ -115,7 +115,7 @@ impl<'a> ModuleBuilder<'a> {
     /// # Errors
     ///
     /// If wasm bytes have already been configured via a call to this method or
-    /// [`ModuleBuilder::wasm`] then an error will be returned.
+    /// [`CodeBuilder::wasm`] then an error will be returned.
     ///
     /// If `file` can't be read or an error happens reading it then that will
     /// also be returned.
@@ -206,8 +206,8 @@ impl<'a> ModuleBuilder<'a> {
 
     /// Finishes this compilation and produces a serialized list of bytes.
     ///
-    /// This method requires that either [`ModuleBuilder::wasm`] or
-    /// [`ModuleBuilder::wasm_file`] was invoked prior to indicate what is
+    /// This method requires that either [`CodeBuilder::wasm`] or
+    /// [`CodeBuilder::wasm_file`] was invoked prior to indicate what is
     /// being compiled.
     ///
     /// This method will block the current thread until compilation has
@@ -226,7 +226,7 @@ impl<'a> ModuleBuilder<'a> {
         Ok(v)
     }
 
-    /// Same as [`ModuleBuilder::compile_serialized`] except that a
+    /// Same as [`CodeBuilder::compile_serialized`] except that a
     /// [`Module`](crate::Module) is produced instead.
     ///
     /// Note that this method will cache compilations if the `cache` feature is
@@ -238,7 +238,7 @@ impl<'a> ModuleBuilder<'a> {
         Module::from_parts(self.engine, code, info_and_types)
     }
 
-    /// Same as [`ModuleBuilder::compile_module_serialized`] except that it
+    /// Same as [`CodeBuilder::compile_module_serialized`] except that it
     /// compiles a serialized [`Component`] instead of a module.
     #[cfg(feature = "component-model")]
     #[cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
@@ -248,7 +248,7 @@ impl<'a> ModuleBuilder<'a> {
         Ok(v)
     }
 
-    /// Same as [`ModuleBuilder::compile_module`] except that it compiles a
+    /// Same as [`CodeBuilder::compile_module`] except that it compiles a
     /// [`Component`] instead of a module.
     #[cfg(all(feature = "runtime", feature = "component-model"))]
     #[cfg_attr(

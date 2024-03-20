@@ -199,7 +199,7 @@ impl RunCommon {
                     #[cfg(feature = "component-model")]
                     {
                         self.ensure_allow_components()?;
-                        let component = wasmtime::ModuleBuilder::new(engine)
+                        let component = wasmtime::CodeBuilder::new(engine)
                             .wasm(&bytes, Some(path))?
                             .compile_component()?;
                         RunTarget::Component(component)
@@ -209,7 +209,7 @@ impl RunCommon {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    let module = wasmtime::ModuleBuilder::new(engine)
+                    let module = wasmtime::CodeBuilder::new(engine)
                         .wasm(&bytes, Some(path))?
                         .compile_module()?;
                     RunTarget::Core(module)
