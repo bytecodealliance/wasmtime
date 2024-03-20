@@ -207,15 +207,26 @@ impl RunCommand {
             }
         }
 
+        // Pre-emptively initialize and install a Tokio runtime ambiently in the
+        // environment when executing the module. Without this whenever a WASI
+        // call is made that needs to block on a future a Tokio runtime is
+        // configured and entered, and this appears to be slower than simply
+        // picking an existing runtime out of the environment and using that.
+        // The goal of this is to improve the performance of WASI-related
+        // operations that block in the CLI since the CLI doesn't use async to
+        // invoke WebAssembly.
+        let result = wasmtime_wasi::runtime::with_ambient_tokio_runtime(|| {
+            self.load_main_module(&mut store, &mut linker, &main, modules)
+                .with_context(|| {
+                    format!(
+                        "failed to run main module `{}`",
+                        self.module_and_args[0].to_string_lossy()
+                    )
+                })
+        });
+
         // Load the main wasm module.
-        match self
-            .load_main_module(&mut store, &mut linker, &main, modules)
-            .with_context(|| {
-                format!(
-                    "failed to run main module `{}`",
-                    self.module_and_args[0].to_string_lossy()
-                )
-            }) {
+        match result {
             Ok(()) => (),
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
@@ -798,6 +809,12 @@ impl RunCommand {
     fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
+
+        // It's ok to block the current thread since we're the only thread in
+        // the program as the CLI. This helps improve the performance of some
+        // blocking operations in WASI, for example, by skipping the
+        // back-and-forth between sync and async.
+        builder.allow_blocking_current_thread(true);
 
         if self.run.common.wasi.inherit_env == Some(true) {
             for (k, v) in std::env::vars() {
