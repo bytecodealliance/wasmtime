@@ -24,7 +24,7 @@
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use object::write::{Object, StandardSegment};
-use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
+use object::{FileFlags, NativeFile as File, Object as _, ObjectSection, SectionKind};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use wasmtime_environ::obj;
