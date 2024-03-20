@@ -342,7 +342,6 @@ impl Config {
     pub fn disable_unimplemented_winch_proposals(&mut self) {
         self.module_config.config.simd_enabled = false;
         self.module_config.config.relaxed_simd_enabled = false;
-        self.module_config.config.memory64_enabled = false;
         self.module_config.config.gc_enabled = false;
         self.module_config.config.threads_enabled = false;
         self.module_config.config.tail_call_enabled = false;
