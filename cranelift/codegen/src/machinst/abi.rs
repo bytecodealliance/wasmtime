@@ -408,16 +408,14 @@ pub trait ABIMachineSpec {
     /// Returns the stack-space used (rounded up to as alignment requires), and
     /// if `add_ret_area_ptr` was passed, the index of the extra synthetic arg
     /// that was added.
-    fn compute_arg_locs<'a, I>(
+    fn compute_arg_locs(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        params: I,
+        params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-        args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(u32, Option<usize>)>
-    where
-        I: IntoIterator<Item = &'a ir::AbiParam>;
+        args: ArgsAccumulator,
+    ) -> CodegenResult<(u32, Option<usize>)>;
 
     /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
     /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
@@ -827,8 +825,13 @@ impl SigSet {
         sig: &ir::Signature,
         flags: &settings::Flags,
     ) -> CodegenResult<SigData> {
-        let sret = missing_struct_return(sig);
-        let returns = sret.as_ref().into_iter().chain(&sig.returns);
+        use std::borrow::Cow;
+
+        let returns = if let Some(sret) = missing_struct_return(sig) {
+            Cow::from_iter(std::iter::once(&sret).chain(&sig.returns).copied())
+        } else {
+            Cow::from(sig.returns.as_slice())
+        };
 
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
@@ -839,7 +842,7 @@ impl SigSet {
         let (sized_stack_ret_space, _) = M::compute_arg_locs(
             sig.call_conv,
             flags,
-            returns,
+            &returns,
             ArgsOrRets::Rets,
             /* extra ret-area ptr = */ false,
             ArgsAccumulator::new(&mut self.abi_args),
