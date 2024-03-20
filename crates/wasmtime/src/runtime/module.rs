@@ -346,7 +346,7 @@ impl Module {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// # let engine = Engine::default();
-    /// assert!(Module::from_binary(&engine, b"(module)").is_err(), None);
+    /// assert!(Module::from_binary(&engine, b"(module)", None).is_err());
     /// # Ok(())
     /// # }
     /// ```
