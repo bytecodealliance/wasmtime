@@ -3,11 +3,15 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::{path::Path, time::Duration};
+
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 
 #[cfg(feature = "component-model")]
 use wasmtime::component::Component;
+
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+use wasmtime::module_builder::ModuleBuilder;
 
 pub enum RunTarget {
     Core(Module),
@@ -207,7 +211,7 @@ impl RunCommon {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    RunTarget::Core(Module::new(engine, &bytes)?)
+                    RunTarget::Core(ModuleBuilder::new(engine).wasm_path(path).compile(&bytes)?)
                 }
             }
             #[cfg(not(any(feature = "cranelift", feature = "winch")))]

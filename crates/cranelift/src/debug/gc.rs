@@ -67,12 +67,13 @@ impl Dependencies {
 
 pub fn build_dependencies<R: Reader<Offset = usize>>(
     dwarf: &read::Dwarf<R>,
+    dwp: &Option<read::DwarfPackage<R>>,
     at: &AddressTransform,
 ) -> read::Result<Dependencies> {
     let mut deps = Dependencies::new();
     let mut units = dwarf.units();
     while let Some(unit) = units.next()? {
-        build_unit_dependencies(unit, dwarf, at, &mut deps)?;
+        build_unit_dependencies(unit, dwarf, dwp, at, &mut deps)?;
     }
     Ok(deps)
 }
@@ -80,6 +81,7 @@ pub fn build_dependencies<R: Reader<Offset = usize>>(
 fn build_unit_dependencies<R: Reader<Offset = usize>>(
     header: read::UnitHeader<R>,
     dwarf: &read::Dwarf<R>,
+    dwp: &Option<read::DwarfPackage<R>>,
     at: &AddressTransform,
     deps: &mut Dependencies,
 ) -> read::Result<()> {
@@ -87,6 +89,15 @@ fn build_unit_dependencies<R: Reader<Offset = usize>>(
     let mut tree = unit.entries_tree(None)?;
     let root = tree.root()?;
     build_die_dependencies(root, dwarf, &unit, at, deps)?;
+
+    if let Some(dwarf_package) = dwp {
+        let dwo_id = unit.dwo_id.unwrap();
+        let cu = dwarf_package.find_cu(dwo_id, dwarf)?.unwrap();
+        if let Some(unit_header) = cu.debug_info.units().next()? {
+            build_unit_dependencies(unit_header, &cu, &None, at, deps)?;
+        }
+    }
+
     Ok(())
 }
 

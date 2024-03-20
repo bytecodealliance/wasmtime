@@ -724,7 +724,9 @@ and for re-adding support for interface types you can see this issue:
             // `gimli::Dwarf` fields.
             ".debug_abbrev" => dwarf.debug_abbrev = gimli::DebugAbbrev::new(data, endian),
             ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
-            ".debug_info" => dwarf.debug_info = gimli::DebugInfo::new(data, endian),
+            ".debug_info" => {
+                dwarf.debug_info = gimli::DebugInfo::new(data, endian);
+            }
             ".debug_line" => dwarf.debug_line = gimli::DebugLine::new(data, endian),
             ".debug_line_str" => dwarf.debug_line_str = gimli::DebugLineStr::from(slice),
             ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),

@@ -516,7 +516,7 @@ impl Engine {
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(self, &bytes)?;
+        let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(self, &bytes, None)?;
         Ok(v)
     }
 

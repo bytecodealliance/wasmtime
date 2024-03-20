@@ -1333,9 +1333,9 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.28.0"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fb8d784f27acf97159b40fc4db5ecd8aa23b9ad5ef69cdd136d3bc80665f0c0"
+checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 dependencies = [
  "fallible-iterator",
  "indexmap 2.0.0",
@@ -1914,6 +1914,7 @@ dependencies = [
  "hashbrown 0.14.0",
  "indexmap 2.0.0",
  "memchr",
+ "wasmparser",
 ]
 
 [[package]]
@@ -2959,6 +2960,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
+name = "typed-arena"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
+
+[[package]]
 name = "typenum"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3370,6 +3377,7 @@ dependencies = [
  "serde_json",
  "target-lexicon",
  "tempfile",
+ "typed-arena",
  "wasi-common",
  "wasm-encoder",
  "wasmparser",
@@ -3573,11 +3581,13 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
+ "fallible-iterator",
  "gimli",
  "log",
  "object 0.33.0",
  "target-lexicon",
  "thiserror",
+ "typed-arena",
  "wasmparser",
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
@@ -3617,6 +3627,7 @@ dependencies = [
  "serde_derive",
  "target-lexicon",
  "thiserror",
+ "typed-arena",
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",

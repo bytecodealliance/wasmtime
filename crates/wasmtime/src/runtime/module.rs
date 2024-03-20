@@ -24,7 +24,6 @@ use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
     VMNativeCallFunction, VMSharedTypeIndex, VMWasmCallFunction,
 };
-
 mod registry;
 
 pub use registry::{
@@ -65,6 +64,10 @@ pub use registry::{
 /// Using `clone` on a `Module` is a cheap operation. It will not create an
 /// entirely new module, but rather just a new reference to the existing module.
 /// In other words it's a shallow copy, not a deep copy.
+///
+/// ##  [`ModuleBuilder`] - a builder module that can be used to fuse DWRF `.dwp`
+/// packages with a WebAssembly module function for the purposes of debugging.
+/// TODO: more docs...
 ///
 /// ## Examples
 ///
@@ -242,7 +245,7 @@ impl Module {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes)?;
-        Self::from_binary(engine, &bytes)
+        Self::from_binary(engine, &bytes, None)
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given
@@ -297,6 +300,25 @@ impl Module {
         }
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    fn compute_artifacts<'a>(
+        engine: &HashedEngineCompileEnv<'a>,
+        wasm: &[u8],
+        dwarf_package_binary: Option<&'a [u8]>,
+    ) -> Result<(Arc<CodeMemory>, Option<(CompiledModuleInfo, ModuleTypes)>), anyhow::Error> {
+        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
+
+        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm, dwarf_package_binary)?;
+        let code = publish_mmap(mmap.0)?;
+        return Ok((code, info));
+
+        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+            let mut code = CodeMemory::new(mmap)?;
+            code.publish()?;
+            Ok(Arc::new(code))
+        }
+    }
+
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
     /// data.
     ///
@@ -313,7 +335,7 @@ impl Module {
     /// # fn main() -> anyhow::Result<()> {
     /// # let engine = Engine::default();
     /// let wasm = b"\0asm\x01\0\0\0";
-    /// let module = Module::from_binary(&engine, wasm)?;
+    /// let module = Module::from_binary(&engine, wasm, None)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -324,22 +346,26 @@ impl Module {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// # let engine = Engine::default();
-    /// assert!(Module::from_binary(&engine, b"(module)").is_err());
+    /// assert!(Module::from_binary(&engine, b"(module)", None).is_err());
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
-
+    pub fn from_binary(
+        engine: &Engine,
+        binary: &[u8],
+        dwarf_package_binary: Option<&[u8]>,
+    ) -> Result<Module> {
         engine
             .check_compatible_with_native_host()
             .context("compilation settings are not compatible with the native host")?;
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
-                let state = (HashedEngineCompileEnv(engine), binary);
+
+                let state = (HashedEngineCompileEnv(engine), binary,
+                    dwarf_package_binary);
                 let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
@@ -348,37 +374,37 @@ impl Module {
                     &state,
 
                     // Cache miss, compute the actual artifacts
-                    |(engine, wasm)| -> Result<_> {
-                        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
-                        let code = publish_mmap(mmap.0)?;
-                        Ok((code, info))
+                    |(engine, wasm, dwarf_package)| {
+                        Self::compute_artifacts(engine, wasm, *dwarf_package)
                     },
 
                     // Implementation of how to serialize artifacts
-                    |(_engine, _wasm), (code, _info_and_types)| {
+                    |(_engine, _wasm, _dwarf_package), (code, _info_and_types)| {
                         Some(code.mmap().to_vec())
                     },
 
                     // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm), serialized_bytes| {
+                    |(engine, _wasm, _dwarf_package), serialized_bytes| {
                         let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Module).ok()?;
                         Some((code, None))
                     },
                 )?;
             } else {
-                let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary)?;
+                use crate::{instantiate::MmapVecWrapper, compile::build_artifacts};
+
+                let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary, dwarf_package_binary)?;
                 let code = publish_mmap(mmap.0)?;
+
+                fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+                    let mut code = CodeMemory::new(mmap)?;
+                    code.publish()?;
+                    Ok(Arc::new(code))
+                }
             }
         };
 
         let info_and_types = info_and_types.map(|(info, types)| (info, types.into()));
         return Self::from_parts(engine, code, info_and_types);
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given `file`
