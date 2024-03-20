@@ -13,6 +13,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(unix)] {
         mod unix;
         use unix as imp;
+    } else if #[cfg(wasi)] { // Is this right to regard WASI as os?
+        mod unix;
+        use unix as imp;
     } else {
         compile_error!("fibers are not supported on this platform");
     }

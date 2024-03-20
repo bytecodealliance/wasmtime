@@ -259,7 +259,9 @@ cfg_if::cfg_if! {
         // assembler file built with the `build.rs`.
     } else if #[cfg(target_arch = "riscv64")]  {
         mod riscv64;
-    }else {
+    } else if #[cfg(target_arch = "wasm32")] {
+        mod wasm32;
+    } else {
         compile_error!("fibers are not supported on this CPU architecture");
     }
 }
