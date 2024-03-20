@@ -269,6 +269,8 @@ pub use runtime::*;
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 mod compile;
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+pub use compile::CodeBuilder;
 
 mod config;
 mod engine;

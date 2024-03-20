@@ -1,12 +1,11 @@
 use crate::component::matching::InstanceType;
 use crate::component::types;
 use crate::{
-    code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
-    type_registry::TypeCollection, Engine, Module, ResourcesRequired,
+    code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
+    ResourcesRequired,
 };
 use crate::{FuncType, ValType};
-use anyhow::{bail, Context, Result};
-use std::fs;
+use anyhow::Result;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
@@ -151,10 +150,9 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
-        let bytes = bytes.as_ref();
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(bytes)?;
-        Component::from_binary(engine, &bytes)
+        crate::CodeBuilder::new(engine)
+            .wasm(bytes.as_ref(), None)?
+            .compile_component()
     }
 
     /// Compiles a new WebAssembly component from a wasm file on disk pointed
@@ -165,23 +163,9 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
-        match Self::new(
-            engine,
-            &fs::read(&file).with_context(|| "failed to read input file")?,
-        ) {
-            Ok(m) => Ok(m),
-            Err(e) => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "wat")] {
-                        let mut e = e.downcast::<wat::Error>()?;
-                        e.set_path(file);
-                        bail!(e)
-                    } else {
-                        Err(e)
-                    }
-                }
-            }
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm_file(file.as_ref())?
+            .compile_component()
     }
 
     /// Compiles a new WebAssembly component from the in-memory wasm image
@@ -196,56 +180,10 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
-        use crate::compile::build_component_artifacts;
-        use crate::module::HashedEngineCompileEnv;
-        use wasmtime_runtime::MmapVec;
-
-        engine
-            .check_compatible_with_native_host()
-            .context("compilation settings are not compatible with the native host")?;
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "cache")] {
-                let state = (HashedEngineCompileEnv(engine), binary);
-                let (code, artifacts) = wasmtime_cache::ModuleCacheEntry::new(
-                    "wasmtime",
-                    engine.cache_config(),
-                )
-                .get_data_raw(
-                    &state,
-
-                    // Cache miss, compute the actual artifacts
-                    |(engine, wasm)| -> Result<_> {
-                        let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
-                        let code = publish_mmap(mmap.0)?;
-                        Ok((code, Some(artifacts)))
-                    },
-
-                    // Implementation of how to serialize artifacts
-                    |(_engine, _wasm), (code, _info_and_types)| {
-                        Some(code.mmap().to_vec())
-                    },
-
-                    // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm), serialized_bytes| {
-                        let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Component).ok()?;
-                        Some((code, None))
-                    },
-                )?;
-            } else {
-                let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine, binary)?;
-                let artifacts = Some(artifacts);
-                let code = publish_mmap(mmap.0)?;
-            }
-        };
-
-        return Component::from_parts(engine, code, artifacts);
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm(binary, None)?
+            .wat(false)?
+            .compile_component()
     }
 
     /// Same as [`Module::deserialize`], but for components.
@@ -425,7 +363,7 @@ impl Component {
     ///
     /// If the `artifacts` are specified as `None` here then they will be
     /// deserialized from `code_memory`.
-    fn from_parts(
+    pub(crate) fn from_parts(
         engine: &Engine,
         code_memory: Arc<CodeMemory>,
         artifacts: Option<ComponentArtifacts>,
