@@ -74,6 +74,7 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub struct File {
     /// The operating system File this struct is mediating access to.
     ///
@@ -118,13 +119,29 @@ impl File {
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        if self.allow_blocking_current_thread {
-            body(&self.file)
-        } else {
-            let f = self.file.clone();
-            spawn_blocking(move || body(&f)).await
+        match self._spawn_blocking(body) {
+            SpawnBlocking::Done(result) => result,
+            SpawnBlocking::Spawned(task) => task.await,
         }
     }
+
+    fn _spawn_blocking<F, R>(&self, body: F) -> SpawnBlocking<R>
+    where
+        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        if self.allow_blocking_current_thread {
+            SpawnBlocking::Done(body(&self.file))
+        } else {
+            let f = self.file.clone();
+            SpawnBlocking::Spawned(spawn_blocking(move || body(&f)))
+        }
+    }
+}
+
+enum SpawnBlocking<T> {
+    Done(T),
+    Spawned(AbortOnDropJoinHandle<T>),
 }
 
 bitflags::bitflags! {
@@ -196,37 +213,28 @@ impl Dir {
 }
 
 pub struct FileInputStream {
-    file: Arc<cap_std::fs::File>,
+    file: File,
     position: u64,
-    allow_blocking_current_thread: bool,
 }
 impl FileInputStream {
-    pub fn new(
-        file: Arc<cap_std::fs::File>,
-        position: u64,
-        allow_blocking_current_thread: bool,
-    ) -> Self {
+    pub fn new(file: &File, position: u64) -> Self {
         Self {
-            file,
+            file: file.clone(),
             position,
-            allow_blocking_current_thread,
         }
     }
 
     pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use system_interface::fs::FileIoExt;
         let p = self.position;
-        let run = move |f: &cap_std::fs::File| {
-            let mut buf = BytesMut::zeroed(size);
-            let r = f.read_at(&mut buf, p);
-            (r, buf)
-        };
-        let (r, mut buf) = if self.allow_blocking_current_thread {
-            run(&self.file)
-        } else {
-            let f = Arc::clone(&self.file);
-            spawn_blocking(move || run(&f)).await
-        };
+        let (r, mut buf) = self
+            .file
+            .spawn_blocking(move |f| {
+                let mut buf = BytesMut::zeroed(size);
+                let r = f.read_at(&mut buf, p);
+                (r, buf)
+            })
+            .await;
         let n = read_result(r)?;
         buf.truncate(n);
         self.position += n as u64;
@@ -255,10 +263,9 @@ pub(crate) enum FileOutputMode {
 }
 
 pub(crate) struct FileOutputStream {
-    file: Arc<cap_std::fs::File>,
+    file: File,
     mode: FileOutputMode,
     state: OutputState,
-    allow_blocking_current_thread: bool,
 }
 
 enum OutputState {
@@ -272,25 +279,19 @@ enum OutputState {
 }
 
 impl FileOutputStream {
-    pub fn write_at(
-        file: Arc<cap_std::fs::File>,
-        position: u64,
-        allow_blocking_current_thread: bool,
-    ) -> Self {
+    pub fn write_at(file: &File, position: u64) -> Self {
         Self {
-            file,
+            file: file.clone(),
             mode: FileOutputMode::Position(position),
             state: OutputState::Ready,
-            allow_blocking_current_thread,
         }
     }
 
-    pub fn append(file: Arc<cap_std::fs::File>, allow_blocking_current_thread: bool) -> Self {
+    pub fn append(file: &File) -> Self {
         Self {
-            file,
+            file: file.clone(),
             mode: FileOutputMode::Append,
             state: OutputState::Ready,
-            allow_blocking_current_thread,
         }
     }
 }
@@ -317,7 +318,7 @@ impl HostOutputStream for FileOutputStream {
         }
 
         let m = self.mode;
-        let run = move |f: &cap_std::fs::File| {
+        let result = self.file._spawn_blocking(move |f| {
             match m {
                 FileOutputMode::Position(mut p) => {
                     let mut total = 0;
@@ -342,21 +343,16 @@ impl HostOutputStream for FileOutputStream {
                     Ok(total)
                 }
             }
-        };
-        self.state = if self.allow_blocking_current_thread {
-            match run(&self.file) {
-                Ok(nwritten) => {
-                    if let FileOutputMode::Position(ref mut p) = &mut self.mode {
-                        *p += nwritten as u64;
-                    }
-                    OutputState::Ready
+        });
+        self.state = match result {
+            SpawnBlocking::Done(Ok(nwritten)) => {
+                if let FileOutputMode::Position(ref mut p) = &mut self.mode {
+                    *p += nwritten as u64;
                 }
-                Err(e) => OutputState::Error(e),
+                OutputState::Ready
             }
-        } else {
-            let f = Arc::clone(&self.file);
-            let task = spawn_blocking(move || run(&f));
-            OutputState::Waiting(task)
+            SpawnBlocking::Done(Err(e)) => OutputState::Error(e),
+            SpawnBlocking::Spawned(task) => OutputState::Waiting(task),
         };
         Ok(())
     }

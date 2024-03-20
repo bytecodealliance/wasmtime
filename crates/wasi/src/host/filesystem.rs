@@ -735,11 +735,9 @@ impl<T: WasiView> HostDescriptor for T {
         if !f.perms.contains(FilePerms::READ) {
             Err(types::ErrorCode::BadDescriptor)?;
         }
-        // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let reader = FileInputStream::new(clone, offset, self.ctx().allow_blocking_current_thread);
+        let reader = FileInputStream::new(f, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table().push(InputStream::File(reader))?;
@@ -759,12 +757,8 @@ impl<T: WasiView> HostDescriptor for T {
             Err(types::ErrorCode::BadDescriptor)?;
         }
 
-        // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = std::sync::Arc::clone(&f.file);
-
         // Create a stream view for it.
-        let writer =
-            FileOutputStream::write_at(clone, offset, self.ctx().allow_blocking_current_thread);
+        let writer = FileOutputStream::write_at(f, offset);
         let writer: OutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
@@ -783,11 +777,9 @@ impl<T: WasiView> HostDescriptor for T {
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
         }
-        // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let appender = FileOutputStream::append(clone, self.ctx().allow_blocking_current_thread);
+        let appender = FileOutputStream::append(f);
         let appender: OutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
