@@ -2,9 +2,7 @@ use super::regs;
 use crate::{
     abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI},
     isa::{reg::Reg, CallingConvention},
-    masm::OperandSize,
 };
-use smallvec::SmallVec;
 use wasmtime_environ::{WasmHeapType, WasmValType};
 
 /// Helper environment to track argument-register
@@ -173,10 +171,6 @@ impl ABI for X64ABI {
 
     fn vmctx_reg() -> Reg {
         regs::vmctx()
-    }
-
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
-        regs::callee_saved(call_conv)
     }
 
     fn stack_slot_size() -> u8 {

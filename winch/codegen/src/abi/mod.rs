@@ -47,7 +47,7 @@
 //! |                               |
 use crate::codegen::ptr_type_from_ptr_size;
 use crate::isa::{reg::Reg, CallingConvention};
-use crate::masm::{OperandSize, SPOffset};
+use crate::masm::SPOffset;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
@@ -161,11 +161,6 @@ pub(crate) trait ABI {
     /// Returns the pinned register used to hold
     /// the `VMContext`.
     fn vmctx_reg() -> Reg;
-
-    /// Returns the callee-saved registers for the given
-    /// calling convention.
-    #[allow(unused)]
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
 
     /// The size, in bytes, of each stack slot used for stack parameter passing.
     fn stack_slot_size() -> u8;
