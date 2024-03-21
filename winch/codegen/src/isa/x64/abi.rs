@@ -84,18 +84,6 @@ impl ABI for X64ABI {
         16
     }
 
-    fn ret_addr_offset() -> u8 {
-        // 1 8-byte slot.
-        // ┌──────────┬
-        // │   Ret    │
-        // │   Addr   │
-        // ├──────────┼ * offset
-        // │          │
-        // │   FP     │
-        // └──────────┴
-        8
-    }
-
     fn word_bits() -> u8 {
         64
     }
@@ -159,14 +147,6 @@ impl ABI for X64ABI {
 
     fn float_scratch_reg() -> Reg {
         regs::scratch_xmm()
-    }
-
-    fn fp_reg() -> Reg {
-        regs::rbp()
-    }
-
-    fn sp_reg() -> Reg {
-        regs::rsp()
     }
 
     fn vmctx_reg() -> Reg {

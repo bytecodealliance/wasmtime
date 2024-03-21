@@ -73,10 +73,6 @@ impl ABI for Aarch64ABI {
         16
     }
 
-    fn ret_addr_offset() -> u8 {
-        8
-    }
-
     fn word_bits() -> u8 {
         64
     }
@@ -123,14 +119,6 @@ impl ABI for Aarch64ABI {
 
     fn float_scratch_reg() -> Reg {
         todo!()
-    }
-
-    fn sp_reg() -> Reg {
-        todo!()
-    }
-
-    fn fp_reg() -> Reg {
-        regs::fp()
     }
 
     fn vmctx_reg() -> Reg {
