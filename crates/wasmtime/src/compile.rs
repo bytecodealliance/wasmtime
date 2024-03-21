@@ -518,20 +518,6 @@ impl<'a> CompileInputs<'a> {
             outputs.entry(output.key.kind()).or_default().push(output);
         }
 
-        // Assert that the elements within a bucket are all sorted as we expect
-        // // them to be.
-        // fn is_sorted_by_key<T, K>(items: &[T], f: impl Fn(&T) -> K) -> bool
-        // where
-        //     K: PartialOrd,
-        // {
-        //     items
-        //         .windows(2)
-        //         .all(|window| f(&window[0]) <= f(&window[1]))
-        // }
-        // debug_assert!(outputs
-        //     .values()
-        //     .all(|funcs| is_sorted_by_key(funcs, |x| x.key)));
-
         Ok(UnlinkedCompileOutputs { outputs })
     }
 }
@@ -554,8 +540,10 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
     };
 
     for output in raw_outputs.iter() {
-        let CompiledFunction::Function(f) = &output.function else {
-            continue;
+        let f = match &output.function {
+            CompiledFunction::Function(f) => f,
+            #[cfg(feature = "component-model")]
+            CompiledFunction::AllCallFunc(_) => continue,
         };
         for reloc in compiler.compiled_function_relocation_targets(&**f) {
             match reloc {

@@ -411,6 +411,7 @@ impl BuiltinFunctionSignatures {
                 )*
             ) => {
                 $(
+                    $( #[$attr] )*
                     if _cur == builtin.index() {
                         return Signature {
                             params: vec![ $( self.$param() ),* ],
