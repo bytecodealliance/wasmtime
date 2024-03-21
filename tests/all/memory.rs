@@ -609,8 +609,8 @@ fn shared_memory_wait_notify() -> Result<()> {
 
     let engine = Engine::default();
     let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
-    let data = unsafe { &*(memory.data().as_ptr() as *const AtomicU32) };
-    let locked = unsafe { &*(memory.data().as_ptr().add(4) as *const AtomicU32) };
+    let data = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().cast_mut().cast()) };
+    let locked = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().add(4).cast_mut().cast()) };
 
     // Note that `SeqCst` is used here to not think much about the orderings
     // here, and it also somewhat more closely mirrors what's happening in wasm.
