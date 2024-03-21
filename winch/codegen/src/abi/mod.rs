@@ -102,6 +102,7 @@ pub(crate) trait ABI {
     fn arg_base_offset() -> u8;
 
     /// The offset to the return address, relative to the frame pointer.
+    #[allow(unused)]
     fn ret_addr_offset() -> u8;
 
     /// Construct the ABI-specific signature from a WebAssembly
@@ -150,9 +151,11 @@ pub(crate) trait ABI {
     }
 
     /// Returns the frame pointer register.
+    #[allow(unused)]
     fn fp_reg() -> Reg;
 
     /// Returns the stack pointer register.
+    #[allow(unused)]
     fn sp_reg() -> Reg;
 
     /// Returns the pinned register used to hold
@@ -161,6 +164,7 @@ pub(crate) trait ABI {
 
     /// Returns the callee-saved registers for the given
     /// calling convention.
+    #[allow(unused)]
     fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
 
     /// The size, in bytes, of each stack slot used for stack parameter passing.

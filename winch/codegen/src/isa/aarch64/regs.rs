@@ -154,6 +154,7 @@ pub(crate) const ALL_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;
 /// This function will return the set of registers that need to be saved
 /// according to the system ABI and that are known not to be saved during the
 /// prologue emission.
+#[allow(unused)]
 pub(crate) fn callee_saved() -> SmallVec<[(Reg, OperandSize); 18]> {
     use OperandSize::*;
     let regs: SmallVec<[_; 18]> = smallvec![
