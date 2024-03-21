@@ -29,9 +29,6 @@
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+88
 ;;     gv5 = load.i64 notrap aligned checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -61,9 +58,6 @@
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+88
 ;;     gv5 = load.i64 notrap aligned checked gv3+80
-;;     sig0 = (i64 vmctx, i32 uext, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
-;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):

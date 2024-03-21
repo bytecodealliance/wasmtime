@@ -19,15 +19,6 @@
     i32.load offset=0x1000))
 
 ;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   lui a1,262144
 ;;   addi a4,a1,-1025
@@ -39,23 +30,11 @@
 ;;   sw a3,4096(a4)
 ;;   j label2
 ;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
 ;;   ret
 ;; block3:
 ;;   udf##trap_code=heap_oob
 ;;
 ;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   lui a1,262144
 ;;   addi a3,a1,-1025
@@ -67,9 +46,6 @@
 ;;   lw a0,4096(a4)
 ;;   j label2
 ;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
 ;;   ret
 ;; block3:
 ;;   udf##trap_code=heap_oob

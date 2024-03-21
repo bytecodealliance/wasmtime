@@ -1,4 +1,3 @@
-use cfg_if::cfg_if;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -6,7 +5,7 @@ use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature, UserFuncName, Value,
+    AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature,
 };
 use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
@@ -130,6 +129,7 @@ pub struct FuncEnvironment<'module_environment> {
     module: &'module_environment Module,
     types: &'module_environment ModuleTypesBuilder,
 
+    #[cfg(feature = "wmemcheck")]
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -221,13 +221,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
             vmruntime_limits_ptr: Variable::new(0),
-            translation: translation,
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
             #[cfg(feature = "wmemcheck")]
             wmemcheck,
+            #[cfg(feature = "wmemcheck")]
+            translation,
         }
     }
 
@@ -1001,6 +1002,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         result_param
     }
 
+    #[cfg(feature = "wmemcheck")]
     fn check_malloc_start(&mut self, builder: &mut FunctionBuilder) {
         let malloc_start_sig = self.builtin_function_signatures.malloc_start(builder.func);
         let (vmctx, malloc_start) = self.translate_load_builtin_function_address(
@@ -1012,6 +1014,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .call_indirect(malloc_start_sig, malloc_start, &[vmctx]);
     }
 
+    #[cfg(feature = "wmemcheck")]
     fn check_free_start(&mut self, builder: &mut FunctionBuilder) {
         let free_start_sig = self.builtin_function_signatures.free_start(builder.func);
         let (vmctx, free_start) = self.translate_load_builtin_function_address(
@@ -1023,6 +1026,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .call_indirect(free_start_sig, free_start, &[vmctx]);
     }
 
+    #[cfg(feature = "wmemcheck")]
     fn current_func_name(&self, builder: &mut FunctionBuilder) -> Option<&str> {
         let func_index = match &builder.func.name {
             UserFuncName::User(user) => FuncIndex::from_u32(user.index),
@@ -2898,11 +2902,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.epoch_function_entry(builder);
         }
 
-        let func_name = self.current_func_name(builder);
-        if func_name == Some("malloc") {
-            self.check_malloc_start(builder);
-        } else if func_name == Some("free") {
-            self.check_free_start(builder);
+        #[cfg(feature = "wmemcheck")]
+        {
+            let func_name = self.current_func_name(builder);
+            if func_name == Some("malloc") {
+                self.check_malloc_start(builder);
+            } else if func_name == Some("free") {
+                self.check_free_start(builder);
+            }
         }
 
         Ok(())
@@ -2947,102 +2954,110 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.isa.has_x86_pmaddubsw_lowering()
     }
 
-    cfg_if! {
-        if #[cfg(feature = "wmemcheck")] {
-            fn handle_before_return(
-                &mut self,
-                retvals: &[Value],
-                builder: &mut FunctionBuilder,
-            ) {
-                if self.wmemcheck {
-                    let func_name = self.current_func_name(builder);
-                    if func_name == Some("malloc") {
-                        self.hook_malloc_exit(builder, retvals);
-                    } else if func_name == Some("free") {
-                        self.hook_free_exit(builder);
-                    }
-                }
+    #[cfg(feature = "wmemcheck")]
+    fn handle_before_return(&mut self, retvals: &[Value], builder: &mut FunctionBuilder) {
+        if self.wmemcheck {
+            let func_name = self.current_func_name(builder);
+            if func_name == Some("malloc") {
+                self.hook_malloc_exit(builder, retvals);
+            } else if func_name == Some("free") {
+                self.hook_free_exit(builder);
             }
+        }
+    }
 
-            fn before_load(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
-                if self.wmemcheck {
-                    let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
-                    let (vmctx, check_load) = self.translate_load_builtin_function_address(
-                        &mut builder.cursor(),
-                        BuiltinFunctionIndex::check_load(),
-                    );
-                    let num_bytes = builder.ins().iconst(I32, val_size as i64);
-                    let offset_val = builder.ins().iconst(I64, offset as i64);
-                    builder
-                        .ins()
-                        .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
-                }
-            }
+    #[cfg(feature = "wmemcheck")]
+    fn before_load(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        val_size: u8,
+        addr: ir::Value,
+        offset: u64,
+    ) {
+        if self.wmemcheck {
+            let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
+            let (vmctx, check_load) = self.translate_load_builtin_function_address(
+                &mut builder.cursor(),
+                BuiltinFunctionIndex::check_load(),
+            );
+            let num_bytes = builder.ins().iconst(I32, val_size as i64);
+            let offset_val = builder.ins().iconst(I64, offset as i64);
+            builder.ins().call_indirect(
+                check_load_sig,
+                check_load,
+                &[vmctx, num_bytes, addr, offset_val],
+            );
+        }
+    }
 
-            fn before_store(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
-                if self.wmemcheck {
-                    let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
-                    let (vmctx, check_store) = self.translate_load_builtin_function_address(
-                        &mut builder.cursor(),
-                        BuiltinFunctionIndex::check_store(),
-                    );
-                    let num_bytes = builder.ins().iconst(I32, val_size as i64);
-                    let offset_val = builder.ins().iconst(I64, offset as i64);
-                    builder
-                        .ins()
-                        .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
-                }
-            }
+    #[cfg(feature = "wmemcheck")]
+    fn before_store(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        val_size: u8,
+        addr: ir::Value,
+        offset: u64,
+    ) {
+        if self.wmemcheck {
+            let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
+            let (vmctx, check_store) = self.translate_load_builtin_function_address(
+                &mut builder.cursor(),
+                BuiltinFunctionIndex::check_store(),
+            );
+            let num_bytes = builder.ins().iconst(I32, val_size as i64);
+            let offset_val = builder.ins().iconst(I64, offset as i64);
+            builder.ins().call_indirect(
+                check_store_sig,
+                check_store,
+                &[vmctx, num_bytes, addr, offset_val],
+            );
+        }
+    }
 
-            fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {
-                if self.wmemcheck {
-                    if global_index == 0 {
-                        // We are making the assumption that global 0 is the auxiliary stack pointer.
-                        let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
-                        let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
-                            &mut builder.cursor(),
-                            BuiltinFunctionIndex::update_stack_pointer(),
-                        );
-                        builder
-                            .ins()
-                            .call_indirect(update_stack_pointer_sig, update_stack_pointer, &[vmctx, value]);
-                    }
-                }
+    #[cfg(feature = "wmemcheck")]
+    fn update_global(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        global_index: u32,
+        value: ir::Value,
+    ) {
+        if self.wmemcheck {
+            if global_index == 0 {
+                // We are making the assumption that global 0 is the auxiliary stack pointer.
+                let update_stack_pointer_sig = self
+                    .builtin_function_signatures
+                    .update_stack_pointer(builder.func);
+                let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
+                    &mut builder.cursor(),
+                    BuiltinFunctionIndex::update_stack_pointer(),
+                );
+                builder.ins().call_indirect(
+                    update_stack_pointer_sig,
+                    update_stack_pointer,
+                    &[vmctx, value],
+                );
             }
+        }
+    }
 
-            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_pages: ir::Value, mem_index: MemoryIndex) {
-                if self.wmemcheck && mem_index.as_u32() == 0 {
-                    let update_mem_size_sig = self.builtin_function_signatures.update_mem_size(builder.func);
-                    let (vmctx, update_mem_size) = self.translate_load_builtin_function_address(
-                        &mut builder.cursor(),
-                        BuiltinFunctionIndex::update_mem_size(),
-                    );
-                    builder
-                        .ins()
-                        .call_indirect(update_mem_size_sig, update_mem_size, &[vmctx, num_pages]);
-                }
-            }
-        } else {
-            fn handle_before_return(&mut self, _retvals: &[Value], builder: &mut FunctionBuilder) {
-                let _ = self.builtin_function_signatures.check_malloc(builder.func);
-                let _ = self.builtin_function_signatures.check_free(builder.func);
-            }
-
-            fn before_load(&mut self, builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {
-                let _ = self.builtin_function_signatures.check_load(builder.func);
-            }
-
-            fn before_store(&mut self, builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {
-                let _ = self.builtin_function_signatures.check_store(builder.func);
-            }
-
-            fn update_global(&mut self, builder: &mut FunctionBuilder, _global_index: u32, _value: ir::Value) {
-                let _ = self.builtin_function_signatures.update_stack_pointer(builder.func);
-            }
-
-            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, _num_pages: Value, _mem_index: MemoryIndex) {
-                let _ = self.builtin_function_signatures.update_mem_size(builder.func);
-            }
+    #[cfg(feature = "wmemcheck")]
+    fn before_memory_grow(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        num_pages: ir::Value,
+        mem_index: MemoryIndex,
+    ) {
+        if self.wmemcheck && mem_index.as_u32() == 0 {
+            let update_mem_size_sig = self
+                .builtin_function_signatures
+                .update_mem_size(builder.func);
+            let (vmctx, update_mem_size) = self.translate_load_builtin_function_address(
+                &mut builder.cursor(),
+                BuiltinFunctionIndex::update_mem_size(),
+            );
+            builder
+                .ins()
+                .call_indirect(update_mem_size_sig, update_mem_size, &[vmctx, num_pages]);
         }
     }
 }

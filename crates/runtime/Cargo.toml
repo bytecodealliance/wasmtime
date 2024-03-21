@@ -14,7 +14,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-wasmtime-wmemcheck = { workspace = true }
+wasmtime-wmemcheck = { workspace = true, optional = true }
 wasmtime-asm-macros = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
@@ -68,6 +68,6 @@ wasmtime-versioned-export-macros = { workspace = true }
 async = ["wasmtime-fiber"]
 pooling-allocator = []
 component-model = ["wasmtime-environ/component-model", "dep:encoding_rs"]
-wmemcheck = []
+wmemcheck = ['dep:wasmtime-wmemcheck']
 debug-builtins = ['wasmtime-jit-debug']
 gc = ["wasmtime-environ/gc"]
