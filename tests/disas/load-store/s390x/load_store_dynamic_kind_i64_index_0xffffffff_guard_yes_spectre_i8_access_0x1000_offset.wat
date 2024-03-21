@@ -19,9 +19,6 @@
     i32.load8_u offset=0x1000))
 
 ;; function u0:0:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   stmg %r6, %r15, 48(%r15)
 ;;   unwind SaveReg { clobber_offset: 48, reg: p6i }
@@ -50,9 +47,6 @@
 ;;   br %r14
 ;;
 ;; function u0:1:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   stmg %r6, %r15, 48(%r15)
 ;;   unwind SaveReg { clobber_offset: 48, reg: p6i }

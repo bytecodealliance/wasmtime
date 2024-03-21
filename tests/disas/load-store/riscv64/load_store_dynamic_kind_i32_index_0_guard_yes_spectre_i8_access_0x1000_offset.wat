@@ -19,15 +19,6 @@
     i32.load8_u offset=0x1000))
 
 ;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   ld a1,88(a0)
 ;;   ld a0,80(a0)
@@ -46,21 +37,9 @@
 ;;   sb a3,0(a2)
 ;;   j label1
 ;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
 ;;   ret
 ;;
 ;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   ld a1,88(a0)
 ;;   ld a0,80(a0)
@@ -79,7 +58,4 @@
 ;;   lbu a0,0(a2)
 ;;   j label1
 ;; block1:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
 ;;   ret

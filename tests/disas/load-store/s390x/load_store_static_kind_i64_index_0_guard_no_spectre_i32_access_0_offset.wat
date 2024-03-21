@@ -19,9 +19,6 @@
     i32.load offset=0))
 
 ;; function u0:0:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
@@ -37,9 +34,6 @@
 ;;   .word 0x0000 # trap=heap_oob
 ;;
 ;; function u0:1:
-;;   lg %r1, 8(%r2)
-;;   lg %r1, 0(%r1)
-;;   clgrtle %r15, %r1
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:

@@ -61,7 +61,6 @@ use crate::{Instance, TrapReason};
 #[cfg(feature = "wmemcheck")]
 use anyhow::bail;
 use anyhow::Result;
-use cfg_if::cfg_if;
 use std::time::{Duration, Instant};
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};
 #[cfg(feature = "wmemcheck")]
@@ -86,7 +85,7 @@ pub mod trampolines {
     macro_rules! libcall {
         (
             $(
-                $( #[$attr:meta] )*
+                $( #[cfg($attr:meta)] )?
                 $name:ident( vmctx: vmctx $(, $pname:ident: $param:ident )* ) $( -> $result:ident )?;
             )*
         ) => {paste::paste! {
@@ -96,7 +95,6 @@ pub mod trampolines {
                 // supported platforms or otherwise in inline assembly for
                 // platforms like s390x which don't have stable `global_asm!`
                 // yet.
-                $( #[$attr] )*
                 extern "C" {
                     #[allow(missing_docs)]
                     #[allow(improper_ctypes)]
@@ -107,7 +105,6 @@ pub mod trampolines {
                     ) $(-> libcall!(@ty $result))?;
                 }
 
-                $( #[ $attr ] )*
                 wasm_to_libcall_trampoline!($name ; [<impl_ $name>]);
 
                 // This is the direct entrypoint from the inline assembly which
@@ -121,20 +118,29 @@ pub mod trampolines {
                 // like s390x need to use outlined assembly files which requires
                 // `no_mangle`.
                 #[cfg_attr(target_arch = "s390x", wasmtime_versioned_export_macros::versioned_export)]
-                $( #[ $attr ] )*
+                #[allow(unused_variables)]
                 unsafe extern "C" fn [<impl_ $name>](
                     vmctx: *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
                 ) $( -> libcall!(@ty $result))? {
+                    $(#[cfg($attr)])?
+                    {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         Instance::from_vmctx(vmctx, |instance| {
-                            super::$name(instance, $($pname),*)
+                            {
+                                super::$name(instance, $($pname),*)
+                            }
                         })
                     }));
                     match result {
                         Ok(ret) => LibcallResult::convert(ret),
                         Err(panic) => crate::traphandlers::resume_panic(panic),
                     }
+                    }
+                    $(
+                        #[cfg(not($attr))]
+                        std::process::abort();
+                    )?
                 }
 
                 // This works around a `rustc` bug where compiling with LTO
@@ -142,7 +148,6 @@ pub mod trampolines {
                 // in a linking failure.
                 #[allow(non_upper_case_globals)]
                 #[used]
-                $( #[ $attr ] )*
                 static [<impl_ $name _ref>]: unsafe extern "C" fn(
                     *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
@@ -498,144 +503,131 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
     (*instance.store()).new_epoch()
 }
 
-cfg_if! {
-    if #[cfg(feature = "wmemcheck")] {
-        // Hook for validating malloc using wmemcheck_state.
-        unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
-            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-                let result = wmemcheck_state.malloc(addr as usize, len as usize);
-                wmemcheck_state.memcheck_on();
-                match result {
-                    Ok(()) => {
-                        return Ok(0);
-                    }
-                    Err(DoubleMalloc { addr, len }) => {
-                        bail!("Double malloc at addr {:#x} of size {}", addr, len)
-                    }
-                    Err(OutOfBounds { addr, len }) => {
-                        bail!("Malloc out of bounds at addr {:#x} of size {}", addr, len);
-                    }
-                    _ => {
-                        panic!("unreachable")
-                    }
-                }
+// Hook for validating malloc using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        let result = wmemcheck_state.malloc(addr as usize, len as usize);
+        wmemcheck_state.memcheck_on();
+        match result {
+            Ok(()) => {
+                return Ok(0);
             }
-            Ok(0)
-        }
-
-        // Hook for validating free using wmemcheck_state.
-        unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
-            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-                let result = wmemcheck_state.free(addr as usize);
-                wmemcheck_state.memcheck_on();
-                match result {
-                    Ok(()) => {
-                        return Ok(0);
-                    }
-                    Err(InvalidFree { addr }) => {
-                        bail!("Invalid free at addr {:#x}", addr)
-                    }
-                    _ => {
-                        panic!("unreachable")
-                    }
-                }
+            Err(DoubleMalloc { addr, len }) => {
+                bail!("Double malloc at addr {:#x} of size {}", addr, len)
             }
-            Ok(0)
-        }
-
-        // Hook for validating load using wmemcheck_state.
-        fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
-            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-                let result = wmemcheck_state.read(addr as usize + offset as usize, num_bytes as usize);
-                match result {
-                    Ok(()) => {
-                        return Ok(0);
-                    }
-                    Err(InvalidRead { addr, len }) => {
-                        bail!("Invalid load at addr {:#x} of size {}", addr, len);
-                    }
-                    Err(OutOfBounds { addr, len }) => {
-                        bail!("Load out of bounds at addr {:#x} of size {}", addr, len);
-                    }
-                    _ => {
-                        panic!("unreachable")
-                    }
-                }
+            Err(OutOfBounds { addr, len }) => {
+                bail!("Malloc out of bounds at addr {:#x} of size {}", addr, len);
             }
-            Ok(0)
-        }
-
-        // Hook for validating store using wmemcheck_state.
-        fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
-            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-                let result = wmemcheck_state.write(addr as usize + offset as usize, num_bytes as usize);
-                match result {
-                    Ok(()) => {
-                        return Ok(0);
-                    }
-                    Err(InvalidWrite { addr, len }) => {
-                        bail!("Invalid store at addr {:#x} of size {}", addr, len)
-                    }
-                    Err(OutOfBounds { addr, len }) => {
-                        bail!("Store out of bounds at addr {:#x} of size {}", addr, len)
-                    }
-                    _ => {
-                        panic!("unreachable")
-                    }
-                }
-            }
-            Ok(0)
-        }
-
-        // Hook for turning wmemcheck load/store validation off when entering a malloc function.
-        fn malloc_start(instance: &mut Instance) {
-            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-                wmemcheck_state.memcheck_off();
+            _ => {
+                panic!("unreachable")
             }
         }
+    }
+    Ok(0)
+}
 
-        // Hook for turning wmemcheck load/store validation off when entering a free function.
-        fn free_start(instance: &mut Instance) {
-            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-                wmemcheck_state.memcheck_off();
+// Hook for validating free using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        let result = wmemcheck_state.free(addr as usize);
+        wmemcheck_state.memcheck_on();
+        match result {
+            Ok(()) => {
+                return Ok(0);
+            }
+            Err(InvalidFree { addr }) => {
+                bail!("Invalid free at addr {:#x}", addr)
+            }
+            _ => {
+                panic!("unreachable")
             }
         }
+    }
+    Ok(0)
+}
 
-        // Hook for tracking wasm stack updates using wmemcheck_state.
-        fn update_stack_pointer(_instance: &mut Instance, _value: u32) {
-            // TODO: stack-tracing has yet to be finalized. All memory below
-            // the address of the top of the stack is marked as valid for
-            // loads and stores.
-            // if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-            //     instance.wmemcheck_state.update_stack_pointer(value as usize);
-            // }
-        }
-
-        // Hook updating wmemcheck_state memory state vector every time memory.grow is called.
-        fn update_mem_size(instance: &mut Instance, num_pages: u32) {
-            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-                const KIB: usize = 1024;
-                let num_bytes = num_pages as usize * 64 * KIB;
-                wmemcheck_state.update_mem_size(num_bytes);
+// Hook for validating load using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        let result = wmemcheck_state.read(addr as usize + offset as usize, num_bytes as usize);
+        match result {
+            Ok(()) => {
+                return Ok(0);
+            }
+            Err(InvalidRead { addr, len }) => {
+                bail!("Invalid load at addr {:#x} of size {}", addr, len);
+            }
+            Err(OutOfBounds { addr, len }) => {
+                bail!("Load out of bounds at addr {:#x} of size {}", addr, len);
+            }
+            _ => {
+                panic!("unreachable")
             }
         }
-    } else {
-        // No-op for all wmemcheck hooks.
-        unsafe fn check_malloc(_instance: &mut Instance, _addr: u32, _len: u32) -> Result<u32> { Ok(0) }
+    }
+    Ok(0)
+}
 
-        unsafe fn check_free(_instance: &mut Instance, _addr: u32) -> Result<u32> { Ok(0) }
+// Hook for validating store using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        let result = wmemcheck_state.write(addr as usize + offset as usize, num_bytes as usize);
+        match result {
+            Ok(()) => {
+                return Ok(0);
+            }
+            Err(InvalidWrite { addr, len }) => {
+                bail!("Invalid store at addr {:#x} of size {}", addr, len)
+            }
+            Err(OutOfBounds { addr, len }) => {
+                bail!("Store out of bounds at addr {:#x} of size {}", addr, len)
+            }
+            _ => {
+                panic!("unreachable")
+            }
+        }
+    }
+    Ok(0)
+}
 
-        fn check_load(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> { Ok(0) }
+// Hook for turning wmemcheck load/store validation off when entering a malloc function.
+#[cfg(feature = "wmemcheck")]
+fn malloc_start(instance: &mut Instance) {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        wmemcheck_state.memcheck_off();
+    }
+}
 
-        fn check_store(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> { Ok(0) }
+// Hook for turning wmemcheck load/store validation off when entering a free function.
+#[cfg(feature = "wmemcheck")]
+fn free_start(instance: &mut Instance) {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        wmemcheck_state.memcheck_off();
+    }
+}
 
-        fn malloc_start(_instance: &mut Instance) {}
+// Hook for tracking wasm stack updates using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+fn update_stack_pointer(_instance: &mut Instance, _value: u32) {
+    // TODO: stack-tracing has yet to be finalized. All memory below
+    // the address of the top of the stack is marked as valid for
+    // loads and stores.
+    // if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    //     instance.wmemcheck_state.update_stack_pointer(value as usize);
+    // }
+}
 
-        fn free_start(_instance: &mut Instance) {}
-
-        fn update_stack_pointer(_instance: &mut Instance, _value: u32) {}
-
-        fn update_mem_size(_instance: &mut Instance, _num_pages: u32) {}
+// Hook updating wmemcheck_state memory state vector every time memory.grow is called.
+#[cfg(feature = "wmemcheck")]
+fn update_mem_size(instance: &mut Instance, num_pages: u32) {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        const KIB: usize = 1024;
+        let num_bytes = num_pages as usize * 64 * KIB;
+        wmemcheck_state.update_mem_size(num_bytes);
     }
 }
 
