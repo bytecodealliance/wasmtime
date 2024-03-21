@@ -94,9 +94,8 @@ where
             .unwrap_reg()
             .into();
 
-        // We need to use the vmctx paramter before pinning it for stack checking, and we don't
-        // have any callee save registers in the winch calling convention.
-        self.masm.prologue(vmctx, &[]);
+        // We need to use the vmctx paramter before pinning it for stack checking.
+        self.masm.prologue(vmctx);
 
         // Pin the `VMContext` pointer.
         self.masm
@@ -317,7 +316,7 @@ where
         }
         debug_assert_eq!(self.context.stack.len(), 0);
         self.masm.free_stack(self.context.frame.locals_size);
-        self.masm.epilogue(&[]);
+        self.masm.epilogue();
         Ok(())
     }
 
