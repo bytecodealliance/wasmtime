@@ -102,7 +102,7 @@
 ;;      	 488b02               	mov	rax, qword ptr [rdx]
 ;;      	 4885c0               	test	rax, rax
 ;;      	 0f8533000000         	jne	0xc1
-;;   8e:	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
+;;   8e:	 4d8b5e10             	mov	r11, qword ptr [r14 + 0x10]
 ;;      	 498b5b48             	mov	rbx, qword ptr [r11 + 0x48]
 ;;      	 4883ec04             	sub	rsp, 4
 ;;      	 890c24               	mov	dword ptr [rsp], ecx
@@ -117,7 +117,7 @@
 ;;      	 e904000000           	jmp	0xc5
 ;;   c1:	 4883e0fe             	and	rax, 0xfffffffffffffffe
 ;;      	 4889442404           	mov	qword ptr [rsp + 4], rax
-;;      	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
+;;      	 4d8b5e10             	mov	r11, qword ptr [r14 + 0x10]
 ;;      	 498b4358             	mov	rax, qword ptr [r11 + 0x58]
 ;;      	 448b5c2414           	mov	r11d, dword ptr [rsp + 0x14]
 ;;      	 4883ec04             	sub	rsp, 4

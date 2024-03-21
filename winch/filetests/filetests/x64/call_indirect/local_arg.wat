@@ -63,7 +63,7 @@
 ;;      	 488b02               	mov	rax, qword ptr [rdx]
 ;;      	 4885c0               	test	rax, rax
 ;;      	 0f852a000000         	jne	0xa1
-;;   77:	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
+;;   77:	 4d8b5e10             	mov	r11, qword ptr [r14 + 0x10]
 ;;      	 498b5b48             	mov	rbx, qword ptr [r11 + 0x48]
 ;;      	 4883ec04             	sub	rsp, 4
 ;;      	 890c24               	mov	dword ptr [rsp], ecx
