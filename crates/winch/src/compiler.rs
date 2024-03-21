@@ -11,7 +11,7 @@ use wasmtime_environ::{
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, TrapEncodingBuilder, VMOffsets,
     WasmFunctionInfo,
 };
-use winch_codegen::{BuiltinFunctions, TargetIsa, TrampolineKind};
+use winch_codegen::{BuiltinFunctions, TargetIsa};
 
 /// Function compilation context.
 /// This struct holds information that can be shared globally across
@@ -25,11 +25,6 @@ struct CompilationContext {
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
-
-    /// The trampoline compiler is only used for the component model currently, but will soon be
-    /// used for all winch trampolines. For now, mark it as unused to handle the situation where
-    /// the component-model feature is disabled.
-    #[allow(unused)]
     trampolines: Box<dyn wasmtime_environ::Compiler>,
     contexts: Mutex<Vec<CompilationContext>>,
 }
@@ -150,22 +145,8 @@ impl wasmtime_environ::Compiler for Compiler {
         types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let func_index = translation.module.func_index(index);
-        let sig = translation.module.functions[func_index].signature;
-        let ty = &types[sig];
-        let buffer = self
-            .isa
-            .compile_trampoline(&ty, TrampolineKind::ArrayToWasm(func_index))
-            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
-
-        let mut compiled_function =
-            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
-
-        if self.isa.flags().unwind_info() {
-            self.emit_unwind_info(&mut compiled_function)?;
-        }
-
-        Ok(Box::new(compiled_function))
+        self.trampolines
+            .compile_array_to_wasm_trampoline(translation, types, index)
     }
 
     fn compile_native_to_wasm_trampoline(
@@ -174,42 +155,16 @@ impl wasmtime_environ::Compiler for Compiler {
         types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let func_index = translation.module.func_index(index);
-        let sig = translation.module.functions[func_index].signature;
-        let ty = &types[sig];
-
-        let buffer = self
-            .isa
-            .compile_trampoline(ty, TrampolineKind::NativeToWasm(func_index))
-            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
-
-        let mut compiled_function =
-            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
-
-        if self.isa.flags().unwind_info() {
-            self.emit_unwind_info(&mut compiled_function)?;
-        }
-
-        Ok(Box::new(compiled_function))
+        self.trampolines
+            .compile_native_to_wasm_trampoline(translation, types, index)
     }
 
     fn compile_wasm_to_native_trampoline(
         &self,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let buffer = self
-            .isa
-            .compile_trampoline(wasm_func_ty, TrampolineKind::WasmToNative)
-            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
-
-        let mut compiled_function =
-            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
-
-        if self.isa.flags().unwind_info() {
-            self.emit_unwind_info(&mut compiled_function)?;
-        }
-
-        Ok(Box::new(compiled_function))
+        self.trampolines
+            .compile_wasm_to_native_trampoline(wasm_func_ty)
     }
 
     fn append_code(

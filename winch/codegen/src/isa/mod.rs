@@ -1,4 +1,4 @@
-use crate::{BuiltinFunctions, TrampolineKind};
+use crate::BuiltinFunctions;
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
@@ -202,16 +202,6 @@ pub trait TargetIsa: Send + Sync {
 
     /// See `cranelift_codegen::isa::TargetIsa::function_alignment`.
     fn function_alignment(&self) -> u32;
-
-    /// Compile a trampoline kind.
-    ///
-    /// This function, internally dispatches to the right trampoline to emit
-    /// depending on the `kind` paramter.
-    fn compile_trampoline(
-        &self,
-        ty: &WasmFuncType,
-        kind: TrampolineKind,
-    ) -> Result<MachBufferFinalized<Final>>;
 
     /// Returns the pointer width of the ISA in bytes.
     fn pointer_bytes(&self) -> u8 {
