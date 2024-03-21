@@ -22,7 +22,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
 ;;     sig0 = (i64 vmctx, i64) system_v
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
 ;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
@@ -35,7 +35,7 @@
 ;; @0056                               v4 = iconst.i32 7
 ;; @0056                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 7
 ;; @0056                               v6 = uextend.i64 v3  ; v3 = 0
-;; @0056                               v7 = load.i64 notrap aligned v23+72
+;; @0056                               v7 = load.i64 notrap aligned readonly v23+72
 ;;                                     v24 = iconst.i64 3
 ;; @0056                               v8 = ishl v6, v24  ; v24 = 3
 ;; @0056                               v9 = iadd v7, v8
@@ -85,7 +85,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
 ;;     sig0 = (i64 vmctx, i64) system_v
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
 ;;     sig2 = (i64 vmctx, i32 uext) -> i32 uext system_v
@@ -97,7 +97,7 @@
 ;; @005f                               v4 = iconst.i32 7
 ;; @005f                               v5 = icmp uge v2, v4  ; v4 = 7
 ;; @005f                               v6 = uextend.i64 v2
-;; @005f                               v7 = load.i64 notrap aligned v23+72
+;; @005f                               v7 = load.i64 notrap aligned readonly v23+72
 ;;                                     v24 = iconst.i64 3
 ;; @005f                               v8 = ishl v6, v24  ; v24 = 3
 ;; @005f                               v9 = iadd v7, v8

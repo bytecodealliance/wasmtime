@@ -13,7 +13,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
 ;;     sig0 = (i64 vmctx, i64, f32) -> i32 fast
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     sig2 = (i64 vmctx, i32 uext, i32 uext) -> i32 uext system_v
