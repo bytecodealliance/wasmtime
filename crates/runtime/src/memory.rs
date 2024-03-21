@@ -585,7 +585,7 @@ impl SharedMemory {
         // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
         assert!(std::mem::size_of::<AtomicU32>() == 4);
         assert!(std::mem::align_of::<AtomicU32>() <= 4);
-        let atomic = unsafe { &*(addr as *const AtomicU32) };
+        let atomic = unsafe { AtomicU32::from_ptr(addr.cast()) };
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();
@@ -608,7 +608,7 @@ impl SharedMemory {
         // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
         assert!(std::mem::size_of::<AtomicU64>() == 8);
         assert!(std::mem::align_of::<AtomicU64>() <= 8);
-        let atomic = unsafe { &*(addr as *const AtomicU64) };
+        let atomic = unsafe { AtomicU64::from_ptr(addr.cast()) };
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();

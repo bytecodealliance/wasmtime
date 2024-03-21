@@ -72,10 +72,10 @@ impl Mmap {
     }
 
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
-        let ptr = self.memory.as_ptr().cast::<u8>();
+        let ptr = self.memory.as_ptr();
         unsafe {
             mprotect(
-                ptr.add(start).cast(),
+                ptr.byte_add(start).cast(),
                 len,
                 MprotectFlags::READ | MprotectFlags::WRITE,
             )?;
@@ -104,7 +104,7 @@ impl Mmap {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        let base = self.memory.as_ptr().cast::<u8>().add(range.start).cast();
+        let base = self.memory.as_ptr().byte_add(range.start).cast();
         let len = range.end - range.start;
 
         let flags = MprotectFlags::READ | MprotectFlags::EXEC;
@@ -128,7 +128,7 @@ impl Mmap {
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        let base = self.memory.as_ptr().cast::<u8>().add(range.start).cast();
+        let base = self.memory.as_ptr().byte_add(range.start).cast();
         let len = range.end - range.start;
 
         mprotect(base, len, MprotectFlags::READ)?;
