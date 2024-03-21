@@ -156,8 +156,7 @@ impl ComponentInstance {
         f: impl FnOnce(&mut ComponentInstance) -> R,
     ) -> R {
         let ptr = vmctx
-            .cast::<u8>()
-            .sub(mem::size_of::<ComponentInstance>())
+            .byte_sub(mem::size_of::<ComponentInstance>())
             .cast::<ComponentInstance>();
         f(&mut *ptr)
     }
@@ -205,8 +204,7 @@ impl ComponentInstance {
                 vmctx_self_reference: SendSyncPtr::new(
                     NonNull::new(
                         ptr.as_ptr()
-                            .cast::<u8>()
-                            .add(mem::size_of::<ComponentInstance>())
+                            .byte_add(mem::size_of::<ComponentInstance>())
                             .cast(),
                     )
                     .unwrap(),
@@ -230,15 +228,13 @@ impl ComponentInstance {
 
     unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
         self.vmctx()
-            .cast::<u8>()
-            .add(usize::try_from(offset).unwrap())
+            .byte_add(usize::try_from(offset).unwrap())
             .cast()
     }
 
     unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: u32) -> *mut T {
         self.vmctx()
-            .cast::<u8>()
-            .add(usize::try_from(offset).unwrap())
+            .byte_add(usize::try_from(offset).unwrap())
             .cast()
     }
 

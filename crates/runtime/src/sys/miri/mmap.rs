@@ -51,7 +51,7 @@ impl Mmap {
         // The memory is technically always accessible but this marks it as
         // initialized for miri-level checking.
         unsafe {
-            std::ptr::write_bytes(self.memory.as_ptr().cast::<u8>().add(start), 0u8, len);
+            std::ptr::write_bytes(self.as_mut_ptr().add(start), 0u8, len);
         }
         Ok(())
     }
