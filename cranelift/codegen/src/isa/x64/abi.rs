@@ -212,11 +212,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 continue;
             }
 
-            debug_assert!(
-                call_conv != CallConv::Winch || rcs.len() == 1,
-                "Winch is unable to handle values wider than 64-bits"
-            );
-
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 let intreg = *rc == RegClass::Int;
@@ -1103,7 +1098,13 @@ fn get_intreg_for_retval(
             1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
             _ => None,
         },
-        CallConv::Winch => is_last.then(|| regs::rax()),
+
+        CallConv::Winch => {
+            // TODO: Once Winch supports SIMD, this will need to be updated to support values
+            // returned in more than one register.
+            // https://github.com/bytecodealliance/wasmtime/issues/8093
+            is_last.then(|| regs::rax())
+        }
         CallConv::Probestack => todo!(),
         CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
     }
