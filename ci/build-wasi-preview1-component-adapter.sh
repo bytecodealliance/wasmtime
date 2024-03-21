@@ -26,3 +26,9 @@ $build_adapter --release
 $verify $release
 wasm-tools metadata add --name "wasi_preview1_component_adapter.reactor.adapter:${VERSION}" $release \
   -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.reactor.wasm
+
+# Release build, proxy
+$build_adapter --release --no-default-features --features proxy
+$verify $release
+wasm-tools metadata add --name "wasi_preview1_component_adapter.proxy.adapter:${VERSION}" $release \
+  -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.proxy.wasm

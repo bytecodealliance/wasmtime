@@ -400,11 +400,11 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   andi a3, a1, 3
 ;   slli a2, a3, 3
 ;   andi a1, a1, -4
-;   lr.w.aqrl a4, (a1)
+;   lr.w.aqrl a4, (a1) ; trap: heap_oob
 ;   srl a4, a4, a2
 ;   andi a4, a4, 0xff
 ;   and a3, a4, a5
-;   lr.w.aqrl t5, (a1)
+;   lr.w.aqrl t5, (a1) ; trap: heap_oob
 ;   addi t6, zero, 0xff
 ;   sll t6, t6, a2
 ;   not t6, t6
@@ -412,7 +412,7 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   andi t6, a3, 0xff
 ;   sll t6, t6, a2
 ;   or t5, t5, t6
-;   sc.w.aqrl a3, t5, (a1)
+;   sc.w.aqrl a3, t5, (a1) ; trap: heap_oob
 ;   bnez a3, -0x34
 ;   mv a5, a4
 ;   beqz a0, 0xc

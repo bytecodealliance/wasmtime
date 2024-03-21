@@ -1,5 +1,4 @@
 use proptest::prelude::*;
-use std::convert::TryFrom;
 use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 

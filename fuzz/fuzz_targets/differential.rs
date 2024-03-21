@@ -5,7 +5,6 @@ use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
-use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
@@ -23,10 +22,8 @@ static SETUP: Once = Once::new();
 // - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
 // - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
 // - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
-// - FUZZ_WINCH=1 cargo +nightly fuzz run ...
 static mut ALLOWED_ENGINES: Vec<&str> = vec![];
 static mut ALLOWED_MODULES: Vec<&str> = vec![];
-static mut FUZZ_WINCH: bool = false;
 
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
@@ -41,22 +38,16 @@ fuzz_target!(|data: &[u8]| {
         // environment variables.
         let allowed_engines = build_allowed_env_list(
             parse_env_list("ALLOWED_ENGINES"),
-            &["wasmtime", "wasmi", "spec", "v8"],
+            &["wasmtime", "wasmi", "spec", "v8", "winch"],
         );
         let allowed_modules = build_allowed_env_list(
             parse_env_list("ALLOWED_MODULES"),
             &["wasm-smith", "single-inst"],
         );
 
-        let fuzz_winch = match std::env::var("FUZZ_WINCH").map(|v| v == "1") {
-            Ok(v) => v,
-            _ => false,
-        };
-
         unsafe {
             ALLOWED_ENGINES = allowed_engines;
             ALLOWED_MODULES = allowed_modules;
-            FUZZ_WINCH = fuzz_winch;
         }
     });
 
@@ -69,7 +60,6 @@ fn execute_one(data: &[u8]) -> Result<()> {
     STATS.bump_attempts();
 
     let mut u = Unstructured::new(data);
-    let fuzz_winch = unsafe { FUZZ_WINCH };
 
     // Generate a Wasmtime and module configuration and update its settings
     // initially to be suitable for differential execution where the generated
@@ -78,19 +68,10 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
 
-    // When fuzzing Winch, explicitly override the compiler strategy, which by
-    // default its arbitrary implementation unconditionally returns
-    // `Cranelift`.
-    // We also explicitly disable multi-value support.
-    if fuzz_winch {
-        config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
-        config.module_config.config.multi_value_enabled = false;
-    }
-
     // Choose an engine that Wasmtime will be differentially executed against.
     // The chosen engine is then created, which might update `config`, and
     // returned as a trait object.
-    let lhs = u.choose(unsafe { &ALLOWED_ENGINES })?;
+    let lhs = u.choose(unsafe { &*std::ptr::addr_of!(ALLOWED_ENGINES) })?;
     let mut lhs = match engine::build(&mut u, lhs, &mut config)? {
         Some(engine) => engine,
         // The chosen engine does not have support compiled into the fuzzer,
@@ -119,10 +100,6 @@ fn execute_one(data: &[u8]) -> Result<()> {
         "single-inst" => build_single_inst_module(&mut u, &config)?,
         _ => unreachable!(),
     };
-
-    if fuzz_winch && !winch_supports_module(&wasm) {
-        return Ok(());
-    }
 
     log_wasm(&wasm);
 
@@ -208,6 +185,7 @@ struct RuntimeStats {
     v8: AtomicUsize,
     spec: AtomicUsize,
     wasmtime: AtomicUsize,
+    winch: AtomicUsize,
 
     // Counters for which style of module is chosen
     wasm_smith_modules: AtomicUsize,
@@ -224,6 +202,7 @@ impl RuntimeStats {
             v8: AtomicUsize::new(0),
             spec: AtomicUsize::new(0),
             wasmtime: AtomicUsize::new(0),
+            winch: AtomicUsize::new(0),
             wasm_smith_modules: AtomicUsize::new(0),
             single_instruction_modules: AtomicUsize::new(0),
         }
@@ -246,13 +225,15 @@ impl RuntimeStats {
         let spec = self.spec.load(SeqCst);
         let wasmi = self.wasmi.load(SeqCst);
         let wasmtime = self.wasmtime.load(SeqCst);
-        let total = v8 + spec + wasmi + wasmtime;
+        let winch = self.winch.load(SeqCst);
+        let total = v8 + spec + wasmi + wasmtime + winch;
         println!(
-            "\twasmi: {:.02}%, spec: {:.02}%, wasmtime: {:.02}%, v8: {:.02}%",
+            "\twasmi: {:.02}%, spec: {:.02}%, wasmtime: {:.02}%, v8: {:.02}%, winch: {:.02}%",
             wasmi as f64 / total as f64 * 100f64,
             spec as f64 / total as f64 * 100f64,
             wasmtime as f64 / total as f64 * 100f64,
             v8 as f64 / total as f64 * 100f64,
+            winch as f64 / total as f64 * 100f64,
         );
 
         let wasm_smith = self.wasm_smith_modules.load(SeqCst);
@@ -271,157 +252,8 @@ impl RuntimeStats {
             "wasmtime" => self.wasmtime.fetch_add(1, SeqCst),
             "spec" => self.spec.fetch_add(1, SeqCst),
             "v8" => self.v8.fetch_add(1, SeqCst),
+            "winch" => self.winch.fetch_add(1, SeqCst),
             _ => return,
         };
     }
-}
-
-// Returns true if the module only contains operators supported by
-// Winch. Winch's x86_64 target has broader support for Wasm operators
-// than the aarch64 target. This list assumes fuzzing on the x86_64
-// target.
-fn winch_supports_module(module: &[u8]) -> bool {
-    use wasmparser::{Operator::*, Parser, Payload};
-
-    let mut supported = true;
-    let mut parser = Parser::new(0).parse_all(module);
-
-    'main: while let Some(payload) = parser.next() {
-        match payload.unwrap() {
-            Payload::CodeSectionEntry(body) => {
-                let op_reader = body.get_operators_reader().unwrap();
-                for op in op_reader {
-                    match op.unwrap() {
-                        I32Const { .. }
-                        | I64Const { .. }
-                        | I32Add { .. }
-                        | I64Add { .. }
-                        | I32Sub { .. }
-                        | I32Mul { .. }
-                        | I32DivS { .. }
-                        | I32DivU { .. }
-                        | I64DivS { .. }
-                        | I64DivU { .. }
-                        | I64RemU { .. }
-                        | I64RemS { .. }
-                        | I32RemU { .. }
-                        | I32RemS { .. }
-                        | I64Mul { .. }
-                        | I64Sub { .. }
-                        | I32Eq { .. }
-                        | I64Eq { .. }
-                        | I32Ne { .. }
-                        | I64Ne { .. }
-                        | I32LtS { .. }
-                        | I64LtS { .. }
-                        | I32LtU { .. }
-                        | I64LtU { .. }
-                        | I32LeS { .. }
-                        | I64LeS { .. }
-                        | I32LeU { .. }
-                        | I64LeU { .. }
-                        | I32GtS { .. }
-                        | I64GtS { .. }
-                        | I32GtU { .. }
-                        | I64GtU { .. }
-                        | I32GeS { .. }
-                        | I64GeS { .. }
-                        | I32GeU { .. }
-                        | I64GeU { .. }
-                        | I32Eqz { .. }
-                        | I64Eqz { .. }
-                        | I32And { .. }
-                        | I64And { .. }
-                        | I32Or { .. }
-                        | I64Or { .. }
-                        | I32Xor { .. }
-                        | I64Xor { .. }
-                        | I32Shl { .. }
-                        | I64Shl { .. }
-                        | I32ShrS { .. }
-                        | I64ShrS { .. }
-                        | I32ShrU { .. }
-                        | I64ShrU { .. }
-                        | I32Rotl { .. }
-                        | I64Rotl { .. }
-                        | I32Rotr { .. }
-                        | I64Rotr { .. }
-                        | I32Clz { .. }
-                        | I64Clz { .. }
-                        | I32Ctz { .. }
-                        | I64Ctz { .. }
-                        | I32Popcnt { .. }
-                        | I64Popcnt { .. }
-                        | LocalGet { .. }
-                        | LocalSet { .. }
-                        | LocalTee { .. }
-                        | GlobalGet { .. }
-                        | GlobalSet { .. }
-                        | Call { .. }
-                        | Nop { .. }
-                        | End { .. }
-                        | If { .. }
-                        | Else { .. }
-                        | Block { .. }
-                        | Loop { .. }
-                        | Br { .. }
-                        | BrIf { .. }
-                        | BrTable { .. }
-                        | Unreachable { .. }
-                        | Return { .. }
-                        | F32Const { .. }
-                        | F64Const { .. }
-                        | F32Add { .. }
-                        | F64Add { .. }
-                        | F32Sub { .. }
-                        | F64Sub { .. }
-                        | F32Mul { .. }
-                        | F64Mul { .. }
-                        | F32Div { .. }
-                        | F64Div { .. }
-                        | F32Min { .. }
-                        | F64Min { .. }
-                        | F32Max { .. }
-                        | F64Max { .. }
-                        | F32Copysign { .. }
-                        | F64Copysign { .. }
-                        | F32Abs { .. }
-                        | F64Abs { .. }
-                        | F32Neg { .. }
-                        | F64Neg { .. }
-                        | F32Sqrt { .. }
-                        | F64Sqrt { .. }
-                        | F32Eq { .. }
-                        | F64Eq { .. }
-                        | F32Ne { .. }
-                        | F64Ne { .. }
-                        | F32Lt { .. }
-                        | F64Lt { .. }
-                        | F32Gt { .. }
-                        | F64Gt { .. }
-                        | F32Le { .. }
-                        | F64Le { .. }
-                        | F32Ge { .. }
-                        | F64Ge { .. }
-                        | CallIndirect { .. }
-                        | ElemDrop { .. }
-                        | TableCopy { .. }
-                        | TableSet { .. }
-                        | TableGet { .. }
-                        | TableFill { .. }
-                        | TableGrow { .. }
-                        | TableSize { .. }
-                        | TableInit { .. } => {}
-                        _ => {
-                            supported = false;
-                            break 'main;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    supported
 }

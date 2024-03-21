@@ -15,6 +15,7 @@ use crate::machinst::{
 };
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
+use crate::{Final, MachBufferFinalized};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
@@ -26,6 +27,8 @@ mod inst;
 mod lower;
 mod pcc;
 pub mod settings;
+
+pub use inst::unwind::systemv::create_cie;
 
 /// An X64 backend.
 pub(crate) struct X64Backend {
@@ -118,26 +121,7 @@ impl TargetIsa for X64Backend {
         result: &CompiledCode,
         kind: crate::isa::unwind::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        use crate::isa::unwind::UnwindInfo;
-        use crate::isa::unwind::UnwindInfoKind;
-        Ok(match kind {
-            UnwindInfoKind::SystemV => {
-                let mapper = self::inst::unwind::systemv::RegisterMapper;
-                Some(UnwindInfo::SystemV(
-                    crate::isa::unwind::systemv::create_unwind_info_from_insts(
-                        &result.buffer.unwind_info[..],
-                        result.buffer.data().len(),
-                        &mapper,
-                    )?,
-                ))
-            }
-            UnwindInfoKind::Windows => Some(UnwindInfo::WindowsX64(
-                crate::isa::unwind::winx64::create_unwind_info_from_insts::<
-                    self::inst::unwind::winx64::RegisterMapper,
-                >(&result.buffer.unwind_info[..])?,
-            )),
-            _ => None,
-        })
+        emit_unwind_info(&result.buffer, kind)
     }
 
     #[cfg(feature = "unwind")]
@@ -191,6 +175,32 @@ impl TargetIsa for X64Backend {
     fn has_x86_pmaddubsw_lowering(&self) -> bool {
         self.x64_flags.use_ssse3()
     }
+}
+
+/// Emit unwind info for an x86 target.
+pub fn emit_unwind_info(
+    buffer: &MachBufferFinalized<Final>,
+    kind: crate::isa::unwind::UnwindInfoKind,
+) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+    use crate::isa::unwind::{UnwindInfo, UnwindInfoKind};
+    Ok(match kind {
+        UnwindInfoKind::SystemV => {
+            let mapper = self::inst::unwind::systemv::RegisterMapper;
+            Some(UnwindInfo::SystemV(
+                crate::isa::unwind::systemv::create_unwind_info_from_insts(
+                    &buffer.unwind_info[..],
+                    buffer.data().len(),
+                    &mapper,
+                )?,
+            ))
+        }
+        UnwindInfoKind::Windows => Some(UnwindInfo::WindowsX64(
+            crate::isa::unwind::winx64::create_unwind_info_from_insts::<
+                self::inst::unwind::winx64::RegisterMapper,
+            >(&buffer.unwind_info[..])?,
+        )),
+        _ => None,
+    })
 }
 
 impl fmt::Display for X64Backend {

@@ -56,7 +56,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ng %r2, 0(%r3)
+;   ng %r2, 0(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %band_i32(i32, i32) -> i32 {
@@ -89,7 +89,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   n %r2, 0(%r3)
+;   n %r2, 0(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %band_i32_memoff(i32, i64) -> i32 {
@@ -106,7 +106,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ny %r2, 0x1000(%r3)
+;   ny %r2, 0x1000(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %band_i16(i16, i16) -> i16 {
@@ -140,7 +140,7 @@ block0(v0: i16, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llh %r3, 0(%r3)
+;   llh %r3, 0(%r3) ; trap: heap_oob
 ;   nr %r2, %r3
 ;   br %r14
 
@@ -175,7 +175,7 @@ block0(v0: i8, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llc %r3, 0(%r3)
+;   llc %r3, 0(%r3) ; trap: heap_oob
 ;   nr %r2, %r3
 ;   br %r14
 
@@ -231,7 +231,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   og %r2, 0(%r3)
+;   og %r2, 0(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %bor_i32(i32, i32) -> i32 {
@@ -264,7 +264,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   o %r2, 0(%r3)
+;   o %r2, 0(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %bor_i32_memoff(i32, i64) -> i32 {
@@ -281,7 +281,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   oy %r2, 0x1000(%r3)
+;   oy %r2, 0x1000(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %bor_i16(i16, i16) -> i16 {
@@ -315,7 +315,7 @@ block0(v0: i16, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llh %r3, 0(%r3)
+;   llh %r3, 0(%r3) ; trap: heap_oob
 ;   or %r2, %r3
 ;   br %r14
 
@@ -350,7 +350,7 @@ block0(v0: i8, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llc %r3, 0(%r3)
+;   llc %r3, 0(%r3) ; trap: heap_oob
 ;   or %r2, %r3
 ;   br %r14
 
@@ -406,7 +406,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   xg %r2, 0(%r3)
+;   xg %r2, 0(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %bxor_i32(i32, i32) -> i32 {
@@ -439,7 +439,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   x %r2, 0(%r3)
+;   x %r2, 0(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %bxor_i32_memoff(i32, i64) -> i32 {
@@ -456,7 +456,7 @@ block0(v0: i32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   xy %r2, 0x1000(%r3)
+;   xy %r2, 0x1000(%r3) ; trap: heap_oob
 ;   br %r14
 
 function %bxor_i16(i16, i16) -> i16 {
@@ -490,7 +490,7 @@ block0(v0: i16, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llh %r3, 0(%r3)
+;   llh %r3, 0(%r3) ; trap: heap_oob
 ;   xr %r2, %r3
 ;   br %r14
 
@@ -525,7 +525,7 @@ block0(v0: i8, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   llc %r3, 0(%r3)
+;   llc %r3, 0(%r3) ; trap: heap_oob
 ;   xr %r2, %r3
 ;   br %r14
 

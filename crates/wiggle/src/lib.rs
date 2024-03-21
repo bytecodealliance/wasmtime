@@ -21,7 +21,7 @@ mod error;
 mod guest_type;
 mod region;
 
-pub extern crate tracing;
+pub use tracing;
 
 pub use error::GuestError;
 pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};
@@ -32,6 +32,7 @@ pub mod async_trait_crate {
 }
 
 pub mod wasmtime;
+#[cfg(feature = "wasmtime")]
 pub mod wasmtime_crate {
     pub use wasmtime::*;
 }
@@ -402,7 +403,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     /// etc of the returned pointer.
     pub fn cast<U>(&self) -> GuestPtr<'a, U>
     where
-        T: Pointee<Pointer = u32>,
+        U: Pointee<Pointer = T::Pointer> + ?Sized,
     {
         GuestPtr::new(self.mem, self.pointer)
     }

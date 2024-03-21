@@ -184,7 +184,6 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::convert::TryFrom;
 use std::mem;
 use std::string::String;
 use std::vec::Vec;
@@ -311,6 +310,9 @@ pub struct MachBuffer<I: VCodeInst> {
     /// constant may appear in this array multiple times if it was emitted
     /// multiple times.
     used_constants: SmallVec<[(VCodeConstant, CodeOffset); 4]>,
+    /// Indicates when a patchable region is currently open, to guard that it's
+    /// not possible to nest patchable regions.
+    open_patchable: bool,
 }
 
 impl MachBufferFinalized<Stencil> {
@@ -411,6 +413,29 @@ pub enum StackMapExtent {
     StartedAtOffset(CodeOffset),
 }
 
+/// Represents the beginning of an editable region in the [`MachBuffer`], while code emission is
+/// still occurring. An [`OpenPatchRegion`] is closed by [`MachBuffer::end_patchable`], consuming
+/// the [`OpenPatchRegion`] token in the process.
+pub struct OpenPatchRegion(usize);
+
+/// A region in the [`MachBuffer`] code buffer that can be edited prior to finalization. An example
+/// of where you might want to use this is for patching instructions that mention constants that
+/// won't be known until later: [`MachBuffer::start_patchable`] can be used to begin the patchable
+/// region, instructions can be emitted with placeholder constants, and the [`PatchRegion`] token
+/// can be produced by [`MachBuffer::end_patchable`]. Once the values of those constants are known,
+/// the [`PatchRegion::patch`] function can be used to get a mutable buffer to the instruction
+/// bytes, and the constants uses can be updated directly.
+pub struct PatchRegion {
+    range: std::ops::Range<usize>,
+}
+
+impl PatchRegion {
+    /// Consume the patch region to yield a mutable slice of the [`MachBuffer`] data buffer.
+    pub fn patch<I: VCodeInst>(self, buffer: &mut MachBuffer<I>) -> &mut [u8] {
+        &mut buffer.data[self.range]
+    }
+}
+
 impl<I: VCodeInst> MachBuffer<I> {
     /// Create a new section, known to start at `start_offset` and with a size limited to
     /// `length_limit`.
@@ -437,6 +462,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             labels_at_tail_off: 0,
             constants: Default::default(),
             used_constants: Default::default(),
+            open_patchable: false,
         }
     }
 
@@ -513,6 +539,29 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
 
         // Post-invariant: as for `put1()`.
+    }
+
+    /// Begin a region of patchable code. There is one requirement for the
+    /// code that is emitted: It must not introduce any instructions that
+    /// could be chomped (branches are an example of this). In other words,
+    /// you must not call [`MachBuffer::add_cond_branch`] or
+    /// [`MachBuffer::add_uncond_branch`] between calls to this method and
+    /// [`MachBuffer::end_patchable`].
+    pub fn start_patchable(&mut self) -> OpenPatchRegion {
+        assert!(!self.open_patchable, "Patchable regions may not be nested");
+        self.open_patchable = true;
+        OpenPatchRegion(usize::try_from(self.cur_offset()).unwrap())
+    }
+
+    /// End a region of patchable code, yielding a [`PatchRegion`] value that
+    /// can be consumed later to produce a one-off mutable slice to the
+    /// associated region of the data buffer.
+    pub fn end_patchable(&mut self, open: OpenPatchRegion) -> PatchRegion {
+        // No need to assert the state of `open_patchable` here, as we take
+        // ownership of the only `OpenPatchable` value.
+        self.open_patchable = false;
+        let end = usize::try_from(self.cur_offset()).unwrap();
+        PatchRegion { range: open.0..end }
     }
 
     /// Allocate a `Label` to refer to some offset. May not be bound to a fixed
@@ -707,6 +756,10 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Additional requirement: no labels may be bound between `start` and `end`
     /// (exclusive on both ends).
     pub fn add_uncond_branch(&mut self, start: CodeOffset, end: CodeOffset, target: MachLabel) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction inserted within a patchable region"
+        );
         assert!(self.cur_offset() == start);
         debug_assert!(end > start);
         assert!(!self.pending_fixup_records.is_empty());
@@ -738,6 +791,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         target: MachLabel,
         inverted: &[u8],
     ) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction inserted within a patchable region"
+        );
         assert!(self.cur_offset() == start);
         debug_assert!(end > start);
         assert!(!self.pending_fixup_records.is_empty());
@@ -759,6 +816,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     fn truncate_last_branch(&mut self) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction truncated within a patchable region"
+        );
+
         self.lazily_clear_labels_at_tail();
         // Invariants hold at this point.
 
@@ -1486,9 +1548,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Add an external relocation at the current offset.
-    pub fn add_reloc<T: Into<RelocTarget> + Clone>(
+    /// Add an external relocation at the given offset from current offset.
+    pub fn add_reloc_at_offset<T: Into<RelocTarget> + Clone>(
         &mut self,
+        offset: CodeOffset,
         kind: Reloc,
         target: &T,
         addend: Addend,
@@ -1528,11 +1591,21 @@ impl<I: VCodeInst> MachBuffer<I> {
         // when a relocation can't otherwise be resolved later, so it shouldn't
         // actually result in any memory unsafety or anything like that.
         self.relocs.push(MachReloc {
-            offset: self.data.len() as CodeOffset,
+            offset: self.data.len() as CodeOffset + offset,
             kind,
             target,
             addend,
         });
+    }
+
+    /// Add an external relocation at the current offset.
+    pub fn add_reloc<T: Into<RelocTarget> + Clone>(
+        &mut self,
+        kind: Reloc,
+        target: &T,
+        addend: Addend,
+    ) {
+        self.add_reloc_at_offset(0, kind, target, addend);
     }
 
     /// Add a trap record at the current offset.
@@ -2005,8 +2078,6 @@ mod test {
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::machinst::{MachInstEmit, MachInstEmitState};
     use crate::settings;
-    use std::default::Default;
-    use std::vec::Vec;
 
     fn label(n: u32) -> MachLabel {
         MachLabel::from_block(BlockIndex::new(n as usize))

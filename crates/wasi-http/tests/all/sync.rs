@@ -1,6 +1,6 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime_wasi::preview2::command::sync::Command;
+use wasmtime_wasi::command::sync::Command;
 
 foreach_http!(assert_test_exists);
 
@@ -22,6 +22,12 @@ fn run(path: &str, server: &Server) -> Result<()> {
 fn http_outbound_request_get() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_GET_COMPONENT, &server)
+}
+
+#[test_log::test]
+fn http_outbound_request_timeout() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server)
 }
 
 #[test_log::test]
@@ -82,4 +88,10 @@ fn http_outbound_request_invalid_dnsname() -> Result<()> {
 fn http_outbound_request_response_build() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server)
+}
+
+#[test_log::test]
+fn http_outbound_request_content_length() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server)
 }

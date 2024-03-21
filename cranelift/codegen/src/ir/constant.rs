@@ -13,7 +13,6 @@ use crate::ir::Constant;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::fmt;
-use core::iter::FromIterator;
 use core::slice::Iter;
 use core::str::{from_utf8, FromStr};
 use cranelift_entity::EntityRef;

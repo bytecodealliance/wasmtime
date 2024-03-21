@@ -3,15 +3,12 @@
 use crate::ir;
 use crate::ir::types::*;
 
-use crate::ir::ExternalName;
-use crate::ir::MemFlags;
 use crate::isa;
 
-use crate::isa::riscv64::{inst::EmitState, inst::*};
+use crate::isa::riscv64::inst::*;
 use crate::isa::CallConv;
 use crate::machinst::*;
 
-use crate::ir::types::I8;
 use crate::ir::LibCall;
 use crate::ir::Signature;
 use crate::isa::riscv64::settings::Flags as RiscvFlags;
@@ -22,7 +19,6 @@ use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use regs::x_reg;
 
 use smallvec::{smallvec, SmallVec};
 use std::sync::OnceLock;
@@ -102,6 +98,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "riscv64 does not support the 'winch' calling convention yet"
+        );
+
         // All registers that can be used as parameters or rets.
         // both start and end are included.
         let (x_start, x_end, f_start, f_end) = match (call_conv, args_or_rets) {

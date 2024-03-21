@@ -59,4 +59,7 @@ skip-tree = [
     # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
     # it is duplicated for us.
     { name = "indexmap", depth = 2 },
+
+    # criterion is on old version, will update on next release.
+    { name = "itertools" },
 ]

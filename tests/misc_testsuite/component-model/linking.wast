@@ -2,7 +2,7 @@
   (component
     (import "undefined-name" (core module))
   )
-  "expected module found nothing")
+  "was not found")
 (component $i)
 (component
   (import "i" (instance))
@@ -12,7 +12,7 @@
   "expected module found instance")
 (assert_unlinkable
   (component (import "i" (func)))
-  "expected func found instance")
+  "expected function found instance")
 (assert_unlinkable
   (component (import "i" (instance (export "x" (func)))))
-  "expected func found nothing")
+  "was not found")

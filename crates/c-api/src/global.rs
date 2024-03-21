@@ -79,12 +79,13 @@ pub unsafe extern "C" fn wasm_global_set(g: &mut wasm_global_t, val: &wasm_val_t
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_global_new(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     gt: &wasm_globaltype_t,
     val: &wasmtime_val_t,
     ret: &mut Global,
 ) -> Option<Box<wasmtime_error_t>> {
-    let global = Global::new(store, gt.ty().ty.clone(), val.to_val());
+    let val = val.to_val(&mut store);
+    let global = Global::new(store, gt.ty().ty.clone(), val);
     handle_result(global, |global| {
         *ret = global;
     })
@@ -100,18 +101,20 @@ pub extern "C" fn wasmtime_global_type(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_global_get(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     global: &Global,
     val: &mut MaybeUninit<wasmtime_val_t>,
 ) {
-    crate::initialize(val, wasmtime_val_t::from_val(global.get(store)))
+    let gval = global.get(&mut store);
+    crate::initialize(val, wasmtime_val_t::from_val(store, gval))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_global_set(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     global: &Global,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    handle_result(global.set(store, val.to_val()), |()| {})
+    let val = val.to_val(&mut store);
+    handle_result(global.set(store, val), |()| {})
 }

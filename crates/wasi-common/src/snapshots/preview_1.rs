@@ -11,7 +11,6 @@ use crate::{
     I32Exit, SystemTimeSpec, WasiCtx,
 };
 use cap_std::time::{Duration, SystemClock};
-use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -25,7 +24,7 @@ use error::{Error, ErrorExt};
 pub(crate) const MAX_SHARED_BUFFER_SIZE: usize = 1 << 16;
 
 wiggle::from_witx!({
-    witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
+    witx: ["$CARGO_MANIFEST_DIR/witx/preview1/wasi_snapshot_preview1.witx"],
     errors: { errno => trappable Error },
     // Note: not every function actually needs to be async, however, nearly all of them do, and
     // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
@@ -554,7 +553,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let whence = match whence {
             types::Whence::Cur => SeekFrom::Current(offset),
             types::Whence::End => SeekFrom::End(offset),
-            types::Whence::Set => SeekFrom::Start(offset as u64),
+            types::Whence::Set => {
+                SeekFrom::Start(offset.try_into().map_err(|_| Error::invalid_argument())?)
+            }
         };
         let newoffset = self
             .table()

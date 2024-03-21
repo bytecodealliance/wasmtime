@@ -154,7 +154,7 @@ impl<'a> Codegen<'a> {
         if sig.ret_kind == ReturnKind::Iterator {
             writeln!(
                 code,
-                "{indent}type {name}_iter: ContextIter<Context = Self, Output = {output}>;",
+                "{indent}type {name}_returns: Default + IntoContextIter<Context = Self, Output = {output}>;",
                 indent = indent,
                 name = sig.func_name,
                 output = ret_tuple,
@@ -165,7 +165,7 @@ impl<'a> Codegen<'a> {
         let ret_ty = match sig.ret_kind {
             ReturnKind::Plain => ret_tuple,
             ReturnKind::Option => format!("Option<{}>", ret_tuple),
-            ReturnKind::Iterator => format!("Self::{}_iter", sig.func_name),
+            ReturnKind::Iterator => format!("()"),
         };
 
         writeln!(
@@ -178,6 +178,11 @@ impl<'a> Codegen<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
+                .chain(if sig.ret_kind == ReturnKind::Iterator {
+                    Some(format!("returns: &mut Self::{}_returns", sig.func_name))
+                } else {
+                    None
+                })
                 .collect::<Vec<_>>()
                 .join(", "),
             ret_ty = ret_ty,
@@ -217,31 +222,92 @@ impl<'a> Codegen<'a> {
         writeln!(
             code,
             r#"
-           pub trait ContextIter {{
-               type Context;
-               type Output;
-               fn next(&mut self, ctx: &mut Self::Context) -> Option<Self::Output>;
-           }}
+pub trait ContextIter {{
+    type Context;
+    type Output;
+    fn next(&mut self, ctx: &mut Self::Context) -> Option<Self::Output>;
+    fn size_hint(&self) -> (usize, Option<usize>) {{ (0, None) }}
+}}
 
-           pub struct ContextIterWrapper<Item, I: Iterator < Item = Item>, C: Context> {{
-               iter: I,
-               _ctx: PhantomData<C>,
-           }}
-           impl<Item, I: Iterator<Item = Item>, C: Context> From<I> for ContextIterWrapper<Item, I, C> {{
-               fn from(iter: I) -> Self {{
-                   Self {{ iter, _ctx: PhantomData }}
-               }}
-           }}
-           impl<Item, I: Iterator<Item = Item>, C: Context> ContextIter for ContextIterWrapper<Item, I, C> {{
-               type Context = C;
-               type Output = Item;
-               fn next(&mut self, _ctx: &mut Self::Context) -> Option<Self::Output> {{
-                   self.iter.next()
-               }}
-           }}
+pub trait IntoContextIter {{
+    type Context;
+    type Output;
+    type IntoIter: ContextIter<Context = Self::Context, Output = Self::Output>;
+    fn into_context_iter(self) -> Self::IntoIter;
+}}
+
+pub trait Length {{
+    fn len(&self) -> usize;
+}}
+
+impl<T> Length for std::vec::Vec<T> {{
+    fn len(&self) -> usize {{
+        std::vec::Vec::len(self)
+    }}
+}}
+
+pub struct ContextIterWrapper<I, C> {{
+    iter: I,
+    _ctx: std::marker::PhantomData<C>,
+}}
+impl<I: Default, C> Default for ContextIterWrapper<I, C> {{
+    fn default() -> Self {{
+        ContextIterWrapper {{
+            iter: I::default(),
+            _ctx: std::marker::PhantomData
+        }}
+    }}
+}}
+impl<I, C> std::ops::Deref for ContextIterWrapper<I, C> {{
+    type Target = I;
+    fn deref(&self) -> &I {{
+        &self.iter
+    }}
+}}
+impl<I, C> std::ops::DerefMut for ContextIterWrapper<I, C> {{
+    fn deref_mut(&mut self) -> &mut I {{
+        &mut self.iter
+    }}
+}}
+impl<I: Iterator, C: Context> From<I> for ContextIterWrapper<I, C> {{
+    fn from(iter: I) -> Self {{
+        Self {{ iter, _ctx: std::marker::PhantomData }}
+    }}
+}}
+impl<I: Iterator, C: Context> ContextIter for ContextIterWrapper<I, C> {{
+    type Context = C;
+    type Output = I::Item;
+    fn next(&mut self, _ctx: &mut Self::Context) -> Option<Self::Output> {{
+        self.iter.next()
+    }}
+    fn size_hint(&self) -> (usize, Option<usize>) {{
+        self.iter.size_hint()
+    }}
+}}
+impl<I: IntoIterator, C: Context> IntoContextIter for ContextIterWrapper<I, C> {{
+    type Context = C;
+    type Output = I::Item;
+    type IntoIter = ContextIterWrapper<I::IntoIter, C>;
+    fn into_context_iter(self) -> Self::IntoIter {{
+        ContextIterWrapper {{
+            iter: self.iter.into_iter(),
+            _ctx: std::marker::PhantomData
+        }}
+    }}
+}}
+impl<T, E: Extend<T>, C> Extend<T> for ContextIterWrapper<E, C> {{
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {{
+        self.iter.extend(iter);
+    }}
+}}
+impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
+    fn len(&self) -> usize {{
+        self.iter.len()
+    }}
+}}
            "#,
         )
-            .unwrap();
+        .unwrap();
     }
 
     fn generate_internal_types(&self, code: &mut String) {
@@ -349,13 +415,20 @@ impl<'a> Codegen<'a> {
                 writeln!(ctx.out, ",")?;
             }
 
-            write!(ctx.out, "{}) -> ", &ctx.indent)?;
             let (_, ret) = self.ty(sig.ret_tys[0]);
             let ret = &self.typeenv.syms[ret.index()];
+
+            if let ReturnKind::Iterator = sig.ret_kind {
+                writeln!(
+                    ctx.out,
+                    "{}    returns: &mut (impl Extend<{}> + Length),",
+                    &ctx.indent, ret
+                )?;
+            }
+
+            write!(ctx.out, "{}) -> ", &ctx.indent)?;
             match sig.ret_kind {
-                ReturnKind::Iterator => {
-                    write!(ctx.out, "impl ContextIter<Context = C, Output = {}>", ret)?
-                }
+                ReturnKind::Iterator => write!(ctx.out, "()")?,
                 ReturnKind::Option => write!(ctx.out, "Option<{}>", ret)?,
                 ReturnKind::Plain => write!(ctx.out, "{}", ret)?,
             };
@@ -363,21 +436,13 @@ impl<'a> Codegen<'a> {
             let scope = ctx.enter_scope();
             ctx.begin_block()?;
 
-            if sig.ret_kind == ReturnKind::Iterator {
-                writeln!(
-                    ctx.out,
-                    "{}let mut returns = ConstructorVec::new();",
-                    &ctx.indent
-                )?;
-            }
-
             self.emit_block(&mut ctx, &root, sig.ret_kind)?;
 
             match (sig.ret_kind, root.steps.last()) {
                     (ReturnKind::Iterator, _) => {
                         writeln!(
                             ctx.out,
-                            "{}return ContextIterWrapper::from(returns.into_iter());",
+                            "{}return;",
                             &ctx.indent
                         )?;
                     }
@@ -436,7 +501,47 @@ impl<'a> Codegen<'a> {
 
         for case in block.steps.iter() {
             for &expr in case.bind_order.iter() {
-                write!(ctx.out, "{}let v{} = ", &ctx.indent, expr.index())?;
+                let iter_return = match &ctx.ruleset.bindings[expr.index()] {
+                    Binding::Extractor { term, .. } => {
+                        let termdata = &self.termenv.terms[term.index()];
+                        let sig = termdata.extractor_sig(self.typeenv).unwrap();
+                        if sig.ret_kind == ReturnKind::Iterator {
+                            if termdata.has_external_extractor() {
+                                Some(format!("C::{}_returns", sig.func_name))
+                            } else {
+                                Some(format!("ContextIterWrapper::<ConstructorVec<_>, _>"))
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    Binding::Constructor { term, .. } => {
+                        let termdata = &self.termenv.terms[term.index()];
+                        let sig = termdata.constructor_sig(self.typeenv).unwrap();
+                        if sig.ret_kind == ReturnKind::Iterator {
+                            if termdata.has_external_constructor() {
+                                Some(format!("C::{}_returns", sig.func_name))
+                            } else {
+                                Some(format!("ContextIterWrapper::<ConstructorVec<_>, _>"))
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                if let Some(ty) = iter_return {
+                    writeln!(
+                        ctx.out,
+                        "{}let mut v{} = {}::default();",
+                        &ctx.indent,
+                        expr.index(),
+                        ty
+                    )?;
+                    write!(ctx.out, "{}", &ctx.indent)?;
+                } else {
+                    write!(ctx.out, "{}let v{} = ", &ctx.indent, expr.index())?;
+                }
                 self.emit_expr(ctx, expr)?;
                 writeln!(ctx.out, ";")?;
                 ctx.is_bound.insert(expr);
@@ -503,9 +608,15 @@ impl<'a> Codegen<'a> {
                         _ => unreachable!("Loop from a non-Iterator"),
                     };
                     let scope = ctx.enter_scope();
-                    write!(ctx.out, "{}let mut v{} = ", &ctx.indent, source.index())?;
-                    self.emit_expr(ctx, *source)?;
-                    writeln!(ctx.out, ";")?;
+
+                    writeln!(
+                        ctx.out,
+                        "{}let mut v{} = v{}.into_context_iter();",
+                        &ctx.indent,
+                        source.index(),
+                        source.index(),
+                    )?;
+
                     write!(
                         ctx.out,
                         "{}while let Some(v{}) = v{}.next(ctx)",
@@ -530,7 +641,7 @@ impl<'a> Codegen<'a> {
                     match ret_kind {
                         ReturnKind::Plain => write!(ctx.out, "return ")?,
                         ReturnKind::Option => write!(ctx.out, "return Some(")?,
-                        ReturnKind::Iterator => write!(ctx.out, "returns.push(")?,
+                        ReturnKind::Iterator => write!(ctx.out, "returns.extend(Some(")?,
                     }
                     self.emit_expr(ctx, result)?;
                     if ctx.is_ref.contains(&result) {
@@ -538,7 +649,15 @@ impl<'a> Codegen<'a> {
                     }
                     match ret_kind {
                         ReturnKind::Plain => writeln!(ctx.out, ";")?,
-                        ReturnKind::Option | ReturnKind::Iterator => writeln!(ctx.out, ");")?,
+                        ReturnKind::Option => writeln!(ctx.out, ");")?,
+                        ReturnKind::Iterator => {
+                            writeln!(ctx.out, "));")?;
+                            writeln!(
+                                ctx.out,
+                                "{}if returns.len() >= MAX_ISLE_RETURNS {{ return; }}",
+                                ctx.indent
+                            )?;
+                        }
                     }
                 }
             }
@@ -556,6 +675,7 @@ impl<'a> Codegen<'a> {
         let mut call =
             |term: TermId,
              parameters: &[BindingId],
+
              get_sig: fn(&Term, &TypeEnv) -> Option<ExternalSig>| {
                 let termdata = &self.termenv.terms[term.index()];
                 let sig = get_sig(termdata, self.typeenv).unwrap();
@@ -579,6 +699,9 @@ impl<'a> Codegen<'a> {
                     write!(ctx.out, "{}", before)?;
                     self.emit_expr(ctx, parameter)?;
                     write!(ctx.out, "{}", after)?;
+                }
+                if let ReturnKind::Iterator = sig.ret_kind {
+                    write!(ctx.out, ", &mut v{}", result.index())?;
                 }
                 write!(ctx.out, ")")
             };

@@ -9,8 +9,8 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    types::*, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef, Function,
-    LibCall, Opcode, SigRef, Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
+    types::*, AliasRegion, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef,
+    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -523,8 +523,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 rets,
                 (Opcode::UmulOverflow | Opcode::SmulOverflow, &[I128, I128]),
                 (Opcode::Imul, &[I8X16, I8X16]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5468
-                (Opcode::Smulhi | Opcode::Umulhi, &[I8, I8]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4756
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5474
@@ -918,7 +916,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::GetFramePointer),
                 (Opcode::GetStackPointer),
                 (Opcode::GetReturnAddress),
-                (Opcode::TableAddr),
                 (Opcode::Null),
                 (Opcode::X86Blendv),
                 (Opcode::IcmpImm),
@@ -1093,7 +1090,6 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::StackStore => insert_stack_store,
         InstructionFormat::Store => insert_load_store,
         InstructionFormat::StoreNoOffset => insert_load_store,
-        InstructionFormat::TableAddr => todo!(),
         InstructionFormat::Ternary => insert_opcode,
         InstructionFormat::TernaryImm8 => insert_ins_ext_lane,
         InstructionFormat::Trap => todo!(),
@@ -1180,12 +1176,12 @@ impl AACategory {
     }
 
     pub fn update_memflags(&self, flags: &mut MemFlags) {
-        match self {
-            AACategory::Other => {}
-            AACategory::Heap => flags.set_heap(),
-            AACategory::Table => flags.set_table(),
-            AACategory::VmCtx => flags.set_vmctx(),
-        }
+        flags.set_alias_region(match self {
+            AACategory::Other => None,
+            AACategory::Heap => Some(AliasRegion::Heap),
+            AACategory::Table => Some(AliasRegion::Table),
+            AACategory::VmCtx => Some(AliasRegion::Vmctx),
+        })
     }
 }
 
@@ -1401,7 +1397,7 @@ where
             DataValue::I8(i) => builder.ins().iconst(ty, i as u8 as i64),
             DataValue::I16(i) => builder.ins().iconst(ty, i as u16 as i64),
             DataValue::I32(i) => builder.ins().iconst(ty, i as u32 as i64),
-            DataValue::I64(i) => builder.ins().iconst(ty, i as i64),
+            DataValue::I64(i) => builder.ins().iconst(ty, i),
             DataValue::I128(i) => {
                 let hi = builder.ins().iconst(I64, (i >> 64) as i64);
                 let lo = builder.ins().iconst(I64, i as i64);

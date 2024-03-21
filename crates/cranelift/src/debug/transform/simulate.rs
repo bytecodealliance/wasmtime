@@ -7,12 +7,13 @@ use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_wasm::get_vmctx_value_label;
 use gimli::write;
-use gimli::{self, LineEncoding};
+use gimli::LineEncoding;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime_environ::{
-    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo, WasmType,
+    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo,
+    WasmValType,
 };
 
 const PRODUCER_NAME: &str = "wasmtime";
@@ -70,7 +71,7 @@ fn generate_line_info(
             out_program.row().address_offset = address_offset;
             out_program.row().op_index = 0;
             out_program.row().file = file_index;
-            let wasm_offset = w.code_section_offset + addr_map.wasm as u64;
+            let wasm_offset = w.code_section_offset + addr_map.wasm;
             out_program.row().line = wasm_offset;
             out_program.row().column = 0;
             out_program.row().discriminator = 1;
@@ -173,10 +174,10 @@ fn resolve_var_type(
         (func_meta.locals[j].1, false)
     };
     let type_die_id = match ty {
-        WasmType::I32 => wasm_types.i32,
-        WasmType::I64 => wasm_types.i64,
-        WasmType::F32 => wasm_types.f32,
-        WasmType::F64 => wasm_types.f64,
+        WasmValType::I32 => wasm_types.i32,
+        WasmValType::I64 => wasm_types.i64,
+        WasmValType::F32 => wasm_types.f32,
+        WasmValType::F64 => wasm_types.f64,
         _ => {
             // Ignore unsupported types.
             return None;
@@ -363,7 +364,7 @@ pub fn generate_simulated_dwarf(
         );
         die.set(
             gimli::DW_AT_high_pc,
-            write::AttributeValue::Udata((end - start) as u64),
+            write::AttributeValue::Udata(end - start),
         );
 
         let func_index = imported_func_count + (index as u32);
@@ -383,7 +384,7 @@ pub fn generate_simulated_dwarf(
         );
 
         let f_start = map.addresses[0].wasm;
-        let wasm_offset = di.wasm_file.code_section_offset + f_start as u64;
+        let wasm_offset = di.wasm_file.code_section_offset + f_start;
         die.set(
             gimli::DW_AT_decl_file,
             write::AttributeValue::Udata(wasm_offset),

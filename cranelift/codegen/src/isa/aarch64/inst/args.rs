@@ -1,11 +1,7 @@
 //! AArch64 ISA definitions: instruction arguments.
 
 use crate::ir::types::*;
-use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
-use crate::machinst::{ty_bits, MachLabel, PrettyPrint, Reg};
-use core::convert::Into;
-use std::string::String;
 
 //=============================================================================
 // Instruction sub-components: shift and extend descriptors

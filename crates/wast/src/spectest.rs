@@ -1,25 +1,53 @@
-use anyhow::Result;
 use wasmtime::*;
+
+/// Configuration of how spectest primitives work.
+pub struct SpectestConfig {
+    /// Whether or not to have a `shared_memory` definition.
+    pub use_shared_memory: bool,
+    /// Whether or not spectest functions that print things actually print things.
+    pub suppress_prints: bool,
+}
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
 pub fn link_spectest<T>(
     linker: &mut Linker<T>,
     store: &mut Store<T>,
-    use_shared_memory: bool,
+    config: &SpectestConfig,
 ) -> Result<()> {
+    let suppress = config.suppress_prints;
     linker.func_wrap("spectest", "print", || {})?;
-    linker.func_wrap("spectest", "print_i32", |val: i32| println!("{}: i32", val))?;
-    linker.func_wrap("spectest", "print_i64", |val: i64| println!("{}: i64", val))?;
-    linker.func_wrap("spectest", "print_f32", |val: f32| println!("{}: f32", val))?;
-    linker.func_wrap("spectest", "print_f64", |val: f64| println!("{}: f64", val))?;
-    linker.func_wrap("spectest", "print_i32_f32", |i: i32, f: f32| {
-        println!("{}: i32", i);
-        println!("{}: f32", f);
+    linker.func_wrap("spectest", "print_i32", move |val: i32| {
+        if !suppress {
+            println!("{}: i32", val)
+        }
     })?;
-    linker.func_wrap("spectest", "print_f64_f64", |f1: f64, f2: f64| {
-        println!("{}: f64", f1);
-        println!("{}: f64", f2);
+    linker.func_wrap("spectest", "print_i64", move |val: i64| {
+        if !suppress {
+            println!("{}: i64", val)
+        }
+    })?;
+    linker.func_wrap("spectest", "print_f32", move |val: f32| {
+        if !suppress {
+            println!("{}: f32", val)
+        }
+    })?;
+    linker.func_wrap("spectest", "print_f64", move |val: f64| {
+        if !suppress {
+            println!("{}: f64", val)
+        }
+    })?;
+    linker.func_wrap("spectest", "print_i32_f32", move |i: i32, f: f32| {
+        if !suppress {
+            println!("{}: i32", i);
+            println!("{}: f32", f);
+        }
+    })?;
+    linker.func_wrap("spectest", "print_f64_f64", move |f1: f64, f2: f64| {
+        if !suppress {
+            println!("{}: f64", f1);
+            println!("{}: f64", f2);
+        }
     })?;
 
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
@@ -31,22 +59,22 @@ pub fn link_spectest<T>(
     linker.define(&mut *store, "spectest", "global_i64", g)?;
 
     let ty = GlobalType::new(ValType::F32, Mutability::Const);
-    let g = Global::new(&mut *store, ty, Val::F32(0x4426_8000))?;
+    let g = Global::new(&mut *store, ty, Val::F32(0x4426_a666))?;
     linker.define(&mut *store, "spectest", "global_f32", g)?;
 
     let ty = GlobalType::new(ValType::F64, Mutability::Const);
-    let g = Global::new(&mut *store, ty, Val::F64(0x4084_d000_0000_0000))?;
+    let g = Global::new(&mut *store, ty, Val::F64(0x4084_d4cc_cccc_cccd))?;
     linker.define(&mut *store, "spectest", "global_f64", g)?;
 
-    let ty = TableType::new(ValType::FuncRef, 10, Some(20));
-    let table = Table::new(&mut *store, ty, Val::FuncRef(None))?;
+    let ty = TableType::new(RefType::FUNCREF, 10, Some(20));
+    let table = Table::new(&mut *store, ty, Ref::Func(None))?;
     linker.define(&mut *store, "spectest", "table", table)?;
 
     let ty = MemoryType::new(1, Some(2));
     let memory = Memory::new(&mut *store, ty)?;
     linker.define(&mut *store, "spectest", "memory", memory)?;
 
-    if use_shared_memory {
+    if config.use_shared_memory {
         let ty = MemoryType::shared(1, 1);
         let memory = Memory::new(&mut *store, ty)?;
         linker.define(&mut *store, "spectest", "shared_memory", memory)?;
@@ -59,7 +87,7 @@ pub fn link_spectest<T>(
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
     use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
     use std::sync::Arc;
-    use wasmtime::component::Resource;
+    use wasmtime::component::{Resource, ResourceType};
 
     let engine = linker.engine().clone();
     linker
@@ -92,7 +120,7 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
 
     let state = Arc::new(ResourceState::default());
 
-    i.resource::<Resource1>("resource1", {
+    i.resource("resource1", ResourceType::host::<Resource1>(), {
         let state = state.clone();
         move |_, rep| {
             state.drops.fetch_add(1, SeqCst);
@@ -101,13 +129,21 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
             Ok(())
         }
     })?;
-    i.resource::<Resource2>("resource2", |_, _| Ok(()))?;
+    i.resource(
+        "resource2",
+        ResourceType::host::<Resource2>(),
+        |_, _| Ok(()),
+    )?;
     // Currently the embedder API requires redefining the resource destructor
     // here despite this being the same type as before, and fixing that is left
     // for a future refactoring.
-    i.resource::<Resource1>("resource1-again", |_, _| {
-        panic!("shouldn't be destroyed");
-    })?;
+    i.resource(
+        "resource1-again",
+        ResourceType::host::<Resource1>(),
+        |_, _| {
+            panic!("shouldn't be destroyed");
+        },
+    )?;
 
     i.func_wrap("[constructor]resource1", |_cx, (rep,): (u32,)| {
         Ok((Resource::<Resource1>::new_own(rep),))

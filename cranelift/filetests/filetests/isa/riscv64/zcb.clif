@@ -134,9 +134,9 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x14, 0x81
+;   .byte 0x14, 0x81 ; trap: heap_oob
 ;   c.mv a4, a3
-;   .byte 0x6c, 0x81
+;   .byte 0x6c, 0x81 ; trap: heap_oob
 ;   c.mv a0, a4
 ;   c.jr ra
 
@@ -157,9 +157,9 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x14, 0x85
+;   .byte 0x14, 0x85 ; trap: heap_oob
 ;   c.mv a4, a3
-;   .byte 0x2c, 0x85
+;   .byte 0x2c, 0x85 ; trap: heap_oob
 ;   c.mv a0, a4
 ;   c.jr ra
 
@@ -180,12 +180,11 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x54, 0x85
+;   .byte 0x54, 0x85 ; trap: heap_oob
 ;   c.mv a4, a3
-;   .byte 0x6c, 0x85
+;   .byte 0x6c, 0x85 ; trap: heap_oob
 ;   c.mv a0, a4
 ;   c.jr ra
-
 
 function %c_sb(i64, i8) {
 block0(v0: i64, v1: i8):
@@ -208,11 +207,11 @@ block0(v0: i64, v1: i8):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x0c, 0x89
-;   .byte 0x4c, 0x89
-;   .byte 0x2c, 0x89
-;   .byte 0x6c, 0x89
-;   sb a1, 4(a0)
+;   .byte 0x0c, 0x89 ; trap: heap_oob
+;   .byte 0x4c, 0x89 ; trap: heap_oob
+;   .byte 0x2c, 0x89 ; trap: heap_oob
+;   .byte 0x6c, 0x89 ; trap: heap_oob
+;   sb a1, 4(a0) ; trap: heap_oob
 ;   c.jr ra
 
 function %c_sh(i64, i16) {
@@ -232,8 +231,8 @@ block0(v0: i64, v1: i16):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x0c, 0x8d
-;   .byte 0x2c, 0x8d
-;   sh a1, 3(a0)
+;   .byte 0x0c, 0x8d ; trap: heap_oob
+;   .byte 0x2c, 0x8d ; trap: heap_oob
+;   sh a1, 3(a0) ; trap: heap_oob
 ;   c.jr ra
 

@@ -12,27 +12,26 @@ use crate::isa::s390x::inst::{
     WritableRegPair,
 };
 use crate::isa::s390x::S390xBackend;
+use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
 use crate::machinst::{MachLabel, Reg};
 use crate::{
     ir::{
-        condcodes::*, immediates::*, types::*, ArgumentPurpose, AtomicRmwOp, BlockCall, Endianness,
-        Inst, InstructionData, KnownSymbol, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
+        condcodes::*, immediates::*, types::*, ArgumentExtension, ArgumentPurpose, AtomicRmwOp,
+        BlockCall, Endianness, Inst, InstructionData, KnownSymbol, LibCall, MemFlags, Opcode,
+        TrapCode, Value, ValueList,
     },
-    isa::unwind::UnwindInst,
     isa::CallConv,
     machinst::abi::ABIMachineSpec,
     machinst::{
-        ArgPair, CallArgList, CallArgPair, CallRetList, CallRetPair, InstOutput, Lower, MachInst,
+        ArgPair, CallArgList, CallArgPair, CallRetList, CallRetPair, InstOutput, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };
-use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
 use smallvec::smallvec;
 use std::boxed::Box;
 use std::cell::Cell;
-use std::convert::TryFrom;
 use std::vec::Vec;
 
 /// Information describing a library call to be emitted.

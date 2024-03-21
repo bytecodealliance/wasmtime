@@ -20,7 +20,7 @@ pub(crate) struct CMemoryType {
 impl wasm_memorytype_t {
     pub(crate) fn new(ty: MemoryType) -> wasm_memorytype_t {
         wasm_memorytype_t {
-            ext: wasm_externtype_t::new(ty.into()),
+            ext: wasm_externtype_t::from_extern_type(ty.into()),
         }
     }
 
@@ -106,6 +106,11 @@ pub extern "C" fn wasmtime_memorytype_maximum(mt: &wasm_memorytype_t, out: &mut 
 #[no_mangle]
 pub extern "C" fn wasmtime_memorytype_is64(mt: &wasm_memorytype_t) -> bool {
     mt.ty().ty.is_64()
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_memorytype_isshared(mt: &wasm_memorytype_t) -> bool {
+    mt.ty().ty.is_shared()
 }
 
 #[no_mangle]

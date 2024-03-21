@@ -1,0 +1,15 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function u0:11(i8) -> i8 system_v {
+block0(v0: i8):
+    v1 = uextend.i64 v0
+    v2 = imul_imm v1, 256
+    v3 = ireduce.i8 v2
+    return v3
+
+    ;; This function should get optimized down to simply returning zero:
+
+    ; check: return v10  ; v10 = 0
+}

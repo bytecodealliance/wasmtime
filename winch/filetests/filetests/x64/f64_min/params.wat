@@ -7,23 +7,31 @@
         (f64.min)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec18             	sub	rsp, 0x18
-;;    8:	 f20f11442410         	movsd	qword ptr [rsp + 0x10], xmm0
-;;    e:	 f20f114c2408         	movsd	qword ptr [rsp + 8], xmm1
-;;   14:	 4c893424             	mov	qword ptr [rsp], r14
-;;   18:	 f20f10442408         	movsd	xmm0, qword ptr [rsp + 8]
-;;   1e:	 f20f104c2410         	movsd	xmm1, qword ptr [rsp + 0x10]
-;;   24:	 660f2ec8             	ucomisd	xmm1, xmm0
-;;   28:	 0f8519000000         	jne	0x47
-;;   2e:	 0f8a09000000         	jp	0x3d
-;;   34:	 660f56c8             	orpd	xmm1, xmm0
-;;   38:	 e90e000000           	jmp	0x4b
-;;   3d:	 f20f58c8             	addsd	xmm1, xmm0
-;;   41:	 0f8a04000000         	jp	0x4b
-;;   47:	 f20f5dc8             	minsd	xmm1, xmm0
-;;   4b:	 660f28c1             	movapd	xmm0, xmm1
-;;   4f:	 4883c418             	add	rsp, 0x18
-;;   53:	 5d                   	pop	rbp
-;;   54:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c320000000       	add	r11, 0x20
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8758000000         	ja	0x73
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec20             	sub	rsp, 0x20
+;;      	 48897c2418           	mov	qword ptr [rsp + 0x18], rdi
+;;      	 4889742410           	mov	qword ptr [rsp + 0x10], rsi
+;;      	 f20f11442408         	movsd	qword ptr [rsp + 8], xmm0
+;;      	 f20f110c24           	movsd	qword ptr [rsp], xmm1
+;;      	 f20f100424           	movsd	xmm0, qword ptr [rsp]
+;;      	 f20f104c2408         	movsd	xmm1, qword ptr [rsp + 8]
+;;      	 660f2ec8             	ucomisd	xmm1, xmm0
+;;      	 0f8519000000         	jne	0x65
+;;      	 0f8a09000000         	jp	0x5b
+;;   52:	 660f56c8             	orpd	xmm1, xmm0
+;;      	 e90e000000           	jmp	0x69
+;;   5b:	 f20f58c8             	addsd	xmm1, xmm0
+;;      	 0f8a04000000         	jp	0x69
+;;   65:	 f20f5dc8             	minsd	xmm1, xmm0
+;;      	 660f28c1             	movapd	xmm0, xmm1
+;;      	 4883c420             	add	rsp, 0x20
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   73:	 0f0b                 	ud2	

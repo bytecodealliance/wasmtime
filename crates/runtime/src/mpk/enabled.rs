@@ -50,9 +50,18 @@ static KEYS: OnceLock<Vec<ProtectionKey>> = OnceLock::new();
 /// Any accesses to pages marked by another key will result in a `SIGSEGV`
 /// fault.
 pub fn allow(mask: ProtectionMask) {
-    let previous = pkru::read();
+    let previous = if log::log_enabled!(log::Level::Trace) {
+        pkru::read()
+    } else {
+        0
+    };
     pkru::write(mask.0);
     log::trace!("PKRU change: {:#034b} => {:#034b}", previous, pkru::read());
+}
+
+/// Retrieve the current protection mask.
+pub fn current_mask() -> ProtectionMask {
+    ProtectionMask(pkru::read())
 }
 
 /// An MPK protection key.
@@ -152,6 +161,9 @@ mod tests {
     #[test]
     fn check_is_supported() {
         println!("is pku supported = {}", is_supported());
+        if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+            assert!(is_supported());
+        }
     }
 
     #[test]

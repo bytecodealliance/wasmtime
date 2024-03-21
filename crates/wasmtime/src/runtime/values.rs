@@ -1,0 +1,773 @@
+use crate::gc::ExternRef;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::{AsContext, AsContextMut, Func, HeapType, RefType, Rooted, ValType, V128};
+use anyhow::{bail, Context, Result};
+use std::ptr;
+use wasmtime_runtime::TableElement;
+
+pub use wasmtime_runtime::ValRaw;
+
+/// Possible runtime values that a WebAssembly module can either consume or
+/// produce.
+///
+/// Note that we inline the `enum Ref { ... }` variants into `enum Val { ... }`
+/// here as a size optimization.
+#[derive(Debug, Clone)]
+pub enum Val {
+    // NB: the ordering here is intended to match the ordering in
+    // `ValType` to improve codegen when learning the type of a value.
+    //
+    /// A 32-bit integer.
+    I32(i32),
+
+    /// A 64-bit integer.
+    I64(i64),
+
+    /// A 32-bit float.
+    ///
+    /// Note that the raw bits of the float are stored here, and you can use
+    /// `f32::from_bits` to create an `f32` value.
+    F32(u32),
+
+    /// A 64-bit float.
+    ///
+    /// Note that the raw bits of the float are stored here, and you can use
+    /// `f64::from_bits` to create an `f64` value.
+    F64(u64),
+
+    /// A 128-bit number.
+    V128(V128),
+
+    /// A function reference.
+    FuncRef(Option<Func>),
+
+    /// An external reference.
+    ExternRef(Option<Rooted<ExternRef>>),
+}
+
+macro_rules! accessors {
+    ($bind:ident $(($variant:ident($ty:ty) $get:ident $unwrap:ident $cvt:expr))*) => ($(
+        /// Attempt to access the underlying value of this `Val`, returning
+        /// `None` if it is not the correct type.
+        #[inline]
+        pub fn $get(&self) -> Option<$ty> {
+            if let Val::$variant($bind) = self {
+                Some($cvt)
+            } else {
+                None
+            }
+        }
+
+        /// Returns the underlying value of this `Val`, panicking if it's the
+        /// wrong type.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `self` is not of the right type.
+        #[inline]
+        pub fn $unwrap(&self) -> $ty {
+            self.$get().expect(concat!("expected ", stringify!($ty)))
+        }
+    )*)
+}
+
+impl Val {
+    /// Returns the null function reference value.
+    ///
+    /// The return value has type `(ref null nofunc)` aka `nullfuncref` and is a
+    /// subtype of all function references.
+    #[inline]
+    pub const fn null_func_ref() -> Val {
+        Val::FuncRef(None)
+    }
+
+    /// Returns the null function reference value.
+    ///
+    /// The return value has type `(ref null extern)` aka `nullexternref` and is
+    /// a subtype of all external references.
+    #[inline]
+    pub const fn null_extern_ref() -> Val {
+        Val::ExternRef(None)
+    }
+
+    /// Returns the corresponding [`ValType`] for this `Val`.
+    #[inline]
+    pub fn ty(&self, store: impl AsContext) -> ValType {
+        self.load_ty(&store.as_context().0)
+    }
+
+    #[inline]
+    pub(crate) fn load_ty(&self, store: &StoreOpaque) -> ValType {
+        match self {
+            Val::I32(_) => ValType::I32,
+            Val::I64(_) => ValType::I64,
+            Val::F32(_) => ValType::F32,
+            Val::F64(_) => ValType::F64,
+            Val::V128(_) => ValType::V128,
+            Val::ExternRef(_) => ValType::EXTERNREF,
+            Val::FuncRef(None) => ValType::NULLFUNCREF,
+            Val::FuncRef(Some(f)) => {
+                ValType::Ref(RefType::new(false, HeapType::Concrete(f.load_ty(store))))
+            }
+        }
+    }
+
+    /// Does this value match the given type?
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is not associated with the given store.
+    pub fn matches_ty(&self, store: impl AsContext, ty: &ValType) -> bool {
+        self._matches_ty(&store.as_context().0, ty)
+    }
+
+    pub(crate) fn _matches_ty(&self, store: &StoreOpaque, ty: &ValType) -> bool {
+        assert!(self.comes_from_same_store(store));
+        assert!(ty.comes_from_same_engine(store.engine()));
+        match (self, ty) {
+            (Val::I32(_), ValType::I32)
+            | (Val::I64(_), ValType::I64)
+            | (Val::F32(_), ValType::F32)
+            | (Val::F64(_), ValType::F64)
+            | (Val::V128(_), ValType::V128) => true,
+
+            (Val::FuncRef(f), ValType::Ref(ref_ty)) => {
+                Ref::from(f.clone())._matches_ty(store, ref_ty)
+            }
+            (Val::ExternRef(e), ValType::Ref(ref_ty)) => {
+                Ref::from(e.clone())._matches_ty(store, ref_ty)
+            }
+
+            (Val::I32(_), _)
+            | (Val::I64(_), _)
+            | (Val::F32(_), _)
+            | (Val::F64(_), _)
+            | (Val::V128(_), _)
+            | (Val::FuncRef(_), _)
+            | (Val::ExternRef(_), _) => false,
+        }
+    }
+
+    pub(crate) fn ensure_matches_ty(&self, store: &StoreOpaque, ty: &ValType) -> Result<()> {
+        if !self.comes_from_same_store(store) {
+            bail!("value used with wrong store")
+        }
+        if !ty.comes_from_same_engine(store.engine()) {
+            bail!("type used with wrong engine")
+        }
+        if self._matches_ty(store, ty) {
+            Ok(())
+        } else {
+            let actual_ty = self.load_ty(store);
+            bail!("type mismatch: expected {ty}, found {actual_ty}")
+        }
+    }
+
+    /// Convenience method to convert this [`Val`] into a [`ValRaw`].
+    ///
+    /// Returns an error if this value is a GC reference and the GC reference
+    /// has been unrooted.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe for the reasons that [`ExternRef::to_raw`] and
+    /// [`Func::to_raw`] are unsafe.
+    pub unsafe fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
+        match self {
+            Val::I32(i) => Ok(ValRaw::i32(*i)),
+            Val::I64(i) => Ok(ValRaw::i64(*i)),
+            Val::F32(u) => Ok(ValRaw::f32(*u)),
+            Val::F64(u) => Ok(ValRaw::f64(*u)),
+            Val::V128(b) => Ok(ValRaw::v128(b.as_u128())),
+            Val::ExternRef(e) => {
+                let externref = match e {
+                    None => ptr::null_mut(),
+                    Some(e) => e.to_raw(store)?,
+                };
+                Ok(ValRaw::externref(externref))
+            }
+            Val::FuncRef(f) => {
+                let funcref = match f {
+                    Some(f) => f.to_raw(store),
+                    None => ptr::null_mut(),
+                };
+                Ok(ValRaw::funcref(funcref))
+            }
+        }
+    }
+
+    /// Convenience method to convert a [`ValRaw`] into a [`Val`].
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe for the reasons that [`ExternRef::from_raw`] and
+    /// [`Func::from_raw`] are unsafe. Additionaly there's no guarantee
+    /// otherwise that `raw` should have the type `ty` specified.
+    pub unsafe fn from_raw(store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
+        match ty {
+            ValType::I32 => Val::I32(raw.get_i32()),
+            ValType::I64 => Val::I64(raw.get_i64()),
+            ValType::F32 => Val::F32(raw.get_f32()),
+            ValType::F64 => Val::F64(raw.get_f64()),
+            ValType::V128 => Val::V128(raw.get_v128().into()),
+            ValType::Ref(ref_ty) => {
+                let ref_ = match ref_ty.heap_type() {
+                    HeapType::Func | HeapType::Concrete(_) => {
+                        Func::from_raw(store, raw.get_funcref()).into()
+                    }
+                    HeapType::NoFunc => Ref::Func(None),
+                    HeapType::Extern => ExternRef::from_raw(store, raw.get_externref()).into(),
+                };
+                assert!(
+                    ref_ty.is_nullable() || !ref_.is_null(),
+                    "if the type is not nullable, we shouldn't get null"
+                );
+                ref_.into()
+            }
+        }
+    }
+
+    accessors! {
+        e
+        (I32(i32) i32 unwrap_i32 *e)
+        (I64(i64) i64 unwrap_i64 *e)
+        (F32(f32) f32 unwrap_f32 f32::from_bits(*e))
+        (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
+        (FuncRef(Option<&Func>) func_ref unwrap_func_ref e.as_ref())
+        (ExternRef(Option<&Rooted<ExternRef>>) extern_ref unwrap_extern_ref e.as_ref())
+        (V128(V128) v128 unwrap_v128 *e)
+    }
+
+    /// Get this value's underlying reference, if any.
+    #[inline]
+    pub fn ref_(self) -> Option<Ref> {
+        match self {
+            Val::FuncRef(f) => Some(Ref::Func(f)),
+            Val::ExternRef(e) => Some(Ref::Extern(e)),
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => None,
+        }
+    }
+
+    /// Attempt to access the underlying `externref` value of this `Val`.
+    ///
+    /// If this is not an `externref`, then `None` is returned.
+    ///
+    /// If this is a null `externref`, then `Some(None)` is returned.
+    ///
+    /// If this is a non-null `externref`, then `Some(Some(..))` is returned.
+    #[inline]
+    pub fn externref(&self) -> Option<Option<&Rooted<ExternRef>>> {
+        match self {
+            Val::ExternRef(None) => Some(None),
+            Val::ExternRef(Some(e)) => Some(Some(e)),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying `externref` value of this `Val`, panicking if it's the
+    /// wrong type.
+    ///
+    /// If this is a null `externref`, then `None` is returned.
+    ///
+    /// If this is a non-null `externref`, then `Some(..)` is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not a (nullable) `externref`.
+    #[inline]
+    pub fn unwrap_externref(&self) -> Option<&Rooted<ExternRef>> {
+        self.externref().expect("expected externref")
+    }
+
+    /// Attempt to access the underlying `funcref` value of this `Val`.
+    ///
+    /// If this is not an `funcref`, then `None` is returned.
+    ///
+    /// If this is a null `funcref`, then `Some(None)` is returned.
+    ///
+    /// If this is a non-null `funcref`, then `Some(Some(..))` is returned.
+    #[inline]
+    pub fn funcref(&self) -> Option<Option<&Func>> {
+        match self {
+            Val::FuncRef(None) => Some(None),
+            Val::FuncRef(Some(f)) => Some(Some(f)),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying `funcref` value of this `Val`, panicking if it's the
+    /// wrong type.
+    ///
+    /// If this is a null `funcref`, then `None` is returned.
+    ///
+    /// If this is a non-null `funcref`, then `Some(..)` is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not a (nullable) `funcref`.
+    #[inline]
+    pub fn unwrap_funcref(&self) -> Option<&Func> {
+        self.funcref().expect("expected funcref")
+    }
+
+    #[inline]
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
+        match self {
+            Val::FuncRef(Some(f)) => f.comes_from_same_store(store),
+            Val::FuncRef(None) => true,
+
+            Val::ExternRef(Some(x)) => x.comes_from_same_store(store),
+            Val::ExternRef(None) => true,
+
+            // Integers, floats, and vectors have no association with any
+            // particular store, so they're always considered as "yes I came
+            // from that store",
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
+        }
+    }
+}
+
+impl From<i32> for Val {
+    #[inline]
+    fn from(val: i32) -> Val {
+        Val::I32(val)
+    }
+}
+
+impl From<i64> for Val {
+    #[inline]
+    fn from(val: i64) -> Val {
+        Val::I64(val)
+    }
+}
+
+impl From<f32> for Val {
+    #[inline]
+    fn from(val: f32) -> Val {
+        Val::F32(val.to_bits())
+    }
+}
+
+impl From<f64> for Val {
+    #[inline]
+    fn from(val: f64) -> Val {
+        Val::F64(val.to_bits())
+    }
+}
+
+impl From<Ref> for Val {
+    #[inline]
+    fn from(val: Ref) -> Val {
+        match val {
+            Ref::Extern(e) => Val::ExternRef(e),
+            Ref::Func(f) => Val::FuncRef(f),
+        }
+    }
+}
+
+impl From<Rooted<ExternRef>> for Val {
+    #[inline]
+    fn from(val: Rooted<ExternRef>) -> Val {
+        Val::ExternRef(Some(val))
+    }
+}
+
+impl From<Option<Rooted<ExternRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Rooted<ExternRef>>) -> Val {
+        Val::ExternRef(val)
+    }
+}
+
+impl From<Func> for Val {
+    #[inline]
+    fn from(val: Func) -> Val {
+        Val::FuncRef(Some(val))
+    }
+}
+
+impl From<Option<Func>> for Val {
+    #[inline]
+    fn from(val: Option<Func>) -> Val {
+        Val::FuncRef(val)
+    }
+}
+
+impl From<u128> for Val {
+    #[inline]
+    fn from(val: u128) -> Val {
+        Val::V128(val.into())
+    }
+}
+
+impl From<V128> for Val {
+    #[inline]
+    fn from(val: V128) -> Val {
+        Val::V128(val)
+    }
+}
+
+/// A reference.
+///
+/// References come in three broad flavors:
+///
+/// 1. Function references. These are references to a function that can be
+///    invoked.
+///
+/// 2. External references. These are references to data that is external
+///    and opaque to the Wasm guest, provided by the host.
+///
+/// 3. Internal references. These are references to allocations inside the
+///    Wasm's heap, such as structs and arrays. These are part of the GC
+///    proposal, and not yet implemented in Wasmtime.
+///
+/// At the Wasm level, there are nullable and non-nullable variants of each type
+/// of reference. Both variants are represented with `Ref` at the Wasmtime API
+/// level. For example, values of both `(ref extern)` and `(ref null extern)`
+/// types will be represented as `Ref::Extern(Option<ExternRef>)` in the
+/// Wasmtime API. Nullable references are represented as `Option<Ref>` where
+/// null references are represented as `None`. Wasm can construct null
+/// references via the `ref.null <heap-type>` instruction.
+///
+/// References are non-forgable: Wasm cannot create invalid references, for
+/// example, by claiming that the integer `0xbad1bad2` is actually a reference.
+#[derive(Debug, Clone)]
+pub enum Ref {
+    // NB: We have a variant for each of the type heirarchies defined in Wasm,
+    // and push the `Option` that provides nullability into each variant. This
+    // allows us to get the most-precise type of any reference value, whether it
+    // is null or not, without any additional metadata.
+    //
+    // Consider if we instead had the nullability inside `Val::Ref` and each of
+    // the `Ref` variants did not have an `Option`:
+    //
+    //     enum Val {
+    //         Ref(Option<Ref>),
+    //         // Etc...
+    //     }
+    //     enum Ref {
+    //         Func(Func),
+    //         External(ExternRef),
+    //         // Etc...
+    //     }
+    //
+    // In this scenario, what type would we return from `Val::ty` for
+    // `Val::Ref(None)`? Because Wasm has multiple separate type hierarchies,
+    // there is no single common bottom type for all the different kinds of
+    // references. So in this scenario, `Val::Ref(None)` doesn't have enough
+    // information to reconstruct the value's type. That's a problem for us
+    // because we need to get a value's type at various times all over the code
+    // base.
+    //
+    /// A first-class reference to a WebAssembly function.
+    ///
+    /// The host, or the Wasm guest, can invoke this function.
+    ///
+    /// The host can create function references via [`Func::new`] or
+    /// [`Func::wrap`].
+    ///
+    /// The Wasm guest can create non-null function references via the
+    /// `ref.func` instruction, or null references via the `ref.null func`
+    /// instruction.
+    Func(Option<Func>),
+
+    /// A reference to an value outside of the Wasm heap.
+    ///
+    /// These references are opaque to the Wasm itself. Wasm can't create
+    /// non-null external references, nor do anything with them accept pass them
+    /// around as function arguments and returns and place them into globals and
+    /// tables.
+    ///
+    /// Wasm can create null external references via the `ref.null extern`
+    /// instruction.
+    Extern(Option<Rooted<ExternRef>>),
+}
+
+impl From<Func> for Ref {
+    #[inline]
+    fn from(f: Func) -> Ref {
+        Ref::Func(Some(f))
+    }
+}
+
+impl From<Option<Func>> for Ref {
+    #[inline]
+    fn from(f: Option<Func>) -> Ref {
+        Ref::Func(f)
+    }
+}
+
+impl From<Rooted<ExternRef>> for Ref {
+    #[inline]
+    fn from(e: Rooted<ExternRef>) -> Ref {
+        Ref::Extern(Some(e))
+    }
+}
+
+impl From<Option<Rooted<ExternRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Rooted<ExternRef>>) -> Ref {
+        Ref::Extern(e)
+    }
+}
+
+impl Ref {
+    /// Is this a null reference?
+    #[inline]
+    pub fn is_null(&self) -> bool {
+        match self {
+            Ref::Extern(None) | Ref::Func(None) => true,
+            Ref::Extern(Some(_)) | Ref::Func(Some(_)) => false,
+        }
+    }
+
+    /// Is this a non-null reference?
+    #[inline]
+    pub fn is_non_null(&self) -> bool {
+        !self.is_null()
+    }
+
+    /// Is this an `extern` reference?
+    #[inline]
+    pub fn is_extern(&self) -> bool {
+        matches!(self, Ref::Extern(_))
+    }
+
+    /// Get the underlying `extern` reference, if any.
+    ///
+    /// Returns `None` if this `Ref` is not an `extern` reference, eg it is a
+    /// `func` reference.
+    ///
+    /// Returns `Some(None)` if this `Ref` is a null `extern` reference.
+    ///
+    /// Returns `Some(Some(_))` if this `Ref` is a non-null `extern` reference.
+    #[inline]
+    pub fn as_extern(&self) -> Option<Option<&Rooted<ExternRef>>> {
+        match self {
+            Ref::Extern(e) => Some(e.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Get the underlying `extern` reference, panicking if this is a different
+    /// kind of reference.
+    ///
+    /// Returns `None` if this `Ref` is a null `extern` reference.
+    ///
+    /// Returns `Some(_)` if this `Ref` is a non-null `extern` reference.
+    #[inline]
+    pub fn unwrap_extern(&self) -> Option<&Rooted<ExternRef>> {
+        self.as_extern()
+            .expect("Ref::unwrap_extern on non-extern reference")
+    }
+
+    /// Is this a `func` reference?
+    #[inline]
+    pub fn is_func(&self) -> bool {
+        matches!(self, Ref::Func(_))
+    }
+
+    /// Get the underlying `func` reference, if any.
+    ///
+    /// Returns `None` if this `Ref` is not an `func` reference, eg it is an
+    /// `extern` reference.
+    ///
+    /// Returns `Some(None)` if this `Ref` is a null `func` reference.
+    ///
+    /// Returns `Some(Some(_))` if this `Ref` is a non-null `func` reference.
+    #[inline]
+    pub fn as_func(&self) -> Option<Option<&Func>> {
+        match self {
+            Ref::Func(f) => Some(f.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Get the underlying `func` reference, panicking if this is a different
+    /// kind of reference.
+    ///
+    /// Returns `None` if this `Ref` is a null `func` reference.
+    ///
+    /// Returns `Some(_)` if this `Ref` is a non-null `func` reference.
+    #[inline]
+    pub fn unwrap_func(&self) -> Option<&Func> {
+        self.as_func()
+            .expect("Ref::unwrap_func on non-func reference")
+    }
+
+    /// Get the type of this reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn ty(&self, store: impl AsContext) -> RefType {
+        self.load_ty(&store.as_context().0)
+    }
+
+    pub(crate) fn load_ty(&self, store: &StoreOpaque) -> RefType {
+        assert!(self.comes_from_same_store(store));
+        RefType::new(
+            false,
+            match self {
+                Ref::Extern(_) => HeapType::Extern,
+
+                // NB: We choose the most-specific heap type we can here and let
+                // subtyping do its thing if callers are matching against a
+                // `HeapType::Func`.
+                Ref::Func(Some(f)) => HeapType::Concrete(f.load_ty(store)),
+                Ref::Func(None) => HeapType::NoFunc,
+            },
+        )
+    }
+
+    /// Does this reference value match the given type?
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is not associated with the given store.
+    pub fn matches_ty(&self, store: impl AsContext, ty: &RefType) -> bool {
+        self._matches_ty(&store.as_context().0, ty)
+    }
+
+    pub(crate) fn _matches_ty(&self, store: &StoreOpaque, ty: &RefType) -> bool {
+        assert!(self.comes_from_same_store(store));
+        assert!(ty.comes_from_same_engine(store.engine()));
+        if self.is_null() && !ty.is_nullable() {
+            return false;
+        }
+        match (self, ty.heap_type()) {
+            (Ref::Extern(_), HeapType::Extern) => true,
+            (Ref::Extern(_), _) => false,
+            (Ref::Func(_), HeapType::Func | HeapType::NoFunc) => true,
+            (Ref::Func(None), HeapType::Concrete(_)) => true,
+            (Ref::Func(Some(f)), HeapType::Concrete(func_ty)) => f._matches_ty(store, func_ty),
+            (Ref::Func(_), _) => false,
+        }
+    }
+
+    pub(crate) fn ensure_matches_ty(&self, store: &StoreOpaque, ty: &RefType) -> Result<()> {
+        if !self.comes_from_same_store(store) {
+            bail!("reference used with wrong store")
+        }
+        if !ty.comes_from_same_engine(store.engine()) {
+            bail!("type used with wrong engine")
+        }
+        if self._matches_ty(store, ty) {
+            Ok(())
+        } else {
+            let actual_ty = self.load_ty(store);
+            bail!("type mismatch: expected {ty}, found {actual_ty}")
+        }
+    }
+
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
+        match self {
+            Ref::Func(Some(f)) => f.comes_from_same_store(store),
+            Ref::Func(None) => true,
+            Ref::Extern(Some(x)) => x.comes_from_same_store(store),
+            Ref::Extern(None) => true,
+        }
+    }
+
+    pub(crate) fn into_table_element(
+        self,
+        store: &mut StoreOpaque,
+        ty: &RefType,
+    ) -> Result<TableElement> {
+        let mut store = AutoAssertNoGc::new(store);
+        self.ensure_matches_ty(&store, &ty)
+            .context("type mismatch: value does not match table element type")?;
+        match (self, ty.heap_type()) {
+            (Ref::Func(None), HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_)) => {
+                assert!(ty.is_nullable());
+                Ok(TableElement::FuncRef(ptr::null_mut()))
+            }
+            (Ref::Func(Some(f)), HeapType::Func | HeapType::Concrete(_)) => {
+                debug_assert!(
+                    f.comes_from_same_store(&store),
+                    "checked in `ensure_matches_ty`"
+                );
+                Ok(TableElement::FuncRef(f.vm_func_ref(&mut store).as_ptr()))
+            }
+
+            (Ref::Extern(e), HeapType::Extern) => match e {
+                None => {
+                    assert!(ty.is_nullable());
+                    Ok(TableElement::ExternRef(None))
+                }
+                Some(e) => Ok(TableElement::ExternRef(Some(
+                    e.try_to_vm_extern_ref(&mut store)?,
+                ))),
+            },
+
+            _ => unreachable!("checked that the value matches the type above"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    #[test]
+    fn size_of_val() {
+        // Try to keep tabs on the size of `Val` and make sure we don't grow its
+        // size.
+        assert_eq!(
+            std::mem::size_of::<Val>(),
+            if cfg!(any(
+                target_arch = "x86_64",
+                target_arch = "aarch64",
+                target_arch = "riscv64"
+            )) {
+                32
+            } else if cfg!(target_arch = "s390x") {
+                24
+            } else {
+                panic!("unsupported architecture")
+            }
+        );
+    }
+
+    #[test]
+    fn size_of_ref() {
+        // Try to keep tabs on the size of `Ref` and make sure we don't grow its
+        // size.
+        assert_eq!(std::mem::size_of::<Ref>(), 24);
+    }
+
+    #[test]
+    #[should_panic]
+    fn val_matches_ty_wrong_engine() {
+        let e1 = Engine::default();
+        let e2 = Engine::default();
+
+        let t1 = FuncType::new(&e1, None, None);
+        let t2 = FuncType::new(&e2, None, None);
+
+        let mut s1 = Store::new(&e1, ());
+        let f = Func::new(&mut s1, t1.clone(), |_caller, _args, _results| Ok(()));
+
+        // Should panic.
+        let _ = Val::FuncRef(Some(f)).matches_ty(
+            &s1,
+            &ValType::Ref(RefType::new(true, HeapType::Concrete(t2))),
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn ref_matches_ty_wrong_engine() {
+        let e1 = Engine::default();
+        let e2 = Engine::default();
+
+        let t1 = FuncType::new(&e1, None, None);
+        let t2 = FuncType::new(&e2, None, None);
+
+        let mut s1 = Store::new(&e1, ());
+        let f = Func::new(&mut s1, t1.clone(), |_caller, _args, _results| Ok(()));
+
+        // Should panic.
+        let _ = Ref::Func(Some(f)).matches_ty(&s1, &RefType::new(true, HeapType::Concrete(t2)));
+    }
+}

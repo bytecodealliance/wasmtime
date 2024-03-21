@@ -3,14 +3,12 @@
 use super::*;
 use crate::ir::condcodes::CondCode;
 
-use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
-
 use crate::isa::riscv64::lower::isle::generated_code::{
-    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
 };
 use crate::machinst::isle::WritableReg;
 
-use std::fmt::{Display, Formatter, Result};
+use std::fmt::Result;
 
 /// A macro for defining a newtype of `Reg` that enforces some invariant about
 /// the wrapped `Reg` (such as that it is of a particular register class).

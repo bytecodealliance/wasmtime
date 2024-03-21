@@ -2,16 +2,16 @@ use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
 use wasmtime::{Linker, Module};
-use wasmtime_wasi::preview2::preview1::add_to_linker_async;
+use wasmtime_wasi::preview1::add_to_linker_async;
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
     let mut config = Config::new();
-    config.async_support(true).wasm_component_model(true);
+    config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker)?;
+    add_to_linker_async(&mut linker, |t| t)?;
 
     let module = Module::from_file(&engine, path)?;
     let (mut store, _td) = store(&engine, name, inherit_stdio)?;
@@ -24,8 +24,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 foreach_preview1!(assert_test_exists);
 
 // Below here is mechanical: there should be one test for every binary in
-// wasi-tests. The only differences should be should_panic annotations for
-// tests which fail.
+// wasi-tests.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_big_random_buf() {
     run(PREVIEW1_BIG_RANDOM_BUF, false).await.unwrap()
@@ -95,9 +94,8 @@ async fn preview1_file_unbuffered_write() {
     run(PREVIEW1_FILE_UNBUFFERED_WRITE, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)]
 async fn preview1_interesting_paths() {
-    run(PREVIEW1_INTERESTING_PATHS, false).await.unwrap()
+    run(PREVIEW1_INTERESTING_PATHS, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_regular_file_isatty() {
@@ -152,13 +150,6 @@ async fn preview1_path_rename_dir_trailing_slashes() {
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[should_panic]
-async fn preview1_path_rename_file_trailing_slashes() {
-    run(PREVIEW1_PATH_RENAME_FILE_TRAILING_SLASHES, false)
-        .await
-        .unwrap()
-}
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_rename() {
     run(PREVIEW1_PATH_RENAME, false).await.unwrap()
 }
@@ -182,11 +173,8 @@ async fn preview1_readlink() {
     run(PREVIEW1_READLINK, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[should_panic]
-async fn preview1_remove_directory_trailing_slashes() {
-    run(PREVIEW1_REMOVE_DIRECTORY_TRAILING_SLASHES, false)
-        .await
-        .unwrap()
+async fn preview1_remove_directory() {
+    run(PREVIEW1_REMOVE_DIRECTORY, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_remove_nonempty_directory() {
@@ -248,4 +236,8 @@ async fn preview1_unicode_output() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_write() {
     run(PREVIEW1_FILE_WRITE, true).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview1_path_open_lots() {
+    run(PREVIEW1_PATH_OPEN_LOTS, true).await.unwrap()
 }

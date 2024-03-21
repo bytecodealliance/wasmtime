@@ -3,7 +3,7 @@
 //! The `unwind` test command runs each function through the full code generator pipeline.
 
 use crate::subtest::{run_filecheck, Context, SubTest};
-use cranelift_codegen::{self, ir, isa::unwind::UnwindInfo};
+use cranelift_codegen::{ir, isa::unwind::UnwindInfo};
 use cranelift_reader::TestCommand;
 use gimli::{
     write::{Address, EhFrame, EndianVec, FrameTable},

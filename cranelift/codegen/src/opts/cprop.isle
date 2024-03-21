@@ -73,11 +73,12 @@
 (rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
       (subsume (iconst narrow (imm64_masked narrow imm))))
 
-(rule (simplify (uextend (fits_in_64 wide) (iconst narrow imm)))
-      (subsume (iconst wide (imm64 (u64_uextend_imm64 narrow imm)))))
-
-(rule (simplify (sextend (fits_in_64 wide) (iconst narrow imm)))
-      (subsume (iconst wide (imm64_masked wide (i64_as_u64 (i64_sextend_imm64 narrow imm))))))
+;; iconst_[su] support $I128, but do so by extending, so restricting to
+;; 64-bit or smaller keeps it from just remaking essentially the same thing.
+(rule (simplify (uextend (fits_in_64 wide) (iconst_u narrow k)))
+      (subsume (iconst_u wide k)))
+(rule (simplify (sextend (fits_in_64 wide) (iconst_s narrow k)))
+      (subsume (iconst_s wide k)))
 
 (rule (simplify
        (icmp result_ty
@@ -166,12 +167,20 @@
        (bxor ty (bxor ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
       (bxor ty x (bxor ty k1 k2)))
 
-(rule (simplify
-       (select ty (iconst _ (u64_from_imm64 (u64_nonzero _))) x y))
-      x)
-(rule (simplify
-       (select ty (iconst _ (u64_from_imm64 0)) x y))
-      y)
+(rule (simplify (select ty (iconst_u _ (u64_nonzero _)) x _))
+      (subsume x))
+(rule (simplify (select ty (iconst_u _ 0) _ y))
+      (subsume y))
+
+;; Replace subtraction by a "negative" constant with addition.
+;; Notably, this gives `x - (-1) == x + 1`, so other patterns don't have to
+;; match the subtract-negative-one version too.
+;; TODO: it would be nice to do this for `x + (-1) == x - 1` as well, but
+;; that needs work in lowering first to avoid regressing addressing modes.
+
+(rule (simplify (isub ty x (iconst_s ty k)))
+      (if-let $true (u64_lt (i64_as_u64 (i64_neg k)) (i64_as_u64 k)))
+      (iadd ty x (iconst ty (imm64_masked ty (i64_as_u64 (i64_neg k))))))
 
 ;; TODO: fadd, fsub, fmul, fdiv, fneg, fabs
 
@@ -208,3 +217,50 @@
       (ushr ty (ushr ty a c) b))
 (rule (simplify (sshr ty (sshr ty a@(iconst _ _) b) c@(iconst _ _)))
       (sshr ty (sshr ty a c) b))
+
+;; When we operations that are both commutative and associative, reassociate
+;; constants together for cprop:
+;;
+;; ((a op B) op (c op D)) ==> ((a op c) op (B op D))
+;;
+;; Where `op` is one of: `iadd`, `imul`, `band`, `bor`, or `bxor`.
+(rule (simplify (iadd ty
+                      (iadd ty a b@(iconst _ _))
+                      (iadd ty c d@(iconst _ _))))
+      (iadd ty (iadd ty a c) (iadd ty b d)))
+(rule (simplify (imul ty
+                      (imul ty a b@(iconst _ _))
+                      (imul ty c d@(iconst _ _))))
+      (imul ty (imul ty a c) (imul ty b d)))
+(rule (simplify (band ty
+                      (band ty a b@(iconst _ _))
+                      (band ty c d@(iconst _ _))))
+      (band ty (band ty a c) (band ty b d)))
+(rule (simplify (bor ty
+                      (bor ty a b@(iconst _ _))
+                      (bor ty c d@(iconst _ _))))
+      (bor ty (bor ty a c) (bor ty b d)))
+(rule (simplify (bxor ty
+                      (bxor ty a b@(iconst _ _))
+                      (bxor ty c d@(iconst _ _))))
+      (bxor ty (bxor ty a c) (bxor ty b d)))
+
+
+;; Constant fold int-to-float conversions.
+(rule (simplify (fcvt_from_uint $F32 (iconst_u _ n)))
+      (f32const $F32 (f32_from_uint n)))
+(rule (simplify (fcvt_from_uint $F64 (iconst_u _ n)))
+      (f64const $F64 (f64_from_uint n)))
+(rule (simplify (fcvt_from_sint $F32 (iconst_s _ n)))
+      (f32const $F32 (f32_from_sint n)))
+(rule (simplify (fcvt_from_sint $F64 (iconst_s _ n)))
+      (f64const $F64 (f64_from_sint n)))
+
+(decl f32_from_uint (u64) Ieee32)
+(extern constructor f32_from_uint f32_from_uint)
+(decl f64_from_uint (u64) Ieee64)
+(extern constructor f64_from_uint f64_from_uint)
+(decl f32_from_sint (i64) Ieee32)
+(extern constructor f32_from_sint f32_from_sint)
+(decl f64_from_sint (i64) Ieee64)
+(extern constructor f64_from_sint f64_from_sint)

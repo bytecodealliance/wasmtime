@@ -2,13 +2,30 @@
 //! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
-mod kserve;
-mod openvino;
 
+mod kserve;
+#[cfg(feature = "onnx")]
+pub mod onnxruntime;
+#[cfg(feature = "openvino")]
+pub mod openvino;
+#[cfg(all(feature = "winml", target_os = "windows"))]
+pub mod winml;
+
+
+#[cfg(feature = "onnx")]
+use self::onnxruntime::OnnxBackend;
+#[cfg(feature = "openvino")]
 use self::openvino::OpenvinoBackend;
+
 use crate::backend::kserve::KServeBackend;
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph, Registry};
+
+#[cfg(all(feature = "winml", target_os = "windows"))]
+use self::winml::WinMLBackend;
+use std::fs::File;
+use std::io::Read;
+
 use std::path::Path;
 
 use thiserror::Error;
@@ -17,10 +34,24 @@ use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<Backend> {
-    vec![
-        (Backend::from(OpenvinoBackend::default())),
-        (Backend::from(KServeBackend::default())),
-    ]
+    let mut backends = vec![];
+    #[cfg(feature = "openvino")]
+    {
+        backends.push(Backend::from(OpenvinoBackend::default()));
+    }
+    #[cfg(all(feature = "winml", target_os = "windows"))]
+    {
+        backends.push(Backend::from(WinMLBackend::default()));
+    }
+    #[cfg(feature = "onnx")]
+    {
+        backends.push(Backend::from(OnnxBackend::default()));
+    }
+    #[cfg(feature = "kserve")]
+    {
+        backend.push(Backend::from(KServeBackend::default()));
+    }
+    backends
 }
 
 pub fn build_kserve_registry(server_url: &String) -> Registry {
@@ -78,4 +109,12 @@ pub enum BackendError {
     NotEnoughMemory(usize),
     #[error("Unsupoprted operation: {0}")]
     UnsupportedOperation(&'static str),
+}
+
+/// Read a file into a byte vector.
+fn read(path: &Path) -> anyhow::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+    let mut buffer = vec![];
+    file.read_to_end(&mut buffer)?;
+    Ok(buffer)
 }

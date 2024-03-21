@@ -54,6 +54,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn i8_neg(&mut self, x: i8) -> i8 {
+            x.wrapping_neg()
+        }
+
+        #[inline]
         fn u64_add(&mut self, x: u64, y: u64) -> u64 {
             x.wrapping_add(y)
         }
@@ -730,18 +735,6 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn simm32(&mut self, x: Imm64) -> Option<i32> {
-            i64::from(x).try_into().ok()
-        }
-
-        #[inline]
-        fn uimm8(&mut self, x: Imm64) -> Option<u8> {
-            let x64: i64 = x.into();
-            let x8: u8 = x64.try_into().ok()?;
-            Some(x8)
-        }
-
-        #[inline]
         fn offset32(&mut self, x: Offset32) -> i32 {
             x.into()
         }
@@ -782,15 +775,7 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_half_width(&mut self, ty: Type) -> Option<Type> {
-            let new_lane = match ty.lane_type() {
-                I16 => I8,
-                I32 => I16,
-                I64 => I32,
-                F64 => F32,
-                _ => return None,
-            };
-
-            new_lane.by(ty.lane_count())
+            ty.half_width()
         }
 
         #[inline]
@@ -834,7 +819,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
+        fn signed_cond_code(&mut self, cc: &IntCC) -> Option<IntCC> {
             match cc {
                 IntCC::Equal
                 | IntCC::UnsignedGreaterThanOrEqual

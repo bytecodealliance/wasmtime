@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-jit"
-version = "0.103.0"
+version = "0.107.0"
 authors = ["The Cranelift Project Developers"]
 description = "A JIT library backed by Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -8,6 +8,9 @@ documentation = "https://docs.rs/cranelift-jit"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 cranelift-module = { workspace = true }

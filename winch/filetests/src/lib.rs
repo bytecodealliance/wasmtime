@@ -2,7 +2,7 @@ pub mod disasm;
 
 #[cfg(test)]
 mod test {
-    use super::disasm::disasm;
+    use super::disasm::{disasm, OffsetStyle};
     use anyhow::Context;
     use cranelift_codegen::settings::{self, Configurable};
     use serde_derive::{Deserialize, Serialize};
@@ -12,8 +12,8 @@ mod test {
     use wasmtime_environ::ModuleTranslation;
     use wasmtime_environ::{
         wasmparser::{Parser as WasmParser, Validator},
-        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTypes, Tunables, TypeConvert,
-        VMOffsets,
+        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTypesBuilder, Tunables,
+        TypeConvert, VMOffsets,
     };
     use winch_codegen::{lookup, BuiltinFunctions, TargetIsa};
     use winch_test_macros::generate_file_tests;
@@ -104,12 +104,11 @@ mod test {
         let mut validator = Validator::new();
         let parser = WasmParser::new(0);
         let mut types = Default::default();
-        let tunables = Tunables::default();
+        let tunables = Tunables::default_host();
         let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
             .translate(parser, &wasm)
             .context("Failed to translate WebAssembly module")
             .unwrap();
-        let types = types.finish();
 
         let body_inputs = std::mem::take(&mut translation.function_body_inputs);
 
@@ -148,7 +147,7 @@ mod test {
 
     fn compile(
         isa: &Box<dyn TargetIsa>,
-        module_types: &ModuleTypes,
+        module_types: &ModuleTypesBuilder,
         translation: &ModuleTranslation,
         f: (DefinedFuncIndex, FunctionBodyData<'_>),
     ) -> Vec<String> {
@@ -157,7 +156,7 @@ mod test {
 
         let index = module.func_index(f.0);
         let sig = types[types.core_function_at(index.as_u32())].unwrap_func();
-        let sig = translation.module.convert_func_type(&sig);
+        let sig = DummyConvert.convert_func_type(&sig);
 
         let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
         let mut builtins = BuiltinFunctions::new(&vmoffsets, isa.wasmtime_call_conv());
@@ -174,6 +173,14 @@ mod test {
             )
             .expect("Couldn't compile function");
 
-        disasm(buffer.data(), isa).unwrap()
+        disasm(buffer.data(), isa, OffsetStyle::Minimal).unwrap()
+    }
+
+    struct DummyConvert;
+
+    impl TypeConvert for DummyConvert {
+        fn lookup_heap_type(&self, _: wasmparser::UnpackedIndex) -> wasmtime_environ::WasmHeapType {
+            todo!()
+        }
     }
 }

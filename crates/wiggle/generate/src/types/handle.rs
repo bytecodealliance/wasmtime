@@ -7,7 +7,7 @@ use witx::Layout;
 pub(super) fn define_handle(name: &witx::Id, h: &witx::HandleDatatype) -> TokenStream {
     let ident = names::type_(name);
     let size = h.mem_size_align().size as u32;
-    let align = h.mem_size_align().align as usize;
+    let align = h.mem_size_align().align;
     quote! {
         #[repr(transparent)]
         #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]

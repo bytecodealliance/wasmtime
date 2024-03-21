@@ -17,7 +17,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr w0, [x0, w1, sxtw]
+;   ldr w0, [x0, w1, sxtw] ; trap: heap_oob
 ;   ret
 
 function %f6(i64, i32) -> i32 {
@@ -35,7 +35,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr w0, [x0, w1, sxtw]
+;   ldr w0, [x0, w1, sxtw] ; trap: heap_oob
 ;   ret
 
 function %f7(i32, i32) -> i32 {
@@ -56,7 +56,7 @@ block0(v0: i32, v1: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w4, w1
-;   ldr w0, [x4, w0, uxtw]
+;   ldr w0, [x4, w0, uxtw] ; trap: heap_oob
 ;   ret
 
 function %f8(i64, i32) -> i32 {
@@ -85,7 +85,7 @@ block0(v0: i64, v1: i32):
 ;   add x7, x7, #0x20
 ;   add x7, x7, x0
 ;   add x6, x7, #4
-;   ldr w0, [x6, x7]
+;   ldr w0, [x6, x7] ; trap: heap_oob
 ;   ret
 
 function %f9(i64, i64, i64) -> i32 {
@@ -109,7 +109,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0: ; offset 0x0
 ;   add x6, x0, x1
 ;   add x5, x6, #0x30
-;   ldr w0, [x5, x2]
+;   ldr w0, [x5, x2] ; trap: heap_oob
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -135,7 +135,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   add x7, x0, x1
 ;   mov x5, #0x1004
 ;   add x7, x7, x5
-;   ldr w0, [x7, x2]
+;   ldr w0, [x7, x2] ; trap: heap_oob
 ;   ret
 
 function %f10() -> i32 {
@@ -154,7 +154,7 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x1, #0x4d2
-;   ldr w0, [x1]
+;   ldr w0, [x1] ; trap: heap_oob
 ;   ret
 
 function %f11(i64) -> i32 {
@@ -174,7 +174,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, #0x800000
-;   ldr w0, [x0, x2]
+;   ldr w0, [x0, x2] ; trap: heap_oob
 ;   ret
 
 function %add_imm12_max_shifted(i64) -> i32 {
@@ -194,7 +194,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x2, xzr, #0xfff000
-;   ldr w0, [x0, x2]
+;   ldr w0, [x0, x2] ; trap: heap_oob
 ;   ret
 
 function %f12(i64) -> i32 {
@@ -212,7 +212,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldur w0, [x0, #-4]
+;   ldur w0, [x0, #-4] ; trap: heap_oob
 ;   ret
 
 function %f13(i64) -> i32 {
@@ -234,7 +234,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   mov w3, #0xca00
 ;   movk w3, #0x3b9a, lsl #16
-;   ldr w0, [x0, x3]
+;   ldr w0, [x0, x3] ; trap: heap_oob
 ;   ret
 
 function %f14(i32) -> i32 {
@@ -253,7 +253,7 @@ block0(v0: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtw x3, w0
-;   ldr w0, [x3]
+;   ldr w0, [x3] ; trap: heap_oob
 ;   ret
 
 function %f15(i32, i32) -> i32 {
@@ -274,7 +274,7 @@ block0(v0: i32, v1: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtw x4, w1
-;   ldr w0, [x4, w0, sxtw]
+;   ldr w0, [x4, w0, sxtw] ; trap: heap_oob
 ;   ret
 
 function %f18(i64, i64, i64) -> i32 {
@@ -296,7 +296,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0: ; offset 0x0
 ;   mov w6, #-0x1002
 ;   mov w6, w6
-;   ldrsh x0, [x6]
+;   ldrsh x0, [x6] ; trap: heap_oob
 ;   ret
 
 function %f19(i64, i64, i64) -> i32 {
@@ -318,7 +318,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0: ; offset 0x0
 ;   mov w6, #0x1002
 ;   mov w6, w6
-;   ldrsh x0, [x6]
+;   ldrsh x0, [x6] ; trap: heap_oob
 ;   ret
 
 function %f20(i64, i64, i64) -> i32 {
@@ -340,7 +340,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0: ; offset 0x0
 ;   mov w6, #-0x1002
 ;   sxtw x6, w6
-;   ldrsh x0, [x6]
+;   ldrsh x0, [x6] ; trap: heap_oob
 ;   ret
 
 function %f21(i64, i64, i64) -> i32 {
@@ -362,7 +362,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0: ; offset 0x0
 ;   mov w6, #0x1002
 ;   sxtw x6, w6
-;   ldrsh x0, [x6]
+;   ldrsh x0, [x6] ; trap: heap_oob
 ;   ret
 
 function %i128(i64) -> i128 {
@@ -382,8 +382,8 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
-;   ldp x0, x1, [x5]
-;   stp x0, x1, [x5]
+;   ldp x0, x1, [x5] ; trap: heap_oob
+;   stp x0, x1, [x5] ; trap: heap_oob
 ;   ret
 
 function %i128_imm_offset(i64) -> i128 {
@@ -403,8 +403,8 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
-;   ldp x0, x1, [x5, #0x10]
-;   stp x0, x1, [x5, #0x10]
+;   ldp x0, x1, [x5, #0x10] ; trap: heap_oob
+;   stp x0, x1, [x5, #0x10] ; trap: heap_oob
 ;   ret
 
 function %i128_imm_offset_large(i64) -> i128 {
@@ -424,8 +424,8 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
-;   ldp x0, x1, [x5, #0x1f8]
-;   stp x0, x1, [x5, #0x1f8]
+;   ldp x0, x1, [x5, #0x1f8] ; trap: heap_oob
+;   stp x0, x1, [x5, #0x1f8] ; trap: heap_oob
 ;   ret
 
 function %i128_imm_offset_negative_large(i64) -> i128 {
@@ -445,8 +445,8 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
-;   ldp x0, x1, [x5, #-0x200]
-;   stp x0, x1, [x5, #-0x200]
+;   ldp x0, x1, [x5, #-0x200] ; trap: heap_oob
+;   stp x0, x1, [x5, #-0x200] ; trap: heap_oob
 ;   ret
 
 function %i128_add_offset(i64) -> i128 {
@@ -467,8 +467,8 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x4, x0, #0x20
-;   ldp x0, x1, [x4]
-;   stp x0, x1, [x4]
+;   ldp x0, x1, [x4] ; trap: heap_oob
+;   stp x0, x1, [x4] ; trap: heap_oob
 ;   ret
 
 function %i128_32bit_sextend_simple(i32) -> i128 {
@@ -489,8 +489,8 @@ block0(v0: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtw x4, w0
-;   ldp x0, x1, [x4]
-;   stp x0, x1, [x4]
+;   ldp x0, x1, [x4] ; trap: heap_oob
+;   stp x0, x1, [x4] ; trap: heap_oob
 ;   ret
 
 function %i128_32bit_sextend(i64, i32) -> i128 {
@@ -515,8 +515,8 @@ block0(v0: i64, v1: i32):
 ; block0: ; offset 0x0
 ;   add x6, x0, w1, sxtw
 ;   add x6, x6, #0x18
-;   ldp x0, x1, [x6]
-;   stp x0, x1, [x6]
+;   ldp x0, x1, [x6] ; trap: heap_oob
+;   stp x0, x1, [x6] ; trap: heap_oob
 ;   ret
 
 function %load_scaled16(i64, i64) -> i8 {
@@ -534,7 +534,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrb w0, [x0, x1, lsl #0]
+;   ldrb w0, [x0, x1, lsl #0] ; trap: heap_oob
 ;   ret
 
 function %load_scaled16(i64, i64) -> i16 {
@@ -552,7 +552,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrh w0, [x0, x1, lsl #1]
+;   ldrh w0, [x0, x1, lsl #1] ; trap: heap_oob
 ;   ret
 
 function %load_scaled32(i64, i64) -> i32 {
@@ -570,7 +570,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr w0, [x0, x1, lsl #2]
+;   ldr w0, [x0, x1, lsl #2] ; trap: heap_oob
 ;   ret
 
 function %load_scaled64(i64, i64) -> i64 {
@@ -588,7 +588,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr x0, [x0, x1, lsl #3]
+;   ldr x0, [x0, x1, lsl #3] ; trap: heap_oob
 ;   ret
 
 function %load_not_scaled64(i64, i64) -> i64 {
@@ -608,7 +608,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsl x4, x1, #2
-;   ldr x0, [x0, x4]
+;   ldr x0, [x0, x4] ; trap: heap_oob
 ;   ret
 
 function %load_uextend_scaled16(i64, i32) -> i8 {
@@ -627,7 +627,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrb w0, [x0, w1, uxtw #0]
+;   ldrb w0, [x0, w1, uxtw #0] ; trap: heap_oob
 ;   ret
 
 function %load_uextend_scaled16(i64, i32) -> i16 {
@@ -646,7 +646,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrh w0, [x0, w1, uxtw #1]
+;   ldrh w0, [x0, w1, uxtw #1] ; trap: heap_oob
 ;   ret
 
 function %load_uextend_scaled32(i64, i32) -> i32 {
@@ -665,9 +665,8 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr w0, [x0, w1, uxtw #2]
+;   ldr w0, [x0, w1, uxtw #2] ; trap: heap_oob
 ;   ret
-
 
 function %load_uextend_scaled64(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
@@ -685,7 +684,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr x0, [x0, w1, uxtw #3]
+;   ldr x0, [x0, w1, uxtw #3] ; trap: heap_oob
 ;   ret
 
 function %load_not_extend_scaled64(i64, i32) -> i64 {
@@ -706,7 +705,7 @@ block0(v0: i64, v1: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsl w4, w1, #3
-;   ldr x0, [x0, w4, uxtw]
+;   ldr x0, [x0, w4, uxtw] ; trap: heap_oob
 ;   ret
 
 function %load_sextend_scaled8(i64, i32) -> i8 {
@@ -725,7 +724,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrb w0, [x0, w1, sxtw #0]
+;   ldrb w0, [x0, w1, sxtw #0] ; trap: heap_oob
 ;   ret
 
 function %load_sextend_scaled16(i64, i32) -> i16 {
@@ -744,7 +743,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrh w0, [x0, w1, sxtw #1]
+;   ldrh w0, [x0, w1, sxtw #1] ; trap: heap_oob
 ;   ret
 
 function %load_sextend_scaled32(i64, i32) -> i32 {
@@ -763,7 +762,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr w0, [x0, w1, sxtw #2]
+;   ldr w0, [x0, w1, sxtw #2] ; trap: heap_oob
 ;   ret
 
 function %load_sextend_scaled64(i64, i32) -> i64 {
@@ -782,6 +781,6 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr x0, [x0, w1, sxtw #3]
+;   ldr x0, [x0, w1, sxtw #3] ; trap: heap_oob
 ;   ret
 

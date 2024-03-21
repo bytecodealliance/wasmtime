@@ -47,9 +47,10 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
-use crate::{EntityIndex, PrimaryMap, SignatureIndex, WasmType};
+use crate::{EntityIndex, PrimaryMap, WasmValType};
 use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
+use wasmtime_types::ModuleInternedTypeIndex;
 
 /// Metadata as a result of compiling a component.
 pub struct ComponentTranslation {
@@ -146,7 +147,7 @@ pub struct Component {
     pub num_runtime_post_returns: u32,
 
     /// WebAssembly type signature of all trampolines.
-    pub trampolines: PrimaryMap<TrampolineIndex, SignatureIndex>,
+    pub trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
 
     /// The number of lowered host functions (maximum `LoweredIndex`) needed to
     /// instantiate this component.
@@ -402,10 +403,20 @@ pub enum Export {
     /// A module defined within this component is exported.
     ModuleStatic(StaticModuleIndex),
     /// A module imported into this component is exported.
-    ModuleImport(RuntimeImportIndex),
+    ModuleImport {
+        /// Module type index
+        ty: TypeModuleIndex,
+        /// Module runtime import index
+        import: RuntimeImportIndex,
+    },
     /// A nested instance is being exported which has recursively defined
     /// `Export` items.
-    Instance(IndexMap<String, Export>),
+    Instance {
+        /// Instance type index, if such is assigned
+        ty: Option<TypeComponentInstanceIndex>,
+        /// Instance export map
+        exports: IndexMap<String, Export>,
+    },
     /// An exported type from a component or instance, currently only
     /// informational.
     Type(TypeDef),
@@ -456,7 +467,7 @@ pub struct Resource {
     /// The local index of the resource being defined.
     pub index: DefinedResourceIndex,
     /// Core wasm representation of this resource.
-    pub rep: WasmType,
+    pub rep: WasmValType,
     /// Optionally-specified destructor and where it comes from.
     pub dtor: Option<CoreDef>,
     /// Which component instance this resource logically belongs to.

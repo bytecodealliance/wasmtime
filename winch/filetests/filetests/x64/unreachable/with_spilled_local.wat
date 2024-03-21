@@ -9,16 +9,23 @@
     unreachable
   )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 48c744240800000000   	
-;; 				mov	qword ptr [rsp + 8], 0
-;;   11:	 4c89742404           	mov	qword ptr [rsp + 4], r14
-;;   16:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   1b:	 4153                 	push	r11
-;;   1d:	 0f0b                 	ud2	
-;;   1f:	 4883c408             	add	rsp, 8
-;;   23:	 4883c410             	add	rsp, 0x10
-;;   27:	 5d                   	pop	rbp
-;;   28:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c31c000000       	add	r11, 0x1c
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f872e000000         	ja	0x49
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
+;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
+;;      	 4883ec04             	sub	rsp, 4
+;;      	 44891c24             	mov	dword ptr [rsp], r11d
+;;      	 0f0b                 	ud2	
+;;      	 4883c418             	add	rsp, 0x18
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   49:	 0f0b                 	ud2	

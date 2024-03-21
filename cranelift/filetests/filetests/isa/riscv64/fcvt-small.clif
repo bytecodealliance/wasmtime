@@ -114,7 +114,7 @@ block0(v0: f32):
 ;   fle.s a4, fa2, fa0
 ;   beqz a4, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.s a0, fa0, rtz
+;   fcvt.wu.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function u0:0(f64) -> i8 {
@@ -157,7 +157,7 @@ block0(v0: f64):
 ;   fle.d a2, fa1, fa0
 ;   beqz a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.d a0, fa0, rtz
+;   fcvt.wu.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function u0:0(f32) -> i16 {
@@ -196,7 +196,7 @@ block0(v0: f32):
 ;   fle.s a4, fa2, fa0
 ;   beqz a4, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.s a0, fa0, rtz
+;   fcvt.wu.s a0, fa0, rtz ; trap: bad_toint
 ;   ret
 
 function u0:0(f64) -> i16 {
@@ -239,6 +239,6 @@ block0(v0: f64):
 ;   fle.d a2, fa1, fa0
 ;   beqz a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.d a0, fa0, rtz
+;   fcvt.wu.d a0, fa0, rtz ; trap: bad_toint
 ;   ret
 

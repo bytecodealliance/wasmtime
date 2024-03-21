@@ -5,12 +5,12 @@ inputs:
   version:
     description: 'Version to install'
     required: false
-    default: '0.8.0'
+    default: '0.9.0'
 
 runs:
   using: composite
   steps:
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/cargo-vet
         key: cargo-vet-bin-${{ inputs.version }}

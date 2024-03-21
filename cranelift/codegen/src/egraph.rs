@@ -3,26 +3,29 @@
 use crate::alias_analysis::{AliasAnalysis, LastStores};
 use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
-use crate::dominator_tree::DominatorTree;
-use crate::egraph::domtree::DomTreeWithChildren;
+use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::egraph::elaborate::Elaborator;
 use crate::fx::FxHashSet;
 use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
+use crate::ir::pcc::Fact;
 use crate::ir::{
-    Block, DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
+    Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value, ValueDef,
+    ValueListPool,
 };
 use crate::loop_analysis::LoopAnalysis;
-use crate::opts::generated_code::ContextIter;
 use crate::opts::IsleContext;
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
+use crate::settings::Flags;
 use crate::trace;
 use crate::unionfind::UnionFind;
+use core::cmp::Ordering;
+use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
+use smallvec::SmallVec;
 use std::hash::Hasher;
 
 mod cost;
-mod domtree;
 mod elaborate;
 
 /// Pass over a Function that does the whole aegraph thing.
@@ -46,16 +49,20 @@ mod elaborate;
 pub struct EgraphPass<'a> {
     /// The function we're operating on.
     func: &'a mut Function,
-    /// Dominator tree, used for elaboration pass.
-    domtree: &'a DominatorTree,
+    /// Dominator tree for the CFG, used to visit blocks in pre-order
+    /// so we see value definitions before their uses, and also used for
+    /// O(1) dominance checks.
+    domtree: DominatorTreePreorder,
     /// Alias analysis, used during optimization.
     alias_analysis: &'a mut AliasAnalysis<'a>,
-    /// "Domtree with children": like `domtree`, but with an explicit
-    /// list of children, rather than just parent pointers.
-    domtree_children: DomTreeWithChildren,
     /// Loop analysis results, used for built-in LICM during
     /// elaboration.
     loop_analysis: &'a LoopAnalysis,
+    /// Compiler flags.
+    flags: &'a Flags,
+    /// Chaos-mode control-plane so we can test that we still get
+    /// correct results when our heuristics make bad decisions.
+    ctrl_plane: &'a mut ControlPlane,
     /// Which canonical Values do we want to rematerialize in each
     /// block where they're used?
     ///
@@ -66,8 +73,11 @@ pub struct EgraphPass<'a> {
     pub(crate) stats: Stats,
     /// Union-find that maps all members of a Union tree (eclass) back
     /// to the *oldest* (lowest-numbered) `Value`.
-    eclasses: UnionFind<Value>,
+    pub(crate) eclasses: UnionFind<Value>,
 }
+
+// The maximum number of rewrites we will take from a single call into ISLE.
+const MATCHES_LIMIT: usize = 5;
 
 /// Context passed through node insertion and optimization.
 pub(crate) struct OptimizeCtx<'opt, 'analysis>
@@ -79,14 +89,19 @@ where
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
     pub(crate) effectful_gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Value>,
+    available_block: &'opt mut SecondaryMap<Value, Block>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
+    domtree: &'opt DominatorTreePreorder,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
+    flags: &'opt Flags,
+    ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
     pub(crate) subsume_values: FxHashSet<Value>,
+    optimized_values: SmallVec<[Value; MATCHES_LIMIT]>,
 }
 
 /// For passing to `insert_pure_enode`. Sometimes the enode already
@@ -104,7 +119,7 @@ impl NewOrExistingInst {
             NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
                 let ty = dfg.ctrl_typevar(*inst);
-                (ty, dfg.insts[*inst].clone())
+                (ty, dfg.insts[*inst])
             }
         }
     }
@@ -160,14 +175,19 @@ where
             if let NewOrExistingInst::Existing(inst) = inst {
                 debug_assert_eq!(self.func.dfg.inst_results(inst).len(), 1);
                 let result = self.func.dfg.first_result(inst);
+                debug_assert!(
+                    self.domtree.dominates(
+                        self.available_block[orig_result],
+                        self.get_available_block(inst)
+                    ),
+                    "GVN shouldn't replace {result} (available in {}) with non-dominating {orig_result} (available in {})",
+                    self.get_available_block(inst),
+                    self.available_block[orig_result],
+                );
                 self.value_to_opt_value[result] = orig_result;
-                self.eclasses.union(result, orig_result);
                 self.func.dfg.merge_facts(result, orig_result);
-                self.stats.union += 1;
-                result
-            } else {
-                orig_result
             }
+            orig_result
         } else {
             // Now actually insert the InstructionData and attach
             // result value (exactly one).
@@ -189,19 +209,63 @@ where
                 }
             };
 
+            self.attach_constant_fact(inst, result);
+
+            self.available_block[result] = self.get_available_block(inst);
             let opt_value = self.optimize_pure_enode(inst);
+
+            for &argument in self.func.dfg.inst_args(inst) {
+                self.eclasses.pin_index(argument);
+            }
+
             let gvn_context = GVNContext {
                 union_find: self.eclasses,
                 value_lists: &self.func.dfg.value_lists,
             };
-            self.gvn_map.insert(
-                (ty, self.func.dfg.insts[inst].clone()),
-                opt_value,
-                &gvn_context,
-            );
+            self.gvn_map
+                .insert((ty, self.func.dfg.insts[inst]), opt_value, &gvn_context);
             self.value_to_opt_value[result] = opt_value;
             opt_value
         }
+    }
+
+    /// Find the block where a pure instruction first becomes available,
+    /// defined as the block that is closest to the root where all of
+    /// its arguments are available. In the unusual case where a pure
+    /// instruction has no arguments (e.g. get_return_address), we can
+    /// place it anywhere, so it is available in the entry block.
+    ///
+    /// This function does not compute available blocks recursively.
+    /// All of the instruction's arguments must have had their available
+    /// blocks assigned already.
+    fn get_available_block(&self, inst: Inst) -> Block {
+        // Side-effecting instructions have different rules for where
+        // they become available, so this function does not apply.
+        debug_assert!(is_pure_for_egraph(self.func, inst));
+
+        // Note that the def-point of all arguments to an instruction
+        // in SSA lie on a line of direct ancestors in the domtree, and
+        // so do their available-blocks. This means that for any pair of
+        // arguments, their available blocks are either the same or one
+        // strictly dominates the other. We just need to find any argument
+        // whose available block is deepest in the domtree.
+        self.func.dfg.insts[inst]
+            .arguments(&self.func.dfg.value_lists)
+            .iter()
+            .map(|&v| {
+                let block = self.available_block[v];
+                debug_assert!(!block.is_reserved_value());
+                block
+            })
+            .max_by(|&x, &y| {
+                if self.domtree.dominates(x, y) {
+                    Ordering::Less
+                } else {
+                    debug_assert!(self.domtree.dominates(y, x));
+                    Ordering::Greater
+                }
+            })
+            .unwrap_or(self.func.layout.entry_block().unwrap())
     }
 
     /// Optimizes an enode by applying any matching mid-end rewrite
@@ -213,7 +277,7 @@ where
         // A pure node always has exactly one result.
         let orig_value = self.func.dfg.first_result(inst);
 
-        let mut isle_ctx = IsleContext { ctx: self };
+        let mut optimized_values = std::mem::take(&mut self.optimized_values);
 
         // Limit rewrite depth. When we apply optimization rules, they
         // may create new nodes (values) and those are, recursively,
@@ -225,24 +289,80 @@ where
         // infinite or problematic recursion, we bound the rewrite
         // depth to a small constant here.
         const REWRITE_LIMIT: usize = 5;
-        if isle_ctx.ctx.rewrite_depth > REWRITE_LIMIT {
-            isle_ctx.ctx.stats.rewrite_depth_limit += 1;
+        if self.rewrite_depth > REWRITE_LIMIT {
+            self.stats.rewrite_depth_limit += 1;
             return orig_value;
         }
-        isle_ctx.ctx.rewrite_depth += 1;
+        self.rewrite_depth += 1;
+        trace!("Incrementing rewrite depth; now {}", self.rewrite_depth);
 
         // Invoke the ISLE toplevel constructor, getting all new
         // values produced as equivalents to this value.
         trace!("Calling into ISLE with original value {}", orig_value);
-        isle_ctx.ctx.stats.rewrite_rule_invoked += 1;
-        let mut optimized_values =
-            crate::opts::generated_code::constructor_simplify(&mut isle_ctx, orig_value);
+        self.stats.rewrite_rule_invoked += 1;
+        debug_assert!(optimized_values.is_empty());
+        crate::opts::generated_code::constructor_simplify(
+            &mut IsleContext { ctx: self },
+            orig_value,
+            &mut optimized_values,
+        );
+
+        optimized_values.push(orig_value);
+
+        // Remove any values from optimized_values that do not have
+        // the highest possible available block in the domtree, in
+        // O(n) time. This loop scans in reverse, establishing the
+        // loop invariant that all values at indices >= idx have the
+        // same available block, which is the best available block
+        // seen so far. Note that orig_value must also be removed if
+        // it isn't in the best block, so we push it above, which means
+        // optimized_values is never empty: there's always at least one
+        // value in best_block.
+        let mut best_block = self.available_block[*optimized_values.last().unwrap()];
+        for idx in (0..optimized_values.len() - 1).rev() {
+            // At the beginning of each iteration, there is a non-empty
+            // collection of values after idx, which are all available
+            // at best_block.
+            let this_block = self.available_block[optimized_values[idx]];
+            if this_block != best_block {
+                if self.domtree.dominates(this_block, best_block) {
+                    // If the available block for this value dominates
+                    // the best block we've seen so far, discard all
+                    // the values we already checked and leave only this
+                    // value in the tail of the vector.
+                    optimized_values.truncate(idx + 1);
+                    best_block = this_block;
+                } else {
+                    // Otherwise the tail of the vector contains values
+                    // which are all better than this value, so we can
+                    // swap any of them in place of this value to delete
+                    // this one in O(1) time.
+                    debug_assert!(self.domtree.dominates(best_block, this_block));
+                    optimized_values.swap_remove(idx);
+                    debug_assert!(optimized_values.len() > idx);
+                }
+            }
+        }
+
+        // It's not supposed to matter what order `simplify` returns values in.
+        self.ctrl_plane.shuffle(&mut optimized_values);
+
+        let num_matches = optimized_values.len();
+        if num_matches > MATCHES_LIMIT {
+            trace!(
+                "Reached maximum matches limit; too many optimized values \
+                 ({num_matches} > {MATCHES_LIMIT}); ignoring rest.",
+            );
+            optimized_values.truncate(MATCHES_LIMIT);
+        }
+
+        trace!("  -> returned from ISLE: {orig_value} -> {optimized_values:?}");
 
         // Create a union of all new values with the original (or
         // maybe just one new value marked as "subsuming" the
         // original, if present.)
-        let mut union_value = orig_value;
-        while let Some(optimized_value) = optimized_values.next(&mut isle_ctx) {
+        let mut union_value = optimized_values.pop().unwrap();
+        for optimized_value in optimized_values.drain(..) {
             trace!(
                 "Returned from ISLE for {}, got {:?}",
                 orig_value,
@@ -252,42 +372,32 @@ where
                 trace!(" -> same as orig value; skipping");
                 continue;
             }
-            if isle_ctx.ctx.subsume_values.contains(&optimized_value) {
+            if self.subsume_values.contains(&optimized_value) {
                 // Merge in the unionfind so canonicalization
                 // still works, but take *only* the subsuming
                 // value, and break now.
-                isle_ctx.ctx.eclasses.union(optimized_value, union_value);
-                isle_ctx
-                    .ctx
-                    .func
-                    .dfg
-                    .merge_facts(optimized_value, union_value);
+                self.eclasses.union(optimized_value, union_value);
+                self.func.dfg.merge_facts(optimized_value, union_value);
                 union_value = optimized_value;
                 break;
             }
 
             let old_union_value = union_value;
-            union_value = isle_ctx
-                .ctx
-                .func
-                .dfg
-                .union(old_union_value, optimized_value);
-            isle_ctx.ctx.stats.union += 1;
+            union_value = self.func.dfg.union(old_union_value, optimized_value);
+            self.available_block[union_value] = best_block;
+            self.stats.union += 1;
             trace!(" -> union: now {}", union_value);
-            isle_ctx.ctx.eclasses.add(union_value);
-            isle_ctx
-                .ctx
-                .eclasses
-                .union(old_union_value, optimized_value);
-            isle_ctx
-                .ctx
-                .func
-                .dfg
-                .merge_facts(old_union_value, optimized_value);
-            isle_ctx.ctx.eclasses.union(old_union_value, union_value);
+            self.eclasses.add(union_value);
+            self.eclasses.union(old_union_value, optimized_value);
+            self.func.dfg.merge_facts(old_union_value, optimized_value);
+            self.eclasses.union(old_union_value, union_value);
         }
 
-        isle_ctx.ctx.rewrite_depth -= 1;
+        self.rewrite_depth -= 1;
+        trace!("Decrementing rewrite depth; now {}", self.rewrite_depth);
+
+        debug_assert!(self.optimized_values.is_empty());
+        self.optimized_values = optimized_values;
 
         union_value
     }
@@ -297,6 +407,10 @@ where
     /// the layout.
     fn optimize_skeleton_inst(&mut self, inst: Inst) -> bool {
         self.stats.skeleton_inst += 1;
+
+        for &result in self.func.dfg.inst_results(inst) {
+            self.available_block[result] = self.func.layout.inst_block(inst).unwrap();
+        }
 
         // First, can we try to deduplicate? We need to keep some copy
         // of the instruction around because it's side-effecting, but
@@ -324,7 +438,6 @@ where
                     let orig_result = *o.get();
                     // Hit in GVN map -- reuse value.
                     self.value_to_opt_value[result] = orig_result;
-                    self.eclasses.union(orig_result, result);
                     trace!(" -> merges result {} to {}", result, orig_result);
                     true
                 }
@@ -368,24 +481,44 @@ where
             false
         }
     }
+
+    /// Helper to propagate facts on constant values: if PCC is
+    /// enabled, then unconditionally add a fact attesting to the
+    /// Value's concrete value.
+    fn attach_constant_fact(&mut self, inst: Inst, value: Value) {
+        if self.flags.enable_pcc() {
+            if let InstructionData::UnaryImm {
+                opcode: Opcode::Iconst,
+                imm,
+            } = self.func.dfg.insts[inst]
+            {
+                let imm: i64 = imm.into();
+                self.func.dfg.facts[value] = Some(Fact::constant(64, imm as u64));
+            }
+        }
+    }
 }
 
 impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTree,
+        raw_domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
         alias_analysis: &'a mut AliasAnalysis<'a>,
+        flags: &'a Flags,
+        ctrl_plane: &'a mut ControlPlane,
     ) -> Self {
         let num_values = func.dfg.num_values();
-        let domtree_children = DomTreeWithChildren::new(func, domtree);
+        let mut domtree = DominatorTreePreorder::new();
+        domtree.compute(raw_domtree, &func.layout);
         Self {
             func,
             domtree,
-            domtree_children,
             loop_analysis,
             alias_analysis,
+            flags,
+            ctrl_plane,
             stats: Stats::default(),
             eclasses: UnionFind::with_capacity(num_values),
             remat_values: FxHashSet::default(),
@@ -408,7 +541,8 @@ impl<'a> EgraphPass<'a> {
                 }
             }
         }
-        trace!("stats: {:?}", self.stats);
+        trace!("stats: {:#?}", self.stats);
+        trace!("pinned_union_count: {}", self.eclasses.pinned_union_count);
         self.elaborate();
     }
 
@@ -467,9 +601,23 @@ impl<'a> EgraphPass<'a> {
         let mut effectful_gvn_map: ScopedHashMap<(Type, InstructionData), Value> =
             ScopedHashMap::new();
 
+        // We assign an "available block" to every value. Values tied to
+        // the side-effecting skeleton are available in the block where
+        // they're defined. Results from pure instructions could legally
+        // float up the domtree so they are available as soon as all
+        // their arguments are available. Values which identify union
+        // nodes are available in the same block as all values in the
+        // eclass, enforced by optimize_pure_enode.
+        let mut available_block: SecondaryMap<Value, Block> =
+            SecondaryMap::with_default(Block::reserved_value());
+        // This is an initial guess at the size we'll need, but we add
+        // more values as we build simplified alternative expressions so
+        // this is likely to realloc again later.
+        available_block.resize(cursor.func.dfg.num_values());
+
         // In domtree preorder, visit blocks. (TODO: factor out an
         // iterator from this and elaborator.)
-        let root = self.domtree_children.root();
+        let root = cursor.layout().entry_block().unwrap();
         enum StackEntry {
             Visit(Block),
             Pop,
@@ -481,8 +629,11 @@ impl<'a> EgraphPass<'a> {
                     // We popped this block; push children
                     // immediately, then process this block.
                     block_stack.push(StackEntry::Pop);
-                    block_stack
-                        .extend(self.domtree_children.children(block).map(StackEntry::Visit));
+                    block_stack.extend(
+                        self.ctrl_plane
+                            .shuffled(self.domtree.children(block))
+                            .map(StackEntry::Visit),
+                    );
                     effectful_gvn_map.increment_depth();
 
                     trace!("Processing block {}", block);
@@ -494,6 +645,7 @@ impl<'a> EgraphPass<'a> {
                         trace!("creating initial singleton eclass for blockparam {}", param);
                         self.eclasses.add(param);
                         value_to_opt_value[param] = param;
+                        available_block[param] = block;
                     }
                     while let Some(inst) = cursor.next_inst() {
                         trace!("Processing inst {}", inst);
@@ -527,13 +679,18 @@ impl<'a> EgraphPass<'a> {
                             value_to_opt_value: &mut value_to_opt_value,
                             gvn_map: &mut gvn_map,
                             effectful_gvn_map: &mut effectful_gvn_map,
+                            available_block: &mut available_block,
                             eclasses: &mut self.eclasses,
                             rewrite_depth: 0,
                             subsume_values: FxHashSet::default(),
                             remat_values: &mut self.remat_values,
                             stats: &mut self.stats,
+                            domtree: &self.domtree,
                             alias_analysis: self.alias_analysis,
                             alias_analysis_state: &mut alias_analysis_state,
+                            flags: self.flags,
+                            ctrl_plane: self.ctrl_plane,
+                            optimized_values: Default::default(),
                         };
 
                         if is_pure_for_egraph(ctx.func, inst) {
@@ -586,12 +743,11 @@ impl<'a> EgraphPass<'a> {
     fn elaborate(&mut self) {
         let mut elaborator = Elaborator::new(
             self.func,
-            self.domtree,
-            &self.domtree_children,
+            &self.domtree,
             self.loop_analysis,
             &mut self.remat_values,
-            &mut self.eclasses,
             &mut self.stats,
+            self.ctrl_plane,
         );
         elaborator.elaborate();
 
@@ -675,4 +831,5 @@ pub(crate) struct Stats {
     pub(crate) elaborate_func: u64,
     pub(crate) elaborate_func_pre_insts: u64,
     pub(crate) elaborate_func_post_insts: u64,
+    pub(crate) elaborate_best_cost_fixpoint_iters: u64,
 }

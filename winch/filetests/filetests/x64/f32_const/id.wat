@@ -3,12 +3,20 @@
 (module
   (func (param f32) (result f32) (local.get 0))
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 f30f1144240c         	movss	dword ptr [rsp + 0xc], xmm0
-;;    e:	 4c89742404           	mov	qword ptr [rsp + 4], r14
-;;   13:	 f30f1044240c         	movss	xmm0, dword ptr [rsp + 0xc]
-;;   19:	 4883c410             	add	rsp, 0x10
-;;   1d:	 5d                   	pop	rbp
-;;   1e:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8723000000         	ja	0x3e
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 f30f11442404         	movss	dword ptr [rsp + 4], xmm0
+;;      	 f30f10442404         	movss	xmm0, dword ptr [rsp + 4]
+;;      	 4883c418             	add	rsp, 0x18
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   3e:	 0f0b                 	ud2	

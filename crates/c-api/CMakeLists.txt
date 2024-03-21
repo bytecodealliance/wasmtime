@@ -11,23 +11,6 @@ else()
 	set(WASMTIME_BUILD_TYPE "debug")
 endif()
 
-if(BUILD_SHARED_LIBS)
-	# Copy shared library into build directory
-	if(WIN32)
-		set(WASMTIME_INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.dll
-			${CMAKE_BINARY_DIR})
-	elseif(APPLE)
-		set(WASMTIME_INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.dylib
-			${CMAKE_BINARY_DIR})
-	else()
-		set(WASMTIME_INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.so
-			${CMAKE_BINARY_DIR})
-	endif()
-endif()
-
 if(ANDROID)
 	# TODO wasmtime only supports arm64-v8a right now
 	if(ANDROID_ABI STREQUAL "armeabi-v7a")
@@ -124,16 +107,14 @@ else()
 	endif()
 endif()
 
-target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include
-	${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include)
+target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 include(GNUInstallDirs)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime.h
 	${CMAKE_CURRENT_SOURCE_DIR}/include/wasi.h
 	${CMAKE_CURRENT_SOURCE_DIR}/include/doc-wasm.h
-	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include/wasm.h
-	${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include/wasm.hh
+	${CMAKE_CURRENT_SOURCE_DIR}/include/wasm.h
+	${CMAKE_CURRENT_SOURCE_DIR}/include/wasm.hh
 	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime
 	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

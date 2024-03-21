@@ -1,12 +1,11 @@
-use crate::r#ref::{ref_to_val, WasmRefInner};
+use crate::r#ref::ref_to_val;
 use crate::{
     from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t, CStoreContextMut,
     WASM_I32,
 };
-use std::ffi::c_void;
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ptr;
-use wasmtime::{ExternRef, Func, Val, ValType};
+use wasmtime::{AsContextMut, Func, HeapType, Ref, Val, ValType};
 
 #[repr(C)]
 pub struct wasm_val_t {
@@ -29,7 +28,7 @@ pub union wasm_val_union {
 impl Drop for wasm_val_t {
     fn drop(&mut self) {
         match into_valtype(self.kind) {
-            ValType::FuncRef | ValType::ExternRef => unsafe {
+            ValType::Ref(_) => unsafe {
                 if !self.of.ref_.is_null() {
                     drop(Box::from_raw(self.of.ref_));
                 }
@@ -47,7 +46,7 @@ impl Clone for wasm_val_t {
         };
         unsafe {
             match into_valtype(self.kind) {
-                ValType::ExternRef | ValType::FuncRef if !self.of.ref_.is_null() => {
+                ValType::Ref(_) if !self.of.ref_.is_null() => {
                     ret.of.ref_ = Box::into_raw(Box::new((*self.of.ref_).clone()));
                 }
                 _ => {}
@@ -85,32 +84,15 @@ impl wasm_val_t {
                 kind: from_valtype(&ValType::F64),
                 of: wasm_val_union { u64: f },
             },
-            Val::ExternRef(None) => wasm_val_t {
-                kind: from_valtype(&ValType::ExternRef),
+            Val::ExternRef(_) => crate::abort("externref"),
+            Val::FuncRef(f) => wasm_val_t {
+                kind: from_valtype(&ValType::FUNCREF),
                 of: wasm_val_union {
-                    ref_: ptr::null_mut(),
-                },
-            },
-            Val::ExternRef(Some(r)) => wasm_val_t {
-                kind: from_valtype(&ValType::ExternRef),
-                of: wasm_val_union {
-                    ref_: Box::into_raw(Box::new(wasm_ref_t {
-                        r: WasmRefInner::ExternRef(r),
-                    })),
-                },
-            },
-            Val::FuncRef(None) => wasm_val_t {
-                kind: from_valtype(&ValType::FuncRef),
-                of: wasm_val_union {
-                    ref_: ptr::null_mut(),
-                },
-            },
-            Val::FuncRef(Some(f)) => wasm_val_t {
-                kind: from_valtype(&ValType::FuncRef),
-                of: wasm_val_union {
-                    ref_: Box::into_raw(Box::new(wasm_ref_t {
-                        r: WasmRefInner::FuncRef(f),
-                    })),
+                    ref_: f.map_or(ptr::null_mut(), |f| {
+                        Box::into_raw(Box::new(wasm_ref_t {
+                            r: Ref::Func(Some(f)),
+                        }))
+                    }),
                 },
             },
             _ => unimplemented!("wasm_val_t::from_val {:?}", val),
@@ -123,21 +105,24 @@ impl wasm_val_t {
             ValType::I64 => Val::from(unsafe { self.of.i64 }),
             ValType::F32 => Val::from(unsafe { self.of.f32 }),
             ValType::F64 => Val::from(unsafe { self.of.f64 }),
-            ValType::ExternRef => unsafe {
-                if self.of.ref_.is_null() {
-                    Val::ExternRef(None)
-                } else {
-                    ref_to_val(&*self.of.ref_)
-                }
+            ValType::Ref(r) => match (r.is_nullable(), r.heap_type()) {
+                (true, HeapType::Extern) => unsafe {
+                    if self.of.ref_.is_null() {
+                        Val::ExternRef(None)
+                    } else {
+                        ref_to_val(&*self.of.ref_)
+                    }
+                },
+                (true, HeapType::Func) => unsafe {
+                    if self.of.ref_.is_null() {
+                        Val::FuncRef(None)
+                    } else {
+                        ref_to_val(&*self.of.ref_)
+                    }
+                },
+                _ => unimplemented!("wasm_val_t: non-funcref and non-externref reference types"),
             },
-            ValType::FuncRef => unsafe {
-                if self.of.ref_.is_null() {
-                    Val::FuncRef(None)
-                } else {
-                    ref_to_val(&*self.of.ref_)
-                }
-            },
-            _ => unimplemented!("wasm_val_t::val {:?}", self.kind),
+            ValType::V128 => unimplemented!("wasm_val_t: v128"),
         }
     }
 }
@@ -165,7 +150,6 @@ pub union wasmtime_val_union {
     pub f32: u32,
     pub f64: u64,
     pub funcref: wasmtime_func_t,
-    pub externref: ManuallyDrop<Option<ExternRef>>,
     pub v128: [u8; 16],
 }
 
@@ -177,7 +161,10 @@ pub struct wasmtime_func_t {
 }
 
 impl wasmtime_val_t {
-    pub fn from_val(val: Val) -> wasmtime_val_t {
+    pub fn from_val(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
+        // TODO: Needed for when we re-add externref support.
+        let _ = cx;
+
         match val {
             Val::I32(i) => wasmtime_val_t {
                 kind: crate::WASMTIME_I32,
@@ -195,21 +182,16 @@ impl wasmtime_val_t {
                 kind: crate::WASMTIME_F64,
                 of: wasmtime_val_union { f64: i },
             },
-            Val::ExternRef(i) => wasmtime_val_t {
-                kind: crate::WASMTIME_EXTERNREF,
-                of: wasmtime_val_union {
-                    externref: ManuallyDrop::new(i),
-                },
-            },
-            Val::FuncRef(i) => wasmtime_val_t {
+            Val::ExternRef(_) => crate::abort("externref"),
+            Val::FuncRef(func) => wasmtime_val_t {
                 kind: crate::WASMTIME_FUNCREF,
                 of: wasmtime_val_union {
-                    funcref: match i {
-                        Some(func) => unsafe { mem::transmute::<Func, wasmtime_func_t>(func) },
+                    funcref: match func {
                         None => wasmtime_func_t {
                             store_id: 0,
                             index: 0,
                         },
+                        Some(func) => unsafe { mem::transmute::<Func, wasmtime_func_t>(func) },
                     },
                 },
             },
@@ -222,7 +204,10 @@ impl wasmtime_val_t {
         }
     }
 
-    pub unsafe fn to_val(&self) -> Val {
+    pub unsafe fn to_val(&self, cx: impl AsContextMut) -> Val {
+        // TODO: needed for when we re-add externref support.
+        let _ = cx;
+
         match self.kind {
             crate::WASMTIME_I32 => Val::I32(self.of.i32),
             crate::WASMTIME_I64 => Val::I64(self.of.i64),
@@ -238,7 +223,6 @@ impl wasmtime_val_t {
                     Some(mem::transmute::<wasmtime_func_t, Func>(self.of.funcref))
                 })
             }
-            crate::WASMTIME_EXTERNREF => Val::ExternRef((*self.of.externref).clone()),
             other => panic!("unknown wasmtime_valkind_t: {}", other),
         }
     }
@@ -246,67 +230,27 @@ impl wasmtime_val_t {
 
 impl Drop for wasmtime_val_t {
     fn drop(&mut self) {
-        if self.kind == crate::WASMTIME_EXTERNREF {
-            unsafe {
-                ManuallyDrop::drop(&mut self.of.externref);
-            }
-        }
+        // TODO: this drop impl is needed for when we re-add externref support.
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_val_delete(val: &mut ManuallyDrop<wasmtime_val_t>) {
+pub unsafe extern "C" fn wasmtime_val_delete(
+    cx: CStoreContextMut<'_>,
+    val: &mut ManuallyDrop<wasmtime_val_t>,
+) {
+    // TODO: needed for when we re-add externref support.
+    let _ = cx;
+
     ManuallyDrop::drop(val)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_val_copy(
+    mut cx: CStoreContextMut<'_>,
     dst: &mut MaybeUninit<wasmtime_val_t>,
     src: &wasmtime_val_t,
 ) {
-    crate::initialize(dst, wasmtime_val_t::from_val(src.to_val()))
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_new(
-    data: *mut c_void,
-    finalizer: Option<extern "C" fn(*mut c_void)>,
-) -> ExternRef {
-    ExternRef::new(crate::ForeignData { data, finalizer })
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_data(externref: ManuallyDrop<ExternRef>) -> *mut c_void {
-    externref
-        .data()
-        .downcast_ref::<crate::ForeignData>()
-        .unwrap()
-        .data
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_clone(externref: ManuallyDrop<ExternRef>) -> ExternRef {
-    (*externref).clone()
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_delete(_val: Option<ExternRef>) {}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_externref_to_raw(
-    cx: CStoreContextMut<'_>,
-    val: Option<ManuallyDrop<ExternRef>>,
-) -> *mut c_void {
-    match val {
-        Some(ptr) => ptr.to_raw(cx),
-        None => ptr::null_mut(),
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_externref_from_raw(
-    _cx: CStoreContextMut<'_>,
-    val: *mut c_void,
-) -> Option<ExternRef> {
-    ExternRef::from_raw(val)
+    let val = src.to_val(&mut cx);
+    crate::initialize(dst, wasmtime_val_t::from_val(cx, val))
 }

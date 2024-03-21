@@ -14,15 +14,13 @@ use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32,
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
 use cranelift_codegen::ir::types;
-use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, JumpTableData, MemFlags, MemoryTypeData, MemoryTypeField, Opcode,
-    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    UserFuncName, Value,
+    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -347,30 +345,6 @@ impl Context {
         }
     }
 
-    // Allocate a table slot.
-    fn add_table(&mut self, table: Table, data: TableData, loc: Location) -> ParseResult<()> {
-        while self.function.tables.next_key().index() <= table.index() {
-            self.function.create_table(TableData {
-                base_gv: GlobalValue::reserved_value(),
-                min_size: Uimm64::new(0),
-                bound_gv: GlobalValue::reserved_value(),
-                element_size: Uimm64::new(0),
-                index_type: INVALID,
-            });
-        }
-        self.function.tables[table] = data;
-        self.map.def_table(table, loc)
-    }
-
-    // Resolve a reference to a table.
-    fn check_table(&self, table: Table, loc: Location) -> ParseResult<()> {
-        if !self.map.contains_table(table) {
-            err!(loc, "undefined table {}", table)
-        } else {
-            Ok(())
-        }
-    }
-
     // Allocate a new signature.
     fn add_sig(
         &mut self,
@@ -665,17 +639,6 @@ impl<'a> Parser<'a> {
         err!(self.loc, err_msg)
     }
 
-    // Match and consume a table reference.
-    fn match_table(&mut self, err_msg: &str) -> ParseResult<Table> {
-        if let Some(Token::Table(table)) = self.token() {
-            self.consume();
-            if let Some(table) = Table::with_number(table) {
-                return Ok(table);
-            }
-        }
-        err!(self.loc, err_msg)
-    }
-
     // Match and consume a memory-type reference.
     fn match_mt(&mut self, err_msg: &str) -> ParseResult<MemoryType> {
         if let Some(Token::MemoryType(mt)) = self.token() {
@@ -924,16 +887,18 @@ impl<'a> Parser<'a> {
     }
 
     // Match and a consume a possibly empty sequence of memory operation flags.
-    fn optional_memflags(&mut self) -> MemFlags {
+    fn optional_memflags(&mut self) -> ParseResult<MemFlags> {
         let mut flags = MemFlags::new();
         while let Some(Token::Identifier(text)) = self.token() {
-            if flags.set_by_name(text) {
-                self.consume();
-            } else {
-                break;
+            match flags.set_by_name(text) {
+                Ok(true) => {
+                    self.consume();
+                }
+                Ok(false) => break,
+                Err(msg) => return err!(self.loc, msg),
             }
         }
-        flags
+        Ok(flags)
     }
 
     // Match and consume an identifier.
@@ -1484,11 +1449,6 @@ impl<'a> Parser<'a> {
                     self.parse_memory_type_decl()
                         .and_then(|(mt, dat)| ctx.add_mt(mt, dat, self.loc))
                 }
-                Some(Token::Table(..)) => {
-                    self.start_gathering_comments();
-                    self.parse_table_decl()
-                        .and_then(|(table, dat)| ctx.add_table(table, dat, self.loc))
-                }
                 Some(Token::SigRef(..)) => {
                     self.start_gathering_comments();
                     self.parse_signature_decl().and_then(|(sig, dat)| {
@@ -1612,7 +1572,7 @@ impl<'a> Parser<'a> {
                     "expected '.' followed by type in load global value decl",
                 )?;
                 let global_type = self.match_type("expected load type")?;
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
 
@@ -1780,71 +1740,6 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(mt);
 
         Ok((mt, data))
-    }
-
-    // Parse a table decl.
-    //
-    // table-decl ::= * Table(table) "=" table-desc
-    // table-desc ::= table-style table-base { "," table-attr }
-    // table-style ::= "dynamic"
-    // table-base ::= GlobalValue(base)
-    // table-attr ::= "min" Imm64(bytes)
-    //              | "bound" Imm64(bytes)
-    //              | "element_size" Imm64(bytes)
-    //              | "index_type" type
-    //
-    fn parse_table_decl(&mut self) -> ParseResult<(Table, TableData)> {
-        let table = self.match_table("expected table number: table«n»")?;
-        self.match_token(Token::Equal, "expected '=' in table declaration")?;
-
-        let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
-
-        // table-desc ::= table-style * table-base { "," table-attr }
-        // table-base ::= * GlobalValue(base)
-        let base = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for table base"),
-            },
-            _ => return err!(self.loc, "expected table base"),
-        };
-        self.consume();
-
-        let mut data = TableData {
-            base_gv: base,
-            min_size: 0.into(),
-            bound_gv: GlobalValue::reserved_value(),
-            element_size: 0.into(),
-            index_type: ir::types::I32,
-        };
-
-        // table-desc ::= * { "," table-attr }
-        while self.optional(Token::Comma) {
-            match self.match_any_identifier("expected table attribute name")? {
-                "min" => {
-                    data.min_size = self.match_uimm64("expected integer min size")?;
-                }
-                "bound" => {
-                    data.bound_gv = match style_name {
-                        "dynamic" => self.match_gv("expected gv bound")?,
-                        t => return err!(self.loc, "unknown table style '{}'", t),
-                    };
-                }
-                "element_size" => {
-                    data.element_size = self.match_uimm64("expected integer element size")?;
-                }
-                "index_type" => {
-                    data.index_type = self.match_type("expected index type")?;
-                }
-                t => return err!(self.loc, "unknown table attribute '{}'", t),
-            }
-        }
-
-        // Collect any trailing comments.
-        self.token();
-        self.claim_gathered_comments(table);
-
-        Ok((table, data))
     }
 
     // Parse a signature decl.
@@ -3142,21 +3037,8 @@ impl<'a> Parser<'a> {
                     dynamic_stack_slot: dss,
                 }
             }
-            InstructionFormat::TableAddr => {
-                let table = self.match_table("expected table identifier")?;
-                ctx.check_table(table, self.loc)?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let arg = self.match_value("expected SSA value table address")?;
-                let offset = self.optional_offset32()?;
-                InstructionData::TableAddr {
-                    opcode,
-                    table,
-                    arg,
-                    offset,
-                }
-            }
             InstructionFormat::Load => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::Load {
@@ -3167,7 +3049,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Store => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
@@ -3190,7 +3072,7 @@ impl<'a> Parser<'a> {
                 InstructionData::CondTrap { opcode, arg, code }
             }
             InstructionFormat::AtomicCas => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let expected = self.match_value("expected SSA value address")?;
@@ -3203,7 +3085,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::AtomicRmw => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let op = self.match_enum("expected AtomicRmwOp")?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -3216,7 +3098,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::LoadNoOffset => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let addr = self.match_value("expected SSA value address")?;
                 InstructionData::LoadNoOffset {
                     opcode,
@@ -3225,7 +3107,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::StoreNoOffset => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags()?;
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
@@ -3255,14 +3137,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ParseError;
     use crate::isaspec::IsaSpec;
-    use crate::testfile::{Comment, Details};
-    use cranelift_codegen::ir::entities::AnyEntity;
-    use cranelift_codegen::ir::types;
-    use cranelift_codegen::ir::StackSlotKind;
-    use cranelift_codegen::ir::{ArgumentExtension, ArgumentPurpose};
-    use cranelift_codegen::isa::CallConv;
 
     #[test]
     fn argument_type() {

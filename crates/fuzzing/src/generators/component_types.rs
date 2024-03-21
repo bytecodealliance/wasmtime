@@ -46,77 +46,67 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
                 Ok(ControlFlow::Continue(()))
             })?;
 
-            list.new_val(values.into()).unwrap()
+            Val::List(values.into())
         }
-        Type::Record(record) => record
-            .new_val(
-                record
-                    .fields()
-                    .map(|field| Ok((field.name, arbitrary_val(&field.ty, input)?)))
-                    .collect::<arbitrary::Result<Vec<_>>>()?,
-            )
-            .unwrap(),
-        Type::Tuple(tuple) => tuple
-            .new_val(
-                tuple
-                    .types()
-                    .map(|ty| arbitrary_val(&ty, input))
-                    .collect::<arbitrary::Result<_>>()?,
-            )
-            .unwrap(),
+        Type::Record(record) => Val::Record(
+            record
+                .fields()
+                .map(|field| Ok((field.name.to_string(), arbitrary_val(&field.ty, input)?)))
+                .collect::<arbitrary::Result<_>>()?,
+        ),
+        Type::Tuple(tuple) => Val::Tuple(
+            tuple
+                .types()
+                .map(|ty| arbitrary_val(&ty, input))
+                .collect::<arbitrary::Result<_>>()?,
+        ),
         Type::Variant(variant) => {
             let cases = variant.cases().collect::<Vec<_>>();
             let case = input.choose(&cases)?;
             let payload = match &case.ty {
-                Some(ty) => Some(arbitrary_val(ty, input)?),
+                Some(ty) => Some(Box::new(arbitrary_val(ty, input)?)),
                 None => None,
             };
-            variant.new_val(case.name, payload).unwrap()
+            Val::Variant(case.name.to_string(), payload)
         }
         Type::Enum(en) => {
             let names = en.names().collect::<Vec<_>>();
             let name = input.choose(&names)?;
-            en.new_val(name).unwrap()
+            Val::Enum(name.to_string())
         }
         Type::Option(option) => {
             let discriminant = input.int_in_range(0..=1)?;
-            option
-                .new_val(match discriminant {
-                    0 => None,
-                    1 => Some(arbitrary_val(&option.ty(), input)?),
-                    _ => unreachable!(),
-                })
-                .unwrap()
+            Val::Option(match discriminant {
+                0 => None,
+                1 => Some(Box::new(arbitrary_val(&option.ty(), input)?)),
+                _ => unreachable!(),
+            })
         }
         Type::Result(result) => {
             let discriminant = input.int_in_range(0..=1)?;
-            result
-                .new_val(match discriminant {
-                    0 => Ok(match result.ok() {
-                        Some(ty) => Some(arbitrary_val(&ty, input)?),
-                        None => None,
-                    }),
-                    1 => Err(match result.err() {
-                        Some(ty) => Some(arbitrary_val(&ty, input)?),
-                        None => None,
-                    }),
-                    _ => unreachable!(),
-                })
-                .unwrap()
+            Val::Result(match discriminant {
+                0 => Ok(match result.ok() {
+                    Some(ty) => Some(Box::new(arbitrary_val(&ty, input)?)),
+                    None => None,
+                }),
+                1 => Err(match result.err() {
+                    Some(ty) => Some(Box::new(arbitrary_val(&ty, input)?)),
+                    None => None,
+                }),
+                _ => unreachable!(),
+            })
         }
-        Type::Flags(flags) => flags
-            .new_val(
-                &flags
-                    .names()
-                    .filter_map(|name| {
-                        input
-                            .arbitrary()
-                            .map(|p| if p { Some(name) } else { None })
-                            .transpose()
-                    })
-                    .collect::<arbitrary::Result<Box<[_]>>>()?,
-            )
-            .unwrap(),
+        Type::Flags(flags) => Val::Flags(
+            flags
+                .names()
+                .filter_map(|name| {
+                    input
+                        .arbitrary()
+                        .map(|p| if p { Some(name.to_string()) } else { None })
+                        .transpose()
+                })
+                .collect::<arbitrary::Result<_>>()?,
+        ),
 
         // Resources aren't fuzzed at this time.
         Type::Own(_) | Type::Borrow(_) => unreachable!(),

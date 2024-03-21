@@ -2179,25 +2179,29 @@ impl Compiler<'_, '_> {
             _ => panic!("expected a variant"),
         };
 
-        let src_info = variant_info(self.types, src_ty.cases.iter().map(|c| c.ty.as_ref()));
-        let dst_info = variant_info(self.types, dst_ty.cases.iter().map(|c| c.ty.as_ref()));
+        let src_info = variant_info(self.types, src_ty.cases.iter().map(|(_, c)| c.as_ref()));
+        let dst_info = variant_info(self.types, dst_ty.cases.iter().map(|(_, c)| c.as_ref()));
 
-        let iter = src_ty.cases.iter().enumerate().map(|(src_i, src_case)| {
-            let dst_i = dst_ty
-                .cases
-                .iter()
-                .position(|c| c.name == src_case.name)
-                .unwrap();
-            let dst_case = &dst_ty.cases[dst_i];
-            let src_i = u32::try_from(src_i).unwrap();
-            let dst_i = u32::try_from(dst_i).unwrap();
-            VariantCase {
-                src_i,
-                src_ty: src_case.ty.as_ref(),
-                dst_i,
-                dst_ty: dst_case.ty.as_ref(),
-            }
-        });
+        let iter = src_ty
+            .cases
+            .iter()
+            .enumerate()
+            .map(|(src_i, (src_case, src_case_ty))| {
+                let dst_i = dst_ty
+                    .cases
+                    .iter()
+                    .position(|(c, _)| c == src_case)
+                    .unwrap();
+                let dst_case_ty = &dst_ty.cases[dst_i];
+                let src_i = u32::try_from(src_i).unwrap();
+                let dst_i = u32::try_from(dst_i).unwrap();
+                VariantCase {
+                    src_i,
+                    src_ty: src_case_ty.as_ref(),
+                    dst_i,
+                    dst_ty: dst_case_ty.as_ref(),
+                }
+            });
         self.convert_variant(src, &src_info, dst, &dst_info, iter);
     }
 

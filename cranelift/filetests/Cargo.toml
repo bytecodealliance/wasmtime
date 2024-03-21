@@ -9,6 +9,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 publish = false
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-codegen = { workspace = true, features = ["disas"] }
 cranelift-frontend = { workspace = true }
@@ -31,7 +34,5 @@ wat.workspace = true
 toml = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
-cranelift-wasm.workspace = true
-wasmparser.workspace = true
 cranelift.workspace = true
 smallvec = { workspace = true }

@@ -2,14 +2,14 @@ use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle};
 use crate::memory::Memory;
 use crate::mpk::ProtectionKey;
-use crate::table::Table;
+use crate::table::{Table, TableElementType};
 use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Result};
 use std::{alloc, any::Any, mem, ptr, sync::Arc};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, TableSegment,
-    Trap, VMOffsets, WasmType, WASM_PAGE_SIZE,
+    Trap, VMOffsets, WasmValType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "component-model")]
@@ -507,7 +507,7 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
         let table = unsafe { &*instance.get_table(segment.table_index) };
         let start = get_table_init_start(segment, instance)?;
         let start = usize::try_from(start).unwrap();
-        let end = start.checked_add(segment.elements.len());
+        let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
         match end {
             Some(end) if end <= table.size() as usize => {
@@ -531,8 +531,26 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
             TableInitialValue::FuncRef(idx) => {
                 let funcref = instance.get_func_ref(*idx).unwrap();
                 let table = unsafe { &mut *instance.get_defined_table(table) };
-                table.init_func(funcref)?;
+                let init = (0..table.size()).map(|_| funcref);
+                table.init_func(0, init)?;
             }
+
+            TableInitialValue::GlobalGet(idx) => unsafe {
+                let global = instance.defined_or_imported_global_ptr(*idx);
+                let table = &mut *instance.get_defined_table(table);
+                match table.element_type() {
+                    TableElementType::Func => {
+                        let funcref = (*global).as_func_ref();
+                        let init = (0..table.size()).map(|_| funcref);
+                        table.init_func(0, init)?;
+                    }
+                    TableElementType::Extern => {
+                        let externref = (*global).as_externref();
+                        let init = (0..table.size()).map(|_| externref.clone());
+                        table.init_extern(0, init)?;
+                    }
+                }
+            },
         }
     }
 
@@ -550,7 +568,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
             &segment.elements,
             start,
             0,
-            segment.elements.len() as u32,
+            segment.elements.len(),
         )?;
     }
 
@@ -613,7 +631,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
     // 32-bit globals which can be used as the base for 32-bit memories.
     let get_global_as_u64 = &mut |instance: &mut Instance, global| unsafe {
         let def = instance.defined_or_imported_global_ptr(global);
-        if module.globals[global].wasm_ty == WasmType::I64 {
+        if module.globals[global].wasm_ty == WasmValType::I64 {
             *(*def).as_u64()
         } else {
             u64::from(*(*def).as_u32())

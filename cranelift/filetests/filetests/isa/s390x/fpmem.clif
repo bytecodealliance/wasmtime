@@ -14,7 +14,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld %f0, 0(%r2)
+;   ld %f0, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_f32(i64) -> f32 {
@@ -30,7 +30,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   le %f0, 0(%r2)
+;   le %f0, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %load_f64_little(i64) -> f64 {
@@ -47,7 +47,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrvg %r4, 0(%r2)
+;   lrvg %r4, 0(%r2) ; trap: heap_oob
 ;   ldgr %f0, %r4
 ;   br %r14
 
@@ -65,7 +65,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lrv %r4, 0(%r2)
+;   lrv %r4, 0(%r2) ; trap: heap_oob
 ;   vlvgf %v0, %r4, 0
 ;   br %r14
 
@@ -82,7 +82,7 @@ block0(v0: f64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   std %f0, 0(%r2)
+;   std %f0, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_f32(f32, i64) {
@@ -98,7 +98,7 @@ block0(v0: f32, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ste %f0, 0(%r2)
+;   ste %f0, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_f64_little(f64, i64) {
@@ -116,7 +116,7 @@ block0(v0: f64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgdr %r5, %f0
-;   strvg %r5, 0(%r2)
+;   strvg %r5, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_f32_little(f32, i64) {
@@ -134,6 +134,6 @@ block0(v0: f32, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vlgvf %r5, %v0, 0
-;   strv %r5, 0(%r2)
+;   strv %r5, 0(%r2) ; trap: heap_oob
 ;   br %r14
 

@@ -1,3 +1,4 @@
+package wasi:random@0.2.0;
 /// The insecure-seed interface for seeding hash-map DoS resistance.
 ///
 /// It is intended to be portable at least between Unix-family platforms and

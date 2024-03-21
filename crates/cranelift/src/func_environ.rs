@@ -2,27 +2,26 @@ use cfg_if::cfg_if;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
-use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
+use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
-    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmHeapType, WasmRefType, WasmResult,
-    WasmType,
+    EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
+    HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
+    TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
-use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
-    TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleType,
+    ModuleTypesBuilder, PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -35,26 +34,41 @@ macro_rules! declare_function_signatures {
     ) => {
         /// A struct with an `Option<ir::SigRef>` member for every builtin
         /// function, to de-duplicate constructing/getting its signature.
+        #[allow(unused_doc_comments)]
         struct BuiltinFunctionSignatures {
             pointer_type: ir::Type,
+
+            #[cfg(feature = "gc")]
             reference_type: ir::Type,
+
             call_conv: isa::CallConv,
+
             $(
+                $( #[$attr] )*
                 $name: Option<ir::SigRef>,
             )*
         }
 
+        #[allow(unused_doc_comments)]
         impl BuiltinFunctionSignatures {
             fn new(
                 pointer_type: ir::Type,
                 reference_type: ir::Type,
                 call_conv: isa::CallConv,
             ) -> Self {
+                #[cfg(not(feature = "gc"))]
+                let _ = reference_type;
+
                 Self {
                     pointer_type,
+
+                    #[cfg(feature = "gc")]
                     reference_type,
+
                     call_conv,
+
                     $(
+                        $( #[$attr] )*
                         $name: None,
                     )*
                 }
@@ -64,6 +78,7 @@ macro_rules! declare_function_signatures {
                 AbiParam::special(self.pointer_type, ArgumentPurpose::VMContext)
             }
 
+            #[cfg(feature = "gc")]
             fn reference(&self) -> AbiParam {
                 AbiParam::new(self.reference_type)
             }
@@ -90,6 +105,7 @@ macro_rules! declare_function_signatures {
             }
 
             $(
+                $( #[$attr] )*
                 fn $name(&mut self, func: &mut Function) -> ir::SigRef {
                     let sig = self.$name.unwrap_or_else(|| {
                         func.import_signature(Signature {
@@ -112,12 +128,15 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
-    types: &'module_environment ModuleTypes,
+    types: &'module_environment ModuleTypesBuilder,
 
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
     /// Heaps implementing WebAssembly linear memories.
     heaps: PrimaryMap<Heap, HeapData>,
+
+    /// Cranelift tables we have created to implement Wasm tables.
+    tables: SecondaryMap<TableIndex, Option<TableData>>,
 
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
@@ -169,7 +188,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         isa: &'module_environment (dyn TargetIsa + 'module_environment),
         translation: &'module_environment ModuleTranslation<'module_environment>,
-        types: &'module_environment ModuleTypes,
+        types: &'module_environment ModuleTypesBuilder,
         tunables: &'module_environment Tunables,
         wmemcheck: bool,
     ) -> Self {
@@ -192,6 +211,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             module: &translation.module,
             types,
             heaps: PrimaryMap::default(),
+            tables: SecondaryMap::default(),
             vmctx: None,
             pcc_vmctx_memtype: None,
             builtin_function_signatures,
@@ -337,6 +357,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// reference count.
     ///
     /// The new reference count is returned.
+    #[cfg(feature = "gc")]
     fn mutate_externref_ref_count(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -344,20 +365,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         delta: i64,
     ) -> ir::Value {
         debug_assert!(delta == -1 || delta == 1);
-
         let pointer_type = self.pointer_type();
-
-        // If this changes that's ok, the `atomic_rmw` below just needs to be
-        // preceded with an add instruction of `externref` and the offset.
-        assert_eq!(self.offsets.vm_extern_data_ref_count(), 0);
-        let delta = builder.ins().iconst(pointer_type, delta);
-        builder.ins().atomic_rmw(
-            pointer_type,
-            ir::MemFlags::trusted(),
-            ir::AtomicRmwOp::Add,
-            externref,
-            delta,
-        )
+        let offset = i32::try_from(self.offsets.vm_extern_data_ref_count()).unwrap();
+        let count = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), externref, offset);
+        let new_count = builder.ins().iadd_imm(count, delta);
+        builder
+            .ins()
+            .store(ir::MemFlags::trusted(), new_count, externref, offset);
+        new_count
     }
 
     fn get_global_location(
@@ -852,28 +869,107 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
+    /// Set up the necessary preamble definitions in `func` to access the table identified
+    /// by `index`.
+    ///
+    /// The index space covers both imported and locally declared tables.
+    fn ensure_table_exists(&mut self, func: &mut ir::Function, index: TableIndex) {
+        if self.tables[index].is_some() {
+            return;
+        }
+
+        let pointer_type = self.pointer_type();
+
+        let (ptr, base_offset, current_elements_offset) = {
+            let vmctx = self.vmctx(func);
+            if let Some(def_index) = self.module.defined_table_index(index) {
+                let base_offset =
+                    i32::try_from(self.offsets.vmctx_vmtable_definition_base(def_index)).unwrap();
+                let current_elements_offset = i32::try_from(
+                    self.offsets
+                        .vmctx_vmtable_definition_current_elements(def_index),
+                )
+                .unwrap();
+                (vmctx, base_offset, current_elements_offset)
+            } else {
+                let from_offset = self.offsets.vmctx_vmtable_import_from(index);
+                let table = func.create_global_value(ir::GlobalValueData::Load {
+                    base: vmctx,
+                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
+                    global_type: pointer_type,
+                    flags: MemFlags::trusted().with_readonly(),
+                });
+                let base_offset = i32::from(self.offsets.vmtable_definition_base());
+                let current_elements_offset =
+                    i32::from(self.offsets.vmtable_definition_current_elements());
+                (table, base_offset, current_elements_offset)
+            }
+        };
+
+        let base_gv = func.create_global_value(ir::GlobalValueData::Load {
+            base: ptr,
+            offset: Offset32::new(base_offset),
+            global_type: pointer_type,
+            flags: MemFlags::trusted(),
+        });
+
+        let table = &self.module.table_plans[index].table;
+        let element_size = self.reference_type(table.wasm_ty.heap_type).bytes();
+
+        let bound = if Some(table.minimum) == table.maximum {
+            TableSize::Static {
+                bound: table.minimum,
+            }
+        } else {
+            TableSize::Dynamic {
+                bound_gv: func.create_global_value(ir::GlobalValueData::Load {
+                    base: ptr,
+                    offset: Offset32::new(current_elements_offset),
+                    global_type: ir::Type::int(
+                        u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
+                    )
+                    .unwrap(),
+                    flags: MemFlags::trusted(),
+                }),
+            }
+        };
+
+        self.tables[index] = Some(TableData {
+            base_gv,
+            bound,
+            element_size,
+        });
+    }
+
     fn get_or_init_func_ref_table_elem(
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         index: ir::Value,
     ) -> ir::Value {
         let pointer_type = self.pointer_type();
+        self.ensure_table_exists(builder.func, table_index);
+        let table_data = self.tables[table_index].as_ref().unwrap();
 
         // To support lazy initialization of table
         // contents, we check for a null entry here, and
         // if null, we take a slow-path that invokes a
         // libcall.
-        let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-        let flags = ir::MemFlags::trusted().with_table();
+        let (table_entry_addr, flags) = table_data.prepare_table_addr(
+            builder,
+            index,
+            pointer_type,
+            self.isa.flags().enable_table_access_spectre_mitigation(),
+        );
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
         // Mask off the "initialized bit". See documentation on
         // FUNCREF_INIT_BIT in crates/environ/src/ref_bits.rs for more
-        // details.
-        let value_masked = builder
-            .ins()
-            .band_imm(value, Imm64::from(FUNCREF_MASK as i64));
+        // details. Note that `FUNCREF_MASK` has type `usize` which may not be
+        // appropriate for the target architecture. Right now its value is
+        // always -2 so assert that part doesn't change and then thread through
+        // -2 as the immediate.
+        assert_eq!(FUNCREF_MASK as isize, -2);
+        let value_masked = builder.ins().band_imm(value, Imm64::from(-2));
 
         let null_block = builder.create_block();
         let continuation_block = builder.create_block();
@@ -941,12 +1037,103 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .get(&func_index)
             .map(|s| *s)
     }
+
+    /// Proof-carrying code: create a memtype describing an empty
+    /// runtime struct (to be updated later).
+    fn create_empty_struct_memtype(&self, func: &mut ir::Function) -> ir::MemoryType {
+        func.create_memory_type(ir::MemoryTypeData::Struct {
+            size: 0,
+            fields: vec![],
+        })
+    }
+
+    /// Proof-carrying code: add a new field to a memtype used to
+    /// describe a runtime struct. A memory region of type `memtype`
+    /// will have a pointer at `offset` pointing to another memory
+    /// region of type `pointee`. `readonly` indicates whether the
+    /// PCC-checked code is expected to update this field or not.
+    fn add_field_to_memtype(
+        &self,
+        func: &mut ir::Function,
+        memtype: ir::MemoryType,
+        offset: u32,
+        pointee: ir::MemoryType,
+        readonly: bool,
+    ) {
+        let ptr_size = self.pointer_type().bytes();
+        match &mut func.memory_types[memtype] {
+            ir::MemoryTypeData::Struct { size, fields } => {
+                *size = std::cmp::max(*size, offset.checked_add(ptr_size).unwrap().into());
+                fields.push(ir::MemoryTypeField {
+                    ty: self.pointer_type(),
+                    offset: offset.into(),
+                    readonly,
+                    fact: Some(ir::Fact::Mem {
+                        ty: pointee,
+                        min_offset: 0,
+                        max_offset: 0,
+                        nullable: false,
+                    }),
+                });
+
+                // Sort fields by offset -- we need to do this now
+                // because we may create an arbitrary number of
+                // memtypes for imported memories and we don't
+                // otherwise track them.
+                fields.sort_by_key(|f| f.offset);
+            }
+            _ => panic!("Cannot add field to non-struct memtype"),
+        }
+    }
+
+    /// Add one level of indirection to a pointer-and-memtype pair:
+    /// generate a load in the code at the specified offset, and if
+    /// memtypes are in use, add a field to the original struct and
+    /// generate a new memtype for the pointee.
+    fn load_pointer_with_memtypes(
+        &self,
+        func: &mut ir::Function,
+        value: ir::GlobalValue,
+        offset: u32,
+        readonly: bool,
+        memtype: Option<ir::MemoryType>,
+    ) -> (ir::GlobalValue, Option<ir::MemoryType>) {
+        let pointee = func.create_global_value(ir::GlobalValueData::Load {
+            base: value,
+            offset: Offset32::new(i32::try_from(offset).unwrap()),
+            global_type: self.pointer_type(),
+            flags: MemFlags::trusted().with_readonly(),
+        });
+
+        let mt = memtype.map(|mt| {
+            let pointee_mt = self.create_empty_struct_memtype(func);
+            self.add_field_to_memtype(func, mt, offset, pointee_mt, readonly);
+            func.global_value_facts[pointee] = Some(Fact::Mem {
+                ty: pointee_mt,
+                min_offset: 0,
+                max_offset: 0,
+                nullable: false,
+            });
+            pointee_mt
+        });
+        (pointee, mt)
+    }
 }
 
 struct Call<'a, 'func, 'module_env> {
     builder: &'a mut FunctionBuilder<'func>,
     env: &'a mut FuncEnvironment<'module_env>,
     tail: bool,
+}
+
+enum CheckIndirectCallTypeSignature {
+    Runtime,
+    StaticMatch {
+        /// Whether or not the funcref may be null or if it's statically known
+        /// to not be null.
+        may_be_null: bool,
+    },
+    StaticTrap,
 }
 
 impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
@@ -1046,70 +1233,164 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     pub fn indirect_call(
         mut self,
         table_index: TableIndex,
-        table: ir::Table,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        let pointer_type = self.env.pointer_type();
-
+    ) -> WasmResult<Option<ir::Inst>> {
         // Get the funcref pointer from the table.
         let funcref_ptr =
             self.env
-                .get_or_init_func_ref_table_elem(self.builder, table_index, table, callee);
-
-        // Check for whether the table element is null, and trap if so.
-        self.builder
-            .ins()
-            .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
+                .get_or_init_func_ref_table_elem(self.builder, table_index, callee);
 
         // If necessary, check the signature.
-        match self.env.module.table_plans[table_index].style {
-            TableStyle::CallerChecksSignature => {
-                let sig_id_size = self.env.offsets.size_of_vmshared_signature_index();
-                let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
-                let vmctx = self.env.vmctx(self.builder.func);
-                let base = self.builder.ins().global_value(pointer_type, vmctx);
+        let check = self.check_indirect_call_type_signature(table_index, ty_index, funcref_ptr);
 
-                // Load the caller ID. This requires loading the `*mut
-                // VMFuncRef` base pointer from `VMContext` and then loading,
-                // based on `SignatureIndex`, the corresponding entry.
-                let mem_flags = ir::MemFlags::trusted().with_readonly();
-                let signatures = self.builder.ins().load(
-                    pointer_type,
-                    mem_flags,
-                    base,
-                    i32::try_from(self.env.offsets.vmctx_signature_ids_array()).unwrap(),
-                );
-                let sig_index = self.env.module.types[ty_index].unwrap_function();
-                let offset =
-                    i32::try_from(sig_index.as_u32().checked_mul(sig_id_type.bytes()).unwrap())
-                        .unwrap();
-                let caller_sig_id =
-                    self.builder
-                        .ins()
-                        .load(sig_id_type, mem_flags, signatures, offset);
+        let trap_code = match check {
+            // `funcref_ptr` is checked at runtime that its type matches,
+            // meaning that if code gets this far it's guaranteed to not be
+            // null. That means nothing in `unchecked_call` can fail.
+            CheckIndirectCallTypeSignature::Runtime => None,
 
-                // Load the callee ID.
-                let mem_flags = ir::MemFlags::trusted().with_readonly();
-                let callee_sig_id = self.builder.ins().load(
-                    sig_id_type,
-                    mem_flags,
-                    funcref_ptr,
-                    i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
-                );
+            // No type check was performed on `funcref_ptr` because it's
+            // statically known to have the right type. Note that whether or
+            // not the function is null is not necessarily tested so far since
+            // no type information was inspected.
+            //
+            // If the table may hold null functions, then further loads in
+            // `unchecked_call` may fail. If the table only holds non-null
+            // functions, though, then there's no possibility of a trap.
+            CheckIndirectCallTypeSignature::StaticMatch { may_be_null } => {
+                if may_be_null {
+                    Some(ir::TrapCode::IndirectCallToNull)
+                } else {
+                    None
+                }
+            }
 
-                // Check that they match.
-                let cmp = self
-                    .builder
-                    .ins()
-                    .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
-                self.builder.ins().trapz(cmp, ir::TrapCode::BadSignature);
+            // Code has already trapped, so return nothing indicating that this
+            // is now unreachable code.
+            CheckIndirectCallTypeSignature::StaticTrap => return Ok(None),
+        };
+        self.unchecked_call(sig_ref, funcref_ptr, trap_code, call_args)
+            .map(Some)
+    }
+
+    fn check_indirect_call_type_signature(
+        &mut self,
+        table_index: TableIndex,
+        ty_index: TypeIndex,
+        funcref_ptr: ir::Value,
+    ) -> CheckIndirectCallTypeSignature {
+        let pointer_type = self.env.pointer_type();
+        let table = &self.env.module.table_plans[table_index];
+        let sig_id_size = self.env.offsets.size_of_vmshared_type_index();
+        let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
+
+        // Generate a rustc compile error here if more styles are added in
+        // the future as the following code is tailored to just this style.
+        let TableStyle::CallerChecksSignature = table.style;
+
+        // Test if a type check is necessary for this table. If this table is a
+        // table of typed functions and that type matches `ty_index`, then
+        // there's no need to perform a typecheck.
+        match table.table.wasm_ty.heap_type {
+            // Functions do not have a statically known type in the table, a
+            // typecheck is required. Fall through to below to perform the
+            // actual typecheck.
+            WasmHeapType::Func => {}
+
+            // Functions that have a statically known type are either going to
+            // always succeed or always fail. Figure out by inspecting the types
+            // further.
+            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(table_ty)) => {
+                // If `ty_index` matches `table_ty`, then this call is
+                // statically known to have the right type, so no checks are
+                // necessary.
+                let ModuleType::Function(specified_ty) = self.env.module.types[ty_index];
+                if specified_ty == table_ty {
+                    return CheckIndirectCallTypeSignature::StaticMatch {
+                        may_be_null: table.table.wasm_ty.nullable,
+                    };
+                }
+
+                // Otherwise if the types don't match then either (a) this is a
+                // null pointer or (b) it's a pointer with the wrong type.
+                // Figure out which and trap here.
+                //
+                // If it's possible to have a null here then try to load the
+                // type information. If that fails due to the function being a
+                // null pointer, then this was a call to null. Otherwise if it
+                // succeeds then we know it won't match, so trap anyway.
+                if table.table.wasm_ty.nullable {
+                    let mem_flags = ir::MemFlags::trusted().with_readonly();
+                    self.builder.ins().load(
+                        sig_id_type,
+                        mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull)),
+                        funcref_ptr,
+                        i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
+                    );
+                }
+                self.builder.ins().trap(ir::TrapCode::BadSignature);
+                return CheckIndirectCallTypeSignature::StaticTrap;
+            }
+
+            // Tables of `nofunc` can only be inhabited by null, so go ahead and
+            // trap with that.
+            WasmHeapType::NoFunc => {
+                assert!(table.table.wasm_ty.nullable);
+                self.builder.ins().trap(ir::TrapCode::IndirectCallToNull);
+                return CheckIndirectCallTypeSignature::StaticTrap;
+            }
+
+            // Engine-indexed types don't show up until runtime and it's a wasm
+            // validation error to perform a call through an `externref` table,
+            // so these cases are dynamically not reachable.
+            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(_)) | WasmHeapType::Extern => {
+                unreachable!()
             }
         }
 
-        self.unchecked_call(sig_ref, funcref_ptr, call_args)
+        let vmctx = self.env.vmctx(self.builder.func);
+        let base = self.builder.ins().global_value(pointer_type, vmctx);
+
+        // Load the caller ID. This requires loading the `*mut VMFuncRef` base
+        // pointer from `VMContext` and then loading, based on `SignatureIndex`,
+        // the corresponding entry.
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let signatures = self.builder.ins().load(
+            pointer_type,
+            mem_flags,
+            base,
+            i32::try_from(self.env.offsets.vmctx_type_ids_array()).unwrap(),
+        );
+        let sig_index = self.env.module.types[ty_index].unwrap_function();
+        let offset =
+            i32::try_from(sig_index.as_u32().checked_mul(sig_id_type.bytes()).unwrap()).unwrap();
+        let caller_sig_id = self
+            .builder
+            .ins()
+            .load(sig_id_type, mem_flags, signatures, offset);
+
+        // Load the callee ID.
+        //
+        // Note that the callee may be null in which case this load may
+        // trap. If so use the `IndirectCallToNull` trap code.
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let callee_sig_id = self.builder.ins().load(
+            sig_id_type,
+            mem_flags.with_trap_code(Some(ir::TrapCode::IndirectCallToNull)),
+            funcref_ptr,
+            i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
+        );
+
+        // Check that they match.
+        let cmp = self
+            .builder
+            .ins()
+            .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
+        self.builder.ins().trapz(cmp, ir::TrapCode::BadSignature);
+        CheckIndirectCallTypeSignature::Runtime
     }
 
     /// Call a typed function reference.
@@ -1119,19 +1400,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee: ir::Value,
         args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        // Check for whether the callee is null, and trap if so.
-        //
         // FIXME: the wasm type system tracks enough information to know whether
         // `callee` is a null reference or not. In some situations it can be
         // statically known here that `callee` cannot be null in which case this
-        // null check can be elided. This requires feeding type information from
+        // can be `None` instead. This requires feeding type information from
         // wasmparser's validator into this function, however, which is not
         // easily done at this time.
-        self.builder
-            .ins()
-            .trapz(callee, ir::TrapCode::NullReference);
+        let callee_load_trap_code = Some(ir::TrapCode::NullReference);
 
-        self.unchecked_call(sig_ref, callee, args)
+        self.unchecked_call(sig_ref, callee, callee_load_trap_code, args)
     }
 
     /// This calls a function by reference without checking the signature.
@@ -1143,15 +1420,22 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         &mut self,
         sig_ref: ir::SigRef,
         callee: ir::Value,
+        callee_load_trap_code: Option<ir::TrapCode>,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         let pointer_type = self.env.pointer_type();
 
         // Dereference callee pointer to get the function address.
+        //
+        // Note that this may trap if `callee` hasn't previously been verified
+        // to be non-null. This means that this load is annotated with an
+        // optional trap code provided by the caller of `unchecked_call` which
+        // will handle the case where this is either already known to be
+        // non-null or may trap.
         let mem_flags = ir::MemFlags::trusted().with_readonly();
         let func_addr = self.builder.ins().load(
             pointer_type,
-            mem_flags,
+            mem_flags.with_trap_code(callee_load_trap_code),
             callee,
             i32::from(self.env.offsets.ptr.vm_func_ref_wasm_call()),
         );
@@ -1204,8 +1488,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 }
 
 impl TypeConvert for FuncEnvironment<'_> {
-    fn lookup_heap_type(&self, ty: TypeIndex) -> WasmHeapType {
-        self.module.lookup_heap_type(ty)
+    fn lookup_heap_type(&self, ty: wasmparser::UnpackedIndex) -> WasmHeapType {
+        wasmtime_environ::WasmparserTypeConverter {
+            module: self.module,
+            types: self.types,
+        }
+        .lookup_heap_type(ty)
     }
 }
 
@@ -1245,85 +1533,33 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.epoch_ptr_var = Variable::new(num_locals + 3);
     }
 
-    fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table> {
-        let pointer_type = self.pointer_type();
-
-        let (ptr, base_offset, current_elements_offset) = {
-            let vmctx = self.vmctx(func);
-            if let Some(def_index) = self.module.defined_table_index(index) {
-                let base_offset =
-                    i32::try_from(self.offsets.vmctx_vmtable_definition_base(def_index)).unwrap();
-                let current_elements_offset = i32::try_from(
-                    self.offsets
-                        .vmctx_vmtable_definition_current_elements(def_index),
-                )
-                .unwrap();
-                (vmctx, base_offset, current_elements_offset)
-            } else {
-                let from_offset = self.offsets.vmctx_vmtable_import_from(index);
-                let table = func.create_global_value(ir::GlobalValueData::Load {
-                    base: vmctx,
-                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
-                    flags: MemFlags::trusted().with_readonly(),
-                });
-                let base_offset = i32::from(self.offsets.vmtable_definition_base());
-                let current_elements_offset =
-                    i32::from(self.offsets.vmtable_definition_current_elements());
-                (table, base_offset, current_elements_offset)
-            }
-        };
-
-        let base_gv = func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
-            offset: Offset32::new(base_offset),
-            global_type: pointer_type,
-            flags: MemFlags::trusted(),
-        });
-        let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
-            offset: Offset32::new(current_elements_offset),
-            global_type: ir::Type::int(
-                u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
-            )
-            .unwrap(),
-            flags: MemFlags::trusted(),
-        });
-
-        let element_size = u64::from(
-            self.reference_type(self.module.table_plans[index].table.wasm_ty.heap_type)
-                .bytes(),
-        );
-
-        Ok(func.create_table(ir::TableData {
-            base_gv,
-            min_size: Uimm64::new(0),
-            bound_gv,
-            element_size: Uimm64::new(element_size),
-            index_type: I32,
-        }))
-    }
-
     fn translate_table_grow(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         table_index: TableIndex,
-        _table: ir::Table,
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
         let (func_idx, func_sig) =
             match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func | WasmHeapType::TypedFunc(_) => (
+                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => (
                     BuiltinFunctionIndex::table_grow_func_ref(),
                     self.builtin_function_signatures
                         .table_grow_func_ref(&mut pos.func),
                 ),
+                #[cfg(feature = "gc")]
                 WasmHeapType::Extern => (
                     BuiltinFunctionIndex::table_grow_externref(),
                     self.builtin_function_signatures
                         .table_grow_externref(&mut pos.func),
                 ),
+                #[cfg(not(feature = "gc"))]
+                WasmHeapType::Extern => {
+                    return Err(cranelift_wasm::wasm_unsupported!(
+                        "support for `externref` disabled at compile time because \
+                     the `gc` cargo feature was not enabled",
+                    ))
+                }
             };
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
@@ -1342,18 +1578,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         index: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let pointer_type = self.pointer_type();
-
         let plan = &self.module.table_plans[table_index];
         match plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => match plan.style {
-                TableStyle::CallerChecksSignature => {
-                    Ok(self.get_or_init_func_ref_table_elem(builder, table_index, table, index))
+            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+                match plan.style {
+                    TableStyle::CallerChecksSignature => {
+                        Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index))
+                    }
                 }
-            },
+            }
+            #[cfg(feature = "gc")]
             WasmHeapType::Extern => {
                 // Our read barrier for `externref` tables is roughly equivalent
                 // to the following pseudocode:
@@ -1375,6 +1611,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // onto the stack are safely held alive by the
                 // `VMExternRefActivationsTable`.
 
+                let pointer_type = self.pointer_type();
                 let reference_type = self.reference_type(WasmHeapType::Extern);
 
                 builder.ensure_inserted_block();
@@ -1389,8 +1626,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder.insert_block_after(continue_block, gc_block);
 
                 // Load the table element.
-                let elem_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                let flags = ir::MemFlags::trusted().with_table();
+                self.ensure_table_exists(builder.func, table_index);
+                let table_data = self.tables[table_index].as_ref().unwrap();
+                let (elem_addr, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    pointer_type,
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
                 let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
 
                 let elem_is_null = builder.ins().is_null(elem);
@@ -1470,6 +1713,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(elem)
             }
+            #[cfg(not(feature = "gc"))]
+            WasmHeapType::Extern => {
+                return Err(cranelift_wasm::wasm_unsupported!(
+                    "support for `externref` disabled at compile time because the \
+                 `gc` cargo feature was not enabled",
+                ))
+            }
         }
     }
 
@@ -1477,40 +1727,48 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         value: ir::Value,
         index: ir::Value,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
         let plan = &self.module.table_plans[table_index];
+        self.ensure_table_exists(builder.func, table_index);
+        let table_data = self.tables[table_index].as_ref().unwrap();
         match plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => match plan.style {
-                TableStyle::CallerChecksSignature => {
-                    let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                    // Set the "initialized bit". See doc-comment on
-                    // `FUNCREF_INIT_BIT` in
-                    // crates/environ/src/ref_bits.rs for details.
-                    let value_with_init_bit = builder
-                        .ins()
-                        .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
-                    let flags = ir::MemFlags::trusted().with_table();
-                    builder
-                        .ins()
-                        .store(flags, value_with_init_bit, table_entry_addr, 0);
-                    Ok(())
+            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+                match plan.style {
+                    TableStyle::CallerChecksSignature => {
+                        let (table_entry_addr, flags) = table_data.prepare_table_addr(
+                            builder,
+                            index,
+                            pointer_type,
+                            self.isa.flags().enable_table_access_spectre_mitigation(),
+                        );
+                        // Set the "initialized bit". See doc-comment on
+                        // `FUNCREF_INIT_BIT` in
+                        // crates/environ/src/ref_bits.rs for details.
+                        let value_with_init_bit = builder
+                            .ins()
+                            .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
+                        builder
+                            .ins()
+                            .store(flags, value_with_init_bit, table_entry_addr, 0);
+                        Ok(())
+                    }
                 }
-            },
+            }
 
+            #[cfg(feature = "gc")]
             WasmHeapType::Extern => {
                 // Our write barrier for `externref`s being copied out of the
                 // stack and into a table is roughly equivalent to the following
                 // pseudocode:
                 //
                 // ```
-                // if value != null:
-                //     value.ref_count += 1
                 // let current_elem = table[index]
                 // table[index] = value
+                // if value != null:
+                //     value.ref_count += 1
                 // if current_elem != null:
                 //     current_elem.ref_count -= 1
                 //     if current_elem.ref_count == 0:
@@ -1543,11 +1801,29 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let continue_block = builder.create_block();
                 builder.insert_block_after(continue_block, drop_block);
 
-                // Calculate the table address of the current element and do
-                // bounds checks. This is the first thing we do, because we
-                // don't want to modify any ref counts if this `table.set` is
-                // going to trap.
-                let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+                // Grab the current element from the table if it's in-bounds,
+                // and store the new `value` into the table. This is the first
+                // thing we do, because we don't want to modify the ref count
+                // on `value` if this `table.set` is going to trap due to an
+                // out-of-bounds index.
+                //
+                // Note that we load the current element as a pointer, not a
+                // reference. This is so that if we call out-of-line to run its
+                // destructor, and its destructor triggers GC, this reference is
+                // not recorded in the stack map (which would lead to the GC
+                // saving a reference to a deallocated object, and then using it
+                // after its been freed).
+                let (table_entry_addr, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    pointer_type,
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
+
+                // After the load, a store to the same address can't trap.
+                let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
+                builder.ins().store(flags, value, table_entry_addr, 0);
 
                 // If value is not null, increment `value`'s ref count.
                 //
@@ -1570,23 +1846,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 self.mutate_externref_ref_count(builder, value, 1);
                 builder.ins().jump(check_current_elem_block, &[]);
 
-                // Grab the current element from the table, and store the new
-                // `value` into the table.
-                //
-                // Note that we load the current element as a pointer, not a
-                // reference. This is so that if we call out-of-line to run its
-                // destructor, and its destructor triggers GC, this reference is
-                // not recorded in the stack map (which would lead to the GC
-                // saving a reference to a deallocated object, and then using it
-                // after its been freed).
-                builder.switch_to_block(check_current_elem_block);
-                let flags = ir::MemFlags::trusted().with_table();
-                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
-                builder.ins().store(flags, value, table_entry_addr, 0);
-
                 // If the current element is non-null, decrement its reference
                 // count. And if its reference count has reached zero, then make
                 // an out-of-line call to deallocate it.
+                builder.switch_to_block(check_current_elem_block);
                 let current_elem_is_null =
                     builder
                         .ins()
@@ -1600,9 +1863,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 );
 
                 builder.switch_to_block(dec_ref_count_block);
-                let prev_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
-                let one = builder.ins().iconst(pointer_type, 1);
-                let cond = builder.ins().icmp(IntCC::Equal, one, prev_ref_count);
+                let new_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
+                let cond = builder.ins().icmp_imm(IntCC::Equal, new_ref_count, 0);
                 builder
                     .ins()
                     .brif(cond, drop_block, &[], continue_block, &[]);
@@ -1631,6 +1893,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(())
             }
+
+            #[cfg(not(feature = "gc"))]
+            WasmHeapType::Extern => {
+                return Err(cranelift_wasm::wasm_unsupported!(
+                    "support for `externref` disabled at compile time because the \
+                     `gc` cargo feature was not enabled",
+                ))
+            }
         }
     }
 
@@ -1644,16 +1914,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         let (builtin_idx, builtin_sig) =
             match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func | WasmHeapType::TypedFunc(_) => (
+                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => (
                     BuiltinFunctionIndex::table_fill_func_ref(),
                     self.builtin_function_signatures
                         .table_fill_func_ref(&mut pos.func),
                 ),
+                #[cfg(feature = "gc")]
                 WasmHeapType::Extern => (
                     BuiltinFunctionIndex::table_fill_externref(),
                     self.builtin_function_signatures
                         .table_fill_externref(&mut pos.func),
                 ),
+                #[cfg(not(feature = "gc"))]
+                WasmHeapType::Extern => {
+                    return Err(cranelift_wasm::wasm_unsupported!(
+                        "support for `externref` disabled at compile time because the \
+                         `gc` cargo feature was not enabled",
+                    ));
+                }
             };
 
         let (vmctx, builtin_addr) =
@@ -1675,7 +1953,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         ht: WasmHeapType,
     ) -> WasmResult<ir::Value> {
         Ok(match ht {
-            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => {
+            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
                 pos.ins().iconst(self.pointer_type(), 0)
             }
             WasmHeapType::Extern => pos.ins().null(self.reference_type(ht)),
@@ -1718,6 +1996,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
+    #[cfg(feature = "gc")]
     fn translate_custom_global_get(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
@@ -1725,7 +2004,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::Ref(WasmRefType::EXTERNREF),
+            WasmValType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 
@@ -1745,6 +2024,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
+    #[cfg(not(feature = "gc"))]
+    fn translate_custom_global_get(
+        &mut self,
+        _pos: FuncCursor,
+        index: GlobalIndex,
+    ) -> WasmResult<ir::Value> {
+        debug_assert_eq!(
+            self.module.globals[index].wasm_ty,
+            WasmValType::Ref(WasmRefType::EXTERNREF),
+            "We only use GlobalVariable::Custom for externref"
+        );
+        Err(cranelift_wasm::wasm_unsupported!(
+            "support for `externref` disabled at compile time because the \
+             `gc` cargo feature was not enabled",
+        ))
+    }
+
+    #[cfg(feature = "gc")]
     fn translate_custom_global_set(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
@@ -1753,7 +2050,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::Ref(WasmRefType::EXTERNREF),
+            WasmValType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 
@@ -1770,6 +2067,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .call_indirect(builtin_sig, builtin_addr, &[vmctx, global_index_arg, value]);
 
         Ok(())
+    }
+
+    #[cfg(not(feature = "gc"))]
+    fn translate_custom_global_set(
+        &mut self,
+        _pos: FuncCursor,
+        index: GlobalIndex,
+        _value: ir::Value,
+    ) -> WasmResult<()> {
+        debug_assert_eq!(
+            self.module.globals[index].wasm_ty,
+            WasmValType::Ref(WasmRefType::EXTERNREF),
+            "We only use GlobalVariable::Custom for externref"
+        );
+        Err(cranelift_wasm::wasm_unsupported!(
+            "support for `externref` disabled at compile time because the \
+             `gc` cargo feature was not enabled",
+        ))
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
@@ -1803,16 +2118,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     // VMMemoryDefinition` to it and dereference that when
                     // atomically growing it.
                     let from_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
-                    let memory = func.create_global_value(ir::GlobalValueData::Load {
-                        base: vmctx,
-                        offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                        global_type: pointer_type,
-                        flags: MemFlags::trusted().with_readonly(),
-                    });
+                    let (memory, def_mt) = self.load_pointer_with_memtypes(
+                        func,
+                        vmctx,
+                        from_offset,
+                        true,
+                        self.pcc_vmctx_memtype,
+                    );
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
                         i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                    (memory, base_offset, current_length_offset, None)
+                    (memory, base_offset, current_length_offset, def_mt)
                 } else {
                     let owned_index = self.module.owned_memory_index(def_index);
                     let owned_base_offset =
@@ -1831,16 +2147,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             } else {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
-                let memory = func.create_global_value(ir::GlobalValueData::Load {
-                    base: vmctx,
-                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
-                    flags: MemFlags::trusted().with_readonly(),
-                });
+                let (memory, def_mt) = self.load_pointer_with_memtypes(
+                    func,
+                    vmctx,
+                    from_offset,
+                    true,
+                    self.pcc_vmctx_memtype,
+                );
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
                     i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                (memory, base_offset, current_length_offset, None)
+                (memory, base_offset, current_length_offset, def_mt)
             }
         };
 
@@ -1906,7 +2223,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                                 );
                                 *size = std::cmp::max(*size, fields_end);
                             }
-                            _ => {}
+                            _ => {
+                                panic!("Bad memtype");
+                            }
                         }
                         // Apply a fact to the base pointer.
                         (Some(base_fact), Some(data_mt))
@@ -1965,7 +2284,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                                     offset + u64::from(self.isa.pointer_type().bytes()),
                                 );
                             }
-                            _ => {}
+                            _ => {
+                                panic!("Bad memtype");
+                            }
                         }
                         // Apply a fact to the base pointer.
                         (Some(base_fact), Some(data_mt))
@@ -2018,7 +2339,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // `GlobalVariable::Custom`, as that is the only kind of
             // `GlobalVariable` for which `cranelift-wasm` supports custom
             // access translation.
-            WasmType::Ref(WasmRefType {
+            WasmValType::Ref(WasmRefType {
                 heap_type: WasmHeapType::Extern,
                 ..
             }) => return Ok(GlobalVariable::Custom),
@@ -2026,14 +2347,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // Funcrefs are represented as pointers which survive for the
             // entire lifetime of the `Store` so there's no need for barriers.
             // This means that they can fall through to memory as well.
-            WasmType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func | WasmHeapType::TypedFunc(_),
+            WasmValType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc,
                 ..
             }) => {}
 
             // Value types all live in memory so let them fall through to a
             // memory-based global.
-            WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 | WasmType::V128 => {}
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::F32
+            | WasmValType::F64
+            | WasmValType::V128 => {}
         }
 
         let (gv, offset) = self.get_global_location(func, index);
@@ -2093,20 +2418,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        Call::new(builder, self).indirect_call(
-            table_index,
-            table,
-            ty_index,
-            sig_ref,
-            callee,
-            call_args,
-        )
+    ) -> WasmResult<Option<ir::Inst>> {
+        Call::new(builder, self).indirect_call(table_index, ty_index, sig_ref, callee, call_args)
     }
 
     fn translate_call(
@@ -2144,7 +2461,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
@@ -2152,7 +2468,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         Call::new_tail(builder, self).indirect_call(
             table_index,
-            table,
             ty_index,
             sig_ref,
             callee,
@@ -2379,21 +2694,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_table_size(
         &mut self,
-        mut pos: FuncCursor,
-        _table_index: TableIndex,
-        table: ir::Table,
+        pos: FuncCursor,
+        table_index: TableIndex,
     ) -> WasmResult<ir::Value> {
-        let size_gv = pos.func.tables[table].bound_gv;
-        Ok(pos.ins().global_value(ir::types::I32, size_gv))
+        self.ensure_table_exists(pos.func, table_index);
+        let table_data = self.tables[table_index].as_ref().unwrap();
+        Ok(table_data.bound.bound(pos, ir::types::I32))
     }
 
     fn translate_table_copy(
         &mut self,
         mut pos: FuncCursor,
         dst_table_index: TableIndex,
-        _dst_table: ir::Table,
         src_table_index: TableIndex,
-        _src_table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -2427,7 +2740,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor,
         seg_index: u32,
         table_index: TableIndex,
-        _table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -2603,16 +2915,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel && state.reachable() {
             self.fuel_function_exit(builder);
-        }
-        if let Some(pcc_vmctx_memtype) = self.pcc_vmctx_memtype {
-            // Sort the fields by offset in the struct definition for
-            // vmctx, now that we've completed it.
-            match &mut builder.func.memory_types[pcc_vmctx_memtype] {
-                ir::MemoryTypeData::Struct { fields, .. } => {
-                    fields.sort_by_key(|f| f.offset);
-                }
-                _ => {}
-            }
         }
         Ok(())
     }

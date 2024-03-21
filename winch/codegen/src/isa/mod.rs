@@ -1,6 +1,7 @@
 use crate::{BuiltinFunctions, TrampolineKind};
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
+use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
 use cranelift_codegen::settings;
 use cranelift_codegen::{Final, MachBufferFinalized, TextSectionBuilder};
@@ -10,7 +11,7 @@ use std::{
 };
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, WasmFuncType};
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -70,17 +71,24 @@ pub(crate) enum LookupError {
     SupportDisabled,
 }
 
-/// Calling conventions supported by Winch. Winch supports the `Wasmtime*`
-/// variations of the system's ABI calling conventions and an internal default
+/// Calling conventions supported by Winch. Winch supports a variation of
+/// the calling conventions defined in this enum plus an internal default
 /// calling convention.
 ///
 /// This enum is a reduced subset of the calling conventions defined in
 /// [cranelift_codegen::isa::CallConv]. Introducing this enum makes it easier
 /// to enforce the invariant of all the calling conventions supported by Winch.
-#[derive(Copy, Clone)]
+///
+/// The main difference between the system calling conventions defined in
+/// this enum and their native counterparts is how multiple returns are handled.
+/// Given that Winch is not meant to be a standalone code generator, the code
+/// it generates is tightly coupled to how Wasmtime expects multiple returns
+/// to be handled: the first return in a register, dictated by the calling
+/// convention and the rest, if any, via a return pointer.
+#[derive(Copy, Clone, Debug)]
 pub enum CallingConvention {
     /// See [cranelift_codegen::isa::CallConv::WasmtimeSystemV]
-    WasmtimeSystemV,
+    SystemV,
     /// See [cranelift_codegen::isa::CallConv::WindowsFastcall]
     WindowsFastcall,
     /// See [cranelift_codegen::isa::CallConv::AppleAarch64]
@@ -103,7 +111,7 @@ impl CallingConvention {
     /// Returns true if the current calling convention is `WasmtimeSystemV`.
     fn is_systemv(&self) -> bool {
         match &self {
-            CallingConvention::WasmtimeSystemV => true,
+            CallingConvention::SystemV => true,
             _ => false,
         }
     }
@@ -117,7 +125,7 @@ impl CallingConvention {
     }
 
     /// Returns true if the current calling convention is `Default`.
-    fn is_default(&self) -> bool {
+    pub fn is_default(&self) -> bool {
         match &self {
             CallingConvention::Default => true,
             _ => false,
@@ -151,7 +159,7 @@ pub trait TargetIsa: Send + Sync {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
@@ -166,7 +174,7 @@ pub trait TargetIsa: Send + Sync {
     fn wasmtime_call_conv(&self) -> CallingConvention {
         match self.default_call_conv() {
             CallConv::AppleAarch64 => CallingConvention::AppleAarch64,
-            CallConv::SystemV => CallingConvention::WasmtimeSystemV,
+            CallConv::SystemV => CallingConvention::SystemV,
             CallConv::WindowsFastcall => CallingConvention::WindowsFastcall,
             cc => unimplemented!("calling convention: {:?}", cc),
         }
@@ -176,6 +184,12 @@ pub trait TargetIsa: Send + Sync {
     fn endianness(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
     }
+
+    fn emit_unwind_info(
+        &self,
+        _result: &MachBufferFinalized<Final>,
+        _kind: UnwindInfoKind,
+    ) -> Result<Option<UnwindInfo>>;
 
     /// See `cranelift_codegen::isa::TargetIsa::create_systemv_cie`.
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {

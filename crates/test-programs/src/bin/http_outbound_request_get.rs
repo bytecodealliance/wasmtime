@@ -10,6 +10,9 @@ fn main() {
         "/get?some=arg&goes=here",
         None,
         None,
+        None,
+        None,
+        None,
     )
     .context("/get")
     .unwrap();
@@ -21,7 +24,7 @@ fn main() {
     let uri = res.header("x-wasmtime-test-uri").unwrap();
     assert_eq!(
         std::str::from_utf8(uri).unwrap(),
-        format!("http://{addr}/get?some=arg&goes=here")
+        format!("/get?some=arg&goes=here")
     );
     assert_eq!(res.body, b"");
 }

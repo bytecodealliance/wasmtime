@@ -37,6 +37,9 @@ pub fn request(
     path_with_query: &str,
     body: Option<&[u8]>,
     additional_headers: Option<&[(String, Vec<u8>)]>,
+    connect_timeout: Option<u64>,
+    first_by_timeout: Option<u64>,
+    between_bytes_timeout: Option<u64>,
 ) -> Result<Response> {
     fn header_val(v: &str) -> Vec<u8> {
         v.to_string().into_bytes()
@@ -108,24 +111,33 @@ pub fn request(
         };
     }
 
-    let future_response = outgoing_handler::handle(request, None)?;
+    let options = http_types::RequestOptions::new();
+    options
+        .set_connect_timeout(connect_timeout)
+        .map_err(|()| anyhow!("failed to set connect_timeout"))?;
+    options
+        .set_first_byte_timeout(first_by_timeout)
+        .map_err(|()| anyhow!("failed to set first_byte_timeout"))?;
+    options
+        .set_between_bytes_timeout(between_bytes_timeout)
+        .map_err(|()| anyhow!("failed to set between_bytes_timeout"))?;
+    let options = Some(options);
 
-    http_types::OutgoingBody::finish(outgoing_body, None);
+    let future_response = outgoing_handler::handle(request, options)?;
+
+    http_types::OutgoingBody::finish(outgoing_body, None)?;
 
     let incoming_response = match future_response.get() {
-        Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,
+        Some(result) => result.map_err(|()| anyhow!("response already taken"))?,
         None => {
             let pollable = future_response.subscribe();
             pollable.block();
             future_response
                 .get()
                 .expect("incoming response available")
-                .map_err(|_| anyhow!("incoming response errored"))?
+                .map_err(|()| anyhow!("response already taken"))?
         }
-    }
-    // TODO: maybe anything that appears in the Result<_, E> position should impl
-    // Error? anyway, just use its Debug here:
-    .map_err(|e| anyhow!("{e:?}"))?;
+    }?;
 
     drop(future_response);
 

@@ -3,13 +3,15 @@
 //! the translation the base addresses of regions of memory that will hold the globals, tables and
 //! linear memories.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
+#![warn(clippy::cast_sign_loss)]
 
 mod address_map;
 mod builtin;
 mod compilation;
+mod demangling;
 mod module;
+mod module_artifacts;
 mod module_environ;
 mod module_types;
 pub mod obj;
@@ -23,6 +25,7 @@ mod vmoffsets;
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::compilation::*;
+pub use crate::demangling::*;
 pub use crate::module::*;
 pub use crate::module_environ::*;
 pub use crate::module_types::*;
@@ -30,9 +33,13 @@ pub use crate::ref_bits::*;
 pub use crate::scopevec::ScopeVec;
 pub use crate::stack_map::StackMap;
 pub use crate::trap_encoding::*;
-pub use crate::tunables::Tunables;
+pub use crate::tunables::*;
 pub use crate::vmoffsets::*;
 pub use object;
+
+pub use crate::module_artifacts::{
+    CompiledFunctionInfo, CompiledModuleInfo, FinishedObject, FunctionName, Metadata, ObjectBuilder,
+};
 
 #[cfg(feature = "component-model")]
 pub mod component;

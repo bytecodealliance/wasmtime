@@ -18,10 +18,10 @@ use cranelift_entity::EntityRef;
 use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
-    self, Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind,
-    ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
-    GlobalSectionReader, ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader,
-    Naming, Operator, TableSectionReader, TagSectionReader, TagType, TypeRef, TypeSectionReader,
+    Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind, ElementSectionReader,
+    Export, ExportSectionReader, ExternalKind, FunctionSectionReader, GlobalSectionReader,
+    ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator,
+    TableSectionReader, TagSectionReader, TagType, TypeRef, TypeSectionReader,
 };
 
 fn memory(ty: MemoryType) -> Memory {
@@ -401,6 +401,7 @@ pub fn parse_name_section<'data>(
             | wasmparser::Name::Memory(_)
             | wasmparser::Name::Element(_)
             | wasmparser::Name::Data(_)
+            | wasmparser::Name::Tag(_)
             | wasmparser::Name::Unknown { .. } => {}
         }
     }

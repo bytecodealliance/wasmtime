@@ -74,9 +74,9 @@ block0(v0: i8):
     v2 = sshr v0, v1
     v3 = ishl v2, v1
     return v3
-    ; check: v8 = iconst.i8 224
-    ; check: v9 = band v0, v8
-    ; check: return v9
+    ; check: v7 = iconst.i8 224
+    ; check: v8 = band v0, v7
+    ; check: return v8
 }
 
 function %sextend_shift_32_64_unsigned(i32) -> i64 {
@@ -651,9 +651,9 @@ block0(v0: i8):
     return v4
 }
 
-; check: v11 = iconst.i8 2
-; check: v13 = rotr v0, v11  ; v11 = 2
-; check: return v13
+; check: v6 = iconst.i8 2
+; check: v12 = rotr v0, v6  ; v6 = 2
+; check: return v12
 
 function %rotr_rotr_add(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
@@ -675,9 +675,9 @@ block0(v0: i8):
     return v4
 }
 
-; check: v11 = iconst.i8 2
-; check: v13 = rotl v0, v11  ; v11 = 2
-; check: return v13
+; check: v6 = iconst.i8 2
+; check: v12 = rotl v0, v6  ; v6 = 2
+; check: return v12
 
 function %rotl_rotl_add(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
@@ -701,8 +701,8 @@ block0(v0: i8):
 }
 
 ; check: v2 = iconst.i8 1
-; check: v21 = rotr v0, v2  ; v2 = 1
-; check: return v21
+; check: v15 = rotr v0, v2  ; v2 = 1
+; check: return v15
 
 function %rotl_rotr_add(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
@@ -725,8 +725,8 @@ block0(v0: i8):
 }
 
 ; check: v2 = iconst.i8 1
-; check: v21 = rotl v0, v2  ; v2 = 1
-; check: return v21
+; check: v15 = rotl v0, v2  ; v2 = 1
+; check: return v15
 
 function %rotl_rotr_add(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):

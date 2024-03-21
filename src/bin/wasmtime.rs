@@ -8,8 +8,8 @@ use clap::Parser;
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser, PartialEq)]
-#[clap(
-    version,
+#[command(
+    version = version(),
     after_help = "If a subcommand is not provided, the `run` subcommand will be used.\n\
                   \n\
                   Usage examples:\n\
@@ -34,15 +34,27 @@ use clap::Parser;
     args_conflicts_with_subcommands = true
 )]
 struct Wasmtime {
-    #[clap(subcommand)]
+    #[cfg(not(feature = "run"))]
+    #[command(subcommand)]
+    subcommand: Subcommand,
+
+    #[cfg(feature = "run")]
+    #[command(subcommand)]
     subcommand: Option<Subcommand>,
-    #[clap(flatten)]
+    #[command(flatten)]
+    #[cfg(feature = "run")]
     run: wasmtime_cli::commands::RunCommand,
+}
+
+/// If WASMTIME_VERSION_INFO is set, use it, otherwise use CARGO_PKG_VERSION.
+fn version() -> &'static str {
+    option_env!("WASMTIME_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
 }
 
 #[derive(Parser, PartialEq)]
 enum Subcommand {
     /// Runs a WebAssembly module
+    #[cfg(feature = "run")]
     Run(wasmtime_cli::commands::RunCommand),
 
     /// Controls Wasmtime configuration settings
@@ -50,7 +62,7 @@ enum Subcommand {
     Config(wasmtime_cli::commands::ConfigCommand),
 
     /// Compiles a WebAssembly module.
-    #[cfg(feature = "cranelift")]
+    #[cfg(feature = "compile")]
     Compile(wasmtime_cli::commands::CompileCommand),
 
     /// Explore the compilation of a WebAssembly module to native code.
@@ -73,14 +85,19 @@ enum Subcommand {
 impl Wasmtime {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
+        #[cfg(feature = "run")]
         let subcommand = self.subcommand.unwrap_or(Subcommand::Run(self.run));
+        #[cfg(not(feature = "run"))]
+        let subcommand = self.subcommand;
+
         match subcommand {
+            #[cfg(feature = "run")]
             Subcommand::Run(c) => c.execute(),
 
             #[cfg(feature = "cache")]
             Subcommand::Config(c) => c.execute(),
 
-            #[cfg(feature = "cranelift")]
+            #[cfg(feature = "compile")]
             Subcommand::Compile(c) => c.execute(),
 
             #[cfg(feature = "explore")]

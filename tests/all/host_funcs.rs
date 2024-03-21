@@ -1,8 +1,6 @@
-use anyhow::{bail, Result};
+use anyhow::bail;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
-use wasmtime_wasi::sync::WasiCtxBuilder;
-use wasmtime_wasi::I32Exit;
 
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]
@@ -12,7 +10,7 @@ fn async_required() {
     drop(linker.func_new_async(
         "",
         "",
-        FuncType::new(None, None),
+        FuncType::new(&engine, None, None),
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     ));
 }
@@ -31,7 +29,7 @@ fn wrap_func() -> Result<()> {
     linker.func_wrap("", "", || -> i64 { 0 })?;
     linker.func_wrap("m", "f", || -> f32 { 0.0 })?;
     linker.func_wrap("m2", "f", || -> f64 { 0.0 })?;
-    linker.func_wrap("m3", "", || -> Option<ExternRef> { None })?;
+    linker.func_wrap("m3", "", || -> Option<Rooted<ExternRef>> { None })?;
     linker.func_wrap("m3", "f", || -> Option<Func> { None })?;
 
     linker.func_wrap("", "f1", || -> Result<()> { loop {} })?;
@@ -39,7 +37,9 @@ fn wrap_func() -> Result<()> {
     linker.func_wrap("", "f3", || -> Result<i64> { loop {} })?;
     linker.func_wrap("", "f4", || -> Result<f32> { loop {} })?;
     linker.func_wrap("", "f5", || -> Result<f64> { loop {} })?;
-    linker.func_wrap("", "f6", || -> Result<Option<ExternRef>> { loop {} })?;
+    linker.func_wrap("", "f6", || -> Result<Option<Rooted<ExternRef>>> {
+        loop {}
+    })?;
     linker.func_wrap("", "f7", || -> Result<Option<Func>> { loop {} })?;
     Ok(())
 }
@@ -142,9 +142,14 @@ fn signatures_match() -> Result<()> {
     linker.func_wrap(
         "",
         "f6",
-        |_: f32, _: f64, _: i32, _: i64, _: i32, _: Option<ExternRef>, _: Option<Func>| -> f64 {
-            loop {}
-        },
+        |_: f32,
+         _: f64,
+         _: i32,
+         _: i64,
+         _: i32,
+         _: Option<Rooted<ExternRef>>,
+         _: Option<Func>|
+         -> f64 { loop {} },
     )?;
 
     let mut store = Store::new(&engine, ());
@@ -154,59 +159,62 @@ fn signatures_match() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 0);
 
     let f = linker
         .get(&mut store, "", "f2")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I32]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_i32());
 
     let f = linker
         .get(&mut store, "", "f3")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I64]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_i64());
 
     let f = linker
         .get(&mut store, "", "f4")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F32]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f32());
 
     let f = linker
         .get(&mut store, "", "f5")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+    assert_eq!(f.ty(&store).params().len(), 0);
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
 
     let f = linker
         .get(&mut store, "", "f6")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        &[
-            ValType::F32,
-            ValType::F64,
-            ValType::I32,
-            ValType::I64,
-            ValType::I32,
-            ValType::ExternRef,
-            ValType::FuncRef,
-        ]
-    );
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+
+    assert_eq!(f.ty(&store).params().len(), 7);
+    assert!(f.ty(&store).params().nth(0).unwrap().is_f32());
+    assert!(f.ty(&store).params().nth(1).unwrap().is_f64());
+    assert!(f.ty(&store).params().nth(2).unwrap().is_i32());
+    assert!(f.ty(&store).params().nth(3).unwrap().is_i64());
+    assert!(f.ty(&store).params().nth(4).unwrap().is_i32());
+    assert!(f.ty(&store).params().nth(5).unwrap().is_externref());
+    assert!(f.ty(&store).params().nth(6).unwrap().is_funcref());
+
+    assert_eq!(f.ty(&store).results().len(), 1);
+    assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
 
     Ok(())
 }
@@ -272,7 +280,7 @@ fn import_works() -> Result<()> {
          c: i32,
          d: f32,
          e: f64,
-         f: Option<ExternRef>,
+         f: Option<Rooted<ExternRef>>,
          g: Option<Func>| {
             assert_eq!(a, 100);
             assert_eq!(b, 200);
@@ -280,7 +288,12 @@ fn import_works() -> Result<()> {
             assert_eq!(d, 400.0);
             assert_eq!(e, 500.0);
             assert_eq!(
-                f.as_ref().unwrap().data().downcast_ref::<String>().unwrap(),
+                f.as_ref()
+                    .unwrap()
+                    .data(&caller)
+                    .unwrap()
+                    .downcast_ref::<String>()
+                    .unwrap(),
                 "hello"
             );
             let mut results = [Val::I32(0)];
@@ -299,14 +312,8 @@ fn import_works() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
     let run = instance.get_func(&mut store, "run").unwrap();
     let funcref = Val::FuncRef(Some(Func::wrap(&mut store, || -> i32 { 42 })));
-    run.call(
-        &mut store,
-        &[
-            Val::ExternRef(Some(ExternRef::new("hello".to_string()))),
-            funcref,
-        ],
-        &mut [],
-    )?;
+    let externref = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())));
+    run.call(&mut store, &[externref, funcref], &mut [])?;
 
     assert_eq!(HITS.load(SeqCst), 4);
 
@@ -493,10 +500,10 @@ fn new_from_signature() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
 
-    let ty = FuncType::new(None, None);
+    let ty = FuncType::new(&engine, None, None);
     linker.func_new("", "f1", ty, |_, _, _| panic!())?;
 
-    let ty = FuncType::new(Some(ValType::I32), Some(ValType::F64));
+    let ty = FuncType::new(&engine, Some(ValType::I32), Some(ValType::F64));
     linker.func_new("", "f2", ty, |_, _, _| panic!())?;
 
     let mut store = Store::new(&engine, ());
@@ -603,7 +610,7 @@ fn call_wrapped_func() -> Result<()> {
 fn func_return_nothing() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    let ty = FuncType::new(None, Some(ValType::I32));
+    let ty = FuncType::new(&engine, None, Some(ValType::I32));
     linker.func_new("", "", ty, |_, _, _| Ok(()))?;
 
     let mut store = Store::new(&engine, ());
@@ -708,7 +715,7 @@ fn store_with_context() -> Result<()> {
 fn wasi_imports() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
+    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |t| t)?;
 
     let wasm = wat::parse_str(
         r#"
@@ -721,14 +728,14 @@ fn wasi_imports() -> Result<()> {
     )?;
 
     let module = Module::new(&engine, wasm)?;
-    let mut store = Store::new(&engine, WasiCtxBuilder::new().build());
+    let mut store = Store::new(&engine, wasmtime_wasi::WasiCtxBuilder::new().build_p1());
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
     let exit = start
         .call(&mut store, ())
         .unwrap_err()
-        .downcast::<I32Exit>()?;
+        .downcast::<wasmtime_wasi::I32Exit>()?;
     assert_eq!(exit.0, 123);
 
     Ok(())

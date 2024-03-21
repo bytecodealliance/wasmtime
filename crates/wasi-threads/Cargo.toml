@@ -11,12 +11,12 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 log = { workspace = true }
 rand = "0.8"
-wasi-common = { workspace = true }
+wasi-common = { workspace = true, features = ["exit"]}
 wasmtime = { workspace = true }
-wasmtime-wasi = { workspace = true, default-features = true, features = [
-    "exit",
-] }

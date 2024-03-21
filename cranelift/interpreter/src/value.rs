@@ -1,7 +1,8 @@
 //! The [DataValueExt] trait is an extension trait for [DataValue]. It provides a lot of functions
 //! used by the rest of the interpreter.
 
-use core::convert::TryFrom;
+#![allow(trivial_numeric_casts)]
+
 use core::fmt::{self, Display, Formatter};
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};

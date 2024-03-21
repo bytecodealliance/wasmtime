@@ -176,7 +176,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr w3, [x0]
+;   ldr w3, [x0] ; trap: heap_oob
 ;   fmov s0, w3
 ;   ret
 

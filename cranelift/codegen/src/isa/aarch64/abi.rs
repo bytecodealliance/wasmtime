@@ -7,7 +7,7 @@ use crate::ir::MemFlags;
 use crate::ir::Opcode;
 use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
-use crate::isa::aarch64::{inst::EmitState, inst::*, settings as aarch64_settings};
+use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;
@@ -110,7 +110,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
-        if call_conv == isa::CallConv::Tail {
+        if matches!(call_conv, isa::CallConv::Tail | isa::CallConv::Winch) {
             return compute_arg_locs_tail(params, add_ret_area_ptr, args);
         }
 
@@ -1106,10 +1106,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Tail {
-            TAIL_CLOBBERS
-        } else {
-            DEFAULT_AAPCS_CLOBBERS
+        match call_conv_of_callee {
+            isa::CallConv::Tail => ALL_CLOBBERS,
+            isa::CallConv::Winch => ALL_CLOBBERS,
+            _ => DEFAULT_AAPCS_CLOBBERS,
         }
     }
 
@@ -1299,7 +1299,7 @@ fn compute_arg_locs_tail<'a, I>(
 where
     I: IntoIterator<Item = &'a ir::AbiParam>,
 {
-    let mut xregs = TAIL_CLOBBERS
+    let mut xregs = ALL_CLOBBERS
         .into_iter()
         .filter(|r| r.class() == RegClass::Int)
         // We reserve `x0` for the return area pointer. For simplicity, we
@@ -1313,7 +1313,7 @@ where
         // indirect calls. So skip `x1` also, reserving it for that role.
         .skip(2);
 
-    let mut vregs = TAIL_CLOBBERS
+    let mut vregs = ALL_CLOBBERS
         .into_iter()
         .filter(|r| r.class() == RegClass::Float);
 
@@ -1429,7 +1429,7 @@ fn is_reg_saved_in_prologue(
     sig: &Signature,
     r: RealReg,
 ) -> bool {
-    if call_conv == isa::CallConv::Tail {
+    if call_conv == isa::CallConv::Tail || call_conv == isa::CallConv::Winch {
         return false;
     }
 
@@ -1542,8 +1542,8 @@ const fn default_aapcs_clobbers() -> PRegSet {
 
 const DEFAULT_AAPCS_CLOBBERS: PRegSet = default_aapcs_clobbers();
 
-// NB: The `tail` calling convention clobbers all allocatable registers.
-const TAIL_CLOBBERS: PRegSet = PRegSet::empty()
+// For calling conventions that clobber all registers.
+const ALL_CLOBBERS: PRegSet = PRegSet::empty()
     .with(xreg_preg(0))
     .with(xreg_preg(1))
     .with(xreg_preg(2))

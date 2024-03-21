@@ -1,9 +1,9 @@
 use self::regs::{ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_GPR};
 use crate::{
-    abi::ABI,
-    codegen::{CodeGen, CodeGenContext, FuncEnv},
+    abi::{wasm_sig, ABI},
+    codegen::{CodeGen, CodeGenContext, FuncEnv, TypeConverter},
     frame::{DefinedLocals, Frame},
-    isa::{Builder, CallingConvention, TargetIsa},
+    isa::{Builder, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
     regset::RegBitSet,
@@ -17,7 +17,7 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 mod abi;
 mod address;
@@ -87,17 +87,28 @@ impl TargetIsa for Aarch64 {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
-        let vmoffsets = VMOffsets::new(self.pointer_bytes(), &translation.module);
+        let pointer_bytes = self.pointer_bytes();
+        let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
         let mut body = body.get_binary_reader();
-        let mut masm = Aarch64Masm::new(self.shared_flags.clone());
+        let mut masm = Aarch64Masm::new(pointer_bytes, self.shared_flags.clone());
         let stack = Stack::new();
-        let abi_sig = abi::Aarch64ABI::sig(sig, &CallingConvention::Default);
+        let abi_sig = wasm_sig::<abi::Aarch64ABI>(sig);
 
-        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
+        let env = FuncEnv::new(
+            &vmoffsets,
+            translation,
+            types,
+            builtins,
+            self,
+            abi::Aarch64ABI::ptr_type(),
+        );
+        let type_converter = TypeConverter::new(env.translation, env.types);
+        let defined_locals =
+            DefinedLocals::new::<abi::Aarch64ABI>(&type_converter, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),
@@ -107,8 +118,7 @@ impl TargetIsa for Aarch64 {
         // TODO: Add floating point bitmask
         let fpr = RegBitSet::float(0, 0, usize::try_from(MAX_FPR).unwrap());
         let regalloc = RegAlloc::from(gpr, fpr);
-        let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
-        let env = FuncEnv::new(&vmoffsets, translation, types);
+        let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
@@ -131,6 +141,14 @@ impl TargetIsa for Aarch64 {
         _ty: &WasmFuncType,
         _kind: TrampolineKind,
     ) -> Result<MachBufferFinalized<Final>> {
+        todo!()
+    }
+
+    fn emit_unwind_info(
+        &self,
+        _result: &MachBufferFinalized<Final>,
+        _kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
+    ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
         todo!()
     }
 }

@@ -27,7 +27,7 @@ instructions. For example:
   immediate.
 
 One could write something like the following in ISLE (simplified from
-the real code [here](../codegen/src/isa/x64/lower.isle)):
+the real code [here](https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/codegen/src/isa/x64/lower.isle)):
 
 ```lisp
 ;; Add two registers.

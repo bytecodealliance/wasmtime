@@ -1,15 +1,14 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
 use crate::egraph::{NewOrExistingInst, OptimizeCtx};
-use crate::ir::condcodes;
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
-pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8, V128Imm};
+pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
+use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
-    dynamic_to_fixed, AtomicRmwOp, Block, BlockCall, Constant, DataFlowGraph, DynamicStackSlot,
-    FuncRef, GlobalValue, Immediate, InstructionData, JumpTable, MemFlags, Opcode, StackSlot,
-    Table, TrapCode, Type, Value,
+    AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue, Immediate,
+    InstructionData, MemFlags, Opcode, StackSlot, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
@@ -24,10 +23,21 @@ pub type Range = (usize, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 
-pub type ConstructorVec<T> = SmallVec<[T; 8]>;
+const MAX_ISLE_RETURNS: usize = 8;
+
+pub type ConstructorVec<T> = SmallVec<[T; MAX_ISLE_RETURNS]>;
+
+type TypeAndInstructionData = (Type, InstructionData);
+
+impl<T: smallvec::Array> generated_code::Length for SmallVec<T> {
+    #[inline]
+    fn len(&self) -> usize {
+        SmallVec::len(self)
+    }
+}
 
 pub(crate) mod generated_code;
-use generated_code::ContextIter;
+use generated_code::{ContextIter, IntoContextIter};
 
 pub(crate) struct IsleContext<'a, 'b, 'c> {
     pub(crate) ctx: &'a mut OptimizeCtx<'b, 'c>,
@@ -39,6 +49,18 @@ pub(crate) struct InstDataEtorIter<'a, 'b, 'c> {
     _phantom2: PhantomData<&'b ()>,
     _phantom3: PhantomData<&'c ()>,
 }
+
+impl Default for InstDataEtorIter<'_, '_, '_> {
+    fn default() -> Self {
+        InstDataEtorIter {
+            stack: SmallVec::default(),
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
+            _phantom3: PhantomData,
+        }
+    }
+}
+
 impl<'a, 'b, 'c> InstDataEtorIter<'a, 'b, 'c> {
     fn new(root: Value) -> Self {
         debug_assert_ne!(root, Value::reserved_value());
@@ -85,13 +107,93 @@ where
     }
 }
 
+impl<'a, 'b, 'c> IntoContextIter for InstDataEtorIter<'a, 'b, 'c>
+where
+    'b: 'a,
+    'c: 'b,
+{
+    type Context = IsleContext<'a, 'b, 'c>;
+    type Output = (Type, InstructionData);
+    type IntoIter = Self;
+
+    fn into_context_iter(self) -> Self {
+        self
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct MaybeUnaryEtorIter<'a, 'b, 'c> {
+    opcode: Option<Opcode>,
+    inner: InstDataEtorIter<'a, 'b, 'c>,
+    fallback: Option<Value>,
+}
+
+impl MaybeUnaryEtorIter<'_, '_, '_> {
+    fn new(opcode: Opcode, value: Value) -> Self {
+        debug_assert_eq!(opcode.format(), InstructionFormat::Unary);
+        Self {
+            opcode: Some(opcode),
+            inner: InstDataEtorIter::new(value),
+            fallback: Some(value),
+        }
+    }
+}
+
+impl<'a, 'b, 'c> ContextIter for MaybeUnaryEtorIter<'a, 'b, 'c>
+where
+    'b: 'a,
+    'c: 'b,
+{
+    type Context = IsleContext<'a, 'b, 'c>;
+    type Output = (Type, Value);
+
+    fn next(&mut self, ctx: &mut IsleContext<'a, 'b, 'c>) -> Option<Self::Output> {
+        debug_assert_ne!(self.opcode, None);
+        while let Some((ty, inst_def)) = self.inner.next(ctx) {
+            let InstructionData::Unary { opcode, arg } = inst_def else {
+                continue;
+            };
+            if Some(opcode) == self.opcode {
+                self.fallback = None;
+                return Some((ty, arg));
+            }
+        }
+
+        self.fallback.take().map(|value| {
+            let ty = generated_code::Context::value_type(ctx, value);
+            (ty, value)
+        })
+    }
+}
+
+impl<'a, 'b, 'c> IntoContextIter for MaybeUnaryEtorIter<'a, 'b, 'c>
+where
+    'b: 'a,
+    'c: 'b,
+{
+    type Context = IsleContext<'a, 'b, 'c>;
+    type Output = (Type, Value);
+    type IntoIter = Self;
+
+    fn into_context_iter(self) -> Self {
+        self
+    }
+}
+
 impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     isle_common_prelude_methods!();
 
-    type inst_data_etor_iter = InstDataEtorIter<'a, 'b, 'c>;
+    type inst_data_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
 
-    fn inst_data_etor(&mut self, eclass: Value) -> InstDataEtorIter<'a, 'b, 'c> {
-        InstDataEtorIter::new(eclass)
+    fn inst_data_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
+        *returns = InstDataEtorIter::new(eclass);
+    }
+
+    type inst_data_tupled_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
+
+    fn inst_data_tupled_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
+        // Literally identical to `inst_data_etor`, just a different nominal type in ISLE
+        self.inst_data_etor(eclass, returns);
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {
@@ -115,6 +217,21 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         self.ctx.func.dfg.value_type(val)
     }
 
+    fn iconst_sextend_etor(
+        &mut self,
+        (ty, inst_data): (Type, InstructionData),
+    ) -> Option<(Type, i64)> {
+        if let InstructionData::UnaryImm {
+            opcode: Opcode::Iconst,
+            imm,
+        } = inst_data
+        {
+            Some((ty, self.i64_sextend_imm64(ty, imm)))
+        } else {
+            None
+        }
+    }
+
     fn remat(&mut self, value: Value) -> Value {
         trace!("remat: {}", value);
         self.ctx.remat_values.insert(value);
@@ -134,5 +251,34 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         let val = val | (val << 64);
         let imm = V128Imm(val.to_le_bytes());
         self.ctx.func.dfg.constants.insert(imm.into())
+    }
+
+    type sextend_maybe_etor_returns = MaybeUnaryEtorIter<'a, 'b, 'c>;
+    fn sextend_maybe_etor(&mut self, value: Value, returns: &mut Self::sextend_maybe_etor_returns) {
+        *returns = MaybeUnaryEtorIter::new(Opcode::Sextend, value);
+    }
+
+    type uextend_maybe_etor_returns = MaybeUnaryEtorIter<'a, 'b, 'c>;
+    fn uextend_maybe_etor(&mut self, value: Value, returns: &mut Self::uextend_maybe_etor_returns) {
+        *returns = MaybeUnaryEtorIter::new(Opcode::Uextend, value);
+    }
+
+    // NB: Cranelift's defined semantics for `fcvt_from_{s,u}int` match Rust's
+    // own semantics for converting an integer to a float, so these are all
+    // implemented with `as` conversions in Rust.
+    fn f32_from_uint(&mut self, n: u64) -> Ieee32 {
+        Ieee32::with_float(n as f32)
+    }
+
+    fn f64_from_uint(&mut self, n: u64) -> Ieee64 {
+        Ieee64::with_float(n as f64)
+    }
+
+    fn f32_from_sint(&mut self, n: i64) -> Ieee32 {
+        Ieee32::with_float(n as f32)
+    }
+
+    fn f64_from_sint(&mut self, n: i64) -> Ieee64 {
+        Ieee64::with_float(n as f64)
     }
 }

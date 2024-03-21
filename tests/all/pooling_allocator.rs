@@ -1,7 +1,5 @@
 use super::skip_pooling_allocator_tests;
-use anyhow::Result;
 use wasmtime::*;
-use wasmtime_runtime::MpkEnabled;
 
 #[test]
 fn successful_instantiation() -> Result<()> {
@@ -304,14 +302,14 @@ fn table_limit() -> Result<()> {
         assert_eq!(table.size(&store), i);
         assert_eq!(
             table
-                .grow(&mut store, 1, Val::FuncRef(None))
+                .grow(&mut store, 1, Ref::Func(None))
                 .expect("table should grow"),
             i
         );
     }
 
     assert_eq!(table.size(&store), TABLE_ELEMENTS);
-    assert!(table.grow(&mut store, 1, Val::FuncRef(None)).is_err());
+    assert!(table.grow(&mut store, 1, Ref::Func(None)).is_err());
 
     Ok(())
 }
@@ -349,7 +347,7 @@ fn table_init() -> Result<()> {
     for i in 0..5 {
         let v = table.get(&mut store, i).expect("table should have entry");
         let f = v
-            .funcref()
+            .as_func()
             .expect("expected funcref")
             .expect("expected non-null value");
         assert_eq!(f.ty(&store).params().len(), i as usize);
@@ -359,7 +357,7 @@ fn table_init() -> Result<()> {
         table
             .get(&mut store, 5)
             .expect("table should have entry")
-            .funcref()
+            .as_func()
             .expect("expected funcref")
             .is_none(),
         "funcref should be null"
@@ -396,11 +394,11 @@ fn table_zeroed() -> Result<()> {
 
         for i in 0..10 {
             match table.get(&mut store, i).unwrap() {
-                Val::FuncRef(r) => assert!(r.is_none()),
+                Ref::Func(r) => assert!(r.is_none()),
                 _ => panic!("expected a funcref"),
             }
             table
-                .set(&mut store, i, Val::FuncRef(Some(f.clone())))
+                .set(&mut store, i, Ref::Func(Some(f.clone())))
                 .unwrap();
         }
     }
@@ -650,13 +648,22 @@ fn instance_too_large() -> Result<()> {
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
-    let expected = "\
+    let expected = if cfg!(feature = "wmemcheck") {
+        "\
+instance allocation for this module requires 336 bytes which exceeds the \
+configured maximum of 16 bytes; breakdown of allocation requirement:
+
+ * 76.19% - 256 bytes - instance state management
+"
+    } else {
+        "\
 instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 66.67% - 160 bytes - instance state management
  * 6.67% - 16 bytes - jit store state
-";
+"
+    };
     match Module::new(&engine, "(module)") {
         Ok(_) => panic!("should have failed to compile"),
         Err(e) => assert_eq!(e.to_string(), expected),
@@ -668,13 +675,23 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
     }
     lots_of_globals.push_str(")");
 
-    let expected = "\
+    let expected = if cfg!(feature = "wmemcheck") {
+        "\
+instance allocation for this module requires 1936 bytes which exceeds the \
+configured maximum of 16 bytes; breakdown of allocation requirement:
+
+ * 13.22% - 256 bytes - instance state management
+ * 82.64% - 1600 bytes - defined globals
+"
+    } else {
+        "\
 instance allocation for this module requires 1840 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 8.70% - 160 bytes - instance state management
  * 86.96% - 1600 bytes - defined globals
-";
+"
+    };
     match Module::new(&engine, &lots_of_globals) {
         Ok(_) => panic!("should have failed to compile"),
         Err(e) => assert_eq!(e.to_string(), expected),
@@ -947,7 +964,7 @@ async fn total_stacks_limit() -> Result<()> {
     linker.func_new_async(
         "async",
         "yield",
-        FuncType::new([], []),
+        FuncType::new(&engine, [], []),
         |_caller, _params, _results| {
             Box::new(async {
                 tokio::task::yield_now().await;

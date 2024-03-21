@@ -3,12 +3,11 @@
 //! [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 
 use anyhow::{anyhow, Result};
-use rand::Rng;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 use std::thread;
-use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store, ValType};
-use wasmtime_wasi::maybe_exit_on_error;
+use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store};
 
 // This name is a function export designated by the wasi-threads specification:
 // https://github.com/WebAssembly/wasi-threads/#detailed-design-discussion
@@ -16,12 +15,14 @@ const WASI_ENTRY_POINT: &str = "wasi_thread_start";
 
 pub struct WasiThreadsCtx<T> {
     instance_pre: Arc<InstancePre<T>>,
+    tid: AtomicI32,
 }
 
 impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
     pub fn new(module: Module, linker: Arc<Linker<T>>) -> Result<Self> {
         let instance_pre = Arc::new(linker.instantiate_pre(&module)?);
-        Ok(Self { instance_pre })
+        let tid = AtomicI32::new(0);
+        Ok(Self { instance_pre, tid })
     }
 
     pub fn spawn(&self, host: T, thread_start_arg: i32) -> Result<i32> {
@@ -45,8 +46,14 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
             return Ok(-1);
         }
 
+        let wasi_thread_id = self.next_thread_id();
+        if wasi_thread_id.is_none() {
+            log::error!("ran out of valid thread IDs");
+            return Ok(-1);
+        }
+        let wasi_thread_id = wasi_thread_id.unwrap();
+
         // Start a Rust thread running a new instance of the current module.
-        let wasi_thread_id = random_thread_id();
         let builder = thread::Builder::new().name(format!("wasi-thread-{}", wasi_thread_id));
         builder.spawn(move || {
             // Catch any panic failures in host code; e.g., if a WASI module
@@ -74,7 +81,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                     Ok(_) => log::trace!("exiting thread id = {} normally", wasi_thread_id),
                     Err(e) => {
                         log::trace!("exiting thread id = {} due to error", wasi_thread_id);
-                        let e = maybe_exit_on_error(e);
+                        let e = wasi_common::maybe_exit_on_error(e);
                         eprintln!("Error: {:?}", e);
                         std::process::exit(1);
                     }
@@ -89,16 +96,23 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
 
         Ok(wasi_thread_id)
     }
-}
 
-/// Helper for generating valid WASI thread IDs (TID).
-///
-/// Callers of `wasi_thread_spawn` expect a TID >=0 to indicate a successful
-/// spawning of the thread whereas a negative return value indicates an
-/// failure to spawn.
-fn random_thread_id() -> i32 {
-    let tid: u32 = rand::thread_rng().gen();
-    (tid >> 1) as i32
+    /// Helper for generating valid WASI thread IDs (TID).
+    ///
+    /// Callers of `wasi_thread_spawn` expect a TID in range of 0 < TID <= 0x1FFFFFFF
+    /// to indicate a successful spawning of the thread whereas a negative
+    /// return value indicates an failure to spawn.
+    fn next_thread_id(&self) -> Option<i32> {
+        match self
+            .tid
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| match v {
+                ..=0x1ffffffe => Some(v + 1),
+                _ => None,
+            }) {
+            Ok(v) => Some(v + 1),
+            Err(_) => None,
+        }
+    }
 }
 
 /// Manually add the WASI `thread_spawn` function to the linker.
@@ -157,9 +171,13 @@ fn has_entry_point(module: &Module) -> bool {
 
 /// Check if the entry function has the correct signature `(i32, i32) -> ()`.
 fn has_correct_signature(module: &Module) -> bool {
-    use ValType::*;
     match module.get_export(WASI_ENTRY_POINT) {
-        Some(ExternType::Func(ty)) => ty.params().eq([I32, I32]) && ty.results().len() == 0,
+        Some(ExternType::Func(ty)) => {
+            ty.params().len() == 2
+                && ty.params().nth(0).unwrap().is_i32()
+                && ty.params().nth(1).unwrap().is_i32()
+                && ty.results().len() == 0
+        }
         _ => false,
     }
 }

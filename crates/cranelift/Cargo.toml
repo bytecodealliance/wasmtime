@@ -10,12 +10,15 @@ categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 log = { workspace = true }
 wasmtime-environ = { workspace = true }
 cranelift-wasm = { workspace = true }
-cranelift-codegen = { workspace = true, features = ["default"] }
+cranelift-codegen = { workspace = true, features = ["host-arch"] }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-native = { workspace = true }
@@ -31,6 +34,8 @@ wasmtime-versioned-export-macros = { workspace = true }
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]
+host-arch = ["cranelift-codegen/host-arch"]
 component-model = ["wasmtime-environ/component-model"]
 incremental-cache = ["cranelift-codegen/incremental-cache"]
 wmemcheck = []
+gc = ["wasmtime-environ/gc"]

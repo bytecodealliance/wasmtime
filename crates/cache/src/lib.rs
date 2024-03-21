@@ -2,11 +2,11 @@ use base64::Engine;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::fs;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 #[macro_use] // for tests
 mod config;
@@ -172,7 +172,7 @@ impl<'config> ModuleCacheEntryInner<'config> {
 
         // Optimize syscalls: first, try writing to disk. It should succeed in most cases.
         // Otherwise, try creating the cache directory and retry writing to the file.
-        if fs_write_atomic(&mod_cache_path, "mod", &compressed_data) {
+        if fs_write_atomic(&mod_cache_path, "mod", &compressed_data).is_ok() {
             return Some(());
         }
 
@@ -193,10 +193,16 @@ impl<'config> ModuleCacheEntryInner<'config> {
             })
             .ok()?;
 
-        if fs_write_atomic(&mod_cache_path, "mod", &compressed_data) {
-            Some(())
-        } else {
-            None
+        match fs_write_atomic(&mod_cache_path, "mod", &compressed_data) {
+            Ok(_) => Some(()),
+            Err(err) => {
+                warn!(
+                    "Failed to write file with rename, target path: {}, err: {}",
+                    mod_cache_path.display(),
+                    err
+                );
+                None
+            }
         }
     }
 }
@@ -214,7 +220,7 @@ impl Hasher for Sha256Hasher {
 // Assumption: path inside cache directory.
 // Then, we don't have to use sound OS-specific exclusive file access.
 // Note: there's no need to remove temporary file here - cleanup task will do it later.
-fn fs_write_atomic(path: &Path, reason: &str, contents: &[u8]) -> bool {
+fn fs_write_atomic(path: &Path, reason: &str, contents: &[u8]) -> io::Result<()> {
     let lock_path = path.with_extension(format!("wip-atomic-write-{}", reason));
     fs::OpenOptions::new()
         .create_new(true) // atomic file creation (assumption: no one will open it without this flag)
@@ -223,15 +229,6 @@ fn fs_write_atomic(path: &Path, reason: &str, contents: &[u8]) -> bool {
         .and_then(|mut file| file.write_all(contents))
         // file should go out of scope and be closed at this point
         .and_then(|()| fs::rename(&lock_path, &path)) // atomic file rename
-        .map_err(|err| {
-            warn!(
-                "Failed to write file with rename, lock path: {}, target path: {}, err: {}",
-                lock_path.display(),
-                path.display(),
-                err
-            )
-        })
-        .is_ok()
 }
 
 #[cfg(test)]

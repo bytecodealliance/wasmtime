@@ -2,7 +2,7 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use anyhow::Result;
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
-use cranelift::codegen::ir::{AbiParam, Signature, Type};
+use cranelift::codegen::ir::{AbiParam, Signature};
 use cranelift::codegen::isa::CallConv;
 
 use arbitrary::Unstructured;
@@ -62,6 +62,14 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         // yet.
         if !matches!(architecture, Architecture::S390x) {
             allowed_callconvs.push(CallConv::Tail);
+        }
+
+        // The winch calling convention is supposed to work on x64 and aarch64
+        if matches!(
+            architecture,
+            Architecture::X86_64 | Architecture::Aarch64(_)
+        ) {
+            allowed_callconvs.push(CallConv::Winch);
         }
 
         Ok(*self.choose(&allowed_callconvs[..])?)

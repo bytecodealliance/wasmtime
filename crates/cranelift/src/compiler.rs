@@ -17,14 +17,13 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     DefinedFuncIndex, FuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, WasmFuncType,
-    WasmType,
+    WasmValType,
 };
 use object::write::{Object, StandardSegment, SymbolId};
-use object::{RelocationEncoding, RelocationKind, SectionKind};
+use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
 use std::any::Any;
 use std::cmp;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::mem;
 use std::path;
 use std::sync::{Arc, Mutex};
@@ -32,8 +31,8 @@ use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FlagValue, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, TrapEncodingBuilder, Tunables,
-    VMOffsets, WasmFunctionInfo,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapInformation, TrapEncodingBuilder,
+    Tunables, VMOffsets, WasmFunctionInfo,
 };
 
 #[cfg(feature = "component-model")]
@@ -66,7 +65,7 @@ impl Default for CompilerContext {
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
-pub(crate) struct Compiler {
+pub struct Compiler {
     tunables: Tunables,
     contexts: Mutex<Vec<CompilerContext>>,
     isa: OwnedTargetIsa,
@@ -105,7 +104,7 @@ impl Drop for Compiler {
 }
 
 impl Compiler {
-    pub(crate) fn new(
+    pub fn new(
         tunables: Tunables,
         isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
@@ -131,7 +130,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
@@ -240,7 +239,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_array_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
@@ -308,7 +307,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_native_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
@@ -461,9 +460,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = func
-                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
-                .unwrap();
+            let func = func.downcast_ref::<CompiledFunction>().unwrap();
             let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
             if self.tunables.generate_address_map {
                 let addr = func.address_map();
@@ -576,7 +573,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let functions_info = funcs
             .iter()
             .map(|(_, (_, func))| {
-                let f: &CompiledFunction<CompiledFuncEnv> = func.downcast_ref().unwrap();
+                let f = func.downcast_ref::<CompiledFunction>().unwrap();
                 f.metadata()
             })
             .collect();
@@ -614,11 +611,13 @@ impl wasmtime_environ::Compiler for Compiler {
                     section_id,
                     object::write::Relocation {
                         offset: u64::from(reloc.offset),
-                        size: reloc.size << 3,
-                        kind: RelocationKind::Absolute,
-                        encoding: RelocationEncoding::Generic,
                         symbol: target_symbol,
                         addend: i64::from(reloc.addend),
+                        flags: RelocationFlags::Generic {
+                            size: reloc.size << 3,
+                            kind: RelocationKind::Absolute,
+                            encoding: RelocationEncoding::Generic,
+                        },
                     },
                 )?;
             }
@@ -724,7 +723,7 @@ impl Compiler {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-    ) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
+    ) -> Result<CompiledFunction, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let native_call_sig = native_call_signature(isa, ty);
@@ -787,7 +786,7 @@ impl Compiler {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-    ) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
+    ) -> Result<CompiledFunction, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_call_sig = wasm_call_signature(isa, ty, &self.tunables);
@@ -893,7 +892,7 @@ impl Compiler {
     fn store_values_to_array(
         &self,
         builder: &mut FunctionBuilder,
-        types: &[WasmType],
+        types: &[WasmValType],
         values: &[Value],
         values_vec_ptr: Value,
         values_vec_capacity: Value,
@@ -925,7 +924,7 @@ impl Compiler {
     /// function that uses the array calling convention.
     fn load_values_from_array(
         &self,
-        types: &[WasmType],
+        types: &[WasmValType],
         builder: &mut FunctionBuilder,
         values_vec_ptr: Value,
         values_vec_capacity: Value,
@@ -1011,7 +1010,7 @@ impl FunctionCompiler<'_> {
         (builder, block0)
     }
 
-    fn finish(self) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
+    fn finish(self) -> Result<CompiledFunction, CompileError> {
         let (info, func) = self.finish_with_info(None)?;
         assert!(info.stack_maps.is_empty());
         Ok(func)
@@ -1020,7 +1019,7 @@ impl FunctionCompiler<'_> {
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
-    ) -> Result<(WasmFunctionInfo, CompiledFunction<CompiledFuncEnv>), CompileError> {
+    ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
         let (_, _code_buf) =
@@ -1266,10 +1265,10 @@ impl NativeRet {
                 let mut max_align = 1;
                 for ty in other[1..].iter() {
                     let size = match ty {
-                        WasmType::I32 | WasmType::F32 => 4,
-                        WasmType::I64 | WasmType::F64 => 8,
-                        WasmType::Ref(_) => pointer_type.bytes(),
-                        WasmType::V128 => 16,
+                        WasmValType::I32 | WasmValType::F32 => 4,
+                        WasmValType::I64 | WasmValType::F64 => 8,
+                        WasmValType::Ref(_) => pointer_type.bytes(),
+                        WasmValType::V128 => 16,
                     };
                     offset = align_to(offset, size);
                     offsets.push(offset);

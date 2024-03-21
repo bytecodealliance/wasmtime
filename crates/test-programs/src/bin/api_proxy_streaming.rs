@@ -7,20 +7,18 @@ use futures::{future, stream, Future, SinkExt, StreamExt, TryStreamExt};
 use url::Url;
 
 mod bindings {
-    use super::Handler;
-
     wit_bindgen::generate!({
         path: "../wasi-http/wit",
         world: "wasi:http/proxy",
-        exports: {
-            "wasi:http/incoming-handler": Handler,
-        },
+        default_bindings_module: "bindings",
     });
 }
 
 const MAX_CONCURRENCY: usize = 16;
 
 struct Handler;
+
+bindings::export!(Handler);
 
 impl bindings::exports::wasi::http::incoming_handler::Guest for Handler {
     fn handle(request: IncomingRequest, response_out: ResponseOutparam) {
@@ -32,6 +30,8 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for Handler {
 
 async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam) {
     let headers = request.headers().entries();
+
+    assert!(request.authority().is_some());
 
     match (request.method(), request.path_with_query().as_deref()) {
         (Method::Get, Some("/hash-all")) => {
@@ -258,7 +258,7 @@ fn respond(status: u16, response_out: ResponseOutparam) {
 
     ResponseOutparam::set(response_out, Ok(response));
 
-    OutgoingBody::finish(body, None);
+    OutgoingBody::finish(body, None).expect("outgoing-body.finish");
 }
 
 async fn hash(url: &Url) -> Result<String> {
@@ -390,7 +390,7 @@ mod executor {
             fn drop(&mut self) {
                 if let Some((stream, body)) = self.0.take() {
                     drop(stream);
-                    OutgoingBody::finish(body, None);
+                    OutgoingBody::finish(body, None).expect("outgoing-body.finish");
                 }
             }
         }
@@ -451,7 +451,7 @@ mod executor {
 
     pub fn outgoing_request_send(
         request: OutgoingRequest,
-    ) -> impl Future<Output = Result<IncomingResponse, types::Error>> {
+    ) -> impl Future<Output = Result<IncomingResponse, types::ErrorCode>> {
         future::poll_fn({
             let response = outgoing_handler::handle(request, None);
 

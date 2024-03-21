@@ -7,7 +7,6 @@ use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
-use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
@@ -22,12 +21,11 @@ use crate::{
         MemFlags, StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InstOutput, Lower},
+    machinst::{ArgPair, InstOutput},
 };
-use crate::{isa, isle_common_prelude_methods, isle_lower_prelude_methods};
+use crate::{isa, isle_common_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
-use std::convert::TryFrom;
 use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;

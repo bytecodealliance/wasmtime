@@ -1,3 +1,4 @@
+use test_programs::sockets::attempt_random_port;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -18,23 +19,15 @@ fn test_tcp_bind_ephemeral_port(net: &Network, ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_tcp_bind_specific_port(net: &Network, ip: IpAddress) {
-    const PORT: u16 = 54321;
-
-    let bind_addr = IpSocketAddress::new(ip, PORT);
-
     let sock = TcpSocket::new(ip.family()).unwrap();
-    match sock.blocking_bind(net, bind_addr) {
-        Ok(()) => {
-            let bound_addr = sock.local_address().unwrap();
 
-            assert_eq!(bind_addr.ip(), bound_addr.ip());
-            assert_eq!(bind_addr.port(), bound_addr.port());
-        }
-        // Concurrent invocations of this test can yield `AddressInUse` and that
-        // same error can show up on Windows as `AccessDenied`.
-        Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => {}
-        Err(e) => panic!("error: {e}"),
-    }
+    let bind_addr =
+        attempt_random_port(ip, |bind_addr| sock.blocking_bind(net, bind_addr)).unwrap();
+
+    let bound_addr = sock.local_address().unwrap();
+
+    assert_eq!(bind_addr.ip(), bound_addr.ip());
+    assert_eq!(bind_addr.port(), bound_addr.port());
 }
 
 /// Two sockets may not be actively bound to the same address at the same time.
@@ -52,6 +45,45 @@ fn test_tcp_bind_addrinuse(net: &Network, ip: IpAddress) {
         sock2.blocking_bind(net, bound_addr),
         Err(ErrorCode::AddressInUse)
     );
+}
+
+// The WASI runtime should set SO_REUSEADDR for us
+fn test_tcp_bind_reuseaddr(net: &Network, ip: IpAddress) {
+    let client = TcpSocket::new(ip.family()).unwrap();
+
+    let bind_addr = {
+        let listener1 = TcpSocket::new(ip.family()).unwrap();
+
+        let bind_addr =
+            attempt_random_port(ip, |bind_addr| listener1.blocking_bind(net, bind_addr)).unwrap();
+
+        listener1.blocking_listen().unwrap();
+
+        let connect_addr =
+            IpSocketAddress::new(IpAddress::new_loopback(ip.family()), bind_addr.port());
+        client.blocking_connect(net, connect_addr).unwrap();
+
+        let (accepted_connection, accepted_input, accepted_output) =
+            listener1.blocking_accept().unwrap();
+        accepted_output.blocking_write_zeroes_and_flush(10).unwrap();
+        drop(accepted_input);
+        drop(accepted_output);
+        drop(accepted_connection);
+        drop(listener1);
+
+        bind_addr
+    };
+
+    {
+        let listener2 = TcpSocket::new(ip.family()).unwrap();
+
+        // If SO_REUSEADDR was configured correctly, the following lines shouldn't be
+        // affected by the TIME_WAIT state of the just closed `listener1` socket:
+        listener2.blocking_bind(net, bind_addr).unwrap();
+        listener2.blocking_listen().unwrap();
+    }
+
+    drop(client);
 }
 
 // Try binding to an address that is not configured on the system.
@@ -106,23 +138,11 @@ fn test_tcp_bind_dual_stack(net: &Network) {
     let sock = TcpSocket::new(IpAddressFamily::Ipv6).unwrap();
     let addr = IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, 0);
 
-    // Even on platforms that don't support dualstack sockets,
-    // setting ipv6_only to true (disabling dualstack mode) should work.
-    sock.set_ipv6_only(true).unwrap();
-
     // Binding an IPv4-mapped-IPv6 address on a ipv6-only socket should fail:
     assert!(matches!(
         sock.blocking_bind(net, addr),
         Err(ErrorCode::InvalidArgument)
     ));
-
-    sock.set_ipv6_only(false).unwrap();
-
-    sock.blocking_bind(net, addr).unwrap();
-
-    let bound_addr = sock.local_address().unwrap();
-
-    assert_eq!(bound_addr.family(), IpAddressFamily::Ipv6);
 }
 
 fn main() {
@@ -140,6 +160,9 @@ fn main() {
     test_tcp_bind_specific_port(&net, IpAddress::IPV6_LOOPBACK);
     test_tcp_bind_specific_port(&net, IpAddress::IPV4_UNSPECIFIED);
     test_tcp_bind_specific_port(&net, IpAddress::IPV6_UNSPECIFIED);
+
+    test_tcp_bind_reuseaddr(&net, IpAddress::IPV4_LOOPBACK);
+    test_tcp_bind_reuseaddr(&net, IpAddress::IPV6_LOOPBACK);
 
     test_tcp_bind_addrinuse(&net, IpAddress::IPV4_LOOPBACK);
     test_tcp_bind_addrinuse(&net, IpAddress::IPV6_LOOPBACK);

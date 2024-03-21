@@ -6,19 +6,27 @@
   )
 )
  
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec20             	sub	rsp, 0x20
-;;    8:	 f20f11442418         	movsd	qword ptr [rsp + 0x18], xmm0
-;;    e:	 f20f114c2410         	movsd	qword ptr [rsp + 0x10], xmm1
-;;   14:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
-;;   18:	 4c89742404           	mov	qword ptr [rsp + 4], r14
-;;   1d:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
-;;   21:	 f20f10442410         	movsd	xmm0, qword ptr [rsp + 0x10]
-;;   27:	 f20f104c2418         	movsd	xmm1, qword ptr [rsp + 0x18]
-;;   2d:	 83f800               	cmp	eax, 0
-;;   30:	 0f8404000000         	je	0x3a
-;;   36:	 f20f10c1             	movsd	xmm0, xmm1
-;;   3a:	 4883c420             	add	rsp, 0x20
-;;   3e:	 5d                   	pop	rbp
-;;   3f:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c328000000       	add	r11, 0x28
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8744000000         	ja	0x5f
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec28             	sub	rsp, 0x28
+;;      	 48897c2420           	mov	qword ptr [rsp + 0x20], rdi
+;;      	 4889742418           	mov	qword ptr [rsp + 0x18], rsi
+;;      	 f20f11442410         	movsd	qword ptr [rsp + 0x10], xmm0
+;;      	 f20f114c2408         	movsd	qword ptr [rsp + 8], xmm1
+;;      	 89542404             	mov	dword ptr [rsp + 4], edx
+;;      	 8b442404             	mov	eax, dword ptr [rsp + 4]
+;;      	 f20f10442408         	movsd	xmm0, qword ptr [rsp + 8]
+;;      	 f20f104c2410         	movsd	xmm1, qword ptr [rsp + 0x10]
+;;      	 83f800               	cmp	eax, 0
+;;      	 0f8404000000         	je	0x59
+;;   55:	 f20f10c1             	movsd	xmm0, xmm1
+;;      	 4883c428             	add	rsp, 0x28
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   5f:	 0f0b                 	ud2	

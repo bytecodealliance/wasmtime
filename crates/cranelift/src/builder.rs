@@ -11,11 +11,12 @@ use cranelift_codegen::{
 use std::fmt;
 use std::path;
 use std::sync::Arc;
+use target_lexicon::Triple;
 use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, Tunables};
 
 struct Builder {
-    tunables: Tunables,
+    tunables: Option<Tunables>,
     inner: IsaBuilder<CodegenResult<OwnedTargetIsa>>,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
@@ -36,15 +37,15 @@ pub struct LinkOptions {
     pub force_jump_veneers: bool,
 }
 
-pub fn builder() -> Box<dyn CompilerBuilder> {
-    Box::new(Builder {
-        tunables: Tunables::default(),
-        inner: IsaBuilder::new(|triple| isa::lookup(triple).map_err(|e| e.into())),
+pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
+    Ok(Box::new(Builder {
+        tunables: None,
+        inner: IsaBuilder::new(triple, |triple| isa::lookup(triple).map_err(|e| e.into()))?,
         linkopts: LinkOptions::default(),
         cache_store: None,
         clif_dir: None,
         wmemcheck: false,
-    })
+    }))
 }
 
 impl CompilerBuilder for Builder {
@@ -81,14 +82,17 @@ impl CompilerBuilder for Builder {
     }
 
     fn set_tunables(&mut self, tunables: Tunables) -> Result<()> {
-        self.tunables = tunables;
+        self.tunables = Some(tunables);
         Ok(())
     }
 
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self.inner.build()?;
         Ok(Box::new(crate::compiler::Compiler::new(
-            self.tunables.clone(),
+            self.tunables
+                .as_ref()
+                .expect("set_tunables not called")
+                .clone(),
             isa,
             self.cache_store.clone(),
             self.linkopts.clone(),

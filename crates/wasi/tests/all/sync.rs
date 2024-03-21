@@ -1,7 +1,7 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::preview2::command::sync::{add_to_linker, Command};
+use wasmtime_wasi::command::sync::{add_to_linker, Command};
 
 fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
@@ -25,8 +25,7 @@ foreach_preview1!(assert_test_exists);
 foreach_preview2!(assert_test_exists);
 
 // Below here is mechanical: there should be one test for every binary in
-// wasi-tests. The only differences should be should_panic annotations for
-// tests which fail.
+// wasi-tests.
 #[test_log::test]
 fn preview1_big_random_buf() {
     run(PREVIEW1_BIG_RANDOM_BUF_COMPONENT, false).unwrap()
@@ -96,7 +95,6 @@ fn preview1_file_unbuffered_write() {
     run(PREVIEW1_FILE_UNBUFFERED_WRITE_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-#[cfg_attr(windows, should_panic)]
 fn preview1_interesting_paths() {
     run(PREVIEW1_INTERESTING_PATHS_COMPONENT, false).unwrap()
 }
@@ -149,11 +147,6 @@ fn preview1_path_rename_dir_trailing_slashes() {
     run(PREVIEW1_PATH_RENAME_DIR_TRAILING_SLASHES_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-#[should_panic]
-fn preview1_path_rename_file_trailing_slashes() {
-    run(PREVIEW1_PATH_RENAME_FILE_TRAILING_SLASHES_COMPONENT, false).unwrap()
-}
-#[test_log::test]
 fn preview1_path_rename() {
     run(PREVIEW1_PATH_RENAME_COMPONENT, false).unwrap()
 }
@@ -175,9 +168,8 @@ fn preview1_readlink() {
     run(PREVIEW1_READLINK_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-#[should_panic]
-fn preview1_remove_directory_trailing_slashes() {
-    run(PREVIEW1_REMOVE_DIRECTORY_TRAILING_SLASHES_COMPONENT, false).unwrap()
+fn preview1_remove_directory() {
+    run(PREVIEW1_REMOVE_DIRECTORY_COMPONENT, false).unwrap()
 }
 #[test_log::test]
 fn preview1_remove_nonempty_directory() {
@@ -235,6 +227,10 @@ fn preview1_unicode_output() {
 #[test_log::test]
 fn preview1_file_write() {
     run(PREVIEW1_FILE_WRITE_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview1_path_open_lots() {
+    run(PREVIEW1_PATH_OPEN_LOTS_COMPONENT, false).unwrap()
 }
 
 #[test_log::test]
@@ -298,6 +294,22 @@ fn preview2_stream_pollable_traps() {
     let e = run(PREVIEW2_STREAM_POLLABLE_TRAPS_COMPONENT, false).unwrap_err();
     assert_eq!(
         format!("{}", e.source().expect("trap source")),
-        "entry still has children"
+        "resource has children"
     )
+}
+#[test_log::test]
+fn preview2_pollable_correct() {
+    run(PREVIEW2_POLLABLE_CORRECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_pollable_traps() {
+    let e = run(PREVIEW2_POLLABLE_TRAPS_COMPONENT, false).unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "empty poll list"
+    )
+}
+#[test_log::test]
+fn preview2_adapter_badfd() {
+    run(PREVIEW2_ADAPTER_BADFD_COMPONENT, false).unwrap()
 }

@@ -1,6 +1,6 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::ir::{self, types, LibCall, MemFlags, Opcode, Signature, TrapCode, Type};
+use crate::ir::{self, types, LibCall, MemFlags, Opcode, Signature, TrapCode};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
@@ -13,7 +13,6 @@ use alloc::vec::Vec;
 use args::*;
 use regalloc2::{MachineEnv, PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
-use std::convert::TryFrom;
 use std::sync::OnceLock;
 
 /// This is the limit for the size of argument and return-value areas on the
@@ -222,7 +221,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Args => {
                             get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
                         }
-                        ArgsOrRets::Rets => get_intreg_for_retval(&call_conv, next_gpr),
+                        ArgsOrRets::Rets => get_intreg_for_retval(&call_conv, flags, next_gpr),
                     }
                 } else {
                     match args_or_rets {
@@ -506,17 +505,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::rax()),
         ));
         insts.push(Inst::CallKnown {
+            opcode: Opcode::Call,
             dest: ExternalName::LibCall(LibCall::Probestack),
-            info: Box::new(CallInfo {
+            info: Some(Box::new(CallInfo {
                 // No need to include arg here: we are post-regalloc
                 // so no constraints will be seen anyway.
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::Call,
                 callee_pop_size: 0,
                 callee_conv: CallConv::Probestack,
-            }),
+            })),
         });
     }
 
@@ -804,12 +803,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Tail {
-            TAIL_CLOBBERS
-        } else if call_conv_of_callee.extends_windows_fastcall() {
-            WINDOWS_CLOBBERS
-        } else {
-            SYSV_CLOBBERS
+        match call_conv_of_callee {
+            isa::CallConv::Tail => ALL_CLOBBERS,
+            isa::CallConv::Winch => ALL_CLOBBERS,
+            _ if call_conv_of_callee.extends_windows_fastcall() => WINDOWS_CLOBBERS,
+            _ => SYSV_CLOBBERS,
         }
     }
 
@@ -834,6 +832,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // The `tail` calling convention doesn't have any callee-save
             // registers.
             CallConv::Tail => vec![],
+            // The `winch` calling convention doesn't have any callee-save
+            // registers.
+            CallConv::Winch => vec![],
             CallConv::Fast | CallConv::Cold | CallConv::SystemV => regs
                 .iter()
                 .cloned()
@@ -1035,7 +1036,11 @@ fn get_fltreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
     }
 }
 
-fn get_intreg_for_retval(call_conv: &CallConv, intreg_idx: usize) -> Option<Reg> {
+fn get_intreg_for_retval(
+    call_conv: &CallConv,
+    flags: &settings::Flags,
+    intreg_idx: usize,
+) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match intreg_idx {
             0 => Some(regs::rax()),
@@ -1057,11 +1062,16 @@ fn get_intreg_for_retval(call_conv: &CallConv, intreg_idx: usize) -> Option<Reg>
         CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
+            2 if flags.enable_llvm_abi_extensions() => Some(regs::rcx()),
             _ => None,
         },
         CallConv::WindowsFastcall => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
+            _ => None,
+        },
+        CallConv::Winch => match intreg_idx {
+            0 => Some(regs::rax()),
             _ => None,
         },
         CallConv::Probestack => todo!(),
@@ -1087,7 +1097,7 @@ fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize) -> Option<Reg>
             1 => Some(regs::xmm1()),
             _ => None,
         },
-        CallConv::WindowsFastcall => match fltreg_idx {
+        CallConv::WindowsFastcall | CallConv::Winch => match fltreg_idx {
             0 => Some(regs::xmm0()),
             _ => None,
         },
@@ -1148,7 +1158,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
-const TAIL_CLOBBERS: PRegSet = tail_clobbers();
+const ALL_CLOBBERS: PRegSet = all_clobbers();
 
 const fn windows_clobbers() -> PRegSet {
     PRegSet::empty()
@@ -1196,7 +1206,8 @@ const fn sysv_clobbers() -> PRegSet {
         .with(regs::fpr_preg(15))
 }
 
-const fn tail_clobbers() -> PRegSet {
+/// For calling conventions that clobber all registers.
+const fn all_clobbers() -> PRegSet {
     PRegSet::empty()
         .with(regs::gpr_preg(regs::ENC_RAX))
         .with(regs::gpr_preg(regs::ENC_RCX))

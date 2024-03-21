@@ -3,7 +3,7 @@
 
 mod vm_host_func_context;
 
-use crate::externref::VMExternRef;
+use crate::gc::VMExternRef;
 use sptr::Strict;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
@@ -12,7 +12,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
 pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
-use wasmtime_environ::{DefinedMemoryIndex, VMCONTEXT_MAGIC};
+use wasmtime_environ::{DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC};
 
 /// A function pointer that exposes the array calling convention.
 ///
@@ -390,7 +390,6 @@ pub struct VMGlobalDefinition {
 #[cfg(test)]
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
-    use crate::externref::VMExternRef;
     use std::mem::{align_of, size_of};
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
@@ -421,7 +420,9 @@ mod test_vmglobal_definition {
     }
 
     #[test]
+    #[cfg(feature = "gc")]
     fn check_vmglobal_can_contain_externref() {
+        use crate::gc::VMExternRef;
         assert!(size_of::<VMExternRef>() <= size_of::<VMGlobalDefinition>());
     }
 }
@@ -534,16 +535,20 @@ impl VMGlobalDefinition {
 
     /// Return a reference to the value as an externref.
     pub unsafe fn as_externref(&self) -> &Option<VMExternRef> {
-        &*(self.storage.as_ref().as_ptr().cast::<Option<VMExternRef>>())
+        let ret = &*(self.storage.as_ref().as_ptr().cast::<Option<VMExternRef>>());
+        assert!(cfg!(feature = "gc") || ret.is_none());
+        ret
     }
 
     /// Return a mutable reference to the value as an externref.
     pub unsafe fn as_externref_mut(&mut self) -> &mut Option<VMExternRef> {
-        &mut *(self
+        let ret = &mut *(self
             .storage
             .as_mut()
             .as_mut_ptr()
-            .cast::<Option<VMExternRef>>())
+            .cast::<Option<VMExternRef>>());
+        assert!(cfg!(feature = "gc") || ret.is_none());
+        ret
     }
 
     /// Return a reference to the value as a `VMFuncRef`.
@@ -557,33 +562,38 @@ impl VMGlobalDefinition {
     }
 }
 
-/// An index into the shared signature registry, usable for checking signatures
+/// An index into the shared type registry, usable for checking signatures
 /// at indirect calls.
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
-pub struct VMSharedSignatureIndex(u32);
+pub struct VMSharedTypeIndex(u32);
 
 #[cfg(test)]
-mod test_vmshared_signature_index {
-    use super::VMSharedSignatureIndex;
+mod test_vmshared_type_index {
+    use super::VMSharedTypeIndex;
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
-    fn check_vmshared_signature_index() {
+    fn check_vmshared_type_index() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
-            size_of::<VMSharedSignatureIndex>(),
-            usize::from(offsets.size_of_vmshared_signature_index())
+            size_of::<VMSharedTypeIndex>(),
+            usize::from(offsets.size_of_vmshared_type_index())
         );
     }
 }
 
-impl VMSharedSignatureIndex {
-    /// Create a new `VMSharedSignatureIndex`.
+impl VMSharedTypeIndex {
+    /// Create a new `VMSharedTypeIndex`.
     #[inline]
     pub fn new(value: u32) -> Self {
+        assert_ne!(
+            value,
+            u32::MAX,
+            "u32::MAX is reserved for the default value"
+        );
         Self(value)
     }
 
@@ -594,16 +604,16 @@ impl VMSharedSignatureIndex {
     }
 }
 
-impl Default for VMSharedSignatureIndex {
+impl Default for VMSharedTypeIndex {
     #[inline]
     fn default() -> Self {
-        Self::new(u32::MAX)
+        Self(u32::MAX)
     }
 }
 
 /// The VM caller-checked "funcref" record, for caller-side signature checking.
 ///
-/// It consists of function pointer(s), a signature id to be checked by the
+/// It consists of function pointer(s), a type id to be checked by the
 /// caller, and the vmctx closure associated with this function.
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -636,8 +646,8 @@ pub struct VMFuncRef {
     /// the vast vast vast majority of the time.
     pub wasm_call: Option<NonNull<VMWasmCallFunction>>,
 
-    /// Function signature id.
-    pub type_index: VMSharedSignatureIndex,
+    /// Function signature's type id.
+    pub type_index: VMSharedTypeIndex,
 
     /// The VM state associated with this function.
     ///
@@ -702,6 +712,7 @@ macro_rules! define_builtin_array {
         #[repr(C)]
         pub struct VMBuiltinFunctionsArray {
             $(
+                $( #[ $attr ] )*
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -709,8 +720,12 @@ macro_rules! define_builtin_array {
         }
 
         impl VMBuiltinFunctionsArray {
+            #[allow(unused_doc_comments)]
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
-                $($name: crate::libcalls::trampolines::$name,)*
+                $(
+                    $( #[ $attr ] )*
+                    $name: crate::libcalls::trampolines::$name,
+                )*
             };
         }
     };
@@ -1002,7 +1017,7 @@ pub union ValRaw {
     /// This value is always stored in a little-endian format.
     v128: u128,
 
-    /// A WebAssembly `funcref` value.
+    /// A WebAssembly `funcref` value (or one of its subtypes).
     ///
     /// The payload here is a pointer which is runtime-defined. This is one of
     /// the main points of unsafety about the `ValRaw` type as the validity of
@@ -1012,7 +1027,7 @@ pub union ValRaw {
     /// This value is always stored in a little-endian format.
     funcref: *mut c_void,
 
-    /// A WebAssembly `externref` value.
+    /// A WebAssembly `externref` value (or one of its subtypes).
     ///
     /// The payload here is a pointer which is runtime-defined. This is one of
     /// the main points of unsafety about the `ValRaw` type as the validity of
@@ -1038,7 +1053,7 @@ impl ValRaw {
         // `wasmtime` crate. Otherwise though all `ValRaw` constructors are
         // otherwise constrained to guarantee that the initial 64-bits are
         // always initialized.
-        ValRaw::u64((i as u32).into())
+        ValRaw::u64(i.unsigned().into())
     }
 
     /// Creates a WebAssembly `i64` value
@@ -1092,6 +1107,7 @@ impl ValRaw {
     /// Creates a WebAssembly `externref` value
     #[inline]
     pub fn externref(i: *mut c_void) -> ValRaw {
+        assert!(cfg!(feature = "gc") || i.is_null());
         ValRaw {
             externref: Strict::map_addr(i, |i| i.to_le()),
         }
@@ -1112,13 +1128,13 @@ impl ValRaw {
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_u32(&self) -> u32 {
-        self.get_i32() as u32
+        self.get_i32().unsigned()
     }
 
     /// Gets the WebAssembly `i64` value
     #[inline]
     pub fn get_u64(&self) -> u64 {
-        self.get_i64() as u64
+        self.get_i64().unsigned()
     }
 
     /// Gets the WebAssembly `f32` value
@@ -1148,7 +1164,9 @@ impl ValRaw {
     /// Gets the WebAssembly `externref` value
     #[inline]
     pub fn get_externref(&self) -> *mut c_void {
-        unsafe { Strict::map_addr(self.externref, |i| usize::from_le(i)) }
+        let ptr = unsafe { Strict::map_addr(self.externref, |i| usize::from_le(i)) };
+        assert!(cfg!(feature = "gc") || ptr.is_null());
+        ptr
     }
 }
 

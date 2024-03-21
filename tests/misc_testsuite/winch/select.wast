@@ -112,6 +112,15 @@
       (i32.ne (i32.const 1) (select (i32.const 0) (i32.const 1) (local.get 0)))
     )
   )
+  (func (export "as-load-operand") (param i32) (result i32)
+    (i32.load (select (i32.const 0) (i32.const 4) (local.get 0)))
+  )
+  (func (export "as-store-first") (param i32)
+    (select (i32.const 0) (i32.const 4) (local.get 0)) (i32.const 1) (i32.store)
+  )
+  (func (export "as-store-last") (param i32)
+    (i32.const 8) (select (i32.const 1) (i32.const 2) (local.get 0)) (i32.store)
+  )
 )
 
 (assert_return (invoke "select-i32" (i32.const 1) (i32.const 2) (i32.const 1)) (i32.const 1))
@@ -198,3 +207,11 @@
 (assert_return (invoke "as-br_table-first" (i32.const 1)) (i32.const 2))
 (assert_return (invoke "as-br_table-last" (i32.const 0)) (i32.const 2))
 (assert_return (invoke "as-br_table-last" (i32.const 1)) (i32.const 2))
+
+(assert_return (invoke "as-store-first" (i32.const 0)))
+(assert_return (invoke "as-store-first" (i32.const 1)))
+(assert_return (invoke "as-store-last" (i32.const 0)))
+(assert_return (invoke "as-store-last" (i32.const 1)))
+(assert_return (invoke "as-load-operand" (i32.const 0)) (i32.const 1))
+(assert_return (invoke "as-load-operand" (i32.const 1)) (i32.const 1))
+

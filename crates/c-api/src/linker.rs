@@ -22,6 +22,13 @@ pub extern "C" fn wasmtime_linker_new(engine: &wasm_engine_t) -> Box<wasmtime_li
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_linker_clone(linker: &wasmtime_linker_t) -> Box<wasmtime_linker_t> {
+    Box::new(wasmtime_linker_t {
+        linker: linker.linker.clone(),
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_linker_allow_shadowing(
     linker: &mut wasmtime_linker_t,
     allow_shadowing: bool,
@@ -69,7 +76,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_func(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let ty = ty.ty().ty.clone();
+    let ty = ty.ty().ty(linker.linker.engine());
     let module = to_str!(module, module_len);
     let name = to_str!(name, name_len);
     let cb = crate::func::c_callback_to_rust_fn(callback, data, finalizer);
@@ -88,7 +95,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_func_unchecked(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let ty = ty.ty().ty.clone();
+    let ty = ty.ty().ty(linker.linker.engine());
     let module = to_str!(module, module_len);
     let name = to_str!(name, name_len);
     let cb = crate::func::c_unchecked_callback_to_rust_fn(callback, data, finalizer);
@@ -104,7 +111,7 @@ pub extern "C" fn wasmtime_linker_define_wasi(
     linker: &mut wasmtime_linker_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        wasmtime_wasi::add_to_linker(&mut linker.linker, |cx| {
+        wasi_common::sync::add_to_linker(&mut linker.linker, |cx| {
             cx.wasi.as_mut().expect(
                 "failed to define WASI on linker; did you set a WASI configuration in the store?",
             )

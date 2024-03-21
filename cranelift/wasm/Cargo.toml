@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-wasm"
-version = "0.103.0"
+version = "0.107.0"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 documentation = "https://docs.rs/cranelift-wasm"
@@ -11,6 +11,9 @@ readme = "README.md"
 keywords = ["webassembly", "wasm"]
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 wasmparser = { workspace = true }
 cranelift-codegen = { workspace = true }
@@ -18,7 +21,7 @@ cranelift-entity = { workspace = true }
 cranelift-frontend = { workspace = true }
 wasmtime-types = { workspace = true }
 hashbrown = { workspace = true, optional = true }
-itertools = "0.10.0"
+itertools = "0.12.0"
 log = { workspace = true }
 serde = { version = "1.0.188", optional = true }
 serde_derive = { version = "1.0.188", optional = true }

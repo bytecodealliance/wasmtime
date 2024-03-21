@@ -8,6 +8,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 capstone = { workspace = true }
@@ -16,4 +19,4 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 target-lexicon = { workspace = true }
 wasmprinter = { workspace = true }
-wasmtime = { workspace = true, features = ["cranelift"] }
+wasmtime = { workspace = true, features = ["cranelift", "runtime"] }

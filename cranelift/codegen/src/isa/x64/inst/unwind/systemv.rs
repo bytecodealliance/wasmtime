@@ -86,9 +86,6 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
     fn map(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
         Ok(map_reg(reg)?.0)
     }
-    fn sp(&self) -> u16 {
-        X86_64::RSP.0
-    }
     fn fp(&self) -> Option<u16> {
         Some(X86_64::RBP.0)
     }

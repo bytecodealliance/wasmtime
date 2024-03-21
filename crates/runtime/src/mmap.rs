@@ -1,30 +1,18 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
+use crate::sys::mmap;
 use anyhow::{Context, Result};
 use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
-cfg_if::cfg_if! {
-    if #[cfg(windows)] {
-        mod windows;
-        use windows as sys;
-    } else if #[cfg(miri)] {
-        mod miri;
-        use miri as sys;
-    } else {
-        mod unix;
-        use unix as sys;
-    }
-}
-
 /// A simple struct consisting of a page-aligned pointer to page-aligned
 /// and initially-zeroed memory and a length.
 #[derive(Debug)]
 pub struct Mmap {
-    sys: sys::Mmap,
+    sys: mmap::Mmap,
     file: Option<Arc<File>>,
 }
 
@@ -47,7 +35,7 @@ impl Mmap {
     /// The memory mapping and the length of the file within the mapping are
     /// returned.
     pub fn from_file(path: &Path) -> Result<Self> {
-        let (sys, file) = sys::Mmap::from_file(path)?;
+        let (sys, file) = mmap::Mmap::from_file(path)?;
         Ok(Mmap {
             sys,
             file: Some(Arc::new(file)),
@@ -70,18 +58,18 @@ impl Mmap {
 
         if mapping_size == 0 {
             Ok(Mmap {
-                sys: sys::Mmap::new_empty(),
+                sys: mmap::Mmap::new_empty(),
                 file: None,
             })
         } else if accessible_size == mapping_size {
             Ok(Mmap {
-                sys: sys::Mmap::new(mapping_size)
+                sys: mmap::Mmap::new(mapping_size)
                     .context(format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
                 file: None,
             })
         } else {
             let mut result = Mmap {
-                sys: sys::Mmap::reserve(mapping_size)
+                sys: mmap::Mmap::reserve(mapping_size)
                     .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
                 file: None,
             };

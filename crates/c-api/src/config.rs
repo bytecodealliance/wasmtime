@@ -76,6 +76,11 @@ pub extern "C" fn wasmtime_config_wasm_threads_set(c: &mut wasm_config_t, enable
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_tail_call_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_tail_call(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_wasm_reference_types_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_reference_types(enable);
 }
@@ -238,6 +243,11 @@ pub unsafe extern "C" fn wasmtime_config_target_set(
 ) -> Option<Box<wasmtime_error_t>> {
     let target = CStr::from_ptr(target).to_str().expect("not valid utf-8");
     handle_result(c.config.target(target), |_cfg| {})
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_macos_use_mach_ports_set(c: &mut wasm_config_t, enabled: bool) {
+    c.config.macos_use_mach_ports(enabled);
 }
 
 #[no_mangle]

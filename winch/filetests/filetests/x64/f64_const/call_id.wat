@@ -4,27 +4,46 @@
   (func $id-f64 (param f64) (result f64) (local.get 0))
   (func (export "type-first-f64") (result f64) (call $id-f64 (f64.const 1.32)))
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 f20f11442408         	movsd	qword ptr [rsp + 8], xmm0
-;;    e:	 4c893424             	mov	qword ptr [rsp], r14
-;;   12:	 f20f10442408         	movsd	xmm0, qword ptr [rsp + 8]
-;;   18:	 4883c410             	add	rsp, 0x10
-;;   1c:	 5d                   	pop	rbp
-;;   1d:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8721000000         	ja	0x3c
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 f20f110424           	movsd	qword ptr [rsp], xmm0
+;;      	 f20f100424           	movsd	xmm0, qword ptr [rsp]
+;;      	 4883c418             	add	rsp, 0x18
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   3c:	 0f0b                 	ud2	
 ;;
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 4883ec08             	sub	rsp, 8
-;;   10:	 f20f100510000000     	movsd	xmm0, qword ptr [rip + 0x10]
-;;   18:	 e800000000           	call	0x1d
-;;   1d:	 4883c408             	add	rsp, 8
-;;   21:	 4883c408             	add	rsp, 8
-;;   25:	 5d                   	pop	rbp
-;;   26:	 c3                   	ret	
-;;   27:	 001f                 	add	byte ptr [rdi], bl
-;;   29:	 85eb                 	test	ebx, ebp
-;;   2b:	 51                   	push	rcx
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f872e000000         	ja	0x49
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
+;;      	 48893424             	mov	qword ptr [rsp], rsi
+;;      	 4c89f7               	mov	rdi, r14
+;;      	 4c89f6               	mov	rsi, r14
+;;      	 f20f100517000000     	movsd	xmm0, qword ptr [rip + 0x17]
+;;      	 e800000000           	call	0x3e
+;;      	 4c8b742408           	mov	r14, qword ptr [rsp + 8]
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   49:	 0f0b                 	ud2	
+;;   4b:	 0000                 	add	byte ptr [rax], al
+;;   4d:	 0000                 	add	byte ptr [rax], al
+;;   4f:	 001f                 	add	byte ptr [rdi], bl
+;;   51:	 85eb                 	test	ebx, ebp
+;;   53:	 51                   	push	rcx

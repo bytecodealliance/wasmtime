@@ -1,8 +1,8 @@
 use crate::component::*;
 use crate::ScopeVec;
 use crate::{
-    EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
-    SignatureIndex, Tunables, TypeConvert, WasmHeapType, WasmType,
+    EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables,
+    TypeConvert, WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
@@ -12,6 +12,7 @@ use wasmparser::types::{
     AliasableResourceId, ComponentEntityType, ComponentFuncTypeId, ComponentInstanceTypeId, Types,
 };
 use wasmparser::{Chunk, ComponentImportName, Encoding, Parser, Payload, Validator};
+use wasmtime_types::ModuleInternedTypeIndex;
 
 mod adapt;
 pub use self::adapt::*;
@@ -173,16 +174,16 @@ enum LocalInitializer<'data> {
     Lower {
         func: ComponentFuncIndex,
         lower_ty: ComponentFuncTypeId,
-        canonical_abi: SignatureIndex,
+        canonical_abi: ModuleInternedTypeIndex,
         options: LocalCanonicalOptions,
     },
     Lift(ComponentFuncTypeId, FuncIndex, LocalCanonicalOptions),
 
     // resources
-    Resource(AliasableResourceId, WasmType, Option<FuncIndex>),
-    ResourceNew(AliasableResourceId, SignatureIndex),
-    ResourceRep(AliasableResourceId, SignatureIndex),
-    ResourceDrop(AliasableResourceId, SignatureIndex),
+    Resource(AliasableResourceId, WasmValType, Option<FuncIndex>),
+    ResourceNew(AliasableResourceId, ModuleInternedTypeIndex),
+    ResourceRep(AliasableResourceId, ModuleInternedTypeIndex),
+    ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),
 
     // core wasm modules
     ModuleStatic(StaticModuleIndex),
@@ -200,7 +201,7 @@ enum LocalInitializer<'data> {
         HashMap<&'data str, ComponentItem>,
         ComponentInstanceTypeId,
     ),
-    ComponentSynthetic(HashMap<&'data str, ComponentItem>),
+    ComponentSynthetic(HashMap<&'data str, ComponentItem>, ComponentInstanceTypeId),
 
     // alias section
     AliasExportFunc(ModuleInstanceIndex, &'data str),
@@ -581,18 +582,18 @@ impl<'a, 'data> Translator<'a, 'data> {
                 let mut index = self.validator.types(0).unwrap().component_instance_count();
                 self.validator.component_instance_section(&s)?;
                 for instance in s {
+                    let types = self.validator.types(0).unwrap();
+                    let ty = types.component_instance_at(index);
                     let init = match instance? {
                         wasmparser::ComponentInstance::Instantiate {
                             component_index,
                             args,
                         } => {
-                            let types = self.validator.types(0).unwrap();
-                            let ty = types.component_instance_at(index);
                             let index = ComponentIndex::from_u32(component_index);
                             self.instantiate_component(index, &args, ty)?
                         }
                         wasmparser::ComponentInstance::FromExports(exports) => {
-                            self.instantiate_component_from_exports(&exports)?
+                            self.instantiate_component_from_exports(&exports, ty)?
                         }
                     };
                     self.result.initializers.push(init);
@@ -746,6 +747,7 @@ impl<'a, 'data> Translator<'a, 'data> {
     fn instantiate_component_from_exports(
         &mut self,
         exports: &[wasmparser::ComponentExport<'data>],
+        ty: ComponentInstanceTypeId,
     ) -> Result<LocalInitializer<'data>> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
@@ -753,7 +755,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             map.insert(export.name.0, idx);
         }
 
-        Ok(LocalInitializer::ComponentSynthetic(map))
+        Ok(LocalInitializer::ComponentSynthetic(map, ty))
     }
 
     fn kind_to_item(
@@ -889,12 +891,12 @@ impl<'a, 'data> Translator<'a, 'data> {
         return ret;
     }
 
-    fn core_func_signature(&mut self, idx: u32) -> SignatureIndex {
+    fn core_func_signature(&mut self, idx: u32) -> ModuleInternedTypeIndex {
         let types = self.validator.types(0).unwrap();
         let id = types.core_function_at(idx);
         let ty = types[id].unwrap_func();
         let ty = self.types.convert_func_type(ty);
-        self.types.module_types_builder().wasm_func_type(ty)
+        self.types.module_types_builder().wasm_func_type(id, ty)
     }
 }
 
@@ -928,7 +930,7 @@ mod pre_inlining {
         }
 
         pub fn module_types_builder(&mut self) -> &mut ModuleTypesBuilder {
-            self.types.module_types_builder()
+            self.types.module_types_builder_mut()
         }
 
         pub fn types(&self) -> &ComponentTypesBuilder {
@@ -943,7 +945,7 @@ mod pre_inlining {
     }
 
     impl TypeConvert for PreInliningComponentTypes<'_> {
-        fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+        fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
             self.types.lookup_heap_type(index)
         }
     }

@@ -7,21 +7,29 @@
 	(i64.rem_s)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec18             	sub	rsp, 0x18
-;;    8:	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;    d:	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;   12:	 4c893424             	mov	qword ptr [rsp], r14
-;;   16:	 488b4c2408           	mov	rcx, qword ptr [rsp + 8]
-;;   1b:	 488b442410           	mov	rax, qword ptr [rsp + 0x10]
-;;   20:	 4899                 	cqo	
-;;   22:	 4883f9ff             	cmp	rcx, -1
-;;   26:	 0f850a000000         	jne	0x36
-;;   2c:	 ba00000000           	mov	edx, 0
-;;   31:	 e903000000           	jmp	0x39
-;;   36:	 48f7f9               	idiv	rcx
-;;   39:	 4889d0               	mov	rax, rdx
-;;   3c:	 4883c418             	add	rsp, 0x18
-;;   40:	 5d                   	pop	rbp
-;;   41:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c320000000       	add	r11, 0x20
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8745000000         	ja	0x60
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec20             	sub	rsp, 0x20
+;;      	 48897c2418           	mov	qword ptr [rsp + 0x18], rdi
+;;      	 4889742410           	mov	qword ptr [rsp + 0x10], rsi
+;;      	 4889542408           	mov	qword ptr [rsp + 8], rdx
+;;      	 48890c24             	mov	qword ptr [rsp], rcx
+;;      	 488b0c24             	mov	rcx, qword ptr [rsp]
+;;      	 488b442408           	mov	rax, qword ptr [rsp + 8]
+;;      	 4899                 	cqo	
+;;      	 4883f9ff             	cmp	rcx, -1
+;;      	 0f850a000000         	jne	0x54
+;;   4a:	 ba00000000           	mov	edx, 0
+;;      	 e903000000           	jmp	0x57
+;;   54:	 48f7f9               	idiv	rcx
+;;      	 4889d0               	mov	rax, rdx
+;;      	 4883c420             	add	rsp, 0x20
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   60:	 0f0b                 	ud2	

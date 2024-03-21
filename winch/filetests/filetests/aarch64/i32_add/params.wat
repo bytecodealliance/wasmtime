@@ -7,19 +7,21 @@
 	(i32.add)
     )
 )
-;;    0:	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!
-;;    4:	 fd030091             	mov	x29, sp
-;;    8:	 fc030091             	mov	x28, sp
-;;    c:	 ff4300d1             	sub	sp, sp, #0x10
-;;   10:	 fc030091             	mov	x28, sp
-;;   14:	 80c300b8             	stur	w0, [x28, #0xc]
-;;   18:	 818300b8             	stur	w1, [x28, #8]
-;;   1c:	 890300f8             	stur	x9, [x28]
-;;   20:	 808340b8             	ldur	w0, [x28, #8]
-;;   24:	 81c340b8             	ldur	w1, [x28, #0xc]
-;;   28:	 2160200b             	add	w1, w1, w0, uxtx
-;;   2c:	 e003012a             	mov	w0, w1
-;;   30:	 ff430091             	add	sp, sp, #0x10
-;;   34:	 fc030091             	mov	x28, sp
-;;   38:	 fd7bc1a8             	ldp	x29, x30, [sp], #0x10
-;;   3c:	 c0035fd6             	ret	
+;;      	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!
+;;      	 fd030091             	mov	x29, sp
+;;      	 fc030091             	mov	x28, sp
+;;      	 e90300aa             	mov	x9, x0
+;;      	 ff6300d1             	sub	sp, sp, #0x18
+;;      	 fc030091             	mov	x28, sp
+;;      	 800301f8             	stur	x0, [x28, #0x10]
+;;      	 818300f8             	stur	x1, [x28, #8]
+;;      	 824300b8             	stur	w2, [x28, #4]
+;;      	 830300b8             	stur	w3, [x28]
+;;      	 800340b8             	ldur	w0, [x28]
+;;      	 814340b8             	ldur	w1, [x28, #4]
+;;      	 2160200b             	add	w1, w1, w0, uxtx
+;;      	 e003012a             	mov	w0, w1
+;;      	 ff630091             	add	sp, sp, #0x18
+;;      	 fc030091             	mov	x28, sp
+;;      	 fd7bc1a8             	ldp	x29, x30, [sp], #0x10
+;;      	 c0035fd6             	ret	

@@ -7,16 +7,15 @@ use std::cell::Cell;
 pub use super::MachLabel;
 use super::RetPair;
 pub use crate::ir::{
-    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, ArgumentPurpose, Constant,
-    DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName, FuncRef,
+    GlobalValue, Immediate, SigRef, StackSlot,
 };
-pub use crate::isa::unwind::UnwindInst;
-pub use crate::isa::TargetIsa;
+pub use crate::isa::{unwind::UnwindInst, TargetIsa};
 pub use crate::machinst::{
     ABIArg, ABIArgSlot, InputSourceInst, Lower, LowerBackend, RealReg, Reg, RelocDistance, Sig,
     VCodeInst, Writable,
 };
-pub use crate::settings::{OptLevel, TlsModel};
+pub use crate::settings::TlsModel;
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -564,6 +563,18 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn simm32(&mut self, x: Imm64) -> Option<i32> {
+            i64::from(x).try_into().ok()
+        }
+
+        #[inline]
+        fn uimm8(&mut self, x: Imm64) -> Option<u8> {
+            let x64: i64 = x.into();
+            let x8: u8 = x64.try_into().ok()?;
+            Some(x8)
+        }
+
+        #[inline]
         fn preg_to_reg(&mut self, preg: PReg) -> Reg {
             preg.into()
         }
@@ -814,9 +825,8 @@ macro_rules! isle_prelude_method_helpers {
                 call_site.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
-                for inst in call_site.gen_arg(self.lower_ctx, i, *arg_regs) {
-                    self.lower_ctx.emit(inst);
-                }
+                let moves = call_site.gen_arg(self.lower_ctx, i, *arg_regs);
+                call_site.emit_arg_moves(self.lower_ctx, moves);
             }
         }
 

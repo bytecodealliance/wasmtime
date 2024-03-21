@@ -3,7 +3,6 @@
 
 // You can execute this example with `cargo run --example hello`
 
-use anyhow::Result;
 use wasmtime::*;
 
 struct MyState {

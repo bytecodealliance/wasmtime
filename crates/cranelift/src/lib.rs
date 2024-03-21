@@ -6,7 +6,7 @@
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
+use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmValType};
 use target_lexicon::Architecture;
 use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
@@ -40,14 +40,14 @@ fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
 }
 
 /// Returns the corresponding cranelift type for the provided wasm type.
-fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
+fn value_type(isa: &dyn TargetIsa, ty: WasmValType) -> ir::types::Type {
     match ty {
-        WasmType::I32 => ir::types::I32,
-        WasmType::I64 => ir::types::I64,
-        WasmType::F32 => ir::types::F32,
-        WasmType::F64 => ir::types::F64,
-        WasmType::V128 => ir::types::I8X16,
-        WasmType::Ref(rt) => reference_type(rt.heap_type, isa.pointer_type()),
+        WasmValType::I32 => ir::types::I32,
+        WasmValType::I64 => ir::types::I64,
+        WasmValType::F32 => ir::types::F32,
+        WasmValType::F64 => ir::types::F64,
+        WasmValType::V128 => ir::types::I8X16,
+        WasmValType::Ref(rt) => reference_type(rt.heap_type, isa.pointer_type()),
     }
 }
 
@@ -89,7 +89,7 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
 /// pointer.
 fn native_call_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
     let mut sig = blank_sig(isa, CallConv::triple_default(isa.triple()));
-    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
+    let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm.params().iter().map(&cvt));
     if let Some(first_ret) = wasm.returns().get(0) {
         sig.returns.push(cvt(first_ret));
@@ -153,6 +153,15 @@ fn wasm_call_signature(
             CallConv::Tail
         }
 
+        // The winch calling convention is only implemented for x64 and aarch64
+        arch if tunables.winch_callable => {
+            assert!(
+                matches!(arch, Architecture::X86_64 | Architecture::Aarch64(_)),
+                "https://github.com/bytecodealliance/wasmtime/issues/6530"
+            );
+            CallConv::Winch
+        }
+
         // On s390x the "wasmtime" calling convention is used to give vectors
         // little-endian lane order at the ABI layer which should reduce the
         // need for conversion when operating on vector function arguments. By
@@ -165,7 +174,7 @@ fn wasm_call_signature(
         _ => CallConv::Fast,
     };
     let mut sig = blank_sig(isa, call_conv);
-    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
+    let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm_func_ty.params().iter().map(&cvt));
     sig.returns.extend(wasm_func_ty.returns().iter().map(&cvt));
     sig
@@ -174,9 +183,9 @@ fn wasm_call_signature(
 /// Returns the reference type to use for the provided wasm type.
 fn reference_type(wasm_ht: cranelift_wasm::WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht {
-        cranelift_wasm::WasmHeapType::Func | cranelift_wasm::WasmHeapType::TypedFunc(_) => {
-            pointer_type
-        }
+        cranelift_wasm::WasmHeapType::Func
+        | cranelift_wasm::WasmHeapType::Concrete(_)
+        | cranelift_wasm::WasmHeapType::NoFunc => pointer_type,
         cranelift_wasm::WasmHeapType::Extern => match pointer_type {
             ir::types::I32 => ir::types::R32,
             ir::types::I64 => ir::types::R64,

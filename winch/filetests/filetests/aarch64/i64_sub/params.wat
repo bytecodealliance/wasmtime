@@ -7,19 +7,21 @@
 	(i64.sub)
     )
 )
-;;    0:	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!
-;;    4:	 fd030091             	mov	x29, sp
-;;    8:	 fc030091             	mov	x28, sp
-;;    c:	 ff6300d1             	sub	sp, sp, #0x18
-;;   10:	 fc030091             	mov	x28, sp
-;;   14:	 800301f8             	stur	x0, [x28, #0x10]
-;;   18:	 818300f8             	stur	x1, [x28, #8]
-;;   1c:	 890300f8             	stur	x9, [x28]
-;;   20:	 808340f8             	ldur	x0, [x28, #8]
-;;   24:	 810341f8             	ldur	x1, [x28, #0x10]
-;;   28:	 216020cb             	sub	x1, x1, x0, uxtx
-;;   2c:	 e00301aa             	mov	x0, x1
-;;   30:	 ff630091             	add	sp, sp, #0x18
-;;   34:	 fc030091             	mov	x28, sp
-;;   38:	 fd7bc1a8             	ldp	x29, x30, [sp], #0x10
-;;   3c:	 c0035fd6             	ret	
+;;      	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!
+;;      	 fd030091             	mov	x29, sp
+;;      	 fc030091             	mov	x28, sp
+;;      	 e90300aa             	mov	x9, x0
+;;      	 ff8300d1             	sub	sp, sp, #0x20
+;;      	 fc030091             	mov	x28, sp
+;;      	 808301f8             	stur	x0, [x28, #0x18]
+;;      	 810301f8             	stur	x1, [x28, #0x10]
+;;      	 828300f8             	stur	x2, [x28, #8]
+;;      	 830300f8             	stur	x3, [x28]
+;;      	 800340f8             	ldur	x0, [x28]
+;;      	 818340f8             	ldur	x1, [x28, #8]
+;;      	 216020cb             	sub	x1, x1, x0, uxtx
+;;      	 e00301aa             	mov	x0, x1
+;;      	 ff830091             	add	sp, sp, #0x20
+;;      	 fc030091             	mov	x28, sp
+;;      	 fd7bc1a8             	ldp	x29, x30, [sp], #0x10
+;;      	 c0035fd6             	ret	

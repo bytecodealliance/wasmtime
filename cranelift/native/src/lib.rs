@@ -1,13 +1,7 @@
 //! Performs autodetection of the host for the purposes of running
 //! Cranelift to generate code to run on the same machine.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;
@@ -150,6 +144,10 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
         // the cpuinfo interface, so we can't rely on it being present for now.
         let _ = riscv::cpuinfo_detect(isa_builder);
     }
+
+    // On all other architectures (e.g. wasm32) we won't infer any native flags,
+    // but still need to use the `isa_builder` to avoid compiler warnings.
+    let _ = isa_builder;
     Ok(())
 }
 

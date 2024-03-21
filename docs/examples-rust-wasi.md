@@ -5,21 +5,29 @@ repository to run the example locally.
 
 [code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasi/main.rs
 
-This example shows how to use the [`wasmtime-wasi`] crate to define WASI
+This example shows how to use the [`wasi-common`] crate to define WASI
 functions within a [`Linker`] which can then be used to instantiate a
 WebAssembly module.
 
-[`wasmtime-wasi`]: https://crates.io/crates/wasmtime-wasi
+[`wasi-common`]: https://crates.io/crates/wasi-common
 [`Linker`]: https://docs.rs/wasmtime/*/wasmtime/struct.Linker.html
 
-## Wasm Source code
+### WebAssembly module source code
 
+For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASI Preview 1 API. 
+
+`wasi.rs`
 ```rust
 {{#include ../examples/wasi/wasm/wasi.rs}}
 ```
 
-## `wasi.rs`
+Building this program generates `target/wasm32-wasi/debug/wasi.wasm`, used below.
 
+### Invoke the WASM module
+
+This example shows adding and configuring the WASI imports to invoke the above WASM module.
+
+`main.rs`
 ```rust,ignore
 {{#include ../examples/wasi/main.rs}}
 ```
@@ -31,19 +39,19 @@ WasiCtx` from within the `T` stored in the `Store<T>` itself. In the above
 example this is trivial because the `T` in `Store<T>` is `WasiCtx` itself, but
 you can also store other state in `Store` like so:
 
-[`add_to_linker`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/sync/fn.add_to_linker.html
-[`Store`]: https://docs.rs/wasmtime/0.26.0/wasmtime/struct.Store.html
+[`add_to_linker`]: https://docs.rs/wasi-common/*/wasi_common/sync/fn.add_to_linker.html
+[`Store`]: https://docs.rs/wasmtime/*/wasmtime/struct.Store.html
 [`BorrowMut<WasiCtx>`]: https://doc.rust-lang.org/stable/std/borrow/trait.BorrowMut.html
-[`WasiCtx`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/struct.WasiCtx.html
+[`WasiCtx`]: https://docs.rs/wasi-common/*/wasi_common/struct.WasiCtx.html
 
 ```rust
 # extern crate wasmtime;
-# extern crate wasmtime_wasi;
+# extern crate wasi_common;
 # extern crate anyhow;
 use anyhow::Result;
 use std::borrow::{Borrow, BorrowMut};
 use wasmtime::*;
-use wasmtime_wasi::{WasiCtx, sync::WasiCtxBuilder};
+use wasi_common::{WasiCtx, sync::WasiCtxBuilder};
 
 struct MyState {
     message: String,
@@ -53,7 +61,7 @@ struct MyState {
 fn main() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |state: &mut MyState| &mut state.wasi)?;
+    wasi_common::sync::add_to_linker(&mut linker, |state: &mut MyState| &mut state.wasi)?;
 
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()
@@ -70,3 +78,24 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+## WASI Preview 2
+
+An experimental implementation of the WASI Preview 2 API is also available, along with an adapter layer for  WASI Preview 1 WebAssembly modules. In future this `preview2` API will become the default. There are some features which are currently only accessible through the `preview2` API such as async support and overriding the clock and random implementations.
+
+### Async example
+
+This [async example code][code2] shows how to use the [wasmtime-wasi::preview2][`preview2`] module to
+execute the same WASI Preview 1 WebAssembly module from the example above. This example requires the `wasmtime` crate `async` feature to be enabled.
+
+This does not require any change to the WebAssembly module, it's just the WASI API host functions which are implemented to be async. See [wasmtime async support](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support).
+
+[code2]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasi-async/main.rs
+[`preview2`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/preview2/index.html
+
+```rust,ignore
+{{#include ../examples/wasi-async/main.rs}}
+```
+
+You can also [browse this source code online][code2] and clone the wasmtime
+repository to run the example locally.

@@ -13,6 +13,8 @@ use std::process::Command;
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
 
+    set_commit_info_for_rustc();
+
     let out_dir = PathBuf::from(
         env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
     );
@@ -201,35 +203,42 @@ fn write_testsuite_tests(
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     assert!(strategy == "Cranelift" || strategy == "Winch");
 
-    // Ignore everything except the winch misc test suite.
-    // We ignore tests that assert for traps on windows, given
-    // that Winch doesn't encode unwind information for Windows, yet.
+    // Ignore some tests for when testing Winch.
     if strategy == "Winch" {
-        let assert_trap = [
-            "i32",
-            "i64",
-            "call_indirect",
-            "table_fill",
-            "table_init",
-            "table_copy",
-            "table_set",
-            "table_get",
-        ]
-        .contains(&testname);
-
-        if assert_trap && env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() == "windows" {
-            return true;
-        }
-
         if testsuite == "misc_testsuite" {
-            // The misc/call_indirect is fully supported by Winch.
-            if testname != "call_indirect" {
-                return true;
-            }
+            let denylist = [
+                "externref_id_function",
+                "int_to_float_splat",
+                "issue6562",
+                "many_table_gets_lead_to_gc",
+                "mutable_externref_globals",
+                "no_mixup_stack_maps",
+                "no_panic",
+                "simple_ref_is_null",
+                "table_grow_with_funcref",
+            ];
+            return denylist.contains(&testname);
         }
         if testsuite == "spec_testsuite" {
-            // The official table init and table copy tests are now supported.
-            return !["table_init", "table_copy"].contains(&testname);
+            let denylist = [
+                "br_table",
+                "global",
+                "table_fill",
+                "table_get",
+                "table_set",
+                "table_grow",
+                "table_size",
+                "elem",
+                "select",
+                "unreached_invalid",
+                "linking",
+            ]
+            .contains(&testname);
+
+            let ref_types = testname.starts_with("ref_");
+            let simd = testname.starts_with("simd_");
+
+            return denylist || ref_types || simd;
         }
 
         if testsuite != "winch" {
@@ -280,4 +289,31 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
         _ => false,
     }
+}
+
+fn set_commit_info_for_rustc() {
+    if !Path::new(".git").exists() {
+        return;
+    }
+    let output = match Command::new("git")
+        .arg("log")
+        .arg("-1")
+        .arg("--date=short")
+        .arg("--format=%H %h %cd")
+        .arg("--abbrev=9")
+        .output()
+    {
+        Ok(output) if output.status.success() => output,
+        _ => return,
+    };
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let mut parts = stdout.split_whitespace();
+    let mut next = || parts.next().unwrap();
+    println!("cargo:rustc-env=WASMTIME_GIT_HASH={}", next());
+    println!(
+        "cargo:rustc-env=WASMTIME_VERSION_INFO={} ({} {})",
+        env!("CARGO_PKG_VERSION"),
+        next(),
+        next()
+    );
 }

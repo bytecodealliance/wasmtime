@@ -16,7 +16,6 @@ use cranelift_codegen::ir::{
 };
 use log::trace;
 use smallvec::SmallVec;
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::iter;
 use thiserror::Error;
@@ -332,7 +331,11 @@ impl<'a> State<'a> for InterpreterState<'a> {
         let src = match addr.region {
             AddressRegion::Stack => {
                 if addr_end > self.stack.len() {
-                    return Err(MemoryError::OutOfBoundsLoad { addr, load_size });
+                    return Err(MemoryError::OutOfBoundsLoad {
+                        addr,
+                        load_size,
+                        mem_flags,
+                    });
                 }
 
                 &self.stack[addr_start..addr_end]
@@ -364,7 +367,11 @@ impl<'a> State<'a> for InterpreterState<'a> {
         let dst = match addr.region {
             AddressRegion::Stack => {
                 if addr_end > self.stack.len() {
-                    return Err(MemoryError::OutOfBoundsStore { addr, store_size });
+                    return Err(MemoryError::OutOfBoundsStore {
+                        addr,
+                        store_size,
+                        mem_flags,
+                    });
                 }
 
                 &mut self.stack[addr_start..addr_end]
@@ -556,7 +563,6 @@ mod tests {
     use super::*;
     use crate::step::CraneliftTrap;
     use cranelift_codegen::ir::immediates::Ieee32;
-    use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
     use smallvec::smallvec;
 

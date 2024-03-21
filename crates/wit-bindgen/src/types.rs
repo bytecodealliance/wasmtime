@@ -40,6 +40,14 @@ impl std::ops::BitOrAssign for TypeInfo {
 
 impl Types {
     pub fn analyze(&mut self, resolve: &Resolve, world: WorldId) {
+        // Build up all type information first which is inherited through types,
+        // such as properties of borrows/lists/etc.
+        for (t, _) in resolve.types.iter() {
+            self.type_id_info(resolve, t);
+        }
+
+        // ... next handle borrowed/owned flags which aren't inherited through
+        // types.
         let world = &resolve.worlds[world];
         for (import, (_, item)) in world
             .imports

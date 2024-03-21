@@ -14,6 +14,7 @@ use hyper::client::conn::http1::SendRequest;
 use hyper::header::HeaderName;
 use hyper::http::uri::Authority;
 use hyper::{Method, Request, Response, StatusCode, Uri};
+use hyper_util::rt::TokioIo;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
@@ -407,7 +408,7 @@ impl KServeClient {
 
         // The authority of our URL will be the hostname of the httpbin remote
         let authority = url.authority().unwrap().clone();
-        let (sender, conn) = hyper::client::conn::http1::handshake(stream)
+        let (sender, conn) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
             .await
             .expect("Unable to perform http handshake with server.");
         // Spawn a task to poll the connection, driving the HTTP state

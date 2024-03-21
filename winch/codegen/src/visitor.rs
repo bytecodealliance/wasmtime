@@ -4,20 +4,20 @@
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
 
-use crate::abi::ABI;
+use crate::abi::RetArea;
 use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
-    DivKind, FloatCmpKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, RemKind, RoundingMode,
-    ShiftKind,
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
+    RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
 };
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
+use regalloc2::RegClass;
 use smallvec::SmallVec;
-use wasmparser::BrTable;
-use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
+use wasmparser::{BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator};
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType, WasmType,
-    FUNCREF_INIT_BIT,
+    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType,
+    WasmValType, FUNCREF_INIT_BIT,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -85,6 +85,18 @@ macro_rules! def_unsupported {
     (emit F64Le $($rest:tt)*) => {};
     (emit F32Ge $($rest:tt)*) => {};
     (emit F64Ge $($rest:tt)*) => {};
+    (emit F32ConvertI32S $($rest:tt)*) => {};
+    (emit F32ConvertI32U $($rest:tt)*) => {};
+    (emit F32ConvertI64S $($rest:tt)*) => {};
+    (emit F32ConvertI64U $($rest:tt)*) => {};
+    (emit F64ConvertI32S $($rest:tt)*) => {};
+    (emit F64ConvertI32U $($rest:tt)*) => {};
+    (emit F64ConvertI64S $($rest:tt)*) => {};
+    (emit F64ConvertI64U $($rest:tt)*) => {};
+    (emit F32ReinterpretI32 $($rest:tt)*) => {};
+    (emit F64ReinterpretI64 $($rest:tt)*) => {};
+    (emit F32DemoteF64 $($rest:tt)*) => {};
+    (emit F64PromoteF32 $($rest:tt)*) => {};
     (emit I32Add $($rest:tt)*) => {};
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
@@ -143,6 +155,24 @@ macro_rules! def_unsupported {
     (emit I64Ctz $($rest:tt)*) => {};
     (emit I32Popcnt $($rest:tt)*) => {};
     (emit I64Popcnt $($rest:tt)*) => {};
+    (emit I32WrapI64 $($rest:tt)*) => {};
+    (emit I64ExtendI32S $($rest:tt)*) => {};
+    (emit I64ExtendI32U $($rest:tt)*) => {};
+    (emit I32Extend8S $($rest:tt)*) => {};
+    (emit I32Extend16S $($rest:tt)*) => {};
+    (emit I64Extend8S $($rest:tt)*) => {};
+    (emit I64Extend16S $($rest:tt)*) => {};
+    (emit I64Extend32S $($rest:tt)*) => {};
+    (emit I32TruncF32S $($rest:tt)*) => {};
+    (emit I32TruncF32U $($rest:tt)*) => {};
+    (emit I32TruncF64S $($rest:tt)*) => {};
+    (emit I32TruncF64U $($rest:tt)*) => {};
+    (emit I64TruncF32S $($rest:tt)*) => {};
+    (emit I64TruncF32U $($rest:tt)*) => {};
+    (emit I64TruncF64S $($rest:tt)*) => {};
+    (emit I64TruncF64U $($rest:tt)*) => {};
+    (emit I32ReinterpretF32 $($rest:tt)*) => {};
+    (emit I64ReinterpretF64 $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -171,6 +201,45 @@ macro_rules! def_unsupported {
     (emit TableSize $($rest:tt)*) => {};
     (emit TableFill $($rest:tt)*) => {};
     (emit ElemDrop $($rest:tt)*) => {};
+    (emit MemoryInit $($rest:tt)*) => {};
+    (emit MemoryCopy $($rest:tt)*) => {};
+    (emit DataDrop $($rest:tt)*) => {};
+    (emit MemoryFill $($rest:tt)*) => {};
+    (emit MemorySize $($rest:tt)*) => {};
+    (emit MemoryGrow $($rest:tt)*) => {};
+    (emit I32Load $($rest:tt)*) => {};
+    (emit I32Load8S $($rest:tt)*) => {};
+    (emit I32Load8U $($rest:tt)*) => {};
+    (emit I32Load16S $($rest:tt)*) => {};
+    (emit I32Load16U $($rest:tt)*) => {};
+    (emit I64Load8S $($rest:tt)*) => {};
+    (emit I64Load8U $($rest:tt)*) => {};
+    (emit I64Load16S $($rest:tt)*) => {};
+    (emit I64Load16U $($rest:tt)*) => {};
+    (emit I64Load32S $($rest:tt)*) => {};
+    (emit I64Load32U $($rest:tt)*) => {};
+    (emit I64Load $($rest:tt)*) => {};
+    (emit I32Store $($rest:tt)*) => {};
+    (emit I32Store $($rest:tt)*) => {};
+    (emit I32Store8 $($rest:tt)*) => {};
+    (emit I32Store16 $($rest:tt)*) => {};
+    (emit I64Store $($rest:tt)*) => {};
+    (emit I64Store8 $($rest:tt)*) => {};
+    (emit I64Store16 $($rest:tt)*) => {};
+    (emit I64Store32 $($rest:tt)*) => {};
+    (emit F32Load $($rest:tt)*) => {};
+    (emit F32Store $($rest:tt)*) => {};
+    (emit F64Load $($rest:tt)*) => {};
+    (emit F64Store $($rest:tt)*) => {};
+    (emit I32TruncSatF32S $($rest:tt)*) => {};
+    (emit I32TruncSatF32U $($rest:tt)*) => {};
+    (emit I32TruncSatF64S $($rest:tt)*) => {};
+    (emit I32TruncSatF64U $($rest:tt)*) => {};
+    (emit I64TruncSatF32S $($rest:tt)*) => {};
+    (emit I64TruncSatF32U $($rest:tt)*) => {};
+    (emit I64TruncSatF64S $($rest:tt)*) => {};
+    (emit I64TruncSatF64U $($rest:tt)*) => {};
+
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -203,6 +272,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -213,6 +283,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -223,6 +294,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -233,6 +305,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -243,6 +316,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -253,6 +327,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -263,6 +338,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -273,6 +349,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -283,6 +360,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -293,6 +371,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -303,6 +382,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -313,6 +393,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -323,6 +404,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_copysign(dst, dst, src, size);
+                TypedReg::f32(dst)
             },
         );
     }
@@ -333,6 +415,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_copysign(dst, dst, src, size);
+                TypedReg::f64(dst)
             },
         );
     }
@@ -341,6 +424,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_abs(reg, size);
+                TypedReg::f32(reg)
             });
     }
 
@@ -348,6 +432,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_abs(reg, size);
+                TypedReg::f64(reg)
             });
     }
 
@@ -355,6 +440,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_neg(reg, size);
+                TypedReg::f32(reg)
             });
     }
 
@@ -362,53 +448,119 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_neg(reg, size);
+                TypedReg::f64(reg)
             });
     }
 
     fn visit_f32_floor(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Down, &mut self.context, OperandSize::S32);
+        self.masm.float_round(
+            RoundingMode::Down,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S32,
+            |env, cx, masm| {
+                let builtin = env.builtins.floor_f32::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+            },
+        );
     }
 
     fn visit_f64_floor(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Down, &mut self.context, OperandSize::S64);
+        self.masm.float_round(
+            RoundingMode::Down,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S64,
+            |env, cx, masm| {
+                let builtin = env.builtins.floor_f64::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+            },
+        );
     }
 
     fn visit_f32_ceil(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Up, &mut self.context, OperandSize::S32);
+        self.masm.float_round(
+            RoundingMode::Up,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S32,
+            |env, cx, masm| {
+                let builtin = env.builtins.ceil_f32::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+            },
+        );
     }
 
     fn visit_f64_ceil(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Up, &mut self.context, OperandSize::S64);
+        self.masm.float_round(
+            RoundingMode::Up,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S64,
+            |env, cx, masm| {
+                let builtin = env.builtins.ceil_f64::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+            },
+        );
     }
 
     fn visit_f32_nearest(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Nearest, &mut self.context, OperandSize::S32);
+        self.masm.float_round(
+            RoundingMode::Nearest,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S32,
+            |env, cx, masm| {
+                let builtin = env.builtins.nearest_f32::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin))
+            },
+        );
     }
 
     fn visit_f64_nearest(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Nearest, &mut self.context, OperandSize::S64);
+        self.masm.float_round(
+            RoundingMode::Nearest,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S64,
+            |env, cx, masm| {
+                let builtin = env.builtins.nearest_f64::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+            },
+        );
     }
 
     fn visit_f32_trunc(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Zero, &mut self.context, OperandSize::S32);
+        self.masm.float_round(
+            RoundingMode::Zero,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S32,
+            |env, cx, masm| {
+                let builtin = env.builtins.trunc_f32::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+            },
+        );
     }
 
     fn visit_f64_trunc(&mut self) {
-        self.masm
-            .float_round(RoundingMode::Zero, &mut self.context, OperandSize::S64);
+        self.masm.float_round(
+            RoundingMode::Zero,
+            &mut self.env,
+            &mut self.context,
+            OperandSize::S64,
+            |env, cx, masm| {
+                let builtin = env.builtins.trunc_f64::<M::ABI>();
+                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+            },
+        );
     }
 
     fn visit_f32_sqrt(&mut self) {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_sqrt(reg, reg, size);
+                TypedReg::f32(reg)
             });
     }
 
@@ -416,6 +568,7 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_sqrt(reg, reg, size);
+                TypedReg::f64(reg)
             });
     }
 
@@ -539,39 +692,147 @@ where
         );
     }
 
+    fn visit_f32_convert_i32_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S32, dst_size);
+            });
+    }
+
+    fn visit_f32_convert_i32_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::F32,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S32, dst_size);
+            },
+        );
+    }
+
+    fn visit_f32_convert_i64_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S64, dst_size);
+            });
+    }
+
+    fn visit_f32_convert_i64_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::F32,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S64, dst_size);
+            },
+        );
+    }
+
+    fn visit_f64_convert_i32_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S32, dst_size);
+            });
+    }
+
+    fn visit_f64_convert_i32_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::F64,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S32, dst_size);
+            },
+        );
+    }
+
+    fn visit_f64_convert_i64_s(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
+                masm.signed_convert(src, dst, OperandSize::S64, dst_size);
+            });
+    }
+
+    fn visit_f64_convert_i64_u(&mut self) {
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::F64,
+            RegClass::Int,
+            |masm, dst, src, tmp_gpr, dst_size| {
+                masm.unsigned_convert(src, dst, tmp_gpr, OperandSize::S64, dst_size);
+            },
+        );
+    }
+
+    fn visit_f32_reinterpret_i32(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::F32, |masm, dst, src, size| {
+                masm.reinterpret_int_as_float(src.into(), dst, size);
+            });
+    }
+
+    fn visit_f64_reinterpret_i64(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::F64, |masm, dst, src, size| {
+                masm.reinterpret_int_as_float(src.into(), dst, size);
+            });
+    }
+
+    fn visit_f32_demote_f64(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, _size| {
+                masm.demote(reg, reg);
+                TypedReg::f32(reg)
+            });
+    }
+
+    fn visit_f64_promote_f32(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, _size| {
+                masm.promote(reg, reg);
+                TypedReg::f64(reg)
+            });
+    }
+
     fn visit_i32_add(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.add(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_add(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.add(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_sub(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.sub(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_sub(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.sub(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_mul(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.mul(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_mul(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.mul(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
@@ -716,6 +977,7 @@ where
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.cmp_with_set(RegImm::i32(0), reg.into(), IntCmpKind::Eq, size);
+            TypedReg::i32(reg)
         });
     }
 
@@ -724,6 +986,7 @@ where
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.cmp_with_set(RegImm::i64(0), reg.into(), IntCmpKind::Eq, size);
+            TypedReg::i32(reg) // Return value for `i64.eqz` is an `i32`.
         });
     }
 
@@ -732,6 +995,7 @@ where
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.clz(reg, reg, size);
+            TypedReg::i32(reg)
         });
     }
 
@@ -740,6 +1004,7 @@ where
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.clz(reg, reg, size);
+            TypedReg::i64(reg)
         });
     }
 
@@ -748,6 +1013,7 @@ where
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.ctz(reg, reg, size);
+            TypedReg::i32(reg)
         });
     }
 
@@ -756,42 +1022,49 @@ where
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.ctz(reg, reg, size);
+            TypedReg::i64(reg)
         });
     }
 
     fn visit_i32_and(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.and(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_and(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.and(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_or(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.or(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_or(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.or(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
     fn visit_i32_xor(&mut self) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.xor(dst, dst, src, size);
+            TypedReg::i32(dst)
         });
     }
 
     fn visit_i64_xor(&mut self) {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.xor(dst, dst, src, size);
+            TypedReg::i64(dst)
         });
     }
 
@@ -870,17 +1143,7 @@ where
             self.handle_unreachable_end();
         } else {
             let mut control = self.control_frames.pop().unwrap();
-            let is_outermost = self.control_frames.len() == 0;
-            // If it's not the outermost control stack frame, emit the the full "end" sequence,
-            // which involves, popping results from the value stack, pushing results back to the
-            // value stack and binding the exit label.
-            // Else, pop values from the value stack and bind the exit label.
-            if !is_outermost {
-                control.emit_end(self.masm, &mut self.context);
-            } else {
-                self.context.pop_abi_results(control.result(), self.masm);
-                control.bind_exit_label(self.masm);
-            }
+            control.emit_end(self.masm, &mut self.context);
         }
     }
 
@@ -895,13 +1158,184 @@ where
         self.masm.popcnt(&mut self.context, S64);
     }
 
+    fn visit_i32_wrap_i64(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.wrap(reg, reg);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i64_extend_i32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64ExtendI32S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend_i32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64ExtendI32U);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i32_extend8_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I32Extend8S);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i32_extend16_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I32Extend16S);
+            TypedReg::i32(reg)
+        });
+    }
+
+    fn visit_i64_extend8_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend8S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend16_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend16S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i64_extend32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
+            masm.extend(reg, reg, ExtendKind::I64Extend32S);
+            TypedReg::i64(reg)
+        });
+    }
+
+    fn visit_i32_trunc_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Unchecked);
+            });
+    }
+
+    fn visit_i32_trunc_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Unchecked);
+            },
+        );
+    }
+
+    fn visit_i32_trunc_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Unchecked);
+            });
+    }
+
+    fn visit_i32_trunc_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Unchecked);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Unchecked);
+            });
+    }
+
+    fn visit_i64_trunc_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Unchecked);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Unchecked);
+            });
+    }
+
+    fn visit_i64_trunc_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Unchecked);
+            },
+        );
+    }
+
+    fn visit_i32_reinterpret_f32(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, size| {
+                masm.reinterpret_float_as_int(src.into(), dst, size);
+            });
+    }
+
+    fn visit_i64_reinterpret_f64(&mut self) {
+        self.context
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, size| {
+                masm.reinterpret_float_as_int(src.into(), dst, size);
+            });
+    }
+
     fn visit_local_get(&mut self, index: u32) {
-        use WasmType::*;
+        use WasmValType::*;
         let context = &mut self.context;
-        let slot = context
-            .frame
-            .get_local(index)
-            .unwrap_or_else(|| panic!("valid local at slot = {}", index));
+        let slot = context.frame.get_wasm_local(index);
         match slot.ty {
             I32 | I64 | F32 | F64 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
@@ -912,19 +1346,29 @@ where
         }
     }
 
-    // TODO: verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
-        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
-        let src = self.emit_set_local(slot, ty.into());
+        let src = self.emit_set_local(index);
         self.context.free_reg(src);
     }
 
     fn visit_call(&mut self, index: u32) {
-        let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| callee.clone());
+        FnCall::emit::<M, M::Ptr>(
+            self.masm,
+            &mut self.context,
+            self.env
+                .callee_from_index::<M::ABI>(FuncIndex::from_u32(index)),
+        )
     }
 
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
+        // Spill now because `emit_lazy_init_funcref` and the `FnCall::emit`
+        // invocations will both trigger spills since they both call functions.
+        // However, the machine instructions for the spill emitted by
+        // `emit_lazy_funcref` will be jumped over if the funcref was previously
+        // initialized which may result in the machine stack becoming
+        // unbalanced.
+        self.context.spill(self.masm);
+
         let type_index = TypeIndex::from_u32(type_index);
         let table_index = TableIndex::from_u32(table_index);
 
@@ -935,55 +1379,45 @@ where
         // push the funcref to the value stack.
         match self.env.translation.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
-                let funcref_ptr = self.context.stack.peek().map(|v| v.get_reg()).unwrap();
+                let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
                 self.masm
                     .trapz(funcref_ptr.into(), TrapCode::IndirectCallToNull);
                 self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
             }
         }
 
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
-            self.env.funcref(type_index)
-        })
+        FnCall::emit::<M, M::Ptr>(
+            self.masm,
+            &mut self.context,
+            self.env.funcref::<M::ABI>(type_index),
+        )
     }
 
     fn visit_table_init(&mut self, elem: u32, table: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
-
         debug_assert!(self.context.stack.len() >= 3);
         let at = self.context.stack.len() - 3;
 
-        self.context.stack.insert_many(
-            at,
-            [
-                vmctx.into(),
-                table.try_into().unwrap(),
-                elem.try_into().unwrap(),
-            ],
-        );
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
-            Callee::Builtin(cx.builtins.table_init::<M::ABI, M::Ptr>())
-        });
+        self.context
+            .stack
+            .insert_many(at, &[table.try_into().unwrap(), elem.try_into().unwrap()]);
+
+        let builtin = self.env.builtins.table_init::<M::ABI, M::Ptr>();
+        FnCall::emit::<M, M::Ptr>(
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin.clone()),
+        )
     }
 
     fn visit_table_copy(&mut self, dst: u32, src: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         debug_assert!(self.context.stack.len() >= 3);
         let at = self.context.stack.len() - 3;
-        self.context.stack.insert_many(
-            at,
-            [
-                vmctx.into(),
-                dst.try_into().unwrap(),
-                src.try_into().unwrap(),
-            ],
-        );
+        self.context
+            .stack
+            .insert_many(at, &[dst.try_into().unwrap(), src.try_into().unwrap()]);
 
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |context| {
-            Callee::Builtin(context.builtins.table_copy::<M::ABI, M::Ptr>())
-        });
+        let builtin = self.env.builtins.table_copy::<M::ABI, M::Ptr>();
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
     }
 
     fn visit_table_get(&mut self, table: u32) {
@@ -1001,15 +1435,10 @@ where
     }
 
     fn visit_table_grow(&mut self, table: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
         let builtin = match table_plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func => self
-                .context
-                .builtins
-                .table_grow_func_ref::<M::ABI, M::Ptr>(),
+            WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI, M::Ptr>(),
             ty => unimplemented!("Support for HeapType: {ty}"),
         };
 
@@ -1027,11 +1456,13 @@ where
         self.context.stack.inner_mut().swap(len - 1, len - 2);
         self.context
             .stack
-            .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
+            .insert_many(at, &[table.try_into().unwrap()]);
 
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
-            Callee::Builtin(builtin.clone())
-        });
+        FnCall::emit::<M, M::Ptr>(
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin.clone()),
+        )
     }
 
     fn visit_table_size(&mut self, table: u32) {
@@ -1041,15 +1472,10 @@ where
     }
 
     fn visit_table_fill(&mut self, table: u32) {
-        let ptr_type = self.env.ptr_type();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
         let builtin = match table_plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func => self
-                .context
-                .builtins
-                .table_fill_func_ref::<M::ABI, M::Ptr>(),
+            WasmHeapType::Func => self.env.builtins.table_fill_func_ref::<M::ABI, M::Ptr>(),
             ty => unimplemented!("Support for heap type: {ty}"),
         };
 
@@ -1058,10 +1484,12 @@ where
         let at = len - 3;
         self.context
             .stack
-            .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
-            Callee::Builtin(builtin.clone())
-        })
+            .insert_many(at, &[table.try_into().unwrap()]);
+        FnCall::emit::<M, M::Ptr>(
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin.clone()),
+        )
     }
 
     fn visit_table_set(&mut self, table: u32) {
@@ -1102,22 +1530,85 @@ where
     }
 
     fn visit_elem_drop(&mut self, index: u32) {
-        let ptr_type = self.env.ptr_type();
-        let elem_drop = self.context.builtins.elem_drop::<M::ABI, M::Ptr>();
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>();
+        self.context.stack.extend([index.try_into().unwrap()]);
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(elem_drop))
+    }
+
+    fn visit_memory_init(&mut self, data_index: u32, mem: u32) {
+        debug_assert!(self.context.stack.len() >= 3);
+        let at = self.context.stack.len() - 3;
+        self.context.stack.insert_many(
+            at,
+            &[mem.try_into().unwrap(), data_index.try_into().unwrap()],
+        );
+        let builtin = self.env.builtins.memory_init::<M::ABI, M::Ptr>();
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+    }
+
+    fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) {
+        // At this point, the stack is expected to contain:
+        //     [ dst_offset, src_offset, len ]
+        // The following code inserts the missing params, so that stack contains:
+        //     [ vmctx, dst_mem, dst_offset, src_mem, src_offset, len ]
+        // Which is the order expected by the builtin function.
+        debug_assert!(self.context.stack.len() >= 3);
+        let at = self.context.stack.len() - 2;
         self.context
             .stack
-            .extend([vmctx.into(), index.try_into().unwrap()]);
-        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
-            Callee::Builtin(elem_drop.clone())
-        });
+            .insert_many(at, &[src_mem.try_into().unwrap()]);
+
+        // One element was inserted above, so instead of 3, we use 4.
+        let at = self.context.stack.len() - 4;
+        self.context
+            .stack
+            .insert_many(at, &[dst_mem.try_into().unwrap()]);
+
+        let builtin = self.env.builtins.memory_copy::<M::ABI, M::Ptr>();
+
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+    }
+
+    fn visit_memory_fill(&mut self, mem: u32) {
+        debug_assert!(self.context.stack.len() >= 3);
+        let at = self.context.stack.len() - 3;
+
+        self.context
+            .stack
+            .insert_many(at, &[mem.try_into().unwrap()]);
+
+        let builtin = self.env.builtins.memory_fill::<M::ABI, M::Ptr>();
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+    }
+
+    fn visit_memory_size(&mut self, mem: u32, _: u8) {
+        let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
+        self.masm.memory_size(&heap, &mut self.context);
+    }
+
+    fn visit_memory_grow(&mut self, mem: u32, _: u8) {
+        debug_assert!(self.context.stack.len() >= 1);
+        // The stack at this point contains: [ delta ]
+        // The desired state is
+        //   [ vmctx, delta, index ]
+        self.context.stack.extend([mem.try_into().unwrap()]);
+
+        let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>();
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+    }
+
+    fn visit_data_drop(&mut self, data_index: u32) {
+        self.context.stack.extend([data_index.try_into().unwrap()]);
+
+        let builtin = self.env.builtins.data_drop::<M::ABI, M::Ptr>();
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
     }
 
     fn visit_nop(&mut self) {}
 
     fn visit_if(&mut self, blockty: BlockType) {
-        self.control_frames.push(ControlStackFrame::if_(
-            &self.env.resolve_block_type(blockty),
+        self.control_frames.push(ControlStackFrame::r#if(
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1137,15 +1628,15 @@ where
 
     fn visit_block(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::block(
-            &self.env.resolve_block_type(blockty),
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
     }
 
     fn visit_loop(&mut self, blockty: BlockType) {
-        self.control_frames.push(ControlStackFrame::loop_(
-            &self.env.resolve_block_type(blockty),
+        self.control_frames.push(ControlStackFrame::r#loop(
+            self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1156,7 +1647,8 @@ where
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_result(), masm);
+                frame
+                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
             });
     }
 
@@ -1164,22 +1656,66 @@ where
         let index = control_index(depth, self.control_frames.len());
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
-        let result = frame.as_target_result();
-        let top = self.context.maybe_without1::<TypedReg, M, _>(
-            result.result_reg(),
-            self.masm,
-            |ctx, masm| ctx.pop_to_reg(masm, None),
-        );
-        self.context.pop_abi_results(&result, self.masm);
-        self.context.push_abi_results(&result, self.masm);
-        self.masm.branch(
-            IntCmpKind::Ne,
-            top.reg.into(),
-            top.reg.into(),
-            *frame.label(),
-            OperandSize::S32,
-        );
+
+        let top = {
+            let top = self.context.without::<TypedReg, M, _>(
+                frame.results::<M>().regs(),
+                self.masm,
+                |ctx, masm| ctx.pop_to_reg(masm, None),
+            );
+            frame.top_abi_results::<M, _>(
+                &mut self.context,
+                self.masm,
+                |results, context, masm| {
+                    // In the case of `br_if` theres a possibility that we'll
+                    // exit early from the block or falltrough, for
+                    // a falltrough, we cannot rely on the pre-computed return area;
+                    // it must be recalculated so that any values that are
+                    // generated are correctly placed near the current stack
+                    // pointer.
+                    results.on_stack().then(|| {
+                        let stack_consumed = context.stack.sizeof(results.stack_operands_len());
+                        let base = masm.sp_offset().as_u32() - stack_consumed;
+                        let offs = base + results.size();
+                        RetArea::sp(SPOffset::from_u32(offs))
+                    })
+                },
+            );
+            top
+        };
+
+        // Emit instructions to balance the machine stack if the frame has
+        // a different offset.
+        let current_sp_offset = self.masm.sp_offset();
+        let results_size = frame.results::<M>().size();
+        let state = frame.stack_state();
+        let (label, cmp, needs_cleanup) = if current_sp_offset > state.target_offset {
+            (self.masm.get_label(), IntCmpKind::Eq, true)
+        } else {
+            (*frame.label(), IntCmpKind::Ne, false)
+        };
+
+        self.masm
+            .branch(cmp, top.reg.into(), top.reg.into(), label, OperandSize::S32);
         self.context.free_reg(top);
+
+        if needs_cleanup {
+            // Emit instructions to balance the stack and jump if not falling
+            // through.
+            self.masm.memmove(
+                current_sp_offset,
+                state.target_offset,
+                results_size,
+                MemMoveDirection::LowToHigh,
+            );
+            self.masm.ensure_sp_for_jump(state.target_offset);
+            self.masm.jmp(*frame.label());
+
+            // Restore sp_offset to what it was for falling through and emit
+            // fallthrough label.
+            self.masm.reset_stack_pointer(current_sp_offset);
+            self.masm.bind(label);
+        }
     }
 
     fn visit_br_table(&mut self, targets: BrTable<'a>) {
@@ -1191,16 +1727,30 @@ where
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
         let default_index = control_index(targets.default(), self.control_frames.len());
-        let default_result = self.control_frames[default_index].as_target_result();
-        let (index, tmp) = self.context.maybe_without1::<(TypedReg, _), M, _>(
-            default_result.result_reg(),
-            self.masm,
-            |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
-        );
+        let default_frame = &mut self.control_frames[default_index];
+        let default_result = default_frame.results::<M>();
 
-        self.context.pop_abi_results(&default_result, self.masm);
-        self.context.push_abi_results(&default_result, self.masm);
+        let (index, tmp) = {
+            let index_and_tmp = self.context.without::<(TypedReg, _), M, _>(
+                default_result.regs(),
+                self.masm,
+                |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
+            );
+
+            // Materialize any constants or locals into their result representation,
+            // so that when reachability is restored, they are correctly located.
+            default_frame.top_abi_results::<M, _>(&mut self.context, self.masm, |results, _, _| {
+                results.ret_area().copied()
+            });
+            index_and_tmp
+        };
+
         self.masm.jmp_table(&labels, index.into(), tmp);
+        // Save the original stack pointer offset; we will reset the stack
+        // pointer to this offset after jumping to each of the targets. Each
+        // jump might adjust the stack according to the base offset of the
+        // target.
+        let current_sp = self.masm.sp_offset();
 
         for (t, l) in targets
             .targets()
@@ -1209,18 +1759,28 @@ where
             .zip(labels.iter())
         {
             let control_index = control_index(t.unwrap(), self.control_frames.len());
+            let frame = &mut self.control_frames[control_index];
+            // Reset the stack pointer to its original offset. This is needed
+            // because each jump will potentially adjust the stack pointer
+            // according to the base offset of the target.
+            self.masm.reset_stack_pointer(current_sp);
 
+            // NB: We don't perform any result handling as it was
+            // already taken care of above before jumping to the
+            // jump table.
             self.masm.bind(*l);
-            self.context.unconditional_jump(
-                &mut self.control_frames[control_index],
-                self.masm,
-                // NB: We don't perform any result handling as it was
-                // already taken care of above before jumping to the
-                // jump table above. The call to `unconditional_jump`,
-                // will stil take care of the proper stack alignment.
-                |_, _, _| {},
-            )
+            // Ensure that the stack pointer is correctly positioned before
+            // jumping to the jump table code.
+            let state = frame.stack_state();
+            self.masm.ensure_sp_for_jump(state.target_offset);
+            self.masm.jmp(*frame.label());
+            frame.set_as_target();
         }
+        // Finally reset the stack pointer to the original location.
+        // The reachability analysis, will ensure it's correctly located
+        // once reachability is restored.
+        self.masm.reset_stack_pointer(current_sp);
+        self.context.reachable = false;
         self.context.free_reg(index.reg);
         self.context.free_reg(tmp);
     }
@@ -1233,7 +1793,8 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_result(), masm);
+                frame
+                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
             });
     }
 
@@ -1247,17 +1808,13 @@ where
     }
 
     fn visit_local_tee(&mut self, index: u32) {
-        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
-        let typed_reg = self.emit_set_local(slot, ty.into());
+        let typed_reg = self.emit_set_local(index);
         self.context.stack.push(typed_reg.into());
     }
 
     fn visit_global_get(&mut self, global_index: u32) {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
-        let addr = self
-            .masm
-            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let (ty, addr) = self.emit_get_global_addr(index);
         let dst = self.context.reg_for_type(ty, self.masm);
         self.masm.load(addr, dst, ty.into());
         self.context.stack.push(Val::reg(dst, ty));
@@ -1265,10 +1822,8 @@ where
 
     fn visit_global_set(&mut self, global_index: u32) {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
-        let addr = self
-            .masm
-            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let (ty, addr) = self.emit_get_global_addr(index);
+
         let typed_reg = self.context.pop_to_reg(self.masm, None);
         self.context.free_reg(typed_reg.reg);
         self.masm.store(typed_reg.reg.into(), addr, ty.into());
@@ -1297,16 +1852,222 @@ where
         self.context.free_reg(cond);
     }
 
+    fn visit_i32_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S32, None);
+    }
+
+    fn visit_i32_load8_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I32,
+            OperandSize::S8,
+            Some(ExtendKind::I32Extend8S),
+        );
+    }
+
+    fn visit_i32_load8_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S8, None);
+    }
+
+    fn visit_i32_load16_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I32,
+            OperandSize::S16,
+            Some(ExtendKind::I32Extend16S),
+        )
+    }
+
+    fn visit_i32_load16_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S16, None)
+    }
+
+    fn visit_i32_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S32);
+    }
+
+    fn visit_i32_store8(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S8)
+    }
+
+    fn visit_i32_store16(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S16)
+    }
+
+    fn visit_i64_load8_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S8,
+            Some(ExtendKind::I64Extend8S),
+        )
+    }
+
+    fn visit_i64_load8_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S8, None)
+    }
+
+    fn visit_i64_load16_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S16, None)
+    }
+
+    fn visit_i64_load16_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S16,
+            Some(ExtendKind::I64Extend16S),
+        )
+    }
+
+    fn visit_i64_load32_u(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S32, None)
+    }
+
+    fn visit_i64_load32_s(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S32,
+            Some(ExtendKind::I64Extend32S),
+        )
+    }
+
+    fn visit_i64_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S64, None)
+    }
+
+    fn visit_i64_store(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S64)
+    }
+
+    fn visit_i64_store8(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S8)
+    }
+
+    fn visit_i64_store16(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S16)
+    }
+
+    fn visit_i64_store32(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S32)
+    }
+
+    fn visit_f32_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::F32, OperandSize::S32, None)
+    }
+
+    fn visit_f32_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S32)
+    }
+
+    fn visit_f64_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::F64, OperandSize::S64, None)
+    }
+
+    fn visit_f64_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S64)
+    }
+
+    fn visit_i32_trunc_sat_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i32_trunc_sat_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Checked);
+            },
+        );
+    }
+
+    fn visit_i32_trunc_sat_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i32_trunc_sat_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I32,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Checked);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_sat_f32_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S32, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i64_trunc_sat_f32_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S32, dst_size, TruncKind::Checked);
+            },
+        );
+    }
+
+    fn visit_i64_trunc_sat_f64_s(&mut self) {
+        use OperandSize::*;
+
+        self.context
+            .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
+                masm.signed_truncate(src, dst, S64, dst_size, TruncKind::Checked);
+            });
+    }
+
+    fn visit_i64_trunc_sat_f64_u(&mut self) {
+        use OperandSize::*;
+
+        self.context.convert_op_with_tmp_reg(
+            self.masm,
+            WasmValType::I64,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.unsigned_truncate(src, dst, tmp_fpr, S64, dst_size, TruncKind::Checked);
+            },
+        );
+    }
+
     wasmparser::for_each_operator!(def_unsupported);
 }
 
-impl<'a, 'b, 'c, M> CodeGen<'a, 'b, 'c, M>
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
 where
     M: MacroAssembler,
 {
     fn cmp_i32s(&mut self, kind: IntCmpKind) {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.cmp_with_set(src, dst, kind, size);
+            TypedReg::i32(dst)
         });
     }
 
@@ -1314,16 +2075,17 @@ where
         self.context
             .i64_binop(self.masm, move |masm, dst, src, size| {
                 masm.cmp_with_set(src, dst, kind, size);
+                TypedReg::i32(dst) // Return value for comparisons is an `i32`.
             });
     }
 }
 
-impl From<WasmType> for OperandSize {
-    fn from(ty: WasmType) -> OperandSize {
+impl From<WasmValType> for OperandSize {
+    fn from(ty: WasmValType) -> OperandSize {
         match ty {
-            WasmType::I32 | WasmType::F32 => OperandSize::S32,
-            WasmType::I64 | WasmType::F64 => OperandSize::S64,
-            WasmType::Ref(rt) => {
+            WasmValType::I32 | WasmValType::F32 => OperandSize::S32,
+            WasmValType::I64 | WasmValType::F64 => OperandSize::S64,
+            WasmValType::Ref(rt) => {
                 match rt.heap_type {
                     // TODO: Harcoded size, assuming 64-bit support only. Once
                     // Wasmtime supports 32-bit architectures, this will need
@@ -1333,7 +2095,7 @@ impl From<WasmType> for OperandSize {
                     t => unimplemented!("Support for WasmHeapType: {t}"),
                 }
             }
-            ty => unimplemented!("Support for WasmType {ty}"),
+            ty => unimplemented!("Support for WasmValType {ty}"),
         }
     }
 }

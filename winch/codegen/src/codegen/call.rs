@@ -3,34 +3,33 @@
 //!
 //! This module exposes a single function [`FnCall::emit`], which is responsible
 //! of orchestrating the emission of calls. In general such orchestration
-//! takes place in 4 steps:
+//! takes place in 6 steps:
 //!
 //! 1. [`Callee`] resolution.
 //! 2. Mapping of the [`Callee`] to the [`CalleeKind`].
-//! 3. Calculation of the stack space consumed by the call.
-//! 4. Emission.
+//! 3. Spilling the value stack.
+//! 4. Calculate the return area, for 1+ results.
+//! 5. Emission.
+//! 6. Stack space cleanup.
 //!
-//! The stack space consumed by the function call; that is,
-//! the sum of:
+//! The stack space consumed by the function call is the amount
+//! of space used by any memory entries in the value stack present
+//! at the callsite (after spilling the value stack), that will be
+//! used as arguments for the function call. Any memory values in the
+//! value stack that are needed as part of the function
+//! arguments will be consumed by the function call (either by
+//! assigning those values to a register or by storing those
+//! values in a memory location if the callee argument is on
+//! the stack).
+//! This could also be done when assigning arguments every time a
+//! memory entry needs to be assigned to a particular location,
+//! but doing so will emit more instructions (e.g. a pop per
+//! argument that needs to be assigned); it's more efficient to
+//! calculate the space used by those memory values and reclaim it
+//! at once when cleaning up the stack after the call has been
+//! emitted.
 //!
-//! 1. The amount of stack space created by saving any live
-//!    registers at the callsite.
-//! 2. The amount of space used by any memory entries in the value
-//!    stack present at the callsite, that will be used as
-//!    arguments for the function call. Any memory values in the
-//!    value stack that are needed as part of the function
-//!    arguments, will be consumed by the function call (either by
-//!    assigning those values to a register or by storing those
-//!    values to a memory location if the callee argument is on
-//!    the stack), so we track that stack space to reclaim it once
-//!    the function call has ended. This could also be done in
-//!    when assigning arguments everytime a memory entry needs to be assigned
-//!    to a particular location, but doing so, will incur in more
-//!    instructions (e.g. a pop per argument that needs to be
-//!    assigned); it's more efficient to track the space needed by
-//!    those memory values and reclaim it at once.
-//!
-//! The machine stack throghout the function call is as follows:
+//! The machine stack throughout the function call is as follows:
 //! ┌──────────────────────────────────────────────────┐
 //! │                                                  │
 //! │                  1                               │
@@ -39,18 +38,18 @@
 //! │  are used as function arguments.                 │
 //! │                                                  │
 //! ├──────────────────────────────────────────────────┤ ---> The Wasm value stack at this point in time would look like:
-//! │                                                  │      [ Reg | Reg | Mem(offset) | Mem(offset) ]
+//! │                                                  │      [ Mem(offset) | Mem(offset) | Local(index) | Local(index) ]
 //! │                   2                              │
-//! │   Stack space created by saving                  │
-//! │   any live registers at the callsite.            │
+//! │   Stack space created by spilling locals and     |
+//! │   registers at the callsite.                     │
 //! │                                                  │
 //! │                                                  │
 //! ├─────────────────────────────────────────────────┬┤ ---> The Wasm value stack at this point in time would look like:
 //! │                                                  │      [ Mem(offset) | Mem(offset) | Mem(offset) | Mem(offset) ]
 //! │                                                  │      Assuming that the callee takes 4 arguments, we calculate
-//! │                                                  │      2 spilled registers + 2 memory values; all of which will be used
-//! │   Stack space allocated for                      │      as arguments to the call via `assign_args`, thus the memory they represent is
-//! │   the callee function arguments in the stack;    │      is considered to be consumed by the call.
+//! │                                                  │      4 memory values; all of which will be used as arguments to
+//! │   Stack space allocated for                      │      the call via `assign_args`, thus the sum of the size of the
+//! │   the callee function arguments in the stack;    │      memory they represent is considered to be consumed by the call.
 //! │   represented by `arg_stack_space`               │
 //! │                                                  │
 //! │                                                  │
@@ -58,18 +57,16 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{ABIArg, ABISig, ABI},
-    codegen::{
-        ptr_type_from_ptr_size, BuiltinFunction, BuiltinType, Callee, CalleeInfo, CodeGenContext,
-        TypedReg,
+    abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
+    codegen::{BuiltinFunction, BuiltinType, Callee, CalleeInfo, CodeGenContext},
+    masm::{
+        CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
+        VMContextLoc,
     },
-    masm::{CalleeKind, MacroAssembler, OperandSize},
     reg::Reg,
-    CallingConvention,
+    stack::Val,
 };
-use smallvec::SmallVec;
-use std::borrow::Cow;
-use wasmtime_environ::{PtrSize, VMOffsets, WasmType};
+use wasmtime_environ::{PtrSize, VMOffsets};
 
 /// All the information needed to emit a function call.
 #[derive(Copy, Clone)]
@@ -78,90 +75,76 @@ pub(crate) struct FnCall {}
 impl FnCall {
     /// Orchestrates the emission of a function call:
     /// 1. Resolves the [`Callee`] through the given callback.
-    /// 2. Maps the resolved [`Callee`] to the [`CalleeKind`].
-    /// 3. Saves any live registers and calculates the stack space consumed
-    ///    by the function call.
-    /// 4. Emits the call.
-    pub fn emit<M: MacroAssembler, P: PtrSize, R>(
+    /// 2. Lowers the resolved [`Callee`] to a ([`CalleeKind`], [ContextArgs])
+    /// 3. Spills the value stack.
+    /// 4. Creates the stack space needed for the return area.
+    /// 5. Emits the call.
+    /// 6. Cleans up the stack space.
+    pub fn emit<'a, M: MacroAssembler, P: PtrSize>(
         masm: &mut M,
         context: &mut CodeGenContext,
-        mut resolve: R,
-    ) where
-        R: FnMut(&mut CodeGenContext) -> Callee,
-    {
-        let callee = resolve(context);
-        let ptr_type = ptr_type_from_ptr_size(context.vmoffsets.ptr.size());
-        let sig = Self::get_sig::<M>(&callee, ptr_type);
-        let sig = sig.as_ref();
+        callee: Callee<'a>,
+    ) {
+        let sig = callee.sig();
+        let (kind, callee_context) = Self::lower(&context.vmoffsets, &callee, sig, context, masm);
 
-        let arg_stack_space = sig.stack_bytes;
-        let kind = Self::map(&context.vmoffsets, &callee, sig, context, masm);
-        let call_stack_space = Self::save(context, masm, &sig);
-
+        context.spill(masm);
+        let ret_area = Self::make_ret_area(&sig, masm);
+        let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
-            let scratch = <M::ABI as ABI>::scratch_reg();
-            Self::assign(sig, context, masm, scratch);
+            Self::assign(sig, &callee_context, ret_area.as_ref(), context, masm);
             kind
         });
 
-        match kind {
-            CalleeKind::Indirect(r) => context.free_reg(r),
-            _ => {}
-        }
         Self::cleanup(
             sig,
-            call_stack_space.checked_add(reserved_stack).unwrap(),
+            &callee_context,
+            &kind,
+            reserved_stack,
+            ret_area,
             masm,
             context,
         );
     }
 
-    /// Derive the [`ABISig`] for a particulare [`Callee].
-    fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmType) -> Cow<'_, ABISig> {
-        match callee {
-            Callee::Builtin(info) => Cow::Borrowed(info.sig()),
-            Callee::Import(info) => {
-                let mut params: SmallVec<[WasmType; 6]> =
-                    SmallVec::with_capacity(info.ty.params().len() + 2);
-                params.extend_from_slice(&[ptr_type, ptr_type]);
-                params.extend_from_slice(info.ty.params());
-                Cow::Owned(<M::ABI as ABI>::sig_from(
-                    &params,
-                    info.ty.returns(),
-                    &CallingConvention::Default,
-                ))
+    /// Calculates the return area for the callee, if any.
+    fn make_ret_area<M: MacroAssembler>(callee_sig: &ABISig, masm: &mut M) -> Option<RetArea> {
+        callee_sig.has_stack_results().then(|| {
+            let base = masm.sp_offset().as_u32();
+            let end = base + callee_sig.results_stack_size();
+            if end > base {
+                masm.reserve_stack(end - base);
             }
-            Callee::Local(info) => {
-                Cow::Owned(<M::ABI as ABI>::sig(&info.ty, &CallingConvention::Default))
-            }
-            Callee::FuncRef(ty) => {
-                Cow::Owned(<M::ABI as ABI>::sig(&ty, &CallingConvention::Default))
-            }
-        }
+            RetArea::sp(SPOffset::from_u32(end))
+        })
     }
 
-    /// Maps the given [`Callee`] to a [`CalleeKind`].
-    fn map<P: PtrSize, M: MacroAssembler>(
+    /// Lowers the high-level [`Callee`] to a [`CalleeKind`] and
+    /// [ContextArgs] pair which contains all the metadata needed for
+    /// emission.
+    fn lower<P: PtrSize, M: MacroAssembler>(
         vmoffsets: &VMOffsets<P>,
         callee: &Callee,
         sig: &ABISig,
         context: &mut CodeGenContext,
         masm: &mut M,
-    ) -> CalleeKind {
+    ) -> (CalleeKind, ContextArgs) {
+        let ptr = vmoffsets.ptr.size();
         match callee {
-            Callee::Builtin(b) => Self::load_builtin(b, context, masm),
-            Callee::FuncRef(_) => Self::load_funcref(sig, vmoffsets.ptr.size(), context, masm),
-            Callee::Local(i) => Self::map_local(i),
-            Callee::Import(i) => Self::load_import(i, sig, context, masm, vmoffsets),
+            Callee::Builtin(b) => Self::lower_builtin(b, context, masm),
+            Callee::FuncRef(_) => Self::lower_funcref(sig, ptr, context, masm),
+            Callee::Local(i) => Self::lower_local::<M>(i),
+            Callee::Import(i) => Self::lower_import(i, sig, context, masm, vmoffsets),
         }
     }
 
-    /// Load a built-in function to the next available register.
-    fn load_builtin<M: MacroAssembler>(
+    /// Lowers a builtin function by loading its address to the next available
+    /// register.
+    fn lower_builtin<M: MacroAssembler>(
         builtin: &BuiltinFunction,
         context: &mut CodeGenContext,
         masm: &mut M,
-    ) -> CalleeKind {
+    ) -> (CalleeKind, ContextArgs) {
         match builtin.ty() {
             BuiltinType::Dynamic { index, base } => {
                 let sig = builtin.sig();
@@ -174,27 +157,29 @@ impl FnCall {
                     masm.load_ptr(addr, callee);
                     callee
                 });
-                CalleeKind::indirect(callee)
+                (CalleeKind::indirect(callee), ContextArgs::pinned_vmctx())
             }
-            BuiltinType::Known(c) => CalleeKind::known(c),
+            BuiltinType::Known(c) => (CalleeKind::known(c), ContextArgs::none()),
         }
     }
 
-    /// Map a local function to a [`CalleeKind`].
-    fn map_local(info: &CalleeInfo) -> CalleeKind {
-        CalleeKind::direct(info.index.as_u32())
+    /// Lower  a local function to a [`CalleeKind`] and [ContextArgs] pair.
+    fn lower_local<M: MacroAssembler>(info: &CalleeInfo) -> (CalleeKind, ContextArgs) {
+        (
+            CalleeKind::direct(info.index.as_u32()),
+            ContextArgs::pinned_callee_and_caller_vmctx(),
+        )
     }
 
-    /// Loads a function import to the next available register.
-    fn load_import<M: MacroAssembler, P: PtrSize>(
+    /// Lowers a function import by loading its address to the next available
+    /// register.
+    fn lower_import<M: MacroAssembler, P: PtrSize>(
         info: &CalleeInfo,
         sig: &ABISig,
         context: &mut CodeGenContext,
         masm: &mut M,
         vmoffsets: &VMOffsets<P>,
-    ) -> CalleeKind {
-        let ptr_type = ptr_type_from_ptr_size(vmoffsets.ptr.size());
-        let caller_vmctx = <M::ABI as ABI>::vmctx_reg();
+    ) -> (CalleeKind, ContextArgs) {
         let (callee, callee_vmctx) =
             context.without::<(Reg, Reg), M, _>(&sig.regs, masm, |context, masm| {
                 (context.any_gpr(masm), context.any_gpr(masm))
@@ -207,147 +192,222 @@ impl FnCall {
         let callee_addr = masm.address_at_vmctx(callee_body_offset);
         masm.load_ptr(callee_addr, callee);
 
-        // Put the callee / caller vmctx at the start of the
-        // range of the stack so that they are used as first
-        // and second arguments.
-        let stack = &mut context.stack;
-        let location = stack.len() - (sig.params.len() - 2);
-        let values = [
-            TypedReg::new(ptr_type, callee_vmctx).into(),
-            TypedReg::new(ptr_type, caller_vmctx).into(),
-        ]
-        .into_iter();
-        context.stack.insert_many(location, values);
-
-        CalleeKind::indirect(callee)
+        (
+            CalleeKind::indirect(callee),
+            ContextArgs::with_callee_and_pinned_caller(callee_vmctx),
+        )
     }
 
-    /// Loads a function reference to the next available register.
-    fn load_funcref<M: MacroAssembler>(
+    /// Lowers a function reference by loading its address into the next
+    /// available register.
+    fn lower_funcref<M: MacroAssembler>(
         sig: &ABISig,
         ptr: impl PtrSize,
         context: &mut CodeGenContext,
         masm: &mut M,
-    ) -> CalleeKind {
+    ) -> (CalleeKind, ContextArgs) {
         // Pop the funcref pointer to a register and allocate a register to hold the
         // address of the funcref. Since the callee is not addressed from a global non
         // allocatable register (like the vmctx in the case of an import), we load the
-        // funcref to a register ensuring that it doesn't get assigned to a non-arg
-        // register.
-        let (funcref_ptr, funcref) = context.without::<_, M, _>(&sig.regs, masm, |cx, masm| {
-            (cx.pop_to_reg(masm, None).into(), cx.any_gpr(masm))
-        });
+        // funcref to a register ensuring that it doesn't get assigned to a register
+        // used in the callee's signature.
+        let (funcref_ptr, funcref, callee_vmctx) =
+            context.without::<_, M, _>(&sig.regs, masm, |cx, masm| {
+                (
+                    cx.pop_to_reg(masm, None).into(),
+                    cx.any_gpr(masm),
+                    cx.any_gpr(masm),
+                )
+            });
 
+        // Load the callee VMContext, that will be passed as first argument to
+        // the function call.
+        masm.load_ptr(
+            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_vmctx().into()),
+            callee_vmctx,
+        );
+
+        // Load the function pointer to be called.
         masm.load_ptr(
             masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_wasm_call().into()),
             funcref,
         );
         context.free_reg(funcref_ptr);
-        CalleeKind::indirect(funcref)
+
+        (
+            CalleeKind::indirect(funcref),
+            ContextArgs::with_callee_and_pinned_caller(callee_vmctx),
+        )
+    }
+
+    /// Materializes any [ContextArgs] as a function argument.
+    fn assign_context_args<M: MacroAssembler>(sig: &ABISig, context: &ContextArgs, masm: &mut M) {
+        debug_assert!(sig.params().len() >= context.len());
+        for (context_arg, operand) in context
+            .as_slice()
+            .iter()
+            .zip(sig.params_without_retptr().iter().take(context.len()))
+        {
+            match (context_arg, operand) {
+                (VMContextLoc::Pinned, ABIOperand::Reg { ty, reg, .. }) => {
+                    masm.mov(vmctx!(M).into(), *reg, (*ty).into());
+                }
+                (VMContextLoc::Pinned, ABIOperand::Stack { ty, offset, .. }) => {
+                    let addr = masm.address_at_sp(SPOffset::from_u32(*offset));
+                    masm.store(vmctx!(M).into(), addr, (*ty).into());
+                }
+
+                (VMContextLoc::Reg(src), ABIOperand::Reg { ty, reg, .. }) => {
+                    masm.mov((*src).into(), *reg, (*ty).into());
+                }
+
+                (VMContextLoc::Reg(src), ABIOperand::Stack { ty, offset, .. }) => {
+                    let addr = masm.address_at_sp(SPOffset::from_u32(*offset));
+                    masm.store((*src).into(), addr, (*ty).into());
+                }
+            }
+        }
     }
 
     /// Assign arguments for the function call.
     fn assign<M: MacroAssembler>(
         sig: &ABISig,
+        callee_context: &ContextArgs,
+        ret_area: Option<&RetArea>,
         context: &mut CodeGenContext,
         masm: &mut M,
-        scratch: Reg,
     ) {
-        let arg_count = sig.params.len();
+        let arg_count = sig.params.len_without_retptr();
+        debug_assert!(arg_count >= callee_context.len());
         let stack = &context.stack;
-        let mut stack_values = stack.peekn(arg_count);
-        for arg in &sig.params {
-            let val = stack_values
-                .next()
-                .unwrap_or_else(|| panic!("expected stack value for function argument"));
-            match &arg {
-                &ABIArg::Reg { ty: _, reg } => {
-                    context.move_val_to_reg(&val, *reg, masm);
+        let stack_values = stack.peekn(arg_count - callee_context.len());
+
+        if callee_context.len() > 0 {
+            Self::assign_context_args(&sig, &callee_context, masm);
+        }
+
+        for (arg, val) in sig
+            .params_without_retptr()
+            .iter()
+            .skip(callee_context.len())
+            .zip(stack_values)
+        {
+            match arg {
+                &ABIOperand::Reg { reg, .. } => {
+                    context.move_val_to_reg(&val, reg, masm);
                 }
-                &ABIArg::Stack { ty, offset } => {
-                    let addr = masm.address_at_sp(*offset);
-                    let size: OperandSize = (*ty).into();
+                &ABIOperand::Stack { ty, offset, .. } => {
+                    let addr = masm.address_at_sp(SPOffset::from_u32(offset));
+                    let size: OperandSize = ty.into();
+                    let scratch = <M::ABI as ABI>::scratch_for(&ty);
                     context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
                 }
             }
         }
-    }
 
-    /// Save any live registers prior to emitting the call.
-    //
-    // Here we perform a "spill" of the register entries
-    // in the Wasm value stack, we also count any memory
-    // values that will be used used as part of the callee
-    // arguments.  Saving the live registers is done by
-    // emitting push operations for every `Reg` entry in
-    // the Wasm value stack. We do this to be compliant
-    // with Winch's internal ABI, in which all registers
-    // are treated as caller-saved. For more details, see
-    // [ABI].
-    //
-    // The next few lines, partition the value stack into
-    // two sections:
-    // +------------------+--+--- (Stack top)
-    // |                  |  |
-    // |                  |  | 1. The top `n` elements, which are used for
-    // |                  |  |    function arguments; for which we save any
-    // |                  |  |    live registers, keeping track of the amount of registers
-    // +------------------+  |    saved plus the amount of memory values consumed by the function call;
-    // |                  |  |    with this information we can later reclaim the space used by the function call.
-    // |                  |  |
-    // +------------------+--+---
-    // |                  |  | 2. The rest of the items in the stack, for which
-    // |                  |  |    we only save any live registers.
-    // |                  |  |
-    // +------------------+  |
-    fn save<M: MacroAssembler>(context: &mut CodeGenContext, masm: &mut M, sig: &ABISig) -> u32 {
-        let callee_params = &sig.params;
-        let stack = &context.stack;
-        match callee_params.len() {
-            0 => {
-                let _ = context.save_live_registers_and_calculate_sizeof(masm, ..);
-                0u32
-            }
-            _ => {
-                assert!(stack.len() >= callee_params.len());
-                let partition = stack.len() - callee_params.len();
-                let _ = context.save_live_registers_and_calculate_sizeof(masm, 0..partition);
-                context.save_live_registers_and_calculate_sizeof(masm, partition..)
+        if sig.has_stack_results() {
+            let operand = sig.params.unwrap_results_area_operand();
+            let base = ret_area.unwrap().unwrap_sp();
+            let addr = masm.address_from_sp(base);
+
+            match operand {
+                &ABIOperand::Reg { ty, reg, .. } => {
+                    masm.load_addr(addr, reg, ty.into());
+                }
+                &ABIOperand::Stack { ty, offset, .. } => {
+                    let slot = masm.address_at_sp(SPOffset::from_u32(offset));
+                    // Don't rely on `ABI::scratch_for` as we always use
+                    // an int register as the return pointer.
+                    let scratch = <M::ABI as ABI>::scratch_reg();
+                    masm.load_addr(addr, scratch, ty.into());
+                    masm.store(scratch.into(), slot, ty.into());
+                }
             }
         }
     }
 
-    /// Cleanup stack space and free registers after emitting the call.
+    /// Cleanup stack space, handle multiple results, and free registers after
+    /// emitting the call.
     fn cleanup<M: MacroAssembler>(
         sig: &ABISig,
-        total_space: u32,
+        callee_context: &ContextArgs,
+        callee_kind: &CalleeKind,
+        reserved_space: u32,
+        ret_area: Option<RetArea>,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) {
-        masm.free_stack(total_space);
-        // Only account for registers given that any memory entries
-        // consumed by the call (assigned to a register or to a stack
-        // slot) were freed by the previous call to
-        // `masm.free_stack`, so we only care about dropping them
-        // here.
-        //
-        // NOTE / TODO there's probably a path to getting rid of
-        // `save_live_registers_and_calculate_sizeof` and
-        // `call_stack_space`, making it a bit more obvious what's
-        // happening here. We could:
-        //
-        // * Modify the `spill` implementation so that it takes a
-        // filtering callback, to control which values the caller is
-        // interested in saving (e.g. save all if no function is provided)
-        // * Rely on the new implementation of `drop_last` to calcuate
-        // the stack memory entries consumed by the call and then free
-        // the calculated stack space.
-        context.drop_last(sig.params.len(), |regalloc, v| {
-            if v.is_reg() {
-                regalloc.free(v.get_reg().into());
+        // Free any registers holding any function references.
+        match callee_kind {
+            CalleeKind::Indirect(r) => context.free_reg(*r),
+            _ => {}
+        }
+
+        // Free any registers used as part of the [ContextArgs].
+        for loc in callee_context.as_slice() {
+            match loc {
+                VMContextLoc::Reg(r) => context.free_reg(*r),
+                _ => {}
+            }
+        }
+        // Deallocate the reserved space for stack arguments and for alignment,
+        // which was allocated last.
+        masm.free_stack(reserved_space);
+
+        debug_assert!(sig.params.len_without_retptr() >= callee_context.len());
+
+        // Drop params from value stack and calculate amount of machine stack
+        // space they consumed.
+        let mut stack_consumed = 0;
+        context.drop_last(
+            sig.params.len_without_retptr() - callee_context.len(),
+            |_regalloc, v| {
+                debug_assert!(v.is_mem() || v.is_const());
+                if let Val::Memory(mem) = v {
+                    stack_consumed += mem.slot.size;
+                }
+            },
+        );
+
+        if let Some(ret_area) = ret_area {
+            if stack_consumed > 0 {
+                // Perform a memory move, by shuffling the result area to
+                // higher addresses. This is needed because the result area
+                // is located after any memory addresses located on the stack,
+                // and after spilled values consumed by the call.
+                let sp = ret_area.unwrap_sp();
+                let result_bytes = sig.results_stack_size();
+                debug_assert!(sp.as_u32() >= stack_consumed + result_bytes);
+                let dst = SPOffset::from_u32(sp.as_u32() - stack_consumed);
+                masm.memmove(sp, dst, result_bytes, MemMoveDirection::LowToHigh);
+            }
+        };
+
+        // Free the bytes consumed by the call.
+        masm.free_stack(stack_consumed);
+
+        let ret_area = ret_area.map(|area| {
+            if stack_consumed > 0 {
+                // If there's a return area and stack space was consumed by the
+                // call, adjust the return area to be to the current stack
+                // pointer offset.
+                RetArea::sp(masm.sp_offset())
+            } else {
+                // Else if no stack space was consumed by the call, simply use
+                // the previously calculated area.
+                debug_assert_eq!(area.unwrap_sp(), masm.sp_offset());
+                area
             }
         });
-        context.push_abi_results(&sig.result, masm);
+
+        // In the case of [Callee], there's no need to set the [RetArea] of the
+        // signature, as it's only used here to push abi results.
+        context.push_abi_results(&sig.results, masm, |_, _, _| ret_area);
+        // Reload the [VMContext] pointer into the corresponding pinned
+        // register. Winch currently doesn't have any callee-saved registers in
+        // the default ABI. So the callee might clobber the designated pinned
+        // register.
+        context.load_vmctx(masm);
     }
 }

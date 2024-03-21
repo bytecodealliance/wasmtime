@@ -8,7 +8,7 @@ use crate::ir::{
     self, pcc::Fact, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData,
     DynamicStackSlots, DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst,
     JumpTable, JumpTableData, Layout, MemoryType, MemoryTypeData, Opcode, SigRef, Signature,
-    SourceLocs, StackSlot, StackSlotData, StackSlots, Table, TableData, Type,
+    SourceLocs, StackSlot, StackSlotData, StackSlots, Type,
 };
 use crate::isa::CallConv;
 use crate::write::write_function;
@@ -178,9 +178,6 @@ pub struct FunctionStencil {
     /// Memory types for proof-carrying code.
     pub memory_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
 
-    /// Tables referenced.
-    pub tables: PrimaryMap<ir::Table, ir::TableData>,
-
     /// Data flow graph containing the primary definition of all instructions, blocks and values.
     pub dfg: DataFlowGraph,
 
@@ -209,7 +206,6 @@ impl FunctionStencil {
         self.global_values.clear();
         self.global_value_facts.clear();
         self.memory_types.clear();
-        self.tables.clear();
         self.dfg.clear();
         self.layout.clear();
         self.srclocs.clear();
@@ -266,11 +262,6 @@ impl FunctionStencil {
             .get(ty)
             .unwrap_or_else(|| panic!("Undeclared dynamic vector type: {}", ty))
             .concrete()
-    }
-
-    /// Declares a table accessible to the function.
-    pub fn create_table(&mut self, data: TableData) -> Table {
-        self.tables.push(data)
     }
 
     /// Find a presumed unique special-purpose function parameter value.
@@ -423,7 +414,6 @@ impl Function {
                 global_values: PrimaryMap::new(),
                 global_value_facts: SecondaryMap::new(),
                 memory_types: PrimaryMap::new(),
-                tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),

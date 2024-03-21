@@ -4,7 +4,7 @@
 and 64-bit x86 architectures. The tool collects profiling data during runtime
 and then, either through the command line or GUI, provides a variety of options
 for viewing and analyzing that data. VTune Profiler is available in both
-commerical and free options. The free, downloadable version is available
+commercial and free options. The free, downloadable version is available
 [here][download] and is backed by a community forum for support. This version is
 appropriate for detailed analysis of your Wasm program.
 
@@ -65,7 +65,7 @@ This command tells the VTune collector (`vtune`) to collect hot spot
 profiling data as Wasmtime is executing `foo.wasm`. The `--profile=vtune` flag enables
 VTune support in Wasmtime so that the collector is also alerted to JIT events
 that take place during runtime. The first time this is run, the result of the
-command is a results diretory `r000hs/` which contains profiling data for
+command is a results directory `r000hs/` which contains profiling data for
 Wasmtime and the execution of `foo.wasm`. This data can then be read and
 displayed via the command line or via the VTune GUI by importing the result.
 

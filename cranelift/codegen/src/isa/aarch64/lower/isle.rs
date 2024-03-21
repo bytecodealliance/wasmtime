@@ -13,12 +13,13 @@ use super::{
     MachLabel, MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
     ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
-use crate::ir::condcodes;
+use crate::ir::{condcodes, ArgumentExtension};
 use crate::isa;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
 use crate::isa::aarch64::AArch64Backend;
+use crate::isle_common_prelude_methods;
+use crate::machinst::isle::*;
 use crate::machinst::valueregs;
-use crate::machinst::{isle::*, InputSourceInst};
 use crate::{
     binemit::CodeOffset,
     ir::{
@@ -28,15 +29,10 @@ use crate::{
     isa::aarch64::abi::AArch64CallSite,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::inst::SImm7Scaled,
-    isa::unwind::UnwindInst,
-    machinst::{
-        abi::ArgPair, ty_bits, InstOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
-    },
+    machinst::{abi::ArgPair, ty_bits, InstOutput, MachInst, VCodeConstant, VCodeConstantData},
 };
-use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
-use std::convert::TryFrom;
 use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;
@@ -175,6 +171,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         ImmLogic::maybe_from_u64(n, ty)
     }
 
+    fn imm_size_from_type(&mut self, ty: Type) -> Option<u16> {
+        match ty {
+            I32 => Some(32),
+            I64 => Some(64),
+            _ => None,
+        }
+    }
+
     fn imm_logic_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ImmLogic> {
         let ty = if ty.bits() < 32 { I32 } else { ty };
         self.imm_logic_from_u64(ty, n.bits() as u64)
@@ -300,8 +304,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     self.lower_ctx.add_range_fact(
                         rd.to_reg(),
                         64,
-                        u64::from(lower_halfword),
-                        u64::from(lower_halfword),
+                        u64::from(value),
+                        u64::from(value),
                     );
                 }
             } else {
@@ -396,7 +400,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         size,
                     });
                     if pcc {
-                        running_value = !(imm16 << shift);
+                        running_value = !(u64::from(imm.bits) << shift);
                         self.lower_ctx.add_range_fact(
                             rd.to_reg(),
                             64,

@@ -10,7 +10,6 @@
 
 use crate::machinst::{Reg, RegClass};
 use crate::{
-    ir::TrapCode,
     isa::x64::inst::{
         args::{Amode, OperandSize},
         regs, Inst, LabelUse,
@@ -67,28 +66,31 @@ pub(crate) fn reg_enc(reg: impl Into<Reg>) -> u8 {
 /// - bit 1 set to 1 indicates the REX prefix must always be emitted.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct RexFlags(u8);
+pub struct RexFlags(u8);
 
 impl RexFlags {
     /// By default, set the W field, and don't always emit.
     #[inline(always)]
-    pub(crate) fn set_w() -> Self {
+    pub fn set_w() -> Self {
         Self(0)
     }
+
     /// Creates a new RexPrefix for which the REX.W bit will be cleared.
     #[inline(always)]
-    pub(crate) fn clear_w() -> Self {
+    pub fn clear_w() -> Self {
         Self(1)
     }
 
+    /// Require that the REX prefix is emitted.
     #[inline(always)]
-    pub(crate) fn always_emit(&mut self) -> &mut Self {
+    pub fn always_emit(&mut self) -> &mut Self {
         self.0 = self.0 | 2;
         self
     }
 
+    /// Emit the rex prefix if the referenced register would require it for 8-bit operations.
     #[inline(always)]
-    pub(crate) fn always_emit_if_8bit_needed(&mut self, reg: Reg) -> &mut Self {
+    pub fn always_emit_if_8bit_needed(&mut self, reg: Reg) -> &mut Self {
         let enc_reg = int_reg_enc(reg);
         if enc_reg >= 4 && enc_reg <= 7 {
             self.always_emit();
@@ -96,17 +98,21 @@ impl RexFlags {
         self
     }
 
+    /// True if 64-bit operands are used.
     #[inline(always)]
-    pub(crate) fn must_clear_w(&self) -> bool {
+    pub fn must_clear_w(&self) -> bool {
         (self.0 & 1) != 0
     }
+
+    /// True if the REX prefix must always be emitted.
     #[inline(always)]
-    pub(crate) fn must_always_emit(&self) -> bool {
+    pub fn must_always_emit(&self) -> bool {
         (self.0 & 2) != 0
     }
 
+    /// Emit a unary instruction.
     #[inline(always)]
-    pub(crate) fn emit_one_op(&self, sink: &mut MachBuffer<Inst>, enc_e: u8) {
+    pub fn emit_one_op(&self, sink: &mut MachBuffer<Inst>, enc_e: u8) {
         // Register Operand coded in Opcode Byte
         // REX.R and REX.X unused
         // REX.B == 1 accesses r8-r15
@@ -120,8 +126,9 @@ impl RexFlags {
         }
     }
 
+    /// Emit a binary instruction.
     #[inline(always)]
-    pub(crate) fn emit_two_op(&self, sink: &mut MachBuffer<Inst>, enc_g: u8, enc_e: u8) {
+    pub fn emit_two_op(&self, sink: &mut MachBuffer<Inst>, enc_g: u8, enc_e: u8) {
         let w = if self.must_clear_w() { 0 } else { 1 };
         let r = (enc_g >> 3) & 1;
         let x = 0;
@@ -132,6 +139,7 @@ impl RexFlags {
         }
     }
 
+    /// Emit a ternary instruction.
     #[inline(always)]
     pub fn emit_three_op(
         &self,
@@ -305,9 +313,8 @@ pub(crate) fn emit_std_enc_mem(
     // 64-bit integer registers, because they are part of an address
     // expression.  But `enc_g` can be derived from a register of any class.
 
-    let can_trap = mem_e.can_trap();
-    if can_trap {
-        sink.add_trap(TrapCode::HeapOutOfBounds);
+    if let Some(trap_code) = mem_e.get_flags().trap_code() {
+        sink.add_trap(trap_code);
     }
 
     prefixes.emit(sink);

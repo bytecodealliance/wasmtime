@@ -5,24 +5,41 @@
     (loop (result i32) (i32.const 1)) (if (then (call $dummy)))
   )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 4883c408             	add	rsp, 8
-;;   10:	 5d                   	pop	rbp
-;;   11:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8716000000         	ja	0x31
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
+;;      	 48893424             	mov	qword ptr [rsp], rsi
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   31:	 0f0b                 	ud2	
 ;;
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 b801000000           	mov	eax, 1
-;;   11:	 85c0                 	test	eax, eax
-;;   13:	 0f840d000000         	je	0x26
-;;   19:	 4883ec08             	sub	rsp, 8
-;;   1d:	 e800000000           	call	0x22
-;;   22:	 4883c408             	add	rsp, 8
-;;   26:	 4883c408             	add	rsp, 8
-;;   2a:	 5d                   	pop	rbp
-;;   2b:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8733000000         	ja	0x4e
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
+;;      	 48893424             	mov	qword ptr [rsp], rsi
+;;      	 b801000000           	mov	eax, 1
+;;      	 85c0                 	test	eax, eax
+;;      	 0f8410000000         	je	0x48
+;;   38:	 4c89f7               	mov	rdi, r14
+;;      	 4c89f6               	mov	rsi, r14
+;;      	 e800000000           	call	0x43
+;;      	 4c8b742408           	mov	r14, qword ptr [rsp + 8]
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   4e:	 0f0b                 	ud2	

@@ -1,7 +1,6 @@
 use super::HashMap;
 use crate::frontend::FunctionBuilder;
 use alloc::vec::Vec;
-use core::convert::TryFrom;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::*;
 
@@ -343,7 +342,6 @@ mod tests {
     use super::*;
     use crate::frontend::FunctionBuilderContext;
     use alloc::string::ToString;
-    use cranelift_codegen::ir::Function;
 
     macro_rules! setup {
         ($default:expr, [$($index:expr,)*]) => {{

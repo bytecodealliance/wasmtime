@@ -9,21 +9,30 @@
 )
 
 
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;    d:	 4c893424             	mov	qword ptr [rsp], r14
-;;   11:	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
-;;   15:	 498b5b50             	mov	rbx, qword ptr [r11 + 0x50]
-;;   19:	 4156                 	push	r14
-;;   1b:	 4883ec08             	sub	rsp, 8
-;;   1f:	 488b7c2408           	mov	rdi, qword ptr [rsp + 8]
-;;   24:	 be00000000           	mov	esi, 0
-;;   29:	 ba0a000000           	mov	edx, 0xa
-;;   2e:	 488b4c2418           	mov	rcx, qword ptr [rsp + 0x18]
-;;   33:	 ffd3                 	call	rbx
-;;   35:	 4883c410             	add	rsp, 0x10
-;;   39:	 4883c410             	add	rsp, 0x10
-;;   3d:	 5d                   	pop	rbp
-;;   3e:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c320000000       	add	r11, 0x20
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8745000000         	ja	0x60
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 48891424             	mov	qword ptr [rsp], rdx
+;;      	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
+;;      	 498b5b50             	mov	rbx, qword ptr [r11 + 0x50]
+;;      	 4c8b1c24             	mov	r11, qword ptr [rsp]
+;;      	 4153                 	push	r11
+;;      	 4c89f7               	mov	rdi, r14
+;;      	 be00000000           	mov	esi, 0
+;;      	 ba0a000000           	mov	edx, 0xa
+;;      	 488b0c24             	mov	rcx, qword ptr [rsp]
+;;      	 ffd3                 	call	rbx
+;;      	 4883c408             	add	rsp, 8
+;;      	 4c8b742410           	mov	r14, qword ptr [rsp + 0x10]
+;;      	 4883c418             	add	rsp, 0x18
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   60:	 0f0b                 	ud2	

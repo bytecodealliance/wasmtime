@@ -8,6 +8,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cache/"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 base64 = "0.21.0"
@@ -17,8 +20,8 @@ log = { workspace = true }
 serde = "1.0.188"
 serde_derive = "1.0.188"
 sha2 = "0.10.2"
-toml = "0.5.5"
-zstd = { version = "0.11.1", default-features = false }
+toml = { workspace = true }
+zstd = { version = "0.13.0", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true

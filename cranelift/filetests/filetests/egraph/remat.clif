@@ -22,10 +22,9 @@ block2:
 ; check:      v2 = iadd v0, v1
 ; check:      brif v2, block1, block2
 ; check:   block1:
-; check:      v11 = iconst.i32 126
-; check:      v13 = iadd.i32 v0, v11
-; check:      return v13
+; check:      v6 = iconst.i32 126
+; check:      v12 = iadd.i32 v0, v6
+; check:      return v12
 ; check:   block2:
-; check:      v15 = iadd.i32 v0, v1
-; check:      return v15
-
+; check:      v14 = iadd.i32 v0, v1
+; check:      return v14

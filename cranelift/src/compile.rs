@@ -17,30 +17,30 @@ use std::path::PathBuf;
 #[derive(Parser)]
 pub struct Options {
     /// Print the resulting Cranelift IR
-    #[clap(short)]
+    #[arg(short)]
     print: bool,
 
     /// Print pass timing report
-    #[clap(short = 'T')]
+    #[arg(short = 'T')]
     report_times: bool,
 
     /// Print machine code disassembly
-    #[clap(short = 'D', long)]
+    #[arg(short = 'D', long)]
     disasm: bool,
 
     /// Configure Cranelift settings
-    #[clap(long = "set")]
+    #[arg(long = "set")]
     settings: Vec<String>,
 
     /// Specify the Cranelift target
-    #[clap(long = "target")]
+    #[arg(long = "target")]
     target: String,
 
     /// Specify an input file to be used. Use '-' for stdin.
     files: Vec<PathBuf>,
 
     /// Output object file
-    #[clap(short = 'o', long = "output")]
+    #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
 }
 

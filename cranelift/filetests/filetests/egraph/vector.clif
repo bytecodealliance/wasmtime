@@ -18,10 +18,9 @@ block0(v0: i32):
   v2 = splat.i64x2 v1
   v3 = fcvt_from_uint.f64x2 v2
   return v3
-  ; check: v1 = uextend.i64 v0
-  ; check: v4 = fcvt_from_uint.f64 v1
-  ; check: v5 = splat.f64x2 v4
-  ; check: return v5
+  ; check: v5 = fcvt_from_uint.f64 v0
+  ; check: v7 = splat.f64x2 v5
+  ; check: return v7
 }
 
 function %f3(i32) -> f64x2 {

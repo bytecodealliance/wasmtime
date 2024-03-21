@@ -7,31 +7,30 @@
         (f64.max)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 f20f10053c000000     	movsd	xmm0, qword ptr [rip + 0x3c]
-;;   14:	 f20f100d3c000000     	movsd	xmm1, qword ptr [rip + 0x3c]
-;;   1c:	 660f2ec8             	ucomisd	xmm1, xmm0
-;;   20:	 0f8519000000         	jne	0x3f
-;;   26:	 0f8a09000000         	jp	0x35
-;;   2c:	 660f54c8             	andpd	xmm1, xmm0
-;;   30:	 e90e000000           	jmp	0x43
-;;   35:	 f20f58c8             	addsd	xmm1, xmm0
-;;   39:	 0f8a04000000         	jp	0x43
-;;   3f:	 f20f5fc8             	maxsd	xmm1, xmm0
-;;   43:	 660f28c1             	movapd	xmm0, xmm1
-;;   47:	 4883c408             	add	rsp, 8
-;;   4b:	 5d                   	pop	rbp
-;;   4c:	 c3                   	ret	
-;;   4d:	 0000                 	add	byte ptr [rax], al
-;;   4f:	 009a99999999         	add	byte ptr [rdx - 0x66666667], bl
-;;   55:	 99                   	cdq	
-;;   56:	 01409a               	add	dword ptr [rax - 0x66], eax
-;;   59:	 99                   	cdq	
-;;   5a:	 99                   	cdq	
-;;   5b:	 99                   	cdq	
-;;   5c:	 99                   	cdq	
-;;   5d:	 99                   	cdq	
-;;   5e:	 f1                   	int1	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8751000000         	ja	0x6c
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
+;;      	 48893424             	mov	qword ptr [rsp], rsi
+;;      	 f20f10053d000000     	movsd	xmm0, qword ptr [rip + 0x3d]
+;;      	 f20f100d3d000000     	movsd	xmm1, qword ptr [rip + 0x3d]
+;;      	 660f2ec8             	ucomisd	xmm1, xmm0
+;;      	 0f8519000000         	jne	0x5e
+;;      	 0f8a09000000         	jp	0x54
+;;   4b:	 660f54c8             	andpd	xmm1, xmm0
+;;      	 e90e000000           	jmp	0x62
+;;   54:	 f20f58c8             	addsd	xmm1, xmm0
+;;      	 0f8a04000000         	jp	0x62
+;;   5e:	 f20f5fc8             	maxsd	xmm1, xmm0
+;;      	 660f28c1             	movapd	xmm0, xmm1
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   6c:	 0f0b                 	ud2	
+;;   6e:	 0000                 	add	byte ptr [rax], al

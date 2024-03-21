@@ -83,23 +83,16 @@ fn test_tcp_connect_dual_stack(net: &Network) {
 
     // Tests:
 
-    // Even on platforms that don't support dualstack sockets,
-    // setting ipv6_only to true (disabling dualstack mode) should work.
-    v6_client.set_ipv6_only(true).unwrap();
-
-    // Connecting to an IPv4-mapped-IPv6 address on an ipv6-only socket should fail:
+    // Connecting to an IPv4 address on an IPv6 socket should fail:
+    assert!(matches!(
+        v6_client.blocking_connect(net, v4_listener_addr),
+        Err(ErrorCode::InvalidArgument)
+    ));
+    // Connecting to an IPv4-mapped-IPv6 address on an IPv6 socket should fail:
     assert!(matches!(
         v6_client.blocking_connect(net, v6_listener_addr),
         Err(ErrorCode::InvalidArgument)
     ));
-
-    v6_client.set_ipv6_only(false).unwrap();
-
-    v6_client.blocking_connect(net, v6_listener_addr).unwrap();
-
-    let connected_addr = v6_client.local_address().unwrap();
-
-    assert_eq!(connected_addr.family(), IpAddressFamily::Ipv6);
 }
 
 fn main() {

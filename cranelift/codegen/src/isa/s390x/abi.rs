@@ -76,13 +76,11 @@ use crate::isa;
 use crate::isa::s390x::{inst::*, settings as s390x_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
-use crate::machinst::{RealReg, Reg, RegClass, Writable};
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::convert::TryFrom;
 use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
@@ -237,6 +235,11 @@ impl ABIMachineSpec for S390xMachineDeps {
             call_conv,
             isa::CallConv::Tail,
             "s390x does not support the 'tail' calling convention yet"
+        );
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "s390x does not support the 'winch' calling convention yet"
         );
 
         let mut next_gpr = 0;

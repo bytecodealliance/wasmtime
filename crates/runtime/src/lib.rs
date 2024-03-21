@@ -1,7 +1,7 @@
 //! Runtime library support for Wasmtime.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
+#![warn(clippy::cast_sign_loss)]
 
 use anyhow::{Error, Result};
 use std::fmt;
@@ -10,13 +10,11 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
 
-#[macro_use]
-mod trampolines;
-
+mod arch;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod export;
-mod externref;
+mod gc;
 mod imports;
 mod instance;
 mod memory;
@@ -25,6 +23,7 @@ mod mmap_vec;
 mod parking_spot;
 mod send_sync_ptr;
 mod store_box;
+mod sys;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -34,10 +33,12 @@ pub mod debug_builtins;
 pub mod libcalls;
 pub mod mpk;
 
+#[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
+pub use crate::arch::{get_stack_pointer, V128Abi};
 pub use crate::export::*;
-pub use crate::externref::*;
+pub use crate::gc::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
     Instance, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl, InstanceHandle,
@@ -54,13 +55,14 @@ pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
 pub use crate::mpk::MpkEnabled;
 pub use crate::store_box::*;
+pub use crate::sys::unwind::UnwindRegistration;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::*;
 pub use crate::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMInvokeArgument, VMMemoryDefinition,
     VMMemoryImport, VMNativeCallFunction, VMNativeCallHostFuncContext, VMOpaqueContext,
-    VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
+    VMRuntimeLimits, VMSharedTypeIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
     ValRaw,
 };
 pub use send_sync_ptr::SendSyncPtr;
@@ -189,7 +191,7 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// call a native function of the given signature.
     fn wasm_to_native_trampoline(
         &self,
-        signature: VMSharedSignatureIndex,
+        signature: VMSharedTypeIndex,
     ) -> Option<NonNull<VMWasmCallFunction>>;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
@@ -207,7 +209,7 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
 
     /// Returns an array, indexed by `SignatureIndex` of all
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
-    fn signature_ids(&self) -> &[VMSharedSignatureIndex];
+    fn type_ids(&self) -> &[VMSharedTypeIndex];
 
     /// Offset information for the current host.
     fn offsets(&self) -> &VMOffsets<HostPtr>;
@@ -219,30 +221,13 @@ pub fn page_size() -> usize {
 
     return match PAGE_SIZE.load(Ordering::Relaxed) {
         0 => {
-            let size = get_page_size();
+            let size = sys::vm::get_page_size();
             assert!(size != 0);
             PAGE_SIZE.store(size, Ordering::Relaxed);
             size
         }
         n => n,
     };
-
-    #[cfg(windows)]
-    fn get_page_size() -> usize {
-        use std::mem::MaybeUninit;
-        use windows_sys::Win32::System::SystemInformation::*;
-
-        unsafe {
-            let mut info = MaybeUninit::uninit();
-            GetSystemInfo(info.as_mut_ptr());
-            info.assume_init_ref().dwPageSize as usize
-        }
-    }
-
-    #[cfg(unix)]
-    fn get_page_size() -> usize {
-        unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
-    }
 }
 
 /// Result of [`Memory::atomic_wait32`] and [`Memory::atomic_wait64`]

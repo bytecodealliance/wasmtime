@@ -33,6 +33,12 @@ pub enum CallConv {
     /// FIXME: remove this when Wasmtime uses the "tail" calling convention for
     /// all wasm functions.
     WasmtimeSystemV,
+    /// The winch calling convention, not ABI-stable.
+    ///
+    /// The main difference to WasmtimeSystemV is that the winch calling
+    /// convention defines no callee-save registers, and restricts the number
+    /// of return registers to one integer, and one floating point.
+    Winch,
 }
 
 impl CallConv {
@@ -97,6 +103,7 @@ impl fmt::Display for CallConv {
             Self::AppleAarch64 => "apple_aarch64",
             Self::Probestack => "probestack",
             Self::WasmtimeSystemV => "wasmtime_system_v",
+            Self::Winch => "winch",
         })
     }
 }
@@ -113,6 +120,7 @@ impl str::FromStr for CallConv {
             "apple_aarch64" => Ok(Self::AppleAarch64),
             "probestack" => Ok(Self::Probestack),
             "wasmtime_system_v" => Ok(Self::WasmtimeSystemV),
+            "winch" => Ok(Self::Winch),
             _ => Err(()),
         }
     }

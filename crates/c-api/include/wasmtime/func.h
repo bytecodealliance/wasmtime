@@ -8,9 +8,9 @@
 #define WASMTIME_FUNC_H
 
 #include <wasm.h>
-#include <wasmtime/val.h>
-#include <wasmtime/store.h>
 #include <wasmtime/extern.h>
+#include <wasmtime/store.h>
+#include <wasmtime/val.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,13 +54,9 @@ typedef struct wasmtime_caller wasmtime_caller_t;
  * should be raised in WebAssembly. It's expected that in this case the caller
  * relinquishes ownership of the trap and it is passed back to the engine.
  */
-typedef wasm_trap_t* (*wasmtime_func_callback_t)(
-    void *env,
-    wasmtime_caller_t* caller,
-    const wasmtime_val_t *args,
-    size_t nargs,
-    wasmtime_val_t *results,
-    size_t nresults);
+typedef wasm_trap_t *(*wasmtime_func_callback_t)(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults);
 
 /**
  * \brief Creates a new host-defined function.
@@ -78,14 +74,11 @@ typedef wasm_trap_t* (*wasmtime_func_callback_t)(
  *
  * The returned function can only be used with the specified `store`.
  */
-WASM_API_EXTERN void wasmtime_func_new(
-  wasmtime_context_t *store,
-  const wasm_functype_t* type,
-  wasmtime_func_callback_t callback,
-  void *env,
-  void (*finalizer)(void*),
-  wasmtime_func_t *ret
-);
+WASM_API_EXTERN void wasmtime_func_new(wasmtime_context_t *store,
+                                       const wasm_functype_t *type,
+                                       wasmtime_func_callback_t callback,
+                                       void *env, void (*finalizer)(void *),
+                                       wasmtime_func_t *ret);
 
 /**
  * \brief Callback signature for #wasmtime_func_new_unchecked.
@@ -120,10 +113,8 @@ WASM_API_EXTERN void wasmtime_func_new(
  * array. Results are also written starting at index 0, which will overwrite
  * the arguments.
  */
-typedef wasm_trap_t* (*wasmtime_func_unchecked_callback_t)(
-    void *env,
-    wasmtime_caller_t* caller,
-    wasmtime_val_raw_t *args_and_results,
+typedef wasm_trap_t *(*wasmtime_func_unchecked_callback_t)(
+    void *env, wasmtime_caller_t *caller, wasmtime_val_raw_t *args_and_results,
     size_t num_args_and_results);
 
 /**
@@ -151,23 +142,18 @@ typedef wasm_trap_t* (*wasmtime_func_unchecked_callback_t)(
  * existence).
  */
 WASM_API_EXTERN void wasmtime_func_new_unchecked(
-  wasmtime_context_t *store,
-  const wasm_functype_t* type,
-  wasmtime_func_unchecked_callback_t callback,
-  void *env,
-  void (*finalizer)(void*),
-  wasmtime_func_t *ret
-);
+    wasmtime_context_t *store, const wasm_functype_t *type,
+    wasmtime_func_unchecked_callback_t callback, void *env,
+    void (*finalizer)(void *), wasmtime_func_t *ret);
 
 /**
  * \brief Returns the type of the function specified
  *
  * The returned #wasm_functype_t is owned by the caller.
  */
-WASM_API_EXTERN wasm_functype_t* wasmtime_func_type(
-    const wasmtime_context_t *store,
-    const wasmtime_func_t *func
-);
+WASM_API_EXTERN wasm_functype_t *
+wasmtime_func_type(const wasmtime_context_t *store,
+                   const wasmtime_func_t *func);
 
 /**
  * \brief Call a WebAssembly function.
@@ -204,15 +190,11 @@ WASM_API_EXTERN wasm_functype_t* wasmtime_func_type(
  * Does not take ownership of #wasmtime_val_t arguments. Gives ownership of
  * #wasmtime_val_t results.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call(
-    wasmtime_context_t *store,
-    const wasmtime_func_t *func,
-    const wasmtime_val_t *args,
-    size_t nargs,
-    wasmtime_val_t *results,
-    size_t nresults,
-    wasm_trap_t **trap
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_func_call(wasmtime_context_t *store, const wasmtime_func_t *func,
+                   const wasmtime_val_t *args, size_t nargs,
+                   wasmtime_val_t *results, size_t nresults,
+                   wasm_trap_t **trap);
 
 /**
  * \brief Call a WebAssembly function in an "unchecked" fashion.
@@ -243,13 +225,11 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call(
  * faster than that function, but the tradeoff is that embeddings must uphold
  * more invariants rather than relying on Wasmtime to check them for you.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call_unchecked(
-    wasmtime_context_t *store,
-    const wasmtime_func_t *func,
-    wasmtime_val_raw_t *args_and_results,
-    size_t args_and_results_len,
-    wasm_trap_t **trap
-);
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_func_call_unchecked(wasmtime_context_t *store,
+                             const wasmtime_func_t *func,
+                             wasmtime_val_raw_t *args_and_results,
+                             size_t args_and_results_len, wasm_trap_t **trap);
 
 /**
  * \brief Loads a #wasmtime_extern_t from the caller's context
@@ -269,17 +249,16 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call_unchecked(
  * Returns a nonzero value if the export was found, or 0 if the export wasn't
  * found. If the export wasn't found then `item` isn't written to.
  */
-WASM_API_EXTERN bool wasmtime_caller_export_get(
-    wasmtime_caller_t *caller,
-    const char *name,
-    size_t name_len,
-    wasmtime_extern_t *item
-);
+WASM_API_EXTERN bool wasmtime_caller_export_get(wasmtime_caller_t *caller,
+                                                const char *name,
+                                                size_t name_len,
+                                                wasmtime_extern_t *item);
 
 /**
  * \brief Returns the store context of the caller object.
  */
-WASM_API_EXTERN wasmtime_context_t* wasmtime_caller_context(wasmtime_caller_t* caller);
+WASM_API_EXTERN wasmtime_context_t *
+wasmtime_caller_context(wasmtime_caller_t *caller);
 
 /**
  * \brief Converts a `raw` nonzero `funcref` value from #wasmtime_val_raw_t
@@ -294,21 +273,18 @@ WASM_API_EXTERN wasmtime_context_t* wasmtime_caller_context(wasmtime_caller_t* c
  * #wasmtime_context_t that they were produced from. Providing arbitrary values
  * to `raw` here or cross-context values with `context` is UB.
  */
-WASM_API_EXTERN void wasmtime_func_from_raw(
-    wasmtime_context_t* context,
-    void *raw,
-    wasmtime_func_t *ret);
+WASM_API_EXTERN void wasmtime_func_from_raw(wasmtime_context_t *context,
+                                            void *raw, wasmtime_func_t *ret);
 
 /**
  * \brief Converts a `func`  which belongs to `context` into a `usize`
  * parameter that is suitable for insertion into a #wasmtime_val_raw_t.
  */
-WASM_API_EXTERN void *wasmtime_func_to_raw(
-    wasmtime_context_t* context,
-    const wasmtime_func_t *func);
+WASM_API_EXTERN void *wasmtime_func_to_raw(wasmtime_context_t *context,
+                                           const wasmtime_func_t *func);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 #endif // WASMTIME_FUNC_H

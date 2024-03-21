@@ -3,10 +3,6 @@
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::MemFlags;
 use crate::isa::s390x::inst::*;
-use crate::machinst::MachLabel;
-use crate::machinst::{PrettyPrint, Reg};
-
-use std::string::String;
 
 //=============================================================================
 // Instruction sub-components (memory addresses): definitions
@@ -106,10 +102,6 @@ impl MemArg {
         }
     }
 
-    pub(crate) fn can_trap(&self) -> bool {
-        !self.get_flags().notrap()
-    }
-
     /// Edit registers with allocations.
     pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
@@ -189,10 +181,6 @@ impl MemArgPair {
             }
             _ => None,
         }
-    }
-
-    pub(crate) fn can_trap(&self) -> bool {
-        !self.flags.notrap()
     }
 
     /// Edit registers with allocations.

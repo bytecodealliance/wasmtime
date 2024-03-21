@@ -8,31 +8,47 @@
     (if (result i32) (local.get 0) (then (i32.const 7)) (else (i32.const 8)))
   )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 4883c408             	add	rsp, 8
-;;   10:	 5d                   	pop	rbp
-;;   11:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8716000000         	ja	0x31
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
+;;      	 48893424             	mov	qword ptr [rsp], rsi
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   31:	 0f0b                 	ud2	
 ;;
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
-;;    c:	 4c89742404           	mov	qword ptr [rsp + 4], r14
-;;   11:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
-;;   15:	 85c0                 	test	eax, eax
-;;   17:	 0f8400000000         	je	0x1d
-;;   1d:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
-;;   21:	 85c0                 	test	eax, eax
-;;   23:	 0f8400000000         	je	0x29
-;;   29:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
-;;   2d:	 85c0                 	test	eax, eax
-;;   2f:	 0f840a000000         	je	0x3f
-;;   35:	 b807000000           	mov	eax, 7
-;;   3a:	 e905000000           	jmp	0x44
-;;   3f:	 b808000000           	mov	eax, 8
-;;   44:	 4883c410             	add	rsp, 0x10
-;;   48:	 5d                   	pop	rbp
-;;   49:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f874e000000         	ja	0x69
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 89542404             	mov	dword ptr [rsp + 4], edx
+;;      	 8b442404             	mov	eax, dword ptr [rsp + 4]
+;;      	 85c0                 	test	eax, eax
+;;      	 0f8400000000         	je	0x3c
+;;   3c:	 8b442404             	mov	eax, dword ptr [rsp + 4]
+;;      	 85c0                 	test	eax, eax
+;;      	 0f8400000000         	je	0x48
+;;   48:	 8b442404             	mov	eax, dword ptr [rsp + 4]
+;;      	 85c0                 	test	eax, eax
+;;      	 0f840a000000         	je	0x5e
+;;   54:	 b807000000           	mov	eax, 7
+;;      	 e905000000           	jmp	0x63
+;;   5e:	 b808000000           	mov	eax, 8
+;;      	 4883c418             	add	rsp, 0x18
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   69:	 0f0b                 	ud2	

@@ -23,6 +23,7 @@ enum IsAsync {
     Yes,
     YesPooling,
     No,
+    NoPooling,
 }
 
 impl IsAsync {
@@ -31,12 +32,13 @@ impl IsAsync {
             IsAsync::Yes => "async",
             IsAsync::YesPooling => "async-pool",
             IsAsync::No => "sync",
+            IsAsync::NoPooling => "sync-pool",
         }
     }
     fn use_async(&self) -> bool {
         match self {
             IsAsync::Yes | IsAsync::YesPooling => true,
-            IsAsync::No => false,
+            IsAsync::No | IsAsync::NoPooling => false,
         }
     }
 }
@@ -47,14 +49,29 @@ fn engines() -> Vec<(Engine, IsAsync)> {
     #[cfg(feature = "component-model")]
     config.wasm_component_model(true);
 
+    let mut pool = PoolingAllocationConfig::default();
+    if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+        pool.memory_protection_keys(MpkEnabled::Enable);
+    }
+
     vec![
         (Engine::new(&config).unwrap(), IsAsync::No),
+        (
+            Engine::new(
+                config
+                    .clone()
+                    .allocation_strategy(InstanceAllocationStrategy::Pooling(pool.clone())),
+            )
+            .unwrap(),
+            IsAsync::NoPooling,
+        ),
         (
             Engine::new(config.async_support(true)).unwrap(),
             IsAsync::Yes,
         ),
         (
-            Engine::new(config.allocation_strategy(InstanceAllocationStrategy::pooling())).unwrap(),
+            Engine::new(config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool)))
+                .unwrap(),
             IsAsync::YesPooling,
         ),
     ]
@@ -172,16 +189,15 @@ fn bench_host_to_wasm<Params, Results>(
             let mut space = vec![ValRaw::i32(0); params.len().max(results.len())];
             b.iter(|| unsafe {
                 for (i, param) in params.iter().enumerate() {
-                    space[i] = param.to_raw(&mut *store);
+                    space[i] = param.to_raw(&mut *store).unwrap();
                 }
                 untyped
                     .call_unchecked(&mut *store, space.as_mut_ptr(), space.len())
                     .unwrap();
                 for (i, expected) in results.iter().enumerate() {
-                    assert_vals_eq(
-                        expected,
-                        &Val::from_raw(&mut *store, space[i], expected.ty()),
-                    );
+                    let ty = expected.ty(&store);
+                    let actual = Val::from_raw(&mut *store, space[i], ty);
+                    assert_vals_eq(expected, &actual);
                 }
             })
         },
@@ -285,9 +301,9 @@ fn wasm_to_host(c: &mut Criterion) {
 
         let mut untyped = Linker::new(&engine);
         untyped
-            .func_new("", "nop", FuncType::new([], []), |_, _, _| Ok(()))
+            .func_new("", "nop", FuncType::new(&engine, [], []), |_, _, _| Ok(()))
             .unwrap();
-        let ty = FuncType::new([ValType::I32, ValType::I64], [ValType::F32]);
+        let ty = FuncType::new(&engine, [ValType::I32, ValType::I64], [ValType::F32]);
         untyped
             .func_new(
                 "",
@@ -319,9 +335,9 @@ fn wasm_to_host(c: &mut Criterion) {
         unsafe {
             let mut unchecked = Linker::new(&engine);
             unchecked
-                .func_new_unchecked("", "nop", FuncType::new([], []), |_, _| Ok(()))
+                .func_new_unchecked("", "nop", FuncType::new(&engine, [], []), |_, _| Ok(()))
                 .unwrap();
-            let ty = FuncType::new([ValType::I32, ValType::I64], [ValType::F32]);
+            let ty = FuncType::new(&engine, [ValType::I32, ValType::I64], [ValType::F32]);
             unchecked
                 .func_new_unchecked("", "nop-params-and-results", ty, |mut caller, space| {
                     match Val::from_raw(&mut caller, space[0], ValType::I32) {
@@ -332,7 +348,7 @@ fn wasm_to_host(c: &mut Criterion) {
                         Val::I64(0) => {}
                         _ => unreachable!(),
                     }
-                    space[0] = Val::F32(0).to_raw(&mut caller);
+                    space[0] = Val::F32(0).to_raw(&mut caller).unwrap();
                     Ok(())
                 })
                 .unwrap();
@@ -782,30 +798,23 @@ mod component {
             bench_instance(group, store, &instance, "typed", is_async);
 
             let mut untyped = component::Linker::new(&engine);
+            untyped.root().func_new("nop", |_, _, _| Ok(())).unwrap();
             untyped
                 .root()
-                .func_new(&component, "nop", |_, _, _| Ok(()))
-                .unwrap();
-            untyped
-                .root()
-                .func_new(
-                    &component,
-                    "nop-params-and-results",
-                    |_caller, params, results| {
-                        assert_eq!(params.len(), 2);
-                        match params[0] {
-                            component::Val::U32(0) => {}
-                            _ => unreachable!(),
-                        }
-                        match params[1] {
-                            component::Val::U64(0) => {}
-                            _ => unreachable!(),
-                        }
-                        assert_eq!(results.len(), 1);
-                        results[0] = component::Val::Float32(0.0);
-                        Ok(())
-                    },
-                )
+                .func_new("nop-params-and-results", |_caller, params, results| {
+                    assert_eq!(params.len(), 2);
+                    match params[0] {
+                        component::Val::U32(0) => {}
+                        _ => unreachable!(),
+                    }
+                    match params[1] {
+                        component::Val::U64(0) => {}
+                        _ => unreachable!(),
+                    }
+                    assert_eq!(results.len(), 1);
+                    results[0] = component::Val::Float32(0.0);
+                    Ok(())
+                })
                 .unwrap();
             let instance = if is_async.use_async() {
                 run_await(untyped.instantiate_async(&mut *store, &component)).unwrap()

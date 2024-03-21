@@ -1,7 +1,0 @@
-This directory contains the state for cargo-vet, a tool to help projects ensure
-that third-party Rust dependencies have been audited by a trusted entity.
-
-More about the tool can be found here: https://mozilla.github.io/cargo-vet/
-
-The audits.toml file may be imported by other projects, and therefore should be
-handled with care. Ask for help if you're not sure.

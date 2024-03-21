@@ -188,8 +188,10 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
-    let stdout = run_wasmtime(&["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()])?;
-    assert_eq!(stdout, "Hello, world!\n");
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let stdout = run_wasmtime(&["-Ccache=n", preview2, wasm.path().to_str().unwrap()])?;
+        assert_eq!(stdout, "Hello, world!\n");
+    }
     Ok(())
 }
 
@@ -252,11 +254,14 @@ fn timeout_in_invoke() -> Result<()> {
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(
-        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
-        None,
-    )?;
-    assert_eq!(output.status.code().unwrap(), 2);
+
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let output = run_wasmtime_for_output(
+            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
+            None,
+        )?;
+        assert_eq!(output.status.code().unwrap(), 2);
+    }
     Ok(())
 }
 
@@ -273,14 +278,17 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(
-        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
-        None,
-    )?;
-    if cfg!(windows) {
-        assert_eq!(output.status.code().unwrap(), 1);
-    } else {
-        assert_eq!(output.status.code().unwrap(), 125);
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let output = run_wasmtime_for_output(
+            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
+            None,
+        )?;
+        dbg!(&output);
+        if cfg!(windows) {
+            assert_eq!(output.status.code().unwrap(), 1);
+        } else {
+            assert_eq!(output.status.code().unwrap(), 125);
+        }
     }
     Ok(())
 }
@@ -302,13 +310,16 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(
-        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
-        None,
-    )?;
-    assert_eq!(output.status.code().unwrap(), 1);
-    assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
+
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let output = run_wasmtime_for_output(
+            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
+            None,
+        )?;
+        assert_eq!(output.status.code().unwrap(), 1);
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
+    }
     Ok(())
 }
 
@@ -450,20 +461,22 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     // Run a simple WASI hello world, snapshot0 edition.
     // The module is piped from standard input.
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
-    let stdout = {
-        let path = wasm.path();
-        let args: &[&str] = &["-Ccache=n", "-Spreview2=n", "-"];
-        let output = run_wasmtime_for_output(args, Some(path))?;
-        if !output.status.success() {
-            bail!(
-                "Failed to execute wasmtime with: {:?}\n{}",
-                args,
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-        Ok::<_, anyhow::Error>(String::from_utf8(output.stdout).unwrap())
-    }?;
-    assert_eq!(stdout, "Hello, world!\n");
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let stdout = {
+            let path = wasm.path();
+            let args: &[&str] = &["-Ccache=n", preview2, "-"];
+            let output = run_wasmtime_for_output(args, Some(path))?;
+            if !output.status.success() {
+                bail!(
+                    "Failed to execute wasmtime with: {:?}\n{}",
+                    args,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            Ok::<_, anyhow::Error>(String::from_utf8(output.stdout).unwrap())
+        }?;
+        assert_eq!(stdout, "Hello, world!\n");
+    }
     Ok(())
 }
 
@@ -506,7 +519,16 @@ fn specify_env() -> Result<()> {
             "tests/all/cli_tests/print_env.wat",
         ])
         .output()?;
-    assert!(!output.status.success());
+    assert!(output.status.success());
+
+    // Inherit all env vars
+    let output = get_wasmtime_command()?
+        .args(&["run", "-Sinherit-env", "tests/all/cli_tests/print_env.wat"])
+        .env("FOO", "bar")
+        .output()?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("FOO=bar"), "bad output: {stdout}");
 
     Ok(())
 }
@@ -747,6 +769,7 @@ fn component_missing_feature() -> Result<()> {
     let wasm = build_wasm(path)?;
     let output = get_wasmtime_command()?
         .arg("-Ccache=n")
+        .arg("-Wcomponent-model=n")
         .arg(wasm.path())
         .output()?;
     assert!(!output.status.success());
@@ -759,6 +782,7 @@ fn component_missing_feature() -> Result<()> {
     // also tests with raw *.wat input
     let output = get_wasmtime_command()?
         .arg("-Ccache=n")
+        .arg("-Wcomponent-model=n")
         .arg(path)
         .output()?;
     assert!(!output.status.success());
@@ -767,6 +791,27 @@ fn component_missing_feature() -> Result<()> {
         stderr.contains("cannot execute a component without `--wasm component-model`"),
         "bad stderr: {stderr}"
     );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_enabled_by_default() -> Result<()> {
+    let path = "tests/all/cli_tests/component-basic.wat";
+    let wasm = build_wasm(path)?;
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg(wasm.path())
+        .output()?;
+    assert!(output.status.success());
+
+    // also tests with raw *.wat input
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg(path)
+        .output()?;
+    assert!(output.status.success());
 
     Ok(())
 }
@@ -1195,6 +1240,24 @@ fn float_args() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn mpk_without_pooling() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "-O",
+            "memory-protection-keys=y",
+            "--invoke",
+            "echo_f32",
+            "tests/all/cli_tests/simple.wat",
+            "1.0",
+        ])
+        .env("WASMTIME_NEW_CLI", "1")
+        .output()?;
+    assert!(!output.status.success());
+    Ok(())
+}
+
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
     use anyhow::Result;
@@ -1436,7 +1499,7 @@ mod test_programs {
             &[
                 "-Ccache=no",
                 "-Wcomponent-model",
-                "-Scommon,http,preview2",
+                "-Scli,http,preview2",
                 HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
             ],
             None,
@@ -1485,4 +1548,59 @@ mod test_programs {
         ])?;
         Ok(())
     }
+
+    #[test]
+    fn cli_no_tcp() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but turn off TCP
+                "-Sinherit-network,tcp=no",
+                CLI_NO_TCP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_no_udp() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but turn off UDP
+                "-Sinherit-network,udp=no",
+                CLI_NO_UDP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_no_ip_name_lookup() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but ensure name lookup is disabled
+                "-Sinherit-network,allow-ip-name-lookup=no",
+                CLI_NO_IP_NAME_LOOKUP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+}
+
+#[test]
+fn settings_command() -> Result<()> {
+    let output = run_wasmtime(&["settings"])?;
+    assert!(output.contains("Cranelift settings for target"));
+    Ok(())
 }

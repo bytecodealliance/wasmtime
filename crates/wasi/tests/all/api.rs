@@ -4,32 +4,24 @@ use cap_std::fs::Dir;
 use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock;
-use wasmtime_wasi::preview2::bindings::wasi::filesystem::types as filesystem;
-use wasmtime_wasi::preview2::command::{add_to_linker, Command};
-use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, HostMonotonicClock, HostWallClock, Table, WasiCtx, WasiCtxBuilder,
-    WasiView,
+use wasmtime_wasi::{
+    bindings::wasi::{clocks::wall_clock, filesystem::types as filesystem},
+    command::{add_to_linker, Command},
+    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct CommandCtx {
-    table: Table,
+    table: ResourceTable,
     wasi: WasiCtx,
 }
 
 impl WasiView for CommandCtx {
-    fn table(&self) -> &Table {
-        &self.table
-    }
-    fn table_mut(&mut self) -> &mut Table {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
-    fn ctx(&self) -> &WasiCtx {
-        &self.wasi
-    }
-    fn ctx_mut(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }
 }
@@ -82,7 +74,7 @@ async fn api_time() -> Result<()> {
         }
     }
 
-    let table = Table::new();
+    let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new()
         .monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
         .wall_clock(FakeWallClock)
@@ -104,7 +96,7 @@ async fn api_read_only() -> Result<()> {
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
     std::fs::create_dir(dir.path().join("sub"))?;
 
-    let table = Table::new();
+    let table = ResourceTable::new();
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let wasi = WasiCtxBuilder::new()
         .preopened_dir(open_dir, DirPerms::READ, FilePerms::READ, "/")
@@ -133,21 +125,7 @@ fn api_proxy_streaming() {}
 wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
-    with: {
-       "wasi:io/streams": preview2::bindings::io::streams,
-       "wasi:filesystem/types": preview2::bindings::filesystem::types,
-       "wasi:filesystem/preopens": preview2::bindings::filesystem::preopens,
-       "wasi:cli/environment": preview2::bindings::cli::environment,
-       "wasi:cli/exit": preview2::bindings::cli::exit,
-       "wasi:cli/stdin": preview2::bindings::cli::stdin,
-       "wasi:cli/stdout": preview2::bindings::cli::stdout,
-       "wasi:cli/stderr": preview2::bindings::cli::stderr,
-       "wasi:cli/terminal_input": preview2::bindings::cli::terminal_input,
-       "wasi:cli/terminal_output": preview2::bindings::cli::terminal_output,
-       "wasi:cli/terminal_stdin": preview2::bindings::cli::terminal_stdin,
-       "wasi:cli/terminal_stdout": preview2::bindings::cli::terminal_stdout,
-       "wasi:cli/terminal_stderr": preview2::bindings::cli::terminal_stderr,
-    },
+    with: { "wasi": wasmtime_wasi::bindings },
     ownership: Borrowing {
         duplicate_if_necessary: false
     }
@@ -155,7 +133,7 @@ wasmtime::component::bindgen!({
 
 #[test_log::test(tokio::test)]
 async fn api_reactor() -> Result<()> {
-    let table = Table::new();
+    let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new().env("GOOD_DOG", "gussie").build();
 
     let mut config = Config::new();
@@ -183,9 +161,9 @@ async fn api_reactor() -> Result<()> {
     // `host` and `wasi-common` crate.
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
-    let writepipe = preview2::pipe::MemoryOutputPipe::new(4096);
-    let stream: preview2::OutputStream = Box::new(writepipe.clone());
-    let table_ix = store.data_mut().table_mut().push(stream)?;
+    let writepipe = wasmtime_wasi::pipe::MemoryOutputPipe::new(4096);
+    let stream: wasmtime_wasi::OutputStream = Box::new(writepipe.clone());
+    let table_ix = store.data_mut().table().push(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 

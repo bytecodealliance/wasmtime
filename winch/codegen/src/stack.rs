@@ -1,7 +1,7 @@
 use crate::{isa::reg::Reg, masm::StackSlot};
-use std::collections::VecDeque;
+use smallvec::SmallVec;
 use wasmparser::{Ieee32, Ieee64};
-use wasmtime_environ::WasmType;
+use wasmtime_environ::WasmValType;
 
 /// A typed register value used to track register values in the value
 /// stack.
@@ -10,27 +10,43 @@ pub struct TypedReg {
     /// The physical register.
     pub reg: Reg,
     /// The type associated to the physical register.
-    pub ty: WasmType,
+    pub ty: WasmValType,
 }
 
 impl TypedReg {
     /// Create a new [`TypedReg`].
-    pub fn new(ty: WasmType, reg: Reg) -> Self {
+    pub fn new(ty: WasmValType, reg: Reg) -> Self {
         Self { ty, reg }
     }
 
     /// Create an i64 [`TypedReg`].
     pub fn i64(reg: Reg) -> Self {
         Self {
-            ty: WasmType::I64,
+            ty: WasmValType::I64,
             reg,
         }
     }
 
-    /// Create an i64 [`TypedReg`].
+    /// Create an i32 [`TypedReg`].
     pub fn i32(reg: Reg) -> Self {
         Self {
-            ty: WasmType::I32,
+            ty: WasmValType::I32,
+            reg,
+        }
+    }
+
+    /// Create an f64 [`TypedReg`].
+    pub fn f64(reg: Reg) -> Self {
+        Self {
+            ty: WasmValType::F64,
+            reg,
+        }
+    }
+
+    /// Create an f32 [`TypedReg`].
+    pub fn f32(reg: Reg) -> Self {
+        Self {
+            ty: WasmValType::F32,
             reg,
         }
     }
@@ -48,14 +64,14 @@ pub struct Local {
     /// The index of the local.
     pub index: u32,
     /// The type of the local.
-    pub ty: WasmType,
+    pub ty: WasmValType,
 }
 
 /// A memory value.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Memory {
     /// The type associated with the memory offset.
-    pub ty: WasmType,
+    pub ty: WasmValType,
     /// The stack slot corresponding to the memory value.
     pub slot: StackSlot,
 }
@@ -125,17 +141,17 @@ impl Val {
     }
 
     /// Create a new Reg value.
-    pub fn reg(reg: Reg, ty: WasmType) -> Self {
+    pub fn reg(reg: Reg, ty: WasmValType) -> Self {
         Self::Reg(TypedReg { reg, ty })
     }
 
     /// Create a new Local value.
-    pub fn local(index: u32, ty: WasmType) -> Self {
+    pub fn local(index: u32, ty: WasmValType) -> Self {
         Self::Local(Local { index, ty })
     }
 
     /// Create a Memory value.
-    pub fn mem(ty: WasmType, slot: StackSlot) -> Self {
+    pub fn mem(ty: WasmValType, slot: StackSlot) -> Self {
         Self::Memory(Memory { ty, slot })
     }
 
@@ -155,11 +171,27 @@ impl Val {
         }
     }
 
+    /// Check whether the value is a constant.
+    pub fn is_const(&self) -> bool {
+        match *self {
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Check whether the value is local with a particular index.
+    pub fn is_local_at_index(&self, index: u32) -> bool {
+        match *self {
+            Self::Local(Local { index: i, .. }) if i == index => true,
+            _ => false,
+        }
+    }
+
     /// Get the register representation of the value.
     ///
     /// # Panics
     /// This method will panic if the value is not a register.
-    pub fn get_reg(&self) -> TypedReg {
+    pub fn unwrap_reg(&self) -> TypedReg {
         match self {
             Self::Reg(tr) => *tr,
             v => panic!("expected value {:?} to be a register", v),
@@ -170,7 +202,7 @@ impl Val {
     ///
     /// # Panics
     /// This method will panic if the value is not an i32.
-    pub fn get_i32(&self) -> i32 {
+    pub fn unwrap_i32(&self) -> i32 {
         match self {
             Self::I32(v) => *v,
             v => panic!("expected value {:?} to be i32", v),
@@ -181,10 +213,18 @@ impl Val {
     ///
     /// # Panics
     /// This method will panic if the value is not an i64.
-    pub fn get_i64(&self) -> i64 {
+    pub fn unwrap_i64(&self) -> i64 {
         match self {
             Self::I64(v) => *v,
             v => panic!("expected value {:?} to be i64", v),
+        }
+    }
+
+    /// Returns the underlying memory value if it is one, panics otherwise.
+    pub fn unwrap_mem(&self) -> Memory {
+        match self {
+            Self::Memory(m) => *m,
+            v => panic!("expected value {:?} to be a Memory", v),
         }
     }
 
@@ -205,12 +245,12 @@ impl Val {
     }
 
     /// Get the type of the value.
-    pub fn ty(&self) -> WasmType {
+    pub fn ty(&self) -> WasmValType {
         match self {
-            Val::I32(_) => WasmType::I32,
-            Val::I64(_) => WasmType::I64,
-            Val::F32(_) => WasmType::F32,
-            Val::F64(_) => WasmType::F64,
+            Val::I32(_) => WasmValType::I32,
+            Val::I64(_) => WasmValType::I64,
+            Val::F32(_) => WasmValType::F32,
+            Val::F64(_) => WasmValType::F64,
             Val::Reg(r) => r.ty,
             Val::Memory(m) => m.ty,
             Val::Local(l) => l.ty,
@@ -221,7 +261,8 @@ impl Val {
 /// The shadow stack used for compilation.
 #[derive(Default, Debug)]
 pub(crate) struct Stack {
-    inner: VecDeque<Val>,
+    // NB: The 64 is chosen arbitrarily. We can adjust as we see fit.
+    inner: SmallVec<[Val; 64]>,
 }
 
 impl Stack {
@@ -232,21 +273,36 @@ impl Stack {
         }
     }
 
+    /// Returns true if the stack contains a local with the provided index
+    /// except if the only time the local appears is the top element.
+    pub fn contains_latent_local(&self, index: u32) -> bool {
+        self.inner
+            .iter()
+            // Iterate top-to-bottom so we can skip the top element and stop
+            // when we see a memory element.
+            .rev()
+            // The local is not latent if it's the top element because the top
+            // element will be popped next which materializes the local.
+            .skip(1)
+            // Stop when we see a memory element because that marks where we
+            // spilled up to so there will not be any locals past this point.
+            .take_while(|v| !v.is_mem())
+            .any(|v| v.is_local_at_index(index))
+    }
+
     /// Extend the stack with the given elements.
     pub fn extend(&mut self, values: impl IntoIterator<Item = Val>) {
         self.inner.extend(values);
     }
 
     /// Inserts many values at the given index.
-    pub fn insert_many(&mut self, at: usize, values: impl IntoIterator<Item = Val>) {
+    pub fn insert_many(&mut self, at: usize, values: &[Val]) {
         debug_assert!(at <= self.len());
-        // If last, simply extend.
-        if at == self.inner.len() {
-            self.inner.extend(values);
+
+        if at == self.len() {
+            self.inner.extend_from_slice(values);
         } else {
-            let mut tail = self.inner.split_off(at);
-            self.inner.extend(values);
-            self.inner.append(&mut tail);
+            self.inner.insert_from_slice(at, values);
         }
     }
 
@@ -257,12 +313,12 @@ impl Stack {
 
     /// Push a value to the stack.
     pub fn push(&mut self, val: Val) {
-        self.inner.push_back(val);
+        self.inner.push(val);
     }
 
     /// Peek into the top in the stack.
     pub fn peek(&self) -> Option<&Val> {
-        self.inner.back()
+        self.inner.last()
     }
 
     /// Returns an iterator referencing the last n items of the stack,
@@ -272,19 +328,19 @@ impl Stack {
         assert!(n <= len);
 
         let partition = len - n;
-        self.inner.range(partition..)
+        self.inner[partition..].into_iter()
     }
 
     /// Pops the top element of the stack, if any.
     pub fn pop(&mut self) -> Option<Val> {
-        self.inner.pop_back()
+        self.inner.pop()
     }
 
     /// Pops the element at the top of the stack if it is an i32 const;
     /// returns `None` otherwise.
     pub fn pop_i32_const(&mut self) -> Option<i32> {
         match self.peek() {
-            Some(v) => v.is_i32_const().then(|| self.pop().unwrap().get_i32()),
+            Some(v) => v.is_i32_const().then(|| self.pop().unwrap().unwrap_i32()),
             _ => None,
         }
     }
@@ -293,7 +349,7 @@ impl Stack {
     /// returns `None` otherwise.
     pub fn pop_i64_const(&mut self) -> Option<i64> {
         match self.peek() {
-            Some(v) => v.is_i64_const().then(|| self.pop().unwrap().get_i64()),
+            Some(v) => v.is_i64_const().then(|| self.pop().unwrap().unwrap_i64()),
             _ => None,
         }
     }
@@ -302,7 +358,7 @@ impl Stack {
     /// returns `None` otherwise.
     pub fn pop_reg(&mut self) -> Option<TypedReg> {
         match self.peek() {
-            Some(v) => v.is_reg().then(|| self.pop().unwrap().get_reg()),
+            Some(v) => v.is_reg().then(|| self.pop().unwrap().unwrap_reg()),
             _ => None,
         }
     }
@@ -312,15 +368,32 @@ impl Stack {
     pub fn pop_named_reg(&mut self, reg: Reg) -> Option<TypedReg> {
         match self.peek() {
             Some(v) => {
-                (v.is_reg() && v.get_reg().reg == reg).then(|| self.pop().unwrap().get_reg())
+                (v.is_reg() && v.unwrap_reg().reg == reg).then(|| self.pop().unwrap().unwrap_reg())
             }
             _ => None,
         }
     }
 
     /// Get a mutable reference to the inner stack representation.
-    pub fn inner_mut(&mut self) -> &mut VecDeque<Val> {
+    pub fn inner_mut(&mut self) -> &mut SmallVec<[Val; 64]> {
         &mut self.inner
+    }
+
+    /// Get a reference to the inner stack representation.
+    pub fn inner(&self) -> &SmallVec<[Val; 64]> {
+        &self.inner
+    }
+
+    /// Calculates the size of, in bytes, of the top n [Memory] entries
+    /// in the value stack.
+    pub fn sizeof(&self, top: usize) -> u32 {
+        self.peekn(top).fold(0, |acc, v| {
+            if v.is_mem() {
+                acc + v.unwrap_mem().slot.size
+            } else {
+                acc
+            }
+        })
     }
 }
 
@@ -328,7 +401,7 @@ impl Stack {
 mod tests {
     use super::{Stack, Val};
     use crate::isa::reg::Reg;
-    use wasmtime_environ::WasmType;
+    use wasmtime_environ::WasmValType;
 
     #[test]
     fn test_pop_i32_const() {
@@ -336,7 +409,7 @@ mod tests {
         stack.push(Val::i32(33i32));
         assert_eq!(33, stack.pop_i32_const().unwrap());
 
-        stack.push(Val::local(10, WasmType::I32));
+        stack.push(Val::local(10, WasmValType::I32));
         assert!(stack.pop_i32_const().is_none());
     }
 
@@ -344,7 +417,7 @@ mod tests {
     fn test_pop_reg() {
         let mut stack = Stack::new();
         let reg = Reg::int(2usize);
-        stack.push(Val::reg(reg, WasmType::I32));
+        stack.push(Val::reg(reg, WasmValType::I32));
         stack.push(Val::i32(4));
 
         assert_eq!(None, stack.pop_reg());
@@ -356,8 +429,8 @@ mod tests {
     fn test_pop_named_reg() {
         let mut stack = Stack::new();
         let reg = Reg::int(2usize);
-        stack.push(Val::reg(reg, WasmType::I32));
-        stack.push(Val::reg(Reg::int(4), WasmType::I32));
+        stack.push(Val::reg(reg, WasmValType::I32));
+        stack.push(Val::reg(Reg::int(4), WasmValType::I32));
 
         assert_eq!(None, stack.pop_named_reg(reg));
         let _ = stack.pop().unwrap();

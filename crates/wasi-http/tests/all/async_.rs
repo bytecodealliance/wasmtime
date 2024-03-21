@@ -1,6 +1,6 @@
 use super::*;
 use test_programs_artifacts::*;
-use wasmtime_wasi::preview2::command::Command;
+use wasmtime_wasi::command::Command;
 
 foreach_http!(assert_test_exists);
 
@@ -13,7 +13,8 @@ async fn run(path: &str, server: &Server) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
     let mut store = store(&engine, server);
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
+    wasmtime_wasi::command::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::proxy::add_only_http_to_linker(&mut linker)?;
     let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
     let result = command.wasi_cli_run().call_run(&mut store).await?;
     result.map_err(|()| anyhow::anyhow!("run returned an error"))
@@ -23,6 +24,12 @@ async fn run(path: &str, server: &Server) -> Result<()> {
 async fn http_outbound_request_get() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_GET_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn http_outbound_request_timeout() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -83,4 +90,10 @@ async fn http_outbound_request_invalid_dnsname() -> Result<()> {
 async fn http_outbound_request_response_build() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn http_outbound_request_content_length() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
 }

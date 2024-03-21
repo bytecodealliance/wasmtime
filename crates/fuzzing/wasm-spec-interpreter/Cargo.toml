@@ -7,6 +7,9 @@ publish = false
 edition.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 
+[lints]
+workspace = true
+
 # Until https://gitlab.com/ocaml-rust/ocaml-boxroot/-/issues/1 is resolved and
 # this crate can use the `without-ocamlopt` feature to avoid build failures, it
 # is better to only build the OCaml dependencies when fuzzing (see the

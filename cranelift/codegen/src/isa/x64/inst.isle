@@ -90,20 +90,34 @@
              (dividend Gpr)
              (dst WritableGpr))
 
-       ;; The high (and low) bits of a (un)signed multiply: `RDX:RAX := RAX *
-       ;; rhs`.
-       (MulHi (size OperandSize)
-              (signed bool)
-              (src1 Gpr)
-              (src2 GprMem)
-              (dst_lo WritableGpr)
-              (dst_hi WritableGpr))
+       ;; Unsigned multiplication producing the high bits of the result in one
+       ;; register and the low bits in another register.
+       (Mul (size OperandSize)
+            (signed bool)
+            (src1 Gpr)
+            (src2 GprMem)
+            (dst_lo WritableGpr)
+            (dst_hi WritableGpr))
 
-       ;; x64 'mul' instruction but it only outputs the low half
-       (UMulLo    (size OperandSize)
-                  (src1 Gpr)
-                  (src2 GprMem)
-                  (dst WritableGpr))
+       ;; Same as `Mul` but the 16-bit multiplication result is stored in `AX`.
+       (Mul8 (signed bool)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst WritableGpr))
+
+       ;; The two-operand form of `imul` which produces a truncated same-size
+       ;; result as the operands.
+       (IMul (size OperandSize)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst WritableGpr))
+
+       ;; The three-operand form of `imul` where the third operand must be
+       ;; a constant.
+       (IMulImm (size OperandSize)
+                (src1 GprMem)
+                (src2 i32)
+                (dst WritableGpr))
 
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
@@ -229,7 +243,7 @@
        ;; XMM conditional move; overwrites the destination register.
        (XmmCmove (ty Type)
                  (cc CC)
-                 (consequent XmmMemAligned)
+                 (consequent Xmm)
                  (alternative Xmm)
                  (dst WritableXmm))
 
@@ -511,10 +525,12 @@
 
        ;; Direct call: call simm32.
        (CallKnown (dest ExternalName)
+                  (opcode Opcode)
                   (info BoxCallInfo))
 
        ;; Indirect call: callq (reg mem)
        (CallUnknown (dest RegMem)
+                    (opcode Opcode)
                     (info BoxCallInfo))
 
        ;; Tail call to a direct destination.
@@ -750,8 +766,7 @@
             Sbb
             And
             Or
-            Xor
-            Mul))
+            Xor))
 
 (type AluRmROpcode
       (enum Andn
@@ -951,6 +966,7 @@
             Ucomiss
             Ucomisd
             Unpcklps
+            Unpcklpd
             Unpckhps
             Xorps
             Xorpd
@@ -1264,6 +1280,7 @@
             Vpunpckhwd
             Vpunpcklwd
             Vunpcklps
+            Vunpcklpd
             Vunpckhps
             Vandnps
             Vandnpd
@@ -1553,7 +1570,7 @@
 (extern constructor xmm_to_xmm_mem xmm_to_xmm_mem)
 
 ;; Construct a new `XmmMem` from an `RegMem`.
-(decl xmm_mem_to_reg_mem (XmmMem) RegMem)
+(decl pure xmm_mem_to_reg_mem (XmmMem) RegMem)
 (extern constructor xmm_mem_to_reg_mem xmm_mem_to_reg_mem)
 
 ;; Convert a `GprMem` to a `RegMem`.
@@ -2045,22 +2062,6 @@
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
         dst))
-
-;; Helper for creating `MInst.MulHi` instructions.
-;;
-;; Returns the (lo, hi) register halves of the multiplication.
-(decl mul_hi (Type bool Gpr GprMem) ValueRegs)
-(rule (mul_hi ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.MulHi size
-                                       signed
-                                       src1
-                                       src2
-                                       dst_lo
-                                       dst_hi))))
-        (value_gprs dst_lo dst_hi)))
 
 ;; Helper for creating `MInst.UnaryRmR` instructions.
 (decl unary_rm_r (UnaryRmROpcode Gpr OperandSize) Gpr)
@@ -2559,31 +2560,55 @@
                         dst)
          dst)))
 
-;; Helper for creating `mul` instructions.
-(decl x64_mul (Type Gpr GprMemImm) Gpr)
-(rule (x64_mul ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Mul)
-                 src1
-                 src2))
-
-;; Helper for creating `umullo` instructions.
-(decl x64_umullo (Type Gpr GprMem) Gpr)
-(rule (x64_umullo ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`)
+(decl x64_mul (Type bool Gpr GprMem) ValueRegs)
+(rule (x64_mul ty signed src1 src2)
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
             (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.UMulLo size src1 src2 dst))))
+            (_ Unit (emit (MInst.Mul size signed src1 src2 dst_lo dst_hi))))
+        (value_gprs dst_lo dst_hi)))
+
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`) for 8-bit operands.
+(decl x64_mul8 (bool Gpr GprMem) Gpr)
+(rule (x64_mul8 signed src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Mul8 signed src1 src2 dst))))
         dst))
 
-(decl x64_umullo_with_flags_paired (Type Gpr GprMem) ProducesFlags)
-(rule (x64_umullo_with_flags_paired ty src1 src2)
+;; Helper for creating `imul` instructions.
+(decl x64_imul (Type Gpr GprMem) Gpr)
+(rule (x64_imul ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.IMul size src1 src2 dst))))
+        dst))
+
+;; Helper for creating `imul` instructions with an immediate operand.
+(decl x64_imul_imm (Type GprMem i32) Gpr)
+(rule (x64_imul_imm ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.IMulImm size src1 src2 dst))))
+        dst))
+
+(decl x64_mul8_with_flags_paired (bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul8_with_flags_paired signed src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
            (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-                 (MInst.UMulLo (raw_operand_size_of_type ty)
-                               src1
-                               src2
-                               dst)
-                  dst)))
+                 (MInst.Mul8 signed src1 src2 dst)
+                 dst)))
+
+(decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty)))
+           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+                 (MInst.Mul size signed src1 src2 dst_lo dst_hi)
+                 dst_lo)))
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
@@ -2819,7 +2844,7 @@
          (MInst.Cmove size cc consequent alternative dst)
          dst)))
 
-(decl cmove_xmm (Type CC XmmMemAligned Xmm) ConsumesFlags)
+(decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -2872,7 +2897,7 @@
          cmove2
          dst)))
 
-(decl cmove_or_xmm (Type CC CC XmmMemAligned Xmm) ConsumesFlags)
+(decl cmove_or_xmm (Type CC CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm))
             (tmp WritableXmm (temp_writable_xmm))
@@ -3272,6 +3297,14 @@
 (rule 1 (x64_unpcklps src1 src2)
       (if-let $true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vunpcklps) src1 src2))
+
+;; Helper for creating `unpcklpd` instructions.
+(decl x64_unpcklpd (Xmm XmmMem) Xmm)
+(rule 0 (x64_unpcklpd src1 src2)
+      (xmm_rm_r (SseOpcode.Unpcklpd) src1 src2))
+(rule 1 (x64_unpcklpd src1 src2)
+      (if-let $true (use_avx))
+      (xmm_rmir_vex (AvxOpcode.Vunpcklpd) src1 src2))
 
 ;; Helper for creating `unpckhps` instructions.
 (decl x64_unpckhps (Xmm XmmMem) Xmm)
@@ -3728,20 +3761,51 @@
       (xmm_vex_pinsr (AvxOpcode.Vpinsrq) src1 src2 lane))
 
 ;; Helper for creating `roundss` instructions.
+;;
+;; NB: the non-AVX variant of this instruction does not require that the operand
+;; is aligned, but the instruction variant used here requires it to be aligned.
+;; This means that if the operand here points to memory then we'll eagerly load
+;; it, but the eager load will load too much (the full register width of 16
+;; bytes). To fix this a `put_xmm_mem_in_xmm` helper is used to force the
+;; operand to be a register where the load is done with the appropriate type if
+;; it's in memory.
+;;
+;; Some more discussion of this can be found on #8112. Ideally this would use
+;; a variant that allows an unaligned `XmmMem` in the instruction variant.
+;; Either that or the auto-conversion to aligned memory is removed and/or starts
+;; to require a type.
+;;
+;; Also note that the argument here isn't changed to `Xmm` instead of `XmmMem`
+;; because the AVX variant, when available, doesn't need alignment and can
+;; pass through the `src1` argument as-is.
 (decl x64_roundss (XmmMem RoundImm) Xmm)
 (rule (x64_roundss src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundss) src1 (encode_round_imm round)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundss) (put_xmm_mem_in_xmm $F32 src1) (encode_round_imm round)))
 (rule 1 (x64_roundss src1 round)
         (if-let $true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundss) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
+;;
+;; NB: see `x64_roundss` above for `put_xmm_mem_in_xmm` in call.
 (decl x64_roundsd (XmmMem RoundImm) Xmm)
 (rule (x64_roundsd src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) src1 (encode_round_imm round)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) (put_xmm_mem_in_xmm $F64 src1) (encode_round_imm round)))
 (rule 1 (x64_roundsd src1 round)
         (if-let $true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundsd) src1 (encode_round_imm round)))
+
+;; Helper for forcing an `XmmMem` to be placed into an `Xmm` register.
+;;
+;; If it's already in a register it stays there, otherwise it turns into a
+;; load instruction with the destination register as output.
+(decl put_xmm_mem_in_xmm (Type XmmMem) Xmm)
+(rule (put_xmm_mem_in_xmm ty xmm_mem)
+      (if-let (RegMem.Reg r) (xmm_mem_to_reg_mem xmm_mem))
+      (xmm_new r))
+(rule (put_xmm_mem_in_xmm ty xmm_mem)
+      (if-let (RegMem.Mem amode) (xmm_mem_to_reg_mem xmm_mem))
+      (x64_load ty amode (ExtKind.None)))
 
 ;; Helper for creating `roundps` instructions.
 (decl x64_roundps (XmmMem RoundImm) Xmm)
@@ -3890,12 +3954,6 @@
                                              src3
                                              dst))))
         dst))
-
-;; Helper for creating `mul` instructions that return both the lower and
-;; (unsigned) higher halves of the result.
-(decl mulhi_u (Type Gpr GprMem) ValueRegs)
-(rule (mulhi_u ty src1 src2)
-      (mul_hi ty $false src1 src2))
 
 ;; Helper for creating `psllw` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)
@@ -4281,18 +4339,27 @@
 (rule (x64_vfnmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132pd) a b c))
 
 ;; Helper for creating `sqrtss` instructions.
-(decl x64_sqrtss (XmmMem) Xmm)
-(rule (x64_sqrtss x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtss) x))
-(rule 1 (x64_sqrtss x)
+;;
+;; NB: the square-root operation technically only has one operand but this
+;; instruction has two. This is to reflect how the square root operation copies
+;; the upper bits of the first register and only performs the square root
+;; operation on the low bits of the second register. This introduces
+;; a data-dependency on the contents of the first register which is modeled
+;; here.
+(decl x64_sqrtss (Xmm XmmMem) Xmm)
+(rule (x64_sqrtss x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtss) x y))
+(rule 1 (x64_sqrtss x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtss) x))
+        (xmm_rmir_vex (AvxOpcode.Vsqrtss) x y))
 
 ;; Helper for creating `sqrtsd` instructions.
-(decl x64_sqrtsd (XmmMem) Xmm)
-(rule (x64_sqrtsd x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtsd) x))
-(rule 1 (x64_sqrtsd x)
+;;
+;; NB: see `x64_sqrtss` for explanation of why this has two args.
+(decl x64_sqrtsd (Xmm XmmMem) Xmm)
+(rule (x64_sqrtsd x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtsd) x y))
+(rule 1 (x64_sqrtsd x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtsd) x))
+        (xmm_rmir_vex (AvxOpcode.Vsqrtsd) x y))
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
@@ -4309,18 +4376,22 @@
         (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtpd) x))
 
 ;; Helper for creating `cvtss2sd` instructions.
-(decl x64_cvtss2sd (XmmMem) Xmm)
-(rule (x64_cvtss2sd x) (xmm_unary_rm_r_unaligned (SseOpcode.Cvtss2sd) x))
-(rule 1 (x64_cvtss2sd x)
+;;
+;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
+(decl x64_cvtss2sd (Xmm XmmMem) Xmm)
+(rule (x64_cvtss2sd x y) (xmm_rm_r_unaligned (SseOpcode.Cvtss2sd) x y))
+(rule 1 (x64_cvtss2sd x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vcvtss2sd) x))
+        (xmm_rmir_vex (AvxOpcode.Vcvtss2sd) x y))
 
 ;; Helper for creating `cvtsd2ss` instructions.
-(decl x64_cvtsd2ss (XmmMem) Xmm)
-(rule (x64_cvtsd2ss x) (xmm_unary_rm_r_unaligned (SseOpcode.Cvtsd2ss) x))
-(rule 1 (x64_cvtsd2ss x)
+;;
+;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
+(decl x64_cvtsd2ss (Xmm XmmMem) Xmm)
+(rule (x64_cvtsd2ss x y) (xmm_rm_r_unaligned (SseOpcode.Cvtsd2ss) x y))
+(rule 1 (x64_cvtsd2ss x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vcvtsd2ss) x))
+        (xmm_rmir_vex (AvxOpcode.Vcvtsd2ss) x y))
 
 ;; Helper for creating `cvtdq2ps` instructions.
 (decl x64_cvtdq2ps (XmmMem) Xmm)

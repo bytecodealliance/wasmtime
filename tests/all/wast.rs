@@ -7,7 +7,8 @@ use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store, Strategy,
 };
 use wasmtime_environ::WASM_PAGE_SIZE;
-use wasmtime_wast::WastContext;
+use wasmtime_runtime::MpkEnabled;
+use wasmtime_wast::{SpectestConfig, WastContext};
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 
@@ -132,7 +133,14 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
             .max_memory_protection_keys(2)
             .memory_pages(805)
             .max_memories_per_module(if multi_memory { 9 } else { 1 })
-            .max_tables_per_module(4);
+            .max_tables_per_module(5);
+
+        // When testing, we may choose to start with MPK force-enabled to ensure
+        // we use that functionality.
+        if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+            pool.memory_protection_keys(MpkEnabled::Enable);
+        }
+
         cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
         Some(lock_pooling())
     } else {
@@ -154,7 +162,10 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     for (engine, desc) in engines {
         let store = Store::new(&engine, ());
         let mut wast_context = WastContext::new(store);
-        wast_context.register_spectest(use_shared_memory)?;
+        wast_context.register_spectest(&SpectestConfig {
+            use_shared_memory,
+            suppress_prints: false,
+        })?;
         wast_context
             .run_buffer(wast.to_str().unwrap(), &wast_bytes)
             .with_context(|| format!("failed to run spec test with {desc} engine"))?;

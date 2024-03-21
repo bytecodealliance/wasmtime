@@ -16,26 +16,34 @@
         f32.copysign
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 48c744240800000000   	
-;; 				mov	qword ptr [rsp + 8], 0
-;;   11:	 4c893424             	mov	qword ptr [rsp], r14
-;;   15:	 f30f100543000000     	movss	xmm0, dword ptr [rip + 0x43]
-;;   1d:	 f30f1144240c         	movss	dword ptr [rsp + 0xc], xmm0
-;;   23:	 f30f10053d000000     	movss	xmm0, dword ptr [rip + 0x3d]
-;;   2b:	 f30f11442408         	movss	dword ptr [rsp + 8], xmm0
-;;   31:	 f30f10442408         	movss	xmm0, dword ptr [rsp + 8]
-;;   37:	 f30f104c240c         	movss	xmm1, dword ptr [rsp + 0xc]
-;;   3d:	 41bb00000080         	mov	r11d, 0x80000000
-;;   43:	 66450f6efb           	movd	xmm15, r11d
-;;   48:	 410f54c7             	andps	xmm0, xmm15
-;;   4c:	 440f55f9             	andnps	xmm15, xmm1
-;;   50:	 410f28cf             	movaps	xmm1, xmm15
-;;   54:	 0f56c8               	orps	xmm1, xmm0
-;;   57:	 0f28c1               	movaps	xmm0, xmm1
-;;   5a:	 4883c410             	add	rsp, 0x10
-;;   5e:	 5d                   	pop	rbp
-;;   5f:	 c3                   	ret	
-;;   60:	 cdcc                 	int	0xcc
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8762000000         	ja	0x7d
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
+;;      	 f30f100544000000     	movss	xmm0, dword ptr [rip + 0x44]
+;;      	 f30f11442404         	movss	dword ptr [rsp + 4], xmm0
+;;      	 f30f10053e000000     	movss	xmm0, dword ptr [rip + 0x3e]
+;;      	 f30f110424           	movss	dword ptr [rsp], xmm0
+;;      	 f30f100424           	movss	xmm0, dword ptr [rsp]
+;;      	 f30f104c2404         	movss	xmm1, dword ptr [rsp + 4]
+;;      	 41bb00000080         	mov	r11d, 0x80000000
+;;      	 66450f6efb           	movd	xmm15, r11d
+;;      	 410f54c7             	andps	xmm0, xmm15
+;;      	 440f55f9             	andnps	xmm15, xmm1
+;;      	 410f28cf             	movaps	xmm1, xmm15
+;;      	 0f56c8               	orps	xmm1, xmm0
+;;      	 0f28c1               	movaps	xmm0, xmm1
+;;      	 4883c418             	add	rsp, 0x18
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   7d:	 0f0b                 	ud2	
+;;   7f:	 00cd                 	add	ch, cl
+;;   81:	 cc                   	int3	

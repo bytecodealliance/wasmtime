@@ -16,7 +16,6 @@ use crate::shared::formats::Formats;
 use crate::shared::immediates::Immediates;
 
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::rc::Rc;
 
 pub(crate) struct Definitions {

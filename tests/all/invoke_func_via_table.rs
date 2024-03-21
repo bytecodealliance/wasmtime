@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
 use wasmtime::*;
 
 #[test]
@@ -11,7 +11,7 @@ fn test_invoke_func_via_table() -> Result<()> {
       (module
         (func $f (result i64) (i64.const 42))
 
-        (table (export "table") 1 1 anyfunc)
+        (table (export "table") 1 1 funcref)
         (elem (i32.const 0) $f)
       )
     "#;
@@ -24,8 +24,7 @@ fn test_invoke_func_via_table() -> Result<()> {
         .unwrap()
         .get(&mut store, 0)
         .unwrap()
-        .funcref()
-        .unwrap()
+        .unwrap_func()
         .unwrap()
         .clone();
     let mut results = [Val::I32(0)];

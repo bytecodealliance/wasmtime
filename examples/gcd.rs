@@ -3,7 +3,6 @@
 
 // You can execute this example with `cargo run --example gcd`
 
-use anyhow::Result;
 use wasmtime::*;
 
 fn main() -> Result<()> {

@@ -112,6 +112,7 @@ impl RealReg {
         self.0.class()
     }
 
+    /// The physical register number.
     pub fn hw_enc(self) -> u8 {
         PReg::from(self).hw_enc() as u8
     }

@@ -1,6 +1,6 @@
 //! Define the interface for differential evaluation of Wasm functions.
 
-use crate::generators::{Config, DiffValue, DiffValueType};
+use crate::generators::{CompilerStrategy, Config, DiffValue, DiffValueType};
 use crate::oracles::{diff_wasmi::WasmiEngine, diff_wasmtime::WasmtimeEngine};
 use anyhow::Error;
 use arbitrary::Unstructured;
@@ -16,8 +16,13 @@ pub fn build(
     config: &mut Config,
 ) -> arbitrary::Result<Option<Box<dyn DiffEngine>>> {
     let engine: Box<dyn DiffEngine> = match name {
-        "wasmtime" => Box::new(WasmtimeEngine::new(u, config)?),
+        "wasmtime" => Box::new(WasmtimeEngine::new(u, config, CompilerStrategy::Cranelift)?),
         "wasmi" => Box::new(WasmiEngine::new(config)),
+
+        #[cfg(target_arch = "x86_64")]
+        "winch" => Box::new(WasmtimeEngine::new(u, config, CompilerStrategy::Winch)?),
+        #[cfg(not(target_arch = "x86_64"))]
+        "winch" => return Ok(None),
 
         #[cfg(feature = "fuzz-spec-interpreter")]
         "spec" => Box::new(crate::oracles::diff_spec::SpecInterpreter::new(config)),

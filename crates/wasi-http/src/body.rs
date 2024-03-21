@@ -9,12 +9,12 @@ use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
-use wasmtime_wasi::preview2::{
-    self, poll_noop, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError,
-    Subscribe,
+use wasmtime_wasi::{
+    runtime::{poll_noop, AbortOnDropJoinHandle},
+    HostInputStream, HostOutputStream, StreamError, Subscribe,
 };
 
-pub type HyperIncomingBody = BoxBody<Bytes, types::Error>;
+pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
 
 /// Small wrapper around `BoxBody` which adds a timeout to every frame.
 struct BodyWithTimeout {
@@ -36,7 +36,7 @@ impl BodyWithTimeout {
             inner,
             between_bytes_timeout,
             reset_sleep: true,
-            timeout: Box::pin(preview2::with_ambient_tokio_runtime(|| {
+            timeout: Box::pin(wasmtime_wasi::runtime::with_ambient_tokio_runtime(|| {
                 tokio::time::sleep(Duration::new(0, 0))
             })),
         }
@@ -45,12 +45,12 @@ impl BodyWithTimeout {
 
 impl Body for BodyWithTimeout {
     type Data = Bytes;
-    type Error = types::Error;
+    type Error = types::ErrorCode;
 
     fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Bytes>, types::Error>>> {
+    ) -> Poll<Option<Result<Frame<Bytes>, types::ErrorCode>>> {
         let me = Pin::into_inner(self);
 
         // If the timeout timer needs to be reset, do that now relative to the
@@ -66,9 +66,7 @@ impl Body for BodyWithTimeout {
         // Register interest in this context on the sleep timer, and if the
         // sleep elapsed that means that we've timed out.
         if let Poll::Ready(()) = me.timeout.as_mut().poll(cx) {
-            return Poll::Ready(Some(Err(types::Error::TimeoutError(
-                "frame timed out".to_string(),
-            ))));
+            return Poll::Ready(Some(Err(types::ErrorCode::ConnectionReadTimeout)));
         }
 
         // Without timeout business now handled check for the frame. If a frame
@@ -222,7 +220,7 @@ impl Subscribe for HostIncomingBodyStream {
 }
 
 impl HostIncomingBodyStream {
-    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, types::Error>>) {
+    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, types::ErrorCode>>) {
         match frame {
             Some(Ok(frame)) => match frame.into_data() {
                 // A data frame was received, so queue up the buffered data for
@@ -300,7 +298,10 @@ pub enum HostFutureTrailers {
     ///
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
-    Done(Result<Option<FieldMap>, types::Error>),
+    Done(Result<Option<FieldMap>, types::ErrorCode>),
+
+    /// Trailers have been consumed by `future-trailers.get`.
+    Consumed,
 }
 
 #[async_trait::async_trait]
@@ -309,6 +310,7 @@ impl Subscribe for HostFutureTrailers {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
             HostFutureTrailers::Done(_) => return,
+            HostFutureTrailers::Consumed => return,
         };
 
         // If the body is itself being read by a body stream then we need to
@@ -328,9 +330,7 @@ impl Subscribe for HostFutureTrailers {
                 // this just in case though.
                 Err(_) => {
                     debug_assert!(false, "should be unreachable");
-                    *self = HostFutureTrailers::Done(Err(types::Error::ProtocolError(
-                        "stream hung up before trailers were received".to_string(),
-                    )));
+                    *self = HostFutureTrailers::Done(Err(types::ErrorCode::ConnectionTerminated));
                 }
             }
         }
@@ -340,6 +340,7 @@ impl Subscribe for HostFutureTrailers {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
             HostFutureTrailers::Done(_) => return,
+            HostFutureTrailers::Consumed => return,
         };
         let hyper_body = match &mut body.body {
             IncomingBodyState::Start(body) => body,
@@ -362,7 +363,7 @@ impl Subscribe for HostFutureTrailers {
     }
 }
 
-pub type HyperOutgoingBody = BoxBody<Bytes, types::Error>;
+pub type HyperOutgoingBody = BoxBody<Bytes, types::ErrorCode>;
 
 pub enum FinishMessage {
     Finished,
@@ -370,13 +371,47 @@ pub enum FinishMessage {
     Abort,
 }
 
+#[derive(Clone)]
+struct WrittenState {
+    expected: u64,
+    written: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl WrittenState {
+    fn new(expected_size: u64) -> Self {
+        Self {
+            expected: expected_size,
+            written: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        }
+    }
+
+    /// The number of bytes that have been written so far.
+    fn written(&self) -> u64 {
+        self.written.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Add `len` to the total number of bytes written. Returns `false` if the new total exceeds
+    /// the number of bytes expected to be written.
+    fn update(&self, len: usize) -> bool {
+        let len = len as u64;
+        let old = self
+            .written
+            .fetch_add(len, std::sync::atomic::Ordering::Relaxed);
+        old + len <= self.expected
+    }
+}
+
 pub struct HostOutgoingBody {
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
-    pub finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
+    context: StreamContext,
+    written: Option<WrittenState>,
+    finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
 }
 
 impl HostOutgoingBody {
-    pub fn new() -> (Self, HyperOutgoingBody) {
+    pub fn new(context: StreamContext, size: Option<u64>) -> (Self, HyperOutgoingBody) {
+        let written = size.map(WrittenState::new);
+
         use tokio::sync::oneshot::error::RecvError;
         struct BodyImpl {
             body_receiver: mpsc::Receiver<Bytes>,
@@ -384,7 +419,7 @@ impl HostOutgoingBody {
         }
         impl Body for BodyImpl {
             type Data = Bytes;
-            type Error = types::Error;
+            type Error = types::ErrorCode;
             fn poll_frame(
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
@@ -406,9 +441,9 @@ impl HostOutgoingBody {
                                     FinishMessage::Trailers(trailers) => {
                                         Poll::Ready(Some(Ok(Frame::trailers(trailers))))
                                     }
-                                    FinishMessage::Abort => Poll::Ready(Some(Err(
-                                        types::Error::ProtocolError("response corrupted".into()),
-                                    ))),
+                                    FinishMessage::Abort => {
+                                        Poll::Ready(Some(Err(types::ErrorCode::HttpProtocolError)))
+                                    }
                                 },
                                 Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
                             }
@@ -427,31 +462,105 @@ impl HostOutgoingBody {
             finish_receiver: Some(finish_receiver),
         }
         .boxed();
+
+        // TODO: this capacity constant is arbitrary, and should be configurable
+        let output_stream =
+            BodyWriteStream::new(context, 1024 * 1024, body_sender, written.clone());
+
         (
             Self {
-                // TODO: this capacity constant is arbitrary, and should be configurable
-                body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
+                body_output_stream: Some(Box::new(output_stream)),
+                context,
+                written,
                 finish_sender: Some(finish_sender),
             },
             body_impl,
         )
     }
+
+    pub fn finish(mut self, ts: Option<FieldMap>) -> Result<(), types::ErrorCode> {
+        // Make sure that the output stream has been dropped, so that the BodyImpl poll function
+        // will immediately pick up the finish sender.
+        drop(self.body_output_stream);
+
+        let sender = self
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        if let Some(w) = self.written {
+            let written = w.written();
+            if written != w.expected {
+                let _ = sender.send(FinishMessage::Abort);
+                return Err(self.context.as_body_error(written));
+            }
+        }
+
+        let message = if let Some(ts) = ts {
+            FinishMessage::Trailers(ts)
+        } else {
+            FinishMessage::Finished
+        };
+
+        // Ignoring failure: receiver died sending body, but we can't report that here.
+        let _ = sender.send(message.into());
+
+        Ok(())
+    }
+
+    pub fn abort(mut self) {
+        // Make sure that the output stream has been dropped, so that the BodyImpl poll function
+        // will immediately pick up the finish sender.
+        drop(self.body_output_stream);
+
+        let sender = self
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        let _ = sender.send(FinishMessage::Abort);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StreamContext {
+    Request,
+    Response,
+}
+
+impl StreamContext {
+    /// Construct an http request or response body size error.
+    pub fn as_body_error(&self, size: u64) -> types::ErrorCode {
+        match self {
+            StreamContext::Request => types::ErrorCode::HttpRequestBodySize(Some(size)),
+            StreamContext::Response => types::ErrorCode::HttpResponseBodySize(Some(size)),
+        }
+    }
 }
 
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
-pub struct BodyWriteStream {
+struct BodyWriteStream {
+    context: StreamContext,
     writer: mpsc::Sender<Bytes>,
     write_budget: usize,
+    written: Option<WrittenState>,
 }
 
 impl BodyWriteStream {
     /// Create a [`BodyWriteStream`].
-    pub fn new(write_budget: usize, writer: mpsc::Sender<Bytes>) -> Self {
+    fn new(
+        context: StreamContext,
+        write_budget: usize,
+        writer: mpsc::Sender<Bytes>,
+        written: Option<WrittenState>,
+    ) -> Self {
         // at least one capacity is required to send a message
         assert!(writer.max_capacity() >= 1);
         BodyWriteStream {
+            context,
             writer,
             write_budget,
+            written,
         }
     }
 }
@@ -459,10 +568,22 @@ impl BodyWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        let len = bytes.len();
         match self.writer.try_send(bytes) {
             // If the message was sent then it's queued up now in hyper to get
             // received.
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                if let Some(written) = self.written.as_ref() {
+                    if !written.update(len) {
+                        let total = written.written();
+                        return Err(StreamError::LastOperationFailed(anyhow!(self
+                            .context
+                            .as_body_error(total))));
+                    }
+                }
+
+                Ok(())
+            }
 
             // If this channel is full then that means `check_write` wasn't
             // called. The call to `check_write` always guarantees that there's

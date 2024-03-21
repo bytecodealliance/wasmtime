@@ -130,14 +130,14 @@ impl FiberStack {
                 assert!(
                     start_ptr.align_offset(page_size) == 0,
                     "expected fiber stack end ({}) to be page aligned ({})",
-                    range.start as usize,
+                    range.start,
                     page_size
                 );
                 let end_ptr = range.end as *const u8;
                 assert!(
                     end_ptr.align_offset(page_size) == 0,
                     "expected fiber stack start ({}) to be page aligned ({})",
-                    range.end as usize,
+                    range.end,
                     page_size
                 );
                 range

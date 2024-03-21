@@ -7,17 +7,25 @@
 	(i32.div_s)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 b900000000           	mov	ecx, 0
-;;   11:	 b801000000           	mov	eax, 1
-;;   16:	 83f900               	cmp	ecx, 0
-;;   19:	 0f8409000000         	je	0x28
-;;   1f:	 99                   	cdq	
-;;   20:	 f7f9                 	idiv	ecx
-;;   22:	 4883c408             	add	rsp, 8
-;;   26:	 5d                   	pop	rbp
-;;   27:	 c3                   	ret	
-;;   28:	 0f0b                 	ud2	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c310000000       	add	r11, 0x10
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f872c000000         	ja	0x47
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec10             	sub	rsp, 0x10
+;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
+;;      	 48893424             	mov	qword ptr [rsp], rsi
+;;      	 b900000000           	mov	ecx, 0
+;;      	 b801000000           	mov	eax, 1
+;;      	 83f900               	cmp	ecx, 0
+;;      	 0f840b000000         	je	0x49
+;;   3e:	 99                   	cdq	
+;;      	 f7f9                 	idiv	ecx
+;;      	 4883c410             	add	rsp, 0x10
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   47:	 0f0b                 	ud2	
+;;   49:	 0f0b                 	ud2	

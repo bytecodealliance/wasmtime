@@ -1,5 +1,6 @@
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::Context;
 use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::DummyEnvironment;
@@ -22,21 +23,21 @@ pub struct Options {
 
     /// Specify the directory where harvested left-hand side files should be
     /// written to.
-    #[clap(short, long)]
+    #[arg(short, long)]
     output_dir: PathBuf,
 
     /// Configure Cranelift settings
-    #[clap(long = "set")]
+    #[arg(long = "set")]
     settings: Vec<String>,
 
     /// Specify the Cranelift target
-    #[clap(long = "target")]
+    #[arg(long = "target")]
     target: String,
 
     /// Add a comment from which CLIF variable and function each left-hand side
     /// was harvested from. This prevents deduplicating harvested left-hand
     /// sides.
-    #[clap(long)]
+    #[arg(long)]
     add_harvest_source: bool,
 }
 
@@ -56,7 +57,7 @@ pub fn run(options: &Options) -> Result<()> {
         ))
     };
 
-    match std::fs::create_dir_all(&options.output_dir) {
+    match fs::create_dir_all(&options.output_dir) {
         Ok(_) => {}
         Err(e)
             if e.kind() == io::ErrorKind::AlreadyExists
@@ -133,7 +134,7 @@ pub fn run(options: &Options) -> Result<()> {
             let mut ctx = Context::new();
             ctx.func = func;
 
-            ctx.optimize(fisa.isa.unwrap())
+            ctx.optimize(fisa.isa.unwrap(), &mut ControlPlane::default())
                 .context("failed to run optimizations")?;
 
             ctx.souper_harvest(send)

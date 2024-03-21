@@ -4,6 +4,7 @@
 mod backtrace;
 mod coredump;
 
+use crate::sys::traphandlers;
 use crate::{Instance, VMContext, VMRuntimeLimits};
 use anyhow::Error;
 use std::any::Any;
@@ -16,85 +17,14 @@ pub use self::backtrace::{Backtrace, Frame};
 pub use self::coredump::CoreDumpStack;
 pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
 
-cfg_if::cfg_if! {
-    if #[cfg(miri)] {
-        // With MIRI set up just enough of a setjmp/longjmp with catching panics
-        // to get a few tests working that use this.
-        //
-        // Note that no actual JIT code runs in MIRI so this is purely here for
-        // host-to-host calls.
-
-        struct WasmtimeLongjmp;
-
-        #[wasmtime_versioned_export_macros::versioned_export]
-        unsafe extern "C" fn wasmtime_setjmp(
-            _jmp_buf: *mut *const u8,
-            callback: extern "C" fn(*mut u8, *mut VMContext),
-            payload: *mut u8,
-            callee: *mut VMContext,
-        ) -> i32 {
-            use std::panic::{self, AssertUnwindSafe};
-            let result = panic::catch_unwind(AssertUnwindSafe(|| {
-                callback(payload, callee);
-            }));
-            match result {
-                Ok(()) => 1,
-                Err(e) => {
-                    if e.is::<WasmtimeLongjmp>() {
-                        0
-                    } else {
-                        panic::resume_unwind(e)
-                    }
-                }
-            }
-        }
-
-        #[wasmtime_versioned_export_macros::versioned_export]
-        unsafe extern "C" fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
-            std::panic::panic_any(WasmtimeLongjmp)
-        }
-    } else {
-        #[link(name = "wasmtime-helpers")]
-        extern "C" {
-            #[wasmtime_versioned_export_macros::versioned_link]
-            #[allow(improper_ctypes)]
-            fn wasmtime_setjmp(
-                jmp_buf: *mut *const u8,
-                callback: extern "C" fn(*mut u8, *mut VMContext),
-                payload: *mut u8,
-                callee: *mut VMContext,
-            ) -> i32;
-            #[wasmtime_versioned_export_macros::versioned_link]
-            fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
-        }
-    }
-}
-
-cfg_if::cfg_if! {
-    if #[cfg(unix)] {
-        mod unix;
-        use unix as sys;
-    } else if #[cfg(target_os = "windows")] {
-        mod windows;
-        use windows as sys;
-    }
-}
-
-#[cfg(target_os = "macos")]
-mod macos;
-
-pub use sys::SignalHandler;
+pub use traphandlers::SignalHandler;
 
 /// Globally-set callback to determine whether a program counter is actually a
 /// wasm trap.
 ///
 /// This is initialized during `init_traps` below. The definition lives within
 /// `wasmtime` currently.
-static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
-
-/// Whether or not macOS is using mach ports.
-#[cfg(target_os = "macos")]
-static mut MACOS_USE_MACH_PORTS: bool = false;
+pub(crate) static mut GET_WASM_TRAP: fn(usize) -> Option<wasmtime_environ::Trap> = |_| None;
 
 /// This function is required to be called before any WebAssembly is entered.
 /// This will configure global state such as signal handlers to prepare the
@@ -109,41 +39,27 @@ static mut MACOS_USE_MACH_PORTS: bool = false;
 /// program counter is the pc of an actual wasm trap or not. This is then used
 /// to disambiguate faults that happen due to wasm and faults that happen due to
 /// bugs in Rust or elsewhere.
-pub fn init_traps(is_wasm_pc: fn(usize) -> bool, macos_use_mach_ports: bool) {
+pub fn init_traps(
+    get_wasm_trap: fn(usize) -> Option<wasmtime_environ::Trap>,
+    macos_use_mach_ports: bool,
+) {
     static INIT: Once = Once::new();
 
-    // only used on macos, so squelch warnings about this not being used on
-    // other platform.
-    let _ = macos_use_mach_ports;
-
     INIT.call_once(|| unsafe {
-        IS_WASM_PC = is_wasm_pc;
-        #[cfg(target_os = "macos")]
-        if macos_use_mach_ports {
-            MACOS_USE_MACH_PORTS = macos_use_mach_ports;
-            return macos::platform_init();
-        }
-        sys::platform_init();
+        GET_WASM_TRAP = get_wasm_trap;
+        traphandlers::platform_init(macos_use_mach_ports);
     });
 
     #[cfg(target_os = "macos")]
-    unsafe {
-        assert_eq!(
-            MACOS_USE_MACH_PORTS, macos_use_mach_ports,
-            "cannot configure two different methods of signal handling in the same process"
-        );
-    }
+    assert_eq!(
+        traphandlers::using_mach_ports(),
+        macos_use_mach_ports,
+        "cannot configure two different methods of signal handling in the same process"
+    );
 }
 
 fn lazy_per_thread_init() {
-    #[cfg(target_os = "macos")]
-    unsafe {
-        if MACOS_USE_MACH_PORTS {
-            return macos::lazy_per_thread_init();
-        }
-    }
-
-    sys::lazy_per_thread_init();
+    traphandlers::lazy_per_thread_init();
 }
 
 /// Raises a trap immediately.
@@ -244,6 +160,9 @@ pub enum TrapReason {
         /// fault-based traps which are one of the main ways, but not the only
         /// way, to run wasm.
         faulting_addr: Option<usize>,
+
+        /// The trap code associated with this trap.
+        trap: wasmtime_environ::Trap,
     },
 
     /// A trap raised from a wasm libcall
@@ -285,6 +204,22 @@ impl From<wasmtime_environ::Trap> for TrapReason {
     }
 }
 
+/// Return value from `test_if_trap`.
+pub(crate) enum TrapTest {
+    /// Not a wasm trap, need to delegate to whatever process handler is next.
+    NotWasm,
+    /// This trap was handled by the embedder via custom embedding APIs.
+    HandledByEmbedder,
+    /// This is a wasm trap, it needs to be handled.
+    #[cfg_attr(miri, allow(dead_code))]
+    Trap {
+        /// How to longjmp back to the original wasm frame.
+        jmp_buf: *const u8,
+        /// The trap code of this trap.
+        trap: wasmtime_environ::Trap,
+    },
+}
+
 /// Catches any wasm traps that happen within the execution of `closure`,
 /// returning them as a `Result`.
 ///
@@ -303,7 +238,7 @@ where
 
     let result = CallThreadState::new(signal_handler, capture_backtrace, capture_coredump, *limits)
         .with(|cx| {
-            wasmtime_setjmp(
+            traphandlers::wasmtime_setjmp(
                 cx.jmp_buf.as_ptr(),
                 call_closure::<F>,
                 &mut closure as *mut F as *mut u8,
@@ -413,11 +348,13 @@ mod call_thread_state {
             self.prev.get()
         }
 
+        #[inline]
         pub(crate) unsafe fn push(&self) {
             assert!(self.prev.get().is_null());
             self.prev.set(tls::raw::replace(self));
         }
 
+        #[inline]
         pub(crate) unsafe fn pop(&self) {
             let prev = self.prev.replace(ptr::null());
             let head = tls::raw::replace(prev);
@@ -433,6 +370,7 @@ enum UnwindReason {
 }
 
 impl CallThreadState {
+    #[inline]
     fn with(
         mut self,
         closure: impl FnOnce(&CallThreadState) -> i32,
@@ -470,7 +408,7 @@ impl CallThreadState {
             (*self.unwind.get())
                 .as_mut_ptr()
                 .write((reason, backtrace, coredump));
-            wasmtime_longjmp(self.jmp_buf.get());
+            traphandlers::wasmtime_longjmp(self.jmp_buf.get());
         }
     }
 
@@ -489,15 +427,15 @@ impl CallThreadState {
     ///   instance, and the trap handler should quickly return.
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
-    #[cfg_attr(target_os = "macos", allow(dead_code))] // macOS is more raw and doesn't use this
-    fn take_jmp_buf_if_trap(
+    #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
+    pub(crate) fn test_if_trap(
         &self,
         pc: *const u8,
         call_handler: impl Fn(&SignalHandler) -> bool,
-    ) -> *const u8 {
+    ) -> TrapTest {
         // If we haven't even started to handle traps yet, bail out.
         if self.jmp_buf.get().is_null() {
-            return ptr::null();
+            return TrapTest::NotWasm;
         }
 
         // First up see if any instance registered has a custom trap handler,
@@ -505,21 +443,36 @@ impl CallThreadState {
         // return that the trap was handled.
         if let Some(handler) = self.signal_handler {
             if unsafe { call_handler(&*handler) } {
-                return 1 as *const _;
+                return TrapTest::HandledByEmbedder;
             }
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if unsafe { !IS_WASM_PC(pc as usize) } {
-            return ptr::null();
-        }
+        let trap = match unsafe { GET_WASM_TRAP(pc as usize) } {
+            Some(trap) => trap,
+            None => return TrapTest::NotWasm,
+        };
 
         // If all that passed then this is indeed a wasm trap, so return the
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
+        TrapTest::Trap {
+            jmp_buf: self.take_jmp_buf(),
+            trap,
+        }
+    }
+
+    pub(crate) fn take_jmp_buf(&self) -> *const u8 {
         self.jmp_buf.replace(ptr::null())
     }
 
-    fn set_jit_trap(&self, pc: *const u8, fp: usize, faulting_addr: Option<usize>) {
+    #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
+    pub(crate) fn set_jit_trap(
+        &self,
+        pc: *const u8,
+        fp: usize,
+        faulting_addr: Option<usize>,
+        trap: wasmtime_environ::Trap,
+    ) {
         let backtrace = self.capture_backtrace(self.limits, Some((pc as usize, fp)));
         let coredump = self.capture_coredump(self.limits, Some((pc as usize, fp)));
         unsafe {
@@ -527,6 +480,7 @@ impl CallThreadState {
                 UnwindReason::Trap(TrapReason::Jit {
                     pc: pc as usize,
                     faulting_addr,
+                    trap,
                 }),
                 backtrace,
                 coredump,
@@ -567,21 +521,12 @@ impl CallThreadState {
     }
 }
 
-struct ResetCell<'a, T: Copy>(&'a Cell<T>, T);
-
-impl<T: Copy> Drop for ResetCell<'_, T> {
-    #[inline]
-    fn drop(&mut self) {
-        self.0.set(self.1);
-    }
-}
-
 // A private inner module for managing the TLS state that we require across
 // calls in wasm. The WebAssembly code is called from C++ and then a trap may
 // happen which requires us to read some contextual state to figure out what to
 // do with the trap. This `tls` module is used to persist that information from
 // the caller to the trap site.
-mod tls {
+pub(crate) mod tls {
     use super::CallThreadState;
     use std::mem;
     use std::ops::Range;

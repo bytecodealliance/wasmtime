@@ -7,7 +7,7 @@ use crate::{
 };
 use cranelift_codegen::ir::LibCall;
 use std::sync::Arc;
-use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmType};
+use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmValType};
 
 #[derive(Copy, Clone)]
 pub(crate) enum BuiltinType {
@@ -73,7 +73,7 @@ macro_rules! declare_function_sig {
             /// The target pointer size.
             ptr_size: u8,
             /// The target pointer type, as a WebAssembly type.
-            ptr_type: WasmType,
+            ptr_type: WasmValType,
             /// The builtin functions base relative to the VMContext.
             base: u32,
             /// F32 Ceil.
@@ -93,6 +93,7 @@ macro_rules! declare_function_sig {
             /// F64 Nearest.
             nearest_f64: Option<BuiltinFunction>,
             $(
+                $( #[ $attr ] )*
                 $name: Option<BuiltinFunction>,
             )*
         }
@@ -102,6 +103,7 @@ macro_rules! declare_function_sig {
         impl BuiltinFunctions {
             pub fn new<P: PtrSize>(vmoffsets: &VMOffsets<P>, call_conv: CallingConvention) -> Self {
                 let size = vmoffsets.ptr.size();
+                #[allow(unused_doc_comments)]
                 Self {
                     ptr_size: size,
                     call_conv,
@@ -116,36 +118,37 @@ macro_rules! declare_function_sig {
                     nearest_f32: None,
                     nearest_f64: None,
                     $(
+                        $( #[ $attr ] )*
                         $name: None,
                     )*
                 }
             }
 
-            fn pointer(&self) -> WasmType {
+            fn pointer(&self) -> WasmValType {
                 self.ptr_type
             }
 
-            fn vmctx(&self) -> WasmType {
+            fn vmctx(&self) -> WasmValType {
                 self.pointer()
             }
 
-            fn i32(&self) -> WasmType {
-                WasmType::I32
+            fn i32(&self) -> WasmValType {
+                WasmValType::I32
             }
 
-            fn f32(&self) -> WasmType {
-                WasmType::F32
+            fn f32(&self) -> WasmValType {
+                WasmValType::F32
             }
 
-            fn f64(&self) -> WasmType {
-                WasmType::F64
+            fn f64(&self) -> WasmValType {
+                WasmValType::F64
             }
 
-            fn i64(&self) -> WasmType {
-                WasmType::I64
+            fn i64(&self) -> WasmValType {
+                WasmValType::I64
             }
 
-            fn reference(&self) -> WasmType {
+            fn reference(&self) -> WasmValType {
                 self.pointer()
             }
 
@@ -246,6 +249,7 @@ macro_rules! declare_function_sig {
             }
 
             $(
+                $( #[ $attr ] )*
                 pub(crate) fn $name<A: ABI, P: PtrSize>(&mut self) -> BuiltinFunction {
                     if self.$name.is_none() {
                         let params = vec![ $(self.$param() ),* ];

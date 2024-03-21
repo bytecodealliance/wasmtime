@@ -8,15 +8,14 @@ use sha2::{Digest, Sha256};
 use std::{collections::HashMap, iter, net::Ipv4Addr, str, sync::Arc};
 use tokio::task;
 use wasmtime::{
-    component::{Component, Linker, Resource},
+    component::{Component, Linker, Resource, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::{
-    self, pipe::MemoryOutputPipe, Table, WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
-    bindings::http::types::Error,
+    bindings::http::types::ErrorCode,
     body::HyperIncomingBody,
+    io::TokioIo,
     types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequest},
     WasiHttpCtx, WasiHttpView,
 };
@@ -30,25 +29,20 @@ type RequestSender = Arc<
 >;
 
 struct Ctx {
-    table: Table,
+    table: ResourceTable,
     wasi: WasiCtx,
     http: WasiHttpCtx,
     stdout: MemoryOutputPipe,
     stderr: MemoryOutputPipe,
     send_request: Option<RequestSender>,
+    rejected_authority: Option<String>,
 }
 
 impl WasiView for Ctx {
-    fn table(&self) -> &Table {
-        &self.table
-    }
-    fn table_mut(&mut self) -> &mut Table {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
-    fn ctx(&self) -> &WasiCtx {
-        &self.wasi
-    }
-    fn ctx_mut(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }
 }
@@ -58,7 +52,7 @@ impl WasiHttpView for Ctx {
         &mut self.http
     }
 
-    fn table(&mut self) -> &mut Table {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 
@@ -66,6 +60,12 @@ impl WasiHttpView for Ctx {
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Resource<HostFutureIncomingResponse>> {
+        if let Some(rejected_authority) = &self.rejected_authority {
+            let (auth, _port) = request.authority.split_once(':').unwrap();
+            if auth == rejected_authority {
+                return Err(ErrorCode::HttpRequestDenied.into());
+            }
+        }
         if let Some(send_request) = self.send_request.clone() {
             send_request(self, request)
         } else {
@@ -88,12 +88,13 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     builder.stderr(stderr.clone());
     builder.env("HTTP_SERVER", server.addr().to_string());
     let ctx = Ctx {
-        table: Table::new(),
+        table: ResourceTable::new(),
         wasi: builder.build(),
         http: WasiHttpCtx {},
         stderr,
         stdout,
         send_request: None,
+        rejected_authority: None,
     };
 
     Store::new(&engine, ctx)
@@ -128,10 +129,11 @@ async fn run_wasi_http(
     component_filename: &str,
     req: hyper::Request<HyperIncomingBody>,
     send_request: Option<RequestSender>,
-) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, Error>> {
+    rejected_authority: Option<String>,
+) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
-    let table = Table::new();
+    let table = ResourceTable::new();
 
     let mut config = Config::new();
     config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
@@ -153,6 +155,7 @@ async fn run_wasi_http(
         stderr,
         stdout,
         send_request,
+        rejected_authority,
     };
     let mut store = Store::new(&engine, ctx);
 
@@ -167,7 +170,7 @@ async fn run_wasi_http(
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let out = store.data_mut().new_response_outparam(sender)?;
 
-    let handle = preview2::spawn(async move {
+    let handle = wasmtime_wasi::runtime::spawn(async move {
         proxy
             .wasi_http_incoming_handler()
             .call_handle(&mut store, req, out)
@@ -181,29 +184,36 @@ async fn run_wasi_http(
             use http_body_util::BodyExt;
             let (parts, body) = resp.into_parts();
             let collected = BodyExt::collect(body).await?;
-            Ok(hyper::Response::from_parts(parts, collected))
+            Some(Ok(hyper::Response::from_parts(parts, collected)))
         }
+        Ok(Err(e)) => Some(Err(e)),
 
-        Ok(Err(e)) => Err(e),
-
-        // This happens if the wasm never calls `set-response-outparam`
-        Err(e) => panic!("Failed to receive a response: {e:?}"),
+        // Fall through below to the `resp.expect(...)` which will hopefully
+        // return a more specific error from `handle.await`.
+        Err(_) => None,
     };
 
-    // Now that the response has been processed, we can wait on the wasm to finish without
-    // deadlocking.
+    // Now that the response has been processed, we can wait on the wasm to
+    // finish without deadlocking.
     handle.await.context("Component execution")?;
 
-    Ok(resp)
+    Ok(resp.expect("wasm never called set-response-outparam"))
 }
 
 #[test_log::test(tokio::test)]
 async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
     let req = hyper::Request::builder()
-        .method(http::Method::GET)
-        .body(body::empty())?;
+        .header("custom-forbidden-header", "yes")
+        .uri("http://example.com:8080/test-path")
+        .method(http::Method::GET);
 
-    let resp = run_wasi_http(test_programs_artifacts::API_PROXY_COMPONENT, req, None).await?;
+    let resp = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        req.body(body::empty())?,
+        None,
+        None,
+    )
+    .await?;
 
     match resp {
         Ok(resp) => println!("response: {resp:?}"),
@@ -268,19 +278,18 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponseInternal {
                         resp,
-                        worker: Arc::new(preview2::spawn(future::ready(()))),
+                        worker: Arc::new(wasmtime_wasi::runtime::spawn(future::ready(()))),
                         between_bytes_timeout,
                     })
                 });
-                Ok(view
-                    .table()
-                    .push(HostFutureIncomingResponse::Ready(response))?)
+                Ok(WasiHttpView::table(view).push(HostFutureIncomingResponse::Ready(response))?)
             },
         ) as RequestSender)
     } else {
         let server = async move {
             loop {
                 let (stream, _) = listener.accept().await?;
+                let stream = TokioIo::new(stream);
                 let handle = handle.clone();
                 task::spawn(async move {
                     if let Err(e) = http1::Builder::new()
@@ -319,7 +328,9 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         None
     };
 
-    let mut request = hyper::Request::get("/hash-all");
+    let mut request = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri("http://example.com:8080/hash-all");
     for path in bodies.keys() {
         request = request.header("url", format!("{prefix}{path}"));
     }
@@ -329,6 +340,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
         request,
         send_request,
+        None,
     )
     .await??;
 
@@ -361,6 +373,39 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
     Ok(())
 }
 
+// ensure the runtime rejects the outgoing request
+#[test_log::test(tokio::test)]
+async fn wasi_http_hash_all_with_reject() -> Result<()> {
+    let request = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri("http://example.com:8080/hash-all");
+    let request = request.header("url", format!("http://forbidden.com"));
+    let request = request.header("url", format!("http://localhost"));
+    let request = request.body(body::empty())?;
+
+    let response = run_wasi_http(
+        test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
+        request,
+        None,
+        Some("forbidden.com".to_string()),
+    )
+    .await??;
+
+    let body = response.into_body().to_bytes();
+    let body = str::from_utf8(&body).unwrap();
+    for line in body.lines() {
+        println!("{}", line);
+        if line.contains("forbidden.com") {
+            assert!(line.contains("HttpRequestDenied"));
+        }
+        if line.contains("localhost") {
+            assert!(!line.contains("HttpRequestDenied"));
+        }
+    }
+
+    Ok(())
+}
+
 #[test_log::test(tokio::test)]
 async fn wasi_http_echo() -> Result<()> {
     do_wasi_http_echo("echo", None).await
@@ -377,6 +422,7 @@ async fn wasi_http_double_echo() -> Result<()> {
     let server = async move {
         loop {
             let (stream, _) = listener.accept().await?;
+            let stream = TokioIo::new(stream);
             task::spawn(async move {
                 if let Err(e) = http1::Builder::new()
                     .keep_alive(true)
@@ -441,8 +487,10 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
         .collect::<Vec<_>>()
     };
 
-    let mut request =
-        hyper::Request::post(&format!("/{uri}")).header("content-type", "application/octet-stream");
+    let mut request = hyper::Request::builder()
+        .method(http::Method::POST)
+        .uri(format!("http://example.com:8080/{uri}"))
+        .header("content-type", "application/octet-stream");
 
     if let Some(url_header) = url_header {
         request = request.header("url", url_header);
@@ -450,13 +498,14 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
 
     let request = request.body(BoxBody::new(StreamBody::new(stream::iter(
         body.chunks(16 * 1024)
-            .map(|chunk| Ok::<_, Error>(Frame::data(Bytes::copy_from_slice(chunk))))
+            .map(|chunk| Ok::<_, ErrorCode>(Frame::data(Bytes::copy_from_slice(chunk))))
             .collect::<Vec<_>>(),
     ))))?;
 
     let response = run_wasi_http(
         test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
         request,
+        None,
         None,
     )
     .await??;

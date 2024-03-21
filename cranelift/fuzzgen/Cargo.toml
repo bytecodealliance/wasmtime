@@ -9,6 +9,8 @@ readme = "README.md"
 edition.workspace = true
 publish = false
 
+[lints]
+workspace = true
 
 [dependencies]
 cranelift = { workspace = true }

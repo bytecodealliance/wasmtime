@@ -1,0 +1,37 @@
+test optimize
+set enable_verifier=true
+set opt_level=speed
+target x86_64
+
+;; This test case should optimize just fine, and should definitely not produce
+;; CLIF that has verifier errors like
+;;
+;;     error: inst10 (v12 = select.f32 v11, v4, v10 ; v11 = 1): uses value arg
+;;     from non-dominating block4
+
+function %foo() {
+block0:
+    v0 = iconst.i64 0
+    v2 = f32const 0.0
+    v9 = f32const 0.0
+    v20 = fneg v2
+    v18 = fcmp eq v20, v20
+    v4 = select v18, v2, v20
+    v8 = iconst.i32 0
+    v11 = iconst.i32 1
+    brif v0, block2, block3
+
+block2:
+    brif.i32 v8, block4(v2), block4(v9)
+
+block4(v10: f32):
+    v12 = select.f32 v11, v4, v10
+    v13 = bitcast.i32 v12
+    store v13, v0
+    trap user0
+
+block3:
+    v15 = bitcast.i32 v4
+    store v15, v0
+    return
+}

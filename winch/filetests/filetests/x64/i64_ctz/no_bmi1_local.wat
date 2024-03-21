@@ -11,20 +11,27 @@
         (i64.ctz)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 48c744240800000000   	
-;; 				mov	qword ptr [rsp + 8], 0
-;;   11:	 4c893424             	mov	qword ptr [rsp], r14
-;;   15:	 48c7c002000000       	mov	rax, 2
-;;   1c:	 4889442408           	mov	qword ptr [rsp + 8], rax
-;;   21:	 488b442408           	mov	rax, qword ptr [rsp + 8]
-;;   26:	 480fbcc0             	bsf	rax, rax
-;;   2a:	 41bb00000000         	mov	r11d, 0
-;;   30:	 410f94c3             	sete	r11b
-;;   34:	 49c1e306             	shl	r11, 6
-;;   38:	 4c01d8               	add	rax, r11
-;;   3b:	 4883c410             	add	rsp, 0x10
-;;   3f:	 5d                   	pop	rbp
-;;   40:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c318000000       	add	r11, 0x18
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8743000000         	ja	0x5e
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec18             	sub	rsp, 0x18
+;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
+;;      	 48c7c002000000       	mov	rax, 2
+;;      	 48890424             	mov	qword ptr [rsp], rax
+;;      	 488b0424             	mov	rax, qword ptr [rsp]
+;;      	 480fbcc0             	bsf	rax, rax
+;;      	 41bb00000000         	mov	r11d, 0
+;;      	 410f94c3             	sete	r11b
+;;      	 49c1e306             	shl	r11, 6
+;;      	 4c01d8               	add	rax, r11
+;;      	 4883c418             	add	rsp, 0x18
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   5e:	 0f0b                 	ud2	

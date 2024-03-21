@@ -15,7 +15,7 @@ fn test_on_get_create_stats_file() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}",
+         directory = '{cache_dir}'",
         cache_dir
     );
     assert!(cache_config.enabled());
@@ -42,7 +42,7 @@ fn test_on_get_update_usage_counter() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'",
         cache_dir
     );
@@ -76,7 +76,7 @@ fn test_on_get_recompress_no_mod_file() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
          optimized-compression-level = 7\n\
@@ -118,7 +118,7 @@ fn test_on_get_recompress_with_mod_file() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
          optimized-compression-level = 7\n\
@@ -193,7 +193,7 @@ fn test_on_get_recompress_lock() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
          optimized-compression-level = 7\n\
@@ -263,7 +263,7 @@ fn test_on_update_fresh_stats_file() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
          optimized-compression-level = 7\n\
@@ -312,7 +312,7 @@ fn test_on_update_cleanup_limits_trash_locks() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          cleanup-interval = '30m'\n\
          optimizing-compression-task-timeout = '30m'\n\
@@ -453,7 +453,7 @@ fn test_on_update_cleanup_lru_policy() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          file-count-soft-limit = '5'\n\
          files-total-size-soft-limit = '30K'\n\
@@ -585,7 +585,7 @@ fn test_on_update_cleanup_future_files() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          allowed-clock-drift-for-files-from-future = '1d'\n\
          file-count-soft-limit = '3'\n\
@@ -693,7 +693,7 @@ fn test_on_update_cleanup_self_lock() {
         config_path,
         "[cache]\n\
          enabled = true\n\
-         directory = {cache_dir}\n\
+         directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          cleanup-interval = '30m'\n\
          allowed-clock-drift-for-files-from-future = '1d'",

@@ -834,7 +834,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, #0x2a
-;   str x2, [x8]
+;   str x2, [x8] ; trap: heap_oob
 ;   ret
 
 function %f18(i64) -> i64 {

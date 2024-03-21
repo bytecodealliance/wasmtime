@@ -7,11 +7,14 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition.workspace = true
-publish = false
+links = "wasmtime-c-api"
+include = ["include", "src", "build.rs"]
+
+[lints]
+workspace = true
 
 [lib]
-name = "wamstime_c_api"
-doc = false
+name = "wasmtime_c_api"
 test = false
 doctest = false
 
@@ -19,8 +22,8 @@ doctest = false
 env_logger = { workspace = true, optional = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift'] }
-wasmtime-c-api-macros = { path = "macros" }
+wasmtime = { workspace = true, features = ['cranelift', 'runtime', 'gc'] }
+wasmtime-c-api-macros = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
 
@@ -28,10 +31,8 @@ tracing = { workspace = true }
 wat = { workspace = true, optional = true }
 
 # Optional dependencies for the `wasi` feature
-wasi-cap-std-sync = { workspace = true, optional = true }
-wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 cap-std = { workspace = true, optional = true }
-wasi-common = { workspace = true, optional = true }
+wasi-common = { workspace = true, optional = true, features = ["sync"] }
 
 # Optional dependencies for the `async` feature
 futures = { workspace = true, optional = true }
@@ -41,8 +42,9 @@ async = ['wasmtime/async', 'futures']
 profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
-wasi = ['wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std', 'wasi-common']
+wasi = ['cap-std', 'wasi-common']
 logging = ['dep:env_logger']
 disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 coredump = ["wasmtime/coredump"]
 addr2line = ["wasmtime/addr2line"]
+demangle = ["wasmtime/demangle"]

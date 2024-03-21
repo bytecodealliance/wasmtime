@@ -728,7 +728,7 @@ impl WorkerThread {
 }
 
 fn read_stats_file(path: &Path) -> Option<ModuleCacheStatistics> {
-    fs::read(path)
+    fs::read_to_string(path)
         .map_err(|err| {
             trace!(
                 "Failed to read stats file, path: {}, err: {}",
@@ -736,8 +736,8 @@ fn read_stats_file(path: &Path) -> Option<ModuleCacheStatistics> {
                 err
             )
         })
-        .and_then(|bytes| {
-            toml::from_slice::<ModuleCacheStatistics>(&bytes[..]).map_err(|err| {
+        .and_then(|contents| {
+            toml::from_str::<ModuleCacheStatistics>(&contents).map_err(|err| {
                 trace!(
                     "Failed to parse stats file, path: {}, err: {}",
                     path.display(),
@@ -758,11 +758,7 @@ fn write_stats_file(path: &Path, stats: &ModuleCacheStatistics) -> bool {
             )
         })
         .and_then(|serialized| {
-            if fs_write_atomic(path, "stats", serialized.as_bytes()) {
-                Ok(())
-            } else {
-                Err(())
-            }
+            fs_write_atomic(path, "stats", serialized.as_bytes()).map_err(|_| ())
         })
         .is_ok()
 }

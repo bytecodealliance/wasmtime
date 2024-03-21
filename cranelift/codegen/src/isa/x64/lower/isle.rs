@@ -2,12 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::{
-    ir::types,
-    ir::AtomicRmwOp,
-    isa, isle_common_prelude_methods, isle_lower_prelude_methods,
-    machinst::{InputSourceInst, Reg, Writable},
-};
+use crate::{ir::types, ir::AtomicRmwOp, isa, isle_common_prelude_methods};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -17,29 +12,29 @@ use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
 use crate::{
     ir::{
-        condcodes::{CondCode, FloatCC, IntCC},
+        condcodes::{FloatCC, IntCC},
         immediates::*,
         types::*,
         BlockCall, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
-    isa::{
-        unwind::UnwindInst,
-        x64::{
-            abi::X64CallSite,
-            inst::{args::*, regs, CallInfo, ReturnCallInfo},
-        },
+    isa::x64::{
+        abi::X64CallSite,
+        inst::{args::*, regs, CallInfo, ReturnCallInfo},
     },
     machinst::{
-        isle::*, valueregs, ArgPair, InsnInput, InstOutput, Lower, MachAtomicRmwOp, MachInst,
+        isle::*, valueregs, ArgPair, InsnInput, InstOutput, MachAtomicRmwOp, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };
 use alloc::vec::Vec;
 use regalloc2::PReg;
 use std::boxed::Box;
-use std::convert::TryFrom;
 
-type BoxCallInfo = Box<CallInfo>;
+/// Type representing out-of-line data for calls. This type optional because the
+/// call instruction is also used by Winch to emit calls, but the
+/// `Box<CallInfo>` field is not used, it's only used by Cranelift. By making it
+/// optional, we reduce the number of heap allocations in Winch.
+type BoxCallInfo = Option<Box<CallInfo>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecArgPair = Vec<ArgPair>;
 

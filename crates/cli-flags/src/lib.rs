@@ -1,8 +1,5 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-#![deny(trivial_numeric_casts, unused_extern_crates, unstable_features)]
-#![warn(unused_import_braces)]
-
 use anyhow::Result;
 use clap::Parser;
 use std::time::Duration;
@@ -42,7 +39,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 wasmtime_option_group! {
     #[derive(PartialEq, Clone)]
     pub struct OptimizeOptions {
-        /// Optimization level of generated code (0-2, s; default: 0)
+        /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
         /// Byte size of the guard region after dynamic memories are allocated
@@ -62,6 +59,10 @@ wasmtime_option_group! {
         /// memories.
         pub dynamic_memory_reserved_for_growth: Option<u64>,
 
+        /// Indicates whether an unmapped region of memory is placed before all
+        /// linear memories.
+        pub guard_before_linear_memory: Option<bool>,
+
         /// Enable the pooling allocator, in place of the on-demand allocator.
         pub pooling_allocator: Option<bool>,
 
@@ -73,9 +74,33 @@ wasmtime_option_group! {
         /// pooling allocator in tables.
         pub pooling_table_keep_resident: Option<usize>,
 
+        /// Enable memory protection keys for the pooling allocator; this can
+        /// optimize the size of memory slots.
+        pub memory_protection_keys: Option<bool>,
+
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
         pub memory_init_cow: Option<bool>,
+
+        /// The maximum number of WebAssembly instances which can be created
+        /// with the pooling allocator.
+        pub pooling_total_core_instances: Option<u32>,
+
+        /// The maximum number of WebAssembly components which can be created
+        /// with the pooling allocator.
+        pub pooling_total_component_instances: Option<u32>,
+
+        /// The maximum number of WebAssembly memories which can be created with
+        /// the pooling allocator.
+        pub pooling_total_memories: Option<u32>,
+
+        /// The maximum number of WebAssembly tables which can be created with
+        /// the pooling allocator.
+        pub pooling_total_tables: Option<u32>,
+
+        /// The maximum number of WebAssembly stacks which can be created with
+        /// the pooling allocator.
+        pub pooling_total_stacks: Option<u32>,
     }
 
     enum Optimize {
@@ -227,7 +252,9 @@ wasmtime_option_group! {
 wasmtime_option_group! {
     #[derive(PartialEq, Clone)]
     pub struct WasiOptions {
-        /// Enable support for WASI common APIs
+        /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
+        pub cli: Option<bool>,
+        /// Deprecated alias for `cli`
         pub common: Option<bool>,
         /// Enable suport for WASI neural network API (experimental)
         pub nn: Option<bool>,
@@ -240,7 +267,7 @@ wasmtime_option_group! {
         pub listenfd: Option<bool>,
         /// Grant access to the given TCP listen socket
         pub tcplisten: Vec<String>,
-        /// Implement WASI with preview2 primitives (experimental).
+        /// Implement WASI CLI APIs with preview2 primitives (experimental).
         ///
         /// Indicates that the implementation of WASI preview1 should be backed by
         /// the preview2 implementation for components.
@@ -262,7 +289,16 @@ wasmtime_option_group! {
         pub inherit_network: Option<bool>,
         /// Indicates whether `wasi:sockets/ip-name-lookup` is enabled or not.
         pub allow_ip_name_lookup: Option<bool>,
-
+        /// Indicates whether `wasi:sockets` TCP support is enabled or not.
+        pub tcp: Option<bool>,
+        /// Indicates whether `wasi:sockets` UDP support is enabled or not.
+        pub udp: Option<bool>,
+        /// Allows imports from the `wasi_unstable` core wasm module.
+        pub preview0: Option<bool>,
+        /// Inherit all environment variables from the parent process.
+        ///
+        /// This option can be further overwritten with `--env` flags.
+        pub inherit_env: Option<bool>,
     }
 
     enum Wasi {
@@ -288,39 +324,39 @@ pub struct CommonOptions {
     // now.
     /// Optimization and tuning related options for wasm performance, `-O help` to
     /// see all.
-    #[clap(short = 'O', long = "optimize", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'O', long = "optimize", value_name = "KEY[=VAL[,..]]")]
     opts_raw: Vec<opt::CommaSeparated<Optimize>>,
 
     /// Codegen-related configuration options, `-C help` to see all.
-    #[clap(short = 'C', long = "codegen", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'C', long = "codegen", value_name = "KEY[=VAL[,..]]")]
     codegen_raw: Vec<opt::CommaSeparated<Codegen>>,
 
     /// Debug-related configuration options, `-D help` to see all.
-    #[clap(short = 'D', long = "debug", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'D', long = "debug", value_name = "KEY[=VAL[,..]]")]
     debug_raw: Vec<opt::CommaSeparated<Debug>>,
 
     /// Options for configuring semantic execution of WebAssembly, `-W help` to see
     /// all.
-    #[clap(short = 'W', long = "wasm", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'W', long = "wasm", value_name = "KEY[=VAL[,..]]")]
     wasm_raw: Vec<opt::CommaSeparated<Wasm>>,
 
     /// Options for configuring WASI and its proposals, `-S help` to see all.
-    #[clap(short = 'S', long = "wasi", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'S', long = "wasi", value_name = "KEY[=VAL[,..]]")]
     wasi_raw: Vec<opt::CommaSeparated<Wasi>>,
 
     // These fields are filled in by the `configure` method below via the
     // options parsed from the CLI above. This is what the CLI should use.
-    #[clap(skip)]
+    #[arg(skip)]
     configured: bool,
-    #[clap(skip)]
+    #[arg(skip)]
     pub opts: OptimizeOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub codegen: CodegenOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub debug: DebugOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub wasm: WasmOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub wasi: WasiOptions,
 }
 
@@ -488,6 +524,9 @@ impl CommonOptions {
         if let Some(size) = self.opts.dynamic_memory_reserved_for_growth {
             config.dynamic_memory_reserved_for_growth(size);
         }
+        if let Some(enable) = self.opts.guard_before_linear_memory {
+            config.guard_before_linear_memory(enable);
+        }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
         if self.wasm.fuel.is_some() {
@@ -515,10 +554,36 @@ impl CommonOptions {
                     if let Some(size) = self.opts.pooling_table_keep_resident {
                         cfg.table_keep_resident(size);
                     }
+                    if let Some(limit) = self.opts.pooling_total_core_instances {
+                        cfg.total_core_instances(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_component_instances {
+                        cfg.total_component_instances(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_memories {
+                        cfg.total_memories(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_tables {
+                        cfg.total_tables(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_stacks {
+                        cfg.total_stacks(limit);
+                    }
+                    if let Some(enable) = self.opts.memory_protection_keys {
+                        if enable {
+                            cfg.memory_protection_keys(wasmtime::MpkEnabled::Enable);
+                        }
+                    }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
                 }
             },
             true => err,
+        }
+
+        if self.opts.memory_protection_keys.unwrap_or(false)
+            && !self.opts.pooling_allocator.unwrap_or(false)
+        {
+            anyhow::bail!("memory protection keys require the pooling allocator");
         }
 
         if let Some(max) = self.wasm.max_wasm_stack {

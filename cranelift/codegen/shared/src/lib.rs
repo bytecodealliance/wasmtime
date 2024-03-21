@@ -1,9 +1,7 @@
 //! This library contains code that is common to both the `cranelift-codegen` and
 //! `cranelift-codegen-meta` libraries.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
+#![deny(missing_docs)]
 
 pub mod constant_hash;
 pub mod constants;

@@ -1,7 +1,6 @@
 use crate::CompiledFunctionsMetadata;
 use gimli::write;
 use std::collections::BTreeMap;
-use std::iter::FromIterator;
 use wasmtime_cranelift_shared::FunctionAddressMap;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef, FilePos, PrimaryMap, WasmFileInfo};
 
@@ -608,7 +607,6 @@ mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
-    use std::iter::FromIterator;
     use std::mem;
     use wasmtime_cranelift_shared::{CompiledFunctionMetadata, FunctionAddressMap};
     use wasmtime_environ::{FilePos, InstructionAddressMap, WasmFileInfo};

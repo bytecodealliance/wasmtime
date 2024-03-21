@@ -16,7 +16,6 @@ block0(v0: i32):
 ; function %icmp_eq_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 1
-;     v3 -> v2
 ;     return v2  ; v2 = 1
 ; }
 
@@ -29,7 +28,6 @@ block0(v0: i32):
 ; function %icmp_ne_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 0
-;     v3 -> v2
 ;     return v2  ; v2 = 0
 ; }
 
@@ -42,7 +40,6 @@ block0(v0: i32):
 ; function %icmp_ult_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 0
-;     v3 -> v2
 ;     return v2  ; v2 = 0
 ; }
 
@@ -55,7 +52,6 @@ block0(v0: i32):
 ; function %icmp_ule_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 1
-;     v3 -> v2
 ;     return v2  ; v2 = 1
 ; }
 
@@ -68,7 +64,6 @@ block0(v0: i32):
 ; function %icmp_ugt_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 0
-;     v3 -> v2
 ;     return v2  ; v2 = 0
 ; }
 
@@ -81,7 +76,6 @@ block0(v0: i32):
 ; function %icmp_uge_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 1
-;     v3 -> v2
 ;     return v2  ; v2 = 1
 ; }
 
@@ -94,7 +88,6 @@ block0(v0: i32):
 ; function %icmp_slt_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 0
-;     v3 -> v2
 ;     return v2  ; v2 = 0
 ; }
 
@@ -107,7 +100,6 @@ block0(v0: i32):
 ; function %icmp_sle_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 1
-;     v3 -> v2
 ;     return v2  ; v2 = 1
 ; }
 
@@ -120,7 +112,6 @@ block0(v0: i32):
 ; function %icmp_sgt_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 0
-;     v3 -> v2
 ;     return v2  ; v2 = 0
 ; }
 
@@ -133,7 +124,6 @@ block0(v0: i32):
 ; function %icmp_sge_self(i32) -> i8 fast {
 ; block0(v0: i32):
 ;     v2 = iconst.i8 1
-;     v3 -> v2
 ;     return v2  ; v2 = 1
 ; }
 
@@ -148,7 +138,6 @@ block0(v1: i64, v2: i64):
 ; function %mask_icmp_result(i64, i64) -> i8 fast {
 ; block0(v1: i64, v2: i64):
 ;     v3 = icmp ult v1, v2
-;     v6 -> v3
 ;     return v3
 ; }
 
@@ -165,7 +154,6 @@ block0(v1: i64, v2: i64):
 ; block0(v1: i64, v2: i64):
 ;     v3 = icmp ult v1, v2
 ;     v4 = uextend.i64 v3
-;     v7 -> v4
 ;     return v4
 ; }
 
@@ -305,7 +293,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0xffff_ffff
 ;     v3 = icmp ne v0, v1  ; v1 = 0xffff_ffff
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -348,7 +335,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0
 ;     v3 = icmp eq v0, v1  ; v1 = 0
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -404,7 +390,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0
 ;     v3 = icmp ne v0, v1  ; v1 = 0
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -473,7 +458,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0xffff_ffff
 ;     v3 = icmp eq v0, v1  ; v1 = 0xffff_ffff
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -557,7 +541,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0x7fff_ffff
 ;     v3 = icmp ne v0, v1  ; v1 = 0x7fff_ffff
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -584,9 +567,9 @@ block0(v0: i32):
 
 ; function %icmp_sle_umax(i32) -> i8 fast {
 ; block0(v0: i32):
-;     v1 = iconst.i32 0xffff_ffff
-;     v2 = icmp sle v0, v1  ; v1 = 0xffff_ffff
-;     return v2
+;     v3 = iconst.i32 0
+;     v4 = icmp slt v0, v3  ; v3 = 0
+;     return v4
 ; }
 
 function %icmp_sle_smin(i32) -> i8 {
@@ -600,7 +583,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0x8000_0000
 ;     v3 = icmp eq v0, v1  ; v1 = 0x8000_0000
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -640,9 +622,9 @@ block0(v0: i32):
 
 ; function %icmp_sgt_umax(i32) -> i8 fast {
 ; block0(v0: i32):
-;     v1 = iconst.i32 0xffff_ffff
-;     v2 = icmp sgt v0, v1  ; v1 = 0xffff_ffff
-;     return v2
+;     v3 = iconst.i32 0
+;     v4 = icmp sge v0, v3  ; v3 = 0
+;     return v4
 ; }
 
 function %icmp_sgt_smin(i32) -> i8 {
@@ -656,7 +638,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0x8000_0000
 ;     v3 = icmp ne v0, v1  ; v1 = 0x8000_0000
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -725,7 +706,6 @@ block0(v0: i32):
 ; block0(v0: i32):
 ;     v1 = iconst.i32 0x7fff_ffff
 ;     v3 = icmp eq v0, v1  ; v1 = 0x7fff_ffff
-;     v4 -> v3
 ;     return v3
 ; }
 
@@ -782,7 +762,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_eq_ule(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -811,7 +790,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_eq_uge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -840,7 +818,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_eq_sle(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -869,7 +846,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_eq_sge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -912,7 +888,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_ult(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ult v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -927,7 +902,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_ule(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ult v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -942,7 +916,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ugt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -957,7 +930,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_uge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ugt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -972,7 +944,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_slt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp slt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -987,7 +958,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_sle(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp slt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1002,7 +972,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sgt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1017,7 +986,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ne_sge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sgt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1046,7 +1014,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ult_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ult v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1075,7 +1042,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ult_ule(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ult v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1182,7 +1148,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ule_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1197,7 +1162,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ule_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ult v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1212,7 +1176,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ule_ult(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ult v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1255,7 +1218,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ule_uge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1348,7 +1310,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ugt_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ugt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1405,7 +1366,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_ugt_uge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ugt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1484,7 +1444,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_uge_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1499,7 +1458,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_uge_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ugt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1528,7 +1486,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_uge_ule(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1543,7 +1500,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_uge_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ugt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1650,7 +1606,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_slt_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp slt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1743,7 +1698,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_slt_sle(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp slt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1786,7 +1740,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sle_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1801,7 +1754,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sle_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp slt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1880,7 +1832,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sle_slt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp slt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1923,7 +1874,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sle_sge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -1952,7 +1902,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sgt_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sgt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2073,7 +2022,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sgt_sge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sgt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2088,7 +2036,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sge_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2103,7 +2050,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sge_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sgt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2196,7 +2142,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sge_sle(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp eq v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2211,7 +2156,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_and_sge_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sgt v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2268,7 +2212,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_ult(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ule v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2283,7 +2226,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_ule(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ule v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2298,7 +2240,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp uge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2313,7 +2254,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_uge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp uge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2328,7 +2268,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_slt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sle v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2343,7 +2282,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_sle(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sle v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2358,7 +2296,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2373,7 +2310,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_eq_sge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2416,7 +2352,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ne_ult(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2445,7 +2380,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ne_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2474,7 +2408,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ne_slt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2503,7 +2436,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ne_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2532,7 +2464,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ult_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ule v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2547,7 +2478,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ult_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2576,7 +2506,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ult_ule(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ule v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2591,7 +2520,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ult_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2684,7 +2612,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ule_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ule v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2713,7 +2640,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ule_ult(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ule v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2834,7 +2760,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ugt_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp uge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2849,7 +2774,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ugt_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2864,7 +2788,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ugt_ult(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2907,7 +2830,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_ugt_uge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp uge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -2986,7 +2908,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_uge_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp uge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3043,7 +2964,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_uge_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp uge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3136,7 +3056,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_slt_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sle v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3151,7 +3070,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_slt_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3244,7 +3162,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_slt_sle(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sle v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3259,7 +3176,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_slt_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3288,7 +3204,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sle_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sle v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3381,7 +3296,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sle_slt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sle v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3438,7 +3352,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sgt_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3453,7 +3366,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sgt_ne(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3532,7 +3444,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sgt_slt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3575,7 +3486,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sgt_sge(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3590,7 +3500,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sge_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 
@@ -3711,7 +3620,6 @@ block0(v0: i32, v1: i32):
 ; function %icmp_or_sge_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = icmp sge v0, v1
-;     v6 -> v5
 ;     return v5
 ; }
 

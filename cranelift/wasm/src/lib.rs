@@ -9,9 +9,7 @@
 //!
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
+#![deny(missing_docs)]
 #![no_std]
 
 #[cfg(not(feature = "std"))]
@@ -41,16 +39,18 @@ mod heap;
 mod module_translator;
 mod sections_translator;
 mod state;
+mod table;
 mod translation_utils;
 
 pub use crate::environ::{
-    DummyEnvironment, DummyFuncEnvironment, DummyModuleInfo, ExpectedReachability, FuncEnvironment,
-    GlobalVariable, ModuleEnvironment, TargetEnvironment,
+    DummyEnvironment, DummyFuncEnvironment, DummyModuleInfo, FuncEnvironment, GlobalVariable,
+    ModuleEnvironment, TargetEnvironment,
 };
 pub use crate::func_translator::FuncTranslator;
 pub use crate::heap::{Heap, HeapData, HeapStyle};
 pub use crate::module_translator::translate_module;
 pub use crate::state::FuncTranslationState;
+pub use crate::table::{TableData, TableSize};
 pub use crate::translation_utils::*;
 pub use cranelift_frontend::FunctionBuilder;
 pub use wasmtime_types::*;

@@ -1,6 +1,4 @@
-use anyhow::Result;
 use wasmtime::*;
-use wasmtime_runtime::MpkEnabled;
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
@@ -12,7 +10,7 @@ fn test_limits() -> Result<()> {
         &engine,
         r#"(module
             (memory $m (export "m") 0)
-            (table (export "t") 0 anyfunc)
+            (table (export "t") 0 funcref)
             (func (export "grow") (param i32) (result i32)
               (memory.grow $m (local.get 0)))
            )"#,
@@ -52,17 +50,17 @@ fn test_limits() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ]) {
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
 
         assert_eq!(
             table
-                .grow(&mut store, 1, Val::FuncRef(None))
+                .grow(&mut store, 1, Ref::Func(None))
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
             "failed to grow table by `1`"
@@ -100,7 +98,7 @@ async fn test_limits_async() -> Result<()> {
     let engine = Engine::new(&config).unwrap();
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     struct LimitsAsync {
@@ -163,18 +161,18 @@ async fn test_limits_async() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new_async(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )
         .await?,
     ]) {
-        table.grow_async(&mut store, 2, Val::FuncRef(None)).await?;
-        table.grow_async(&mut store, 1, Val::FuncRef(None)).await?;
-        table.grow_async(&mut store, 2, Val::FuncRef(None)).await?;
+        table.grow_async(&mut store, 2, Ref::Func(None)).await?;
+        table.grow_async(&mut store, 1, Ref::Func(None)).await?;
+        table.grow_async(&mut store, 2, Ref::Func(None)).await?;
 
         assert_eq!(
             table
-                .grow_async(&mut store, 1, Val::FuncRef(None))
+                .grow_async(&mut store, 1, Ref::Func(None))
                 .await
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
@@ -190,7 +188,7 @@ fn test_limits_memory_only() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let mut store = Store::new(
@@ -226,14 +224,14 @@ fn test_limits_memory_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ]) {
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
     }
 
     Ok(())
@@ -276,7 +274,7 @@ fn test_limits_table_only() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let mut store = Store::new(&engine, StoreLimitsBuilder::new().table_elements(5).build());
@@ -300,17 +298,17 @@ fn test_limits_table_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ]) {
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        table.grow(&mut store, 2, Ref::Func(None))?;
 
         assert_eq!(
             table
-                .grow(&mut store, 1, Val::FuncRef(None))
+                .grow(&mut store, 1, Ref::Func(None))
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
             "failed to grow table by `1`"
@@ -323,7 +321,7 @@ fn test_limits_table_only() -> Result<()> {
 #[test]
 fn test_initial_table_limits_exceeded() -> Result<()> {
     let engine = Engine::default();
-    let module = Module::new(&engine, r#"(module (table (export "t") 23 anyfunc))"#)?;
+    let module = Module::new(&engine, r#"(module (table (export "t") 23 funcref))"#)?;
 
     let mut store = Store::new(&engine, StoreLimitsBuilder::new().table_elements(4).build());
     store.limiter(|s| s as &mut dyn ResourceLimiter);
@@ -338,8 +336,8 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 
     match Table::new(
         &mut store,
-        TableType::new(ValType::FuncRef, 99, None),
-        Val::FuncRef(None),
+        TableType::new(RefType::FUNCREF, 99, None),
+        Ref::Func(None),
     ) {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
@@ -409,8 +407,7 @@ impl ResourceLimiter for MemoryContext {
         // Check if the desired exceeds a maximum (either from Wasm or from the host)
         assert!(desired < maximum.unwrap_or(usize::MAX));
 
-        assert_eq!(current as usize, self.wasm_memory_used);
-        let desired = desired as usize;
+        assert_eq!(current, self.wasm_memory_used);
 
         if desired + self.host_memory_used > self.memory_limit {
             self.limit_exceeded = true;
@@ -524,8 +521,7 @@ impl ResourceLimiterAsync for MemoryContext {
         // Check if the desired exceeds a maximum (either from Wasm or from the host)
         assert!(desired < maximum.unwrap_or(usize::MAX));
 
-        assert_eq!(current as usize, self.wasm_memory_used);
-        let desired = desired as usize;
+        assert_eq!(current, self.wasm_memory_used);
 
         if desired + self.host_memory_used > self.memory_limit {
             self.limit_exceeded = true;
@@ -663,7 +659,7 @@ fn test_custom_table_limiter() -> Result<()> {
     let engine = Engine::default();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#)?;
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#)?;
 
     let context = TableContext {
         elements_used: 0,
@@ -677,9 +673,9 @@ fn test_custom_table_limiter() -> Result<()> {
     let table = instance.get_table(&mut store, "t").unwrap();
 
     // Grow the table by 10 elements
-    table.grow(&mut store, 3, Val::FuncRef(None))?;
-    table.grow(&mut store, 5, Val::FuncRef(None))?;
-    table.grow(&mut store, 2, Val::FuncRef(None))?;
+    table.grow(&mut store, 3, Ref::Func(None))?;
+    table.grow(&mut store, 5, Ref::Func(None))?;
+    table.grow(&mut store, 2, Ref::Func(None))?;
 
     assert!(!store.data().limit_exceeded);
 
@@ -689,7 +685,7 @@ fn test_custom_table_limiter() -> Result<()> {
     // Try to grow the memory again
     assert_eq!(
         table
-            .grow(&mut store, 1, Val::FuncRef(None))
+            .grow(&mut store, 1, Ref::Func(None))
             .map_err(|e| e.to_string())
             .unwrap_err(),
         "failed to grow table by `1`"
@@ -754,7 +750,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
 
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let context = FailureDetector::default();
@@ -787,7 +783,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
 
     let table = instance.get_table(&mut store, "t").unwrap();
     // Grow the table 10 elements
-    table.grow(&mut store, 10, Val::FuncRef(None))?;
+    table.grow(&mut store, 10, Ref::Func(None))?;
 
     assert!(store.data().table_error.is_none());
     assert_eq!(store.data().table_current, 0);
@@ -797,7 +793,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     // The ResourceLimiter will permit this, but the grow will fail.
     assert_eq!(
         table
-            .grow(&mut store, 1, Val::FuncRef(None))
+            .grow(&mut store, 1, Ref::Func(None))
             .unwrap_err()
             .to_string(),
         "failed to grow table by `1`"
@@ -866,7 +862,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
 
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 funcref))"#,
     )?;
 
     let context = FailureDetector::default();
@@ -903,7 +899,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
 
     let table = instance.get_table(&mut store, "t").unwrap();
     // Grow the table 10 elements
-    table.grow_async(&mut store, 10, Val::FuncRef(None)).await?;
+    table.grow_async(&mut store, 10, Ref::Func(None)).await?;
 
     assert!(store.data().table_error.is_none());
     assert_eq!(store.data().table_current, 0);
@@ -913,7 +909,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     // The ResourceLimiter will permit this, but the grow will fail.
     assert_eq!(
         table
-            .grow_async(&mut store, 1, Val::FuncRef(None))
+            .grow_async(&mut store, 1, Ref::Func(None))
             .await
             .unwrap_err()
             .to_string(),
@@ -1025,7 +1021,7 @@ fn panic_in_table_limiter() {
     let engine = Engine::default();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#).unwrap();
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#).unwrap();
 
     let mut store = Store::new(&engine, Panic);
     store.limiter(|s| s as &mut dyn ResourceLimiter);
@@ -1033,7 +1029,7 @@ fn panic_in_table_limiter() {
     let table = instance.get_table(&mut store, "t").unwrap();
 
     // Grow the table, which should panic
-    table.grow(&mut store, 3, Val::FuncRef(None)).unwrap();
+    table.grow(&mut store, 3, Ref::Func(None)).unwrap();
 }
 
 #[tokio::test]
@@ -1097,7 +1093,7 @@ async fn panic_in_async_table_limiter() {
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#).unwrap();
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#).unwrap();
 
     let mut store = Store::new(&engine, Panic);
     store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
@@ -1106,7 +1102,7 @@ async fn panic_in_async_table_limiter() {
 
     // Grow the table, which should panic
     table
-        .grow_async(&mut store, 3, Val::FuncRef(None))
+        .grow_async(&mut store, 3, Ref::Func(None))
         .await
         .unwrap();
 }
@@ -1119,7 +1115,7 @@ fn growth_trap() -> Result<()> {
         &engine,
         r#"(module
             (memory $m (export "m") 0)
-            (table (export "t") 0 anyfunc)
+            (table (export "t") 0 funcref)
             (func (export "grow") (param i32) (result i32)
               (memory.grow $m (local.get 0)))
            )"#,
@@ -1151,12 +1147,12 @@ fn growth_trap() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, 0, None),
-            Val::FuncRef(None),
+            TableType::new(RefType::FUNCREF, 0, None),
+            Ref::Func(None),
         )?,
     ] {
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        assert!(table.grow(&mut store, 1, Val::FuncRef(None)).is_err());
+        table.grow(&mut store, 1, Ref::Func(None))?;
+        assert!(table.grow(&mut store, 1, Ref::Func(None)).is_err());
     }
 
     let mut store = Store::new(&engine, store.data().clone());

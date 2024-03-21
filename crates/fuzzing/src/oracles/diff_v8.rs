@@ -92,10 +92,7 @@ impl DiffEngine for V8Engine {
         };
         match wasmtime {
             Trap::MemoryOutOfBounds => {
-                return verify_v8(&[
-                    "memory access out of bounds",
-                    "data segment is out of bounds",
-                ])
+                return verify_v8(&["memory access out of bounds", "is out of bounds"])
             }
             Trap::UnreachableCodeReached => {
                 return verify_v8(&[
@@ -297,7 +294,7 @@ fn get_diff_value(
     scope: &mut v8::HandleScope<'_>,
 ) -> DiffValue {
     match ty {
-        DiffValueType::I32 => DiffValue::I32(val.to_int32(scope).unwrap().value() as i32),
+        DiffValueType::I32 => DiffValue::I32(val.to_int32(scope).unwrap().value()),
         DiffValueType::I64 => {
             let (val, todo) = val.to_big_int(scope).unwrap().i64_value();
             assert!(todo);

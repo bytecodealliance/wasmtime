@@ -148,3 +148,168 @@ mod trappable_errors {
     #[allow(dead_code)]
     type MyX = u32;
 }
+
+mod interface_name_with_rust_keyword {
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface crate { }
+
+            world foo {
+                export crate;
+            }
+        "
+    });
+}
+
+mod with_works_with_hierarchy {
+    mod bindings {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface a {
+                    record t {
+                        x: u32,
+                    }
+                    x: func() -> t;
+                }
+
+                interface b {
+                    use a.{t};
+                    x: func() -> t;
+                }
+
+                interface c {
+                    use b.{t};
+                    x: func() -> t;
+                }
+
+                world foo {
+                    import c;
+                }
+            "
+        });
+    }
+
+    mod with_just_one_interface {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface a {
+                    record t {
+                        x: u32,
+                    }
+                    x: func() -> t;
+                }
+
+                interface b {
+                    use a.{t};
+                    x: func() -> t;
+                }
+
+                interface c {
+                    use b.{t};
+                    x: func() -> t;
+                }
+
+                world foo {
+                    use c.{t};
+
+                    import x: func() -> t;
+                }
+            ",
+            with: { "foo:foo/a": super::bindings::foo::foo::a }
+        });
+
+        struct X;
+
+        impl FooImports for X {
+            fn x(&mut self) -> wasmtime::Result<super::bindings::foo::foo::a::T> {
+                loop {}
+            }
+        }
+    }
+
+    mod with_whole_package {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface a {
+                    record t {
+                        x: u32,
+                    }
+                    x: func() -> t;
+                }
+
+                interface b {
+                    use a.{t};
+                    x: func() -> t;
+                }
+
+                interface c {
+                    use b.{t};
+                    x: func() -> t;
+                }
+
+                world foo {
+                    use c.{t};
+
+                    import x: func() -> t;
+                }
+            ",
+            with: { "foo:foo": super::bindings::foo::foo }
+        });
+
+        struct X;
+
+        impl FooImports for X {
+            fn x(&mut self) -> wasmtime::Result<super::bindings::foo::foo::a::T> {
+                loop {}
+            }
+        }
+    }
+
+    mod with_whole_namespace {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface a {
+                    record t {
+                        x: u32,
+                    }
+                    x: func() -> t;
+                }
+
+                interface b {
+                    use a.{t};
+                    x: func() -> t;
+                }
+
+                interface c {
+                    use b.{t};
+                    x: func() -> t;
+                }
+
+                world foo {
+                    use c.{t};
+
+                    import x: func() -> t;
+                }
+            ",
+            with: { "foo": super::bindings::foo }
+        });
+
+        struct X;
+
+        impl FooImports for X {
+            fn x(&mut self) -> wasmtime::Result<super::bindings::foo::foo::a::T> {
+                loop {}
+            }
+        }
+    }
+}

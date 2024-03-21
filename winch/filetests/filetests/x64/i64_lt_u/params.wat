@@ -7,18 +7,26 @@
         (i64.lt_u)
     )
 )
-;;    0:	 55                   	push	rbp
-;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec18             	sub	rsp, 0x18
-;;    8:	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;    d:	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;   12:	 4c893424             	mov	qword ptr [rsp], r14
-;;   16:	 488b442408           	mov	rax, qword ptr [rsp + 8]
-;;   1b:	 488b4c2410           	mov	rcx, qword ptr [rsp + 0x10]
-;;   20:	 4839c1               	cmp	rcx, rax
-;;   23:	 b900000000           	mov	ecx, 0
-;;   28:	 400f92c1             	setb	cl
-;;   2c:	 4889c8               	mov	rax, rcx
-;;   2f:	 4883c418             	add	rsp, 0x18
-;;   33:	 5d                   	pop	rbp
-;;   34:	 c3                   	ret	
+;;      	 55                   	push	rbp
+;;      	 4889e5               	mov	rbp, rsp
+;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
+;;      	 4d8b1b               	mov	r11, qword ptr [r11]
+;;      	 4981c320000000       	add	r11, 0x20
+;;      	 4939e3               	cmp	r11, rsp
+;;      	 0f8737000000         	ja	0x52
+;;   1b:	 4989fe               	mov	r14, rdi
+;;      	 4883ec20             	sub	rsp, 0x20
+;;      	 48897c2418           	mov	qword ptr [rsp + 0x18], rdi
+;;      	 4889742410           	mov	qword ptr [rsp + 0x10], rsi
+;;      	 4889542408           	mov	qword ptr [rsp + 8], rdx
+;;      	 48890c24             	mov	qword ptr [rsp], rcx
+;;      	 488b0424             	mov	rax, qword ptr [rsp]
+;;      	 488b4c2408           	mov	rcx, qword ptr [rsp + 8]
+;;      	 4839c1               	cmp	rcx, rax
+;;      	 b900000000           	mov	ecx, 0
+;;      	 400f92c1             	setb	cl
+;;      	 89c8                 	mov	eax, ecx
+;;      	 4883c420             	add	rsp, 0x20
+;;      	 5d                   	pop	rbp
+;;      	 c3                   	ret	
+;;   52:	 0f0b                 	ud2	

@@ -1,10 +1,10 @@
 use crate::{
-    abi::ABI,
-    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv},
+    abi::{wasm_sig, ABI},
+    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv, TypeConverter},
 };
 
 use crate::frame::{DefinedLocals, Frame};
-use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
+use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
@@ -19,7 +19,7 @@ use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFin
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
 
@@ -91,7 +91,7 @@ impl TargetIsa for X64 {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
+        types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
@@ -105,9 +105,20 @@ impl TargetIsa for X64 {
             self.isa_flags.clone(),
         );
         let stack = Stack::new();
-        let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
+        let abi_sig = wasm_sig::<abi::X64ABI>(sig);
+
+        let env = FuncEnv::new(
+            &vmoffsets,
+            translation,
+            types,
+            builtins,
+            self,
+            abi::X64ABI::ptr_type(),
+        );
+        let type_converter = TypeConverter::new(env.translation, env.types);
+        let defined_locals =
+            DefinedLocals::new::<abi::X64ABI>(&type_converter, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),
@@ -121,8 +132,7 @@ impl TargetIsa for X64 {
         );
 
         let regalloc = RegAlloc::from(gpr, fpr);
-        let env = FuncEnv::new(&vmoffsets, translation, types);
-        let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
+        let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
@@ -153,7 +163,7 @@ impl TargetIsa for X64 {
         );
         let call_conv = self.wasmtime_call_conv();
 
-        let mut trampoline = Trampoline::new(
+        let trampoline = Trampoline::new(
             &mut masm,
             regs::scratch(),
             regs::argv(),
@@ -168,5 +178,17 @@ impl TargetIsa for X64 {
         }
 
         Ok(masm.finalize())
+    }
+
+    fn emit_unwind_info(
+        &self,
+        buffer: &MachBufferFinalized<Final>,
+        kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
+    ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
+        Ok(cranelift_codegen::isa::x64::emit_unwind_info(buffer, kind)?)
+    }
+
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        Some(cranelift_codegen::isa::x64::create_cie())
     }
 }

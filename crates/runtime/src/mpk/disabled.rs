@@ -13,6 +13,10 @@ pub fn keys(_: usize) -> &'static [ProtectionKey] {
 }
 pub fn allow(_: ProtectionMask) {}
 
+pub fn current_mask() -> ProtectionMask {
+    ProtectionMask
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum ProtectionKey {}
 impl ProtectionKey {

@@ -1,3 +1,4 @@
+use test_programs::sockets::attempt_random_port;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -18,19 +19,10 @@ fn test_udp_bind_ephemeral_port(net: &Network, ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_udp_bind_specific_port(net: &Network, ip: IpAddress) {
-    const PORT: u16 = 54321;
-
-    let bind_addr = IpSocketAddress::new(ip, PORT);
-
     let sock = UdpSocket::new(ip.family()).unwrap();
-    match sock.blocking_bind(net, bind_addr) {
-        Ok(()) => {}
 
-        // Concurrent invocations of this test can yield `AddressInUse` and that
-        // same error can show up on Windows as `AccessDenied`.
-        Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => {}
-        r => r.unwrap(),
-    }
+    let bind_addr =
+        attempt_random_port(ip, |bind_addr| sock.blocking_bind(net, bind_addr)).unwrap();
 
     let bound_addr = sock.local_address().unwrap();
 
@@ -83,23 +75,11 @@ fn test_udp_bind_dual_stack(net: &Network) {
     let sock = UdpSocket::new(IpAddressFamily::Ipv6).unwrap();
     let addr = IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, 0);
 
-    // Even on platforms that don't support dualstack sockets,
-    // setting ipv6_only to true (disabling dualstack mode) should work.
-    sock.set_ipv6_only(true).unwrap();
-
     // Binding an IPv4-mapped-IPv6 address on a ipv6-only socket should fail:
     assert!(matches!(
         sock.blocking_bind(net, addr),
         Err(ErrorCode::InvalidArgument)
     ));
-
-    sock.set_ipv6_only(false).unwrap();
-
-    sock.blocking_bind(net, addr).unwrap();
-
-    let bound_addr = sock.local_address().unwrap();
-
-    assert_eq!(bound_addr.family(), IpAddressFamily::Ipv6);
 }
 
 fn main() {

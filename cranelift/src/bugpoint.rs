@@ -26,14 +26,14 @@ pub struct Options {
     file: PathBuf,
 
     /// Configure Cranelift settings
-    #[clap(long = "set")]
+    #[arg(long = "set")]
     settings: Vec<String>,
 
     /// Specify the target architecture.
     target: String,
 
     /// Be more verbose
-    #[clap(short, long)]
+    #[arg(short, long)]
     verbose: bool,
 }
 
@@ -1059,7 +1059,6 @@ impl<'a> CrashCheckContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_reader::ParseOptions;
 
     fn run_test(test_str: &str, expected_str: &str) {
         let test_file = parse_test(test_str, ParseOptions::default()).unwrap();

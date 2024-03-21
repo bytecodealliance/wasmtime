@@ -77,6 +77,9 @@ impl std::fmt::Display for CodegenError {
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError(_0) => write!(f, "Register mapping error"),
             CodegenError::Regalloc(errors) => write!(f, "Regalloc validation errors: {:?}", errors),
+
+            // NOTE: if this is changed, please update the `is_pcc_error` function defined in
+            // `wasmtime/crates/fuzzing/src/oracles.rs`
             CodegenError::Pcc(e) => write!(f, "Proof-carrying-code validation error: {:?}", e),
         }
     }
