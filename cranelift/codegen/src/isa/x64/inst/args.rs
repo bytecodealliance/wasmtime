@@ -1371,6 +1371,26 @@ impl SseOpcode {
             _ => 8,
         }
     }
+
+    /// Is `src2` with this opcode a scalar, as for lane insertions?
+    pub(crate) fn has_scalar_src2(self) -> bool {
+        match self {
+            SseOpcode::Pinsrb | SseOpcode::Pinsrw | SseOpcode::Pinsrd => true,
+            SseOpcode::Pmovsxbw
+            | SseOpcode::Pmovsxbd
+            | SseOpcode::Pmovsxbq
+            | SseOpcode::Pmovsxwd
+            | SseOpcode::Pmovsxwq
+            | SseOpcode::Pmovsxdq => true,
+            SseOpcode::Pmovzxbw
+            | SseOpcode::Pmovzxbd
+            | SseOpcode::Pmovzxbq
+            | SseOpcode::Pmovzxwd
+            | SseOpcode::Pmovzxwq
+            | SseOpcode::Pmovzxdq => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Debug for SseOpcode {

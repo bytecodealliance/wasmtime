@@ -303,7 +303,7 @@ pub(crate) fn check(
                 check_constant(ctx, vcode, rd, 64, constant)
             } else {
                 check_output(ctx, vcode, rd, &[], |_vcode| {
-                    Ok(Fact::max_range_for_width(64))
+                    Ok(Some(Fact::max_range_for_width(64)))
                 })
             }
         }
@@ -426,7 +426,7 @@ fn check_addr<'a>(
                 trace!(
                     "checking a load: loaded_fact = {loaded_fact:?} result_fact = {result_fact:?}"
                 );
-                if ctx.subsumes_fact_optionals(Some(&loaded_fact), result_fact) {
+                if ctx.subsumes_fact_optionals(loaded_fact.as_ref(), result_fact) {
                     Ok(())
                 } else {
                     Err(PccError::UnsupportedFact)
