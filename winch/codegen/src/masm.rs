@@ -2,7 +2,7 @@ use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
-    ir::{Endianness, LibCall, MemFlags},
+    ir::{Endianness, LibCall, MemFlags, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -365,9 +365,9 @@ pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
     /// A function call to a local function.
-    Direct(u32),
+    Direct(UserExternalNameRef),
     /// Call to a well known LibCall.
-    Known(LibCall),
+    LibCall(LibCall),
 }
 
 impl CalleeKind {
@@ -376,14 +376,14 @@ impl CalleeKind {
         Self::Indirect(reg)
     }
 
-    /// Creates a direct callee kind from a function index.
-    pub fn direct(index: u32) -> Self {
-        Self::Direct(index)
+    /// Creates a direct callee kind from a function name.
+    pub fn direct(name: UserExternalNameRef) -> Self {
+        Self::Direct(name)
     }
 
     /// Creates a known callee kind from a libcall.
-    pub fn known(call: LibCall) -> Self {
-        Self::Known(call)
+    pub fn libcall(call: LibCall) -> Self {
+        Self::LibCall(call)
     }
 }
 

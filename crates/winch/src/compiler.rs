@@ -29,17 +29,6 @@ pub(crate) struct Compiler {
     contexts: Mutex<Vec<CompilationContext>>,
 }
 
-/// The compiled function environment.
-pub struct CompiledFuncEnv;
-impl wasmtime_cranelift::CompiledFuncEnv for CompiledFuncEnv {
-    fn resolve_user_external_name_ref(
-        &self,
-        external: cranelift_codegen::ir::UserExternalNameRef,
-    ) -> (u32, u32) {
-        (0, external.as_u32())
-    }
-}
-
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>, trampolines: Box<dyn wasmtime_environ::Compiler>) -> Self {
         Self {
@@ -109,7 +98,7 @@ impl wasmtime_environ::Compiler for Compiler {
         );
         let mut context = self.get_context(translation);
         let mut validator = validator.into_validator(mem::take(&mut context.allocations));
-        let buffer = self
+        let func = self
             .isa
             .compile_function(
                 ty,
@@ -121,13 +110,10 @@ impl wasmtime_environ::Compiler for Compiler {
             )
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_context(context, validator.into_allocations());
-        let buffer = buffer?;
-
-        let mut compiled_function =
-            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
+        let mut func = func?;
 
         if self.isa.flags().unwind_info() {
-            self.emit_unwind_info(&mut compiled_function)?;
+            self.emit_unwind_info(&mut func)?;
         }
 
         Ok((
@@ -135,7 +121,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 start_srcloc,
                 stack_maps: Box::new([]),
             },
-            Box::new(compiled_function),
+            Box::new(func),
         ))
     }
 

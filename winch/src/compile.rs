@@ -71,7 +71,7 @@ fn compile(
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());
-    disasm(buffer.data(), isa, OffsetStyle::Full)?
+    disasm(buffer.buffer.data(), isa, OffsetStyle::Full)?
         .iter()
         .for_each(|s| println!("{}", s));
 

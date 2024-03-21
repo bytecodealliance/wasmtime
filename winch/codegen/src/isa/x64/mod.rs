@@ -18,6 +18,7 @@ use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFin
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
@@ -93,7 +94,7 @@ impl TargetIsa for X64 {
         types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
-    ) -> Result<MachBufferFinalized<Final>> {
+    ) -> Result<CompiledFunction> {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
 
@@ -136,7 +137,12 @@ impl TargetIsa for X64 {
 
         codegen.emit(&mut body, validator)?;
 
-        Ok(masm.finalize())
+        let names = codegen.env.take_name_map();
+        Ok(CompiledFunction::new(
+            masm.finalize(),
+            names,
+            self.function_alignment(),
+        ))
     }
 
     fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {

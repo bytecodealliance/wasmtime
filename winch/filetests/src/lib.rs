@@ -173,7 +173,7 @@ mod test {
             )
             .expect("Couldn't compile function");
 
-        disasm(buffer.data(), isa, OffsetStyle::Minimal).unwrap()
+        disasm(buffer.buffer.data(), isa, OffsetStyle::Minimal).unwrap()
     }
 
     struct DummyConvert;

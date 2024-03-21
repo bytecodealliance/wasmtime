@@ -5,7 +5,6 @@ use crate::{
     masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::TypedReg,
 };
-
 use anyhow::Result;
 use smallvec::SmallVec;
 use wasmparser::{
@@ -433,7 +432,8 @@ where
         // This is safe since the FnCall::emit call below, will ensure
         // that the result register is placed on the value stack.
         self.context.free_reg(elem_value);
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),

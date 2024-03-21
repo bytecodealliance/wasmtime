@@ -1,17 +1,9 @@
-use std::any::Any;
-
 use crate::{mach_reloc_to_reloc, mach_trap_to_trap, Relocation};
 use cranelift_codegen::{
-    ir, ir::UserExternalNameRef, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo, Final,
-    MachBufferFinalized, MachSrcLoc, ValueLabelsRanges,
+    ir, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo, Final, MachBufferFinalized,
+    MachSrcLoc, ValueLabelsRanges,
 };
-use wasmtime_environ::{FilePos, InstructionAddressMap, TrapInformation};
-
-/// Trait used in the [CompiledFunction] to resolve the locations of
-/// external name references in a compiled function.
-pub trait CompiledFuncEnv {
-    fn resolve_user_external_name_ref(&self, external: UserExternalNameRef) -> (u32, u32);
-}
+use wasmtime_environ::{FilePos, InstructionAddressMap, PrimaryMap, TrapInformation};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Metadata to translate from binary offsets back to the original
@@ -64,8 +56,8 @@ pub struct CompiledFunctionMetadata {
 pub struct CompiledFunction {
     /// The machine code buffer for this function.
     pub buffer: MachBufferFinalized<Final>,
-    /// The environment for the compiled function.
-    env: Box<dyn CompiledFuncEnv + Send + 'static>,
+    /// What names each name ref corresponds to.
+    name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
     /// The alignment for the compiled function.
     pub alignment: u32,
     /// The metadata for the compiled function, including unwind information
@@ -77,13 +69,14 @@ impl CompiledFunction {
     /// Creates a [CompiledFunction] from a [cranelift_codegen::MachBufferFinalized<Final>]
     /// This function uses the information in the machine buffer to derive the traps and relocations
     /// fields. The compiled function metadata is loaded with the default values.
-    pub fn new<E>(buffer: MachBufferFinalized<Final>, env: E, alignment: u32) -> Self
-    where
-        E: Any + CompiledFuncEnv + Send + 'static,
-    {
+    pub fn new(
+        buffer: MachBufferFinalized<Final>,
+        name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
+        alignment: u32,
+    ) -> Self {
         Self {
             buffer,
-            env: Box::new(env),
+            name_map,
             alignment,
             metadata: Default::default(),
         }
@@ -91,11 +84,10 @@ impl CompiledFunction {
 
     /// Returns an iterator to the function's relocation information.
     pub fn relocations(&self) -> impl Iterator<Item = Relocation> + '_ {
-        self.buffer.relocs().iter().map(|r| {
-            mach_reloc_to_reloc(r, |external| {
-                self.env.resolve_user_external_name_ref(external)
-            })
-        })
+        self.buffer
+            .relocs()
+            .iter()
+            .map(|r| mach_reloc_to_reloc(r, &self.name_map))
     }
 
     /// Returns an iterator to the function's trap information.

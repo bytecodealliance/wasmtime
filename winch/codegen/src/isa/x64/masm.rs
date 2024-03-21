@@ -373,8 +373,8 @@ impl Masm for MacroAssembler {
         let callee = load_callee(self);
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg),
-            CalleeKind::Direct(idx) => self.asm.call_with_index(idx),
-            CalleeKind::Known(lib) => self.asm.call_with_lib(lib, regs::scratch()),
+            CalleeKind::Direct(idx) => self.asm.call_with_name(idx),
+            CalleeKind::LibCall(lib) => self.asm.call_with_lib(lib, regs::scratch()),
         };
         total_stack
     }

@@ -32,7 +32,7 @@
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
 ;;      	 4981c360000000       	add	r11, 0x60
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f87f1000000         	ja	0x10c
+;;      	 0f87ed000000         	ja	0x108
 ;;   1b:	 4989fe               	mov	r14, rdi
 ;;      	 4883ec50             	sub	rsp, 0x50
 ;;      	 48897c2448           	mov	qword ptr [rsp + 0x48], rdi
@@ -59,13 +59,11 @@
 ;;      	 c1e810               	shr	eax, 0x10
 ;;      	 4883ec04             	sub	rsp, 4
 ;;      	 890424               	mov	dword ptr [rsp], eax
-;;      	 4d8b5e10             	mov	r11, qword ptr [r14 + 0x10]
-;;      	 498b0b               	mov	rcx, qword ptr [r11]
 ;;      	 4883ec0c             	sub	rsp, 0xc
 ;;      	 4c89f7               	mov	rdi, r14
 ;;      	 8b74240c             	mov	esi, dword ptr [rsp + 0xc]
 ;;      	 ba00000000           	mov	edx, 0
-;;      	 ffd1                 	call	rcx
+;;      	 e800000000           	call	0xa0
 ;;      	 4883c40c             	add	rsp, 0xc
 ;;      	 4883c404             	add	rsp, 4
 ;;      	 4c8b742448           	mov	r14, qword ptr [rsp + 0x48]
@@ -74,13 +72,13 @@
 ;;      	 4801c1               	add	rcx, rax
 ;;      	 4881c124300200       	add	rcx, 0x23024
 ;;      	 480fbe01             	movsx	rax, byte ptr [rcx]
-;;      	 f30f100543000000     	movss	xmm0, dword ptr [rip + 0x43]
+;;      	 f30f100547000000     	movss	xmm0, dword ptr [rip + 0x47]
 ;;      	 4883ec0c             	sub	rsp, 0xc
-;;      	 f2440f103d3e000000   	
-;; 				movsd	xmm15, qword ptr [rip + 0x3e]
+;;      	 f2440f103d42000000   	
+;; 				movsd	xmm15, qword ptr [rip + 0x42]
 ;;      	 f2440f113c24         	movsd	qword ptr [rsp], xmm15
-;;      	 f3440f103d27000000   	
-;; 				movss	xmm15, dword ptr [rip + 0x27]
+;;      	 f3440f103d2b000000   	
+;; 				movss	xmm15, dword ptr [rip + 0x2b]
 ;;      	 f3440f117c2408       	movss	dword ptr [rsp + 8], xmm15
 ;;      	 488b44240c           	mov	rax, qword ptr [rsp + 0xc]
 ;;      	 415b                 	pop	r11
@@ -91,7 +89,9 @@
 ;;      	 4883c450             	add	rsp, 0x50
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;  10c:	 0f0b                 	ud2	
+;;  108:	 0f0b                 	ud2	
+;;  10a:	 0000                 	add	byte ptr [rax], al
+;;  10c:	 0000                 	add	byte ptr [rax], al
 ;;  10e:	 0000                 	add	byte ptr [rax], al
 ;;  110:	 0000                 	add	byte ptr [rax], al
 ;;  112:	 0000                 	add	byte ptr [rax], al

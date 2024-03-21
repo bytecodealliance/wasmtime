@@ -5,7 +5,6 @@ use crate::{
     masm::{DivKind, ExtendKind, IntCmpKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
-    entity::EntityRef,
     ir::{
         types, ConstantPool, ExternalName, LibCall, MemFlags, Opcode, TrapCode, UserExternalNameRef,
     },
@@ -1252,8 +1251,8 @@ impl Assembler {
     }
 
     /// Emit a call to a locally defined function through an index.
-    pub fn call_with_index(&mut self, index: u32) {
-        let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
+    pub fn call_with_name(&mut self, name: UserExternalNameRef) {
+        let dest = ExternalName::user(name);
         self.emit(Inst::CallKnown {
             dest,
             opcode: Opcode::Call,

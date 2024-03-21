@@ -4,9 +4,7 @@ use crate::{array_call_signature, native_call_signature, DEBUG_ASSERT_TRAP_CODE}
 use crate::{builder::LinkOptions, value_type, wasm_call_signature, BuiltinFunctionSignatures};
 use crate::{CompiledFunction, ModuleTextBuilder};
 use anyhow::{Context as _, Result};
-use cranelift_codegen::ir::{
-    self, InstBuilder, MemFlags, UserExternalName, UserExternalNameRef, UserFuncName, Value,
-};
+use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{
     unwind::{UnwindInfo, UnwindInfoKind},
     OwnedTargetIsa, TargetIsa,
@@ -1037,20 +1035,6 @@ impl Compiler {
     }
 }
 
-/// The compiled function environment.
-pub struct CompiledFuncEnv {
-    /// Map to resolve external name references.
-    map: PrimaryMap<UserExternalNameRef, UserExternalName>,
-}
-
-impl crate::CompiledFuncEnv for CompiledFuncEnv {
-    fn resolve_user_external_name_ref(&self, external: ir::UserExternalNameRef) -> (u32, u32) {
-        let UserExternalName { index, namespace } = self.map[external];
-
-        (namespace, index)
-    }
-}
-
 struct FunctionCompiler<'a> {
     compiler: &'a Compiler,
     cx: CompilerContext,
@@ -1097,11 +1081,11 @@ impl FunctionCompiler<'_> {
         };
 
         let alignment = compiled_code.buffer.alignment.max(preferred_alignment);
-        let env = CompiledFuncEnv {
-            map: context.func.params.user_named_funcs().clone(),
-        };
-        let mut compiled_function =
-            CompiledFunction::new(compiled_code.buffer.clone(), env, alignment);
+        let mut compiled_function = CompiledFunction::new(
+            compiled_code.buffer.clone(),
+            context.func.params.user_named_funcs().clone(),
+            alignment,
+        );
 
         if let Some((body, tunables)) = body_and_tunables {
             let data = body.get_binary_reader();

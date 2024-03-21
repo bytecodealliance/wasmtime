@@ -6,7 +6,7 @@
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Signature};
 use cranelift_codegen::{
     binemit,
-    ir::{self, ExternalName, UserExternalNameRef},
+    ir::{self, ExternalName},
     isa::{CallConv, TargetIsa},
     settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
@@ -294,10 +294,10 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
 
 /// Converts machine relocations to relocation information
 /// to perform.
-fn mach_reloc_to_reloc<F>(reloc: &FinalizedMachReloc, transform_user_func_ref: F) -> Relocation
-where
-    F: Fn(UserExternalNameRef) -> (u32, u32),
-{
+fn mach_reloc_to_reloc(
+    reloc: &FinalizedMachReloc,
+    name_map: &PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
+) -> Relocation {
     let &FinalizedMachReloc {
         offset,
         kind,
@@ -306,13 +306,13 @@ where
     } = reloc;
     let reloc_target = match *target {
         FinalizedRelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
-            let (namespace, index) = transform_user_func_ref(user_func_ref);
-            match namespace {
-                NS_WASM_FUNC => RelocationTarget::Wasm(FuncIndex::from_u32(index)),
+            let name = &name_map[user_func_ref];
+            match name.namespace {
+                NS_WASM_FUNC => RelocationTarget::Wasm(FuncIndex::from_u32(name.index)),
                 NS_WASMTIME_BUILTIN => {
-                    RelocationTarget::Builtin(BuiltinFunctionIndex::from_u32(index))
+                    RelocationTarget::Builtin(BuiltinFunctionIndex::from_u32(name.index))
                 }
-                _ => panic!("unknown namespace {namespace}"),
+                _ => panic!("unknown namespace {}", name.namespace),
             }
         }
         FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
