@@ -185,6 +185,11 @@ impl Config {
 
         self.wasmtime.codegen.configure(&mut cfg);
 
+        // Determine whether we will actually enable PCC -- this is
+        // disabled if the module erquires memory64, which is not yet
+        // compatible (due to the need for dynamic checks).
+        let pcc = self.wasmtime.pcc && !self.module_config.config.memory64_enabled;
+
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
         if cranelift_strategy {
@@ -217,7 +222,7 @@ impl Config {
                 }
             }
 
-            cfg.cranelift_pcc(self.wasmtime.pcc);
+            cfg.cranelift_pcc(pcc);
         }
 
         // Vary the memory configuration, but only if threads are not enabled.
@@ -233,7 +238,7 @@ impl Config {
         if !self.module_config.config.threads_enabled {
             // If PCC is enabled, force other options to be compatible: PCC is currently only
             // supported when bounds checks are elided.
-            let memory_config = if self.wasmtime.pcc {
+            let memory_config = if pcc {
                 MemoryConfig::Normal(NormalMemoryConfig {
                     static_memory_maximum_size: Some(4 << 30), // 4 GiB
                     static_memory_guard_size: Some(2 << 30),   // 2 GiB
