@@ -28,8 +28,10 @@ pub(crate) fn clamp_range(
     to_bits: u16,
     from_bits: u16,
     fact: Option<Fact>,
-) -> PccResult<Fact> {
-    let max = if from_bits == 64 {
+) -> PccResult<Option<Fact>> {
+    let max = if from_bits > 64 {
+        return Ok(None);
+    } else if from_bits == 64 {
         u64::MAX
     } else {
         (1u64 << from_bits) - 1
@@ -42,32 +44,40 @@ pub(crate) fn clamp_range(
     );
     Ok(fact
         .and_then(|f| ctx.uextend(&f, from_bits, to_bits))
-        .unwrap_or_else(|| {
+        .or_else(|| {
             let result = Fact::Range {
                 bit_width: to_bits,
                 min: 0,
                 max,
             };
             trace!(" -> clamping to {:?}", result);
-            result
+            Some(result)
         }))
 }
 
 pub(crate) fn check_subsumes(ctx: &FactContext, subsumer: &Fact, subsumee: &Fact) -> PccResult<()> {
+    check_subsumes_optionals(ctx, Some(subsumer), Some(subsumee))
+}
+
+pub(crate) fn check_subsumes_optionals(
+    ctx: &FactContext,
+    subsumer: Option<&Fact>,
+    subsumee: Option<&Fact>,
+) -> PccResult<()> {
     trace!(
         "checking if derived fact {:?} subsumes stated fact {:?}",
         subsumer,
         subsumee
     );
 
-    if ctx.subsumes(subsumer, subsumee) {
+    if ctx.subsumes_fact_optionals(subsumer, subsumee) {
         Ok(())
     } else {
         Err(PccError::UnsupportedFact)
     }
 }
 
-pub(crate) fn check_output<I: VCodeInst, F: FnOnce(&VCode<I>) -> PccResult<Fact>>(
+pub(crate) fn check_output<I: VCodeInst, F: FnOnce(&VCode<I>) -> PccResult<Option<Fact>>>(
     ctx: &FactContext,
     vcode: &mut VCode<I>,
     out: Writable<Reg>,
@@ -76,14 +86,14 @@ pub(crate) fn check_output<I: VCodeInst, F: FnOnce(&VCode<I>) -> PccResult<Fact>
 ) -> PccResult<()> {
     if let Some(fact) = vcode.vreg_fact(out.to_reg().into()) {
         let result = f(vcode)?;
-        check_subsumes(ctx, &result, fact)
+        check_subsumes_optionals(ctx, result.as_ref(), Some(fact))
     } else if ins.iter().any(|r| {
         vcode
             .vreg_fact(r.into())
             .map(|fact| fact.propagates())
             .unwrap_or(false)
     }) {
-        if let Ok(fact) = f(vcode) {
+        if let Ok(Some(fact)) = f(vcode) {
             trace!("setting vreg {:?} to {:?}", out, fact);
             vcode.set_vreg_fact(out.to_reg().into(), fact);
         }
@@ -93,7 +103,7 @@ pub(crate) fn check_output<I: VCodeInst, F: FnOnce(&VCode<I>) -> PccResult<Fact>
     }
 }
 
-pub(crate) fn check_unop<I: VCodeInst, F: FnOnce(&Fact) -> PccResult<Fact>>(
+pub(crate) fn check_unop<I: VCodeInst, F: FnOnce(&Fact) -> PccResult<Option<Fact>>>(
     ctx: &FactContext,
     vcode: &mut VCode<I>,
     reg_width: u16,
@@ -107,7 +117,7 @@ pub(crate) fn check_unop<I: VCodeInst, F: FnOnce(&Fact) -> PccResult<Fact>>(
     })
 }
 
-pub(crate) fn check_binop<I: VCodeInst, F: FnOnce(&Fact, &Fact) -> PccResult<Fact>>(
+pub(crate) fn check_binop<I: VCodeInst, F: FnOnce(&Fact, &Fact) -> PccResult<Option<Fact>>>(
     ctx: &FactContext,
     vcode: &mut VCode<I>,
     reg_width: u16,
