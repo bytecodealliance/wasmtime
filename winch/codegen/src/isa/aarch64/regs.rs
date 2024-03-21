@@ -1,8 +1,7 @@
 //! AArch64 register definition.
 
-use crate::{isa::reg::Reg, masm::OperandSize};
+use crate::isa::reg::Reg;
 use regalloc2::{PReg, RegClass};
-use smallvec::{smallvec, SmallVec};
 
 /// FPR index bound.
 pub(crate) const MAX_FPR: u32 = 32;
@@ -148,37 +147,3 @@ pub(crate) const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
 
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;
-
-/// Returns the callee-saved registers.
-///
-/// This function will return the set of registers that need to be saved
-/// according to the system ABI and that are known not to be saved during the
-/// prologue emission.
-#[allow(unused)]
-pub(crate) fn callee_saved() -> SmallVec<[(Reg, OperandSize); 18]> {
-    use OperandSize::*;
-    let regs: SmallVec<[_; 18]> = smallvec![
-        xreg(19),
-        xreg(20),
-        xreg(21),
-        xreg(22),
-        xreg(23),
-        xreg(24),
-        xreg(25),
-        xreg(26),
-        xreg(27),
-        xreg(28),
-        vreg(8),
-        vreg(9),
-        vreg(10),
-        vreg(11),
-        vreg(12),
-        vreg(13),
-        vreg(14),
-        vreg(15),
-    ];
-    // Aarch64's calling convention states that for VReg's only
-    // the lower 64 bits are callee-saved (D8-D15).  See
-    // https://developer.arm.com/documentation/102374/0101/Procedure-Call-Standard
-    regs.into_iter().map(|reg| (reg, S64)).collect()
-}

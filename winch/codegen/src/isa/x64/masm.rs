@@ -95,76 +95,17 @@ impl Masm for MacroAssembler {
 
         self.asm.cmp_rr(regs::rsp(), scratch, self.ptr_size);
         self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
-    }
-
-    fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        let int_bytes: u32 = Self::ABI::word_bytes().try_into().unwrap();
-        let float_bytes = int_bytes * 2;
-
-        // Determine how much space we need for the clobbers
-        let clobbered_size = align_to(
-            clobbers
-                .iter()
-                .fold(0u32, |total, (reg, _)| match reg.class() {
-                    RegClass::Int => total + int_bytes,
-                    RegClass::Float => align_to(total, float_bytes) + float_bytes,
-                    RegClass::Vector => unimplemented!(),
-                }),
-            float_bytes,
-        );
 
         // Emit unwind info.
         if self.shared_flags.unwind_info() {
             self.asm.emit_unwind_inst(UnwindInst::DefineNewFrame {
                 offset_upward_to_caller_sp: Self::ABI::arg_base_offset().try_into().unwrap(),
-                offset_downward_to_clobbers: clobbered_size,
+
+                // The Winch calling convention has no callee-save registers, so nothing will be
+                // clobbered.
+                offset_downward_to_clobbers: 0,
             })
         }
-
-        self.reserve_stack(clobbered_size);
-
-        let mut off = 0;
-        for &(reg, size) in clobbers {
-            // Align the current offset
-            off = align_to(off, size.bytes());
-
-            // Emit the store
-            let addr = self.address_at_sp(SPOffset::from_u32(off));
-            self.store(RegImm::Reg(reg), addr, size);
-
-            // Emit unwinding info, if necessary
-            if self.shared_flags.unwind_info() {
-                self.asm.emit_unwind_inst(UnwindInst::SaveReg {
-                    clobber_offset: off,
-                    reg: reg.into(),
-                });
-            }
-
-            // Increment the offset
-            off += size.bytes();
-        }
-
-        debug_assert_eq!(align_to(off, float_bytes), clobbered_size);
-    }
-
-    fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        let int_bytes: u32 = Self::ABI::word_bytes().try_into().unwrap();
-        let float_bytes = int_bytes * 2;
-
-        let mut off = 0;
-        for &(reg, size) in clobbers {
-            // Align the current offset
-            off = align_to(off, size.bytes());
-
-            // Emit the load
-            let addr = self.address_at_sp(SPOffset::from_u32(off));
-            self.load(addr, reg, size);
-
-            // Increment the offset
-            off += size.bytes();
-        }
-
-        self.free_stack(align_to(off, float_bytes));
     }
 
     fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
