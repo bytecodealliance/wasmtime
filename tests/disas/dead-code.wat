@@ -32,7 +32,7 @@
 ;; @0023                               jump block2
 ;;
 ;;                                 block2:
-;; @0029                               brif.i32 v3, block4, block5
+;; @0029                               brif.i32 v2, block4, block5
 ;;
 ;;                                 block5:
 ;; @002b                               jump block2

@@ -33,7 +33,7 @@
 ;; @0056                               v4 = iconst.i32 7
 ;; @0056                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 7
 ;; @0056                               v6 = uextend.i64 v3  ; v3 = 0
-;; @0056                               v7 = load.i64 notrap aligned v23+72
+;; @0056                               v7 = load.i64 notrap aligned v0+72
 ;;                                     v24 = iconst.i64 3
 ;; @0056                               v8 = ishl v6, v24  ; v24 = 3
 ;; @0056                               v9 = iadd v7, v8
@@ -66,9 +66,9 @@
 ;; @0056                               brif v19, block5, block6
 ;;
 ;;                                 block5:
-;; @0056                               v21 = load.i64 notrap aligned readonly v20+56
+;; @0056                               v21 = load.i64 notrap aligned readonly v0+56
 ;; @0056                               v22 = load.i64 notrap aligned readonly v21+200
-;; @0056                               call_indirect sig0, v22(v20, v12)
+;; @0056                               call_indirect sig0, v22(v0, v12)
 ;; @0056                               jump block6
 ;;
 ;;                                 block6:
@@ -93,7 +93,7 @@
 ;; @005f                               v4 = iconst.i32 7
 ;; @005f                               v5 = icmp uge v2, v4  ; v4 = 7
 ;; @005f                               v6 = uextend.i64 v2
-;; @005f                               v7 = load.i64 notrap aligned v23+72
+;; @005f                               v7 = load.i64 notrap aligned v0+72
 ;;                                     v24 = iconst.i64 3
 ;; @005f                               v8 = ishl v6, v24  ; v24 = 3
 ;; @005f                               v9 = iadd v7, v8
@@ -126,9 +126,9 @@
 ;; @005f                               brif v19, block5, block6
 ;;
 ;;                                 block5:
-;; @005f                               v21 = load.i64 notrap aligned readonly v20+56
+;; @005f                               v21 = load.i64 notrap aligned readonly v0+56
 ;; @005f                               v22 = load.i64 notrap aligned readonly v21+200
-;; @005f                               call_indirect sig0, v22(v20, v12)
+;; @005f                               call_indirect sig0, v22(v0, v12)
 ;; @005f                               jump block6
 ;;
 ;;                                 block6:

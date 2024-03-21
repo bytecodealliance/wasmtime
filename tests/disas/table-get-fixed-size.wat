@@ -32,7 +32,7 @@
 ;; @0054                               v4 = iconst.i32 7
 ;; @0054                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 7
 ;; @0054                               v6 = uextend.i64 v3  ; v3 = 0
-;; @0054                               v7 = load.i64 notrap aligned v25+72
+;; @0054                               v7 = load.i64 notrap aligned v0+72
 ;;                                     v26 = iconst.i64 3
 ;; @0054                               v8 = ishl v6, v26  ; v26 = 3
 ;; @0054                               v9 = iadd v7, v8
@@ -44,7 +44,7 @@
 ;; @0054                               brif v13, block2, block3
 ;;
 ;;                                 block3:
-;; @0054                               v15 = load.i64 notrap aligned v14+32
+;; @0054                               v15 = load.i64 notrap aligned v0+32
 ;; @0054                               v16 = load.i64 notrap aligned v15
 ;; @0054                               v17 = load.i64 notrap aligned v15+8
 ;; @0054                               v18 = icmp eq v16, v17
@@ -62,16 +62,16 @@
 ;; @0054                               jump block2
 ;;
 ;;                                 block4:
-;; @0054                               v20 = load.i64 notrap aligned readonly v19+56
+;; @0054                               v20 = load.i64 notrap aligned readonly v0+56
 ;; @0054                               v21 = load.i64 notrap aligned readonly v20+208
-;; @0054                               call_indirect sig0, v21(v19, v12)
+;; @0054                               call_indirect sig0, v21(v0, v12)
 ;; @0054                               jump block2
 ;;
 ;;                                 block2:
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
-;; @0056                               return v2
+;; @0056                               return v12
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> r64 fast {
@@ -90,7 +90,7 @@
 ;; @005b                               v4 = iconst.i32 7
 ;; @005b                               v5 = icmp uge v2, v4  ; v4 = 7
 ;; @005b                               v6 = uextend.i64 v2
-;; @005b                               v7 = load.i64 notrap aligned v25+72
+;; @005b                               v7 = load.i64 notrap aligned v0+72
 ;;                                     v26 = iconst.i64 3
 ;; @005b                               v8 = ishl v6, v26  ; v26 = 3
 ;; @005b                               v9 = iadd v7, v8
@@ -102,7 +102,7 @@
 ;; @005b                               brif v13, block2, block3
 ;;
 ;;                                 block3:
-;; @005b                               v15 = load.i64 notrap aligned v14+32
+;; @005b                               v15 = load.i64 notrap aligned v0+32
 ;; @005b                               v16 = load.i64 notrap aligned v15
 ;; @005b                               v17 = load.i64 notrap aligned v15+8
 ;; @005b                               v18 = icmp eq v16, v17
@@ -120,14 +120,14 @@
 ;; @005b                               jump block2
 ;;
 ;;                                 block4:
-;; @005b                               v20 = load.i64 notrap aligned readonly v19+56
+;; @005b                               v20 = load.i64 notrap aligned readonly v0+56
 ;; @005b                               v21 = load.i64 notrap aligned readonly v20+208
-;; @005b                               call_indirect sig0, v21(v19, v12)
+;; @005b                               call_indirect sig0, v21(v0, v12)
 ;; @005b                               jump block2
 ;;
 ;;                                 block2:
 ;; @005d                               jump block1
 ;;
 ;;                                 block1:
-;; @005d                               return v3
+;; @005d                               return v12
 ;; }
