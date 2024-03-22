@@ -524,10 +524,16 @@ pub trait ABIMachineSpec {
     ) -> SmallInstVec<Self::I>;
 
     /// Generate the usual frame-restore sequence for this architecture.
-    /// This includes generating the actual return instruction(s).
     fn gen_epilogue_frame_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        isa_flags: &Self::F,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Self::I>;
+
+    /// Generate a return instruction.
+    fn gen_return(
+        call_conv: isa::CallConv,
         isa_flags: &Self::F,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I>;
@@ -1963,10 +1969,17 @@ impl<M: ABIMachineSpec> Callee<M> {
         // the CFG, so early returns in the middle of function bodies would cause an incorrect
         // offset for the rest of the body.
 
-        // Tear down frame and return.
+        // Tear down frame.
         insts.extend(M::gen_epilogue_frame_restore(
             self.call_conv,
             &self.flags,
+            &self.isa_flags,
+            &frame_layout,
+        ));
+
+        // And return.
+        insts.extend(M::gen_return(
+            self.call_conv,
             &self.isa_flags,
             &frame_layout,
         ));

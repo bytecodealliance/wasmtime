@@ -418,9 +418,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 frame_layout.stack_args_size.try_into().unwrap(),
             ));
         }
-        insts.push(Inst::Ret {});
 
         insts
+    }
+
+    fn gen_return(
+        _call_conv: isa::CallConv,
+        _isa_flags: &RiscvFlags,
+        _frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Inst> {
+        smallvec![Inst::Ret {}]
     }
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
