@@ -1,0 +1,41 @@
+test optimize
+set opt_level=speed
+set ensure_precise_store_traps=true
+target x86_64
+
+function %f0(i64) {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    store.i64 v1, v0
+    return
+}
+
+; check: load.i64 v0
+; check: store v1, v0
+
+function %f1(i64, i8x16) {
+block0(v0: i64, v1: i8x16):
+    store.i64 v1, v0
+    return
+}
+
+; check: load.i8x16 v0
+; check: store v1, v0
+
+function %f2(i64, i64) {
+block0(v0: i64, v1: i64):
+    istore8 v1, v0
+    return
+}
+
+; check: load.i8 v0
+; check: istore8 v1, v0
+
+function %f3(i64, i64) {
+block0(v0: i64, v1: i64):
+    atomic_store.i64 v1, v0
+    return
+}
+
+; check: atomic_load.i64 v0
+; check: atomic_store v1, v0
