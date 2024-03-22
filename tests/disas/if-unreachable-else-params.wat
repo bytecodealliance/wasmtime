@@ -56,7 +56,7 @@
 ;; @0045                               jump block2(v3)  ; v3 = 35
 ;;
 ;;                                 block2(v4: i32):
-;; @0049                               brif.i32 v5, block4, block6(v4)
+;; @0049                               brif.i32 v2, block4, block6(v4)
 ;;
 ;;                                 block4:
 ;; @004b                               v7 = uextend.i64 v4
