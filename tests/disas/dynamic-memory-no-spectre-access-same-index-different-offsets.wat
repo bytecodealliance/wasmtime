@@ -45,12 +45,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v30 -> v0
-;;                                     v31 -> v0
-;;                                     v32 -> v0
-;;                                     v33 -> v0
-;;                                     v34 -> v0
-;;                                     v35 -> v0
 ;; @0047                               v7 = load.i64 notrap aligned v0+88
 ;; @0047                               v6 = uextend.i64 v2
 ;; @0047                               v8 = icmp ugt v6, v7
@@ -63,7 +57,6 @@
 ;; @0047                               v9 = load.i64 notrap aligned checked v0+80
 ;; @0047                               v10 = iadd v9, v6
 ;; @0047                               v11 = load.i32 little heap v10
-;;                                     v3 -> v11
 ;; @004c                               brif.i8 v8, block4, block5
 ;;
 ;;                                 block4 cold:
@@ -73,7 +66,6 @@
 ;; @004c                               v17 = iconst.i64 4
 ;; @004c                               v18 = iadd.i64 v10, v17  ; v17 = 4
 ;; @004c                               v19 = load.i32 little heap v18
-;;                                     v4 -> v19
 ;; @0051                               v21 = iconst.i64 0x0010_0003
 ;; @0051                               v22 = uadd_overflow_trap.i64 v6, v21, heap_oob  ; v21 = 0x0010_0003
 ;; @0051                               v24 = icmp ugt v22, v7
@@ -88,7 +80,6 @@
 ;; @0051                               v27 = iconst.i64 0x000f_ffff
 ;; @0051                               v28 = iadd v26, v27  ; v27 = 0x000f_ffff
 ;; @0051                               v29 = load.i32 little heap v28
-;;                                     v5 -> v29
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
@@ -105,12 +96,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;;                                     v27 -> v0
-;;                                     v28 -> v0
-;;                                     v29 -> v0
-;;                                     v30 -> v0
-;;                                     v31 -> v0
-;;                                     v32 -> v0
 ;; @005d                               v7 = load.i64 notrap aligned v0+88
 ;; @005d                               v6 = uextend.i64 v2
 ;; @005d                               v8 = icmp ugt v6, v7

@@ -26,9 +26,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;;                                     v14 -> v0
-;;                                     v19 -> v0
-;;                                     v23 -> v0
 ;; @0052                               v3 = iconst.i32 0
 ;; @0054                               v4 = iconst.i32 7
 ;; @0054                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 7
@@ -40,7 +37,6 @@
 ;; @0054                               v10 = iconst.i64 0
 ;; @0054                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
 ;; @0054                               v12 = load.r64 table_oob aligned table v11
-;;                                     v2 -> v12
 ;; @0054                               v13 = is_null v12
 ;; @0054                               brif v13, block2, block3
 ;;
@@ -84,9 +80,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v14 -> v0
-;;                                     v19 -> v0
-;;                                     v23 -> v0
 ;; @005b                               v4 = iconst.i32 7
 ;; @005b                               v5 = icmp uge v2, v4  ; v4 = 7
 ;; @005b                               v6 = uextend.i64 v2
@@ -97,7 +90,6 @@
 ;; @005b                               v10 = iconst.i64 0
 ;; @005b                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
 ;; @005b                               v12 = load.r64 table_oob aligned table v11
-;;                                     v3 -> v12
 ;; @005b                               v13 = is_null v12
 ;; @005b                               brif v13, block2, block3
 ;;
