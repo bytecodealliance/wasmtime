@@ -163,7 +163,6 @@ wasmtime-c-api-macros = { path = "crates/c-api-macros", version = "=20.0.0" }
 wasmtime-cache = { path = "crates/cache", version = "=20.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=20.0.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=20.0.0" }
-wasmtime-cranelift-shared = { path = "crates/cranelift-shared", version = "=20.0.0" }
 wasmtime-winch = { path = "crates/winch", version = "=20.0.0" }
 wasmtime-environ = { path = "crates/environ", version = "=20.0.0" }
 wasmtime-explorer = { path = "crates/explorer", version = "=20.0.0" }

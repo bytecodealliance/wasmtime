@@ -3579,23 +3579,8 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasmparser",
- "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "wasmtime-versioned-export-macros",
-]
-
-[[package]]
-name = "wasmtime-cranelift-shared"
-version = "20.0.0"
-dependencies = [
- "anyhow",
- "cranelift-codegen",
- "cranelift-control",
- "cranelift-native",
- "gimli",
- "object 0.33.0",
- "target-lexicon",
- "wasmtime-environ",
 ]
 
 [[package]]
@@ -3905,7 +3890,6 @@ dependencies = [
  "target-lexicon",
  "wasmparser",
  "wasmtime-cranelift",
- "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "winch-codegen",
 ]

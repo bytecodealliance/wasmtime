@@ -1,7 +1,6 @@
-use crate::CompiledFunctionsMetadata;
+use crate::{CompiledFunctionsMetadata, FunctionAddressMap};
 use gimli::write;
 use std::collections::BTreeMap;
-use wasmtime_cranelift_shared::FunctionAddressMap;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef, FilePos, PrimaryMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;
@@ -605,10 +604,10 @@ impl AddressTransform {
 #[cfg(test)]
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
+    use crate::{CompiledFunctionMetadata, FunctionAddressMap};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
     use std::mem;
-    use wasmtime_cranelift_shared::{CompiledFunctionMetadata, FunctionAddressMap};
     use wasmtime_environ::{FilePos, InstructionAddressMap, WasmFileInfo};
 
     #[test]

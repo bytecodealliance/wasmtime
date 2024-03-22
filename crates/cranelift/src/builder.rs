@@ -3,6 +3,7 @@
 //! This module contains the implementation of how Cranelift is configured, as
 //! well as providing a function to return the default configuration to build.
 
+use crate::isa_builder::IsaBuilder;
 use anyhow::Result;
 use cranelift_codegen::{
     isa::{self, OwnedTargetIsa},
@@ -12,7 +13,6 @@ use std::fmt;
 use std::path;
 use std::sync::Arc;
 use target_lexicon::Triple;
-use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, Tunables};
 
 struct Builder {

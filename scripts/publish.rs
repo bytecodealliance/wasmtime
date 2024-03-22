@@ -55,7 +55,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-environ",
     "wasmtime-wmemcheck",
     "wasmtime-runtime",
-    "wasmtime-cranelift-shared",
     "wasmtime-cranelift",
     "wasmtime-cache",
     "winch-codegen",
