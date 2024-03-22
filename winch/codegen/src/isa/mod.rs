@@ -11,6 +11,7 @@ use std::{
 };
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, WasmFuncType};
 
 #[cfg(feature = "x64")]
@@ -162,7 +163,7 @@ pub trait TargetIsa: Send + Sync {
         types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
-    ) -> Result<MachBufferFinalized<Final>>;
+    ) -> Result<CompiledFunction>;
 
     /// Get the default calling convention of the underlying target triple.
     fn default_call_conv(&self) -> CallConv {

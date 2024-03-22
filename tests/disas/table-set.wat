@@ -24,19 +24,20 @@
 ;;     gv4 = load.i64 notrap aligned gv3+72
 ;;     gv5 = load.i32 notrap aligned gv3+80
 ;;     sig0 = (i64 vmctx, i64) system_v
+;;     fn0 = colocated u1:25 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: r64):
 ;;                                     v20 -> v0
-;;                                     v23 -> v0
-;;                                     v24 -> v0
+;;                                     v21 -> v0
+;;                                     v22 -> v0
 ;; @0051                               v3 = iconst.i32 0
 ;; @0055                               v4 = load.i32 notrap aligned v0+80
 ;; @0055                               v5 = icmp uge v3, v4  ; v3 = 0
 ;; @0055                               v6 = uextend.i64 v3  ; v3 = 0
 ;; @0055                               v7 = load.i64 notrap aligned v0+72
-;;                                     v25 = iconst.i64 3
-;; @0055                               v8 = ishl v6, v25  ; v25 = 3
+;;                                     v23 = iconst.i64 3
+;; @0055                               v8 = ishl v6, v23  ; v23 = 3
 ;; @0055                               v9 = iadd v7, v8
 ;; @0055                               v10 = iconst.i64 0
 ;; @0055                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
@@ -47,29 +48,27 @@
 ;;
 ;;                                 block2:
 ;; @0055                               v14 = load.i64 notrap aligned v2
-;;                                     v26 = iconst.i64 1
-;; @0055                               v15 = iadd v14, v26  ; v26 = 1
+;;                                     v24 = iconst.i64 1
+;; @0055                               v15 = iadd v14, v24  ; v24 = 1
 ;; @0055                               store notrap aligned v15, v2
 ;; @0055                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v27 = iconst.i64 0
-;; @0055                               v16 = icmp.i64 eq v12, v27  ; v27 = 0
+;;                                     v25 = iconst.i64 0
+;; @0055                               v16 = icmp.i64 eq v12, v25  ; v25 = 0
 ;; @0055                               brif v16, block6, block4
 ;;
 ;;                                 block4:
 ;; @0055                               v17 = load.i64 notrap aligned v12
-;;                                     v28 = iconst.i64 -1
-;; @0055                               v18 = iadd v17, v28  ; v28 = -1
+;;                                     v26 = iconst.i64 -1
+;; @0055                               v18 = iadd v17, v26  ; v26 = -1
 ;; @0055                               store notrap aligned v18, v12
-;;                                     v29 = iconst.i64 0
-;; @0055                               v19 = icmp eq v18, v29  ; v29 = 0
+;;                                     v27 = iconst.i64 0
+;; @0055                               v19 = icmp eq v18, v27  ; v27 = 0
 ;; @0055                               brif v19, block5, block6
 ;;
 ;;                                 block5:
-;; @0055                               v21 = load.i64 notrap aligned readonly v0+56
-;; @0055                               v22 = load.i64 notrap aligned readonly v21+200
-;; @0055                               call_indirect sig0, v22(v0, v12)
+;; @0055                               call fn0(v0, v12)
 ;; @0055                               jump block6
 ;;
 ;;                                 block6:
@@ -87,18 +86,19 @@
 ;;     gv4 = load.i64 notrap aligned gv3+72
 ;;     gv5 = load.i32 notrap aligned gv3+80
 ;;     sig0 = (i64 vmctx, i64) system_v
+;;     fn0 = colocated u1:25 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: r64):
 ;;                                     v20 -> v0
-;;                                     v23 -> v0
-;;                                     v24 -> v0
+;;                                     v21 -> v0
+;;                                     v22 -> v0
 ;; @005e                               v4 = load.i32 notrap aligned v0+80
 ;; @005e                               v5 = icmp uge v2, v4
 ;; @005e                               v6 = uextend.i64 v2
 ;; @005e                               v7 = load.i64 notrap aligned v0+72
-;;                                     v25 = iconst.i64 3
-;; @005e                               v8 = ishl v6, v25  ; v25 = 3
+;;                                     v23 = iconst.i64 3
+;; @005e                               v8 = ishl v6, v23  ; v23 = 3
 ;; @005e                               v9 = iadd v7, v8
 ;; @005e                               v10 = iconst.i64 0
 ;; @005e                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
@@ -109,29 +109,27 @@
 ;;
 ;;                                 block2:
 ;; @005e                               v14 = load.i64 notrap aligned v3
-;;                                     v26 = iconst.i64 1
-;; @005e                               v15 = iadd v14, v26  ; v26 = 1
+;;                                     v24 = iconst.i64 1
+;; @005e                               v15 = iadd v14, v24  ; v24 = 1
 ;; @005e                               store notrap aligned v15, v3
 ;; @005e                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v27 = iconst.i64 0
-;; @005e                               v16 = icmp.i64 eq v12, v27  ; v27 = 0
+;;                                     v25 = iconst.i64 0
+;; @005e                               v16 = icmp.i64 eq v12, v25  ; v25 = 0
 ;; @005e                               brif v16, block6, block4
 ;;
 ;;                                 block4:
 ;; @005e                               v17 = load.i64 notrap aligned v12
-;;                                     v28 = iconst.i64 -1
-;; @005e                               v18 = iadd v17, v28  ; v28 = -1
+;;                                     v26 = iconst.i64 -1
+;; @005e                               v18 = iadd v17, v26  ; v26 = -1
 ;; @005e                               store notrap aligned v18, v12
-;;                                     v29 = iconst.i64 0
-;; @005e                               v19 = icmp eq v18, v29  ; v29 = 0
+;;                                     v27 = iconst.i64 0
+;; @005e                               v19 = icmp eq v18, v27  ; v27 = 0
 ;; @005e                               brif v19, block5, block6
 ;;
 ;;                                 block5:
-;; @005e                               v21 = load.i64 notrap aligned readonly v0+56
-;; @005e                               v22 = load.i64 notrap aligned readonly v21+200
-;; @005e                               call_indirect sig0, v22(v0, v12)
+;; @005e                               call fn0(v0, v12)
 ;; @005e                               jump block6
 ;;
 ;;                                 block6:

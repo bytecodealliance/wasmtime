@@ -68,18 +68,25 @@ use wasmtime_wmemcheck::AccessError::{
     DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds,
 };
 
-/// Actually public trampolines which are used by the runtime as the entrypoint
-/// for libcalls.
+/// Raw functions which are actually called from compiled code.
 ///
-/// Note that the trampolines here are actually defined in inline assembly right
-/// now to ensure that the fp/sp on exit are recorded for backtraces to work
-/// properly.
-pub mod trampolines {
+/// Invocation of a builtin currently looks like:
+///
+/// * A wasm function calls a cranelift-compiled trampoline that's generated
+///   once-per-builtin.
+/// * The cranelift-compiled trampoline performs any necessary actions to exit
+///   wasm, such as dealing with fp/pc/etc.
+/// * The cranelift-compiled trampoline loads a function pointer from an array
+///   stored in `VMContext` That function pointer is defined in this module.
+/// * This module runs, handling things like `catch_unwind` and `Result` and
+///   such.
+/// * This module delegates to the outer module (this file) which has the actual
+///   implementation.
+pub mod raw {
     // Allow these things because of the macro and how we can't differentiate
     // between doc comments and `cfg`s.
     #![allow(unused_doc_comments, unused_attributes)]
 
-    use crate::arch::wasm_to_libcall_trampoline;
     use crate::{Instance, TrapReason, VMContext};
 
     macro_rules! libcall {
@@ -88,54 +95,32 @@ pub mod trampolines {
                 $( #[cfg($attr:meta)] )?
                 $name:ident( vmctx: vmctx $(, $pname:ident: $param:ident )* ) $( -> $result:ident )?;
             )*
-        ) => {paste::paste! {
+        ) => {
             $(
-                // The actual libcall itself, which has the `pub` name here, is
-                // defined via the `wasm_to_libcall_trampoline!` macro on
-                // supported platforms or otherwise in inline assembly for
-                // platforms like s390x which don't have stable `global_asm!`
-                // yet.
-                extern "C" {
-                    #[allow(missing_docs)]
-                    #[allow(improper_ctypes)]
-                    #[wasmtime_versioned_export_macros::versioned_link]
-                    pub fn $name(
-                        vmctx: *mut VMContext,
-                        $( $pname: libcall!(@ty $param), )*
-                    ) $(-> libcall!(@ty $result))?;
-                }
-
-                wasm_to_libcall_trampoline!($name ; [<impl_ $name>]);
-
-                // This is the direct entrypoint from the inline assembly which
-                // still has the same raw signature as the trampoline itself.
+                // This is the direct entrypoint from the compiled module which
+                // still has the raw signature.
+                //
                 // This will delegate to the outer module to the actual
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
-                //
-                // Note that rust targets which support `global_asm!` can use
-                // the `sym` operator to get the symbol here, but other targets
-                // like s390x need to use outlined assembly files which requires
-                // `no_mangle`.
-                #[cfg_attr(target_arch = "s390x", wasmtime_versioned_export_macros::versioned_export)]
-                #[allow(unused_variables)]
-                unsafe extern "C" fn [<impl_ $name>](
+                #[allow(unused_variables, missing_docs)]
+                pub unsafe extern "C" fn $name(
                     vmctx: *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
                 ) $( -> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
                     {
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        Instance::from_vmctx(vmctx, |instance| {
-                            {
-                                super::$name(instance, $($pname),*)
-                            }
-                        })
-                    }));
-                    match result {
-                        Ok(ret) => LibcallResult::convert(ret),
-                        Err(panic) => crate::traphandlers::resume_panic(panic),
-                    }
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            Instance::from_vmctx(vmctx, |instance| {
+                                {
+                                    super::$name(instance, $($pname),*)
+                                }
+                            })
+                        }));
+                        match result {
+                            Ok(ret) => LibcallResult::convert(ret),
+                            Err(panic) => crate::traphandlers::resume_panic(panic),
+                        }
                     }
                     $(
                         #[cfg(not($attr))]
@@ -147,14 +132,15 @@ pub mod trampolines {
                 // will sometimes strip out some of these symbols resulting
                 // in a linking failure.
                 #[allow(non_upper_case_globals)]
-                #[used]
-                static [<impl_ $name _ref>]: unsafe extern "C" fn(
-                    *mut VMContext,
-                    $( $pname : libcall!(@ty $param), )*
-                ) $( -> libcall!(@ty $result))? = [<impl_ $name>];
-
+                const _: () = {
+                    #[used]
+                    static I_AM_USED: unsafe extern "C" fn(
+                        *mut VMContext,
+                        $( $pname : libcall!(@ty $param), )*
+                    ) $( -> libcall!(@ty $result))? = $name;
+                };
             )*
-        }};
+        };
 
         (@ty i32) => (u32);
         (@ty i64) => (u64);

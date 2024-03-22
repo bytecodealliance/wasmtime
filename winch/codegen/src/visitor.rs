@@ -461,7 +461,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.floor_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -474,7 +474,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.floor_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -487,7 +487,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.ceil_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -500,7 +500,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.ceil_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -513,7 +513,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.nearest_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin))
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         );
     }
@@ -526,7 +526,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.nearest_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -539,7 +539,7 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.trunc_f32::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -552,7 +552,7 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.trunc_f64::<M::ABI>();
-                FnCall::emit::<M, M::Ptr>(masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
             },
         );
     }
@@ -1353,12 +1353,8 @@ where
     }
 
     fn visit_call(&mut self, index: u32) {
-        FnCall::emit::<M, M::Ptr>(
-            self.masm,
-            &mut self.context,
-            self.env
-                .callee_from_index::<M::ABI>(FuncIndex::from_u32(index)),
-        )
+        let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
     }
 
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
@@ -1387,11 +1383,8 @@ where
             }
         }
 
-        FnCall::emit::<M, M::Ptr>(
-            self.masm,
-            &mut self.context,
-            self.env.funcref::<M::ABI>(type_index),
-        )
+        let callee = self.env.funcref(type_index);
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
     }
 
     fn visit_table_init(&mut self, elem: u32, table: u32) {
@@ -1403,7 +1396,8 @@ where
             .insert_many(at, &[table.try_into().unwrap(), elem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.table_init::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
@@ -1418,7 +1412,12 @@ where
             .insert_many(at, &[dst.try_into().unwrap(), src.try_into().unwrap()]);
 
         let builtin = self.env.builtins.table_copy::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_table_get(&mut self, table: u32) {
@@ -1459,7 +1458,8 @@ where
             .stack
             .insert_many(at, &[table.try_into().unwrap()]);
 
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
@@ -1486,7 +1486,8 @@ where
         self.context
             .stack
             .insert_many(at, &[table.try_into().unwrap()]);
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
@@ -1533,7 +1534,12 @@ where
     fn visit_elem_drop(&mut self, index: u32) {
         let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>();
         self.context.stack.extend([index.try_into().unwrap()]);
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(elem_drop))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(elem_drop),
+        )
     }
 
     fn visit_memory_init(&mut self, data_index: u32, mem: u32) {
@@ -1544,7 +1550,12 @@ where
             &[mem.try_into().unwrap(), data_index.try_into().unwrap()],
         );
         let builtin = self.env.builtins.memory_init::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) {
@@ -1567,7 +1578,12 @@ where
 
         let builtin = self.env.builtins.memory_copy::<M::ABI, M::Ptr>();
 
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_memory_fill(&mut self, mem: u32) {
@@ -1579,7 +1595,12 @@ where
             .insert_many(at, &[mem.try_into().unwrap()]);
 
         let builtin = self.env.builtins.memory_fill::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_memory_size(&mut self, mem: u32, _: u8) {
@@ -1596,7 +1617,12 @@ where
 
         let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
         let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin));
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        );
 
         // The memory32_grow builtin returns a pointer type, therefore we must
         // ensure that the return type is representative of the address space of
@@ -1618,7 +1644,12 @@ where
         self.context.stack.extend([data_index.try_into().unwrap()]);
 
         let builtin = self.env.builtins.data_drop::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )
     }
 
     fn visit_nop(&mut self) {}

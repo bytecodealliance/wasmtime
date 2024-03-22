@@ -7,9 +7,9 @@ use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, TrapEncodingBuilder, VMOffsets,
-    WasmFunctionInfo,
+    BuiltinFunctionIndex, CompileError, DefinedFuncIndex, FilePos, FunctionBodyData, FunctionLoc,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget, TrapEncodingBuilder,
+    VMOffsets, WasmFunctionInfo,
 };
 use winch_codegen::{BuiltinFunctions, TargetIsa};
 
@@ -27,17 +27,6 @@ pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
     trampolines: Box<dyn wasmtime_environ::Compiler>,
     contexts: Mutex<Vec<CompilationContext>>,
-}
-
-/// The compiled function environment.
-pub struct CompiledFuncEnv;
-impl wasmtime_cranelift::CompiledFuncEnv for CompiledFuncEnv {
-    fn resolve_user_external_name_ref(
-        &self,
-        external: cranelift_codegen::ir::UserExternalNameRef,
-    ) -> (u32, u32) {
-        (0, external.as_u32())
-    }
 }
 
 impl Compiler {
@@ -109,7 +98,7 @@ impl wasmtime_environ::Compiler for Compiler {
         );
         let mut context = self.get_context(translation);
         let mut validator = validator.into_validator(mem::take(&mut context.allocations));
-        let buffer = self
+        let func = self
             .isa
             .compile_function(
                 ty,
@@ -121,13 +110,10 @@ impl wasmtime_environ::Compiler for Compiler {
             )
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_context(context, validator.into_allocations());
-        let buffer = buffer?;
-
-        let mut compiled_function =
-            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
+        let mut func = func?;
 
         if self.isa.flags().unwind_info() {
-            self.emit_unwind_info(&mut compiled_function)?;
+            self.emit_unwind_info(&mut func)?;
         }
 
         Ok((
@@ -135,7 +121,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 start_srcloc,
                 stack_maps: Box::new([]),
             },
-            Box::new(compiled_function),
+            Box::new(func),
         ))
     }
 
@@ -171,7 +157,7 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+        resolve_reloc: &dyn Fn(usize, wasmtime_environ::RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
@@ -239,5 +225,19 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.isa.create_systemv_cie()
+    }
+
+    fn compile_wasm_to_builtin(
+        &self,
+        index: BuiltinFunctionIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        self.trampolines.compile_wasm_to_builtin(index)
+    }
+
+    fn compiled_function_relocation_targets<'a>(
+        &'a self,
+        func: &'a dyn Any,
+    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
+        self.trampolines.compiled_function_relocation_targets(func)
     }
 }

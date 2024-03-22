@@ -31,7 +31,7 @@
 ;;      	 4d8b1b               	mov	r11, qword ptr [r11]
 ;;      	 4981c320000000       	add	r11, 0x20
 ;;      	 4939e3               	cmp	r11, rsp
-;;      	 0f8797000000         	ja	0xb2
+;;      	 0f8792000000         	ja	0xad
 ;;   1b:	 4989fe               	mov	r14, rdi
 ;;      	 4883ec18             	sub	rsp, 0x18
 ;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
@@ -45,7 +45,7 @@
 ;;      	 4c89f2               	mov	rdx, r14
 ;;      	 8b5a50               	mov	ebx, dword ptr [rdx + 0x50]
 ;;      	 39d9                 	cmp	ecx, ebx
-;;      	 0f8362000000         	jae	0xb4
+;;      	 0f835d000000         	jae	0xaf
 ;;   52:	 4189cb               	mov	r11d, ecx
 ;;      	 4d6bdb08             	imul	r11, r11, 8
 ;;      	 488b5248             	mov	rdx, qword ptr [rdx + 0x48]
@@ -55,23 +55,21 @@
 ;;      	 480f43d6             	cmovae	rdx, rsi
 ;;      	 488b02               	mov	rax, qword ptr [rdx]
 ;;      	 4885c0               	test	rax, rax
-;;      	 0f8533000000         	jne	0xa8
-;;   75:	 4d8b5e38             	mov	r11, qword ptr [r14 + 0x38]
-;;      	 498b5b48             	mov	rbx, qword ptr [r11 + 0x48]
-;;      	 4883ec04             	sub	rsp, 4
+;;      	 0f852e000000         	jne	0xa3
+;;   75:	 4883ec04             	sub	rsp, 4
 ;;      	 890c24               	mov	dword ptr [rsp], ecx
 ;;      	 4883ec04             	sub	rsp, 4
 ;;      	 4c89f7               	mov	rdi, r14
 ;;      	 be00000000           	mov	esi, 0
 ;;      	 8b542404             	mov	edx, dword ptr [rsp + 4]
-;;      	 ffd3                 	call	rbx
+;;      	 e800000000           	call	0x91
 ;;      	 4883c404             	add	rsp, 4
 ;;      	 4883c404             	add	rsp, 4
 ;;      	 4c8b742410           	mov	r14, qword ptr [rsp + 0x10]
-;;      	 e904000000           	jmp	0xac
-;;   a8:	 4883e0fe             	and	rax, 0xfffffffffffffffe
+;;      	 e904000000           	jmp	0xa7
+;;   a3:	 4883e0fe             	and	rax, 0xfffffffffffffffe
 ;;      	 4883c418             	add	rsp, 0x18
 ;;      	 5d                   	pop	rbp
 ;;      	 c3                   	ret	
-;;   b2:	 0f0b                 	ud2	
-;;   b4:	 0f0b                 	ud2	
+;;   ad:	 0f0b                 	ud2	
+;;   af:	 0f0b                 	ud2	
