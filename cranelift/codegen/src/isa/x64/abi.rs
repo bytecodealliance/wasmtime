@@ -125,6 +125,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             next_stack = 32;
         }
 
+        // If any param uses extension, the winch calling convention will not pack its results
+        // on the stack and will instead align them to 8-byte boundaries the same way that all the
+        // other calling conventions do. This isn't consistent with Winch itself, but is fine as
+        // Winch only uses this calling convention via trampolines, and those trampolines don't add
+        // extension annotations. Additionally, handling extension attributes this way allows clif
+        // functions that use them with the Winch calling convention to interact successfully with
+        // testing infrastructure.
+        let uses_extension = params
+            .iter()
+            .any(|p| p.extension != ir::ArgumentExtension::None);
+
         for (ix, param) in params.iter().enumerate() {
             let last_param = ix == params.len() - 1;
 
@@ -248,7 +259,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     });
                 } else {
                     let size = reg_ty.bytes();
-                    let size = if call_conv == CallConv::Winch && args_or_rets == ArgsOrRets::Rets {
+                    let size = if call_conv == CallConv::Winch
+                        && args_or_rets == ArgsOrRets::Rets
+                        && !uses_extension
+                    {
                         size
                     } else {
                         let size = std::cmp::max(size, 8);
@@ -318,7 +332,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 if let ABIArg::Slots { slots, .. } = arg {
                     for slot in slots.iter_mut() {
                         if let ABIArgSlot::Stack { offset, ty, .. } = slot {
-                            let size = i64::from(ty.bytes());
+                            let size = if uses_extension {
+                                i64::from(std::cmp::max(ty.bytes(), 8))
+                            } else {
+                                i64::from(ty.bytes())
+                            };
+
                             *offset = i64::from(next_stack) - *offset - size;
                         }
                     }
