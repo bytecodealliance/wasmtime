@@ -147,8 +147,7 @@ fn switch_error() {
     match cranelift_codegen::verify_function(&func, &flags) {
         Ok(_) => {}
         Err(err) => {
-            let pretty_error =
-                cranelift_codegen::print_errors::pretty_verifier_error(&func, None, err);
+            let pretty_error = cranelift_codegen::print_errors::pretty_verifier_error(&func, err);
             panic!("pretty_error:\n{}", pretty_error);
         }
     }

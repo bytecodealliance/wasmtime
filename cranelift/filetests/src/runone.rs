@@ -104,7 +104,7 @@ pub fn run(
 fn verify_testfile(testfile: &TestFile, fisa: FlagsOrIsa) -> anyhow::Result<()> {
     for (func, _) in &testfile.functions {
         verify_function(func, fisa)
-            .map_err(|errors| anyhow::anyhow!("{}", pretty_verifier_error(&func, None, errors)))?;
+            .map_err(|errors| anyhow::anyhow!("{}", pretty_verifier_error(&func, errors)))?;
     }
 
     Ok(())

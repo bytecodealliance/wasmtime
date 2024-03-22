@@ -1750,7 +1750,7 @@ impl<'a> Verifier<'a> {
         if !errors.is_empty() {
             log::warn!(
                 "Found verifier errors in function:\n{}",
-                pretty_verifier_error(self.func, None, errors.clone())
+                pretty_verifier_error(self.func, errors.clone())
             );
         }
 

@@ -8,28 +8,18 @@ use crate::ir::pcc::Fact;
 use crate::result::CodegenError;
 use crate::verifier::{VerifierError, VerifierErrors};
 use crate::write::{decorate_function, FuncWriter, PlainWriter};
-use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
 use core::fmt::Write;
 
 /// Pretty-print a verifier error.
-pub fn pretty_verifier_error<'a>(
-    func: &ir::Function,
-    func_w: Option<Box<dyn FuncWriter + 'a>>,
-    errors: VerifierErrors,
-) -> String {
+pub fn pretty_verifier_error<'a>(func: &ir::Function, errors: VerifierErrors) -> String {
     let mut errors = errors.0;
     let mut w = String::new();
     let num_errors = errors.len();
 
-    decorate_function(
-        &mut PrettyVerifierError(func_w.unwrap_or_else(|| Box::new(PlainWriter)), &mut errors),
-        &mut w,
-        func,
-    )
-    .unwrap();
+    decorate_function(&mut PrettyVerifierError(&mut errors), &mut w, func).unwrap();
 
     writeln!(
         w,
@@ -42,7 +32,7 @@ pub fn pretty_verifier_error<'a>(
     w
 }
 
-struct PrettyVerifierError<'a>(Box<dyn FuncWriter + 'a>, &'a mut Vec<VerifierError>);
+struct PrettyVerifierError<'a>(&'a mut Vec<VerifierError>);
 
 impl<'a> FuncWriter for PrettyVerifierError<'a> {
     fn write_block_header(
@@ -52,7 +42,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         block: Block,
         indent: usize,
     ) -> fmt::Result {
-        pretty_block_header_error(w, func, block, indent, &mut *self.0, self.1)
+        pretty_block_header_error(w, func, block, indent, self.0)
     }
 
     fn write_instruction(
@@ -63,7 +53,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        pretty_instruction_error(w, func, aliases, inst, indent, &mut *self.0, self.1)
+        pretty_instruction_error(w, func, aliases, inst, indent, self.0)
     }
 
     fn write_entity_definition(
@@ -74,7 +64,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         value: &dyn fmt::Display,
         maybe_fact: Option<&Fact>,
     ) -> fmt::Result {
-        pretty_preamble_error(w, func, entity, value, maybe_fact, &mut *self.0, self.1)
+        pretty_preamble_error(w, func, entity, value, maybe_fact, self.0)
     }
 }
 
@@ -84,11 +74,10 @@ fn pretty_block_header_error(
     func: &Function,
     cur_block: Block,
     indent: usize,
-    func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_block_header(&mut s, func, cur_block, indent)?;
+    PlainWriter.write_block_header(&mut s, func, cur_block, indent)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
@@ -122,11 +111,10 @@ fn pretty_instruction_error(
     aliases: &SecondaryMap<Value, Vec<Value>>,
     cur_inst: Inst,
     indent: usize,
-    func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_instruction(&mut s, func, aliases, cur_inst, indent)?;
+    PlainWriter.write_instruction(&mut s, func, aliases, cur_inst, indent)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
@@ -159,11 +147,10 @@ fn pretty_preamble_error(
     entity: AnyEntity,
     value: &dyn fmt::Display,
     maybe_fact: Option<&Fact>,
-    func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_entity_definition(&mut s, func, entity, value, maybe_fact)?;
+    PlainWriter.write_entity_definition(&mut s, func, entity, value, maybe_fact)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
@@ -216,7 +203,7 @@ fn print_error(w: &mut dyn Write, err: VerifierError) -> fmt::Result {
 /// Pretty-print a Cranelift error.
 pub fn pretty_error(func: &ir::Function, err: CodegenError) -> String {
     if let CodegenError::Verifier(e) = err {
-        pretty_verifier_error(func, None, e)
+        pretty_verifier_error(func, e)
     } else {
         err.to_string()
     }

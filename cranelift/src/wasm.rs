@@ -242,7 +242,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         let mut mem = vec![];
         let (relocs, traps, stack_maps) = if options.check_translation {
             if let Err(errors) = context.verify(fisa) {
-                anyhow::bail!("{}", pretty_verifier_error(&context.func, None, errors));
+                anyhow::bail!("{}", pretty_verifier_error(&context.func, errors));
             }
             (vec![], vec![], vec![])
         } else {
