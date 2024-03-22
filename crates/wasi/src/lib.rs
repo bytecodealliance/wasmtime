@@ -35,7 +35,7 @@ pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
-pub use self::network::{Network, SocketError, SocketResult};
+pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
 #[cfg(feature = "preview1")]
 pub use self::p1ctx::WasiP1Ctx;
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
