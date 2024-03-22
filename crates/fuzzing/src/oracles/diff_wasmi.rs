@@ -198,6 +198,7 @@ impl From<&DiffValue> for wasmi::Value {
                 assert!(null);
                 WasmiValue::ExternRef(wasmi::ExternRef::null())
             }
+            DiffValue::AnyRef { .. } => unimplemented!(),
         }
     }
 }

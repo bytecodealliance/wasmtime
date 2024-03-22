@@ -20,8 +20,8 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld a5,88(a0)
-;;   ld a4,80(a0)
+;;   ld a5,104(a0)
+;;   ld a4,96(a0)
 ;;   lui a0,1
 ;;   addi a0,a0,4
 ;;   sub a5,a5,a0
@@ -39,8 +39,8 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld a5,88(a0)
-;;   ld a4,80(a0)
+;;   ld a5,104(a0)
+;;   ld a4,96(a0)
 ;;   lui a3,1
 ;;   addi a0,a3,4
 ;;   sub a5,a5,a0

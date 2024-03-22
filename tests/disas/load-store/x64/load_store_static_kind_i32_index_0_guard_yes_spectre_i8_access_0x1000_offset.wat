@@ -28,7 +28,7 @@
 ;;   movl    %edx, %edi
 ;;   xorq    %rsi, %rsi, %rsi
 ;;   movq    %rax, %rdx
-;;   movq    80(%rdx), %rax
+;;   movq    96(%rdx), %rax
 ;;   lea     4096(%rax,%rdi,1), %r11
 ;;   cmpq    const(0), %rdi
 ;;   cmovnbeq %rsi, %r11, %r11
@@ -48,7 +48,7 @@
 ;;   movq    %rdi, %rcx
 ;;   movl    %edx, %edi
 ;;   xorq    %rsi, %rsi, %rsi
-;;   movq    80(%rcx), %rax
+;;   movq    96(%rcx), %rax
 ;;   lea     4096(%rax,%rdi,1), %r11
 ;;   cmpq    const(0), %rdi
 ;;   cmovnbeq %rsi, %r11, %r11

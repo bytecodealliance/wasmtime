@@ -24,7 +24,7 @@
 ;;   srli a5,a2,32
 ;;   ld a4,[const(0)]
 ;;   sltu a4,a4,a5
-;;   ld a0,80(a0)
+;;   ld a0,96(a0)
 ;;   add a5,a0,a5
 ;;   lui a0,1
 ;;   add a5,a5,a0
@@ -42,7 +42,7 @@
 ;;   srli a4,a2,32
 ;;   ld a3,[const(0)]
 ;;   sltu a3,a3,a4
-;;   ld a5,80(a0)
+;;   ld a5,96(a0)
 ;;   add a4,a5,a4
 ;;   lui a5,1
 ;;   add a4,a4,a5

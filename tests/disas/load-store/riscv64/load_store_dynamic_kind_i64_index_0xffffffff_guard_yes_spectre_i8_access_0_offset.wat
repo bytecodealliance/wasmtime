@@ -20,8 +20,8 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld a1,88(a0)
-;;   ld a0,80(a0)
+;;   ld a1,104(a0)
+;;   ld a0,96(a0)
 ;;   sltu a5,a2,a1
 ;;   xori a1,a5,1
 ;;   add a0,a0,a2
@@ -35,8 +35,8 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld a1,88(a0)
-;;   ld a0,80(a0)
+;;   ld a1,104(a0)
+;;   ld a0,96(a0)
 ;;   sltu a5,a2,a1
 ;;   xori a1,a5,1
 ;;   add a0,a0,a2

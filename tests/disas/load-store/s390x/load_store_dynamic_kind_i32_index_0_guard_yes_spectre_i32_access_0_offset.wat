@@ -33,12 +33,12 @@
 ;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lg %r3, 88(%r2)
+;;   lg %r3, 104(%r2)
 ;;   llgfr %r4, %r4
 ;;   aghik %r7, %r3, -4
 ;;   lghi %r3, 0
 ;;   lgr %r6, %r4
-;;   ag %r6, 80(%r2)
+;;   ag %r6, 96(%r2)
 ;;   clgr %r4, %r7
 ;;   locgrh %r6, %r3
 ;;   strv %r5, 0(%r6)
@@ -62,12 +62,12 @@
 ;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lg %r5, 88(%r2)
+;;   lg %r5, 104(%r2)
 ;;   llgfr %r4, %r4
 ;;   aghik %r3, %r5, -4
 ;;   lghi %r5, 0
 ;;   lgr %r6, %r4
-;;   ag %r6, 80(%r2)
+;;   ag %r6, 96(%r2)
 ;;   clgr %r4, %r3
 ;;   locgrh %r6, %r5
 ;;   lrv %r2, 0(%r6)

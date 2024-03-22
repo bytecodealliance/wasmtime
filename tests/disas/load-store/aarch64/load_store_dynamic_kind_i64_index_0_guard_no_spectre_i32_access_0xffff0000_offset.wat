@@ -23,11 +23,11 @@
 ;;   movn w10, #65531
 ;;   adds x10, x2, x10
 ;;   b.hs #trap=heap_oob
-;;   ldr x11, [x0, #88]
+;;   ldr x11, [x0, #104]
 ;;   subs xzr, x10, x11
 ;;   b.hi label3 ; b label1
 ;; block1:
-;;   ldr x13, [x0, #80]
+;;   ldr x13, [x0, #96]
 ;;   add x13, x13, x2
 ;;   movz x14, #65535, LSL #16
 ;;   str w3, [x13, x14]
@@ -42,11 +42,11 @@
 ;;   movn w10, #65531
 ;;   adds x10, x2, x10
 ;;   b.hs #trap=heap_oob
-;;   ldr x11, [x0, #88]
+;;   ldr x11, [x0, #104]
 ;;   subs xzr, x10, x11
 ;;   b.hi label3 ; b label1
 ;; block1:
-;;   ldr x13, [x0, #80]
+;;   ldr x13, [x0, #96]
 ;;   add x13, x13, x2
 ;;   movz x14, #65535, LSL #16
 ;;   ldr w0, [x13, x14]

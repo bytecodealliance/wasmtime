@@ -25,8 +25,8 @@
 ;;   ld a2,[const(0)]
 ;;   add a2,a1,a2
 ;;   trap_if heap_oob##(a2 ult a1)
-;;   ld a4,88(a0)
-;;   ld a5,80(a0)
+;;   ld a4,104(a0)
+;;   ld a5,96(a0)
 ;;   sltu a2,a4,a2
 ;;   add a1,a5,a1
 ;;   lui a0,65535
@@ -47,8 +47,8 @@
 ;;   ld a2,[const(0)]
 ;;   add a2,a1,a2
 ;;   trap_if heap_oob##(a2 ult a1)
-;;   ld a3,88(a0)
-;;   ld a4,80(a0)
+;;   ld a3,104(a0)
+;;   ld a4,96(a0)
 ;;   sltu a2,a3,a2
 ;;   add a1,a4,a1
 ;;   lui a0,65535

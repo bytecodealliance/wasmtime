@@ -2492,14 +2492,27 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(r);
         }
 
+        Operator::RefI31 => {
+            let val = state.pop1();
+            let i31ref = environ.translate_ref_i31(builder.cursor(), val)?;
+            state.push1(i31ref);
+        }
+        Operator::I31GetS => {
+            let i31ref = state.pop1();
+            let val = environ.translate_i31_get_s(builder.cursor(), i31ref)?;
+            state.push1(val);
+        }
+        Operator::I31GetU => {
+            let i31ref = state.pop1();
+            let val = environ.translate_i31_get_u(builder.cursor(), i31ref)?;
+            state.push1(val);
+        }
+
         Operator::TryTable { .. } | Operator::ThrowRef => {
             unimplemented!("exception operators not yet implemented")
         }
 
-        Operator::RefI31
-        | Operator::I31GetS
-        | Operator::I31GetU
-        | Operator::RefEq
+        Operator::RefEq
         | Operator::RefTestNonNull { .. }
         | Operator::RefTestNullable { .. }
         | Operator::RefCastNonNull { .. }

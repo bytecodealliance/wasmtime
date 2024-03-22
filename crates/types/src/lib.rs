@@ -90,6 +90,15 @@ impl TypeTrace for WasmValType {
     }
 }
 
+impl WasmValType {
+    pub fn is_gc_heap_type(&self) -> bool {
+        match self {
+            WasmValType::Ref(r) => r.is_gc_heap_type(),
+            _ => false,
+        }
+    }
+}
+
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WasmRefType {
@@ -122,6 +131,12 @@ impl WasmRefType {
         nullable: true,
         heap_type: WasmHeapType::Func,
     };
+
+    /// Is this a GC type that is allocated within the GC heap? (As opposed to
+    /// `i31ref` which is a GC type that is not allocated on the GC heap.)
+    pub fn is_gc_heap_type(&self) -> bool {
+        self.heap_type.is_gc_heap_type()
+    }
 }
 
 impl fmt::Display for WasmRefType {
@@ -170,6 +185,9 @@ pub enum WasmHeapType {
     Func,
     Concrete(EngineOrModuleTypeIndex),
     NoFunc,
+    Any,
+    I31,
+    None,
 }
 
 impl fmt::Display for WasmHeapType {
@@ -179,6 +197,9 @@ impl fmt::Display for WasmHeapType {
             Self::Func => write!(f, "func"),
             Self::Concrete(i) => write!(f, "{i}"),
             Self::NoFunc => write!(f, "nofunc"),
+            Self::Any => write!(f, "any"),
+            Self::I31 => write!(f, "i31"),
+            Self::None => write!(f, "none"),
         }
     }
 }
@@ -190,7 +211,7 @@ impl TypeTrace for WasmHeapType {
     {
         match *self {
             Self::Concrete(i) => func(i),
-            Self::Func | Self::NoFunc | Self::Extern => Ok(()),
+            _ => Ok(()),
         }
     }
 
@@ -200,7 +221,37 @@ impl TypeTrace for WasmHeapType {
     {
         match self {
             Self::Concrete(i) => func(i),
-            Self::Func | Self::NoFunc | Self::Extern => Ok(()),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl WasmHeapType {
+    /// Is this a GC type that is allocated within the GC heap? (As opposed to
+    /// `i31ref` which is a GC type that is not allocated on the GC heap.)
+    pub fn is_gc_heap_type(&self) -> bool {
+        // All `t <: (ref null any)` and `t <: (ref null extern)` that are
+        // not `(ref null? i31)` are GC-managed references.
+        match self {
+            // These types are managed by the GC.
+            Self::Extern | Self::Any => true,
+
+            // TODO: Once we support concrete struct and array types, this
+            // will no longer be true.
+            Self::Concrete(_) => false,
+
+            // These are compatible with GC references, but don't actually point
+            // to GC objecs. It would generally be safe to return `true` here,
+            // but there is no need to.
+            Self::I31 => false,
+
+            // These are a subtype of GC-managed types, but are uninhabited, so
+            // can never actually point to a GC object. Again, we could return
+            // `true` here but there is no need.
+            Self::None => false,
+
+            // These types are not managed by the GC.
+            Self::Func | Self::NoFunc => false,
         }
     }
 }
@@ -209,9 +260,9 @@ impl TypeTrace for WasmHeapType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
     params: Box<[WasmValType]>,
-    externref_params_count: usize,
+    non_i31_gc_ref_params_count: usize,
     returns: Box<[WasmValType]>,
-    externref_returns_count: usize,
+    non_i31_gc_ref_returns_count: usize,
 }
 
 impl TypeTrace for WasmFuncType {
@@ -245,25 +296,25 @@ impl TypeTrace for WasmFuncType {
 impl WasmFuncType {
     #[inline]
     pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
-        let externref_params_count = params
+        let non_i31_gc_ref_params_count = params
             .iter()
             .filter(|p| match **p {
-                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                WasmValType::Ref(rt) => rt.heap_type != WasmHeapType::I31,
                 _ => false,
             })
             .count();
-        let externref_returns_count = returns
+        let non_i31_gc_ref_returns_count = returns
             .iter()
             .filter(|r| match **r {
-                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                WasmValType::Ref(rt) => rt.heap_type != WasmHeapType::I31,
                 _ => false,
             })
             .count();
         WasmFuncType {
             params,
-            externref_params_count,
+            non_i31_gc_ref_params_count,
             returns,
-            externref_returns_count,
+            non_i31_gc_ref_returns_count,
         }
     }
 
@@ -275,8 +326,8 @@ impl WasmFuncType {
 
     /// How many `externref`s are in this function's params?
     #[inline]
-    pub fn externref_params_count(&self) -> usize {
-        self.externref_params_count
+    pub fn non_i31_gc_ref_params_count(&self) -> usize {
+        self.non_i31_gc_ref_params_count
     }
 
     /// Returns params types.
@@ -287,8 +338,8 @@ impl WasmFuncType {
 
     /// How many `externref`s are in this function's returns?
     #[inline]
-    pub fn externref_returns_count(&self) -> usize {
-        self.externref_returns_count
+    pub fn non_i31_gc_ref_returns_count(&self) -> usize {
+        self.non_i31_gc_ref_returns_count
     }
 }
 
@@ -620,15 +671,15 @@ pub trait TypeConvert {
             wasmparser::HeapType::Func => WasmHeapType::Func,
             wasmparser::HeapType::NoFunc => WasmHeapType::NoFunc,
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
+            wasmparser::HeapType::Any => WasmHeapType::Any,
+            wasmparser::HeapType::I31 => WasmHeapType::I31,
+            wasmparser::HeapType::None => WasmHeapType::None,
 
-            wasmparser::HeapType::Any
-            | wasmparser::HeapType::Exn
-            | wasmparser::HeapType::None
+            wasmparser::HeapType::Exn
             | wasmparser::HeapType::NoExtern
             | wasmparser::HeapType::Eq
             | wasmparser::HeapType::Struct
-            | wasmparser::HeapType::Array
-            | wasmparser::HeapType::I31 => {
+            | wasmparser::HeapType::Array => {
                 unimplemented!("unsupported heap type {ty:?}");
             }
         }

@@ -1,11 +1,12 @@
 use super::{
-    InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
+    GcHeapAllocationIndex, InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex,
+    TableAllocationIndex,
 };
 use crate::instance::RuntimeMemoryCreator;
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::mpk::ProtectionKey;
 use crate::table::Table;
-use crate::CompiledModuleId;
+use crate::{CompiledModuleId, GcHeap, GcRuntime};
 use anyhow::Result;
 use std::sync::Arc;
 use wasmtime_environ::{
@@ -192,5 +193,23 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         // allocator will never hand out protection keys to the stores its
         // engine creates.
         unreachable!()
+    }
+
+    #[cfg(feature = "gc")]
+    fn allocate_gc_heap(
+        &self,
+        gc_runtime: &dyn GcRuntime,
+    ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
+        Ok((GcHeapAllocationIndex::default(), gc_runtime.new_gc_heap()?))
+    }
+
+    #[cfg(feature = "gc")]
+    fn deallocate_gc_heap(
+        &self,
+        allocation_index: GcHeapAllocationIndex,
+        gc_heap: Box<dyn crate::GcHeap>,
+    ) {
+        debug_assert_eq!(allocation_index, GcHeapAllocationIndex::default());
+        drop(gc_heap);
     }
 }

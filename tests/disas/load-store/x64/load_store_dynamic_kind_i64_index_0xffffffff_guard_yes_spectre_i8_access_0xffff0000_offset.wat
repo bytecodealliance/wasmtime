@@ -24,10 +24,10 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    88(%rdi), %rax
+;;   movq    104(%rdi), %rax
 ;;   xorq    %r8, %r8, %r8
 ;;   movq    %rdx, %r9
-;;   addq    %r9, 80(%rdi), %r9
+;;   addq    %r9, 96(%rdi), %r9
 ;;   movl    $-65536, %edi
 ;;   lea     0(%r9,%rdi,1), %rsi
 ;;   cmpq    %rax, %rdx
@@ -45,10 +45,10 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    88(%rdi), %rax
+;;   movq    104(%rdi), %rax
 ;;   xorq    %rcx, %rcx, %rcx
 ;;   movq    %rdx, %r8
-;;   addq    %r8, 80(%rdi), %r8
+;;   addq    %r8, 96(%rdi), %r8
 ;;   movl    $-65536, %edi
 ;;   lea     0(%r8,%rdi,1), %rsi
 ;;   cmpq    %rax, %rdx

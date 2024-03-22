@@ -69,6 +69,11 @@ pub unsafe fn decommit_table_pages(addr: *mut u8, len: usize) -> io::Result<()> 
     decommit(addr, len)
 }
 
+#[cfg(feature = "pooling-allocator")]
+pub unsafe fn decommit_gc_heap_pages(addr: *mut u8, len: usize) -> io::Result<()> {
+    decommit(addr, len)
+}
+
 #[cfg(all(feature = "pooling-allocator", feature = "async"))]
 pub unsafe fn commit_stack_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
     // Like table pages stack pages are always READ | WRITE so nothing extra

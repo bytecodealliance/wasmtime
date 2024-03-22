@@ -22,7 +22,7 @@
 ;; block0:
 ;;   mov w10, w2
 ;;   movz x11, #0
-;;   ldr x12, [x0, #80]
+;;   ldr x12, [x0, #96]
 ;;   add x12, x12, x2, UXTW
 ;;   orr x9, xzr, #4294967292
 ;;   subs xzr, x10, x9
@@ -37,7 +37,7 @@
 ;; block0:
 ;;   mov w10, w2
 ;;   movz x11, #0
-;;   ldr x12, [x0, #80]
+;;   ldr x12, [x0, #96]
 ;;   add x12, x12, x2, UXTW
 ;;   orr x9, xzr, #4294967292
 ;;   subs xzr, x10, x9

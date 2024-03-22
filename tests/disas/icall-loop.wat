@@ -27,7 +27,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned gv3+88
 ;;     sig0 = (i64 vmctx, i64) -> i32 fast
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     stack_limit = gv2
@@ -45,15 +45,15 @@
 ;;                                     v30 = iconst.i64 3
 ;; @002b                               v8 = ishl v6, v30  ; v30 = 3
 ;;                                     v31 = iconst.i64 -2
-;; @002b                               v17 = load.i64 notrap aligned readonly v0+56
+;; @002b                               v17 = load.i64 notrap aligned readonly v0+72
 ;; @002b                               v18 = load.i64 notrap aligned readonly v17+72
 ;; @002b                               v15 = iconst.i32 0
-;; @002b                               v21 = load.i64 notrap aligned readonly v0+64
+;; @002b                               v21 = load.i64 notrap aligned readonly v0+80
 ;; @002b                               v22 = load.i32 notrap aligned readonly v21
 ;; @0027                               jump block2
 ;;
 ;;                                 block2:
-;; @002b                               v7 = load.i64 notrap aligned v0+72
+;; @002b                               v7 = load.i64 notrap aligned v0+88
 ;; @002b                               v9 = iadd v7, v8
 ;;                                     v32 = iconst.i64 0
 ;;                                     v33 = select_spectre_guard v5, v32, v9  ; v32 = 0
@@ -87,7 +87,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned gv3+88
 ;;     sig0 = (i64 vmctx, i64) -> i32 fast
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     stack_limit = gv2
@@ -98,16 +98,16 @@
 ;;                                     v27 -> v0
 ;;                                     v38 = iconst.i64 8
 ;;                                     v29 = iconst.i64 -2
-;; @0038                               v16 = load.i64 notrap aligned readonly v0+56
+;; @0038                               v16 = load.i64 notrap aligned readonly v0+72
 ;; @0038                               v17 = load.i64 notrap aligned readonly v16+72
 ;; @0038                               v14 = iconst.i32 0
 ;; @0036                               v2 = iconst.i32 1
-;; @0038                               v20 = load.i64 notrap aligned readonly v0+64
+;; @0038                               v20 = load.i64 notrap aligned readonly v0+80
 ;; @0038                               v21 = load.i32 notrap aligned readonly v20
 ;; @0034                               jump block2
 ;;
 ;;                                 block2:
-;; @0038                               v6 = load.i64 notrap aligned v0+72
+;; @0038                               v6 = load.i64 notrap aligned v0+88
 ;;                                     v39 = iconst.i64 8
 ;;                                     v40 = iadd v6, v39  ; v39 = 8
 ;; @0038                               v11 = load.i64 table_oob aligned table v40

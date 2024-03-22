@@ -21,7 +21,7 @@
 ;; function u0:0:
 ;; block0:
 ;;   movz x10, #0
-;;   ldr x11, [x0, #80]
+;;   ldr x11, [x0, #96]
 ;;   add x11, x11, x2
 ;;   add x11, x11, #4096
 ;;   movn w9, #4099
@@ -36,7 +36,7 @@
 ;; function u0:1:
 ;; block0:
 ;;   movz x10, #0
-;;   ldr x11, [x0, #80]
+;;   ldr x11, [x0, #96]
 ;;   add x11, x11, x2
 ;;   add x11, x11, #4096
 ;;   movn w9, #4099

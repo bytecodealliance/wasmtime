@@ -193,7 +193,7 @@ wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=20.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.107.0" }
-cranelift-codegen = { path = "cranelift/codegen", version = "0.107.0", default-features = false, features = ["std", "unwind"] }
+cranelift-codegen = { path = "cranelift/codegen", version = "0.107.0", default-features = false, features = ["std", "unwind", "trace-log"] }
 cranelift-frontend = { path = "cranelift/frontend", version = "0.107.0" }
 cranelift-entity = { path = "cranelift/entity", version = "0.107.0" }
 cranelift-native = { path = "cranelift/native", version = "0.107.0" }

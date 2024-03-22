@@ -127,6 +127,7 @@ use std::num::NonZeroU32;
 
 /// An identifier for an allocated value inside a `slab`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct Id(EntryIndex);
 
 impl std::fmt::Debug for Id {
@@ -188,6 +189,7 @@ enum Entry<T> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 struct EntryIndex(NonZeroU32);
 
 impl EntryIndex {
@@ -413,20 +415,23 @@ impl<T> Slab<T> {
 
     /// Deallocate the value associated with the given `id`.
     ///
-    /// If `id` comes from a different `Slab` instance, this method may panic,
-    /// do nothing, or deallocate an arbitrary value.
+    /// If `id` comes from a different `Slab` instance, this method may panic or
+    /// deallocate an arbitrary value.
     #[inline]
-    pub fn dealloc(&mut self, id: Id) {
-        match self
-            .entries
-            .get_mut(id.0.index())
-            .expect("id from a different slab")
-        {
+    pub fn dealloc(&mut self, id: Id) -> T {
+        let entry = std::mem::replace(
+            self.entries
+                .get_mut(id.0.index())
+                .expect("id from a different slab"),
+            Entry::Free { next_free: None },
+        );
+        match entry {
             Entry::Free { .. } => panic!("attempt to deallocate an entry that is already vacant"),
-            e @ Entry::Occupied(_) => {
+            Entry::Occupied(value) => {
                 let next_free = std::mem::replace(&mut self.free, Some(id.0));
-                *e = Entry::Free { next_free };
+                self.entries[id.0.index()] = Entry::Free { next_free };
                 self.len -= 1;
+                value
             }
         }
     }

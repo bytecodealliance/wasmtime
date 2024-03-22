@@ -210,10 +210,7 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
 fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Result<()> {
     use WasmHeapType as H;
     let result = match (actual, expected) {
-        (H::Concrete(actual), H::Concrete(expected)) => {
-            // TODO(dhil): we need either canonicalised types or a context here.
-            actual == expected
-        }
+        (H::Concrete(actual), H::Concrete(expected)) => actual == expected,
 
         (H::NoFunc, H::NoFunc) => true,
         (_, H::NoFunc) => false,
@@ -226,6 +223,15 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
 
         (H::Extern, H::Extern) => true,
         (_, H::Extern) => false,
+
+        (H::Any | H::I31 | H::None, H::Any) => true,
+        (_, H::Any) => false,
+
+        (H::I31 | H::None, H::I31) => true,
+        (_, H::I31) => false,
+
+        (H::None, H::None) => true,
+        (_, H::None) => false,
     };
     if result {
         Ok(())
