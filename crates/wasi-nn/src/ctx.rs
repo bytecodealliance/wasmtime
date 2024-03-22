@@ -1,12 +1,17 @@
 //! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
 
-use crate::backend::{self, BackendError};
+use std::{collections::HashMap, hash::Hash, path::Path};
+
+use anyhow::anyhow;
+use thiserror::Error;
+
+use wiggle::GuestError;
+
+use crate::backend::{self, build_kserve_registry, BackendError};
 use crate::wit::types::GraphEncoding;
 use crate::{Backend, ExecutionContext, Graph, InMemoryRegistry, Registry};
-use anyhow::anyhow;
-use std::{collections::HashMap, hash::Hash, path::Path};
-use thiserror::Error;
-use wiggle::GuestError;
+
+// use crate::backend::BackendKind::KServe;
 
 type GraphId = u32;
 type GraphExecutionContextId = u32;
@@ -20,6 +25,7 @@ type GraphDirectory = String;
 pub fn preload(
     preload_graphs: &[(BackendName, GraphDirectory)],
 ) -> anyhow::Result<(impl IntoIterator<Item = Backend>, Registry)> {
+    #[allow(unused_mut)]
     let mut backends = backend::list();
     let mut registry = InMemoryRegistry::new();
     for (kind, path) in preload_graphs {
@@ -33,6 +39,14 @@ pub fn preload(
         registry.load(backend, Path::new(path))?;
     }
     Ok((backends, Registry::from(registry)))
+}
+
+pub fn kserve_registry() -> anyhow::Result<(impl IntoIterator<Item = Backend>, Registry)> {
+    #[allow(unused_mut)]
+    let mut backends = backend::list();
+    let registry = build_kserve_registry(&"http://localhost:8000".to_string());
+
+    Ok((backends, registry))
 }
 
 /// Capture the state necessary for calling into the backend ML libraries.
@@ -112,6 +126,7 @@ where
         key
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, key: K) -> Option<&V> {
         self.entries.get(&key)
     }
@@ -129,15 +144,18 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::registry::GraphRegistry;
+    use wiggle::async_trait;
+
+    use super::*;
 
     #[test]
     fn example() {
         struct FakeRegistry;
+        #[async_trait]
         impl GraphRegistry for FakeRegistry {
-            fn get_mut(&mut self, _: &str) -> Option<&mut Graph> {
-                None
+            async fn get_mut(&mut self, _: &str) -> Result<Option<&mut Graph>, BackendError> {
+                Ok(None)
             }
         }
 

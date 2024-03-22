@@ -1,10 +1,11 @@
 //! Implement a [`GraphRegistry`] with a hash map.
 
 use super::{Graph, GraphRegistry};
-use crate::backend::BackendFromDir;
+use crate::backend::{BackendError, BackendFromDir};
 use crate::wit::types::ExecutionTarget;
 use anyhow::{anyhow, bail};
 use std::{collections::HashMap, path::Path};
+use wiggle::async_trait;
 
 pub struct InMemoryRegistry(HashMap<String, Graph>);
 impl InMemoryRegistry {
@@ -36,8 +37,9 @@ impl InMemoryRegistry {
     }
 }
 
+#[async_trait]
 impl GraphRegistry for InMemoryRegistry {
-    fn get_mut(&mut self, name: &str) -> Option<&mut Graph> {
-        self.0.get_mut(name)
+    async fn get_mut(&mut self, name: &str) -> Result<Option<&mut Graph>, BackendError> {
+        Ok(self.0.get_mut(name))
     }
 }
