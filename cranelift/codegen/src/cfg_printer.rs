@@ -1,9 +1,7 @@
 //! The `CFGPrinter` utility.
 
-use alloc::vec::Vec;
 use core::fmt::{Display, Formatter, Result, Write};
 
-use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::Function;
 use crate::write::{FuncWriter, PlainWriter};
@@ -41,21 +39,13 @@ impl<'a> CFGPrinter<'a> {
     }
 
     fn block_nodes(&self, w: &mut dyn Write) -> Result {
-        let mut aliases = SecondaryMap::<_, Vec<_>>::new();
-        for v in self.func.dfg.values() {
-            // VADFS returns the immediate target of an alias
-            if let Some(k) = self.func.dfg.value_alias_dest_for_serialization(v) {
-                aliases[k].push(v);
-            }
-        }
-
         for block in &self.func.layout {
             write!(w, "    {} [shape=record, label=\"{{", block)?;
             crate::write::write_block_header(w, self.func, block, 4)?;
             // Add all outgoing branch instructions to the label.
             if let Some(inst) = self.func.layout.last_inst(block) {
                 write!(w, " | <{}>", inst)?;
-                PlainWriter.write_instruction(w, self.func, &aliases, inst, 0)?;
+                PlainWriter.write_instruction(w, self.func, inst, 0)?;
             }
             writeln!(w, "}}\"]")?
         }

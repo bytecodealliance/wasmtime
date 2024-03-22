@@ -15,8 +15,7 @@ block0(v0: i64, v1: i64):
 
     v4 = load.i32 heap v0+8
     v5 = load.i32 table v1+8
-    ; check: v4 -> v2
-    ; check: v5 -> v3
 
     return v4, v5
+    ; check: return v2, v3
 }

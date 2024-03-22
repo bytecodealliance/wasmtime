@@ -16,7 +16,6 @@ block0(v0: i64, v1: i32):
     v3 = load.i32 v2+8
     ;; This should reuse the load above.
     v5 = load.i32 v2+8
-    ; check: v5 -> v3
 
     call fn0(v0)
 
@@ -24,9 +23,9 @@ block0(v0: i64, v1: i32):
     ;; is a barrier that prevents reusing v3 or v5.
     v6 = load.i32 v2+8
     v7 = load.i32 v2+8
-    ; check: v7 -> v6
 
     return v3, v5, v6, v7
+    ; check: return v3, v3, v6, v6
 }
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -44,7 +43,7 @@ block0(v0: i64, v1: i32):
 
     ;; This load should pick up the store above.
     v4 = load.i32 v2+8
-    ; check: v4 -> v1
 
     return v4
+    ; check: return v1
 }

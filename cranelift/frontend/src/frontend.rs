@@ -1291,9 +1291,7 @@ mod tests {
 
 block0:
     v4 = iconst.i64 0
-    v1 -> v4
     v3 = iconst.i64 0
-    v0 -> v3
     v2 = call fn0(v4, v3, v4)  ; v4 = 0, v3 = 0, v4 = 0
     return v4  ; v4 = 0
 }
@@ -1344,9 +1342,7 @@ block0:
             "function %sample() -> i32 system_v {
 block0:
     v4 = iconst.i64 0
-    v1 -> v4
     v3 = iconst.i64 0
-    v0 -> v3
     v2 = load.i64 aligned v3  ; v3 = 0
     store aligned v2, v4  ; v4 = 0
     return v4  ; v4 = 0
@@ -1401,9 +1397,7 @@ block0:
 
 block0:
     v5 = iconst.i64 0
-    v1 -> v5
     v4 = iconst.i64 0
-    v0 -> v4
     v2 = iconst.i64 8192
     v3 = call fn0(v5, v4, v2)  ; v5 = 0, v4 = 0, v2 = 8192
     return v5  ; v5 = 0
@@ -1443,7 +1437,6 @@ block0:
             "function %sample() -> i32 system_v {
 block0:
     v2 = iconst.i64 0
-    v0 -> v2
     v1 = iconst.i64 0x0101_0101_0101_0101
     store aligned v1, v2  ; v1 = 0x0101_0101_0101_0101, v2 = 0
     return v2  ; v2 = 0
@@ -1486,7 +1479,6 @@ block0:
 
 block0:
     v5 = iconst.i64 0
-    v0 -> v5
     v1 = iconst.i8 1
     v2 = iconst.i64 8192
     v3 = uextend.i32 v1  ; v1 = 1
@@ -1550,11 +1542,8 @@ block0:
 
 block0:
     v6 = iconst.i64 0
-    v2 -> v6
     v5 = iconst.i64 0
-    v1 -> v5
     v4 = iconst.i64 0
-    v0 -> v4
     v3 = call fn0(v4, v5, v6)  ; v4 = 0, v5 = 0, v6 = 0
     return v3
 }
@@ -1569,9 +1558,7 @@ block0:
             "
 block0:
     v4 = iconst.i64 0
-    v1 -> v4
     v3 = iconst.i64 0
-    v0 -> v3
     v2 = iconst.i8 1
     return v2  ; v2 = 1",
             |builder, target, x, y| {
@@ -1596,9 +1583,7 @@ block0:
             "
 block0:
     v6 = iconst.i64 0
-    v1 -> v6
     v5 = iconst.i64 0
-    v0 -> v5
     v2 = load.i8 aligned v5  ; v5 = 0
     v3 = load.i8 aligned v6  ; v6 = 0
     v4 = icmp ugt v2, v3
@@ -1625,9 +1610,7 @@ block0:
             "
 block0:
     v6 = iconst.i64 0
-    v1 -> v6
     v5 = iconst.i64 0
-    v0 -> v5
     v2 = load.i32 aligned v5  ; v5 = 0
     v3 = load.i32 aligned v6  ; v6 = 0
     v4 = icmp eq v2, v3
@@ -1654,9 +1637,7 @@ block0:
             "
 block0:
     v6 = iconst.i64 0
-    v1 -> v6
     v5 = iconst.i64 0
-    v0 -> v5
     v2 = load.i128 v5  ; v5 = 0
     v3 = load.i128 v6  ; v6 = 0
     v4 = icmp ne v2, v3
@@ -1686,9 +1667,7 @@ block0:
 
 block0:
     v6 = iconst.i64 0
-    v1 -> v6
     v5 = iconst.i64 0
-    v0 -> v5
     v2 = iconst.i64 3
     v3 = call fn0(v5, v6, v2)  ; v5 = 0, v6 = 0, v2 = 3
     v4 = icmp_imm sge v3, 0
@@ -1796,11 +1775,8 @@ block0:
 block0:
     v5 = f32const 0.0
     v6 = splat.f32x4 v5  ; v5 = 0.0
-    v2 -> v6
     v4 = vconst.i8x16 const0
-    v1 -> v4
     v3 = vconst.i8x16 const0
-    v0 -> v3
     return v3, v4, v6  ; v3 = const0, v4 = const0
 }
 ",

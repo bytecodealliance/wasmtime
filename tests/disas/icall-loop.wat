@@ -33,18 +33,13 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v16 -> v0
-;;                                     v20 -> v0
-;;                                     v29 -> v0
-;;                                     v3 -> v2
-;;                                     v28 -> v3
 ;; @002b                               v4 = iconst.i32 2
 ;; @002b                               v5 = icmp uge v2, v4  ; v4 = 2
 ;; @002b                               v10 = iconst.i64 0
 ;; @002b                               v6 = uextend.i64 v2
-;;                                     v30 = iconst.i64 3
-;; @002b                               v8 = ishl v6, v30  ; v30 = 3
-;;                                     v31 = iconst.i64 -2
+;;                                     v29 = iconst.i64 3
+;; @002b                               v8 = ishl v6, v29  ; v29 = 3
+;;                                     v30 = iconst.i64 -2
 ;; @002b                               v17 = load.i64 notrap aligned readonly v0+56
 ;; @002b                               v18 = load.i64 notrap aligned readonly v17+72
 ;; @002b                               v15 = iconst.i32 0
@@ -55,16 +50,16 @@
 ;;                                 block2:
 ;; @002b                               v7 = load.i64 notrap aligned v0+72
 ;; @002b                               v9 = iadd v7, v8
-;;                                     v32 = iconst.i64 0
-;;                                     v33 = select_spectre_guard v5, v32, v9  ; v32 = 0
-;; @002b                               v12 = load.i64 table_oob aligned table v33
-;;                                     v34 = iconst.i64 -2
-;;                                     v35 = band v12, v34  ; v34 = -2
-;; @002b                               brif v12, block5(v35), block4
+;;                                     v31 = iconst.i64 0
+;;                                     v32 = select_spectre_guard v5, v31, v9  ; v31 = 0
+;; @002b                               v12 = load.i64 table_oob aligned table v32
+;;                                     v33 = iconst.i64 -2
+;;                                     v34 = band v12, v33  ; v33 = -2
+;; @002b                               brif v12, block5(v34), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v36 = iconst.i32 0
-;; @002b                               v19 = call_indirect.i64 sig1, v18(v0, v36, v2)  ; v36 = 0
+;;                                     v35 = iconst.i32 0
+;; @002b                               v19 = call_indirect.i64 sig1, v18(v0, v35, v2)  ; v35 = 0
 ;; @002b                               jump block5(v19)
 ;;
 ;;                                 block5(v14: i64):
@@ -93,9 +88,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;;                                     v15 -> v0
-;;                                     v19 -> v0
-;;                                     v27 -> v0
 ;;                                     v38 = iconst.i64 8
 ;;                                     v29 = iconst.i64 -2
 ;; @0038                               v16 = load.i64 notrap aligned readonly v0+56

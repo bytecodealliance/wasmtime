@@ -27,8 +27,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: r64):
-;;                                     v20 -> v0
-;;                                     v23 -> v0
 ;; @0052                               v3 = iconst.i32 0
 ;; @0056                               v4 = iconst.i32 7
 ;; @0056                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 7
@@ -88,8 +86,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: r64):
-;;                                     v20 -> v0
-;;                                     v23 -> v0
 ;; @005f                               v4 = iconst.i32 7
 ;; @005f                               v5 = icmp uge v2, v4  ; v4 = 7
 ;; @005f                               v6 = uextend.i64 v2

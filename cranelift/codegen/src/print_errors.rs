@@ -1,8 +1,7 @@
 //! Utility routines for pretty-printing error messages.
 
-use crate::entity::SecondaryMap;
 use crate::ir;
-use crate::ir::entities::{AnyEntity, Block, Inst, Value};
+use crate::ir::entities::{AnyEntity, Block, Inst};
 use crate::ir::function::Function;
 use crate::ir::pcc::Fact;
 use crate::result::CodegenError;
@@ -59,11 +58,10 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        aliases: &SecondaryMap<Value, Vec<Value>>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        pretty_instruction_error(w, func, aliases, inst, indent, &mut *self.0, self.1)
+        pretty_instruction_error(w, func, inst, indent, &mut *self.0, self.1)
     }
 
     fn write_entity_definition(
@@ -119,14 +117,13 @@ fn pretty_block_header_error(
 fn pretty_instruction_error(
     w: &mut dyn Write,
     func: &Function,
-    aliases: &SecondaryMap<Value, Vec<Value>>,
     cur_inst: Inst,
     indent: usize,
     func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_instruction(&mut s, func, aliases, cur_inst, indent)?;
+    func_w.write_instruction(&mut s, func, cur_inst, indent)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized

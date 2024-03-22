@@ -15,8 +15,8 @@ block0(v0: i64, v1: i32):
 
 block1:
     v4 = load.i32 v2+8
-    ; check: v4 -> v3
     jump block3(v4)
+    ; check: jump block3(v3)
 
 block2:
     jump block3(v3)

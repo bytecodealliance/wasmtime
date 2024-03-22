@@ -42,9 +42,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v15 -> v0
-;;                                     v19 -> v0
-;;                                     v26 -> v0
 ;; @0031                               v6 = load.i64 notrap aligned v0+72
 ;; @0031                               v3 = iconst.i32 2
 ;; @0031                               v4 = icmp uge v2, v3  ; v3 = 2

@@ -3,7 +3,6 @@
 //! The `write` module provides the `write_function` function which converts an IR `Function` to an
 //! equivalent textual form. This textual form can be read back by the `cranelift-reader` crate.
 
-use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
 use crate::ir::pcc::Fact;
 use crate::ir::{Block, DataFlowGraph, Function, Inst, SigRef, Type, Value, ValueDef};
@@ -28,7 +27,6 @@ pub trait FuncWriter {
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        aliases: &SecondaryMap<Value, Vec<Value>>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result;
@@ -134,11 +132,10 @@ impl FuncWriter for PlainWriter {
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        aliases: &SecondaryMap<Value, Vec<Value>>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        write_instruction(w, func, aliases, inst, indent)
+        write_instruction(w, func, inst, indent)
     }
 
     fn write_block_header(
@@ -158,18 +155,6 @@ pub fn write_function(w: &mut dyn Write, func: &Function) -> fmt::Result {
     decorate_function(&mut PlainWriter, w, func)
 }
 
-/// Create a reverse-alias map from a value to all aliases having that value as a direct target
-fn alias_map(func: &Function) -> SecondaryMap<Value, Vec<Value>> {
-    let mut aliases = SecondaryMap::<_, Vec<_>>::new();
-    for v in func.dfg.values() {
-        // VADFS returns the immediate target of an alias
-        if let Some(k) = func.dfg.value_alias_dest_for_serialization(v) {
-            aliases[k].push(v);
-        }
-    }
-    aliases
-}
-
 /// Writes `func` to `w` as text.
 /// write_function_plain is passed as 'closure' to print instructions as text.
 /// pretty_function_error is passed as 'closure' to add error decoration.
@@ -181,13 +166,12 @@ pub fn decorate_function<FW: FuncWriter>(
     write!(w, "function ")?;
     write_spec(w, func)?;
     writeln!(w, " {{")?;
-    let aliases = alias_map(func);
     let mut any = func_w.write_preamble(w, func)?;
     for block in &func.layout {
         if any {
             writeln!(w)?;
         }
-        decorate_block(func_w, w, func, &aliases, block)?;
+        decorate_block(func_w, w, func, block)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -255,19 +239,15 @@ fn decorate_block<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut dyn Write,
     func: &Function,
-    aliases: &SecondaryMap<Value, Vec<Value>>,
     block: Block,
 ) -> fmt::Result {
     // Indent all instructions if any srclocs are present.
     let indent = if func.rel_srclocs().is_empty() { 4 } else { 36 };
 
     func_w.write_block_header(w, func, block, indent)?;
-    for a in func.dfg.block_params(block).iter().cloned() {
-        write_value_aliases(w, aliases, a, indent)?;
-    }
 
     for inst in func.layout.block_insts(block) {
-        func_w.write_instruction(w, func, aliases, inst, indent)?;
+        func_w.write_instruction(w, func, inst, indent)?;
     }
 
     Ok(())
@@ -312,31 +292,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
     Some(rtype)
 }
 
-/// Write out any aliases to the given target, including indirect aliases
-fn write_value_aliases(
-    w: &mut dyn Write,
-    aliases: &SecondaryMap<Value, Vec<Value>>,
-    target: Value,
-    indent: usize,
-) -> fmt::Result {
-    let mut todo_stack = vec![target];
-    while let Some(target) = todo_stack.pop() {
-        for &a in &aliases[target] {
-            writeln!(w, "{1:0$}{2} -> {3}", indent, "", a, target)?;
-            todo_stack.push(a);
-        }
-    }
-
-    Ok(())
-}
-
-fn write_instruction(
-    w: &mut dyn Write,
-    func: &Function,
-    aliases: &SecondaryMap<Value, Vec<Value>>,
-    inst: Inst,
-    indent: usize,
-) -> fmt::Result {
+fn write_instruction(w: &mut dyn Write, func: &Function, inst: Inst, indent: usize) -> fmt::Result {
     // Prefix containing source location, encoding, and value locations.
     let mut s = String::with_capacity(16);
 
@@ -376,13 +332,7 @@ fn write_instruction(
     }
 
     write_operands(w, &func.dfg, inst)?;
-    writeln!(w)?;
-
-    // Value aliases come out on lines after the instruction defining the referent.
-    for r in func.dfg.inst_results(inst) {
-        write_value_aliases(w, aliases, *r, indent)?;
-    }
-    Ok(())
+    writeln!(w)
 }
 
 /// Write the operands of `inst` to `w` with a prepended space.
@@ -608,7 +558,7 @@ mod tests {
         }
         assert_eq!(
             func.to_string(),
-            "function u0:0() fast {\nblock0(v3: i32):\n    v0 -> v3\n    v2 -> v0\n    v4 = iconst.i32 42\n    v5 = iadd v3, v3\n    v1 -> v5\n    v6 = iconst.i32 23\n    v7 = iadd v5, v5\n}\n"
+            "function u0:0() fast {\nblock0(v3: i32):\n    v4 = iconst.i32 42\n    v5 = iadd v3, v3\n    v6 = iconst.i32 23\n    v7 = iadd v5, v5\n}\n"
         );
     }
 
