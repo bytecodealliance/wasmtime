@@ -224,7 +224,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }
 
             let mut slots = ABIArgSlotVec::new();
-            for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
+            for (ix, (rc, reg_ty)) in rcs.iter().zip(reg_tys.iter()).enumerate() {
+                let last_slot = last_param && ix == rcs.len() - 1;
+
                 let intreg = *rc == RegClass::Int;
                 let nextreg = if intreg {
                     match args_or_rets {
@@ -232,7 +234,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                             get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
                         }
                         ArgsOrRets::Rets => {
-                            get_intreg_for_retval(&call_conv, flags, next_gpr, last_param)
+                            get_intreg_for_retval(&call_conv, flags, next_gpr, last_slot)
                         }
                     }
                 } else {
@@ -240,9 +242,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Args => {
                             get_fltreg_for_arg(&call_conv, next_vreg, next_param_idx)
                         }
-                        ArgsOrRets::Rets => {
-                            get_fltreg_for_retval(&call_conv, next_vreg, last_param)
-                        }
+                        ArgsOrRets::Rets => get_fltreg_for_retval(&call_conv, next_vreg, last_slot),
                     }
                 };
                 next_param_idx += 1;
