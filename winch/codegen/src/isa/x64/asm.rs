@@ -1271,7 +1271,7 @@ impl Assembler {
         // emitting to binary.
         //
         // See [wasmtime::engine::Engine::check_compatible_with_shared_flag] and
-        // [wasmtime_cranelift_shared::obj::ModuleTextBuilder::apend_func]
+        // [wasmtime_cranelift::obj::ModuleTextBuilder::apend_func]
         self.emit(Inst::LoadExtName {
             dst: Writable::from_reg(dst.into()),
             name: Box::new(dest),

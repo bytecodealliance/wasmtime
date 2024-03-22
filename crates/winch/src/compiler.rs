@@ -5,7 +5,7 @@ use std::any::Any;
 use std::mem;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
-use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
+use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, TrapEncodingBuilder, VMOffsets,
@@ -31,7 +31,7 @@ pub(crate) struct Compiler {
 
 /// The compiled function environment.
 pub struct CompiledFuncEnv;
-impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
+impl wasmtime_cranelift::CompiledFuncEnv for CompiledFuncEnv {
     fn resolve_user_external_name_ref(
         &self,
         external: cranelift_codegen::ir::UserExternalNameRef,
@@ -212,11 +212,11 @@ impl wasmtime_environ::Compiler for Compiler {
     }
 
     fn flags(&self) -> Vec<(&'static str, wasmtime_environ::FlagValue<'static>)> {
-        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.flags().iter())
+        wasmtime_cranelift::clif_flags_to_wasmtime(self.isa.flags().iter())
     }
 
     fn isa_flags(&self) -> Vec<(&'static str, wasmtime_environ::FlagValue<'static>)> {
-        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.isa_flags())
+        wasmtime_cranelift::clif_flags_to_wasmtime(self.isa.isa_flags())
     }
 
     fn is_branch_protection_enabled(&self) -> bool {

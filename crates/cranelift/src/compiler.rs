@@ -2,6 +2,7 @@ use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{array_call_signature, native_call_signature, DEBUG_ASSERT_TRAP_CODE};
 use crate::{builder::LinkOptions, value_type, wasm_call_signature};
+use crate::{CompiledFunction, ModuleTextBuilder};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
     self, InstBuilder, MemFlags, UserExternalName, UserExternalNameRef, UserFuncName, Value,
@@ -28,7 +29,6 @@ use std::mem;
 use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
-use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FlagValue, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapInformation, TrapEncodingBuilder,
@@ -519,11 +519,11 @@ impl wasmtime_environ::Compiler for Compiler {
     }
 
     fn flags(&self) -> Vec<(&'static str, FlagValue<'static>)> {
-        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.flags().iter())
+        crate::clif_flags_to_wasmtime(self.isa.flags().iter())
     }
 
     fn isa_flags(&self) -> Vec<(&'static str, FlagValue<'static>)> {
-        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.isa_flags())
+        crate::clif_flags_to_wasmtime(self.isa.isa_flags())
     }
 
     fn is_branch_protection_enabled(&self) -> bool {
@@ -982,7 +982,7 @@ pub struct CompiledFuncEnv {
     map: PrimaryMap<UserExternalNameRef, UserExternalName>,
 }
 
-impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
+impl crate::CompiledFuncEnv for CompiledFuncEnv {
     fn resolve_user_external_name_ref(&self, external: ir::UserExternalNameRef) -> (u32, u32) {
         let UserExternalName { index, namespace } = self.map[external];
 
