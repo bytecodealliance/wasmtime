@@ -163,6 +163,10 @@ impl StdoutStream for pipe::ClosedOutputStream {
 /// streams are required.
 pub struct Stdout;
 
+/// Returns a stream that represents the host's standard out.
+///
+/// Suitable for passing to
+/// [`WasiCtxBuilder::stdout`](crate::WasiCtxBuilder::stdout).
 pub fn stdout() -> Stdout {
     Stdout
 }
@@ -183,6 +187,10 @@ impl StdoutStream for Stdout {
 /// streams are required.
 pub struct Stderr;
 
+/// Returns a stream that represents the host's standard err.
+///
+/// Suitable for passing to
+/// [`WasiCtxBuilder::stderr`](crate::WasiCtxBuilder::stderr).
 pub fn stderr() -> Stderr {
     Stderr
 }

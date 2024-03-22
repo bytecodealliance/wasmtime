@@ -262,20 +262,6 @@ impl RunCommand {
         Ok(())
     }
 
-    fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
-        let mut preopen_dirs = Vec::new();
-
-        for (host, guest) in self.dirs.iter() {
-            preopen_dirs.push((
-                guest.clone(),
-                Dir::open_ambient_dir(host, ambient_authority())
-                    .with_context(|| format!("failed to open directory '{}'", host))?,
-            ));
-        }
-
-        Ok(preopen_dirs)
-    }
-
     fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
         let mut listeners = vec![];
 
@@ -484,7 +470,7 @@ impl RunCommand {
 
                 let component = module.unwrap_component();
 
-                let (command, _instance) = wasmtime_wasi::command::sync::Command::instantiate(
+                let (command, _instance) = wasmtime_wasi::bindings::sync::Command::instantiate(
                     &mut *store,
                     component,
                     linker,
@@ -663,7 +649,7 @@ impl RunCommand {
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    wasmtime_wasi::command::sync::add_to_linker(linker)?;
+                    wasmtime_wasi::add_to_linker_sync(linker)?;
                     self.set_preview2_ctx(store)?;
                 }
             }
@@ -798,8 +784,10 @@ impl RunCommand {
             num_fd += 1;
         }
 
-        for (name, dir) in self.compute_preopen_dirs()? {
-            builder.preopened_dir(dir, name)?;
+        for (host, guest) in self.dirs.iter() {
+            let dir = Dir::open_ambient_dir(host, ambient_authority())
+                .with_context(|| format!("failed to open directory '{}'", host))?;
+            builder.preopened_dir(dir, guest)?;
         }
 
         store.data_mut().preview1_ctx = Some(builder.build());
@@ -844,13 +832,13 @@ impl RunCommand {
             bail!("components do not support --tcplisten");
         }
 
-        for (name, dir) in self.compute_preopen_dirs()? {
+        for (host, guest) in self.dirs.iter() {
             builder.preopened_dir(
-                dir,
+                host,
                 wasmtime_wasi::DirPerms::all(),
                 wasmtime_wasi::FilePerms::all(),
-                name,
-            );
+                guest,
+            )?;
         }
 
         if self.run.common.wasi.inherit_network == Some(true) {

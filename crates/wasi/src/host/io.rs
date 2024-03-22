@@ -230,8 +230,8 @@ pub mod sync {
             self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
             HostOutputStream as AsyncHostOutputStream,
         },
-        bindings::sync_io::io::poll::Pollable,
-        bindings::sync_io::io::streams::{self, InputStream, OutputStream},
+        bindings::sync::io::poll::Pollable,
+        bindings::sync::io::streams::{self, InputStream, OutputStream},
         runtime::in_tokio,
         StreamError, StreamResult, WasiView,
     };

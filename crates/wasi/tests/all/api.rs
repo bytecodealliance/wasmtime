@@ -1,14 +1,13 @@
 use anyhow::Result;
-use cap_std::ambient_authority;
-use cap_std::fs::Dir;
 use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
+use wasmtime_wasi::bindings::Command;
 use wasmtime_wasi::{
-    bindings::wasi::{clocks::wall_clock, filesystem::types as filesystem},
-    command::{add_to_linker, Command},
+    add_to_linker_async,
+    bindings::{clocks::wall_clock, filesystem::types as filesystem},
     DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
@@ -35,7 +34,7 @@ async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, 
     config.async_support(true).wasm_component_model(true);
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
-    add_to_linker(&mut linker)?;
+    add_to_linker_async(&mut linker)?;
 
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
@@ -97,9 +96,8 @@ async fn api_read_only() -> Result<()> {
     std::fs::create_dir(dir.path().join("sub"))?;
 
     let table = ResourceTable::new();
-    let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let wasi = WasiCtxBuilder::new()
-        .preopened_dir(open_dir, DirPerms::READ, FilePerms::READ, "/")
+        .preopened_dir(dir.path(), DirPerms::READ, FilePerms::READ, "/")?
         .build();
 
     let (mut store, command) =
@@ -140,7 +138,7 @@ async fn api_reactor() -> Result<()> {
     config.async_support(true).wasm_component_model(true);
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
-    add_to_linker(&mut linker)?;
+    add_to_linker_async(&mut linker)?;
 
     let mut store = Store::new(&engine, CommandCtx { table, wasi });
     let component = Component::from_file(&engine, API_REACTOR_COMPONENT)?;

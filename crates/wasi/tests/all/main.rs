@@ -60,9 +60,7 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
         .inherit_network()
         .allow_ip_name_lookup(true);
     println!("preopen: {:?}", workspace);
-    let preopen_dir =
-        cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
-    builder.preopened_dir(preopen_dir, DirPerms::all(), FilePerms::all(), ".");
+    builder.preopened_dir(workspace.path(), DirPerms::all(), FilePerms::all(), ".")?;
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
         builder.env(var, val);
     }
