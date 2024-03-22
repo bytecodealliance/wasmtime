@@ -9,6 +9,7 @@ use crate::{
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
+use rustls::pki_types::{ServerName, TrustAnchor};
 use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
@@ -177,28 +178,25 @@ async fn handler(
 
         #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
         {
-            use tokio_rustls::rustls::OwnedTrustAnchor;
-
             // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
             let mut root_cert_store = rustls::RootCertStore::empty();
-            root_cert_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-                OwnedTrustAnchor::from_subject_spki_name_constraints(
-                    ta.subject,
-                    ta.spki,
-                    ta.name_constraints,
-                )
+            root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| TrustAnchor {
+                name_constraints: ta.name_constraints.to_owned(),
+                subject: ta.subject.to_owned(),
+                subject_public_key_info: ta.subject_public_key_info.to_owned(),
             }));
             let config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
                 .with_root_certificates(root_cert_store)
                 .with_no_client_auth();
             let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
             let mut parts = authority.split(":");
             let host = parts.next().unwrap_or(&authority);
-            let domain = rustls::ServerName::try_from(host).map_err(|e| {
-                tracing::warn!("dns lookup error: {e:?}");
-                dns_error("invalid dns name".to_string(), 0)
-            })?;
+            let domain = ServerName::try_from(host)
+                .map_err(|e| {
+                    tracing::warn!("dns lookup error: {e:?}");
+                    dns_error("invalid dns name".to_string(), 0)
+                })?
+                .to_owned();
             let stream = connector.connect(domain, tcp_stream).await.map_err(|e| {
                 tracing::warn!("tls protocol error: {e:?}");
                 types::ErrorCode::TlsProtocolError
