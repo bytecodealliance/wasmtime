@@ -520,10 +520,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_epilogue_frame_restore(
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &x64_settings::Flags,
-        frame_layout: &FrameLayout,
+        _frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
         // `mov %rbp, %rsp`
@@ -534,14 +534,21 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         ));
         // `pop %rbp`
         insts.push(Inst::pop64(Writable::from_reg(regs::rbp())));
+        insts
+    }
+
+    fn gen_return(
+        call_conv: isa::CallConv,
+        _isa_flags: &x64_settings::Flags,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Self::I> {
         // Emit return instruction.
         let stack_bytes_to_pop = if call_conv == isa::CallConv::Tail {
             frame_layout.stack_args_size
         } else {
             0
         };
-        insts.push(Inst::ret(stack_bytes_to_pop));
-        insts
+        smallvec![Inst::ret(stack_bytes_to_pop)]
     }
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
