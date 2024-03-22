@@ -72,7 +72,7 @@ use wasmtime_wmemcheck::AccessError::{
 ///
 /// Invocation of a builtin currently looks like:
 ///
-/// * A wasm function calls a cranelift-compiled tramopline that's generated
+/// * A wasm function calls a cranelift-compiled trampoline that's generated
 ///   once-per-builtin.
 /// * The cranelift-compiled trampoline performs any necessary actions to exit
 ///   wasm, such as dealing with fp/pc/etc.

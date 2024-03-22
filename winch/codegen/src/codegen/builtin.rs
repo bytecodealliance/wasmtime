@@ -19,12 +19,14 @@ pub(crate) enum BuiltinType {
 }
 
 impl BuiltinType {
-    /// Create a new dynamic built-in function type.
+    /// Creates a new builtin from a Wasmtime-defined builtin function
+    /// enumerated with a [`BuiltinFunctionIndex`].
     pub fn builtin(idx: BuiltinFunctionIndex) -> Self {
         Self::Builtin(idx)
     }
 
-    /// Create a new known built-in function type.
+    /// Creates a new builtin from a Compiler-defined [`LibCall`] typically used
+    /// late in lowering.
     pub fn libcall(libcall: LibCall) -> Self {
         Self::LibCall(libcall)
     }
