@@ -378,6 +378,65 @@ impl DataFlowGraph {
         resolve_aliases(&self.values, value)
     }
 
+    /// Replace all uses of value aliases with their resolved values, and delete
+    /// the aliases.
+    pub fn resolve_all_aliases(&mut self) {
+        let invalid_value = ValueDataPacked::from(ValueData::Alias {
+            ty: types::INVALID,
+            original: Value::reserved_value(),
+        });
+
+        // Rewrite each chain of aliases. Update every alias along the chain
+        // into an alias directly to the final value. Due to updating every
+        // alias that it looks at, this loop runs in time linear in the number
+        // of values.
+        for mut src in self.values.keys() {
+            let value_data = self.values[src];
+            if value_data == invalid_value {
+                continue;
+            }
+            if let ValueData::Alias { mut original, .. } = value_data.into() {
+                // We don't use the type after this, we just need some place to
+                // store the resolved aliases temporarily.
+                let resolved = ValueDataPacked::from(ValueData::Alias {
+                    ty: types::INVALID,
+                    original: resolve_aliases(&self.values, original),
+                });
+                // Walk the chain again, splatting the new alias everywhere.
+                // resolve_aliases panics if there's an alias cycle, so we don't
+                // need to guard against cycles here.
+                loop {
+                    self.values[src] = resolved;
+                    src = original;
+                    if let ValueData::Alias { original: next, .. } = self.values[src].into() {
+                        original = next;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Now aliases don't point to other aliases, so we can replace any use
+        // of an alias with the final value in constant time.
+        for inst in self.insts.0.values_mut() {
+            inst.map_values(&mut self.value_lists, &mut self.jump_tables, |arg| {
+                if let ValueData::Alias { original, .. } = self.values[arg].into() {
+                    original
+                } else {
+                    arg
+                }
+            });
+        }
+
+        // Delete all aliases now that there are no uses left.
+        for value in self.values.values_mut() {
+            if let ValueData::Alias { .. } = ValueData::from(*value) {
+                *value = invalid_value;
+            }
+        }
+    }
+
     /// Resolve all aliases among inst's arguments.
     ///
     /// For each argument of inst which is defined by an alias, replace the
