@@ -333,6 +333,13 @@ impl DataFlowGraph {
         self.values.is_valid(v)
     }
 
+    /// Check whether a value is valid and not an alias.
+    pub fn value_is_real(&self, value: Value) -> bool {
+        // Deleted or unused values are also stored as aliases so this excludes
+        // those as well.
+        self.value_is_valid(value) && !matches!(self.values[value].into(), ValueData::Alias { .. })
+    }
+
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
         self.values[v].ty()
@@ -435,16 +442,6 @@ impl DataFlowGraph {
                 *value = invalid_value;
             }
         }
-    }
-
-    /// Resolve all aliases among inst's arguments.
-    ///
-    /// For each argument of inst which is defined by an alias, replace the
-    /// alias with the aliased value.
-    pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, |arg| {
-            resolve_aliases(&self.values, arg)
-        });
     }
 
     /// Turn a value into an alias of another.
