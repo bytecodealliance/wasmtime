@@ -416,8 +416,7 @@ impl<'a> Elaborator<'a> {
         while let Some(entry) = self.elab_stack.pop() {
             match entry {
                 ElabStackEntry::Start { value, before } => {
-                    debug_assert_ne!(value, Value::reserved_value());
-                    let value = self.func.dfg.resolve_aliases(value);
+                    debug_assert!(self.func.dfg.value_is_real(value));
 
                     self.stats.elaborate_visit_node += 1;
 
