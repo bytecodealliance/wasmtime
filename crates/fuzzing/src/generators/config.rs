@@ -188,7 +188,9 @@ impl Config {
         // Determine whether we will actually enable PCC -- this is
         // disabled if the module erquires memory64, which is not yet
         // compatible (due to the need for dynamic checks).
-        let pcc = self.wasmtime.pcc && !self.module_config.config.memory64_enabled;
+        let pcc = cfg!(feature = "fuzz-pcc")
+            && self.wasmtime.pcc
+            && !self.module_config.config.memory64_enabled;
 
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
