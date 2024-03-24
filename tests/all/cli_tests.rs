@@ -1596,6 +1596,13 @@ mod test_programs {
         assert!(output.status.success());
         Ok(())
     }
+
+    #[test]
+    fn cli_sleep() -> Result<()> {
+        run_wasmtime(&["run", CLI_SLEEP])?;
+        run_wasmtime(&["run", CLI_SLEEP_COMPONENT])?;
+        Ok(())
+    }
 }
 
 #[test]
