@@ -1,5 +1,3 @@
-#[cfg(feature = "preview1")]
-use crate::WasiP1Ctx;
 use crate::{
     clocks::{
         host::{monotonic_clock, wall_clock},
@@ -501,10 +499,26 @@ impl WasiCtxBuilder {
         }
     }
 
+    /// Builds a WASIp1 context instead of a [`WasiCtx`].
+    ///
+    /// This method is the same as [`build`](WasiCtxBuilder::build) but it
+    /// creates a [`WasiP1Ctx`] instead. This is intended for use with the
+    /// [`preview1`] module of this crate
+    ///
+    /// [`WasiP1Ctx`]: crate::preview1::WasiP1Ctx
+    /// [`preview1`]: crate::preview1
+    ///
+    /// # Panics
+    ///
+    /// Panics if this method is called twice. Each [`WasiCtxBuilder`] can be
+    /// used to create only a single [`WasiCtx`] or [`WasiP1Ctx`]. Repeated
+    /// usage of this method is not allowed and should use a second builder
+    /// instead.
     #[cfg(feature = "preview1")]
-    pub fn build_p1(&mut self) -> WasiP1Ctx {
+    #[cfg_attr(docsrs, doc(cfg(feature = "preview1")))]
+    pub fn build_p1(&mut self) -> crate::preview1::WasiP1Ctx {
         let wasi = self.build();
-        WasiP1Ctx::new(wasi)
+        crate::preview1::WasiP1Ctx::new(wasi)
     }
 }
 

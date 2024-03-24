@@ -178,19 +178,18 @@
 //! [`wasi:sockets/udp`]: bindings::sockets::udp::Host
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 use wasmtime::component::Linker;
 
 pub mod bindings;
 mod clocks;
-pub mod command;
 mod ctx;
 mod error;
 mod filesystem;
 mod host;
 mod ip_name_lookup;
 mod network;
-#[cfg(feature = "preview1")]
-mod p1ctx;
 pub mod pipe;
 mod poll;
 #[cfg(feature = "preview1")]
@@ -210,8 +209,6 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
-#[cfg(feature = "preview1")]
-pub use self::p1ctx::WasiP1Ctx;
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{

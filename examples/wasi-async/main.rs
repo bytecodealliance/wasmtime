@@ -9,32 +9,8 @@ You can execute this example with:
 
 use anyhow::Result;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-
-struct WasiHostCtx {
-    preview2_ctx: wasmtime_wasi::WasiCtx,
-    preview2_table: wasmtime::component::ResourceTable,
-    preview1_adapter: wasmtime_wasi::preview1::WasiPreview1Adapter,
-}
-
-impl wasmtime_wasi::WasiView for WasiHostCtx {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        &mut self.preview2_table
-    }
-
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        &mut self.preview2_ctx
-    }
-}
-
-impl wasmtime_wasi::preview1::WasiPreview1View for WasiHostCtx {
-    fn adapter(&self) -> &wasmtime_wasi::preview1::WasiPreview1Adapter {
-        &self.preview1_adapter
-    }
-
-    fn adapter_mut(&mut self) -> &mut wasmtime_wasi::preview1::WasiPreview1Adapter {
-        &mut self.preview1_adapter
-    }
-}
+use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -45,18 +21,15 @@ async fn main() -> Result<()> {
 
     // Add the WASI preview1 API to the linker (will be implemented in terms of
     // the preview2 API)
-    let mut linker: Linker<WasiHostCtx> = Linker::new(&engine);
-    wasmtime_wasi::preview1::add_to_linker_async(&mut linker, |t| t)?;
+    let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
+    preview1::add_to_linker_async(&mut linker, |t| t)?;
 
-    // Add capabilities (e.g. filesystem access) to the WASI preview2 context here.
-    let wasi_ctx = wasmtime_wasi::WasiCtxBuilder::new().inherit_stdio().build();
+    // Add capabilities (e.g. filesystem access) to the WASI preview2 context
+    // here. Here only stdio is inherited, but see docs of `WasiCtxBuilder` for
+    // more.
+    let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build_p1();
 
-    let host_ctx = WasiHostCtx {
-        preview2_ctx: wasi_ctx,
-        preview2_table: wasmtime::component::ResourceTable::new(),
-        preview1_adapter: wasmtime_wasi::preview1::WasiPreview1Adapter::new(),
-    };
-    let mut store: Store<WasiHostCtx> = Store::new(&engine, host_ctx);
+    let mut store = Store::new(&engine, wasi_ctx);
 
     // Instantiate our 'Hello World' wasm module.
     // Note: This is a module built against the preview1 WASI API.
