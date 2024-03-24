@@ -341,6 +341,25 @@ impl InstructionData {
         }
     }
 
+    /// Replace the values used in this instruction according to the given
+    /// function.
+    pub fn map_values(
+        &mut self,
+        pool: &mut ValueListPool,
+        jump_tables: &mut ir::JumpTables,
+        mut f: impl FnMut(Value) -> Value,
+    ) {
+        for arg in self.arguments_mut(pool) {
+            *arg = f(*arg);
+        }
+
+        for block in self.branch_destination_mut(jump_tables) {
+            for arg in block.args_slice_mut(pool) {
+                *arg = f(*arg);
+            }
+        }
+    }
+
     /// If this is a trapping instruction, get its trap code. Otherwise, return
     /// `None`.
     pub fn trap_code(&self) -> Option<TrapCode> {
