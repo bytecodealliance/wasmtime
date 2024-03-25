@@ -820,7 +820,6 @@ dependencies = [
  "cranelift-native",
  "cranelift-object",
  "cranelift-reader",
- "cranelift-wasm",
  "filecheck",
  "fxhash",
  "indicatif",
@@ -831,11 +830,9 @@ dependencies = [
  "serde",
  "similar",
  "target-lexicon",
- "termcolor",
  "thiserror",
  "toml",
  "walkdir",
- "wat",
 ]
 
 [[package]]
