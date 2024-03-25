@@ -611,6 +611,13 @@ pub struct WasiCtx {
     pub(crate) allow_blocking_current_thread: bool,
 }
 
+impl WasiCtx {
+    /// Convenience function for calling [`WasiCtxBuilder::new`].
+    pub fn builder() -> WasiCtxBuilder {
+        WasiCtxBuilder::new()
+    }
+}
+
 pub struct AllowedNetworkUses {
     pub ip_name_lookup: bool,
     pub udp: bool,
