@@ -1722,6 +1722,103 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::GrowFrame { amount, tmp } => {
+            debug_assert!(*amount > 0);
+            debug_assert_eq!(*amount % 8, 0);
+
+            let tmp = allocs.next(tmp.to_reg().to_reg());
+            let src = Gpr::new(tmp).unwrap();
+            let dst = WritableGpr::from_reg(src);
+
+            // As we're increasing the number of stack arguments, we need to move the frame down in
+            // memory, by decrementing SP by `amount` and looping from lower addresses to higher
+            // ones, copying down.
+
+            // TODO: this needs to be accounted for by the stack check, before `GrowFrame` is
+            // emitted, so that the increment here is expected.
+            //
+            // Decrement SP by `amount`
+            Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Sub,
+                RegMemImm::imm(*amount),
+                Writable::from_reg(regs::rsp()),
+            )
+            .emit(&[], sink, info, state);
+
+            // The total size that we're going to copy, including the return address and frame
+            // pointer that are pushed on the stack alreadcy.
+            let size = i32::try_from(state.nominal_sp_to_fp()).unwrap() + 16;
+
+            debug_assert_eq!(size % 8, 0);
+
+            // Iterate word offsets from `SP + amount`, copying them to SP.
+            for sp_word_offset in 0..(size / 8) {
+                let sp_byte_offset = sp_word_offset * 8;
+                Inst::Mov64MR {
+                    src: SyntheticAmode::nominal_sp_offset(
+                        sp_byte_offset + i32::try_from(*amount).unwrap(),
+                    ),
+                    dst,
+                }
+                .emit(&[], sink, info, state);
+
+                Inst::MovRM {
+                    size: OperandSize::Size64,
+                    src,
+                    dst: SyntheticAmode::nominal_sp_offset(sp_byte_offset),
+                }
+                .emit(&[], sink, info, state);
+            }
+        }
+
+        Inst::ShrinkFrame { amount, tmp } => {
+            debug_assert!(*amount > 0);
+            debug_assert_eq!(*amount % 8, 0);
+
+            let tmp = allocs.next(tmp.to_reg().to_reg());
+            let src = Gpr::new(tmp).unwrap();
+            let dst = WritableGpr::from_reg(src);
+
+            // As we're decreasing the number of stack arguments, we need to move the frame up in
+            // memory, looping from higher addresses to lower ones copying up, and finally
+            // incrementing `SP` by `amount`.
+
+            // The total size that we're going to copy, including the return address and frame
+            // pointer that are pushed on the stack alreadcy.
+            let size = i32::try_from(state.nominal_sp_to_fp()).unwrap() + 16;
+
+            debug_assert_eq!(size % 8, 0);
+
+            // Iterate word offsets from `SP`, copying them to `SP + amount`.
+            for sp_word_offset in (0..(size / 8)).rev() {
+                let sp_byte_offset = sp_word_offset * 8;
+                Inst::Mov64MR {
+                    src: SyntheticAmode::nominal_sp_offset(sp_byte_offset),
+                    dst,
+                }
+                .emit(&[], sink, info, state);
+
+                Inst::MovRM {
+                    size: OperandSize::Size64,
+                    src,
+                    dst: SyntheticAmode::nominal_sp_offset(
+                        sp_byte_offset + i32::try_from(*amount).unwrap(),
+                    ),
+                }
+                .emit(&[], sink, info, state);
+            }
+
+            // Increment SP by `amount`
+            Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Add,
+                RegMemImm::imm(*amount),
+                Writable::from_reg(regs::rsp()),
+            )
+            .emit(&[], sink, info, state);
+        }
+
         Inst::Args { .. } => {}
         Inst::Rets { .. } => {}
 
@@ -4291,6 +4388,7 @@ fn emit_return_call_common_sequence(
     //            | ...                 |
     //    current | return address      |
     //    frame   | old FP              | <-- FP
+    //            | callee saves        |
     //            | ...                 |
     //            | old stack slots     |
     //            | ...                 |

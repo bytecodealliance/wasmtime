@@ -541,6 +541,16 @@
        (ReturnCallUnknown (callee RegMem)
                           (info BoxReturnCallInfo))
 
+       ;; Move the frame down in memory to accommodate additional stack
+       ;; arguments, when setting up for a tail call.
+       (GrowFrame (amount u32)
+                  (tmp WritableGpr))
+
+       ;; Move the frame up in memory to accommodate fewer stack arguments, when
+       ;; setting up for a tail call.
+       (ShrinkFrame (amount u32)
+                    (tmp WritableGpr))
+
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
         (args VecArgPair))

@@ -138,6 +138,8 @@ impl Inst {
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
+            | Inst::GrowFrame { .. }
+            | Inst::ShrinkFrame { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::Ret { .. }
@@ -1733,6 +1735,18 @@ impl PrettyPrint for Inst {
                 s
             }
 
+            Inst::GrowFrame { amount, tmp } => {
+                let amount = *amount;
+                let tmp = regs::show_reg(tmp.to_reg().to_reg());
+                format!("grow_frame {amount} {tmp}")
+            }
+
+            Inst::ShrinkFrame { amount, tmp } => {
+                let amount = *amount;
+                let tmp = regs::show_reg(tmp.to_reg().to_reg());
+                format!("shrink_frame {amount} {tmp}")
+            }
+
             Inst::Args { args } => {
                 let mut s = "args".to_string();
                 for arg in args {
@@ -2423,6 +2437,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
             collector.reg_use(**fp);
             collector.reg_early_def(tmp.to_writable_reg());
+        }
+
+        Inst::GrowFrame { tmp, .. } | Inst::ShrinkFrame { tmp, .. } => {
+            collector.reg_def(tmp.to_writable_reg());
         }
 
         Inst::JmpTableSeq {

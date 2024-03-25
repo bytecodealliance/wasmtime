@@ -808,6 +808,8 @@ pub(crate) fn check(
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
         | Inst::Ret { .. }
+        | Inst::GrowFrame { .. }
+        | Inst::ShrinkFrame { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::TrapIf { .. }
