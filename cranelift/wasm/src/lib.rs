@@ -4,9 +4,6 @@
 //! [`ModuleEnvironment`](trait.ModuleEnvironment.html)
 //! trait to deal with tables, globals and linear memory.
 //!
-//! The crate provides a `DummyEnvironment` struct that will allow to translate the code of the
-//! functions but will fail at execution.
-//!
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
 #![deny(missing_docs)]
@@ -42,10 +39,7 @@ mod state;
 mod table;
 mod translation_utils;
 
-pub use crate::environ::{
-    DummyEnvironment, DummyFuncEnvironment, DummyModuleInfo, FuncEnvironment, GlobalVariable,
-    ModuleEnvironment, TargetEnvironment,
-};
+pub use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, TargetEnvironment};
 pub use crate::func_translator::FuncTranslator;
 pub use crate::heap::{Heap, HeapData, HeapStyle};
 pub use crate::module_translator::translate_module;
