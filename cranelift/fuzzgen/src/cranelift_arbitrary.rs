@@ -64,11 +64,8 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
             allowed_callconvs.push(CallConv::Tail);
         }
 
-        // The winch calling convention is supposed to work on x64 and aarch64
-        if matches!(
-            architecture,
-            Architecture::X86_64 | Architecture::Aarch64(_)
-        ) {
+        // The winch calling convention is supposed to work on x64.
+        if matches!(architecture, Architecture::X86_64) {
             allowed_callconvs.push(CallConv::Winch);
         }
 
