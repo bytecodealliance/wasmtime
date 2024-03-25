@@ -238,3 +238,15 @@ fn large_add_chain_no_stack_overflow() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn compile_a_component() -> Result<()> {
+    let engine = Engine::default();
+    let err = Module::new(&engine, "(component)").unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("expected a WebAssembly module but was given a WebAssembly component"),
+        "bad error: {err}"
+    );
+    Ok(())
+}
