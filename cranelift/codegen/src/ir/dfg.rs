@@ -383,7 +383,9 @@ impl DataFlowGraph {
     /// For each argument of inst which is defined by an alias, replace the
     /// alias with the aliased value.
     pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        self.map_inst_values(inst, |dfg, arg| resolve_aliases(&dfg.values, arg));
+        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, |arg| {
+            resolve_aliases(&self.values, arg)
+        });
     }
 
     /// Turn a value into an alias of another.
@@ -732,24 +734,11 @@ impl DataFlowGraph {
     }
 
     /// Map a function over the values of the instruction.
-    pub fn map_inst_values<F>(&mut self, inst: Inst, mut body: F)
+    pub fn map_inst_values<F>(&mut self, inst: Inst, body: F)
     where
-        F: FnMut(&mut DataFlowGraph, Value) -> Value,
+        F: FnMut(Value) -> Value,
     {
-        for i in 0..self.inst_args(inst).len() {
-            let arg = self.inst_args(inst)[i];
-            self.inst_args_mut(inst)[i] = body(self, arg);
-        }
-
-        for block_ix in 0..self.insts[inst].branch_destination(&self.jump_tables).len() {
-            // We aren't changing the size of the args list, so we won't need to write the branch
-            // back to the instruction.
-            let mut block = self.insts[inst].branch_destination(&self.jump_tables)[block_ix];
-            for i in 0..block.args_slice(&self.value_lists).len() {
-                let arg = block.args_slice(&self.value_lists)[i];
-                block.args_slice_mut(&mut self.value_lists)[i] = body(self, arg);
-            }
-        }
+        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, body);
     }
 
     /// Overwrite the instruction's value references with values from the iterator.
@@ -759,16 +748,9 @@ impl DataFlowGraph {
     where
         I: Iterator<Item = Value>,
     {
-        for arg in self.inst_args_mut(inst) {
-            *arg = values.next().unwrap();
-        }
-
-        for block_ix in 0..self.insts[inst].branch_destination(&self.jump_tables).len() {
-            let mut block = self.insts[inst].branch_destination(&self.jump_tables)[block_ix];
-            for arg in block.args_slice_mut(&mut self.value_lists) {
-                *arg = values.next().unwrap();
-            }
-        }
+        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, |_| {
+            values.next().unwrap()
+        });
     }
 
     /// Get all value arguments on `inst` as a slice.
