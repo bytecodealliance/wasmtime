@@ -293,14 +293,14 @@ impl WasiCtxBuilder {
     /// * `host_path` - a path to a directory on the host to open and make
     ///   accessible to WebAssembly. Note that the name of this directory in the
     ///   guest is configured with `guest_path` below.
-    /// * `perms` - this is the permissions that wasm will have to operate on
+    /// * `guest_path` - the name of the preopened directory from WebAssembly's
+    ///   perspective. Note that this does not need to match the host's name for
+    ///   the directory.
+    /// * `dir_perms` - this is the permissions that wasm will have to operate on
     ///   `dir`. This can be used, for example, to provide readonly access to a
     ///   directory.
     /// * `file_perms` - similar to `perms` but corresponds to the maximum set
     ///   of permissions that can be used for any file in this directory.
-    /// * `guest_path` - the name of the preopened directory from WebAssembly's
-    ///   perspective. Note that this does not need to match the host's name for
-    ///   the directory.
     ///
     /// # Errors
     ///
@@ -316,32 +316,32 @@ impl WasiCtxBuilder {
     /// let mut wasi = WasiCtxBuilder::new();
     ///
     /// // Make `./host-directory` available in the guest as `.`
-    /// wasi.preopened_dir("./host-directory", DirPerms::all(), FilePerms::all(), ".");
+    /// wasi.preopened_dir("./host-directory", ".", DirPerms::all(), FilePerms::all());
     ///
     /// // Make `./readonly` available in the guest as `./ro`
-    /// wasi.preopened_dir("./readonly", DirPerms::READ, FilePerms::READ, "./ro");
+    /// wasi.preopened_dir("./readonly", "./ro", DirPerms::READ, FilePerms::READ);
     /// # Ok(())
     /// # }
     /// ```
     pub fn preopened_dir(
         &mut self,
         host_path: impl AsRef<Path>,
-        perms: DirPerms,
-        file_perms: FilePerms,
         guest_path: impl AsRef<str>,
+        dir_perms: DirPerms,
+        file_perms: FilePerms,
     ) -> Result<&mut Self> {
         let dir = cap_std::fs::Dir::open_ambient_dir(host_path.as_ref(), ambient_authority())?;
         let mut open_mode = OpenMode::empty();
-        if perms.contains(DirPerms::READ) {
+        if dir_perms.contains(DirPerms::READ) {
             open_mode |= OpenMode::READ;
         }
-        if perms.contains(DirPerms::MUTATE) {
+        if dir_perms.contains(DirPerms::MUTATE) {
             open_mode |= OpenMode::WRITE;
         }
         self.preopens.push((
             Dir::new(
                 dir,
-                perms,
+                dir_perms,
                 file_perms,
                 open_mode,
                 self.allow_blocking_current_thread,

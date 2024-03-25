@@ -840,9 +840,9 @@ impl RunCommand {
         for (host, guest) in self.dirs.iter() {
             builder.preopened_dir(
                 host,
+                guest,
                 wasmtime_wasi::DirPerms::all(),
                 wasmtime_wasi::FilePerms::all(),
-                guest,
             )?;
         }
 

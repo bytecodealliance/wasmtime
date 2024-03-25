@@ -97,7 +97,7 @@ async fn api_read_only() -> Result<()> {
 
     let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new()
-        .preopened_dir(dir.path(), DirPerms::READ, FilePerms::READ, "/")?
+        .preopened_dir(dir.path(), "/", DirPerms::READ, FilePerms::READ)?
         .build();
 
     let (mut store, command) =
