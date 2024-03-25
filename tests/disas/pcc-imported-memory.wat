@@ -34,41 +34,27 @@
     local.get 1
     drop))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    72(%rdi), %r10
-;;   movq    8(%r10), %rax
-;;   movl    $65536, %r10d
-;;   xorq    %rdx, %rdx, %rdx
-;;   div     %rax, %rdx, %r10, %rax, %rdx ; trap=int_divz
-;;   movq    %rax, %r9
-;;   shll    $16, %r9d, %r9d
-;;   lea     4(%rax), %r10d
-;;   cmpl    %r10d, %r9d
-;;   jbe     label1; j label2
-;; block1:
-;;   jmp     label5
-;; block2:
-;;   testl   %eax, %eax
-;;   jle     label3; j label4
-;; block3:
-;;   jmp     label5
-;; block4:
-;;   movq    72(%rdi), %rcx
-;;   movq    0(%rcx), %rcx
-;;   movl    %eax, %edx
-;;   movl    0(%rcx,%rdx,1), %edi
-;;   jmp     label6
-;; block5:
-;;   xorl    %edi, %edi, %edi
-;;   jmp     label6
-;; block6:
-;;   jmp     label7
-;; block7:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    0x48(%rdi), %r10
+;;    8: movq    8(%r10), %rax
+;;    c: movl    $0x10000, %r10d
+;;   12: xorq    %rdx, %rdx
+;;   15: divq    %r10
+;;   18: movq    %rax, %r9
+;;   1b: shll    $0x10, %r9d
+;;   1f: leal    4(%rax), %r10d
+;;   23: cmpl    %r10d, %r9d
+;;   26: jbe     0x45
+;;   2c: testl   %eax, %eax
+;;   2e: jle     0x45
+;;   34: movq    0x48(%rdi), %rcx
+;;   38: movq    (%rcx), %rcx
+;;   3b: movl    %eax, %edx
+;;   3d: movl    (%rcx, %rdx), %edi
+;;   40: jmp     0x47
+;;   45: xorl    %edi, %edi
+;;   47: movq    %rbp, %rsp
+;;   4a: popq    %rbp
+;;   4b: retq

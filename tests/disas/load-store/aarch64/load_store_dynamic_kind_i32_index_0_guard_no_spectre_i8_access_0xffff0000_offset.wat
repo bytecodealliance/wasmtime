@@ -18,42 +18,40 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;; block0:
-;;   mov w11, w2
-;;   movn w12, #65534
-;;   adds x11, x11, x12
-;;   b.hs #trap=heap_oob
-;;   ldr x12, [x0, #88]
-;;   subs xzr, x11, x12
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x14, [x0, #80]
-;;   add x14, x14, x2, UXTW
-;;   movz x15, #65535, LSL #16
-;;   strb w3, [x14, x15]
-;;   b label2
-;; block2:
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[0]:
+;;    0: stp     x29, x30, [sp, #-0x10]!
+;;    4: mov     x29, sp
+;;    8: mov     w11, w2
+;;    c: mov     w12, #-0xffff
+;;   10: adds    x11, x11, x12
+;;   14: b.hs    #0x40
+;;   18: ldr     x12, [x0, #0x58]
+;;   1c: cmp     x11, x12
+;;   20: b.hi    #0x3c
+;;   24: ldr     x14, [x0, #0x50]
+;;   28: add     x14, x14, w2, uxtw
+;;   2c: mov     x15, #0xffff0000
+;;   30: strb    w3, [x14, x15]
+;;   34: ldp     x29, x30, [sp], #0x10
+;;   38: ret
+;;   3c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   40: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
-;; function u0:1:
-;; block0:
-;;   mov w11, w2
-;;   movn w12, #65534
-;;   adds x11, x11, x12
-;;   b.hs #trap=heap_oob
-;;   ldr x12, [x0, #88]
-;;   subs xzr, x11, x12
-;;   b.hi label3 ; b label1
-;; block1:
-;;   ldr x14, [x0, #80]
-;;   add x14, x14, x2, UXTW
-;;   movz x15, #65535, LSL #16
-;;   ldrb w0, [x14, x15]
-;;   b label2
-;; block2:
-;;   ret
-;; block3:
-;;   udf #0xc11f
+;; wasm[0]::function[1]:
+;;   60: stp     x29, x30, [sp, #-0x10]!
+;;   64: mov     x29, sp
+;;   68: mov     w11, w2
+;;   6c: mov     w12, #-0xffff
+;;   70: adds    x11, x11, x12
+;;   74: b.hs    #0xa0
+;;   78: ldr     x12, [x0, #0x58]
+;;   7c: cmp     x11, x12
+;;   80: b.hi    #0x9c
+;;   84: ldr     x14, [x0, #0x50]
+;;   88: add     x14, x14, w2, uxtw
+;;   8c: mov     x15, #0xffff0000
+;;   90: ldrb    w0, [x14, x15]
+;;   94: ldp     x29, x30, [sp], #0x10
+;;   98: ret
+;;   9c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   a0: .byte   0x1f, 0xc1, 0x00, 0x00

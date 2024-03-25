@@ -18,42 +18,58 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;; block0:
-;;   ld a4,[const(0)]
-;;   add a4,a2,a4
-;;   trap_if heap_oob##(a4 ult a2)
-;;   ld a5,88(a0)
-;;   ld a0,80(a0)
-;;   sltu a5,a5,a4
-;;   add a0,a0,a2
-;;   lui a4,65535
-;;   slli a1,a4,4
-;;   add a0,a0,a1
-;;   sub a4,zero,a5
-;;   not a5,a4
-;;   and a1,a0,a5
-;;   sb a3,0(a1)
-;;   j label1
-;; block1:
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: addi    sp, sp, -0x10
+;;    4: sd      ra, 8(sp)
+;;    8: sd      s0, 0(sp)
+;;    c: mv      s0, sp
+;;   10: auipc   a4, 0
+;;   14: ld      a4, 0x50(a4)
+;;   18: add     a4, a2, a4
+;;   1c: bgeu    a4, a2, 8
+;;   20: .byte   0x00, 0x00, 0x00, 0x00
+;;   24: ld      a5, 0x58(a0)
+;;   28: ld      a0, 0x50(a0)
+;;   2c: sltu    a5, a5, a4
+;;   30: add     a0, a0, a2
+;;   34: lui     a4, 0xffff
+;;   38: slli    a1, a4, 4
+;;   3c: add     a0, a0, a1
+;;   40: neg     a4, a5
+;;   44: not     a5, a4
+;;   48: and     a1, a0, a5
+;;   4c: sb      a3, 0(a1)
+;;   50: ld      ra, 8(sp)
+;;   54: ld      s0, 0(sp)
+;;   58: addi    sp, sp, 0x10
+;;   5c: ret
+;;   60: .byte   0x01, 0x00, 0xff, 0xff
+;;   64: .byte   0x00, 0x00, 0x00, 0x00
 ;;
-;; function u0:1:
-;; block0:
-;;   ld a4,[const(0)]
-;;   add a4,a2,a4
-;;   trap_if heap_oob##(a4 ult a2)
-;;   ld a5,88(a0)
-;;   ld a0,80(a0)
-;;   sltu a5,a5,a4
-;;   add a0,a0,a2
-;;   lui a4,65535
-;;   slli a1,a4,4
-;;   add a0,a0,a1
-;;   sub a3,zero,a5
-;;   not a5,a3
-;;   and a1,a0,a5
-;;   lbu a0,0(a1)
-;;   j label1
-;; block1:
-;;   ret
+;; wasm[0]::function[1]:
+;;   68: addi    sp, sp, -0x10
+;;   6c: sd      ra, 8(sp)
+;;   70: sd      s0, 0(sp)
+;;   74: mv      s0, sp
+;;   78: auipc   a4, 0
+;;   7c: ld      a4, 0x50(a4)
+;;   80: add     a4, a2, a4
+;;   84: bgeu    a4, a2, 8
+;;   88: .byte   0x00, 0x00, 0x00, 0x00
+;;   8c: ld      a5, 0x58(a0)
+;;   90: ld      a0, 0x50(a0)
+;;   94: sltu    a5, a5, a4
+;;   98: add     a0, a0, a2
+;;   9c: lui     a4, 0xffff
+;;   a0: slli    a1, a4, 4
+;;   a4: add     a0, a0, a1
+;;   a8: neg     a3, a5
+;;   ac: not     a5, a3
+;;   b0: and     a1, a0, a5
+;;   b4: lbu     a0, 0(a1)
+;;   b8: ld      ra, 8(sp)
+;;   bc: ld      s0, 0(sp)
+;;   c0: addi    sp, sp, 0x10
+;;   c4: ret
+;;   c8: .byte   0x01, 0x00, 0xff, 0xff
+;;   cc: .byte   0x00, 0x00, 0x00, 0x00

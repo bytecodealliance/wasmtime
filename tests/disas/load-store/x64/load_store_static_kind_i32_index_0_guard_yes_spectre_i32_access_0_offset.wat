@@ -18,40 +18,36 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %esi
-;;   xorq    %r11, %r11, %r11
-;;   movq    %rsi, %r10
-;;   addq    %r10, 80(%rdi), %r10
-;;   cmpq    const(0), %rsi
-;;   cmovnbeq %r11, %r10, %r10
-;;   movl    %ecx, 0(%r10)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movl    %edx, %esi
+;;    6: xorq    %r11, %r11
+;;    9: movq    %rsi, %r10
+;;    c: addq    0x50(%rdi), %r10
+;;   10: cmpq    0x11(%rip), %rsi
+;;   17: cmovaq  %r11, %r10
+;;   1b: movl    %ecx, (%r10)
+;;   1e: movq    %rbp, %rsp
+;;   21: popq    %rbp
+;;   22: retq
+;;   23: addb    %al, (%rax)
+;;   25: addb    %al, (%rax)
+;;   27: addb    %bh, %ah
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %esi
-;;   xorq    %r11, %r11, %r11
-;;   movq    %rsi, %r10
-;;   addq    %r10, 80(%rdi), %r10
-;;   cmpq    const(0), %rsi
-;;   cmovnbeq %r11, %r10, %r10
-;;   movl    0(%r10), %eax
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;   30: pushq   %rbp
+;;   31: movq    %rsp, %rbp
+;;   34: movl    %edx, %esi
+;;   36: xorq    %r11, %r11
+;;   39: movq    %rsi, %r10
+;;   3c: addq    0x50(%rdi), %r10
+;;   40: cmpq    0x11(%rip), %rsi
+;;   47: cmovaq  %r11, %r10
+;;   4b: movl    (%r10), %eax
+;;   4e: movq    %rbp, %rsp
+;;   51: popq    %rbp
+;;   52: retq
+;;   53: addb    %al, (%rax)
+;;   55: addb    %al, (%rax)
+;;   57: addb    %bh, %ah

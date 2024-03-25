@@ -18,46 +18,36 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %rax
-;;   movl    %edx, %r8d
-;;   xorq    %rdx, %rdx, %rdx
-;;   movq    %r8, %r9
-;;   addq    %r9, 80(%rdi), %r9
-;;   movl    $-65536, %r10d
-;;   lea     0(%r9,%r10,1), %rdi
-;;   cmpq    %rax, %r8
-;;   cmovnbeq %rdx, %rdi, %rdi
-;;   movl    %ecx, 0(%rdi)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    0x58(%rdi), %rax
+;;    8: movl    %edx, %r8d
+;;    b: xorq    %rdx, %rdx
+;;    e: movq    %r8, %r9
+;;   11: addq    0x50(%rdi), %r9
+;;   15: movl    $0xffff0000, %r10d
+;;   1b: leaq    (%r9, %r10), %rdi
+;;   1f: cmpq    %rax, %r8
+;;   22: cmovaq  %rdx, %rdi
+;;   26: movl    %ecx, (%rdi)
+;;   28: movq    %rbp, %rsp
+;;   2b: popq    %rbp
+;;   2c: retq
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %rax
-;;   movl    %edx, %edx
-;;   xorq    %rcx, %rcx, %rcx
-;;   movq    %rdx, %r8
-;;   addq    %r8, 80(%rdi), %r8
-;;   movl    $-65536, %r9d
-;;   lea     0(%r8,%r9,1), %rdi
-;;   cmpq    %rax, %rdx
-;;   cmovnbeq %rcx, %rdi, %rdi
-;;   movl    0(%rdi), %eax
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;   30: pushq   %rbp
+;;   31: movq    %rsp, %rbp
+;;   34: movq    0x58(%rdi), %rax
+;;   38: movl    %edx, %edx
+;;   3a: xorq    %rcx, %rcx
+;;   3d: movq    %rdx, %r8
+;;   40: addq    0x50(%rdi), %r8
+;;   44: movl    $0xffff0000, %r9d
+;;   4a: leaq    (%r8, %r9), %rdi
+;;   4e: cmpq    %rax, %rdx
+;;   51: cmovaq  %rcx, %rdi
+;;   55: movl    (%rdi), %eax
+;;   57: movq    %rbp, %rsp
+;;   5a: popq    %rbp
+;;   5b: retq

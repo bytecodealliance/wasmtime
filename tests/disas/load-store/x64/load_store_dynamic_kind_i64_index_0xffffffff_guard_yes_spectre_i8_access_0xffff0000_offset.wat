@@ -18,44 +18,34 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %rax
-;;   xorq    %r8, %r8, %r8
-;;   movq    %rdx, %r9
-;;   addq    %r9, 80(%rdi), %r9
-;;   movl    $-65536, %edi
-;;   lea     0(%r9,%rdi,1), %rsi
-;;   cmpq    %rax, %rdx
-;;   cmovnbeq %r8, %rsi, %rsi
-;;   movb    %cl, 0(%rsi)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    0x58(%rdi), %rax
+;;    8: xorq    %r8, %r8
+;;    b: movq    %rdx, %r9
+;;    e: addq    0x50(%rdi), %r9
+;;   12: movl    $0xffff0000, %edi
+;;   17: leaq    (%r9, %rdi), %rsi
+;;   1b: cmpq    %rax, %rdx
+;;   1e: cmovaq  %r8, %rsi
+;;   22: movb    %cl, (%rsi)
+;;   24: movq    %rbp, %rsp
+;;   27: popq    %rbp
+;;   28: retq
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %rax
-;;   xorq    %rcx, %rcx, %rcx
-;;   movq    %rdx, %r8
-;;   addq    %r8, 80(%rdi), %r8
-;;   movl    $-65536, %edi
-;;   lea     0(%r8,%rdi,1), %rsi
-;;   cmpq    %rax, %rdx
-;;   cmovnbeq %rcx, %rsi, %rsi
-;;   movzbq  0(%rsi), %rax
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;   30: pushq   %rbp
+;;   31: movq    %rsp, %rbp
+;;   34: movq    0x58(%rdi), %rax
+;;   38: xorq    %rcx, %rcx
+;;   3b: movq    %rdx, %r8
+;;   3e: addq    0x50(%rdi), %r8
+;;   42: movl    $0xffff0000, %edi
+;;   47: leaq    (%r8, %rdi), %rsi
+;;   4b: cmpq    %rax, %rdx
+;;   4e: cmovaq  %rcx, %rsi
+;;   52: movzbq  (%rsi), %rax
+;;   56: movq    %rbp, %rsp
+;;   59: popq    %rbp
+;;   5a: retq

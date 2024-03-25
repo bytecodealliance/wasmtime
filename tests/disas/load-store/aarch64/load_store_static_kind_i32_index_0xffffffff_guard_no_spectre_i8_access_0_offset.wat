@@ -18,18 +18,18 @@
     local.get 0
     i32.load8_u offset=0))
 
-;; function u0:0:
-;; block0:
-;;   ldr x5, [x0, #80]
-;;   strb w3, [x5, w2, UXTW]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: stp     x29, x30, [sp, #-0x10]!
+;;    4: mov     x29, sp
+;;    8: ldr     x5, [x0, #0x50]
+;;    c: strb    w3, [x5, w2, uxtw]
+;;   10: ldp     x29, x30, [sp], #0x10
+;;   14: ret
 ;;
-;; function u0:1:
-;; block0:
-;;   ldr x5, [x0, #80]
-;;   ldrb w0, [x5, w2, UXTW]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[1]:
+;;   20: stp     x29, x30, [sp, #-0x10]!
+;;   24: mov     x29, sp
+;;   28: ldr     x5, [x0, #0x50]
+;;   2c: ldrb    w0, [x5, w2, uxtw]
+;;   30: ldp     x29, x30, [sp], #0x10
+;;   34: ret

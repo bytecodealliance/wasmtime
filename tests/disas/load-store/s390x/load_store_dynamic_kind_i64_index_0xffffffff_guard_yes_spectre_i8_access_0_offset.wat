@@ -18,42 +18,32 @@
     local.get 0
     i32.load8_u offset=0))
 
-;; function u0:0:
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r13, %r15, 104(%r15)
-;;   unwind SaveReg { clobber_offset: 104, reg: p13i }
-;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
-;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lg %r14, 88(%r2)
-;;   lghi %r3, 0
-;;   lgr %r13, %r4
-;;   ag %r13, 80(%r2)
-;;   clgr %r4, %r14
-;;   locgrhe %r13, %r3
-;;   stc %r5, 0(%r13)
-;;   jg label1
-;; block1:
-;;   lmg %r13, %r15, 104(%r15)
-;;   br %r14
+;; wasm[0]::function[0]:
+;;    0: stmg    %r13, %r15, 0x68(%r15)
+;;    6: lgr     %r1, %r15
+;;    a: aghi    %r15, -0xa0
+;;    e: stg     %r1, 0(%r15)
+;;   14: lg      %r14, 0x58(%r2)
+;;   1a: lghi    %r3, 0
+;;   1e: lgr     %r13, %r4
+;;   22: ag      %r13, 0x50(%r2)
+;;   28: clgr    %r4, %r14
+;;   2c: locgrhe %r13, %r3
+;;   30: stc     %r5, 0(%r13)
+;;   34: lmg     %r13, %r15, 0x108(%r15)
+;;   3a: br      %r14
 ;;
-;; function u0:1:
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r13, %r15, 104(%r15)
-;;   unwind SaveReg { clobber_offset: 104, reg: p13i }
-;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
-;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lg %r5, 88(%r2)
-;;   lghi %r3, 0
-;;   lgr %r13, %r4
-;;   ag %r13, 80(%r2)
-;;   clgr %r4, %r5
-;;   locgrhe %r13, %r3
-;;   llc %r2, 0(%r13)
-;;   jg label1
-;; block1:
-;;   lmg %r13, %r15, 104(%r15)
-;;   br %r14
+;; wasm[0]::function[1]:
+;;   3c: stmg    %r13, %r15, 0x68(%r15)
+;;   42: lgr     %r1, %r15
+;;   46: aghi    %r15, -0xa0
+;;   4a: stg     %r1, 0(%r15)
+;;   50: lg      %r5, 0x58(%r2)
+;;   56: lghi    %r3, 0
+;;   5a: lgr     %r13, %r4
+;;   5e: ag      %r13, 0x50(%r2)
+;;   64: clgr    %r4, %r5
+;;   68: locgrhe %r13, %r3
+;;   6c: llc     %r2, 0(%r13)
+;;   72: lmg     %r13, %r15, 0x108(%r15)
+;;   78: br      %r14

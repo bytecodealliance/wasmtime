@@ -18,30 +18,38 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;; block0:
-;;   ld a5,88(a0)
-;;   ld a0,80(a0)
-;;   sltu a1,a5,a2
-;;   add a5,a0,a2
-;;   sub a4,zero,a1
-;;   not a0,a4
-;;   and a1,a5,a0
-;;   sw a3,0(a1)
-;;   j label1
-;; block1:
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: addi    sp, sp, -0x10
+;;    4: sd      ra, 8(sp)
+;;    8: sd      s0, 0(sp)
+;;    c: mv      s0, sp
+;;   10: ld      a5, 0x58(a0)
+;;   14: ld      a0, 0x50(a0)
+;;   18: sltu    a1, a5, a2
+;;   1c: add     a5, a0, a2
+;;   20: neg     a4, a1
+;;   24: not     a0, a4
+;;   28: and     a1, a5, a0
+;;   2c: sw      a3, 0(a1)
+;;   30: ld      ra, 8(sp)
+;;   34: ld      s0, 0(sp)
+;;   38: addi    sp, sp, 0x10
+;;   3c: ret
 ;;
-;; function u0:1:
-;; block0:
-;;   ld a5,88(a0)
-;;   ld a0,80(a0)
-;;   sltu a1,a5,a2
-;;   add a5,a0,a2
-;;   sub a3,zero,a1
-;;   not a0,a3
-;;   and a1,a5,a0
-;;   lw a0,0(a1)
-;;   j label1
-;; block1:
-;;   ret
+;; wasm[0]::function[1]:
+;;   40: addi    sp, sp, -0x10
+;;   44: sd      ra, 8(sp)
+;;   48: sd      s0, 0(sp)
+;;   4c: mv      s0, sp
+;;   50: ld      a5, 0x58(a0)
+;;   54: ld      a0, 0x50(a0)
+;;   58: sltu    a1, a5, a2
+;;   5c: add     a5, a0, a2
+;;   60: neg     a3, a1
+;;   64: not     a0, a3
+;;   68: and     a1, a5, a0
+;;   6c: lw      a0, 0(a1)
+;;   70: ld      ra, 8(sp)
+;;   74: ld      s0, 0(sp)
+;;   78: addi    sp, sp, 0x10
+;;   7c: ret

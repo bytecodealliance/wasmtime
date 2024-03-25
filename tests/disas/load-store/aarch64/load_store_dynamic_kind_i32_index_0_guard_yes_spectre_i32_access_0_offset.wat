@@ -18,34 +18,34 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;; block0:
-;;   ldr x13, [x0, #88]
-;;   ldr x11, [x0, #80]
-;;   mov w12, w2
-;;   sub x13, x13, #4
-;;   movz x14, #0
-;;   add x11, x11, x2, UXTW
-;;   subs xzr, x12, x13
-;;   csel x12, x14, x11, hi
-;;   csdb
-;;   str w3, [x12]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: stp     x29, x30, [sp, #-0x10]!
+;;    4: mov     x29, sp
+;;    8: ldr     x13, [x0, #0x58]
+;;    c: ldr     x11, [x0, #0x50]
+;;   10: mov     w12, w2
+;;   14: sub     x13, x13, #4
+;;   18: mov     x14, #0
+;;   1c: add     x11, x11, w2, uxtw
+;;   20: cmp     x12, x13
+;;   24: csel    x12, x14, x11, hi
+;;   28: csdb
+;;   2c: str     w3, [x12]
+;;   30: ldp     x29, x30, [sp], #0x10
+;;   34: ret
 ;;
-;; function u0:1:
-;; block0:
-;;   ldr x13, [x0, #88]
-;;   ldr x11, [x0, #80]
-;;   mov w12, w2
-;;   sub x13, x13, #4
-;;   movz x14, #0
-;;   add x11, x11, x2, UXTW
-;;   subs xzr, x12, x13
-;;   csel x12, x14, x11, hi
-;;   csdb
-;;   ldr w0, [x12]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[1]:
+;;   40: stp     x29, x30, [sp, #-0x10]!
+;;   44: mov     x29, sp
+;;   48: ldr     x13, [x0, #0x58]
+;;   4c: ldr     x11, [x0, #0x50]
+;;   50: mov     w12, w2
+;;   54: sub     x13, x13, #4
+;;   58: mov     x14, #0
+;;   5c: add     x11, x11, w2, uxtw
+;;   60: cmp     x12, x13
+;;   64: csel    x12, x14, x11, hi
+;;   68: csdb
+;;   6c: ldr     w0, [x12]
+;;   70: ldp     x29, x30, [sp], #0x10
+;;   74: ret

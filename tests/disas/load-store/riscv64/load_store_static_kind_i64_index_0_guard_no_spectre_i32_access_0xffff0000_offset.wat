@@ -18,38 +18,42 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;; block0:
-;;   lui a4,16
-;;   addi a1,a4,-4
-;;   bgtu a2,a1,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a0,80(a0)
-;;   add a0,a0,a2
-;;   lui a5,65535
-;;   slli a1,a5,4
-;;   add a0,a0,a1
-;;   sw a3,0(a0)
-;;   j label2
-;; block2:
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[0]:
+;;    0: addi    sp, sp, -0x10
+;;    4: sd      ra, 8(sp)
+;;    8: sd      s0, 0(sp)
+;;    c: mv      s0, sp
+;;   10: lui     a4, 0x10
+;;   14: addi    a1, a4, -4
+;;   18: bltu    a1, a2, 0x2c
+;;   1c: ld      a0, 0x50(a0)
+;;   20: add     a0, a0, a2
+;;   24: lui     a5, 0xffff
+;;   28: slli    a1, a5, 4
+;;   2c: add     a0, a0, a1
+;;   30: sw      a3, 0(a0)
+;;   34: ld      ra, 8(sp)
+;;   38: ld      s0, 0(sp)
+;;   3c: addi    sp, sp, 0x10
+;;   40: ret
+;;   44: .byte   0x00, 0x00, 0x00, 0x00
 ;;
-;; function u0:1:
-;; block0:
-;;   lui a4,16
-;;   addi a1,a4,-4
-;;   bgtu a2,a1,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a0,80(a0)
-;;   add a0,a0,a2
-;;   lui a5,65535
-;;   slli a1,a5,4
-;;   add a0,a0,a1
-;;   lw a0,0(a0)
-;;   j label2
-;; block2:
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[1]:
+;;   48: addi    sp, sp, -0x10
+;;   4c: sd      ra, 8(sp)
+;;   50: sd      s0, 0(sp)
+;;   54: mv      s0, sp
+;;   58: lui     a4, 0x10
+;;   5c: addi    a1, a4, -4
+;;   60: bltu    a1, a2, 0x2c
+;;   64: ld      a0, 0x50(a0)
+;;   68: add     a0, a0, a2
+;;   6c: lui     a5, 0xffff
+;;   70: slli    a1, a5, 4
+;;   74: add     a0, a0, a1
+;;   78: lw      a0, 0(a0)
+;;   7c: ld      ra, 8(sp)
+;;   80: ld      s0, 0(sp)
+;;   84: addi    sp, sp, 0x10
+;;   88: ret
+;;   8c: .byte   0x00, 0x00, 0x00, 0x00

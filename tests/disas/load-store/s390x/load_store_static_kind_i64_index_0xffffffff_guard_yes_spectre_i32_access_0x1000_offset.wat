@@ -18,36 +18,32 @@
     local.get 0
     i32.load offset=0x1000))
 
-;; function u0:0:
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r14, %r15, 112(%r15)
-;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
-;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lghi %r14, 0
-;;   lgr %r3, %r4
-;;   ag %r3, 80(%r2)
-;;   aghi %r3, 4096
-;;   clgfi %r4, 4294963196
-;;   locgrh %r3, %r14
-;;   strv %r5, 0(%r3)
-;;   jg label1
-;; block1:
-;;   lmg %r14, %r15, 112(%r15)
-;;   br %r14
+;; wasm[0]::function[0]:
+;;    0: stmg    %r14, %r15, 0x70(%r15)
+;;    6: lgr     %r1, %r15
+;;    a: aghi    %r15, -0xa0
+;;    e: stg     %r1, 0(%r15)
+;;   14: lghi    %r14, 0
+;;   18: lgr     %r3, %r4
+;;   1c: ag      %r3, 0x50(%r2)
+;;   22: aghi    %r3, 0x1000
+;;   26: clgfi   %r4, 0xffffeffc
+;;   2c: locgrh  %r3, %r14
+;;   30: strv    %r5, 0(%r3)
+;;   36: lmg     %r14, %r15, 0x110(%r15)
+;;   3c: br      %r14
 ;;
-;; function u0:1:
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   lghi %r3, 0
-;;   lgr %r5, %r4
-;;   ag %r5, 80(%r2)
-;;   aghi %r5, 4096
-;;   clgfi %r4, 4294963196
-;;   locgrh %r5, %r3
-;;   lrv %r2, 0(%r5)
-;;   jg label1
-;; block1:
-;;   br %r14
+;; wasm[0]::function[1]:
+;;   40: stmg    %r14, %r15, 0x70(%r15)
+;;   46: lgr     %r1, %r15
+;;   4a: aghi    %r15, -0xa0
+;;   4e: stg     %r1, 0(%r15)
+;;   54: lghi    %r3, 0
+;;   58: lgr     %r5, %r4
+;;   5c: ag      %r5, 0x50(%r2)
+;;   62: aghi    %r5, 0x1000
+;;   66: clgfi   %r4, 0xffffeffc
+;;   6c: locgrh  %r5, %r3
+;;   70: lrv     %r2, 0(%r5)
+;;   76: lmg     %r14, %r15, 0x110(%r15)
+;;   7c: br      %r14

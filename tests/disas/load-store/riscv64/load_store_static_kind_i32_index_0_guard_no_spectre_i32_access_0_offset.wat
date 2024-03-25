@@ -18,38 +18,42 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;; block0:
-;;   slli a4,a2,32
-;;   srli a1,a4,32
-;;   lui a4,262144
-;;   addi a5,a4,-1
-;;   slli a2,a5,2
-;;   bgtu a1,a2,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a0,80(a0)
-;;   add a0,a0,a1
-;;   sw a3,0(a0)
-;;   j label2
-;; block2:
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[0]:
+;;    0: addi    sp, sp, -0x10
+;;    4: sd      ra, 8(sp)
+;;    8: sd      s0, 0(sp)
+;;    c: mv      s0, sp
+;;   10: slli    a4, a2, 0x20
+;;   14: srli    a1, a4, 0x20
+;;   18: lui     a4, 0x40000
+;;   1c: addi    a5, a4, -1
+;;   20: slli    a2, a5, 2
+;;   24: bltu    a2, a1, 0x20
+;;   28: ld      a0, 0x50(a0)
+;;   2c: add     a0, a0, a1
+;;   30: sw      a3, 0(a0)
+;;   34: ld      ra, 8(sp)
+;;   38: ld      s0, 0(sp)
+;;   3c: addi    sp, sp, 0x10
+;;   40: ret
+;;   44: .byte   0x00, 0x00, 0x00, 0x00
 ;;
-;; function u0:1:
-;; block0:
-;;   slli a4,a2,32
-;;   srli a1,a4,32
-;;   lui a3,262144
-;;   addi a5,a3,-1
-;;   slli a2,a5,2
-;;   bgtu a1,a2,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a0,80(a0)
-;;   add a0,a0,a1
-;;   lw a0,0(a0)
-;;   j label2
-;; block2:
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[1]:
+;;   48: addi    sp, sp, -0x10
+;;   4c: sd      ra, 8(sp)
+;;   50: sd      s0, 0(sp)
+;;   54: mv      s0, sp
+;;   58: slli    a4, a2, 0x20
+;;   5c: srli    a1, a4, 0x20
+;;   60: lui     a3, 0x40000
+;;   64: addi    a5, a3, -1
+;;   68: slli    a2, a5, 2
+;;   6c: bltu    a2, a1, 0x20
+;;   70: ld      a0, 0x50(a0)
+;;   74: add     a0, a0, a1
+;;   78: lw      a0, 0(a0)
+;;   7c: ld      ra, 8(sp)
+;;   80: ld      s0, 0(sp)
+;;   84: addi    sp, sp, 0x10
+;;   88: ret
+;;   8c: .byte   0x00, 0x00, 0x00, 0x00

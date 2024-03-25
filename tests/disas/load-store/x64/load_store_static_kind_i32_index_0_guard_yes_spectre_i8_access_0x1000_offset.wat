@@ -18,43 +18,36 @@
     local.get 0
     i32.load8_u offset=0x1000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    %rdi, %rax
-;;   movl    %edx, %edi
-;;   xorq    %rsi, %rsi, %rsi
-;;   movq    %rax, %rdx
-;;   movq    80(%rdx), %rax
-;;   lea     4096(%rax,%rdi,1), %r11
-;;   cmpq    const(0), %rdi
-;;   cmovnbeq %rsi, %r11, %r11
-;;   movb    %cl, 0(%r11)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    %rdi, %rax
+;;    7: movl    %edx, %edi
+;;    9: xorq    %rsi, %rsi
+;;    c: movq    %rax, %rdx
+;;    f: movq    0x50(%rdx), %rax
+;;   13: leaq    0x1000(%rax, %rdi), %r11
+;;   1b: cmpq    0xe(%rip), %rdi
+;;   22: cmovaq  %rsi, %r11
+;;   26: movb    %cl, (%r11)
+;;   29: movq    %rbp, %rsp
+;;   2c: popq    %rbp
+;;   2d: retq
+;;   2e: addb    %al, (%rax)
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    %rdi, %rcx
-;;   movl    %edx, %edi
-;;   xorq    %rsi, %rsi, %rsi
-;;   movq    80(%rcx), %rax
-;;   lea     4096(%rax,%rdi,1), %r11
-;;   cmpq    const(0), %rdi
-;;   cmovnbeq %rsi, %r11, %r11
-;;   movzbq  0(%r11), %rax
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;   40: pushq   %rbp
+;;   41: movq    %rsp, %rbp
+;;   44: movq    %rdi, %rcx
+;;   47: movl    %edx, %edi
+;;   49: xorq    %rsi, %rsi
+;;   4c: movq    0x50(%rcx), %rax
+;;   50: leaq    0x1000(%rax, %rdi), %r11
+;;   58: cmpq    0x11(%rip), %rdi
+;;   5f: cmovaq  %rsi, %r11
+;;   63: movzbq  (%r11), %rax
+;;   67: movq    %rbp, %rsp
+;;   6a: popq    %rbp
+;;   6b: retq
+;;   6c: addb    %al, (%rax)
+;;   6e: addb    %al, (%rax)

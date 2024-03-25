@@ -18,42 +18,44 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;; block0:
-;;   mov w14, w2
-;;   movn w15, #65531
-;;   adds x14, x14, x15
-;;   b.hs #trap=heap_oob
-;;   ldr x15, [x0, #88]
-;;   ldr x1, [x0, #80]
-;;   movz x0, #0
-;;   add x1, x1, x2, UXTW
-;;   movz x2, #65535, LSL #16
-;;   add x1, x1, x2
-;;   subs xzr, x14, x15
-;;   csel x0, x0, x1, hi
-;;   csdb
-;;   str w3, [x0]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: stp     x29, x30, [sp, #-0x10]!
+;;    4: mov     x29, sp
+;;    8: mov     w14, w2
+;;    c: mov     w15, #-0xfffc
+;;   10: adds    x14, x14, x15
+;;   14: b.hs    #0x48
+;;   18: ldr     x15, [x0, #0x58]
+;;   1c: ldr     x1, [x0, #0x50]
+;;   20: mov     x0, #0
+;;   24: add     x1, x1, w2, uxtw
+;;   28: mov     x2, #0xffff0000
+;;   2c: add     x1, x1, x2
+;;   30: cmp     x14, x15
+;;   34: csel    x0, x0, x1, hi
+;;   38: csdb
+;;   3c: str     w3, [x0]
+;;   40: ldp     x29, x30, [sp], #0x10
+;;   44: ret
+;;   48: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
-;; function u0:1:
-;; block0:
-;;   mov w14, w2
-;;   movn w15, #65531
-;;   adds x14, x14, x15
-;;   b.hs #trap=heap_oob
-;;   ldr x15, [x0, #88]
-;;   ldr x1, [x0, #80]
-;;   movz x0, #0
-;;   add x1, x1, x2, UXTW
-;;   movz x2, #65535, LSL #16
-;;   add x1, x1, x2
-;;   subs xzr, x14, x15
-;;   csel x0, x0, x1, hi
-;;   csdb
-;;   ldr w0, [x0]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[1]:
+;;   60: stp     x29, x30, [sp, #-0x10]!
+;;   64: mov     x29, sp
+;;   68: mov     w14, w2
+;;   6c: mov     w15, #-0xfffc
+;;   70: adds    x14, x14, x15
+;;   74: b.hs    #0xa8
+;;   78: ldr     x15, [x0, #0x58]
+;;   7c: ldr     x1, [x0, #0x50]
+;;   80: mov     x0, #0
+;;   84: add     x1, x1, w2, uxtw
+;;   88: mov     x2, #0xffff0000
+;;   8c: add     x1, x1, x2
+;;   90: cmp     x14, x15
+;;   94: csel    x0, x0, x1, hi
+;;   98: csdb
+;;   9c: ldr     w0, [x0]
+;;   a0: ldp     x29, x30, [sp], #0x10
+;;   a4: ret
+;;   a8: .byte   0x1f, 0xc1, 0x00, 0x00
