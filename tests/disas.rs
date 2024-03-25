@@ -44,6 +44,7 @@ use clap::Parser;
 use cranelift_codegen::ir::{Function, UserExternalName, UserFuncName};
 use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
+use libtest_mimic::{Arguments, Trial};
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use similar::TextDiff;
@@ -59,16 +60,24 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // First discover all tests ...
     let mut tests = Vec::new();
     find_tests("./tests/disas".as_ref(), &mut tests)?;
 
-    // ... then run all tests!
-    for test in tests.iter() {
-        run_test(&test).with_context(|| format!("failed to run tests {test:?}"))?;
+    let mut trials = Vec::new();
+    for test in tests {
+        trials.push(Trial::test(test.to_str().unwrap().to_string(), move || {
+            run_test(&test)
+                .with_context(|| format!("failed to run tests {test:?}"))
+                .map_err(|e| format!("{e:?}").into())
+        }))
     }
 
-    Ok(())
+    // These tests have some long names so use the "quiet" output by default.
+    let mut arguments = Arguments::parse();
+    if arguments.format.is_none() {
+        arguments.quiet = true;
+    }
+    libtest_mimic::run(&arguments, trials).exit()
 }
 
 fn find_tests(path: &Path, dst: &mut Vec<PathBuf>) -> Result<()> {
