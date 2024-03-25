@@ -1215,6 +1215,12 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 notes = "This should be portable to any POSIX system and seems like it should be part of the libc crate, but at any rate it's safe as is."
 
+[[audits.escape8259]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.5.2"
+notes = "No unsafe code, crate does what it says on the tin, small crate."
+
 [[audits.fallible-iterator]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1712,6 +1718,12 @@ notes = """
 This is a minor update which has some testing affordances as well as some
 updated math algorithms.
 """
+
+[[audits.libtest-mimic]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.6.1 -> 0.7.0"
+notes = "Only minor changes with new flags and such, no major updates to `unsafe` or anything outside of a test framework."
 
 [[audits.linux-raw-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"

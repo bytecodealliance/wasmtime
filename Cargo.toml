@@ -96,6 +96,7 @@ cranelift-codegen = { workspace = true }
 cranelift-reader = { workspace = true }
 toml = { workspace = true }
 similar = { workspace = true }
+libtest-mimic = "0.7.0"
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
