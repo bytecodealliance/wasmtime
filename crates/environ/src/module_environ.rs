@@ -8,6 +8,7 @@ use crate::{
     Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmValType,
     WasmparserTypeConverter,
 };
+use anyhow::{bail, Result};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -182,7 +183,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         mut self,
         parser: Parser,
         data: &'data [u8],
-    ) -> WasmResult<ModuleTranslation<'data>> {
+    ) -> Result<ModuleTranslation<'data>> {
         self.result.wasm = data;
 
         for payload in parser.parse_all(data) {
@@ -192,7 +193,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         Ok(self.result)
     }
 
-    fn translate_payload(&mut self, payload: Payload<'data>) -> WasmResult<()> {
+    fn translate_payload(&mut self, payload: Payload<'data>) -> Result<()> {
         match payload {
             Payload::Version {
                 num,
@@ -203,7 +204,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 match encoding {
                     Encoding::Module => {}
                     Encoding::Component => {
-                        return Err(WasmError::Unsupported(format!("component model")));
+                        bail!("expected a WebAssembly module but was given a WebAssembly component")
                     }
                 }
             }
@@ -324,7 +325,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     TableInitialValue::GlobalGet(index)
                                 }
                                 s => {
-                                    return Err(WasmError::Unsupported(format!(
+                                    bail!(WasmError::Unsupported(format!(
                                         "unsupported init expr in table section: {:?}",
                                         s
                                     )));
@@ -388,7 +389,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
                         }
                         s => {
-                            return Err(WasmError::Unsupported(format!(
+                            bail!(WasmError::Unsupported(format!(
                                 "unsupported init expr in global section: {:?}",
                                 s
                             )));
@@ -479,7 +480,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                         TableElementExpression::GlobalGet(global)
                                     }
                                     s => {
-                                        return Err(WasmError::Unsupported(format!(
+                                        bail!(WasmError::Unsupported(format!(
                                             "unsupported init expr in element section: {:?}",
                                             s
                                         )));
@@ -504,7 +505,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
                                 }
                                 ref s => {
-                                    return Err(WasmError::Unsupported(format!(
+                                    bail!(WasmError::Unsupported(format!(
                                         "unsupported init expr in element section: {:?}",
                                         s
                                     )));
@@ -625,7 +626,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
                                 }
                                 s => {
-                                    return Err(WasmError::Unsupported(format!(
+                                    bail!(WasmError::Unsupported(format!(
                                         "unsupported init expr in data section: {:?}",
                                         s
                                     )));
@@ -673,7 +674,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::CustomSection(s)
                 if s.name() == "webidl-bindings" || s.name() == "wasm-interface-types" =>
             {
-                return Err(WasmError::Unsupported(
+                bail!(
                     "\
 Support for interface types has temporarily been removed from `wasmtime`.
 
@@ -685,8 +686,7 @@ and for re-adding support for interface types you can see this issue:
 
     https://github.com/bytecodealliance/wasmtime/issues/677
 "
-                    .to_string(),
-                ))
+                )
             }
 
             Payload::CustomSection(s) => {
