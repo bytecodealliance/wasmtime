@@ -177,7 +177,9 @@ impl<'a> CodeBuilder<'a> {
                             Ok((code, info))
                         },
                         // Implementation of how to serialize artifacts
-                        |(_engine, _wasm, _), (code, _info_and_types)| Some(code.mmap().to_vec()),
+                        |(_engine, _wasm, _), (code, _info_and_types)| {
+                            Some(code.image_slice().to_vec())
+                        },
                         // Cache hit, deserialize the provided artifacts
                         |(engine, _wasm, _), serialized_bytes| {
                             let code = engine
@@ -290,7 +292,7 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
 
 #[cfg(feature = "runtime")]
 fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-    let mut code = CodeMemory::new(mmap)?;
+    let mut code = CodeMemory::new_from_mmap(mmap)?;
     code.publish()?;
     Ok(Arc::new(code))
 }

@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
 use once_cell::sync::OnceCell;
+use std::ops::Range;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -703,13 +704,34 @@ impl Engine {
         )
     }
 
+    /// Like `load_code_bytes`, but uses image already mapped in the host
+    /// address space.
+    pub(crate) unsafe fn load_code_premapped(
+        &self,
+        image_range: Range<*const u8>,
+        finalizer: impl FnOnce() + Send + Sync + 'static,
+        expected: ObjectKind,
+    ) -> Result<Arc<crate::CodeMemory>> {
+        serialization::check_compatible(
+            self,
+            &std::slice::from_raw_parts(
+                image_range.start,
+                image_range.end.offset_from(image_range.start) as usize,
+            ),
+            expected,
+        )?;
+        let mut code = crate::CodeMemory::new_from_premapped_image(image_range, finalizer)?;
+        code.publish()?;
+        Ok(Arc::new(code))
+    }
+
     pub(crate) fn load_code(
         &self,
         mmap: wasmtime_runtime::MmapVec,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
         serialization::check_compatible(self, &mmap, expected)?;
-        let mut code = crate::CodeMemory::new(mmap)?;
+        let mut code = crate::CodeMemory::new_from_mmap(mmap)?;
         code.publish()?;
         Ok(Arc::new(code))
     }

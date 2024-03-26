@@ -6,6 +6,7 @@
 use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use anyhow::{Error, Result};
 use object::write::WritableBuffer;
+use std::ops::Range;
 use std::str;
 use std::sync::Arc;
 use wasmtime_environ::{
@@ -75,14 +76,14 @@ impl CompiledModule {
 
             let text = self.text();
             let bytes = crate::debug::create_gdbjit_image(
-                self.mmap().to_vec(),
+                self.image_slice().to_vec(),
                 (text.as_ptr(), text.len()),
             )
             .context("failed to create jit image for gdb")?;
             let reg = wasmtime_runtime::GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
         }
-        profiler.register_module(&self.code_memory.mmap()[..], &|addr| {
+        profiler.register_module(&self.image_slice(), &|addr| {
             let (idx, _) = self.func_by_text_offset(addr)?;
             let idx = self.module.func_index(idx);
             let name = self.func_name(idx)?;
@@ -101,8 +102,18 @@ impl CompiledModule {
 
     /// Returns the underlying memory which contains the compiled module's
     /// image.
-    pub fn mmap(&self) -> &MmapVec {
+    pub fn mmap(&self) -> Option<&MmapVec> {
         self.code_memory.mmap()
+    }
+
+    /// Returns image range
+    pub fn image_range(&self) -> Range<*const u8> {
+        self.code_memory.image_range()
+    }
+
+    /// Returns image slice
+    pub fn image_slice(&self) -> &[u8] {
+        &self.code_memory.image_slice()
     }
 
     /// Returns the underlying owned mmap of this compiled image.

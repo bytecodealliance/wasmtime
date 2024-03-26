@@ -103,12 +103,12 @@ where
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.
-    let mut code_memory = CodeMemory::new(obj)?;
+    let mut code_memory = CodeMemory::new_from_mmap(obj)?;
     code_memory.publish()?;
 
     engine
         .profiler()
-        .register_module(&code_memory.mmap()[..], &|_| None);
+        .register_module(&code_memory.image_slice(), &|_| None);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.

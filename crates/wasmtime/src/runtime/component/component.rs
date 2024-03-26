@@ -224,6 +224,27 @@ impl Component {
         Component::from_parts(engine, code, None)
     }
 
+    /// Same as [`Module::from_premapped_image`], but for components.
+    ///
+    /// Note that the images used here must contain contents previously
+    /// produced by [`Engine::precompile_component`] or
+    /// [`Component::serialize`].
+    ///
+    /// For more information see the [`Module::from_premapped_image`] method.
+    ///
+    /// # Unsafety
+    ///
+    /// The unsafety of this method is the same as that of the
+    /// [`Module::from_premapped_image`] method.
+    pub unsafe fn from_premapped_image(
+        engine: &Engine,
+        image_range: Range<*const u8>,
+        finalizer: impl FnOnce() + Send + Sync + 'static,
+    ) -> Result<Component> {
+        let code = engine.load_code_premapped(image_range, finalizer, ObjectKind::Component)?;
+        Component::from_parts(engine, code, None)
+    }
+
     /// Returns the type of this component as a [`types::Component`].
     ///
     /// This method enables runtime introspection of the type of a component
@@ -482,7 +503,7 @@ impl Component {
     /// [`Module::serialize`]: crate::Module::serialize
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        Ok(self.code_object().code_memory().mmap().to_vec())
+        Ok(self.code_object().code_memory().image_slice().to_vec())
     }
 
     pub(crate) fn runtime_info(&self) -> Arc<dyn ComponentRuntimeInfo> {
@@ -606,7 +627,7 @@ impl Component {
     /// For more information see
     /// [`Module;:image_range`](crate::Module::image_range).
     pub fn image_range(&self) -> Range<*const u8> {
-        self.inner.code.code_memory().mmap().image_range()
+        self.inner.code.code_memory().image_range()
     }
 }
 

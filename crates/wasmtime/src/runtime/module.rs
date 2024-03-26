@@ -429,6 +429,24 @@ impl Module {
         Module::from_parts(engine, code, None)
     }
 
+    /// Similiar to [`deserialize`], but uses module image that is already
+    /// mapped in the host address space with proper permission flags.
+    ///
+    /// `finalizer` will be called when module is destroyed.
+    ///
+    /// # Unsafety
+    ///
+    /// In addition to all the reasons that [`deserialize`] is `unsafe`,
+    /// this also directly uses host memory passed in `image_range`.
+    pub unsafe fn from_premapped_image(
+        engine: &Engine,
+        image_range: Range<*const u8>,
+        finalizer: impl FnOnce() + Send + Sync + 'static,
+    ) -> Result<Module> {
+        let code = engine.load_code_premapped(image_range, finalizer, ObjectKind::Module)?;
+        Module::from_parts(engine, code, None)
+    }
+
     /// Entrypoint for creating a `Module` for all above functions, both
     /// of the AOT and jit-compiled cateogries.
     ///
@@ -573,7 +591,7 @@ impl Module {
         if !self.inner.serializable {
             bail!("cannot serialize a module exported from a component");
         }
-        Ok(self.compiled_module().mmap().to_vec())
+        Ok(self.compiled_module().image_slice().to_vec())
     }
 
     pub(crate) fn compiled_module(&self) -> &CompiledModule {
@@ -922,7 +940,7 @@ impl Module {
     /// It is not safe to modify the memory in this range, nor is it safe to
     /// modify the protections of memory in this range.
     pub fn image_range(&self) -> Range<*const u8> {
-        self.compiled_module().mmap().image_range()
+        self.compiled_module().image_range()
     }
 
     /// Force initialization of copy-on-write images to happen here-and-now
@@ -1248,7 +1266,7 @@ fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<Modu
     let mmap = if engine.config().force_memory_init_memfd {
         None
     } else {
-        Some(module.mmap())
+        module.mmap()
     };
     ModuleMemoryImages::new(module.module(), module.code_memory().wasm_data(), mmap)
 }

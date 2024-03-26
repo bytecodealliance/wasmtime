@@ -134,6 +134,22 @@ wasmtime_module_deserialize_file(wasm_engine_t *engine, const char *path,
                                  wasmtime_module_t **ret);
 
 /**
+ * \brief Create a module from already mapped memory image.
+ *
+ * This function creates a module for which data is already mapped with proper
+ * permission flags in the host address space.
+ *
+ * If `finalizer` is provided it will be called with `data` argument when
+ * module is destroyed.
+ *
+ * This function does not take ownership of any of its arguments, but the
+ * returned error and module are owned by the caller.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_module_from_premapped_image(
+    wasm_engine_t *engine, const uint8_t *image, size_t size, void *data,
+    void (*finalizer)(void *), wasmtime_module_t **ret);
+
+/**
  * \brief Returns the range of bytes in memory where this module’s compilation
  * image resides.
  *
