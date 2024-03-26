@@ -41,12 +41,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v36 -> v0
-;;                                     v37 -> v0
-;;                                     v38 -> v0
-;;                                     v39 -> v0
-;;                                     v40 -> v0
-;;                                     v41 -> v0
 ;; @0047                               v7 = load.i64 notrap aligned v0+88
 ;; @0047                               v9 = load.i64 notrap aligned checked v0+80
 ;; @0047                               v6 = uextend.i64 v2
@@ -55,12 +49,10 @@
 ;; @0047                               v10 = iadd v9, v6
 ;; @0047                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @0047                               v13 = load.i32 little heap v12
-;;                                     v3 -> v13
 ;; @004c                               v19 = iconst.i64 4
 ;; @004c                               v20 = iadd v10, v19  ; v19 = 4
 ;; @004c                               v22 = select_spectre_guard v8, v11, v20  ; v11 = 0
 ;; @004c                               v23 = load.i32 little heap v22
-;;                                     v4 -> v23
 ;; @0051                               v25 = iconst.i64 0x0010_0003
 ;; @0051                               v26 = uadd_overflow_trap v6, v25, heap_oob  ; v25 = 0x0010_0003
 ;; @0051                               v28 = icmp ugt v26, v7
@@ -68,7 +60,6 @@
 ;; @0051                               v32 = iadd v10, v31  ; v31 = 0x000f_ffff
 ;; @0051                               v34 = select_spectre_guard v28, v11, v32  ; v11 = 0
 ;; @0051                               v35 = load.i32 little heap v34
-;;                                     v5 -> v35
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
@@ -85,12 +76,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;;                                     v33 -> v0
-;;                                     v34 -> v0
-;;                                     v35 -> v0
-;;                                     v36 -> v0
-;;                                     v37 -> v0
-;;                                     v38 -> v0
 ;; @005d                               v7 = load.i64 notrap aligned v0+88
 ;; @005d                               v9 = load.i64 notrap aligned checked v0+80
 ;; @005d                               v6 = uextend.i64 v2

@@ -352,14 +352,13 @@ fn write_instruction(
     // Write out the result values, if any.
     let mut has_results = false;
     for r in func.dfg.inst_results(inst) {
-        let r = func.dfg.resolve_aliases(*r);
         if !has_results {
             has_results = true;
             write!(w, "{}", r)?;
         } else {
             write!(w, ", {}", r)?;
         }
-        if let Some(f) = &func.dfg.facts[r] {
+        if let Some(f) = &func.dfg.facts[*r] {
             write!(w, " ! {}", f)?;
         }
     }
@@ -389,23 +388,13 @@ fn write_instruction(
 pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
     let pool = &dfg.value_lists;
     let jump_tables = &dfg.jump_tables;
-
-    // Resolve a value to its alias, if any.
-    let v = |v: Value| dfg.resolve_aliases(v);
-
-    // Resolve a list of values to their aliases and format them.
-    let vs = |vs: &[_]| {
-        let vs: Vec<_> = vs.iter().copied().map(v).collect();
-        DisplayValues(&vs).to_string()
-    };
-
     use crate::ir::instructions::InstructionData::*;
     match dfg.insts[inst] {
-        AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, v(args[0]), v(args[1])),
-        AtomicCas { args, .. } => write!(w, " {}, {}, {}", v(args[0]), v(args[1]), v(args[2])),
-        LoadNoOffset { flags, arg, .. } => write!(w, "{} {}", flags, v(arg)),
-        StoreNoOffset { flags, args, .. } => write!(w, "{} {}, {}", flags, v(args[0]), v(args[1])),
-        Unary { arg, .. } => write!(w, " {}", v(arg)),
+        AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, args[0], args[1]),
+        AtomicCas { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
+        LoadNoOffset { flags, arg, .. } => write!(w, "{} {}", flags, arg),
+        StoreNoOffset { flags, args, .. } => write!(w, "{} {}, {}", flags, args[0], args[1]),
+        Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
@@ -413,29 +402,29 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         UnaryConst {
             constant_handle, ..
         } => write!(w, " {}", constant_handle),
-        Binary { args, .. } => write!(w, " {}, {}", v(args[0]), v(args[1])),
-        BinaryImm8 { arg, imm, .. } => write!(w, " {}, {}", v(arg), imm),
-        BinaryImm64 { arg, imm, .. } => write!(w, " {}, {}", v(arg), imm),
-        Ternary { args, .. } => write!(w, " {}, {}, {}", v(args[0]), v(args[1]), v(args[2])),
+        Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
+        BinaryImm8 { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
+        BinaryImm64 { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
+        Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         MultiAry { ref args, .. } => {
             if args.is_empty() {
                 write!(w, "")
             } else {
-                write!(w, " {}", vs(args.as_slice(pool)))
+                write!(w, " {}", DisplayValues(args.as_slice(pool)))
             }
         }
         NullAry { .. } => write!(w, " "),
-        TernaryImm8 { imm, args, .. } => write!(w, " {}, {}, {}", v(args[0]), v(args[1]), imm),
+        TernaryImm8 { imm, args, .. } => write!(w, " {}, {}, {}", args[0], args[1], imm),
         Shuffle { imm, args, .. } => {
             let data = dfg.immediates.get(imm).expect(
                 "Expected the shuffle mask to already be inserted into the immediates table",
             );
-            write!(w, " {}, {}, {}", v(args[0]), v(args[1]), data)
+            write!(w, " {}, {}, {}", args[0], args[1], data)
         }
-        IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, v(args[0]), v(args[1])),
+        IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
-        IntAddTrap { args, code, .. } => write!(w, " {}, {}, {}", v(args[0]), v(args[1]), code),
-        FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, v(args[0]), v(args[1])),
+        IntAddTrap { args, code, .. } => write!(w, " {}, {}, {}", args[0], args[1], code),
+        FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         Jump { destination, .. } => {
             write!(w, " {}", destination.display(pool))
         }
@@ -444,20 +433,26 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             blocks: [block_then, block_else],
             ..
         } => {
-            write!(w, " {}, {}", v(arg), block_then.display(pool))?;
+            write!(w, " {}, {}", arg, block_then.display(pool))?;
             write!(w, ", {}", block_else.display(pool))
         }
         BranchTable { arg, table, .. } => {
-            write!(w, " {}, {}", v(arg), jump_tables[table].display(pool))
+            write!(w, " {}, {}", arg, jump_tables[table].display(pool))
         }
         Call {
             func_ref, ref args, ..
-        } => write!(w, " {}({})", func_ref, vs(args.as_slice(pool))),
+        } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),
         CallIndirect {
             sig_ref, ref args, ..
         } => {
             let args = args.as_slice(pool);
-            write!(w, " {}, {}({})", sig_ref, args[0], vs(&args[1..]))
+            write!(
+                w,
+                " {}, {}({})",
+                sig_ref,
+                args[0],
+                DisplayValues(&args[1..])
+            )
         }
         FuncAddr { func_ref, .. } => write!(w, " {}", func_ref),
         StackLoad {
@@ -468,7 +463,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             stack_slot,
             offset,
             ..
-        } => write!(w, " {}, {}{}", v(arg), stack_slot, offset),
+        } => write!(w, " {}, {}{}", arg, stack_slot, offset),
         DynamicStackLoad {
             dynamic_stack_slot, ..
         } => write!(w, " {}", dynamic_stack_slot),
@@ -479,15 +474,15 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         } => write!(w, " {}, {}", arg, dynamic_stack_slot),
         Load {
             flags, arg, offset, ..
-        } => write!(w, "{} {}{}", flags, v(arg), offset),
+        } => write!(w, "{} {}{}", flags, arg, offset),
         Store {
             flags,
             args,
             offset,
             ..
-        } => write!(w, "{} {}, {}{}", flags, v(args[0]), v(args[1]), offset),
+        } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
         Trap { code, .. } => write!(w, " {}", code),
-        CondTrap { arg, code, .. } => write!(w, " {}, {}", v(arg), code),
+        CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
     }?;
 
     let mut sep = "  ; ";
@@ -502,7 +497,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 } => constant_handle.to_string(),
                 _ => continue,
             };
-            write!(w, "{}{} = {}", sep, v(arg), imm)?;
+            write!(w, "{}{} = {}", sep, arg, imm)?;
             sep = ", ";
         }
     }
@@ -608,7 +603,7 @@ mod tests {
         }
         assert_eq!(
             func.to_string(),
-            "function u0:0() fast {\nblock0(v3: i32):\n    v0 -> v3\n    v2 -> v0\n    v4 = iconst.i32 42\n    v5 = iadd v3, v3\n    v1 -> v5\n    v6 = iconst.i32 23\n    v7 = iadd v5, v5\n}\n"
+            "function u0:0() fast {\nblock0(v3: i32):\n    v0 -> v3\n    v2 -> v0\n    v4 = iconst.i32 42\n    v5 = iadd v0, v0\n    v1 -> v5\n    v6 = iconst.i32 23\n    v7 = iadd v1, v1\n}\n"
         );
     }
 

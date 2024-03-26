@@ -118,7 +118,6 @@ fn run_test(path: &Path) -> Result<()> {
         UserFuncName::Testcase(_) => unreachable!(),
     });
 
-    // And finally, use `cranelift_filetests` to perform the rest of the test.
     run_functions(
         &test.path,
         &test.contents,
@@ -271,7 +270,7 @@ pub enum TestKind {
 }
 
 /// Assert that `wat` contains the test expectations necessary for `funcs`.
-pub fn run_functions(
+fn run_functions(
     path: &Path,
     wat: &str,
     isa: &dyn TargetIsa,
@@ -294,9 +293,12 @@ pub fn run_functions(
                 let mut ctx = cranelift_codegen::Context::for_function(func.clone());
                 ctx.optimize(isa, &mut Default::default())
                     .map_err(|e| codegen_error_to_anyhow_error(&ctx.func, e))?;
+                ctx.func.dfg.resolve_all_aliases();
                 writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
             }
             TestKind::Clif => {
+                let mut func = func.clone();
+                func.dfg.resolve_all_aliases();
                 writeln!(&mut actual, "{}", func.display()).unwrap();
             }
         }
