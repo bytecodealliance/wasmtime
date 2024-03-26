@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = ["has_sse41"]
+;;! flags = ["-Ccranelift-has_sse41"]
 
 (module
     (func (param f64) (result f64)

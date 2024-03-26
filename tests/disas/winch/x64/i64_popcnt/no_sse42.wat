@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = ["has_popcnt"]
+;;! flags = ["-Ccranelift-has_popcnt"]
 
 (module
     (func (result i64)

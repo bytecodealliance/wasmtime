@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = ["has_bmi1"]
+;;! flags = ["-Ccranelift-has_bmi1"]
 
 (module
     (func (result i32)

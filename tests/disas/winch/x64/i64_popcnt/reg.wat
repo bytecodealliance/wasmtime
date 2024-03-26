@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = ["has_popcnt", "has_sse42"]
+;;! flags = ["-Ccranelift-has_popcnt", "-Ccranelift-has_sse42"]
 
 (module
     (func (param i64) (result i64)
@@ -24,5 +24,5 @@
 ;;      	 f3480fb8c0           	popcntq	%rax, %rax
 ;;      	 4883c418             	addq	$0x18, %rsp
 ;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   3f:	 0f0b                 	ud2	
+;;      	 c3                   	retq
+;;   3f:	 0f0b                 	ud2

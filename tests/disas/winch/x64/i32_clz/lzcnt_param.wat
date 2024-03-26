@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = ["has_lzcnt"]
+;;! flags = ["-Ccranelift-has_lzcnt"]
 
 (module
     (func (param i32) (result i32)
