@@ -119,6 +119,24 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
+        "ensure_precise_store_traps",
+        "Enable transform to ensure precise store traps in the presence of store-tearing hardware.",
+        r#"
+            This inserts a load before every store so that hardware that "tears" stores when
+            part of the stored address range would fault due to a not-present page does not do so.
+            This can be useful to ensure precise post-trap memory state: for example, a Wasm guest
+            that traps on an unaligned partially-out-of-bounds store might otherwise produce
+            incorrect final memory state on hardware that performs the in-bounds part of the store
+            before trapping.
+
+            See also:
+            * https://github.com/WebAssembly/design/issues/1490
+            * https://github.com/bytecodealliance/wasmtime/issues/7237
+        "#,
+        false,
+    );
+
+    settings.add_bool(
         "enable_pinned_reg",
         "Enable the use of the pinned register.",
         r#"
