@@ -16,28 +16,28 @@
         (i64.rotr)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c320000000       	add	r11, 0x20
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c320000000       	addq	$0x20, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8746000000         	ja	0x61
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec20             	sub	rsp, 0x20
-;;      	 48897c2418           	mov	qword ptr [rsp + 0x18], rdi
-;;      	 4889742410           	mov	qword ptr [rsp + 0x10], rsi
-;;      	 4531db               	xor	r11d, r11d
-;;      	 4c895c2408           	mov	qword ptr [rsp + 8], r11
-;;      	 4c891c24             	mov	qword ptr [rsp], r11
-;;      	 48c7c001000000       	mov	rax, 1
-;;      	 4889442408           	mov	qword ptr [rsp + 8], rax
-;;      	 48c7c002000000       	mov	rax, 2
-;;      	 48890424             	mov	qword ptr [rsp], rax
-;;      	 488b0c24             	mov	rcx, qword ptr [rsp]
-;;      	 488b442408           	mov	rax, qword ptr [rsp + 8]
-;;      	 48d3c8               	ror	rax, cl
-;;      	 4883c420             	add	rsp, 0x20
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec20             	subq	$0x20, %rsp
+;;      	 48897c2418           	movq	%rdi, 0x18(%rsp)
+;;      	 4889742410           	movq	%rsi, 0x10(%rsp)
+;;      	 4531db               	xorl	%r11d, %r11d
+;;      	 4c895c2408           	movq	%r11, 8(%rsp)
+;;      	 4c891c24             	movq	%r11, (%rsp)
+;;      	 48c7c001000000       	movq	$1, %rax
+;;      	 4889442408           	movq	%rax, 8(%rsp)
+;;      	 48c7c002000000       	movq	$2, %rax
+;;      	 48890424             	movq	%rax, (%rsp)
+;;      	 488b0c24             	movq	(%rsp), %rcx
+;;      	 488b442408           	movq	8(%rsp), %rax
+;;      	 48d3c8               	rorq	%cl, %rax
+;;      	 4883c420             	addq	$0x20, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   61:	 0f0b                 	ud2	

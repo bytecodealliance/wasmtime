@@ -7,42 +7,42 @@
       i64.popcnt
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c310000000       	addq	$0x10, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8777000000         	ja	0x92
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 48c7c003000000       	mov	rax, 3
-;;      	 4889c1               	mov	rcx, rax
-;;      	 48c1e801             	shr	rax, 1
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec10             	subq	$0x10, %rsp
+;;      	 48897c2408           	movq	%rdi, 8(%rsp)
+;;      	 48893424             	movq	%rsi, (%rsp)
+;;      	 48c7c003000000       	movq	$3, %rax
+;;      	 4889c1               	movq	%rax, %rcx
+;;      	 48c1e801             	shrq	$1, %rax
 ;;      	 49bb5555555555555555 	
-;; 				movabs	r11, 0x5555555555555555
-;;      	 4c21d8               	and	rax, r11
-;;      	 4829c1               	sub	rcx, rax
-;;      	 4889c8               	mov	rax, rcx
+;; 				movabsq	$0x5555555555555555, %r11
+;;      	 4c21d8               	andq	%r11, %rax
+;;      	 4829c1               	subq	%rax, %rcx
+;;      	 4889c8               	movq	%rcx, %rax
 ;;      	 49bb3333333333333333 	
-;; 				movabs	r11, 0x3333333333333333
-;;      	 4c21d8               	and	rax, r11
-;;      	 48c1e902             	shr	rcx, 2
-;;      	 4c21d9               	and	rcx, r11
-;;      	 4801c1               	add	rcx, rax
-;;      	 4889c8               	mov	rax, rcx
-;;      	 48c1e804             	shr	rax, 4
-;;      	 4801c8               	add	rax, rcx
+;; 				movabsq	$0x3333333333333333, %r11
+;;      	 4c21d8               	andq	%r11, %rax
+;;      	 48c1e902             	shrq	$2, %rcx
+;;      	 4c21d9               	andq	%r11, %rcx
+;;      	 4801c1               	addq	%rax, %rcx
+;;      	 4889c8               	movq	%rcx, %rax
+;;      	 48c1e804             	shrq	$4, %rax
+;;      	 4801c8               	addq	%rcx, %rax
 ;;      	 49bb0f0f0f0f0f0f0f0f 	
-;; 				movabs	r11, 0xf0f0f0f0f0f0f0f
-;;      	 4c21d8               	and	rax, r11
+;; 				movabsq	$0xf0f0f0f0f0f0f0f, %r11
+;;      	 4c21d8               	andq	%r11, %rax
 ;;      	 49bb0101010101010101 	
-;; 				movabs	r11, 0x101010101010101
-;;      	 490fafc3             	imul	rax, r11
-;;      	 48c1e838             	shr	rax, 0x38
-;;      	 4883c410             	add	rsp, 0x10
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;; 				movabsq	$0x101010101010101, %r11
+;;      	 490fafc3             	imulq	%r11, %rax
+;;      	 48c1e838             	shrq	$0x38, %rax
+;;      	 4883c410             	addq	$0x10, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   92:	 0f0b                 	ud2	

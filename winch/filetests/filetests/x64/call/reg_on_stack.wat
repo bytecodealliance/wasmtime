@@ -10,47 +10,47 @@
     unreachable
   )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c324000000       	add	r11, 0x24
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c324000000       	addq	$0x24, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8789000000         	ja	0xa4
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;      	 89542404             	mov	dword ptr [rsp + 4], edx
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 4c89f7               	mov	rdi, r14
-;;      	 4c89f6               	mov	rsi, r14
-;;      	 ba01000000           	mov	edx, 1
-;;      	 e800000000           	call	0x51
-;;      	 4883c404             	add	rsp, 4
-;;      	 4c8b742414           	mov	r14, qword ptr [rsp + 0x14]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 890424               	mov	dword ptr [rsp], eax
-;;      	 4c89f7               	mov	rdi, r14
-;;      	 4c89f6               	mov	rsi, r14
-;;      	 ba01000000           	mov	edx, 1
-;;      	 e800000000           	call	0x71
-;;      	 4c8b742418           	mov	r14, qword ptr [rsp + 0x18]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 890424               	mov	dword ptr [rsp], eax
-;;      	 8b0c24               	mov	ecx, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 8b0424               	mov	eax, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 85c9                 	test	ecx, ecx
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec18             	subq	$0x18, %rsp
+;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
+;;      	 4889742408           	movq	%rsi, 8(%rsp)
+;;      	 89542404             	movl	%edx, 4(%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 4c89f7               	movq	%r14, %rdi
+;;      	 4c89f6               	movq	%r14, %rsi
+;;      	 ba01000000           	movl	$1, %edx
+;;      	 e800000000           	callq	0x51
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 4c8b742414           	movq	0x14(%rsp), %r14
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 890424               	movl	%eax, (%rsp)
+;;      	 4c89f7               	movq	%r14, %rdi
+;;      	 4c89f6               	movq	%r14, %rsi
+;;      	 ba01000000           	movl	$1, %edx
+;;      	 e800000000           	callq	0x71
+;;      	 4c8b742418           	movq	0x18(%rsp), %r14
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 890424               	movl	%eax, (%rsp)
+;;      	 8b0c24               	movl	(%rsp), %ecx
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 8b0424               	movl	(%rsp), %eax
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 85c9                 	testl	%ecx, %ecx
 ;;      	 0f8409000000         	je	0x9c
-;;   93:	 4883c404             	add	rsp, 4
+;;   93:	 4883c404             	addq	$4, %rsp
 ;;      	 e902000000           	jmp	0x9e
 ;;   9c:	 0f0b                 	ud2	
-;;      	 4883c418             	add	rsp, 0x18
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;      	 4883c418             	addq	$0x18, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   a4:	 0f0b                 	ud2	

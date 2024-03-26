@@ -6,40 +6,40 @@
         (i64.trunc_f64_s)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c310000000       	addq	$0x10, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8761000000         	ja	0x7c
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 f20f100555000000     	movsd	xmm0, qword ptr [rip + 0x55]
-;;      	 f2480f2cc0           	cvttsd2si	rax, xmm0
-;;      	 4883f801             	cmp	rax, 1
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec10             	subq	$0x10, %rsp
+;;      	 48897c2408           	movq	%rdi, 8(%rsp)
+;;      	 48893424             	movq	%rsi, (%rsp)
+;;      	 f20f100555000000     	movsd	0x55(%rip), %xmm0
+;;      	 f2480f2cc0           	cvttsd2si	%xmm0, %rax
+;;      	 4883f801             	cmpq	$1, %rax
 ;;      	 0f8134000000         	jno	0x76
-;;   42:	 660f2ec0             	ucomisd	xmm0, xmm0
+;;   42:	 660f2ec0             	ucomisd	%xmm0, %xmm0
 ;;      	 0f8a32000000         	jp	0x7e
 ;;   4c:	 49bb000000000000e0c3 	
-;; 				movabs	r11, 0xc3e0000000000000
-;;      	 664d0f6efb           	movq	xmm15, r11
-;;      	 66410f2ec7           	ucomisd	xmm0, xmm15
+;; 				movabsq	$14114281232179134464, %r11
+;;      	 664d0f6efb           	movq	%r11, %xmm15
+;;      	 66410f2ec7           	ucomisd	%xmm15, %xmm0
 ;;      	 0f821a000000         	jb	0x80
-;;   66:	 66450f57ff           	xorpd	xmm15, xmm15
-;;      	 66440f2ef8           	ucomisd	xmm15, xmm0
+;;   66:	 66450f57ff           	xorpd	%xmm15, %xmm15
+;;      	 66440f2ef8           	ucomisd	%xmm0, %xmm15
 ;;      	 0f820c000000         	jb	0x82
-;;   76:	 4883c410             	add	rsp, 0x10
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   76:	 4883c410             	addq	$0x10, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   7c:	 0f0b                 	ud2	
 ;;   7e:	 0f0b                 	ud2	
 ;;   80:	 0f0b                 	ud2	
 ;;   82:	 0f0b                 	ud2	
-;;   84:	 0000                 	add	byte ptr [rax], al
-;;   86:	 0000                 	add	byte ptr [rax], al
-;;   88:	 0000                 	add	byte ptr [rax], al
-;;   8a:	 0000                 	add	byte ptr [rax], al
-;;   8c:	 0000                 	add	byte ptr [rax], al
+;;   84:	 0000                 	addb	%al, (%rax)
+;;   86:	 0000                 	addb	%al, (%rax)
+;;   88:	 0000                 	addb	%al, (%rax)
+;;   8a:	 0000                 	addb	%al, (%rax)
+;;   8c:	 0000                 	addb	%al, (%rax)

@@ -6,35 +6,35 @@
       i32.popcnt
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c310000000       	addq	$0x10, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8751000000         	ja	0x6c
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 b80f000000           	mov	eax, 0xf
-;;      	 89c1                 	mov	ecx, eax
-;;      	 c1e801               	shr	eax, 1
-;;      	 81e055555555         	and	eax, 0x55555555
-;;      	 29c1                 	sub	ecx, eax
-;;      	 89c8                 	mov	eax, ecx
-;;      	 41bb33333333         	mov	r11d, 0x33333333
-;;      	 4421d8               	and	eax, r11d
-;;      	 c1e902               	shr	ecx, 2
-;;      	 4421d9               	and	ecx, r11d
-;;      	 01c1                 	add	ecx, eax
-;;      	 89c8                 	mov	eax, ecx
-;;      	 c1e804               	shr	eax, 4
-;;      	 01c8                 	add	eax, ecx
-;;      	 81e00f0f0f0f         	and	eax, 0xf0f0f0f
-;;      	 69c001010101         	imul	eax, eax, 0x1010101
-;;      	 c1e818               	shr	eax, 0x18
-;;      	 4883c410             	add	rsp, 0x10
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec10             	subq	$0x10, %rsp
+;;      	 48897c2408           	movq	%rdi, 8(%rsp)
+;;      	 48893424             	movq	%rsi, (%rsp)
+;;      	 b80f000000           	movl	$0xf, %eax
+;;      	 89c1                 	movl	%eax, %ecx
+;;      	 c1e801               	shrl	$1, %eax
+;;      	 81e055555555         	andl	$0x55555555, %eax
+;;      	 29c1                 	subl	%eax, %ecx
+;;      	 89c8                 	movl	%ecx, %eax
+;;      	 41bb33333333         	movl	$0x33333333, %r11d
+;;      	 4421d8               	andl	%r11d, %eax
+;;      	 c1e902               	shrl	$2, %ecx
+;;      	 4421d9               	andl	%r11d, %ecx
+;;      	 01c1                 	addl	%eax, %ecx
+;;      	 89c8                 	movl	%ecx, %eax
+;;      	 c1e804               	shrl	$4, %eax
+;;      	 01c8                 	addl	%ecx, %eax
+;;      	 81e00f0f0f0f         	andl	$0xf0f0f0f, %eax
+;;      	 69c001010101         	imull	$0x1010101, %eax, %eax
+;;      	 c1e818               	shrl	$0x18, %eax
+;;      	 4883c410             	addq	$0x10, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   6c:	 0f0b                 	ud2	

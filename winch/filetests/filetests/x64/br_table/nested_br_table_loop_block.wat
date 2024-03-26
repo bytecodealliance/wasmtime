@@ -17,24 +17,24 @@
     )
   )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c318000000       	add	r11, 0x18
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c318000000       	addq	$0x18, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8784000000         	ja	0x9f
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;      	 89542404             	mov	dword ptr [rsp + 4], edx
-;;      	 8b442404             	mov	eax, dword ptr [rsp + 4]
-;;      	 b902000000           	mov	ecx, 2
-;;      	 39c1                 	cmp	ecx, eax
-;;      	 0f42c1               	cmovb	eax, ecx
-;;      	 4c8d1d0a000000       	lea	r11, [rip + 0xa]
-;;      	 49630c83             	movsxd	rcx, dword ptr [r11 + rax*4]
-;;      	 4901cb               	add	r11, rcx
-;;      	 41ffe3               	jmp	r11
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec18             	subq	$0x18, %rsp
+;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
+;;      	 4889742408           	movq	%rsi, 8(%rsp)
+;;      	 89542404             	movl	%edx, 4(%rsp)
+;;      	 8b442404             	movl	4(%rsp), %eax
+;;      	 b902000000           	movl	$2, %ecx
+;;      	 39c1                 	cmpl	%eax, %ecx
+;;      	 0f42c1               	cmovbl	%ecx, %eax
+;;      	 4c8d1d0a000000       	leaq	0xa(%rip), %r11
+;;      	 49630c83             	movslq	(%r11, %rax, 4), %rcx
+;;      	 4901cb               	addq	%rcx, %r11
+;;      	 41ffe3               	jmpq	*%r11
 ;;   4f:	 e1ff                 	loope	0x50

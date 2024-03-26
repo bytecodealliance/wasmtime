@@ -7,25 +7,25 @@
 	(i64.div_s)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c310000000       	addq	$0x10, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8733000000         	ja	0x4e
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 48c7c100000000       	mov	rcx, 0
-;;      	 48c7c000000000       	mov	rax, 0
-;;      	 4883f900             	cmp	rcx, 0
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec10             	subq	$0x10, %rsp
+;;      	 48897c2408           	movq	%rdi, 8(%rsp)
+;;      	 48893424             	movq	%rsi, (%rsp)
+;;      	 48c7c100000000       	movq	$0, %rcx
+;;      	 48c7c000000000       	movq	$0, %rax
+;;      	 4883f900             	cmpq	$0, %rcx
 ;;      	 0f840d000000         	je	0x50
-;;   43:	 4899                 	cqo	
-;;      	 48f7f9               	idiv	rcx
-;;      	 4883c410             	add	rsp, 0x10
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   43:	 4899                 	cqto	
+;;      	 48f7f9               	idivq	%rcx
+;;      	 4883c410             	addq	$0x10, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   4e:	 0f0b                 	ud2	
 ;;   50:	 0f0b                 	ud2	

@@ -7,24 +7,24 @@
         (f64.add)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c320000000       	add	r11, 0x20
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c320000000       	addq	$0x20, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8735000000         	ja	0x50
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec20             	sub	rsp, 0x20
-;;      	 48897c2418           	mov	qword ptr [rsp + 0x18], rdi
-;;      	 4889742410           	mov	qword ptr [rsp + 0x10], rsi
-;;      	 f20f11442408         	movsd	qword ptr [rsp + 8], xmm0
-;;      	 f20f110c24           	movsd	qword ptr [rsp], xmm1
-;;      	 f20f100424           	movsd	xmm0, qword ptr [rsp]
-;;      	 f20f104c2408         	movsd	xmm1, qword ptr [rsp + 8]
-;;      	 f20f58c8             	addsd	xmm1, xmm0
-;;      	 660f28c1             	movapd	xmm0, xmm1
-;;      	 4883c420             	add	rsp, 0x20
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec20             	subq	$0x20, %rsp
+;;      	 48897c2418           	movq	%rdi, 0x18(%rsp)
+;;      	 4889742410           	movq	%rsi, 0x10(%rsp)
+;;      	 f20f11442408         	movsd	%xmm0, 8(%rsp)
+;;      	 f20f110c24           	movsd	%xmm1, (%rsp)
+;;      	 f20f100424           	movsd	(%rsp), %xmm0
+;;      	 f20f104c2408         	movsd	8(%rsp), %xmm1
+;;      	 f20f58c8             	addsd	%xmm0, %xmm1
+;;      	 660f28c1             	movapd	%xmm1, %xmm0
+;;      	 4883c420             	addq	$0x20, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   50:	 0f0b                 	ud2	

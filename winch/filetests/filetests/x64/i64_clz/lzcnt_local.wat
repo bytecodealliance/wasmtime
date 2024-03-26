@@ -12,23 +12,23 @@
         (i64.clz)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c318000000       	add	r11, 0x18
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c318000000       	addq	$0x18, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8733000000         	ja	0x4e
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
-;;      	 48c7c002000000       	mov	rax, 2
-;;      	 48890424             	mov	qword ptr [rsp], rax
-;;      	 488b0424             	mov	rax, qword ptr [rsp]
-;;      	 f3480fbdc0           	lzcnt	rax, rax
-;;      	 4883c418             	add	rsp, 0x18
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec18             	subq	$0x18, %rsp
+;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
+;;      	 4889742408           	movq	%rsi, 8(%rsp)
+;;      	 48c7042400000000     	movq	$0, (%rsp)
+;;      	 48c7c002000000       	movq	$2, %rax
+;;      	 48890424             	movq	%rax, (%rsp)
+;;      	 488b0424             	movq	(%rsp), %rax
+;;      	 f3480fbdc0           	lzcntq	%rax, %rax
+;;      	 4883c418             	addq	$0x18, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   4e:	 0f0b                 	ud2	

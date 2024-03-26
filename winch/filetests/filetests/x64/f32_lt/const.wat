@@ -7,29 +7,29 @@
         (f32.lt)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c310000000       	addq	$0x10, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8732000000         	ja	0x4d
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 f30f10051d000000     	movss	xmm0, dword ptr [rip + 0x1d]
-;;      	 f30f100d1d000000     	movss	xmm1, dword ptr [rip + 0x1d]
-;;      	 0f2ec1               	ucomiss	xmm0, xmm1
-;;      	 b800000000           	mov	eax, 0
-;;      	 400f97c0             	seta	al
-;;      	 4883c410             	add	rsp, 0x10
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec10             	subq	$0x10, %rsp
+;;      	 48897c2408           	movq	%rdi, 8(%rsp)
+;;      	 48893424             	movq	%rsi, (%rsp)
+;;      	 f30f10051d000000     	movss	0x1d(%rip), %xmm0
+;;      	 f30f100d1d000000     	movss	0x1d(%rip), %xmm1
+;;      	 0f2ec1               	ucomiss	%xmm1, %xmm0
+;;      	 b800000000           	movl	$0, %eax
+;;      	 400f97c0             	seta	%al
+;;      	 4883c410             	addq	$0x10, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   4d:	 0f0b                 	ud2	
-;;   4f:	 00cd                 	add	ch, cl
+;;   4f:	 00cd                 	addb	%cl, %ch
 ;;   51:	 cc                   	int3	
-;;   52:	 0c40                 	or	al, 0x40
-;;   54:	 0000                 	add	byte ptr [rax], al
-;;   56:	 0000                 	add	byte ptr [rax], al
-;;   58:	 cdcc                 	int	0xcc
+;;   52:	 0c40                 	orb	$0x40, %al
+;;   54:	 0000                 	addb	%al, (%rax)
+;;   56:	 0000                 	addb	%al, (%rax)
+;;   58:	 cdcc                 	int	$0xcc

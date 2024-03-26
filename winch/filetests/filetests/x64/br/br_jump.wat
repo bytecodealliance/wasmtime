@@ -12,27 +12,27 @@
   )
   (export "" (func 0))
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c320000000       	add	r11, 0x20
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c320000000       	addq	$0x20, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8742000000         	ja	0x5d
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 448b5c2408           	mov	r11d, dword ptr [rsp + 8]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 4883c404             	add	rsp, 4
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec18             	subq	$0x18, %rsp
+;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
+;;      	 4889742408           	movq	%rsi, 8(%rsp)
+;;      	 48c7042400000000     	movq	$0, (%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 448b5c2408           	movl	8(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 4883c404             	addq	$4, %rsp
 ;;      	 e9eaffffff           	jmp	0x41
-;;   57:	 4883c418             	add	rsp, 0x18
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   57:	 4883c418             	addq	$0x18, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   5d:	 0f0b                 	ud2	

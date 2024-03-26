@@ -10,33 +10,33 @@
     br_table 0
   )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c314000000       	add	r11, 0x14
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c314000000       	addq	$0x14, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f874f000000         	ja	0x6a
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 b800000000           	mov	eax, 0
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 890424               	mov	dword ptr [rsp], eax
-;;      	 b900000000           	mov	ecx, 0
-;;      	 b800000000           	mov	eax, 0
-;;      	 ba00000000           	mov	edx, 0
-;;      	 39ca                 	cmp	edx, ecx
-;;      	 0f42ca               	cmovb	ecx, edx
-;;      	 4c8d1d0a000000       	lea	r11, [rip + 0xa]
-;;      	 4963148b             	movsxd	rdx, dword ptr [r11 + rcx*4]
-;;      	 4901d3               	add	r11, rdx
-;;      	 41ffe3               	jmp	r11
-;;   5c:	 0400                 	add	al, 0
-;;      	 0000                 	add	byte ptr [rax], al
-;;      	 4883c404             	add	rsp, 4
-;;      	 4883c410             	add	rsp, 0x10
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec10             	subq	$0x10, %rsp
+;;      	 48897c2408           	movq	%rdi, 8(%rsp)
+;;      	 48893424             	movq	%rsi, (%rsp)
+;;      	 b800000000           	movl	$0, %eax
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 890424               	movl	%eax, (%rsp)
+;;      	 b900000000           	movl	$0, %ecx
+;;      	 b800000000           	movl	$0, %eax
+;;      	 ba00000000           	movl	$0, %edx
+;;      	 39ca                 	cmpl	%ecx, %edx
+;;      	 0f42ca               	cmovbl	%edx, %ecx
+;;      	 4c8d1d0a000000       	leaq	0xa(%rip), %r11
+;;      	 4963148b             	movslq	(%r11, %rcx, 4), %rdx
+;;      	 4901d3               	addq	%rdx, %r11
+;;      	 41ffe3               	jmpq	*%r11
+;;   5c:	 0400                 	addb	$0, %al
+;;      	 0000                 	addb	%al, (%rax)
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 4883c410             	addq	$0x10, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   6a:	 0f0b                 	ud2	

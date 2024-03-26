@@ -7,26 +7,26 @@
     local.set 0
   )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c31c000000       	add	r11, 0x1c
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c31c000000       	addq	$0x1c, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8738000000         	ja	0x53
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;      	 89542404             	mov	dword ptr [rsp + 4], edx
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 b801000000           	mov	eax, 1
-;;      	 89442408             	mov	dword ptr [rsp + 8], eax
-;;      	 8b0424               	mov	eax, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 4883c418             	add	rsp, 0x18
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec18             	subq	$0x18, %rsp
+;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
+;;      	 4889742408           	movq	%rsi, 8(%rsp)
+;;      	 89542404             	movl	%edx, 4(%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 b801000000           	movl	$1, %eax
+;;      	 89442408             	movl	%eax, 8(%rsp)
+;;      	 8b0424               	movl	(%rsp), %eax
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 4883c418             	addq	$0x18, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   53:	 0f0b                 	ud2	

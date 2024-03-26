@@ -6,31 +6,31 @@
         (f64.convert_i32_u)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c310000000       	add	r11, 0x10
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c310000000       	addq	$0x10, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f874b000000         	ja	0x66
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec10             	sub	rsp, 0x10
-;;      	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;      	 48893424             	mov	qword ptr [rsp], rsi
-;;      	 b901000000           	mov	ecx, 1
-;;      	 8bc9                 	mov	ecx, ecx
-;;      	 4883f900             	cmp	rcx, 0
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec10             	subq	$0x10, %rsp
+;;      	 48897c2408           	movq	%rdi, 8(%rsp)
+;;      	 48893424             	movq	%rsi, (%rsp)
+;;      	 b901000000           	movl	$1, %ecx
+;;      	 8bc9                 	movl	%ecx, %ecx
+;;      	 4883f900             	cmpq	$0, %rcx
 ;;      	 0f8c0a000000         	jl	0x46
-;;   3c:	 f2480f2ac1           	cvtsi2sd	xmm0, rcx
+;;   3c:	 f2480f2ac1           	cvtsi2sdq	%rcx, %xmm0
 ;;      	 e91a000000           	jmp	0x60
-;;   46:	 4989cb               	mov	r11, rcx
-;;      	 49c1eb01             	shr	r11, 1
-;;      	 4889c8               	mov	rax, rcx
-;;      	 4883e001             	and	rax, 1
-;;      	 4c09d8               	or	rax, r11
-;;      	 f2480f2ac0           	cvtsi2sd	xmm0, rax
-;;      	 f20f58c0             	addsd	xmm0, xmm0
-;;      	 4883c410             	add	rsp, 0x10
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   46:	 4989cb               	movq	%rcx, %r11
+;;      	 49c1eb01             	shrq	$1, %r11
+;;      	 4889c8               	movq	%rcx, %rax
+;;      	 4883e001             	andq	$1, %rax
+;;      	 4c09d8               	orq	%r11, %rax
+;;      	 f2480f2ac0           	cvtsi2sdq	%rax, %xmm0
+;;      	 f20f58c0             	addsd	%xmm0, %xmm0
+;;      	 4883c410             	addq	$0x10, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   66:	 0f0b                 	ud2	

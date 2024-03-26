@@ -6,27 +6,27 @@
   )
 )
  
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c328000000       	add	r11, 0x28
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c328000000       	addq	$0x28, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f873e000000         	ja	0x59
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec28             	sub	rsp, 0x28
-;;      	 48897c2420           	mov	qword ptr [rsp + 0x20], rdi
-;;      	 4889742418           	mov	qword ptr [rsp + 0x18], rsi
-;;      	 4889542410           	mov	qword ptr [rsp + 0x10], rdx
-;;      	 48894c2408           	mov	qword ptr [rsp + 8], rcx
-;;      	 4489442404           	mov	dword ptr [rsp + 4], r8d
-;;      	 8b442404             	mov	eax, dword ptr [rsp + 4]
-;;      	 488b4c2408           	mov	rcx, qword ptr [rsp + 8]
-;;      	 488b542410           	mov	rdx, qword ptr [rsp + 0x10]
-;;      	 83f800               	cmp	eax, 0
-;;      	 480f45ca             	cmovne	rcx, rdx
-;;      	 4889c8               	mov	rax, rcx
-;;      	 4883c428             	add	rsp, 0x28
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec28             	subq	$0x28, %rsp
+;;      	 48897c2420           	movq	%rdi, 0x20(%rsp)
+;;      	 4889742418           	movq	%rsi, 0x18(%rsp)
+;;      	 4889542410           	movq	%rdx, 0x10(%rsp)
+;;      	 48894c2408           	movq	%rcx, 8(%rsp)
+;;      	 4489442404           	movl	%r8d, 4(%rsp)
+;;      	 8b442404             	movl	4(%rsp), %eax
+;;      	 488b4c2408           	movq	8(%rsp), %rcx
+;;      	 488b542410           	movq	0x10(%rsp), %rdx
+;;      	 83f800               	cmpl	$0, %eax
+;;      	 480f45ca             	cmovneq	%rdx, %rcx
+;;      	 4889c8               	movq	%rcx, %rax
+;;      	 4883c428             	addq	$0x28, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   59:	 0f0b                 	ud2	

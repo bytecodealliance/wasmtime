@@ -6,30 +6,30 @@
         (f32.trunc)
     )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c320000000       	add	r11, 0x20
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c320000000       	addq	$0x20, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f8752000000         	ja	0x6d
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;      	 f30f11442404         	movss	dword ptr [rsp + 4], xmm0
-;;      	 f3440f107c2404       	movss	xmm15, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 f3440f113c24         	movss	dword ptr [rsp], xmm15
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 f30f10442404         	movss	xmm0, dword ptr [rsp + 4]
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec18             	subq	$0x18, %rsp
+;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
+;;      	 4889742408           	movq	%rsi, 8(%rsp)
+;;      	 f30f11442404         	movss	%xmm0, 4(%rsp)
+;;      	 f3440f107c2404       	movss	4(%rsp), %xmm15
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 f3440f113c24         	movss	%xmm15, (%rsp)
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 f30f10442404         	movss	4(%rsp), %xmm0
 ;;      	 49bb0000000000000000 	
-;; 				movabs	r11, 0
-;;      	 41ffd3               	call	r11
-;;      	 4883c404             	add	rsp, 4
-;;      	 4883c404             	add	rsp, 4
-;;      	 4c8b742410           	mov	r14, qword ptr [rsp + 0x10]
-;;      	 4883c418             	add	rsp, 0x18
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;; 				movabsq	$0, %r11
+;;      	 41ffd3               	callq	*%r11
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 4c8b742410           	movq	0x10(%rsp), %r14
+;;      	 4883c418             	addq	$0x18, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   6d:	 0f0b                 	ud2	

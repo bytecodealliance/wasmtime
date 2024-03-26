@@ -11,62 +11,62 @@
     (local.get 0)
   )
 )
-;;      	 55                   	push	rbp
-;;      	 4889e5               	mov	rbp, rsp
-;;      	 4c8b5f08             	mov	r11, qword ptr [rdi + 8]
-;;      	 4d8b1b               	mov	r11, qword ptr [r11]
-;;      	 4981c31c000000       	add	r11, 0x1c
-;;      	 4939e3               	cmp	r11, rsp
+;;      	 55                   	pushq	%rbp
+;;      	 4889e5               	movq	%rsp, %rbp
+;;      	 4c8b5f08             	movq	8(%rdi), %r11
+;;      	 4d8b1b               	movq	(%r11), %r11
+;;      	 4981c31c000000       	addq	$0x1c, %r11
+;;      	 4939e3               	cmpq	%rsp, %r11
 ;;      	 0f87c7000000         	ja	0xe2
-;;   1b:	 4989fe               	mov	r14, rdi
-;;      	 4883ec18             	sub	rsp, 0x18
-;;      	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
-;;      	 4889742408           	mov	qword ptr [rsp + 8], rsi
-;;      	 48c7042400000000     	mov	qword ptr [rsp], 0
-;;      	 b800000000           	mov	eax, 0
-;;      	 89442404             	mov	dword ptr [rsp + 4], eax
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 b801000000           	mov	eax, 1
-;;      	 8b0c24               	mov	ecx, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 01c1                 	add	ecx, eax
-;;      	 894c2404             	mov	dword ptr [rsp + 4], ecx
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 b802000000           	mov	eax, 2
-;;      	 8b0c24               	mov	ecx, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 01c1                 	add	ecx, eax
-;;      	 894c2404             	mov	dword ptr [rsp + 4], ecx
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 b804000000           	mov	eax, 4
-;;      	 8b0c24               	mov	ecx, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 01c1                 	add	ecx, eax
-;;      	 894c2404             	mov	dword ptr [rsp + 4], ecx
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 b808000000           	mov	eax, 8
-;;      	 8b0c24               	mov	ecx, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 01c1                 	add	ecx, eax
-;;      	 894c2404             	mov	dword ptr [rsp + 4], ecx
-;;      	 448b5c2404           	mov	r11d, dword ptr [rsp + 4]
-;;      	 4883ec04             	sub	rsp, 4
-;;      	 44891c24             	mov	dword ptr [rsp], r11d
-;;      	 b810000000           	mov	eax, 0x10
-;;      	 8b0c24               	mov	ecx, dword ptr [rsp]
-;;      	 4883c404             	add	rsp, 4
-;;      	 01c1                 	add	ecx, eax
-;;      	 894c2404             	mov	dword ptr [rsp + 4], ecx
-;;      	 8b442404             	mov	eax, dword ptr [rsp + 4]
-;;      	 4883c418             	add	rsp, 0x18
-;;      	 5d                   	pop	rbp
-;;      	 c3                   	ret	
+;;   1b:	 4989fe               	movq	%rdi, %r14
+;;      	 4883ec18             	subq	$0x18, %rsp
+;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
+;;      	 4889742408           	movq	%rsi, 8(%rsp)
+;;      	 48c7042400000000     	movq	$0, (%rsp)
+;;      	 b800000000           	movl	$0, %eax
+;;      	 89442404             	movl	%eax, 4(%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 b801000000           	movl	$1, %eax
+;;      	 8b0c24               	movl	(%rsp), %ecx
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 01c1                 	addl	%eax, %ecx
+;;      	 894c2404             	movl	%ecx, 4(%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 b802000000           	movl	$2, %eax
+;;      	 8b0c24               	movl	(%rsp), %ecx
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 01c1                 	addl	%eax, %ecx
+;;      	 894c2404             	movl	%ecx, 4(%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 b804000000           	movl	$4, %eax
+;;      	 8b0c24               	movl	(%rsp), %ecx
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 01c1                 	addl	%eax, %ecx
+;;      	 894c2404             	movl	%ecx, 4(%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 b808000000           	movl	$8, %eax
+;;      	 8b0c24               	movl	(%rsp), %ecx
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 01c1                 	addl	%eax, %ecx
+;;      	 894c2404             	movl	%ecx, 4(%rsp)
+;;      	 448b5c2404           	movl	4(%rsp), %r11d
+;;      	 4883ec04             	subq	$4, %rsp
+;;      	 44891c24             	movl	%r11d, (%rsp)
+;;      	 b810000000           	movl	$0x10, %eax
+;;      	 8b0c24               	movl	(%rsp), %ecx
+;;      	 4883c404             	addq	$4, %rsp
+;;      	 01c1                 	addl	%eax, %ecx
+;;      	 894c2404             	movl	%ecx, 4(%rsp)
+;;      	 8b442404             	movl	4(%rsp), %eax
+;;      	 4883c418             	addq	$0x18, %rsp
+;;      	 5d                   	popq	%rbp
+;;      	 c3                   	retq	
 ;;   e2:	 0f0b                 	ud2	
