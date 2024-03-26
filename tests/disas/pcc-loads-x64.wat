@@ -19,41 +19,41 @@
     local.get 1
     f64.store))
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    0x50(%rdi), %r9
-;;    8: movl    %edx, %r10d
-;;    b: movss   (%r9, %r10), %xmm0
-;;   11: movq    %rbp, %rsp
-;;   14: popq    %rbp
-;;   15: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x50(%rdi), %r9
+;;       movl    %edx, %r10d
+;;       movss   (%r9, %r10), %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
 ;; wasm[0]::function[1]:
-;;   20: pushq   %rbp
-;;   21: movq    %rsp, %rbp
-;;   24: movq    0x50(%rdi), %r9
-;;   28: movl    %edx, %r10d
-;;   2b: movsd   (%r9, %r10), %xmm0
-;;   31: movq    %rbp, %rsp
-;;   34: popq    %rbp
-;;   35: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x50(%rdi), %r9
+;;       movl    %edx, %r10d
+;;       movsd   (%r9, %r10), %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
 ;; wasm[0]::function[2]:
-;;   40: pushq   %rbp
-;;   41: movq    %rsp, %rbp
-;;   44: movq    0x50(%rdi), %r9
-;;   48: movl    %edx, %r10d
-;;   4b: movss   %xmm0, (%r9, %r10)
-;;   51: movq    %rbp, %rsp
-;;   54: popq    %rbp
-;;   55: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x50(%rdi), %r9
+;;       movl    %edx, %r10d
+;;       movss   %xmm0, (%r9, %r10)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
 ;; wasm[0]::function[3]:
-;;   60: pushq   %rbp
-;;   61: movq    %rsp, %rbp
-;;   64: movq    0x50(%rdi), %r9
-;;   68: movl    %edx, %r10d
-;;   6b: movsd   %xmm0, (%r9, %r10)
-;;   71: movq    %rbp, %rsp
-;;   74: popq    %rbp
-;;   75: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x50(%rdi), %r9
+;;       movl    %edx, %r10d
+;;       movsd   %xmm0, (%r9, %r10)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq

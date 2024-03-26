@@ -19,31 +19,31 @@
     i32.load offset=0))
 
 ;; wasm[0]::function[0]:
-;;    0: stp     x29, x30, [sp, #-0x10]!
-;;    4: mov     x29, sp
-;;    8: ldr     x11, [x0, #0x58]
-;;    c: ldr     x10, [x0, #0x50]
-;;   10: sub     x11, x11, #4
-;;   14: mov     x12, #0
-;;   18: add     x10, x10, x2
-;;   1c: cmp     x2, x11
-;;   20: csel    x11, x12, x10, hi
-;;   24: csdb
-;;   28: str     w3, [x11]
-;;   2c: ldp     x29, x30, [sp], #0x10
-;;   30: ret
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x11, [x0, #0x58]
+;;       ldr     x10, [x0, #0x50]
+;;       sub     x11, x11, #4
+;;       mov     x12, #0
+;;       add     x10, x10, x2
+;;       cmp     x2, x11
+;;       csel    x11, x12, x10, hi
+;;       csdb
+;;       str     w3, [x11]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   40: stp     x29, x30, [sp, #-0x10]!
-;;   44: mov     x29, sp
-;;   48: ldr     x11, [x0, #0x58]
-;;   4c: ldr     x10, [x0, #0x50]
-;;   50: sub     x11, x11, #4
-;;   54: mov     x12, #0
-;;   58: add     x10, x10, x2
-;;   5c: cmp     x2, x11
-;;   60: csel    x11, x12, x10, hi
-;;   64: csdb
-;;   68: ldr     w0, [x11]
-;;   6c: ldp     x29, x30, [sp], #0x10
-;;   70: ret
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x11, [x0, #0x58]
+;;       ldr     x10, [x0, #0x50]
+;;       sub     x11, x11, #4
+;;       mov     x12, #0
+;;       add     x10, x10, x2
+;;       cmp     x2, x11
+;;       csel    x11, x12, x10, hi
+;;       csdb
+;;       ldr     w0, [x11]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

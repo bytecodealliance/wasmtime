@@ -19,45 +19,45 @@
     i32.load8_u offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: ld      a4, 0x58(a0)
-;;   14: ld      a5, 0x50(a0)
-;;   18: slli    a2, a2, 0x20
-;;   1c: srli    a0, a2, 0x20
-;;   20: sltu    a4, a4, a0
-;;   24: add     a5, a5, a0
-;;   28: lui     a0, 1
-;;   2c: add     a5, a5, a0
-;;   30: neg     a1, a4
-;;   34: not     a4, a1
-;;   38: and     a5, a5, a4
-;;   3c: sb      a3, 0(a5)
-;;   40: ld      ra, 8(sp)
-;;   44: ld      s0, 0(sp)
-;;   48: addi    sp, sp, 0x10
-;;   4c: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a4, 0x58(a0)
+;;       ld      a5, 0x50(a0)
+;;       slli    a2, a2, 0x20
+;;       srli    a0, a2, 0x20
+;;       sltu    a4, a4, a0
+;;       add     a5, a5, a0
+;;       lui     a0, 1
+;;       add     a5, a5, a0
+;;       neg     a1, a4
+;;       not     a4, a1
+;;       and     a5, a5, a4
+;;       sb      a3, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   50: addi    sp, sp, -0x10
-;;   54: sd      ra, 8(sp)
-;;   58: sd      s0, 0(sp)
-;;   5c: mv      s0, sp
-;;   60: ld      a3, 0x58(a0)
-;;   64: ld      a4, 0x50(a0)
-;;   68: slli    a2, a2, 0x20
-;;   6c: srli    a5, a2, 0x20
-;;   70: sltu    a3, a3, a5
-;;   74: add     a4, a4, a5
-;;   78: lui     a5, 1
-;;   7c: add     a4, a4, a5
-;;   80: neg     a1, a3
-;;   84: not     a3, a1
-;;   88: and     a5, a4, a3
-;;   8c: lbu     a0, 0(a5)
-;;   90: ld      ra, 8(sp)
-;;   94: ld      s0, 0(sp)
-;;   98: addi    sp, sp, 0x10
-;;   9c: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a3, 0x58(a0)
+;;       ld      a4, 0x50(a0)
+;;       slli    a2, a2, 0x20
+;;       srli    a5, a2, 0x20
+;;       sltu    a3, a3, a5
+;;       add     a4, a4, a5
+;;       lui     a5, 1
+;;       add     a4, a4, a5
+;;       neg     a1, a3
+;;       not     a3, a1
+;;       and     a5, a4, a3
+;;       lbu     a0, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

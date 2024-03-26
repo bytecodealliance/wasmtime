@@ -19,38 +19,38 @@
     i32.load8_u offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: stmg    %r8, %r15, 0x40(%r15)
-;;    6: lgr     %r1, %r15
-;;    a: aghi    %r15, -0xa0
-;;    e: stg     %r1, 0(%r15)
-;;   14: lgr     %r3, %r4
-;;   18: lg      %r4, 0x58(%r2)
-;;   1e: llgfr   %r3, %r3
-;;   22: aghik   %r8, %r4, -0x1001
-;;   28: lghi    %r4, 0
-;;   2c: lgr     %r9, %r3
-;;   30: ag      %r9, 0x50(%r2)
-;;   36: aghik   %r2, %r9, 0x1000
-;;   3c: clgr    %r3, %r8
-;;   40: locgrh  %r2, %r4
-;;   44: stc     %r5, 0(%r2)
-;;   48: lmg     %r8, %r15, 0xe0(%r15)
-;;   4e: br      %r14
+;;       stmg    %r8, %r15, 0x40(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r3, %r4
+;;       lg      %r4, 0x58(%r2)
+;;       llgfr   %r3, %r3
+;;       aghik   %r8, %r4, -0x1001
+;;       lghi    %r4, 0
+;;       lgr     %r9, %r3
+;;       ag      %r9, 0x50(%r2)
+;;       aghik   %r2, %r9, 0x1000
+;;       clgr    %r3, %r8
+;;       locgrh  %r2, %r4
+;;       stc     %r5, 0(%r2)
+;;       lmg     %r8, %r15, 0xe0(%r15)
+;;       br      %r14
 ;;
 ;; wasm[0]::function[1]:
-;;   50: stmg    %r8, %r15, 0x40(%r15)
-;;   56: lgr     %r1, %r15
-;;   5a: aghi    %r15, -0xa0
-;;   5e: stg     %r1, 0(%r15)
-;;   64: lg      %r3, 0x58(%r2)
-;;   6a: llgfr   %r5, %r4
-;;   6e: aghik   %r4, %r3, -0x1001
-;;   74: lghi    %r3, 0
-;;   78: lgr     %r8, %r5
-;;   7c: ag      %r8, 0x50(%r2)
-;;   82: aghik   %r2, %r8, 0x1000
-;;   88: clgr    %r5, %r4
-;;   8c: locgrh  %r2, %r3
-;;   90: llc     %r2, 0(%r2)
-;;   96: lmg     %r8, %r15, 0xe0(%r15)
-;;   9c: br      %r14
+;;       stmg    %r8, %r15, 0x40(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lg      %r3, 0x58(%r2)
+;;       llgfr   %r5, %r4
+;;       aghik   %r4, %r3, -0x1001
+;;       lghi    %r3, 0
+;;       lgr     %r8, %r5
+;;       ag      %r8, 0x50(%r2)
+;;       aghik   %r2, %r8, 0x1000
+;;       clgr    %r5, %r4
+;;       locgrh  %r2, %r3
+;;       llc     %r2, 0(%r2)
+;;       lmg     %r8, %r15, 0xe0(%r15)
+;;       br      %r14

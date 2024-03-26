@@ -13,25 +13,25 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x18, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x53
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x18, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x53
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x18, %rsp
-;;   22: movq    %rdi, 0x10(%rsp)
-;;   27: movq    %rsi, 8(%rsp)
-;;   2c: movq    $0, (%rsp)
-;;   34: movl    $2, %eax
-;;   39: movl    %eax, 4(%rsp)
-;;   3d: movl    4(%rsp), %eax
-;;   41: cmpl    $0, %eax
-;;   44: movl    $0, %eax
-;;   49: sete    %al
-;;   4d: addq    $0x18, %rsp
-;;   51: popq    %rbp
-;;   52: retq
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movq    $0, (%rsp)
+;;       movl    $2, %eax
+;;       movl    %eax, 4(%rsp)
+;;       movl    4(%rsp), %eax
+;;       cmpl    $0, %eax
+;;       movl    $0, %eax
+;;       sete    %al
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   53: ud2

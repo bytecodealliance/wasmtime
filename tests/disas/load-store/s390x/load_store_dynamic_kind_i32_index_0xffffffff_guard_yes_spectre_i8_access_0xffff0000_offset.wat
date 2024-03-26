@@ -19,37 +19,37 @@
     i32.load8_u offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: stmg    %r8, %r15, 0x40(%r15)
-;;    6: lgr     %r1, %r15
-;;    a: aghi    %r15, -0xa0
-;;    e: stg     %r1, 0(%r15)
-;;   14: lg      %r8, 0x58(%r2)
-;;   1a: llgfr   %r4, %r4
-;;   1e: lghi    %r3, 0
-;;   22: lgr     %r9, %r4
-;;   26: ag      %r9, 0x50(%r2)
-;;   2c: llilh   %r2, 0xffff
-;;   30: agrk    %r2, %r9, %r2
-;;   34: clgr    %r4, %r8
-;;   38: locgrh  %r2, %r3
-;;   3c: stc     %r5, 0(%r2)
-;;   40: lmg     %r8, %r15, 0xe0(%r15)
-;;   46: br      %r14
+;;       stmg    %r8, %r15, 0x40(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lg      %r8, 0x58(%r2)
+;;       llgfr   %r4, %r4
+;;       lghi    %r3, 0
+;;       lgr     %r9, %r4
+;;       ag      %r9, 0x50(%r2)
+;;       llilh   %r2, 0xffff
+;;       agrk    %r2, %r9, %r2
+;;       clgr    %r4, %r8
+;;       locgrh  %r2, %r3
+;;       stc     %r5, 0(%r2)
+;;       lmg     %r8, %r15, 0xe0(%r15)
+;;       br      %r14
 ;;
 ;; wasm[0]::function[1]:
-;;   48: stmg    %r8, %r15, 0x40(%r15)
-;;   4e: lgr     %r1, %r15
-;;   52: aghi    %r15, -0xa0
-;;   56: stg     %r1, 0(%r15)
-;;   5c: lg      %r5, 0x58(%r2)
-;;   62: llgfr   %r3, %r4
-;;   66: lghi    %r4, 0
-;;   6a: lgr     %r8, %r3
-;;   6e: ag      %r8, 0x50(%r2)
-;;   74: llilh   %r2, 0xffff
-;;   78: agrk    %r2, %r8, %r2
-;;   7c: clgr    %r3, %r5
-;;   80: locgrh  %r2, %r4
-;;   84: llc     %r2, 0(%r2)
-;;   8a: lmg     %r8, %r15, 0xe0(%r15)
-;;   90: br      %r14
+;;       stmg    %r8, %r15, 0x40(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lg      %r5, 0x58(%r2)
+;;       llgfr   %r3, %r4
+;;       lghi    %r4, 0
+;;       lgr     %r8, %r3
+;;       ag      %r8, 0x50(%r2)
+;;       llilh   %r2, 0xffff
+;;       agrk    %r2, %r8, %r2
+;;       clgr    %r3, %r5
+;;       locgrh  %r2, %r4
+;;       llc     %r2, 0(%r2)
+;;       lmg     %r8, %r15, 0xe0(%r15)
+;;       br      %r14

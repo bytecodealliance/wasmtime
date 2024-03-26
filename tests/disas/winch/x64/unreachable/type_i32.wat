@@ -5,19 +5,19 @@
   (func (export "type-i32") (result i32) (unreachable))
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x10, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x33
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x10, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x33
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x10, %rsp
-;;   22: movq    %rdi, 8(%rsp)
-;;   27: movq    %rsi, (%rsp)
-;;   2b: ud2
-;;   2d: addq    $0x10, %rsp
-;;   31: popq    %rbp
-;;   32: retq
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       ud2
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   33: ud2

@@ -10,24 +10,24 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x18, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x4c
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x18, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x4c
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x10, %rsp
-;;   22: movq    %rdi, 8(%rsp)
-;;   27: movq    %rsi, (%rsp)
-;;   2b: movl    $1, %eax
-;;   30: cvtsi2sdl %eax, %xmm0
-;;   34: subq    $8, %rsp
-;;   38: movsd   %xmm0, (%rsp)
-;;   3d: movsd   (%rsp), %xmm0
-;;   42: addq    $8, %rsp
-;;   46: addq    $0x10, %rsp
-;;   4a: popq    %rbp
-;;   4b: retq
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       movl    $1, %eax
+;;       cvtsi2sdl %eax, %xmm0
+;;       subq    $8, %rsp
+;;       movsd   %xmm0, (%rsp)
+;;       movsd   (%rsp), %xmm0
+;;       addq    $8, %rsp
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   4c: ud2

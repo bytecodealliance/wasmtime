@@ -12,47 +12,47 @@
   )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x24, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0xa4
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x24, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0xa4
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x18, %rsp
-;;   22: movq    %rdi, 0x10(%rsp)
-;;   27: movq    %rsi, 8(%rsp)
-;;   2c: movl    %edx, 4(%rsp)
-;;   30: movl    4(%rsp), %r11d
-;;   35: subq    $4, %rsp
-;;   39: movl    %r11d, (%rsp)
-;;   3d: subq    $4, %rsp
-;;   41: movq    %r14, %rdi
-;;   44: movq    %r14, %rsi
-;;   47: movl    $1, %edx
-;;   4c: callq   0
-;;   51: addq    $4, %rsp
-;;   55: movq    0x14(%rsp), %r14
-;;   5a: subq    $4, %rsp
-;;   5e: movl    %eax, (%rsp)
-;;   61: movq    %r14, %rdi
-;;   64: movq    %r14, %rsi
-;;   67: movl    $1, %edx
-;;   6c: callq   0
-;;   71: movq    0x18(%rsp), %r14
-;;   76: subq    $4, %rsp
-;;   7a: movl    %eax, (%rsp)
-;;   7d: movl    (%rsp), %ecx
-;;   80: addq    $4, %rsp
-;;   84: movl    (%rsp), %eax
-;;   87: addq    $4, %rsp
-;;   8b: testl   %ecx, %ecx
-;;   8d: je      0x9c
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movl    %edx, 4(%rsp)
+;;       movl    4(%rsp), %r11d
+;;       subq    $4, %rsp
+;;       movl    %r11d, (%rsp)
+;;       subq    $4, %rsp
+;;       movq    %r14, %rdi
+;;       movq    %r14, %rsi
+;;       movl    $1, %edx
+;;       callq   0
+;;       addq    $4, %rsp
+;;       movq    0x14(%rsp), %r14
+;;       subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       movq    %r14, %rdi
+;;       movq    %r14, %rsi
+;;       movl    $1, %edx
+;;       callq   0
+;;       movq    0x18(%rsp), %r14
+;;       subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       movl    (%rsp), %ecx
+;;       addq    $4, %rsp
+;;       movl    (%rsp), %eax
+;;       addq    $4, %rsp
+;;       testl   %ecx, %ecx
+;;       je      0x9c
 ;;   93: addq    $4, %rsp
-;;   97: jmp     0x9e
+;;       jmp     0x9e
 ;;   9c: ud2
-;;   9e: addq    $0x18, %rsp
-;;   a2: popq    %rbp
-;;   a3: retq
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   a4: ud2

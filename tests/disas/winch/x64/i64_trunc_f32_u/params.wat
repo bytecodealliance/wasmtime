@@ -8,38 +8,38 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x18, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x8e
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x18, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x8e
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x18, %rsp
-;;   22: movq    %rdi, 0x10(%rsp)
-;;   27: movq    %rsi, 8(%rsp)
-;;   2c: movss   %xmm0, 4(%rsp)
-;;   32: movss   4(%rsp), %xmm1
-;;   38: movl    $0x5f000000, %r11d
-;;   3e: movd    %r11d, %xmm15
-;;   43: ucomiss %xmm15, %xmm1
-;;   47: jae     0x64
-;;   4d: jp      0x90
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movss   %xmm0, 4(%rsp)
+;;       movss   4(%rsp), %xmm1
+;;       movl    $0x5f000000, %r11d
+;;       movd    %r11d, %xmm15
+;;       ucomiss %xmm15, %xmm1
+;;       jae     0x64
+;;       jp      0x90
 ;;   53: cvttss2si %xmm1, %rax
-;;   58: cmpq    $0, %rax
-;;   5c: jge     0x88
+;;       cmpq    $0, %rax
+;;       jge     0x88
 ;;   62: ud2
-;;   64: movaps  %xmm1, %xmm0
-;;   67: subss   %xmm15, %xmm0
-;;   6c: cvttss2si %xmm0, %rax
-;;   71: cmpq    $0, %rax
-;;   75: jl      0x92
+;;       movaps  %xmm1, %xmm0
+;;       subss   %xmm15, %xmm0
+;;       cvttss2si %xmm0, %rax
+;;       cmpq    $0, %rax
+;;       jl      0x92
 ;;   7b: movabsq $9223372036854775808, %r11
-;;   85: addq    %r11, %rax
-;;   88: addq    $0x18, %rsp
-;;   8c: popq    %rbp
-;;   8d: retq
+;;       addq    %r11, %rax
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   8e: ud2
 ;;   90: ud2
 ;;   92: ud2

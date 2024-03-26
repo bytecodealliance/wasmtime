@@ -19,31 +19,31 @@
     i32.load offset=0))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: ld      a4, 0x50(a0)
-;;   14: slli    a1, a2, 0x20
-;;   18: srli    a5, a1, 0x20
-;;   1c: add     a2, a4, a5
-;;   20: sw      a3, 0(a2)
-;;   24: ld      ra, 8(sp)
-;;   28: ld      s0, 0(sp)
-;;   2c: addi    sp, sp, 0x10
-;;   30: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a4, 0x50(a0)
+;;       slli    a1, a2, 0x20
+;;       srli    a5, a1, 0x20
+;;       add     a2, a4, a5
+;;       sw      a3, 0(a2)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   34: addi    sp, sp, -0x10
-;;   38: sd      ra, 8(sp)
-;;   3c: sd      s0, 0(sp)
-;;   40: mv      s0, sp
-;;   44: ld      a3, 0x50(a0)
-;;   48: slli    a1, a2, 0x20
-;;   4c: srli    a4, a1, 0x20
-;;   50: add     a2, a3, a4
-;;   54: lw      a0, 0(a2)
-;;   58: ld      ra, 8(sp)
-;;   5c: ld      s0, 0(sp)
-;;   60: addi    sp, sp, 0x10
-;;   64: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a3, 0x50(a0)
+;;       slli    a1, a2, 0x20
+;;       srli    a4, a1, 0x20
+;;       add     a2, a3, a4
+;;       lw      a0, 0(a2)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

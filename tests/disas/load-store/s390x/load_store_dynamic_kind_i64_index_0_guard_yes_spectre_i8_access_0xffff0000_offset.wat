@@ -19,39 +19,39 @@
     i32.load8_u offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: stmg    %r8, %r15, 0x40(%r15)
-;;    6: lgr     %r1, %r15
-;;    a: aghi    %r15, -0xa0
-;;    e: stg     %r1, 0(%r15)
-;;   14: lgr     %r8, %r4
-;;   18: algfi   %r8, 0xffff0001
-;;   1e: jgnle   0x20
-;;   24: lg      %r9, 0x58(%r2)
-;;   2a: lghi    %r3, 0
-;;   2e: ag      %r4, 0x50(%r2)
-;;   34: llilh   %r2, 0xffff
-;;   38: agrk    %r2, %r4, %r2
-;;   3c: clgr    %r8, %r9
-;;   40: locgrh  %r2, %r3
-;;   44: stc     %r5, 0(%r2)
-;;   48: lmg     %r8, %r15, 0xe0(%r15)
-;;   4e: br      %r14
+;;       stmg    %r8, %r15, 0x40(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r8, %r4
+;;       algfi   %r8, 0xffff0001
+;;       jgnle   0x20
+;;       lg      %r9, 0x58(%r2)
+;;       lghi    %r3, 0
+;;       ag      %r4, 0x50(%r2)
+;;       llilh   %r2, 0xffff
+;;       agrk    %r2, %r4, %r2
+;;       clgr    %r8, %r9
+;;       locgrh  %r2, %r3
+;;       stc     %r5, 0(%r2)
+;;       lmg     %r8, %r15, 0xe0(%r15)
+;;       br      %r14
 ;;
 ;; wasm[0]::function[1]:
-;;   50: stmg    %r9, %r15, 0x48(%r15)
-;;   56: lgr     %r1, %r15
-;;   5a: aghi    %r15, -0xa0
-;;   5e: stg     %r1, 0(%r15)
-;;   64: lgr     %r5, %r4
-;;   68: algfi   %r5, 0xffff0001
-;;   6e: jgnle   0x70
-;;   74: lg      %r9, 0x58(%r2)
-;;   7a: lghi    %r3, 0
-;;   7e: ag      %r4, 0x50(%r2)
-;;   84: llilh   %r2, 0xffff
-;;   88: agrk    %r2, %r4, %r2
-;;   8c: clgr    %r5, %r9
-;;   90: locgrh  %r2, %r3
-;;   94: llc     %r2, 0(%r2)
-;;   9a: lmg     %r9, %r15, 0xe8(%r15)
-;;   a0: br      %r14
+;;       stmg    %r9, %r15, 0x48(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r5, %r4
+;;       algfi   %r5, 0xffff0001
+;;       jgnle   0x70
+;;       lg      %r9, 0x58(%r2)
+;;       lghi    %r3, 0
+;;       ag      %r4, 0x50(%r2)
+;;       llilh   %r2, 0xffff
+;;       agrk    %r2, %r4, %r2
+;;       clgr    %r5, %r9
+;;       locgrh  %r2, %r3
+;;       llc     %r2, 0(%r2)
+;;       lmg     %r9, %r15, 0xe8(%r15)
+;;       br      %r14

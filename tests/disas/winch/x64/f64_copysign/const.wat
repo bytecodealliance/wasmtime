@@ -9,29 +9,29 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x10, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x67
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x10, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x67
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x10, %rsp
-;;   22: movq    %rdi, 8(%rsp)
-;;   27: movq    %rsi, (%rsp)
-;;   2b: movsd   0x3d(%rip), %xmm0
-;;   33: movsd   0x3d(%rip), %xmm1
-;;   3b: movabsq $9223372036854775808, %r11
-;;   45: movq    %r11, %xmm15
-;;   4a: andpd   %xmm15, %xmm0
-;;   4f: andnpd  %xmm1, %xmm15
-;;   54: movapd  %xmm15, %xmm1
-;;   59: orpd    %xmm0, %xmm1
-;;   5d: movapd  %xmm1, %xmm0
-;;   61: addq    $0x10, %rsp
-;;   65: popq    %rbp
-;;   66: retq
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       movsd   0x3d(%rip), %xmm0
+;;       movsd   0x3d(%rip), %xmm1
+;;       movabsq $9223372036854775808, %r11
+;;       movq    %r11, %xmm15
+;;       andpd   %xmm15, %xmm0
+;;       andnpd  %xmm1, %xmm15
+;;       movapd  %xmm15, %xmm1
+;;       orpd    %xmm0, %xmm1
+;;       movapd  %xmm1, %xmm0
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   67: ud2
 ;;   69: addb    %al, (%rax)
 ;;   6b: addb    %al, (%rax)

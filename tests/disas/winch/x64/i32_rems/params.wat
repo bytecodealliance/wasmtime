@@ -9,29 +9,29 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x18, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x58
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x18, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x58
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x18, %rsp
-;;   22: movq    %rdi, 0x10(%rsp)
-;;   27: movq    %rsi, 8(%rsp)
-;;   2c: movl    %edx, 4(%rsp)
-;;   30: movl    %ecx, (%rsp)
-;;   33: movl    (%rsp), %ecx
-;;   36: movl    4(%rsp), %eax
-;;   3a: cltd
-;;   3b: cmpl    $-1, %ecx
-;;   3e: jne     0x4e
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movl    %edx, 4(%rsp)
+;;       movl    %ecx, (%rsp)
+;;       movl    (%rsp), %ecx
+;;       movl    4(%rsp), %eax
+;;       cltd
+;;       cmpl    $-1, %ecx
+;;       jne     0x4e
 ;;   44: movl    $0, %edx
-;;   49: jmp     0x50
+;;       jmp     0x50
 ;;   4e: idivl   %ecx
-;;   50: movl    %edx, %eax
-;;   52: addq    $0x18, %rsp
-;;   56: popq    %rbp
-;;   57: retq
+;;       movl    %edx, %eax
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   58: ud2

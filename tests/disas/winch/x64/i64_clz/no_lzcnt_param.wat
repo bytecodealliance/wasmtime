@@ -8,26 +8,26 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x18, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x52
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x18, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x52
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x18, %rsp
-;;   22: movq    %rdi, 0x10(%rsp)
-;;   27: movq    %rsi, 8(%rsp)
-;;   2c: movq    %rdx, (%rsp)
-;;   30: movq    (%rsp), %rax
-;;   34: bsrq    %rax, %rax
-;;   38: movl    $0, %r11d
-;;   3e: setne   %r11b
-;;   42: negq    %rax
-;;   45: addq    $0x40, %rax
-;;   49: subq    %r11, %rax
-;;   4c: addq    $0x18, %rsp
-;;   50: popq    %rbp
-;;   51: retq
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movq    %rdx, (%rsp)
+;;       movq    (%rsp), %rax
+;;       bsrq    %rax, %rax
+;;       movl    $0, %r11d
+;;       setne   %r11b
+;;       negq    %rax
+;;       addq    $0x40, %rax
+;;       subq    %r11, %rax
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   52: ud2

@@ -19,27 +19,27 @@
     i32.load offset=0))
 
 ;; wasm[0]::function[0]:
-;;    0: stp     x29, x30, [sp, #-0x10]!
-;;    4: mov     x29, sp
-;;    8: mov     w7, w2
-;;    c: orr     x8, xzr, #0xfffffffc
-;;   10: cmp     x7, x8
-;;   14: b.hi    #0x28
-;;   18: ldr     x9, [x0, #0x50]
-;;   1c: str     w3, [x9, w2, uxtw]
-;;   20: ldp     x29, x30, [sp], #0x10
-;;   24: ret
-;;   28: .byte   0x1f, 0xc1, 0x00, 0x00
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w7, w2
+;;       orr     x8, xzr, #0xfffffffc
+;;       cmp     x7, x8
+;;       b.hi    #0x28
+;;       ldr     x9, [x0, #0x50]
+;;       str     w3, [x9, w2, uxtw]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;       .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   40: stp     x29, x30, [sp, #-0x10]!
-;;   44: mov     x29, sp
-;;   48: mov     w7, w2
-;;   4c: orr     x8, xzr, #0xfffffffc
-;;   50: cmp     x7, x8
-;;   54: b.hi    #0x68
-;;   58: ldr     x9, [x0, #0x50]
-;;   5c: ldr     w0, [x9, w2, uxtw]
-;;   60: ldp     x29, x30, [sp], #0x10
-;;   64: ret
-;;   68: .byte   0x1f, 0xc1, 0x00, 0x00
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w7, w2
+;;       orr     x8, xzr, #0xfffffffc
+;;       cmp     x7, x8
+;;       b.hi    #0x68
+;;       ldr     x9, [x0, #0x50]
+;;       ldr     w0, [x9, w2, uxtw]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;       .byte   0x1f, 0xc1, 0x00, 0x00

@@ -19,37 +19,37 @@
     i32.load8_u offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: stp     x29, x30, [sp, #-0x10]!
-;;    4: mov     x29, sp
-;;    8: ldr     x15, [x0, #0x58]
-;;    c: ldr     x14, [x0, #0x50]
-;;   10: mov     w13, w2
-;;   14: mov     x0, #0x1001
-;;   18: sub     x15, x15, x0
-;;   1c: mov     x0, #0
-;;   20: add     x14, x14, w2, uxtw
-;;   24: add     x14, x14, #1, lsl #12
-;;   28: cmp     x13, x15
-;;   2c: csel    x14, x0, x14, hi
-;;   30: csdb
-;;   34: strb    w3, [x14]
-;;   38: ldp     x29, x30, [sp], #0x10
-;;   3c: ret
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x15, [x0, #0x58]
+;;       ldr     x14, [x0, #0x50]
+;;       mov     w13, w2
+;;       mov     x0, #0x1001
+;;       sub     x15, x15, x0
+;;       mov     x0, #0
+;;       add     x14, x14, w2, uxtw
+;;       add     x14, x14, #1, lsl #12
+;;       cmp     x13, x15
+;;       csel    x14, x0, x14, hi
+;;       csdb
+;;       strb    w3, [x14]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   40: stp     x29, x30, [sp, #-0x10]!
-;;   44: mov     x29, sp
-;;   48: ldr     x15, [x0, #0x58]
-;;   4c: ldr     x14, [x0, #0x50]
-;;   50: mov     w13, w2
-;;   54: mov     x0, #0x1001
-;;   58: sub     x15, x15, x0
-;;   5c: mov     x0, #0
-;;   60: add     x14, x14, w2, uxtw
-;;   64: add     x14, x14, #1, lsl #12
-;;   68: cmp     x13, x15
-;;   6c: csel    x14, x0, x14, hi
-;;   70: csdb
-;;   74: ldrb    w0, [x14]
-;;   78: ldp     x29, x30, [sp], #0x10
-;;   7c: ret
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x15, [x0, #0x58]
+;;       ldr     x14, [x0, #0x50]
+;;       mov     w13, w2
+;;       mov     x0, #0x1001
+;;       sub     x15, x15, x0
+;;       mov     x0, #0
+;;       add     x14, x14, w2, uxtw
+;;       add     x14, x14, #1, lsl #12
+;;       cmp     x13, x15
+;;       csel    x14, x0, x14, hi
+;;       csdb
+;;       ldrb    w0, [x14]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

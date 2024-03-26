@@ -19,45 +19,45 @@
     i32.load8_u offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: auipc   a1, 0
-;;   14: ld      a1, 0x38(a1)
-;;   18: bltu    a1, a2, 0x28
-;;   1c: ld      a4, 0x50(a0)
-;;   20: add     a2, a4, a2
-;;   24: lui     t6, 1
-;;   28: add     t6, t6, a2
-;;   2c: sb      a3, 0(t6)
-;;   30: ld      ra, 8(sp)
-;;   34: ld      s0, 0(sp)
-;;   38: addi    sp, sp, 0x10
-;;   3c: ret
-;;   40: .byte   0x00, 0x00, 0x00, 0x00
-;;   44: .byte   0x00, 0x00, 0x00, 0x00
-;;   48: .byte   0xff, 0xef, 0xff, 0xff
-;;   4c: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a1, 0
+;;       ld      a1, 0x38(a1)
+;;       bltu    a1, a2, 0x28
+;;       ld      a4, 0x50(a0)
+;;       add     a2, a4, a2
+;;       lui     t6, 1
+;;       add     t6, t6, a2
+;;       sb      a3, 0(t6)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0xff, 0xef, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   50: addi    sp, sp, -0x10
-;;   54: sd      ra, 8(sp)
-;;   58: sd      s0, 0(sp)
-;;   5c: mv      s0, sp
-;;   60: auipc   a1, 0
-;;   64: ld      a1, 0x38(a1)
-;;   68: bltu    a1, a2, 0x28
-;;   6c: ld      a3, 0x50(a0)
-;;   70: add     a2, a3, a2
-;;   74: lui     t6, 1
-;;   78: add     t6, t6, a2
-;;   7c: lbu     a0, 0(t6)
-;;   80: ld      ra, 8(sp)
-;;   84: ld      s0, 0(sp)
-;;   88: addi    sp, sp, 0x10
-;;   8c: ret
-;;   90: .byte   0x00, 0x00, 0x00, 0x00
-;;   94: .byte   0x00, 0x00, 0x00, 0x00
-;;   98: .byte   0xff, 0xef, 0xff, 0xff
-;;   9c: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a1, 0
+;;       ld      a1, 0x38(a1)
+;;       bltu    a1, a2, 0x28
+;;       ld      a3, 0x50(a0)
+;;       add     a2, a3, a2
+;;       lui     t6, 1
+;;       add     t6, t6, a2
+;;       lbu     a0, 0(t6)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0xff, 0xef, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00

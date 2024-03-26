@@ -19,41 +19,41 @@
     i32.load8_u offset=0))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: auipc   a1, 0
-;;   14: ld      a1, 0x30(a1)
-;;   18: bltu    a1, a2, 0x20
-;;   1c: ld      a4, 0x50(a0)
-;;   20: add     a2, a4, a2
-;;   24: sb      a3, 0(a2)
-;;   28: ld      ra, 8(sp)
-;;   2c: ld      s0, 0(sp)
-;;   30: addi    sp, sp, 0x10
-;;   34: ret
-;;   38: .byte   0x00, 0x00, 0x00, 0x00
-;;   3c: .byte   0x00, 0x00, 0x00, 0x00
-;;   40: .byte   0xff, 0xff, 0xff, 0xff
-;;   44: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a1, 0
+;;       ld      a1, 0x30(a1)
+;;       bltu    a1, a2, 0x20
+;;       ld      a4, 0x50(a0)
+;;       add     a2, a4, a2
+;;       sb      a3, 0(a2)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0xff, 0xff, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   48: addi    sp, sp, -0x10
-;;   4c: sd      ra, 8(sp)
-;;   50: sd      s0, 0(sp)
-;;   54: mv      s0, sp
-;;   58: auipc   a1, 0
-;;   5c: ld      a1, 0x30(a1)
-;;   60: bltu    a1, a2, 0x20
-;;   64: ld      a3, 0x50(a0)
-;;   68: add     a2, a3, a2
-;;   6c: lbu     a0, 0(a2)
-;;   70: ld      ra, 8(sp)
-;;   74: ld      s0, 0(sp)
-;;   78: addi    sp, sp, 0x10
-;;   7c: ret
-;;   80: .byte   0x00, 0x00, 0x00, 0x00
-;;   84: .byte   0x00, 0x00, 0x00, 0x00
-;;   88: .byte   0xff, 0xff, 0xff, 0xff
-;;   8c: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       auipc   a1, 0
+;;       ld      a1, 0x30(a1)
+;;       bltu    a1, a2, 0x20
+;;       ld      a3, 0x50(a0)
+;;       add     a2, a3, a2
+;;       lbu     a0, 0(a2)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0xff, 0xff, 0xff, 0xff
+;;       .byte   0x00, 0x00, 0x00, 0x00

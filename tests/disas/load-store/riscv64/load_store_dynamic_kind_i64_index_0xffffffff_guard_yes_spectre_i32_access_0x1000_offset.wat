@@ -19,41 +19,41 @@
     i32.load offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: ld      a1, 0x58(a0)
-;;   14: ld      a4, 0x50(a0)
-;;   18: sltu    a1, a1, a2
-;;   1c: add     a2, a4, a2
-;;   20: lui     a4, 1
-;;   24: add     a2, a2, a4
-;;   28: neg     a5, a1
-;;   2c: not     a1, a5
-;;   30: and     a4, a2, a1
-;;   34: sw      a3, 0(a4)
-;;   38: ld      ra, 8(sp)
-;;   3c: ld      s0, 0(sp)
-;;   40: addi    sp, sp, 0x10
-;;   44: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x58(a0)
+;;       ld      a4, 0x50(a0)
+;;       sltu    a1, a1, a2
+;;       add     a2, a4, a2
+;;       lui     a4, 1
+;;       add     a2, a2, a4
+;;       neg     a5, a1
+;;       not     a1, a5
+;;       and     a4, a2, a1
+;;       sw      a3, 0(a4)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   48: addi    sp, sp, -0x10
-;;   4c: sd      ra, 8(sp)
-;;   50: sd      s0, 0(sp)
-;;   54: mv      s0, sp
-;;   58: ld      a1, 0x58(a0)
-;;   5c: ld      a3, 0x50(a0)
-;;   60: sltu    a1, a1, a2
-;;   64: add     a2, a3, a2
-;;   68: lui     a3, 1
-;;   6c: add     a2, a2, a3
-;;   70: neg     a5, a1
-;;   74: not     a1, a5
-;;   78: and     a3, a2, a1
-;;   7c: lw      a0, 0(a3)
-;;   80: ld      ra, 8(sp)
-;;   84: ld      s0, 0(sp)
-;;   88: addi    sp, sp, 0x10
-;;   8c: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x58(a0)
+;;       ld      a3, 0x50(a0)
+;;       sltu    a1, a1, a2
+;;       add     a2, a3, a2
+;;       lui     a3, 1
+;;       add     a2, a2, a3
+;;       neg     a5, a1
+;;       not     a1, a5
+;;       and     a3, a2, a1
+;;       lw      a0, 0(a3)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

@@ -17,42 +17,42 @@
   )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x28, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x9f
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x28, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x9f
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x28, %rsp
-;;   22: movq    %rdi, 0x20(%rsp)
-;;   27: movq    %rsi, 0x18(%rsp)
-;;   2c: movq    %rdx, 0x10(%rsp)
-;;   31: xorl    %r11d, %r11d
-;;   34: movq    %r11, 8(%rsp)
-;;   39: movq    %r11, (%rsp)
-;;   3d: movq    $1, %rax
-;;   44: movq    %rax, 8(%rsp)
-;;   49: movq    $2, %rax
-;;   50: movq    %rax, (%rsp)
-;;   54: movq    0x10(%rsp), %rax
-;;   59: movq    (%rsp), %rcx
-;;   5d: cmpq    %rax, %rcx
-;;   60: movl    $0, %ecx
-;;   65: seta    %cl
-;;   69: testl   %ecx, %ecx
-;;   6b: jne     0x94
+;;       subq    $0x28, %rsp
+;;       movq    %rdi, 0x20(%rsp)
+;;       movq    %rsi, 0x18(%rsp)
+;;       movq    %rdx, 0x10(%rsp)
+;;       xorl    %r11d, %r11d
+;;       movq    %r11, 8(%rsp)
+;;       movq    %r11, (%rsp)
+;;       movq    $1, %rax
+;;       movq    %rax, 8(%rsp)
+;;       movq    $2, %rax
+;;       movq    %rax, (%rsp)
+;;       movq    0x10(%rsp), %rax
+;;       movq    (%rsp), %rcx
+;;       cmpq    %rax, %rcx
+;;       movl    $0, %ecx
+;;       seta    %cl
+;;       testl   %ecx, %ecx
+;;       jne     0x94
 ;;   71: movq    (%rsp), %rax
-;;   75: movq    8(%rsp), %rcx
-;;   7a: imulq   %rax, %rcx
-;;   7e: movq    %rcx, 8(%rsp)
-;;   83: movq    (%rsp), %rax
-;;   87: addq    $1, %rax
-;;   8b: movq    %rax, (%rsp)
-;;   8f: jmp     0x54
+;;       movq    8(%rsp), %rcx
+;;       imulq   %rax, %rcx
+;;       movq    %rcx, 8(%rsp)
+;;       movq    (%rsp), %rax
+;;       addq    $1, %rax
+;;       movq    %rax, (%rsp)
+;;       jmp     0x54
 ;;   94: movq    8(%rsp), %rax
-;;   99: addq    $0x28, %rsp
-;;   9d: popq    %rbp
-;;   9e: retq
+;;       addq    $0x28, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   9f: ud2

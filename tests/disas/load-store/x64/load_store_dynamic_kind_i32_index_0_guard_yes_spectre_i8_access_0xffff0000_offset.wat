@@ -19,49 +19,49 @@
     i32.load8_u offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movl    %edx, %r11d
-;;    7: movq    %r11, %rdx
-;;    a: addq    0x2f(%rip), %rdx
-;;   11: jb      0x3a
-;;   17: movq    0x58(%rdi), %r9
-;;   1b: xorq    %r8, %r8
-;;   1e: addq    0x50(%rdi), %r11
-;;   22: movl    $0xffff0000, %r10d
-;;   28: addq    %r11, %r10
-;;   2b: cmpq    %r9, %rdx
-;;   2e: cmovaq  %r8, %r10
-;;   32: movb    %cl, (%r10)
-;;   35: movq    %rbp, %rsp
-;;   38: popq    %rbp
-;;   39: retq
-;;   3a: ud2
-;;   3c: addb    %al, (%rax)
-;;   3e: addb    %al, (%rax)
-;;   40: addl    %eax, (%rax)
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r11d
+;;       movq    %r11, %rdx
+;;       addq    0x2f(%rip), %rdx
+;;       jb      0x3a
+;;       movq    0x58(%rdi), %r9
+;;       xorq    %r8, %r8
+;;       addq    0x50(%rdi), %r11
+;;       movl    $0xffff0000, %r10d
+;;       addq    %r11, %r10
+;;       cmpq    %r9, %rdx
+;;       cmovaq  %r8, %r10
+;;       movb    %cl, (%r10)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;       ud2
+;;       addb    %al, (%rax)
+;;       addb    %al, (%rax)
+;;       addl    %eax, (%rax)
 ;;
 ;; wasm[0]::function[1]:
-;;   50: pushq   %rbp
-;;   51: movq    %rsp, %rbp
-;;   54: movl    %edx, %r11d
-;;   57: movq    %r11, %rcx
-;;   5a: addq    0x2f(%rip), %rcx
-;;   61: jb      0x8b
-;;   67: movq    0x58(%rdi), %r8
-;;   6b: xorq    %rdx, %rdx
-;;   6e: addq    0x50(%rdi), %r11
-;;   72: movl    $0xffff0000, %r9d
-;;   78: addq    %r11, %r9
-;;   7b: cmpq    %r8, %rcx
-;;   7e: cmovaq  %rdx, %r9
-;;   82: movzbq  (%r9), %rax
-;;   86: movq    %rbp, %rsp
-;;   89: popq    %rbp
-;;   8a: retq
-;;   8b: ud2
-;;   8d: addb    %al, (%rax)
-;;   8f: addb    %al, (%rcx)
-;;   91: addb    %bh, %bh
-;;   93: incl    (%rax)
-;;   95: addb    %al, (%rax)
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r11d
+;;       movq    %r11, %rcx
+;;       addq    0x2f(%rip), %rcx
+;;       jb      0x8b
+;;       movq    0x58(%rdi), %r8
+;;       xorq    %rdx, %rdx
+;;       addq    0x50(%rdi), %r11
+;;       movl    $0xffff0000, %r9d
+;;       addq    %r11, %r9
+;;       cmpq    %r8, %rcx
+;;       cmovaq  %rdx, %r9
+;;       movzbq  (%r9), %rax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;       ud2
+;;       addb    %al, (%rax)
+;;       addb    %al, (%rcx)
+;;       addb    %bh, %bh
+;;       incl    (%rax)
+;;       addb    %al, (%rax)

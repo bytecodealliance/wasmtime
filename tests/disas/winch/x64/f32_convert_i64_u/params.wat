@@ -8,31 +8,31 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x18, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x68
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x18, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x68
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x18, %rsp
-;;   22: movq    %rdi, 0x10(%rsp)
-;;   27: movq    %rsi, 8(%rsp)
-;;   2c: movq    %rdx, (%rsp)
-;;   30: movq    (%rsp), %rcx
-;;   34: cmpq    $0, %rcx
-;;   38: jl      0x48
+;;       subq    $0x18, %rsp
+;;       movq    %rdi, 0x10(%rsp)
+;;       movq    %rsi, 8(%rsp)
+;;       movq    %rdx, (%rsp)
+;;       movq    (%rsp), %rcx
+;;       cmpq    $0, %rcx
+;;       jl      0x48
 ;;   3e: cvtsi2ssq %rcx, %xmm0
-;;   43: jmp     0x62
+;;       jmp     0x62
 ;;   48: movq    %rcx, %r11
-;;   4b: shrq    $1, %r11
-;;   4f: movq    %rcx, %rax
-;;   52: andq    $1, %rax
-;;   56: orq     %r11, %rax
-;;   59: cvtsi2ssq %rax, %xmm0
-;;   5e: addss   %xmm0, %xmm0
-;;   62: addq    $0x18, %rsp
-;;   66: popq    %rbp
-;;   67: retq
+;;       shrq    $1, %r11
+;;       movq    %rcx, %rax
+;;       andq    $1, %rax
+;;       orq     %r11, %rax
+;;       cvtsi2ssq %rax, %xmm0
+;;       addss   %xmm0, %xmm0
+;;       addq    $0x18, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   68: ud2

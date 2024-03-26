@@ -19,43 +19,43 @@
     i32.load8_u offset=0))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: ld      a4, 0x58(a0)
-;;   14: ld      a0, 0x50(a0)
-;;   18: slli    a1, a2, 0x20
-;;   1c: srli    a5, a1, 0x20
-;;   20: sltu    a1, a5, a4
-;;   24: xori    a4, a1, 1
-;;   28: add     a2, a0, a5
-;;   2c: neg     a0, a4
-;;   30: not     a4, a0
-;;   34: and     a4, a2, a4
-;;   38: sb      a3, 0(a4)
-;;   3c: ld      ra, 8(sp)
-;;   40: ld      s0, 0(sp)
-;;   44: addi    sp, sp, 0x10
-;;   48: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a4, 0x58(a0)
+;;       ld      a0, 0x50(a0)
+;;       slli    a1, a2, 0x20
+;;       srli    a5, a1, 0x20
+;;       sltu    a1, a5, a4
+;;       xori    a4, a1, 1
+;;       add     a2, a0, a5
+;;       neg     a0, a4
+;;       not     a4, a0
+;;       and     a4, a2, a4
+;;       sb      a3, 0(a4)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   4c: addi    sp, sp, -0x10
-;;   50: sd      ra, 8(sp)
-;;   54: sd      s0, 0(sp)
-;;   58: mv      s0, sp
-;;   5c: ld      a3, 0x58(a0)
-;;   60: ld      a5, 0x50(a0)
-;;   64: slli    a1, a2, 0x20
-;;   68: srli    a4, a1, 0x20
-;;   6c: sltu    a1, a4, a3
-;;   70: xori    a3, a1, 1
-;;   74: add     a2, a5, a4
-;;   78: neg     a0, a3
-;;   7c: not     a3, a0
-;;   80: and     a4, a2, a3
-;;   84: lbu     a0, 0(a4)
-;;   88: ld      ra, 8(sp)
-;;   8c: ld      s0, 0(sp)
-;;   90: addi    sp, sp, 0x10
-;;   94: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a3, 0x58(a0)
+;;       ld      a5, 0x50(a0)
+;;       slli    a1, a2, 0x20
+;;       srli    a4, a1, 0x20
+;;       sltu    a1, a4, a3
+;;       xori    a3, a1, 1
+;;       add     a2, a5, a4
+;;       neg     a0, a3
+;;       not     a3, a0
+;;       and     a4, a2, a3
+;;       lbu     a0, 0(a4)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

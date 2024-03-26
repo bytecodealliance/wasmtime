@@ -19,41 +19,41 @@
     i32.load offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    %rdx, %rax
-;;    7: addq    0x2a(%rip), %rax
-;;    e: jb      0x36
-;;   14: movq    0x58(%rdi), %r9
-;;   18: xorq    %r8, %r8
-;;   1b: addq    0x50(%rdi), %rdx
-;;   1f: movl    $0xffff0000, %r10d
-;;   25: addq    %r10, %rdx
-;;   28: cmpq    %r9, %rax
-;;   2b: cmovaq  %r8, %rdx
-;;   2f: movl    %ecx, (%rdx)
-;;   31: movq    %rbp, %rsp
-;;   34: popq    %rbp
-;;   35: retq
-;;   36: ud2
-;;   38: addb    $0, %al
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    %rdx, %rax
+;;       addq    0x2a(%rip), %rax
+;;       jb      0x36
+;;       movq    0x58(%rdi), %r9
+;;       xorq    %r8, %r8
+;;       addq    0x50(%rdi), %rdx
+;;       movl    $0xffff0000, %r10d
+;;       addq    %r10, %rdx
+;;       cmpq    %r9, %rax
+;;       cmovaq  %r8, %rdx
+;;       movl    %ecx, (%rdx)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;       ud2
+;;       addb    $0, %al
 ;;
 ;; wasm[0]::function[1]:
-;;   40: pushq   %rbp
-;;   41: movq    %rsp, %rbp
-;;   44: movq    %rdx, %rax
-;;   47: addq    0x2a(%rip), %rax
-;;   4e: jb      0x76
-;;   54: movq    0x58(%rdi), %r8
-;;   58: xorq    %rcx, %rcx
-;;   5b: addq    0x50(%rdi), %rdx
-;;   5f: movl    $0xffff0000, %r9d
-;;   65: addq    %r9, %rdx
-;;   68: cmpq    %r8, %rax
-;;   6b: cmovaq  %rcx, %rdx
-;;   6f: movl    (%rdx), %eax
-;;   71: movq    %rbp, %rsp
-;;   74: popq    %rbp
-;;   75: retq
-;;   76: ud2
-;;   78: addb    $0, %al
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    %rdx, %rax
+;;       addq    0x2a(%rip), %rax
+;;       jb      0x76
+;;       movq    0x58(%rdi), %r8
+;;       xorq    %rcx, %rcx
+;;       addq    0x50(%rdi), %rdx
+;;       movl    $0xffff0000, %r9d
+;;       addq    %r9, %rdx
+;;       cmpq    %r8, %rax
+;;       cmovaq  %rcx, %rdx
+;;       movl    (%rdx), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;       ud2
+;;       addb    $0, %al

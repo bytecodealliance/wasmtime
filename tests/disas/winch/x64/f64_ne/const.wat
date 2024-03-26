@@ -9,28 +9,28 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    8(%rdi), %r11
-;;    8: movq    (%r11), %r11
-;;    b: addq    $0x10, %r11
-;;   12: cmpq    %rsp, %r11
-;;   15: ja      0x5b
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    (%r11), %r11
+;;       addq    $0x10, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x5b
 ;;   1b: movq    %rdi, %r14
-;;   1e: subq    $0x10, %rsp
-;;   22: movq    %rdi, 8(%rsp)
-;;   27: movq    %rsi, (%rsp)
-;;   2b: movsd   0x2d(%rip), %xmm0
-;;   33: movsd   0x2d(%rip), %xmm1
-;;   3b: ucomisd %xmm0, %xmm1
-;;   3f: movl    $0, %eax
-;;   44: setne   %al
-;;   48: movl    $0, %r11d
-;;   4e: setp    %r11b
-;;   52: orq     %r11, %rax
-;;   55: addq    $0x10, %rsp
-;;   59: popq    %rbp
-;;   5a: retq
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       movsd   0x2d(%rip), %xmm0
+;;       movsd   0x2d(%rip), %xmm1
+;;       ucomisd %xmm0, %xmm1
+;;       movl    $0, %eax
+;;       setne   %al
+;;       movl    $0, %r11d
+;;       setp    %r11b
+;;       orq     %r11, %rax
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   5b: ud2
 ;;   5d: addb    %al, (%rax)
 ;;   5f: addb    %bl, -0x66666667(%rdx)
