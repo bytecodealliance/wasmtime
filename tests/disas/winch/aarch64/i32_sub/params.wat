@@ -8,21 +8,22 @@
 	(i32.sub)
     )
 )
-;;      	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!
-;;      	 fd030091             	mov	x29, sp
-;;      	 fc030091             	mov	x28, sp
-;;      	 e90300aa             	mov	x9, x0
-;;      	 ff6300d1             	sub	sp, sp, #0x18
-;;      	 fc030091             	mov	x28, sp
-;;      	 800301f8             	stur	x0, [x28, #0x10]
-;;      	 818300f8             	stur	x1, [x28, #8]
-;;      	 824300b8             	stur	w2, [x28, #4]
-;;      	 830300b8             	stur	w3, [x28]
-;;      	 800340b8             	ldur	w0, [x28]
-;;      	 814340b8             	ldur	w1, [x28, #4]
-;;      	 2160204b             	sub	w1, w1, w0, uxtx
-;;      	 e003012a             	mov	w0, w1
-;;      	 ff630091             	add	sp, sp, #0x18
-;;      	 fc030091             	mov	x28, sp
-;;      	 fd7bc1a8             	ldp	x29, x30, [sp], #0x10
-;;      	 c0035fd6             	ret	
+;; wasm[0]::function[0]:
+;;    0: stp     x29, x30, [sp, #-0x10]!
+;;    4: mov     x29, sp
+;;    8: mov     x28, sp
+;;    c: mov     x9, x0
+;;   10: sub     sp, sp, #0x18
+;;   14: mov     x28, sp
+;;   18: stur    x0, [x28, #0x10]
+;;   1c: stur    x1, [x28, #8]
+;;   20: stur    w2, [x28, #4]
+;;   24: stur    w3, [x28]
+;;   28: ldur    w0, [x28]
+;;   2c: ldur    w1, [x28, #4]
+;;   30: sub     w1, w1, w0, uxtx
+;;   34: mov     w0, w1
+;;   38: add     sp, sp, #0x18
+;;   3c: mov     x28, sp
+;;   40: ldp     x29, x30, [sp], #0x10
+;;   44: ret
