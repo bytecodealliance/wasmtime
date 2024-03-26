@@ -18,50 +18,40 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r12, %r15, 96(%r15)
-;;   unwind SaveReg { clobber_offset: 96, reg: p12i }
-;;   unwind SaveReg { clobber_offset: 104, reg: p13i }
-;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
-;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   llgfr %r12, %r4
-;;   llilf %r3, 4294901764
-;;   algfr %r3, %r4
-;;   jgnle .+2 # trap=heap_oob
-;;   lg %r4, 88(%r2)
-;;   clgr %r3, %r4
-;;   jgh label3 ; jg label1
-;; block1:
-;;   ag %r12, 80(%r2)
-;;   llilh %r3, 65535
-;;   strv %r5, 0(%r3,%r12)
-;;   jg label2
-;; block2:
-;;   lmg %r12, %r15, 96(%r15)
-;;   br %r14
-;; block3:
-;;   .word 0x0000 # trap=heap_oob
+;; wasm[0]::function[0]:
+;;    0: stmg    %r12, %r15, 0x60(%r15)
+;;    6: lgr     %r1, %r15
+;;    a: aghi    %r15, -0xa0
+;;    e: stg     %r1, 0(%r15)
+;;   14: llgfr   %r12, %r4
+;;   18: llilf   %r3, 0xffff0004
+;;   1e: algfr   %r3, %r4
+;;   22: jgnle   0x24
+;;   28: lg      %r4, 0x58(%r2)
+;;   2e: clgr    %r3, %r4
+;;   32: jgh     0x50
+;;   38: ag      %r12, 0x50(%r2)
+;;   3e: llilh   %r3, 0xffff
+;;   42: strv    %r5, 0(%r3, %r12)
+;;   48: lmg     %r12, %r15, 0x100(%r15)
+;;   4e: br      %r14
+;;   50: .byte   0x00, 0x00
 ;;
-;; function u0:1:
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   unwind StackAlloc { size: 0 }
-;; block0:
-;;   llgfr %r5, %r4
-;;   llilf %r3, 4294901764
-;;   algfr %r3, %r4
-;;   jgnle .+2 # trap=heap_oob
-;;   lg %r4, 88(%r2)
-;;   clgr %r3, %r4
-;;   jgh label3 ; jg label1
-;; block1:
-;;   ag %r5, 80(%r2)
-;;   llilh %r3, 65535
-;;   lrv %r2, 0(%r3,%r5)
-;;   jg label2
-;; block2:
-;;   br %r14
-;; block3:
-;;   .word 0x0000 # trap=heap_oob
+;; wasm[0]::function[1]:
+;;   54: stmg    %r14, %r15, 0x70(%r15)
+;;   5a: lgr     %r1, %r15
+;;   5e: aghi    %r15, -0xa0
+;;   62: stg     %r1, 0(%r15)
+;;   68: llgfr   %r5, %r4
+;;   6c: llilf   %r3, 0xffff0004
+;;   72: algfr   %r3, %r4
+;;   76: jgnle   0x78
+;;   7c: lg      %r4, 0x58(%r2)
+;;   82: clgr    %r3, %r4
+;;   86: jgh     0xa4
+;;   8c: ag      %r5, 0x50(%r2)
+;;   92: llilh   %r3, 0xffff
+;;   96: lrv     %r2, 0(%r3, %r5)
+;;   9c: lmg     %r14, %r15, 0x110(%r15)
+;;   a2: br      %r14
+;;   a4: .byte   0x00, 0x00

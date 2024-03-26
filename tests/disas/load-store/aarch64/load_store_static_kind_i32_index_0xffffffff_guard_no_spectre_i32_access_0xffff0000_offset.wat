@@ -18,22 +18,22 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;; block0:
-;;   ldr x7, [x0, #80]
-;;   add x7, x7, x2, UXTW
-;;   movz x8, #65535, LSL #16
-;;   str w3, [x7, x8]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: stp     x29, x30, [sp, #-0x10]!
+;;    4: mov     x29, sp
+;;    8: ldr     x7, [x0, #0x50]
+;;    c: add     x7, x7, w2, uxtw
+;;   10: mov     x8, #0xffff0000
+;;   14: str     w3, [x7, x8]
+;;   18: ldp     x29, x30, [sp], #0x10
+;;   1c: ret
 ;;
-;; function u0:1:
-;; block0:
-;;   ldr x7, [x0, #80]
-;;   add x7, x7, x2, UXTW
-;;   movz x8, #65535, LSL #16
-;;   ldr w0, [x7, x8]
-;;   b label1
-;; block1:
-;;   ret
+;; wasm[0]::function[1]:
+;;   20: stp     x29, x30, [sp, #-0x10]!
+;;   24: mov     x29, sp
+;;   28: ldr     x7, [x0, #0x50]
+;;   2c: add     x7, x7, w2, uxtw
+;;   30: mov     x8, #0xffff0000
+;;   34: ldr     w0, [x7, x8]
+;;   38: ldp     x29, x30, [sp], #0x10
+;;   3c: ret

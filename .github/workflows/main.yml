@@ -158,7 +158,7 @@ jobs:
         else
           pr=${{ github.event.number }}
           gh pr view $pr --json commits | tee commits.log
-          gh pr diff $pr --name-only | tee names.log
+          gh pr diff $pr --name-only | tee names.log || echo "failed to get files"
           if [ "${{ github.base_ref }}" != "main" ]; then
             run_full=true
           elif grep -q 'prtest:full' commits.log; then

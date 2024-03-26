@@ -18,62 +18,42 @@
     local.get 0
     local.get 1
     f64.store))
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    80(%rdi), %r9
-;;   movl    %edx, %r10d
-;;   vmovss  0(%r9,%r10,1), %xmm0
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    0x50(%rdi), %r9
+;;    8: movl    %edx, %r10d
+;;    b: vmovss  (%r9, %r10), %xmm0
+;;   11: movq    %rbp, %rsp
+;;   14: popq    %rbp
+;;   15: retq
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    80(%rdi), %r9
-;;   movl    %edx, %r10d
-;;   vmovsd  0(%r9,%r10,1), %xmm0
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;   20: pushq   %rbp
+;;   21: movq    %rsp, %rbp
+;;   24: movq    0x50(%rdi), %r9
+;;   28: movl    %edx, %r10d
+;;   2b: vmovsd  (%r9, %r10), %xmm0
+;;   31: movq    %rbp, %rsp
+;;   34: popq    %rbp
+;;   35: retq
 ;;
-;; function u0:2:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    80(%rdi), %r9
-;;   movl    %edx, %r10d
-;;   vmovss  %xmm0, 0(%r9,%r10,1)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[2]:
+;;   40: pushq   %rbp
+;;   41: movq    %rsp, %rbp
+;;   44: movq    0x50(%rdi), %r9
+;;   48: movl    %edx, %r10d
+;;   4b: vmovss  %xmm0, (%r9, %r10)
+;;   51: movq    %rbp, %rsp
+;;   54: popq    %rbp
+;;   55: retq
 ;;
-;; function u0:3:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    80(%rdi), %r9
-;;   movl    %edx, %r10d
-;;   vmovsd  %xmm0, 0(%r9,%r10,1)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[3]:
+;;   60: pushq   %rbp
+;;   61: movq    %rsp, %rbp
+;;   64: movq    0x50(%rdi), %r9
+;;   68: movl    %edx, %r10d
+;;   6b: vmovsd  %xmm0, (%r9, %r10)
+;;   71: movq    %rbp, %rsp
+;;   74: popq    %rbp
+;;   75: retq
