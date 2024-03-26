@@ -87,6 +87,7 @@ fn disassembler_for(isa: &Box<dyn TargetIsa>) -> Result<Capstone> {
         Architecture::X86_64 => Capstone::new()
             .x86()
             .mode(arch::x86::ArchMode::Mode64)
+            .syntax(arch::x86::ArchSyntax::Att)
             .detail(true)
             .build()
             .map_err(|e| anyhow::format_err!("{}", e))?,
