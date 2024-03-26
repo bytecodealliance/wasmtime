@@ -14,6 +14,10 @@ pub struct EmitState {
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
+
+    /// A copy of the frame layout, used during the emission of `Inst::ReturnCallKnown` and
+    /// `Inst::ReturnCallUnknown` instructions.
+    frame_layout: FrameLayout,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -23,6 +27,7 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             ctrl_plane,
+            frame_layout: abi.frame_layout().clone(),
         }
     }
 
@@ -61,5 +66,9 @@ impl EmitState {
 
     pub(crate) fn nominal_sp_to_fp(&self) -> i64 {
         self.nominal_sp_to_fp
+    }
+
+    pub(crate) fn frame_layout(&self) -> &FrameLayout {
+        &self.frame_layout
     }
 }

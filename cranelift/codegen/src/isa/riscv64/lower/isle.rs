@@ -18,7 +18,7 @@ use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
         immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, StackSlot, TrapCode, Value, ValueList,
+        MemFlags, Opcode, StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
     machinst::{ArgPair, InstOutput},
@@ -82,6 +82,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
+            // TODO: this should be Opcode::ReturnCall, once riscv64 has been ported to the new
+            // tail call strategy.
+            Opcode::Call,
             distance,
             caller_conv,
             self.backend.flags().clone(),

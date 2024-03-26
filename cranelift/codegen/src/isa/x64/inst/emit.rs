@@ -1,6 +1,6 @@
 use crate::ir;
 use crate::ir::immediates::{Ieee32, Ieee64};
-use crate::ir::{KnownSymbol, MemFlags};
+use crate::ir::KnownSymbol;
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
 use crate::isa::x64::encoding::rex::{
     emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
@@ -1628,18 +1628,7 @@ pub(crate) fn emit(
             callee,
             info: call_info,
         } => {
-            emit_return_call_common_sequence(
-                allocs,
-                sink,
-                info,
-                state,
-                call_info.new_stack_arg_size,
-                call_info.old_stack_arg_size,
-                call_info.ret_addr,
-                call_info.fp,
-                call_info.tmp,
-                &call_info.uses,
-            );
+            emit_return_call_common_sequence(allocs, sink, info, state, &call_info.uses);
 
             // Finally, jump to the callee!
             //
@@ -1660,18 +1649,7 @@ pub(crate) fn emit(
         } => {
             let callee = callee.with_allocs(allocs);
 
-            emit_return_call_common_sequence(
-                allocs,
-                sink,
-                info,
-                state,
-                call_info.new_stack_arg_size,
-                call_info.old_stack_arg_size,
-                call_info.ret_addr,
-                call_info.fp,
-                call_info.tmp,
-                &call_info.uses,
-            );
+            emit_return_call_common_sequence(allocs, sink, info, state, &call_info.uses);
 
             Inst::JmpUnknown { target: callee }.emit(&[], sink, info, state);
             sink.add_call_site(ir::Opcode::ReturnCallIndirect);
@@ -1737,12 +1715,19 @@ pub(crate) fn emit(
             // TODO: this needs to be accounted for by the stack check, before `GrowFrame` is
             // emitted, so that the increment here is expected.
             //
-            // Decrement SP by `amount`
+            // Decrement SP and FP by `amount`
             Inst::alu_rmi_r(
                 OperandSize::Size64,
                 AluRmiROpcode::Sub,
                 RegMemImm::imm(*amount),
                 Writable::from_reg(regs::rsp()),
+            )
+            .emit(&[], sink, info, state);
+            Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Sub,
+                RegMemImm::imm(*amount),
+                Writable::from_reg(regs::rbp()),
             )
             .emit(&[], sink, info, state);
 
@@ -1815,6 +1800,15 @@ pub(crate) fn emit(
                 AluRmiROpcode::Add,
                 RegMemImm::imm(*amount),
                 Writable::from_reg(regs::rsp()),
+            )
+            .emit(&[], sink, info, state);
+
+            // Increment FP by `amount`
+            Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Add,
+                RegMemImm::imm(*amount),
+                Writable::from_reg(regs::rbp()),
             )
             .emit(&[], sink, info, state);
         }
@@ -4349,11 +4343,6 @@ fn emit_return_call_common_sequence(
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
-    new_stack_arg_size: u32,
-    old_stack_arg_size: u32,
-    ret_addr: Option<Gpr>,
-    fp: Gpr,
-    tmp: WritableGpr,
     uses: &CallArgList,
 ) {
     assert!(
@@ -4366,125 +4355,18 @@ fn emit_return_call_common_sequence(
         let _ = allocs.next(u.vreg);
     }
 
-    let ret_addr = ret_addr.map(|r| Gpr::new(allocs.next(*r)).unwrap());
-
-    let fp = allocs.next(*fp);
-
-    let tmp = allocs.next(tmp.to_reg().to_reg());
-    let tmp = Gpr::new(tmp).unwrap();
-    let tmp_w = WritableGpr::from_reg(tmp);
-
-    // Copy the new frame (which is `frame_size` bytes above the SP)
-    // onto our current frame, using only volatile, non-argument
-    // registers.
-    //
-    //
-    // The current stack layout is the following:
-    //
-    //            | ...                 |
-    //            +---------------------+
-    //            | ...                 |
-    //            | stack arguments     |
-    //            | ...                 |
-    //    current | return address      |
-    //    frame   | old FP              | <-- FP
-    //            | callee saves        |
-    //            | ...                 |
-    //            | old stack slots     |
-    //            | ...                 |
-    //            +---------------------+
-    //            | ...                 |
-    //    new     | new stack arguments |
-    //    frame   | ...                 | <-- SP
-    //            +---------------------+
-    //
-    // We need to restore the old FP, copy the new stack arguments over the old
-    // stack arguments, write the return address into the correct slot just
-    // after the new stack arguments, adjust SP to point to the new return
-    // address, and then jump to the callee (which will push the old FP again).
-
-    // Restore the old FP into `rbp`.
-    Inst::Mov64MR {
-        src: SyntheticAmode::Real(Amode::ImmReg {
-            simm32: 0,
-            base: fp,
-            flags: MemFlags::trusted(),
-        }),
-        dst: Writable::from_reg(Gpr::new(regs::rbp()).unwrap()),
-    }
-    .emit(&[], sink, info, state);
-
-    // The new lowest address (top of stack) -- relative to FP -- for
-    // our tail callee. We compute this now so that we can move our
-    // stack arguments into place.
-    let callee_sp_relative_to_fp = i64::from(old_stack_arg_size) - i64::from(new_stack_arg_size);
-
-    // Copy over each word, using `tmp` as a temporary register.
-    //
-    // Note that we have to do this from stack slots with the highest
-    // address to lowest address because in the case of when the tail
-    // callee has more stack arguments than we do, we might otherwise
-    // overwrite some of our stack arguments before they've been copied
-    // into place.
-    assert_eq!(
-        new_stack_arg_size % 8,
-        0,
-        "stack argument space sizes should always be 8-byte aligned"
-    );
-    for i in (0..new_stack_arg_size / 8).rev() {
-        Inst::Mov64MR {
-            src: SyntheticAmode::Real(Amode::ImmReg {
-                simm32: (i * 8).try_into().unwrap(),
-                base: regs::rsp(),
-                flags: MemFlags::trusted(),
-            }),
-            dst: tmp_w,
-        }
-        .emit(&[], sink, info, state);
-        Inst::MovRM {
-            size: OperandSize::Size64,
-            src: tmp,
-            dst: SyntheticAmode::Real(Amode::ImmReg {
-                // Add 2 because we need to skip over the old FP and the
-                // return address.
-                simm32: (callee_sp_relative_to_fp + i64::from((i + 2) * 8))
-                    .try_into()
-                    .unwrap(),
-                base: fp,
-                flags: MemFlags::trusted(),
-            }),
-        }
-        .emit(&[], sink, info, state);
+    for inst in
+        X64ABIMachineSpec::gen_clobber_restore(CallConv::Tail, &info.flags, state.frame_layout())
+    {
+        inst.emit(&[], sink, info, state);
     }
 
-    // Initialize SP for the tail callee, deallocating the temporary
-    // stack arguments space at the same time.
-    Inst::LoadEffectiveAddress {
-        size: OperandSize::Size64,
-        addr: SyntheticAmode::Real(Amode::ImmReg {
-            // NB: We add a word to `callee_sp_relative_to_fp` here because the
-            // callee will push FP, not us.
-            simm32: callee_sp_relative_to_fp.wrapping_add(8).try_into().unwrap(),
-            base: fp,
-            flags: MemFlags::trusted(),
-        }),
-        dst: Writable::from_reg(Gpr::new(regs::rsp()).unwrap()),
-    }
-    .emit(&[], sink, info, state);
-
-    state.adjust_virtual_sp_offset(-i64::from(new_stack_arg_size));
-
-    // Write the return address into the correct stack slot.
-    if let Some(ret_addr) = ret_addr {
-        Inst::MovRM {
-            size: OperandSize::Size64,
-            src: ret_addr,
-            dst: SyntheticAmode::Real(Amode::ImmReg {
-                simm32: 0,
-                base: regs::rsp(),
-                flags: MemFlags::trusted(),
-            }),
-        }
-        .emit(&[], sink, info, state);
+    for inst in X64ABIMachineSpec::gen_epilogue_frame_restore(
+        CallConv::Tail,
+        &info.flags,
+        &info.isa_flags,
+        state.frame_layout(),
+    ) {
+        inst.emit(&[], sink, info, state);
     }
 }

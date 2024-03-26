@@ -926,8 +926,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
 impl X64CallSite {
     pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
-        let (new_stack_arg_size, old_stack_arg_size) =
-            self.emit_temporary_tail_call_frame(ctx, args);
+        let new_stack_arg_size =
+            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
+        let old_stack_arg_size = ctx.abi().stack_args_size(ctx.sigs());
 
         match new_stack_arg_size.cmp(&old_stack_arg_size) {
             core::cmp::Ordering::Equal => {}
@@ -947,43 +948,15 @@ impl X64CallSite {
             }
         }
 
-        // Make a copy of the frame pointer, since we use it when copying down
-        // the new stack frame.
-        let fp = ctx.temp_writable_gpr();
-        let rbp = PReg::from(regs::rbp().to_real_reg().unwrap());
-        ctx.emit(Inst::MovFromPReg { src: rbp, dst: fp });
-
-        // Load the return address, because copying our new stack frame
-        // over our current stack frame might overwrite it, and we'll need to
-        // place it in the correct location after we do that copy.
-        //
-        // But we only need to actually move the return address if the size of
-        // stack arguments changes.
-        let ret_addr = if new_stack_arg_size != old_stack_arg_size {
-            let ret_addr = ctx.temp_writable_gpr();
-            ctx.emit(Inst::Mov64MR {
-                src: SyntheticAmode::Real(Amode::ImmReg {
-                    simm32: 8,
-                    base: *fp.to_reg(),
-                    flags: MemFlags::trusted(),
-                }),
-                dst: ret_addr,
-            });
-            Some(ret_addr.to_reg())
-        } else {
-            None
-        };
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.emit_args(ctx, args);
+        self.emit_stack_ret_arg_for_tail_call(ctx);
 
         // Finally, emit the macro instruction to copy the new stack frame over
         // our current one and do the actual tail call!
-
         let dest = self.dest().clone();
         let info = Box::new(ReturnCallInfo {
-            new_stack_arg_size,
-            old_stack_arg_size,
-            ret_addr,
-            fp: fp.to_reg(),
-            tmp: ctx.temp_writable_gpr(),
             uses: self.take_uses(),
         });
         match dest {
