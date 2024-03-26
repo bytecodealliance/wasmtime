@@ -169,7 +169,7 @@ fn wasm_call_signature(
         arch if tunables.winch_callable => {
             assert!(
                 matches!(arch, Architecture::X86_64 | Architecture::Aarch64(_)),
-                "The Winch calling convention is only implemented for x86_64"
+                "The Winch calling convention is only implemented for x86_64 and aarch64"
             );
             CallConv::Winch
         }
