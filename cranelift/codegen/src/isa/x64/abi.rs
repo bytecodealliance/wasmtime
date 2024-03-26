@@ -206,7 +206,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     None => {
                         next_stack = align_to(next_stack, 8) + 8;
                         ABIArgSlot::Stack {
-                            offset: (next_stack - 8) as i64,
+                            offset: i32::try_from(next_stack - 8).unwrap(),
                             ty: ir::types::I64,
                             extension: param.extension,
                         }
@@ -274,7 +274,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     };
 
                     slots.push(ABIArgSlot::Stack {
-                        offset: next_stack as i64,
+                        offset: i32::try_from(next_stack).unwrap(),
                         ty: *reg_ty,
                         extension: param.extension,
                     });

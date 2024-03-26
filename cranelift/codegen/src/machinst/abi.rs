@@ -158,7 +158,7 @@ pub enum ABIArgSlot {
     /// Arguments only: on stack, at given offset from SP at entry.
     Stack {
         /// Offset of this arg relative to the base of stack args.
-        offset: i64,
+        offset: i32,
         /// Value type of this arg.
         ty: ir::Type,
         /// Should this arg be zero- or sign-extended?
@@ -176,10 +176,12 @@ impl ABIArgSlot {
     }
 }
 
-/// A vector of `ABIArgSlot`s. Inline capacity for one element because basically
-/// 100% of values use one slot. Only `i128`s need multiple slots, and they are
-/// super rare (and never happen with Wasm).
-pub type ABIArgSlotVec = SmallVec<[ABIArgSlot; 1]>;
+/// A vector of `ABIArgSlot`s. Inline capacity for two elements because that
+/// many fit inline in a SmallVec anyway. Basically 100% of values use one slot.
+/// Only `i128`s need two slots, and they are super rare (and never happen with
+/// Wasm). On 64-bit targets, nothing needs more than two slots, so this should
+/// never spill to the heap.
+pub type ABIArgSlotVec = SmallVec<[ABIArgSlot; 2]>;
 
 /// An ABIArg is composed of one or more parts. This allows for a CLIF-level
 /// Value to be passed with its parts in more than one location at the ABI
@@ -257,7 +259,7 @@ impl ABIArg {
     ) -> ABIArg {
         ABIArg::Slots {
             slots: smallvec![ABIArgSlot::Stack {
-                offset,
+                offset: i32::try_from(offset).unwrap(),
                 ty,
                 extension,
             }],
@@ -1532,7 +1534,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                     };
                     insts.push(M::gen_load_stack(
                         StackAMode::FPOffset(
-                            M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
+                            M::fp_to_arg_offset(self.call_conv, &self.flags) + i64::from(offset),
                             ty,
                         ),
                         *into_reg,
@@ -1586,7 +1588,8 @@ impl<M: ABIMachineSpec> Callee<M> {
                         let addr_reg = self.arg_temp_reg[idx].unwrap();
                         insts.push(M::gen_load_stack(
                             StackAMode::FPOffset(
-                                M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
+                                M::fp_to_arg_offset(self.call_conv, &self.flags)
+                                    + i64::from(offset),
                                 ty,
                             ),
                             addr_reg,
@@ -2418,7 +2421,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                 };
                             locs.push((
                                 data.into(),
-                                ArgLoc::Stack(StackAMode::SPOffset(offset, ty)),
+                                ArgLoc::Stack(StackAMode::SPOffset(i64::from(offset), ty)),
                             ));
                         }
                     }
@@ -2444,7 +2447,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                     ABIArgSlot::Reg { reg, .. } => ArgLoc::Reg(reg.into()),
                     ABIArgSlot::Stack { offset, .. } => {
                         let ty = M::word_type();
-                        ArgLoc::Stack(StackAMode::SPOffset(offset, ty))
+                        ArgLoc::Stack(StackAMode::SPOffset(i64::from(offset), ty))
                     }
                 };
                 locs.push((tmp.into(), loc));
@@ -2548,7 +2551,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                 sig_data.sized_stack_arg_space()
                             };
                             insts.push(M::gen_load_stack(
-                                StackAMode::SPOffset(offset + ret_area_base, ty),
+                                StackAMode::SPOffset(i64::from(offset) + ret_area_base, ty),
                                 *into_reg,
                                 ty,
                             ));

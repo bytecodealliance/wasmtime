@@ -323,7 +323,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     Some((ty, slot_offset))
                 })
                 .map(|(ty, offset)| ABIArgSlot::Stack {
-                    offset,
+                    offset: i32::try_from(offset).unwrap(),
                     ty,
                     extension: param.extension,
                 })
@@ -1333,7 +1333,7 @@ fn compute_arg_locs_tail(
         let offset = i64::from(*next_stack);
         *next_stack += ty.bytes();
         ABIArgSlot::Stack {
-            offset,
+            offset: i32::try_from(offset).unwrap(),
             ty,
             extension: ir::ArgumentExtension::None,
         }
