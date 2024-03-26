@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 
 (module
   (func (export "as-return-value") (result i64)

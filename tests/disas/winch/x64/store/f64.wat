@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 
 (module
   (memory (data "\00\00\00\00\00\00\f4\7f"))

@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 
 (module
   (func $id-f64 (param f64) (result f64) (local.get 0))

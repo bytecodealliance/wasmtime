@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func $f (param i32) (result i32) (local.get 0))
   (func (export "as-call-value") (result i32)

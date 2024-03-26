@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func (export "nested-br_table-loop-block") (param i32) (result i32)
     (local.set 0

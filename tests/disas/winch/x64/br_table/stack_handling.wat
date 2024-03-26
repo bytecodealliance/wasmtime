@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func (;0;) (param i32)
     local.get 0

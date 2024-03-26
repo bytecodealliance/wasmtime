@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func (export "while-") (param i64) (result i64)
     (local i64)

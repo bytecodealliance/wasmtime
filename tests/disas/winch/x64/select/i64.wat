@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 
 (module
   (func (export "select-i64") (param i64 i64 i32) (result i64)

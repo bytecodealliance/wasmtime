@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (memory 1)
   (func (export "i64_load8_s") (param $i i64) (result i64)

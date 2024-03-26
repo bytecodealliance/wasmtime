@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (memory 1)
   (func (export "as-store-both") (result i32)

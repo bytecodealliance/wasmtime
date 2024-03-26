@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 
 (module
   (func (export "select-f32") (param f32 f32 i32) (result f32)

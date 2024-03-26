@@ -1,4 +1,5 @@
 ;;! target = "aarch64"
+;;! test = "winch"
 
 (module
     (func (result i64)

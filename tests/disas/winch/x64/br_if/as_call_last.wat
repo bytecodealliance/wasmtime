@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func $f (param i32 i32 i32) (result i32) (i32.const -1))
   (func (export "as-call-last") (result i32)

@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func $dummy)
   (func (export "as-loop-last") (param i32)

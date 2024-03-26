@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func (export "as-br-if-cond")
     (block (br_if 0 (br_if 0 (i32.const 1) (i32.const 1))))

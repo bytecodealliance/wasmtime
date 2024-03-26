@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func (export "as-if-else") (param i32 i32) (result i32)
     (block (result i32)

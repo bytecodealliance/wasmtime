@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func (export "as-block-first") (result i32)
     (block (result i32) (unreachable) (i32.const 2))

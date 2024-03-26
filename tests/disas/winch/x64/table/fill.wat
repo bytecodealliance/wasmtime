@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (type $t0 (func))
   (func $f1 (type $t0))

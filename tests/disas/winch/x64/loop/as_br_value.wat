@@ -1,4 +1,5 @@
 ;;! target = "x86_64"
+;;! test = "winch"
 (module
   (func (export "as-br-value") (result i32)
     (block (result i32) (br 0 (loop (result i32) (i32.const 1))))
