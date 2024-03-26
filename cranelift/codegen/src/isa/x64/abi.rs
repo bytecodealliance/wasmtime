@@ -595,14 +595,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_clobber_save(
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
-        if call_conv == isa::CallConv::Tail {
-            assert!(frame_layout.clobbered_callee_saves.is_empty());
-        }
-
         let mut insts = SmallVec::new();
 
         if flags.unwind_info() && frame_layout.setup_area_size > 0 {
@@ -857,7 +853,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         match call_conv_of_callee {
-            isa::CallConv::Tail => ALL_CLOBBERS,
             isa::CallConv::Winch => ALL_CLOBBERS,
             _ if call_conv_of_callee.extends_windows_fastcall() => WINDOWS_CLOBBERS,
             _ => SYSV_CLOBBERS,
@@ -882,13 +877,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         outgoing_args_size: u32,
     ) -> FrameLayout {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
-            // The `tail` calling convention doesn't have any callee-save
-            // registers.
-            CallConv::Tail => vec![],
             // The `winch` calling convention doesn't have any callee-save
             // registers.
             CallConv::Winch => vec![],
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV => regs
+            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::Tail => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
@@ -1020,25 +1012,6 @@ impl From<StackAMode> for SyntheticAmode {
 fn get_intreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
     let is_fastcall = call_conv.extends_windows_fastcall();
 
-    if *call_conv == isa::CallConv::Tail {
-        return match idx {
-            0 => Some(regs::rax()),
-            1 => Some(regs::rcx()),
-            2 => Some(regs::rdx()),
-            3 => Some(regs::rbx()),
-            4 => Some(regs::rsi()),
-            5 => Some(regs::rdi()),
-            6 => Some(regs::r8()),
-            7 => Some(regs::r9()),
-            8 => Some(regs::r10()),
-            9 => Some(regs::r11()),
-            // NB: `r12`, `r13`, `r14` and `r15` are reserved for indirect
-            // callee addresses and temporaries required for our tail call
-            // sequence (fp, ret_addr, tmp).
-            _ => None,
-        };
-    }
-
     // Fastcall counts by absolute argument number; SysV counts by argument of
     // this (integer) class.
     let i = if is_fastcall { arg_idx } else { idx };
@@ -1091,16 +1064,12 @@ fn get_intreg_for_retval(
             0 => Some(regs::rax()),
             1 => Some(regs::rcx()),
             2 => Some(regs::rdx()),
-            3 => Some(regs::rbx()),
-            4 => Some(regs::rsi()),
-            5 => Some(regs::rdi()),
-            6 => Some(regs::r8()),
-            7 => Some(regs::r9()),
-            8 => Some(regs::r10()),
-            9 => Some(regs::r11()),
-            10 => Some(regs::r12()),
-            11 => Some(regs::r13()),
-            12 => Some(regs::r14()),
+            3 => Some(regs::rsi()),
+            4 => Some(regs::rdi()),
+            5 => Some(regs::r8()),
+            6 => Some(regs::r9()),
+            7 => Some(regs::r10()),
+            8 => Some(regs::r11()),
             // NB: `r15` is reserved as a scratch register.
             _ => None,
         },
