@@ -52,7 +52,7 @@ use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
-use wasmtime::{Engine, OptLevel};
+use wasmtime::{Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
 
 fn main() -> Result<()> {
@@ -139,6 +139,8 @@ enum TestKind {
     Compile,
     /// Test the CLIF output, optimized.
     Optimize,
+    /// Alias for "compile" plus `-C compiler=winch`
+    Winch,
 }
 
 impl Test {
@@ -194,6 +196,9 @@ impl Test {
                 config.emit_clif(tempdir.path());
             }
             TestKind::Compile => {}
+            TestKind::Winch => {
+                config.strategy(Strategy::Winch);
+            }
         }
         let engine = Engine::new(&config).context("failed to create engine")?;
         let module = wat::parse_file(&self.path)?;
@@ -236,7 +241,7 @@ impl Test {
                 });
                 Ok(CompileOutput::Clif(functions))
             }
-            TestKind::Compile => Ok(CompileOutput::Elf(elf)),
+            TestKind::Compile | TestKind::Winch => Ok(CompileOutput::Elf(elf)),
         }
     }
 
@@ -291,7 +296,7 @@ fn assert_output(
         CompileOutput::Clif(funcs) => {
             for mut func in funcs {
                 match kind {
-                    TestKind::Compile => unreachable!(),
+                    TestKind::Compile | TestKind::Winch => unreachable!(),
                     TestKind::Optimize => {
                         let mut ctx = cranelift_codegen::Context::for_function(func.clone());
                         ctx.optimize(isa, &mut Default::default())
