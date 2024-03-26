@@ -929,6 +929,24 @@ impl X64CallSite {
         let (new_stack_arg_size, old_stack_arg_size) =
             self.emit_temporary_tail_call_frame(ctx, args);
 
+        match new_stack_arg_size.cmp(&old_stack_arg_size) {
+            core::cmp::Ordering::Equal => {}
+            core::cmp::Ordering::Less => {
+                let tmp = ctx.temp_writable_gpr();
+                ctx.emit(Inst::ShrinkFrame {
+                    amount: old_stack_arg_size - new_stack_arg_size,
+                    tmp,
+                });
+            }
+            core::cmp::Ordering::Greater => {
+                let tmp = ctx.temp_writable_gpr();
+                ctx.emit(Inst::GrowFrame {
+                    amount: new_stack_arg_size - old_stack_arg_size,
+                    tmp,
+                });
+            }
+        }
+
         // Make a copy of the frame pointer, since we use it when copying down
         // the new stack frame.
         let fp = ctx.temp_writable_gpr();
