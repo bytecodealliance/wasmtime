@@ -8,25 +8,26 @@
         (f64.lt)
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c320000000       	addq	$0x20, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f873a000000         	ja	0x55
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec20             	subq	$0x20, %rsp
-;;      	 48897c2418           	movq	%rdi, 0x18(%rsp)
-;;      	 4889742410           	movq	%rsi, 0x10(%rsp)
-;;      	 f20f11442408         	movsd	%xmm0, 8(%rsp)
-;;      	 f20f110c24           	movsd	%xmm1, (%rsp)
-;;      	 f20f100424           	movsd	(%rsp), %xmm0
-;;      	 f20f104c2408         	movsd	8(%rsp), %xmm1
-;;      	 660f2ec1             	ucomisd	%xmm1, %xmm0
-;;      	 b800000000           	movl	$0, %eax
-;;      	 400f97c0             	seta	%al
-;;      	 4883c420             	addq	$0x20, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   55:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x20, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x55
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x20, %rsp
+;;   22: movq    %rdi, 0x18(%rsp)
+;;   27: movq    %rsi, 0x10(%rsp)
+;;   2c: movsd   %xmm0, 8(%rsp)
+;;   32: movsd   %xmm1, (%rsp)
+;;   37: movsd   (%rsp), %xmm0
+;;   3c: movsd   8(%rsp), %xmm1
+;;   42: ucomisd %xmm1, %xmm0
+;;   46: movl    $0, %eax
+;;   4b: seta    %al
+;;   4f: addq    $0x20, %rsp
+;;   53: popq    %rbp
+;;   54: retq
+;;   55: ud2

@@ -4,20 +4,21 @@
 (module
   (func (param f64) (result f64) (local.get 0))
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c318000000       	addq	$0x18, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8721000000         	ja	0x3c
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 f20f110424           	movsd	%xmm0, (%rsp)
-;;      	 f20f100424           	movsd	(%rsp), %xmm0
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   3c:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x18, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x3c
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x18, %rsp
+;;   22: movq    %rdi, 0x10(%rsp)
+;;   27: movq    %rsi, 8(%rsp)
+;;   2c: movsd   %xmm0, (%rsp)
+;;   31: movsd   (%rsp), %xmm0
+;;   36: addq    $0x18, %rsp
+;;   3a: popq    %rbp
+;;   3b: retq
+;;   3c: ud2

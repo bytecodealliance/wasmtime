@@ -8,31 +8,32 @@
         (f32.min)
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c318000000       	addq	$0x18, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8755000000         	ja	0x70
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 f30f11442404         	movss	%xmm0, 4(%rsp)
-;;      	 f30f110c24           	movss	%xmm1, (%rsp)
-;;      	 f30f100424           	movss	(%rsp), %xmm0
-;;      	 f30f104c2404         	movss	4(%rsp), %xmm1
-;;      	 0f2ec8               	ucomiss	%xmm0, %xmm1
-;;      	 0f8518000000         	jne	0x63
-;;      	 0f8a08000000         	jp	0x59
-;;   51:	 0f56c8               	orps	%xmm0, %xmm1
-;;      	 e90e000000           	jmp	0x67
-;;   59:	 f30f58c8             	addss	%xmm0, %xmm1
-;;      	 0f8a04000000         	jp	0x67
-;;   63:	 f30f5dc8             	minss	%xmm0, %xmm1
-;;      	 0f28c1               	movaps	%xmm1, %xmm0
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   70:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x18, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x70
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x18, %rsp
+;;   22: movq    %rdi, 0x10(%rsp)
+;;   27: movq    %rsi, 8(%rsp)
+;;   2c: movss   %xmm0, 4(%rsp)
+;;   32: movss   %xmm1, (%rsp)
+;;   37: movss   (%rsp), %xmm0
+;;   3c: movss   4(%rsp), %xmm1
+;;   42: ucomiss %xmm0, %xmm1
+;;   45: jne     0x63
+;;   4b: jp      0x59
+;;   51: orps    %xmm0, %xmm1
+;;   54: jmp     0x67
+;;   59: addss   %xmm0, %xmm1
+;;   5d: jp      0x67
+;;   63: minss   %xmm0, %xmm1
+;;   67: movaps  %xmm1, %xmm0
+;;   6a: addq    $0x18, %rsp
+;;   6e: popq    %rbp
+;;   6f: retq
+;;   70: ud2

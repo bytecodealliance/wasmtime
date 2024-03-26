@@ -6,41 +6,43 @@
     (loop (result i32) (i32.const 1)) (if (then (call $dummy)))
   )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8716000000         	ja	0x31
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   31:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x10, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x31
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: addq    $0x10, %rsp
+;;   2f: popq    %rbp
+;;   30: retq
+;;   31: ud2
 ;;
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8733000000         	ja	0x4e
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 b801000000           	movl	$1, %eax
-;;      	 85c0                 	testl	%eax, %eax
-;;      	 0f8410000000         	je	0x48
-;;   38:	 4c89f7               	movq	%r14, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 e800000000           	callq	0x43
-;;      	 4c8b742408           	movq	8(%rsp), %r14
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   4e:	 0f0b                 	ud2	
+;; wasm[0]::function[1]:
+;;   40: pushq   %rbp
+;;   41: movq    %rsp, %rbp
+;;   44: movq    8(%rdi), %r11
+;;   48: movq    (%r11), %r11
+;;   4b: addq    $0x10, %r11
+;;   52: cmpq    %rsp, %r11
+;;   55: ja      0x8e
+;;   5b: movq    %rdi, %r14
+;;   5e: subq    $0x10, %rsp
+;;   62: movq    %rdi, 8(%rsp)
+;;   67: movq    %rsi, (%rsp)
+;;   6b: movl    $1, %eax
+;;   70: testl   %eax, %eax
+;;   72: je      0x88
+;;   78: movq    %r14, %rdi
+;;   7b: movq    %r14, %rsi
+;;   7e: callq   0
+;;   83: movq    8(%rsp), %r14
+;;   88: addq    $0x10, %rsp
+;;   8c: popq    %rbp
+;;   8d: retq
+;;   8e: ud2

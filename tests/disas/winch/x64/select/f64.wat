@@ -7,27 +7,28 @@
   )
 )
  
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c328000000       	addq	$0x28, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8744000000         	ja	0x5f
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec28             	subq	$0x28, %rsp
-;;      	 48897c2420           	movq	%rdi, 0x20(%rsp)
-;;      	 4889742418           	movq	%rsi, 0x18(%rsp)
-;;      	 f20f11442410         	movsd	%xmm0, 0x10(%rsp)
-;;      	 f20f114c2408         	movsd	%xmm1, 8(%rsp)
-;;      	 89542404             	movl	%edx, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 f20f10442408         	movsd	8(%rsp), %xmm0
-;;      	 f20f104c2410         	movsd	0x10(%rsp), %xmm1
-;;      	 83f800               	cmpl	$0, %eax
-;;      	 0f8404000000         	je	0x59
-;;   55:	 f20f10c1             	movsd	%xmm1, %xmm0
-;;      	 4883c428             	addq	$0x28, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   5f:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x28, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x5f
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x28, %rsp
+;;   22: movq    %rdi, 0x20(%rsp)
+;;   27: movq    %rsi, 0x18(%rsp)
+;;   2c: movsd   %xmm0, 0x10(%rsp)
+;;   32: movsd   %xmm1, 8(%rsp)
+;;   38: movl    %edx, 4(%rsp)
+;;   3c: movl    4(%rsp), %eax
+;;   40: movsd   8(%rsp), %xmm0
+;;   46: movsd   0x10(%rsp), %xmm1
+;;   4c: cmpl    $0, %eax
+;;   4f: je      0x59
+;;   55: movsd   %xmm1, %xmm0
+;;   59: addq    $0x28, %rsp
+;;   5d: popq    %rbp
+;;   5e: retq
+;;   5f: ud2

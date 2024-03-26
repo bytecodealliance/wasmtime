@@ -8,37 +8,38 @@
         (f32.min)
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f874e000000         	ja	0x69
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 f30f10053d000000     	movss	0x3d(%rip), %xmm0
-;;      	 f30f100d3d000000     	movss	0x3d(%rip), %xmm1
-;;      	 0f2ec8               	ucomiss	%xmm0, %xmm1
-;;      	 0f8518000000         	jne	0x5c
-;;      	 0f8a08000000         	jp	0x52
-;;   4a:	 0f56c8               	orps	%xmm0, %xmm1
-;;      	 e90e000000           	jmp	0x60
-;;   52:	 f30f58c8             	addss	%xmm0, %xmm1
-;;      	 0f8a04000000         	jp	0x60
-;;   5c:	 f30f5dc8             	minss	%xmm0, %xmm1
-;;      	 0f28c1               	movaps	%xmm1, %xmm0
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   69:	 0f0b                 	ud2	
-;;   6b:	 0000                 	addb	%al, (%rax)
-;;   6d:	 0000                 	addb	%al, (%rax)
-;;   6f:	 00cd                 	addb	%cl, %ch
-;;   71:	 cc                   	int3	
-;;   72:	 0c40                 	orb	$0x40, %al
-;;   74:	 0000                 	addb	%al, (%rax)
-;;   76:	 0000                 	addb	%al, (%rax)
-;;   78:	 cdcc                 	int	$0xcc
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x10, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x69
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: movss   0x3d(%rip), %xmm0
+;;   33: movss   0x3d(%rip), %xmm1
+;;   3b: ucomiss %xmm0, %xmm1
+;;   3e: jne     0x5c
+;;   44: jp      0x52
+;;   4a: orps    %xmm0, %xmm1
+;;   4d: jmp     0x60
+;;   52: addss   %xmm0, %xmm1
+;;   56: jp      0x60
+;;   5c: minss   %xmm0, %xmm1
+;;   60: movaps  %xmm1, %xmm0
+;;   63: addq    $0x10, %rsp
+;;   67: popq    %rbp
+;;   68: retq
+;;   69: ud2
+;;   6b: addb    %al, (%rax)
+;;   6d: addb    %al, (%rax)
+;;   6f: addb    %cl, %ch
+;;   71: int3
+;;   72: orb     $0x40, %al
+;;   74: addb    %al, (%rax)
+;;   76: addb    %al, (%rax)
+;;   78: int     $0xcc

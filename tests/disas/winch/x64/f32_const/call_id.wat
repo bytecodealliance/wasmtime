@@ -5,46 +5,48 @@
   (func $id-f32 (param f32) (result f32) (local.get 0))
   (func (export "type-first-f32") (result f32) (call $id-f32 (f32.const 1.32)))
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c318000000       	addq	$0x18, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8723000000         	ja	0x3e
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 f30f11442404         	movss	%xmm0, 4(%rsp)
-;;      	 f30f10442404         	movss	4(%rsp), %xmm0
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   3e:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x18, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x3e
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x18, %rsp
+;;   22: movq    %rdi, 0x10(%rsp)
+;;   27: movq    %rsi, 8(%rsp)
+;;   2c: movss   %xmm0, 4(%rsp)
+;;   32: movss   4(%rsp), %xmm0
+;;   38: addq    $0x18, %rsp
+;;   3c: popq    %rbp
+;;   3d: retq
+;;   3e: ud2
 ;;
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f872e000000         	ja	0x49
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 f30f100517000000     	movss	0x17(%rip), %xmm0
-;;      	 e800000000           	callq	0x3e
-;;      	 4c8b742408           	movq	8(%rsp), %r14
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   49:	 0f0b                 	ud2	
-;;   4b:	 0000                 	addb	%al, (%rax)
-;;   4d:	 0000                 	addb	%al, (%rax)
-;;   4f:	 00c3                 	addb	%al, %bl
-;;   51:	 f5                   	cmc	
-;;   52:	 a83f                 	testb	$0x3f, %al
+;; wasm[0]::function[1]:
+;;   40: pushq   %rbp
+;;   41: movq    %rsp, %rbp
+;;   44: movq    8(%rdi), %r11
+;;   48: movq    (%r11), %r11
+;;   4b: addq    $0x10, %r11
+;;   52: cmpq    %rsp, %r11
+;;   55: ja      0x89
+;;   5b: movq    %rdi, %r14
+;;   5e: subq    $0x10, %rsp
+;;   62: movq    %rdi, 8(%rsp)
+;;   67: movq    %rsi, (%rsp)
+;;   6b: movq    %r14, %rdi
+;;   6e: movq    %r14, %rsi
+;;   71: movss   0x17(%rip), %xmm0
+;;   79: callq   0
+;;   7e: movq    8(%rsp), %r14
+;;   83: addq    $0x10, %rsp
+;;   87: popq    %rbp
+;;   88: retq
+;;   89: ud2
+;;   8b: addb    %al, (%rax)
+;;   8d: addb    %al, (%rax)
+;;   8f: addb    %al, %bl
+;;   91: cmc
+;;   92: testb   $0x3f, %al

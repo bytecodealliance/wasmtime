@@ -29,135 +29,96 @@
 )
 
 
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c330000000       	addq	$0x30, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f87ad010000         	ja	0x1c8
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 89542404             	movl	%edx, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 83f801               	cmpl	$1, %eax
-;;      	 b800000000           	movl	$0, %eax
-;;      	 400f96c0             	setbe	%al
-;;      	 85c0                 	testl	%eax, %eax
-;;      	 0f840a000000         	je	0x52
-;;   48:	 b801000000           	movl	$1, %eax
-;;      	 e970010000           	jmp	0x1c2
-;;   52:	 8b442404             	movl	4(%rsp), %eax
-;;      	 83e802               	subl	$2, %eax
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 890424               	movl	%eax, (%rsp)
-;;      	 b900000000           	movl	$0, %ecx
-;;      	 4c89f2               	movq	%r14, %rdx
-;;      	 8b5a50               	movl	0x50(%rdx), %ebx
-;;      	 39d9                 	cmpl	%ebx, %ecx
-;;      	 0f8357010000         	jae	0x1ca
-;;   73:	 4189cb               	movl	%ecx, %r11d
-;;      	 4d6bdb08             	imulq	$8, %r11, %r11
-;;      	 488b5248             	movq	0x48(%rdx), %rdx
-;;      	 4889d6               	movq	%rdx, %rsi
-;;      	 4c01da               	addq	%r11, %rdx
-;;      	 39d9                 	cmpl	%ebx, %ecx
-;;      	 480f43d6             	cmovaeq	%rsi, %rdx
-;;      	 488b02               	movq	(%rdx), %rax
-;;      	 4885c0               	testq	%rax, %rax
-;;      	 0f8525000000         	jne	0xbb
-;;   96:	 4883ec04             	subq	$4, %rsp
-;;      	 890c24               	movl	%ecx, (%rsp)
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 be00000000           	movl	$0, %esi
-;;      	 8b1424               	movl	(%rsp), %edx
-;;      	 e800000000           	callq	0xad
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742414           	movq	0x14(%rsp), %r14
-;;      	 e904000000           	jmp	0xbf
-;;   bb:	 4883e0fe             	andq	$0xfffffffffffffffe, %rax
-;;      	 4885c0               	testq	%rax, %rax
-;;      	 0f8404010000         	je	0x1cc
-;;   c8:	 4d8b5e40             	movq	0x40(%r14), %r11
-;;      	 418b0b               	movl	(%r11), %ecx
-;;      	 8b5018               	movl	0x18(%rax), %edx
-;;      	 39d1                 	cmpl	%edx, %ecx
-;;      	 0f85f4000000         	jne	0x1ce
-;;   da:	 50                   	pushq	%rax
-;;      	 59                   	popq	%rcx
-;;      	 4c8b4120             	movq	0x20(%rcx), %r8
-;;      	 488b5910             	movq	0x10(%rcx), %rbx
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 4c89c7               	movq	%r8, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 8b542404             	movl	4(%rsp), %edx
-;;      	 ffd3                 	callq	*%rbx
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742410           	movq	0x10(%rsp), %r14
-;;      	 8b4c2404             	movl	4(%rsp), %ecx
-;;      	 83e901               	subl	$1, %ecx
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 890424               	movl	%eax, (%rsp)
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 890c24               	movl	%ecx, (%rsp)
-;;      	 b900000000           	movl	$0, %ecx
-;;      	 4c89f2               	movq	%r14, %rdx
-;;      	 8b5a50               	movl	0x50(%rdx), %ebx
-;;      	 39d9                 	cmpl	%ebx, %ecx
-;;      	 0f83a7000000         	jae	0x1d0
-;;  129:	 4189cb               	movl	%ecx, %r11d
-;;      	 4d6bdb08             	imulq	$8, %r11, %r11
-;;      	 488b5248             	movq	0x48(%rdx), %rdx
-;;      	 4889d6               	movq	%rdx, %rsi
-;;      	 4c01da               	addq	%r11, %rdx
-;;      	 39d9                 	cmpl	%ebx, %ecx
-;;      	 480f43d6             	cmovaeq	%rsi, %rdx
-;;      	 488b02               	movq	(%rdx), %rax
-;;      	 4885c0               	testq	%rax, %rax
-;;      	 0f852e000000         	jne	0x17a
-;;  14c:	 4883ec04             	subq	$4, %rsp
-;;      	 890c24               	movl	%ecx, (%rsp)
-;;      	 4883ec0c             	subq	$0xc, %rsp
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 be00000000           	movl	$0, %esi
-;;      	 8b54240c             	movl	0xc(%rsp), %edx
-;;      	 e800000000           	callq	0x168
-;;      	 4883c40c             	addq	$0xc, %rsp
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742418           	movq	0x18(%rsp), %r14
-;;      	 e904000000           	jmp	0x17e
-;;  17a:	 4883e0fe             	andq	$0xfffffffffffffffe, %rax
-;;      	 4885c0               	testq	%rax, %rax
-;;      	 0f844b000000         	je	0x1d2
-;;  187:	 4d8b5e40             	movq	0x40(%r14), %r11
-;;      	 418b0b               	movl	(%r11), %ecx
-;;      	 8b5018               	movl	0x18(%rax), %edx
-;;      	 39d1                 	cmpl	%edx, %ecx
-;;      	 0f853b000000         	jne	0x1d4
-;;  199:	 50                   	pushq	%rax
-;;      	 59                   	popq	%rcx
-;;      	 4c8b4120             	movq	0x20(%rcx), %r8
-;;      	 488b5910             	movq	0x10(%rcx), %rbx
-;;      	 4c89c7               	movq	%r8, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 8b1424               	movl	(%rsp), %edx
-;;      	 ffd3                 	callq	*%rbx
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742414           	movq	0x14(%rsp), %r14
-;;      	 8b0c24               	movl	(%rsp), %ecx
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 01c1                 	addl	%eax, %ecx
-;;      	 89c8                 	movl	%ecx, %eax
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;  1c8:	 0f0b                 	ud2	
-;;  1ca:	 0f0b                 	ud2	
-;;  1cc:	 0f0b                 	ud2	
-;;  1ce:	 0f0b                 	ud2	
-;;  1d0:	 0f0b                 	ud2	
-;;  1d2:	 0f0b                 	ud2	
-;;  1d4:	 0f0b                 	ud2	
+;; function u0:0(i64 vmctx, i64, i32) -> i32 fast {
+;;     gv0 = vmctx
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1
+;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
+;;     sig0 = (i64 vmctx, i64, i32) -> i32 fast
+;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
+;;     fn0 = colocated u1:9 sig1
+;;     stack_limit = gv2
+;;
+;;                                 block0(v0: i64, v1: i64, v2: i32):
+;; @0038                               v4 = iconst.i32 1
+;; @003a                               v5 = icmp ule v2, v4  ; v4 = 1
+;; @003a                               v6 = uextend.i32 v5
+;; @003b                               brif v6, block2, block4
+;;
+;;                                 block2:
+;; @003d                               v8 = iconst.i32 1
+;; @003f                               jump block3(v8)  ; v8 = 1
+;;
+;;                                 block4:
+;; @0042                               v9 = iconst.i32 2
+;; @0044                               v10 = isub.i32 v2, v9  ; v9 = 2
+;; @0045                               v11 = iconst.i32 0
+;; @0047                               v12 = iconst.i32 1
+;; @0047                               v13 = icmp uge v11, v12  ; v11 = 0, v12 = 1
+;; @0047                               v14 = uextend.i64 v11  ; v11 = 0
+;; @0047                               v15 = global_value.i64 gv4
+;; @0047                               v16 = ishl_imm v14, 3
+;; @0047                               v17 = iadd v15, v16
+;; @0047                               v18 = iconst.i64 0
+;; @0047                               v19 = select_spectre_guard v13, v18, v17  ; v18 = 0
+;; @0047                               v20 = load.i64 table_oob aligned table v19
+;; @0047                               v21 = band_imm v20, -2
+;; @0047                               brif v20, block6(v21), block5
+;;
+;;                                 block5 cold:
+;; @0047                               v23 = iconst.i32 0
+;; @0047                               v24 = global_value.i64 gv3
+;; @0047                               v25 = call fn0(v24, v23, v11)  ; v23 = 0, v11 = 0
+;; @0047                               jump block6(v25)
+;;
+;;                                 block6(v22: i64):
+;; @0047                               v26 = global_value.i64 gv3
+;; @0047                               v27 = load.i64 notrap aligned readonly v26+64
+;; @0047                               v28 = load.i32 notrap aligned readonly v27
+;; @0047                               v29 = load.i32 icall_null aligned readonly v22+24
+;; @0047                               v30 = icmp eq v29, v28
+;; @0047                               trapz v30, bad_sig
+;; @0047                               v31 = load.i64 notrap aligned readonly v22+16
+;; @0047                               v32 = load.i64 notrap aligned readonly v22+32
+;; @0047                               v33 = call_indirect sig0, v31(v32, v0, v10)
+;; @004c                               v35 = iconst.i32 1
+;; @004e                               v36 = isub.i32 v2, v35  ; v35 = 1
+;; @004f                               v37 = iconst.i32 0
+;; @0051                               v38 = iconst.i32 1
+;; @0051                               v39 = icmp uge v37, v38  ; v37 = 0, v38 = 1
+;; @0051                               v40 = uextend.i64 v37  ; v37 = 0
+;; @0051                               v41 = global_value.i64 gv4
+;; @0051                               v42 = ishl_imm v40, 3
+;; @0051                               v43 = iadd v41, v42
+;; @0051                               v44 = iconst.i64 0
+;; @0051                               v45 = select_spectre_guard v39, v44, v43  ; v44 = 0
+;; @0051                               v46 = load.i64 table_oob aligned table v45
+;; @0051                               v47 = band_imm v46, -2
+;; @0051                               brif v46, block8(v47), block7
+;;
+;;                                 block7 cold:
+;; @0051                               v49 = iconst.i32 0
+;; @0051                               v50 = global_value.i64 gv3
+;; @0051                               v51 = call fn0(v50, v49, v37)  ; v49 = 0, v37 = 0
+;; @0051                               jump block8(v51)
+;;
+;;                                 block8(v48: i64):
+;; @0051                               v52 = global_value.i64 gv3
+;; @0051                               v53 = load.i64 notrap aligned readonly v52+64
+;; @0051                               v54 = load.i32 notrap aligned readonly v53
+;; @0051                               v55 = load.i32 icall_null aligned readonly v48+24
+;; @0051                               v56 = icmp eq v55, v54
+;; @0051                               trapz v56, bad_sig
+;; @0051                               v57 = load.i64 notrap aligned readonly v48+16
+;; @0051                               v58 = load.i64 notrap aligned readonly v48+32
+;; @0051                               v59 = call_indirect sig0, v57(v58, v0, v36)
+;; @0054                               v60 = iadd.i32 v33, v59
+;; @0055                               jump block3(v60)
+;;
+;;                                 block3(v7: i32):
+;; @0056                               jump block1(v7)
+;;
+;;                                 block1(v3: i32):
+;; @0056                               return v3
+;; }

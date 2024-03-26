@@ -23,55 +23,56 @@
   )
   (export "fib" (func $fibonacci8))
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c320000000       	addq	$0x20, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f87a1000000         	ja	0xbc
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 89542404             	movl	%edx, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 83f801               	cmpl	$1, %eax
-;;      	 b800000000           	movl	$0, %eax
-;;      	 400f9ec0             	setle	%al
-;;      	 85c0                 	testl	%eax, %eax
-;;      	 0f8409000000         	je	0x51
-;;   48:	 8b442404             	movl	4(%rsp), %eax
-;;      	 e965000000           	jmp	0xb6
-;;   51:	 8b442404             	movl	4(%rsp), %eax
-;;      	 83e801               	subl	$1, %eax
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 890424               	movl	%eax, (%rsp)
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 8b542404             	movl	4(%rsp), %edx
-;;      	 e800000000           	callq	0x72
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742410           	movq	0x10(%rsp), %r14
-;;      	 8b4c2404             	movl	4(%rsp), %ecx
-;;      	 83e902               	subl	$2, %ecx
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 890424               	movl	%eax, (%rsp)
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 890c24               	movl	%ecx, (%rsp)
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 8b1424               	movl	(%rsp), %edx
-;;      	 e800000000           	callq	0xa2
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742414           	movq	0x14(%rsp), %r14
-;;      	 8b0c24               	movl	(%rsp), %ecx
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 01c1                 	addl	%eax, %ecx
-;;      	 89c8                 	movl	%ecx, %eax
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   bc:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x20, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0xbc
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x18, %rsp
+;;   22: movq    %rdi, 0x10(%rsp)
+;;   27: movq    %rsi, 8(%rsp)
+;;   2c: movl    %edx, 4(%rsp)
+;;   30: movl    4(%rsp), %eax
+;;   34: cmpl    $1, %eax
+;;   37: movl    $0, %eax
+;;   3c: setle   %al
+;;   40: testl   %eax, %eax
+;;   42: je      0x51
+;;   48: movl    4(%rsp), %eax
+;;   4c: jmp     0xb6
+;;   51: movl    4(%rsp), %eax
+;;   55: subl    $1, %eax
+;;   58: subq    $4, %rsp
+;;   5c: movl    %eax, (%rsp)
+;;   5f: subq    $4, %rsp
+;;   63: movq    %r14, %rdi
+;;   66: movq    %r14, %rsi
+;;   69: movl    4(%rsp), %edx
+;;   6d: callq   0
+;;   72: addq    $4, %rsp
+;;   76: addq    $4, %rsp
+;;   7a: movq    0x10(%rsp), %r14
+;;   7f: movl    4(%rsp), %ecx
+;;   83: subl    $2, %ecx
+;;   86: subq    $4, %rsp
+;;   8a: movl    %eax, (%rsp)
+;;   8d: subq    $4, %rsp
+;;   91: movl    %ecx, (%rsp)
+;;   94: movq    %r14, %rdi
+;;   97: movq    %r14, %rsi
+;;   9a: movl    (%rsp), %edx
+;;   9d: callq   0
+;;   a2: addq    $4, %rsp
+;;   a6: movq    0x14(%rsp), %r14
+;;   ab: movl    (%rsp), %ecx
+;;   ae: addq    $4, %rsp
+;;   b2: addl    %eax, %ecx
+;;   b4: movl    %ecx, %eax
+;;   b6: addq    $0x18, %rsp
+;;   ba: popq    %rbp
+;;   bb: retq
+;;   bc: ud2

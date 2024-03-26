@@ -6,22 +6,23 @@
 
   (func (export "f32.load") (result f32) (f32.load (i32.const 0)))
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8726000000         	ja	0x41
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 b800000000           	movl	$0, %eax
-;;      	 498b4e50             	movq	0x50(%r14), %rcx
-;;      	 4801c1               	addq	%rax, %rcx
-;;      	 f30f1001             	movss	(%rcx), %xmm0
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   41:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x10, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x41
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: movl    $0, %eax
+;;   30: movq    0x50(%r14), %rcx
+;;   34: addq    %rax, %rcx
+;;   37: movss   (%rcx), %xmm0
+;;   3b: addq    $0x10, %rsp
+;;   3f: popq    %rbp
+;;   40: retq
+;;   41: ud2

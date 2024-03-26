@@ -8,23 +8,24 @@
 	(i32.rem_u)
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8726000000         	ja	0x41
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 b905000000           	movl	$5, %ecx
-;;      	 b807000000           	movl	$7, %eax
-;;      	 31d2                 	xorl	%edx, %edx
-;;      	 f7f1                 	divl	%ecx
-;;      	 89d0                 	movl	%edx, %eax
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   41:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x10, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x41
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: movl    $5, %ecx
+;;   30: movl    $7, %eax
+;;   35: xorl    %edx, %edx
+;;   37: divl    %ecx
+;;   39: movl    %edx, %eax
+;;   3b: addq    $0x10, %rsp
+;;   3f: popq    %rbp
+;;   40: retq
+;;   41: ud2

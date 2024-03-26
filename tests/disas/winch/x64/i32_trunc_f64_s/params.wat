@@ -7,36 +7,36 @@
         (i32.trunc_f64_s)
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c318000000       	addq	$0x18, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8762000000         	ja	0x7d
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 f20f110424           	movsd	%xmm0, (%rsp)
-;;      	 f20f100424           	movsd	(%rsp), %xmm0
-;;      	 f20f2cc0             	cvttsd2si	%xmm0, %eax
-;;      	 83f801               	cmpl	$1, %eax
-;;      	 0f8134000000         	jno	0x77
-;;   43:	 660f2ec0             	ucomisd	%xmm0, %xmm0
-;;      	 0f8a32000000         	jp	0x7f
-;;   4d:	 49bb000020000000e0c1 	
-;; 				movabsq	$13970166044105375744, %r11
-;;      	 664d0f6efb           	movq	%r11, %xmm15
-;;      	 66410f2ec7           	ucomisd	%xmm15, %xmm0
-;;      	 0f861a000000         	jbe	0x81
-;;   67:	 66450f57ff           	xorpd	%xmm15, %xmm15
-;;      	 66440f2ef8           	ucomisd	%xmm0, %xmm15
-;;      	 0f820c000000         	jb	0x83
-;;   77:	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   7d:	 0f0b                 	ud2	
-;;   7f:	 0f0b                 	ud2	
-;;   81:	 0f0b                 	ud2	
-;;   83:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x18, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x7d
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x18, %rsp
+;;   22: movq    %rdi, 0x10(%rsp)
+;;   27: movq    %rsi, 8(%rsp)
+;;   2c: movsd   %xmm0, (%rsp)
+;;   31: movsd   (%rsp), %xmm0
+;;   36: cvttsd2si %xmm0, %eax
+;;   3a: cmpl    $1, %eax
+;;   3d: jno     0x77
+;;   43: ucomisd %xmm0, %xmm0
+;;   47: jp      0x7f
+;;   4d: movabsq $13970166044105375744, %r11
+;;   57: movq    %r11, %xmm15
+;;   5c: ucomisd %xmm15, %xmm0
+;;   61: jbe     0x81
+;;   67: xorpd   %xmm15, %xmm15
+;;   6c: ucomisd %xmm0, %xmm15
+;;   71: jb      0x83
+;;   77: addq    $0x18, %rsp
+;;   7b: popq    %rbp
+;;   7c: retq
+;;   7d: ud2
+;;   7f: ud2
+;;   81: ud2
+;;   83: ud2

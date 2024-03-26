@@ -16,34 +16,35 @@
     (i32.eq (local.get 0) (i32.const -14))
   )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c318000000       	addq	$0x18, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8759000000         	ja	0x74
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 48c7042400000000     	movq	$0, (%rsp)
-;;      	 b801000000           	movl	$1, %eax
-;;      	 89442404             	movl	%eax, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 6bc003               	imull	$3, %eax, %eax
-;;      	 89442404             	movl	%eax, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 83e805               	subl	$5, %eax
-;;      	 89442404             	movl	%eax, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 6bc007               	imull	$7, %eax, %eax
-;;      	 89442404             	movl	%eax, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 83f8f2               	cmpl	$-0xe, %eax
-;;      	 b800000000           	movl	$0, %eax
-;;      	 400f94c0             	sete	%al
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   74:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x18, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x74
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x18, %rsp
+;;   22: movq    %rdi, 0x10(%rsp)
+;;   27: movq    %rsi, 8(%rsp)
+;;   2c: movq    $0, (%rsp)
+;;   34: movl    $1, %eax
+;;   39: movl    %eax, 4(%rsp)
+;;   3d: movl    4(%rsp), %eax
+;;   41: imull   $3, %eax, %eax
+;;   44: movl    %eax, 4(%rsp)
+;;   48: movl    4(%rsp), %eax
+;;   4c: subl    $5, %eax
+;;   4f: movl    %eax, 4(%rsp)
+;;   53: movl    4(%rsp), %eax
+;;   57: imull   $7, %eax, %eax
+;;   5a: movl    %eax, 4(%rsp)
+;;   5e: movl    4(%rsp), %eax
+;;   62: cmpl    $-0xe, %eax
+;;   65: movl    $0, %eax
+;;   6a: sete    %al
+;;   6e: addq    $0x18, %rsp
+;;   72: popq    %rbp
+;;   73: retq
+;;   74: ud2

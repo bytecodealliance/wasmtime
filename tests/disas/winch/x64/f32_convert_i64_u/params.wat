@@ -7,31 +7,32 @@
         (f32.convert_i64_u)
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c318000000       	addq	$0x18, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f874d000000         	ja	0x68
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 48891424             	movq	%rdx, (%rsp)
-;;      	 488b0c24             	movq	(%rsp), %rcx
-;;      	 4883f900             	cmpq	$0, %rcx
-;;      	 0f8c0a000000         	jl	0x48
-;;   3e:	 f3480f2ac1           	cvtsi2ssq	%rcx, %xmm0
-;;      	 e91a000000           	jmp	0x62
-;;   48:	 4989cb               	movq	%rcx, %r11
-;;      	 49c1eb01             	shrq	$1, %r11
-;;      	 4889c8               	movq	%rcx, %rax
-;;      	 4883e001             	andq	$1, %rax
-;;      	 4c09d8               	orq	%r11, %rax
-;;      	 f3480f2ac0           	cvtsi2ssq	%rax, %xmm0
-;;      	 f30f58c0             	addss	%xmm0, %xmm0
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   68:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x18, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x68
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x18, %rsp
+;;   22: movq    %rdi, 0x10(%rsp)
+;;   27: movq    %rsi, 8(%rsp)
+;;   2c: movq    %rdx, (%rsp)
+;;   30: movq    (%rsp), %rcx
+;;   34: cmpq    $0, %rcx
+;;   38: jl      0x48
+;;   3e: cvtsi2ssq %rcx, %xmm0
+;;   43: jmp     0x62
+;;   48: movq    %rcx, %r11
+;;   4b: shrq    $1, %r11
+;;   4f: movq    %rcx, %rax
+;;   52: andq    $1, %rax
+;;   56: orq     %r11, %rax
+;;   59: cvtsi2ssq %rax, %xmm0
+;;   5e: addss   %xmm0, %xmm0
+;;   62: addq    $0x18, %rsp
+;;   66: popq    %rbp
+;;   67: retq
+;;   68: ud2

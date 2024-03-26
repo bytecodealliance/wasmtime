@@ -7,31 +7,32 @@
         (f64.convert_i32_u)
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f874b000000         	ja	0x66
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 b901000000           	movl	$1, %ecx
-;;      	 8bc9                 	movl	%ecx, %ecx
-;;      	 4883f900             	cmpq	$0, %rcx
-;;      	 0f8c0a000000         	jl	0x46
-;;   3c:	 f2480f2ac1           	cvtsi2sdq	%rcx, %xmm0
-;;      	 e91a000000           	jmp	0x60
-;;   46:	 4989cb               	movq	%rcx, %r11
-;;      	 49c1eb01             	shrq	$1, %r11
-;;      	 4889c8               	movq	%rcx, %rax
-;;      	 4883e001             	andq	$1, %rax
-;;      	 4c09d8               	orq	%r11, %rax
-;;      	 f2480f2ac0           	cvtsi2sdq	%rax, %xmm0
-;;      	 f20f58c0             	addsd	%xmm0, %xmm0
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   66:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x10, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x66
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: movl    $1, %ecx
+;;   30: movl    %ecx, %ecx
+;;   32: cmpq    $0, %rcx
+;;   36: jl      0x46
+;;   3c: cvtsi2sdq %rcx, %xmm0
+;;   41: jmp     0x60
+;;   46: movq    %rcx, %r11
+;;   49: shrq    $1, %r11
+;;   4d: movq    %rcx, %rax
+;;   50: andq    $1, %rax
+;;   54: orq     %r11, %rax
+;;   57: cvtsi2sdq %rax, %xmm0
+;;   5c: addsd   %xmm0, %xmm0
+;;   60: addq    $0x10, %rsp
+;;   64: popq    %rbp
+;;   65: retq
+;;   66: ud2

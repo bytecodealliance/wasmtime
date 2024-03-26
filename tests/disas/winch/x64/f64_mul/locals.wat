@@ -17,30 +17,31 @@
         f64.mul
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c320000000       	addq	$0x20, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8751000000         	ja	0x6c
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec20             	subq	$0x20, %rsp
-;;      	 48897c2418           	movq	%rdi, 0x18(%rsp)
-;;      	 4889742410           	movq	%rsi, 0x10(%rsp)
-;;      	 4531db               	xorl	%r11d, %r11d
-;;      	 4c895c2408           	movq	%r11, 8(%rsp)
-;;      	 4c891c24             	movq	%r11, (%rsp)
-;;      	 f20f100530000000     	movsd	0x30(%rip), %xmm0
-;;      	 f20f11442408         	movsd	%xmm0, 8(%rsp)
-;;      	 f20f10052a000000     	movsd	0x2a(%rip), %xmm0
-;;      	 f20f110424           	movsd	%xmm0, (%rsp)
-;;      	 f20f100424           	movsd	(%rsp), %xmm0
-;;      	 f20f104c2408         	movsd	8(%rsp), %xmm1
-;;      	 f20f59c8             	mulsd	%xmm0, %xmm1
-;;      	 660f28c1             	movapd	%xmm1, %xmm0
-;;      	 4883c420             	addq	$0x20, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   6c:	 0f0b                 	ud2	
-;;   6e:	 0000                 	addb	%al, (%rax)
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x20, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x6c
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x20, %rsp
+;;   22: movq    %rdi, 0x18(%rsp)
+;;   27: movq    %rsi, 0x10(%rsp)
+;;   2c: xorl    %r11d, %r11d
+;;   2f: movq    %r11, 8(%rsp)
+;;   34: movq    %r11, (%rsp)
+;;   38: movsd   0x30(%rip), %xmm0
+;;   40: movsd   %xmm0, 8(%rsp)
+;;   46: movsd   0x2a(%rip), %xmm0
+;;   4e: movsd   %xmm0, (%rsp)
+;;   53: movsd   (%rsp), %xmm0
+;;   58: movsd   8(%rsp), %xmm1
+;;   5e: mulsd   %xmm0, %xmm1
+;;   62: movapd  %xmm1, %xmm0
+;;   66: addq    $0x20, %rsp
+;;   6a: popq    %rbp
+;;   6b: retq
+;;   6c: ud2
+;;   6e: addb    %al, (%rax)

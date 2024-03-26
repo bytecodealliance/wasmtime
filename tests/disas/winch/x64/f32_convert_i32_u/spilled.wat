@@ -9,35 +9,36 @@
         end
     )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c314000000       	addq	$0x14, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f875d000000         	ja	0x78
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 b901000000           	movl	$1, %ecx
-;;      	 8bc9                 	movl	%ecx, %ecx
-;;      	 4883f900             	cmpq	$0, %rcx
-;;      	 0f8c0a000000         	jl	0x46
-;;   3c:	 f3480f2ac1           	cvtsi2ssq	%rcx, %xmm0
-;;      	 e91a000000           	jmp	0x60
-;;   46:	 4989cb               	movq	%rcx, %r11
-;;      	 49c1eb01             	shrq	$1, %r11
-;;      	 4889c8               	movq	%rcx, %rax
-;;      	 4883e001             	andq	$1, %rax
-;;      	 4c09d8               	orq	%r11, %rax
-;;      	 f3480f2ac0           	cvtsi2ssq	%rax, %xmm0
-;;      	 f30f58c0             	addss	%xmm0, %xmm0
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 f30f110424           	movss	%xmm0, (%rsp)
-;;      	 f30f100424           	movss	(%rsp), %xmm0
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   78:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x14, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x78
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: movl    $1, %ecx
+;;   30: movl    %ecx, %ecx
+;;   32: cmpq    $0, %rcx
+;;   36: jl      0x46
+;;   3c: cvtsi2ssq %rcx, %xmm0
+;;   41: jmp     0x60
+;;   46: movq    %rcx, %r11
+;;   49: shrq    $1, %r11
+;;   4d: movq    %rcx, %rax
+;;   50: andq    $1, %rax
+;;   54: orq     %r11, %rax
+;;   57: cvtsi2ssq %rax, %xmm0
+;;   5c: addss   %xmm0, %xmm0
+;;   60: subq    $4, %rsp
+;;   64: movss   %xmm0, (%rsp)
+;;   69: movss   (%rsp), %xmm0
+;;   6e: addq    $4, %rsp
+;;   72: addq    $0x10, %rsp
+;;   76: popq    %rbp
+;;   77: retq
+;;   78: ud2

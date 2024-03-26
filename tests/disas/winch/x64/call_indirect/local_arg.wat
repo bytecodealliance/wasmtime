@@ -16,84 +16,63 @@
     )
 )
 
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c318000000       	addq	$0x18, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f871b000000         	ja	0x36
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 89542404             	movl	%edx, 4(%rsp)
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   36:	 0f0b                 	ud2	
+;; function u0:0(i64 vmctx, i64, i32) fast {
+;;     gv0 = vmctx
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1
+;;     stack_limit = gv2
 ;;
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c320000000       	addq	$0x20, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f87cb000000         	ja	0xe6
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 48c7042400000000     	movq	$0, (%rsp)
-;;      	 448b5c2404           	movl	4(%rsp), %r11d
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 44891c24             	movl	%r11d, (%rsp)
-;;      	 b900000000           	movl	$0, %ecx
-;;      	 4c89f2               	movq	%r14, %rdx
-;;      	 8b5a50               	movl	0x50(%rdx), %ebx
-;;      	 39d9                 	cmpl	%ebx, %ecx
-;;      	 0f8394000000         	jae	0xe8
-;;   54:	 4189cb               	movl	%ecx, %r11d
-;;      	 4d6bdb08             	imulq	$8, %r11, %r11
-;;      	 488b5248             	movq	0x48(%rdx), %rdx
-;;      	 4889d6               	movq	%rdx, %rsi
-;;      	 4c01da               	addq	%r11, %rdx
-;;      	 39d9                 	cmpl	%ebx, %ecx
-;;      	 480f43d6             	cmovaeq	%rsi, %rdx
-;;      	 488b02               	movq	(%rdx), %rax
-;;      	 4885c0               	testq	%rax, %rax
-;;      	 0f8525000000         	jne	0x9c
-;;   77:	 4883ec04             	subq	$4, %rsp
-;;      	 890c24               	movl	%ecx, (%rsp)
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 be00000000           	movl	$0, %esi
-;;      	 8b1424               	movl	(%rsp), %edx
-;;      	 e800000000           	callq	0x8e
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742414           	movq	0x14(%rsp), %r14
-;;      	 e904000000           	jmp	0xa0
-;;   9c:	 4883e0fe             	andq	$0xfffffffffffffffe, %rax
-;;      	 4885c0               	testq	%rax, %rax
-;;      	 0f8441000000         	je	0xea
-;;   a9:	 4d8b5e40             	movq	0x40(%r14), %r11
-;;      	 418b0b               	movl	(%r11), %ecx
-;;      	 8b5018               	movl	0x18(%rax), %edx
-;;      	 39d1                 	cmpl	%edx, %ecx
-;;      	 0f8531000000         	jne	0xec
-;;   bb:	 488b5820             	movq	0x20(%rax), %rbx
-;;      	 488b4810             	movq	0x10(%rax), %rcx
-;;      	 4883ec04             	subq	$4, %rsp
-;;      	 4889df               	movq	%rbx, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 8b542404             	movl	4(%rsp), %edx
-;;      	 ffd1                 	callq	*%rcx
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4883c404             	addq	$4, %rsp
-;;      	 4c8b742410           	movq	0x10(%rsp), %r14
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   e6:	 0f0b                 	ud2	
-;;   e8:	 0f0b                 	ud2	
-;;   ea:	 0f0b                 	ud2	
-;;   ec:	 0f0b                 	ud2	
+;;                                 block0(v0: i64, v1: i64, v2: i32):
+;; @0032                               jump block1
+;;
+;;                                 block1:
+;; @0032                               return
+;; }
+;;
+;; function u0:1(i64 vmctx, i64) fast {
+;;     gv0 = vmctx
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1
+;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
+;;     sig0 = (i64 vmctx, i64, i32) fast
+;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
+;;     fn0 = colocated u1:9 sig1
+;;     stack_limit = gv2
+;;
+;;                                 block0(v0: i64, v1: i64):
+;; @0035                               v2 = iconst.i32 0
+;; @0039                               v3 = iconst.i32 0
+;; @003b                               v4 = iconst.i32 1
+;; @003b                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 1
+;; @003b                               v6 = uextend.i64 v3  ; v3 = 0
+;; @003b                               v7 = global_value.i64 gv4
+;; @003b                               v8 = ishl_imm v6, 3
+;; @003b                               v9 = iadd v7, v8
+;; @003b                               v10 = iconst.i64 0
+;; @003b                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
+;; @003b                               v12 = load.i64 table_oob aligned table v11
+;; @003b                               v13 = band_imm v12, -2
+;; @003b                               brif v12, block3(v13), block2
+;;
+;;                                 block2 cold:
+;; @003b                               v15 = iconst.i32 0
+;; @003b                               v16 = global_value.i64 gv3
+;; @003b                               v17 = call fn0(v16, v15, v3)  ; v15 = 0, v3 = 0
+;; @003b                               jump block3(v17)
+;;
+;;                                 block3(v14: i64):
+;; @003b                               v18 = global_value.i64 gv3
+;; @003b                               v19 = load.i64 notrap aligned readonly v18+64
+;; @003b                               v20 = load.i32 notrap aligned readonly v19
+;; @003b                               v21 = load.i32 icall_null aligned readonly v14+24
+;; @003b                               v22 = icmp eq v21, v20
+;; @003b                               trapz v22, bad_sig
+;; @003b                               v23 = load.i64 notrap aligned readonly v14+16
+;; @003b                               v24 = load.i64 notrap aligned readonly v14+32
+;; @003b                               call_indirect sig0, v23(v24, v0, v2)  ; v2 = 0
+;; @003e                               jump block1
+;;
+;;                                 block1:
+;; @003e                               return
+;; }

@@ -13,58 +13,60 @@
     )
   )
 )
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f8716000000         	ja	0x31
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   31:	 0f0b                 	ud2	
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x10, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x31
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: addq    $0x10, %rsp
+;;   2f: popq    %rbp
+;;   30: retq
+;;   31: ud2
 ;;
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c320000000       	addq	$0x20, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f877d000000         	ja	0x98
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec18             	subq	$0x18, %rsp
-;;      	 48897c2410           	movq	%rdi, 0x10(%rsp)
-;;      	 4889742408           	movq	%rsi, 8(%rsp)
-;;      	 89542404             	movl	%edx, 4(%rsp)
-;;      	 8b442404             	movl	4(%rsp), %eax
-;;      	 85c0                 	testl	%eax, %eax
-;;      	 0f840a000000         	je	0x46
-;;   3c:	 b801000000           	movl	$1, %eax
-;;      	 e905000000           	jmp	0x4b
-;;   46:	 b800000000           	movl	$0, %eax
-;;      	 85c0                 	testl	%eax, %eax
-;;      	 0f8422000000         	je	0x75
-;;   53:	 4883ec08             	subq	$8, %rsp
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 e800000000           	callq	0x62
-;;      	 4883c408             	addq	$8, %rsp
-;;      	 4c8b742410           	movq	0x10(%rsp), %r14
-;;      	 b802000000           	movl	$2, %eax
-;;      	 e91d000000           	jmp	0x92
-;;   75:	 4883ec08             	subq	$8, %rsp
-;;      	 4c89f7               	movq	%r14, %rdi
-;;      	 4c89f6               	movq	%r14, %rsi
-;;      	 e800000000           	callq	0x84
-;;      	 4883c408             	addq	$8, %rsp
-;;      	 4c8b742410           	movq	0x10(%rsp), %r14
-;;      	 b803000000           	movl	$3, %eax
-;;      	 4883c418             	addq	$0x18, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   98:	 0f0b                 	ud2	
+;; wasm[0]::function[1]:
+;;   40: pushq   %rbp
+;;   41: movq    %rsp, %rbp
+;;   44: movq    8(%rdi), %r11
+;;   48: movq    (%r11), %r11
+;;   4b: addq    $0x20, %r11
+;;   52: cmpq    %rsp, %r11
+;;   55: ja      0xd8
+;;   5b: movq    %rdi, %r14
+;;   5e: subq    $0x18, %rsp
+;;   62: movq    %rdi, 0x10(%rsp)
+;;   67: movq    %rsi, 8(%rsp)
+;;   6c: movl    %edx, 4(%rsp)
+;;   70: movl    4(%rsp), %eax
+;;   74: testl   %eax, %eax
+;;   76: je      0x86
+;;   7c: movl    $1, %eax
+;;   81: jmp     0x8b
+;;   86: movl    $0, %eax
+;;   8b: testl   %eax, %eax
+;;   8d: je      0xb5
+;;   93: subq    $8, %rsp
+;;   97: movq    %r14, %rdi
+;;   9a: movq    %r14, %rsi
+;;   9d: callq   0
+;;   a2: addq    $8, %rsp
+;;   a6: movq    0x10(%rsp), %r14
+;;   ab: movl    $2, %eax
+;;   b0: jmp     0xd2
+;;   b5: subq    $8, %rsp
+;;   b9: movq    %r14, %rdi
+;;   bc: movq    %r14, %rsi
+;;   bf: callq   0
+;;   c4: addq    $8, %rsp
+;;   c8: movq    0x10(%rsp), %r14
+;;   cd: movl    $3, %eax
+;;   d2: addq    $0x18, %rsp
+;;   d6: popq    %rbp
+;;   d7: retq
+;;   d8: ud2

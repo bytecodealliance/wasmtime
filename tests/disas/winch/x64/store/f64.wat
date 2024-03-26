@@ -6,29 +6,30 @@
   (func (export "f64.store") (f64.store (i32.const 0) (f64.const nan:0x4000000000000)))
 )
 
-;;      	 55                   	pushq	%rbp
-;;      	 4889e5               	movq	%rsp, %rbp
-;;      	 4c8b5f08             	movq	8(%rdi), %r11
-;;      	 4d8b1b               	movq	(%r11), %r11
-;;      	 4981c310000000       	addq	$0x10, %r11
-;;      	 4939e3               	cmpq	%rsp, %r11
-;;      	 0f872e000000         	ja	0x49
-;;   1b:	 4989fe               	movq	%rdi, %r14
-;;      	 4883ec10             	subq	$0x10, %rsp
-;;      	 48897c2408           	movq	%rdi, 8(%rsp)
-;;      	 48893424             	movq	%rsi, (%rsp)
-;;      	 f20f10051d000000     	movsd	0x1d(%rip), %xmm0
-;;      	 b800000000           	movl	$0, %eax
-;;      	 498b4e50             	movq	0x50(%r14), %rcx
-;;      	 4801c1               	addq	%rax, %rcx
-;;      	 f20f1101             	movsd	%xmm0, (%rcx)
-;;      	 4883c410             	addq	$0x10, %rsp
-;;      	 5d                   	popq	%rbp
-;;      	 c3                   	retq	
-;;   49:	 0f0b                 	ud2	
-;;   4b:	 0000                 	addb	%al, (%rax)
-;;   4d:	 0000                 	addb	%al, (%rax)
-;;   4f:	 0000                 	addb	%al, (%rax)
-;;   51:	 0000                 	addb	%al, (%rax)
-;;   53:	 0000                 	addb	%al, (%rax)
-;;   55:	 00f4                 	addb	%dh, %ah
+;; wasm[0]::function[0]:
+;;    0: pushq   %rbp
+;;    1: movq    %rsp, %rbp
+;;    4: movq    8(%rdi), %r11
+;;    8: movq    (%r11), %r11
+;;    b: addq    $0x10, %r11
+;;   12: cmpq    %rsp, %r11
+;;   15: ja      0x49
+;;   1b: movq    %rdi, %r14
+;;   1e: subq    $0x10, %rsp
+;;   22: movq    %rdi, 8(%rsp)
+;;   27: movq    %rsi, (%rsp)
+;;   2b: movsd   0x1d(%rip), %xmm0
+;;   33: movl    $0, %eax
+;;   38: movq    0x50(%r14), %rcx
+;;   3c: addq    %rax, %rcx
+;;   3f: movsd   %xmm0, (%rcx)
+;;   43: addq    $0x10, %rsp
+;;   47: popq    %rbp
+;;   48: retq
+;;   49: ud2
+;;   4b: addb    %al, (%rax)
+;;   4d: addb    %al, (%rax)
+;;   4f: addb    %al, (%rax)
+;;   51: addb    %al, (%rax)
+;;   53: addb    %al, (%rax)
+;;   55: addb    %dh, %ah
