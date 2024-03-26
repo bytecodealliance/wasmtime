@@ -132,7 +132,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
 ;;     sig0 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     sig1 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast
 ;;     fn0 = colocated u1:9 sig0
@@ -147,7 +147,7 @@
 ;;                                     v29 -> v3
 ;;                                     v30 -> v4
 ;;                                     v31 -> v5
-;; @0048                               v12 = load.i64 notrap aligned v0+72
+;; @0048                               v12 = load.i64 notrap aligned readonly v0+72
 ;;                                     v66 = iconst.i64 8
 ;; @0048                               v14 = iadd v12, v66  ; v66 = 8
 ;; @0048                               v17 = load.i64 table_oob aligned table v14
@@ -166,9 +166,8 @@
 ;; @004a                               v23 = load.i64 null_reference aligned readonly v19+16
 ;; @004a                               v24 = load.i64 notrap aligned readonly v19+32
 ;; @004a                               v25 = call_indirect sig1, v23(v24, v0, v2, v3, v4, v5)
-;; @005b                               v36 = load.i64 notrap aligned v0+72
 ;;                                     v74 = iconst.i64 16
-;; @005b                               v38 = iadd v36, v74  ; v74 = 16
+;; @005b                               v38 = iadd.i64 v12, v74  ; v74 = 16
 ;; @005b                               v41 = load.i64 table_oob aligned table v38
 ;;                                     v75 = iconst.i64 -2
 ;;                                     v76 = band v41, v75  ; v75 = -2
@@ -197,7 +196,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     fn0 = colocated u1:9 sig1
@@ -212,7 +211,7 @@
 ;;                                     v29 -> v3
 ;;                                     v30 -> v4
 ;;                                     v31 -> v5
-;; @0075                               v12 = load.i64 notrap aligned v0+72
+;; @0075                               v12 = load.i64 notrap aligned readonly v0+72
 ;;                                     v66 = iconst.i64 8
 ;; @0075                               v14 = iadd v12, v66  ; v66 = 8
 ;; @0075                               v17 = load.i64 table_oob aligned table v14
@@ -231,9 +230,8 @@
 ;; @0075                               v23 = load.i64 icall_null aligned readonly v19+16
 ;; @0075                               v24 = load.i64 notrap aligned readonly v19+32
 ;; @0075                               v25 = call_indirect sig0, v23(v24, v0, v2, v3, v4, v5)
-;; @0087                               v36 = load.i64 notrap aligned v0+72
 ;;                                     v74 = iconst.i64 16
-;; @0087                               v38 = iadd v36, v74  ; v74 = 16
+;; @0087                               v38 = iadd.i64 v12, v74  ; v74 = 16
 ;; @0087                               v41 = load.i64 table_oob aligned table v38
 ;;                                     v75 = iconst.i64 -2
 ;;                                     v76 = band v41, v75  ; v75 = -2

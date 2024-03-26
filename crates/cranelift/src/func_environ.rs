@@ -791,15 +791,21 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             }
         };
 
+        let table = &self.module.table_plans[index].table;
+        let element_size = self.reference_type(table.wasm_ty.heap_type).bytes();
+
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            flags: MemFlags::trusted(),
+            flags: if Some(table.minimum) == table.maximum {
+                // A fixed-size table can't be resized so its base address won't
+                // change.
+                MemFlags::trusted().with_readonly()
+            } else {
+                MemFlags::trusted()
+            },
         });
-
-        let table = &self.module.table_plans[index].table;
-        let element_size = self.reference_type(table.wasm_ty.heap_type).bytes();
 
         let bound = if Some(table.minimum) == table.maximum {
             TableSize::Static {
