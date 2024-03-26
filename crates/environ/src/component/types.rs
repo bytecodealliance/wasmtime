@@ -1136,8 +1136,8 @@ impl From<&wasmparser::PrimitiveValType> for InterfaceType {
             wasmparser::PrimitiveValType::U32 => InterfaceType::U32,
             wasmparser::PrimitiveValType::S64 => InterfaceType::S64,
             wasmparser::PrimitiveValType::U64 => InterfaceType::U64,
-            wasmparser::PrimitiveValType::Float32 => InterfaceType::Float32,
-            wasmparser::PrimitiveValType::Float64 => InterfaceType::Float64,
+            wasmparser::PrimitiveValType::F32 => InterfaceType::Float32,
+            wasmparser::PrimitiveValType::F64 => InterfaceType::Float64,
             wasmparser::PrimitiveValType::Char => InterfaceType::Char,
             wasmparser::PrimitiveValType::String => InterfaceType::String,
         }
