@@ -2329,11 +2329,6 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::CallUnknown { info, dest, .. } => {
             let info = info.as_ref().expect("CallInfo is expected in this path");
             match dest {
-                RegMem::Reg { reg } if info.callee_conv == CallConv::Tail => {
-                    // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
-                    // This shouldn't be a fixed register constraint.
-                    collector.reg_fixed_use(*reg, regs::r15())
-                }
                 RegMem::Reg { reg } if info.callee_conv == CallConv::Winch => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
                     // This shouldn't be a fixed register constraint.
