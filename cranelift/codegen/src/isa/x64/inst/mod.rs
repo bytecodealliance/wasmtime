@@ -1687,14 +1687,14 @@ impl PrettyPrint for Inst {
 
             Inst::GrowArgumentArea { amount, tmp } => {
                 let amount = *amount;
-                let tmp = regs::show_reg(tmp.to_reg().to_reg());
-                format!("grow_frame {amount} {tmp}")
+                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
+                format!("grow_argument_area {amount} {tmp}")
             }
 
             Inst::ShrinkArgumentArea { amount, tmp } => {
                 let amount = *amount;
-                let tmp = regs::show_reg(tmp.to_reg().to_reg());
-                format!("shrink_frame {amount} {tmp}")
+                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
+                format!("shrink_argument_area {amount} {tmp}")
             }
 
             Inst::Args { args } => {
