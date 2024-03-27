@@ -2071,7 +2071,13 @@ impl<M: ABIMachineSpec> Callee<M> {
 /// The register or stack slot location of an argument.
 #[derive(Clone, Debug)]
 pub enum ArgLoc {
+    /// The physical register that the value will be passed through.
     Reg(PReg),
+
+    /// The offset into the argument area where this value will be passed. It's up to the consumer
+    /// of the `ArgLoc::Stack` variant to decide how to find the argument area that the `offset`
+    /// value is relative to. Depending on the abi, this may end up being relative to SP or FP, for
+    /// example with a tail call where the frame is reused.
     Stack { offset: i64, ty: ir::Type },
 }
 
