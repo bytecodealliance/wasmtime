@@ -53,29 +53,20 @@ impl X64ABIMachineSpec {
 
     fn gen_probestack_loop(
         insts: &mut SmallInstVec<Inst>,
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         frame_size: u32,
         guard_size: u32,
     ) {
         // We have to use a caller-saved register since clobbering only
         // happens after stack probing.
-        let tmp = match call_conv {
-            // All registers are caller-saved on the `tail` calling convention,
-            // and `r15` is not used to pass arguments.
-            isa::CallConv::Tail => regs::r15(),
-            // `r11` is caller saved on both Fastcall and SystemV, and not used
-            // for argument passing, so it's pretty much free. It is also not
-            // used by the stacklimit mechanism.
-            _ => {
-                let tmp = regs::r11();
-                debug_assert!({
-                    let real_reg = tmp.to_real_reg().unwrap();
-                    !is_callee_save_systemv(real_reg, false)
-                        && !is_callee_save_fastcall(real_reg, false)
-                });
-                tmp
-            }
-        };
+        // `r11` is caller saved on both Fastcall and SystemV, and not used
+        // for argument passing, so it's pretty much free. It is also not
+        // used by the stacklimit mechanism.
+        let tmp = regs::r11();
+        debug_assert!({
+            let real_reg = tmp.to_real_reg().unwrap();
+            !is_callee_save_systemv(real_reg, false) && !is_callee_save_fastcall(real_reg, false)
+        });
 
         insts.push(Inst::StackProbeLoop {
             tmp: Writable::from_reg(tmp),
@@ -439,19 +430,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::lea(mem, into_reg)
     }
 
-    fn get_stacklimit_reg(call_conv: isa::CallConv) -> Reg {
+    fn get_stacklimit_reg(_call_conv: isa::CallConv) -> Reg {
         // As per comment on trait definition, we must return a caller-save
         // register that is not used as an argument here.
-        match call_conv {
-            isa::CallConv::Tail => regs::r14(),
-            _ => {
-                debug_assert!(!is_callee_save_systemv(
-                    regs::r10().to_real_reg().unwrap(),
-                    false
-                ));
-                regs::r10()
-            }
-        }
+        debug_assert!(!is_callee_save_systemv(
+            regs::r10().to_real_reg().unwrap(),
+            false
+        ));
+        regs::r10()
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {

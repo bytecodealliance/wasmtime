@@ -16,12 +16,12 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $16, %rsp
-;   movq    %r15, 0(%rsp)
+;   movq    %rbx, 0(%rsp)
 ; block0:
-;   load_ext_name userextname0+0, %r15
-;   call    *%r15
-;   call    *%r15
-;   movq    0(%rsp), %r15
+;   load_ext_name userextname0+0, %rbx
+;   call    *%rbx
+;   call    *%rbx
+;   movq    0(%rsp), %rbx
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -32,12 +32,12 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq %r15, (%rsp)
+;   movq %rbx, (%rsp)
 ; block1: ; offset 0xc
-;   movabsq $0, %r15 ; reloc_external Abs8 u1:7 0
-;   callq *%r15
-;   callq *%r15
-;   movq (%rsp), %r15
+;   movabsq $0, %rbx ; reloc_external Abs8 u1:7 0
+;   callq *%rbx
+;   callq *%rbx
+;   movq (%rsp), %rbx
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

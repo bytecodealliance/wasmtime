@@ -103,9 +103,9 @@ block0:
 ;   movq    %r15, 48(%rsp)
 ;   movq    %rbx, 56(%rsp)
 ;   movq    %rdi, 64(%rsp)
-;   load_ext_name %tail_callee_stack_args+0, %r15
+;   load_ext_name %tail_callee_stack_args+0, %rax
 ;   movq    rsp(0 + virtual offset), %rdi
-;   call    *%r15
+;   call    *%rax
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r12
 ;   movq    32(%rsp), %r13
@@ -153,9 +153,9 @@ block0:
 ;   movq %r15, 0x30(%rsp)
 ;   movq %rbx, 0x38(%rsp)
 ;   movq %rdi, 0x40(%rsp)
-;   movabsq $0, %r15 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   movabsq $0, %rax ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   movq 0x50(%rsp), %rdi
-;   callq *%r15
+;   callq *%rax
 ;   movq 0x10(%rsp), %rbx
 ;   movq 0x18(%rsp), %r12
 ;   movq 0x20(%rsp), %r13
@@ -742,14 +742,14 @@ block0:
 ;   movq    %r11, 152(%rsp)
 ;   lea     176(%rsp), %rax
 ;   movq    %rax, 160(%rsp)
-;   load_ext_name %tail_callee_stack_args_and_rets+0, %r15
+;   load_ext_name %tail_callee_stack_args_and_rets+0, %r10
 ;   movq    rsp(72 + virtual offset), %rcx
 ;   movq    rsp(80 + virtual offset), %rdx
 ;   movq    rsp(88 + virtual offset), %rsi
 ;   movq    rsp(96 + virtual offset), %rdi
 ;   movq    rsp(64 + virtual offset), %r8
 ;   movq    rsp(56 + virtual offset), %r9
-;   call    *%r15
+;   call    *%r10
 ;   movq    0(%rsp), %r10
 ;   movq    8(%rsp), %rsi
 ;   movq    16(%rsp), %rax
@@ -859,14 +859,14 @@ block0:
 ;   movq %r11, 0x98(%rsp)
 ;   leaq 0xb0(%rsp), %rax
 ;   movq %rax, 0xa0(%rsp)
-;   movabsq $0, %r15 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
 ;   movq 0x188(%rsp), %rcx
 ;   movq 0x190(%rsp), %rdx
 ;   movq 0x198(%rsp), %rsi
 ;   movq 0x1a0(%rsp), %rdi
 ;   movq 0x180(%rsp), %r8
 ;   movq 0x178(%rsp), %r9
-;   callq *%r15
+;   callq *%r10
 ;   movq (%rsp), %r10
 ;   movq 8(%rsp), %rsi
 ;   movq 0x10(%rsp), %rax
