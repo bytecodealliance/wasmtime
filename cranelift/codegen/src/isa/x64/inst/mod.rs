@@ -124,8 +124,8 @@ impl Inst {
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
-            | Inst::GrowFrame { .. }
-            | Inst::ShrinkFrame { .. }
+            | Inst::GrowArgumentArea { .. }
+            | Inst::ShrinkArgumentArea { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::Ret { .. }
@@ -1685,13 +1685,13 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::GrowFrame { amount, tmp } => {
+            Inst::GrowArgumentArea { amount, tmp } => {
                 let amount = *amount;
                 let tmp = regs::show_reg(tmp.to_reg().to_reg());
                 format!("grow_frame {amount} {tmp}")
             }
 
-            Inst::ShrinkFrame { amount, tmp } => {
+            Inst::ShrinkArgumentArea { amount, tmp } => {
                 let amount = *amount;
                 let tmp = regs::show_reg(tmp.to_reg().to_reg());
                 format!("shrink_frame {amount} {tmp}")
@@ -2362,7 +2362,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::GrowFrame { tmp, .. } | Inst::ShrinkFrame { tmp, .. } => {
+        Inst::GrowArgumentArea { tmp, .. } | Inst::ShrinkArgumentArea { tmp, .. } => {
             collector.reg_def(tmp.to_writable_reg());
         }
 

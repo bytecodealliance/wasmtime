@@ -541,15 +541,22 @@
        (ReturnCallUnknown (callee RegMem)
                           (info BoxReturnCallInfo))
 
-       ;; Move the frame down in memory to accommodate additional stack
-       ;; arguments, when setting up for a tail call.
-       (GrowFrame (amount u32)
-                  (tmp WritableGpr))
+       ;; GrowArgumentArea does a memmove of everything in the frame except for
+       ;; the argument area, to make room for more arguments. That includes all
+       ;; the stack slots, the callee-saved registers, and the saved FP and
+       ;; return address. To keep the stack pointers in sync with that change,
+       ;; it also subtracts the given amount from both the FP and SP registers.
+       (GrowArgumentArea (amount u32)
+                         (tmp WritableGpr))
 
-       ;; Move the frame up in memory to accommodate fewer stack arguments, when
-       ;; setting up for a tail call.
-       (ShrinkFrame (amount u32)
-                    (tmp WritableGpr))
+       ;; ShrinkArgumentArea does a memmove of everything in the frame except
+       ;; for the argument area, to trim space for fewer arguments. That
+       ;; includes all the stack slots, the callee-saved registers, and the
+       ;; saved FP and return address. To keep the stack pointers in sync with
+       ;; that change, it also adds the given amount to both the FP and SP
+       ;; registers.
+       (ShrinkArgumentArea (amount u32)
+                           (tmp WritableGpr))
 
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args

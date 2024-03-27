@@ -912,14 +912,14 @@ impl X64CallSite {
             core::cmp::Ordering::Equal => {}
             core::cmp::Ordering::Less => {
                 let tmp = ctx.temp_writable_gpr();
-                ctx.emit(Inst::ShrinkFrame {
+                ctx.emit(Inst::ShrinkArgumentArea {
                     amount: old_stack_arg_size - new_stack_arg_size,
                     tmp,
                 });
             }
             core::cmp::Ordering::Greater => {
                 let tmp = ctx.temp_writable_gpr();
-                ctx.emit(Inst::GrowFrame {
+                ctx.emit(Inst::GrowArgumentArea {
                     amount: new_stack_arg_size - old_stack_arg_size,
                     tmp,
                 });

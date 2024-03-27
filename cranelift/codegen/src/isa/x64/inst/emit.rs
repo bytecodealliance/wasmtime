@@ -1700,13 +1700,13 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::GrowFrame { amount, tmp } => {
+        Inst::GrowArgumentArea { amount, tmp } => {
             debug_assert!(*amount > 0);
             debug_assert_eq!(*amount % 8, 0);
 
             assert!(
                 info.flags.preserve_frame_pointers(),
-                "frame pointers must be enabled for GrowFrame"
+                "frame pointers must be enabled for GrowArgumentArea"
             );
 
             let tmp = allocs.next(tmp.to_reg().to_reg());
@@ -1761,13 +1761,13 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::ShrinkFrame { amount, tmp } => {
+        Inst::ShrinkArgumentArea { amount, tmp } => {
             debug_assert!(*amount > 0);
             debug_assert_eq!(*amount % 8, 0);
 
             assert!(
                 info.flags.preserve_frame_pointers(),
-                "frame pointers must be enabled for ShrinkFrame"
+                "frame pointers must be enabled for ShrinkArgumentArea"
             );
 
             let tmp = allocs.next(tmp.to_reg().to_reg());
