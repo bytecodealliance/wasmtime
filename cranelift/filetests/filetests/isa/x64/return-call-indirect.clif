@@ -14,7 +14,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lea     10(%rax), %rax
+;   lea     10(%rdi), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -24,7 +24,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   addq $0xa, %rax
+;   leaq 0xa(%rdi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -42,20 +42,18 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i64+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;   load_ext_name %callee_i64+0, %rax
+;   return_call_unknown %rax %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rdx ; reloc_external Abs8 %callee_i64 0
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   movabsq $0, %rax ; reloc_external Abs8 %callee_i64 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%rax
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -72,20 +70,18 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i64+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;   load_ext_name %callee_i64+0, %rax
+;   return_call_unknown %rax %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leaq (%rip), %rdx ; reloc_external CallPCRel4 %callee_i64 -4
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   leaq (%rip), %rax ; reloc_external CallPCRel4 %callee_i64 -4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%rax
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -143,20 +139,18 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_f64+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %xmm0=%xmm0
+;   load_ext_name %callee_f64+0, %rax
+;   return_call_unknown %rax %xmm0=%xmm0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rdx ; reloc_external Abs8 %callee_f64 0
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   movabsq $0, %rax ; reloc_external Abs8 %callee_f64 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%rax
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -171,7 +165,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   testb   %al, %al
+;   testb   %dil, %dil
 ;   setz    %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -182,7 +176,7 @@ block0(v0: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   testb %al, %al
+;   testb %dil, %dil
 ;   sete %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -201,18 +195,16 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i8+0, %rdx
-;   movq    %rbp, %rcx
-;   return_call_unknown %rdx new_stack_arg_size:0 old_stack_arg_size:0 ret_addr:None fp:%v194 tmp:%v195 %rax=%rax
+;   load_ext_name %callee_i8+0, %rax
+;   return_call_unknown %rax %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rdx ; reloc_external Abs8 %callee_i8 0
-;   movq %rbp, %rcx
-;   movq (%rcx), %rbp
-;   leaq 8(%rcx), %rsp
-;   jmpq *%rdx
+;   movabsq $0, %rax ; reloc_external Abs8 %callee_i8 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%rax
 
