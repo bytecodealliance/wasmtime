@@ -1349,12 +1349,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glob"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
-
-[[package]]
 name = "h2"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4132,56 +4126,6 @@ dependencies = [
  "wasmparser 0.202.0",
  "wasmtime-cranelift",
  "wasmtime-environ",
-]
-
-[[package]]
-name = "winch-filetests"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "capstone",
- "cranelift-codegen",
- "serde",
- "serde_derive",
- "similar",
- "target-lexicon",
- "toml",
- "wasmparser 0.202.0",
- "wasmtime-environ",
- "wat",
- "winch-codegen",
- "winch-test-macros",
-]
-
-[[package]]
-name = "winch-test-macros"
-version = "0.0.0"
-dependencies = [
- "glob",
- "proc-macro2",
- "quote",
- "syn 2.0.32",
-]
-
-[[package]]
-name = "winch-tools"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "capstone",
- "clap",
- "cranelift-codegen",
- "glob",
- "serde",
- "similar",
- "target-lexicon",
- "toml",
- "wasmparser 0.202.0",
- "wasmtime-environ",
- "wat",
- "winch-codegen",
- "winch-filetests",
- "winch-test-macros",
 ]
 
 [[package]]

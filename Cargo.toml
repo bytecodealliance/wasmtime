@@ -122,7 +122,6 @@ members = [
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
-  "crates/winch",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
@@ -130,8 +129,7 @@ members = [
   "examples/min-platform",
   "examples/min-platform/embedding",
   "fuzz",
-  "winch",
-  "winch/codegen", "crates/slab",
+  "winch/codegen",
 ]
 exclude = [
   'docs/rust_wasi_markdown_parser',
@@ -211,8 +209,6 @@ cranelift-control = { path = "cranelift/control", version = "0.107.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.107.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.18.0" }
-winch-filetests = { path = "winch/filetests" }
-winch-test-macros = { path = "winch/test-macros" }
 
 wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
 byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }
