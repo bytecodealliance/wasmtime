@@ -19,19 +19,19 @@
     i32.load8_u offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: stp     x29, x30, [sp, #-0x10]!
-;;    4: mov     x29, sp
-;;    8: ldr     x6, [x0, #0x50]
-;;    c: add     x6, x6, #1, lsl #12
-;;   10: strb    w3, [x6, w2, uxtw]
-;;   14: ldp     x29, x30, [sp], #0x10
-;;   18: ret
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x6, [x0, #0x50]
+;;       add     x6, x6, #1, lsl #12
+;;       strb    w3, [x6, w2, uxtw]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   20: stp     x29, x30, [sp, #-0x10]!
-;;   24: mov     x29, sp
-;;   28: ldr     x6, [x0, #0x50]
-;;   2c: add     x5, x6, #1, lsl #12
-;;   30: ldrb    w0, [x5, w2, uxtw]
-;;   34: ldp     x29, x30, [sp], #0x10
-;;   38: ret
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       ldr     x6, [x0, #0x50]
+;;       add     x5, x6, #1, lsl #12
+;;       ldrb    w0, [x5, w2, uxtw]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

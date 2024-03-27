@@ -19,18 +19,18 @@
 )
 
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    %rdx, %rax
-;;    7: notl    %eax
-;;    9: movq    %rbp, %rsp
-;;    c: popq    %rbp
-;;    d: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    %rdx, %rax
+;;       notl    %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
 ;; wasm[0]::function[1]:
-;;   10: pushq   %rbp
-;;   11: movq    %rsp, %rbp
-;;   14: andnl   %edx, %ecx, %eax
-;;   19: movq    %rbp, %rsp
-;;   1c: popq    %rbp
-;;   1d: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       andnl   %edx, %ecx, %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq

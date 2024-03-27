@@ -465,9 +465,10 @@ impl<'a> UnwindInfoBuilder<'a> {
         section_id: SectionId,
         text_section_size: u64,
     ) {
-        let mut cie = compiler
-            .create_systemv_cie()
-            .expect("must be able to create a CIE for system-v unwind info");
+        let mut cie = match compiler.create_systemv_cie() {
+            Some(cie) => cie,
+            None => return,
+        };
         let mut table = FrameTable::default();
         cie.fde_address_encoding = gimli::constants::DW_EH_PE_pcrel;
         let cie_id = table.add_cie(cie);

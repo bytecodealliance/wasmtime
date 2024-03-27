@@ -19,21 +19,21 @@
     i32.load offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    0x50(%rdi), %r9
-;;    8: movl    %edx, %r10d
-;;    b: movl    %ecx, 0x1000(%r9, %r10)
-;;   13: movq    %rbp, %rsp
-;;   16: popq    %rbp
-;;   17: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x50(%rdi), %r9
+;;       movl    %edx, %r10d
+;;       movl    %ecx, 0x1000(%r9, %r10)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
 ;; wasm[0]::function[1]:
-;;   20: pushq   %rbp
-;;   21: movq    %rsp, %rbp
-;;   24: movq    0x50(%rdi), %r9
-;;   28: movl    %edx, %r10d
-;;   2b: movl    0x1000(%r9, %r10), %eax
-;;   33: movq    %rbp, %rsp
-;;   36: popq    %rbp
-;;   37: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x50(%rdi), %r9
+;;       movl    %edx, %r10d
+;;       movl    0x1000(%r9, %r10), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq

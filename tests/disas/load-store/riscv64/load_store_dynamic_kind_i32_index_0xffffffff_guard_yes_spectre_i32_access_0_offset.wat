@@ -19,41 +19,41 @@
     i32.load offset=0))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: ld      a1, 0x58(a0)
-;;   14: ld      a4, 0x50(a0)
-;;   18: slli    a0, a2, 0x20
-;;   1c: srli    a2, a0, 0x20
-;;   20: sltu    a5, a1, a2
-;;   24: add     a1, a4, a2
-;;   28: neg     a5, a5
-;;   2c: not     a2, a5
-;;   30: and     a4, a1, a2
-;;   34: sw      a3, 0(a4)
-;;   38: ld      ra, 8(sp)
-;;   3c: ld      s0, 0(sp)
-;;   40: addi    sp, sp, 0x10
-;;   44: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x58(a0)
+;;       ld      a4, 0x50(a0)
+;;       slli    a0, a2, 0x20
+;;       srli    a2, a0, 0x20
+;;       sltu    a5, a1, a2
+;;       add     a1, a4, a2
+;;       neg     a5, a5
+;;       not     a2, a5
+;;       and     a4, a1, a2
+;;       sw      a3, 0(a4)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   48: addi    sp, sp, -0x10
-;;   4c: sd      ra, 8(sp)
-;;   50: sd      s0, 0(sp)
-;;   54: mv      s0, sp
-;;   58: ld      a1, 0x58(a0)
-;;   5c: ld      a3, 0x50(a0)
-;;   60: slli    a0, a2, 0x20
-;;   64: srli    a2, a0, 0x20
-;;   68: sltu    a4, a1, a2
-;;   6c: add     a1, a3, a2
-;;   70: neg     a5, a4
-;;   74: not     a2, a5
-;;   78: and     a3, a1, a2
-;;   7c: lw      a0, 0(a3)
-;;   80: ld      ra, 8(sp)
-;;   84: ld      s0, 0(sp)
-;;   88: addi    sp, sp, 0x10
-;;   8c: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x58(a0)
+;;       ld      a3, 0x50(a0)
+;;       slli    a0, a2, 0x20
+;;       srli    a2, a0, 0x20
+;;       sltu    a4, a1, a2
+;;       add     a1, a3, a2
+;;       neg     a5, a4
+;;       not     a2, a5
+;;       and     a3, a1, a2
+;;       lw      a0, 0(a3)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

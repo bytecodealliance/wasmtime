@@ -19,29 +19,29 @@
     i32.load offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    0x58(%rdi), %r10
-;;    8: cmpq    %r10, %rdx
-;;    b: ja      0x22
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x58(%rdi), %r10
+;;       cmpq    %r10, %rdx
+;;       ja      0x22
 ;;   11: addq    0x50(%rdi), %rdx
-;;   15: movl    $0xffff0000, %esi
-;;   1a: movl    %ecx, (%rdx, %rsi)
-;;   1d: movq    %rbp, %rsp
-;;   20: popq    %rbp
-;;   21: retq
+;;       movl    $0xffff0000, %esi
+;;       movl    %ecx, (%rdx, %rsi)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   22: ud2
 ;;
 ;; wasm[0]::function[1]:
-;;   30: pushq   %rbp
-;;   31: movq    %rsp, %rbp
-;;   34: movq    0x58(%rdi), %r10
-;;   38: cmpq    %r10, %rdx
-;;   3b: ja      0x52
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x58(%rdi), %r10
+;;       cmpq    %r10, %rdx
+;;       ja      0x52
 ;;   41: addq    0x50(%rdi), %rdx
-;;   45: movl    $0xffff0000, %esi
-;;   4a: movl    (%rdx, %rsi), %eax
-;;   4d: movq    %rbp, %rsp
-;;   50: popq    %rbp
-;;   51: retq
+;;       movl    $0xffff0000, %esi
+;;       movl    (%rdx, %rsi), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   52: ud2

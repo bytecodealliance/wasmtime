@@ -19,37 +19,37 @@
     i32.load8_u offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: stmg    %r6, %r15, 0x30(%r15)
-;;    6: lgr     %r1, %r15
-;;    a: aghi    %r15, -0xa0
-;;    e: stg     %r1, 0(%r15)
-;;   14: lgr     %r3, %r4
-;;   18: algfi   %r3, 0xffff0001
-;;   1e: jgnle   0x20
-;;   24: lg      %r6, 0x58(%r2)
-;;   2a: clgr    %r3, %r6
-;;   2e: jgh     0x4a
-;;   34: ag      %r4, 0x50(%r2)
-;;   3a: llilh   %r2, 0xffff
-;;   3e: stc     %r5, 0(%r2, %r4)
-;;   42: lmg     %r6, %r15, 0xd0(%r15)
-;;   48: br      %r14
-;;   4a: .byte   0x00, 0x00
+;;       stmg    %r6, %r15, 0x30(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r3, %r4
+;;       algfi   %r3, 0xffff0001
+;;       jgnle   0x20
+;;       lg      %r6, 0x58(%r2)
+;;       clgr    %r3, %r6
+;;       jgh     0x4a
+;;       ag      %r4, 0x50(%r2)
+;;       llilh   %r2, 0xffff
+;;       stc     %r5, 0(%r2, %r4)
+;;       lmg     %r6, %r15, 0xd0(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   4c: stmg    %r14, %r15, 0x70(%r15)
-;;   52: lgr     %r1, %r15
-;;   56: aghi    %r15, -0xa0
-;;   5a: stg     %r1, 0(%r15)
-;;   60: lgr     %r3, %r4
-;;   64: algfi   %r3, 0xffff0001
-;;   6a: jgnle   0x6c
-;;   70: lg      %r5, 0x58(%r2)
-;;   76: clgr    %r3, %r5
-;;   7a: jgh     0x98
-;;   80: ag      %r4, 0x50(%r2)
-;;   86: llilh   %r5, 0xffff
-;;   8a: llc     %r2, 0(%r5, %r4)
-;;   90: lmg     %r14, %r15, 0x110(%r15)
-;;   96: br      %r14
-;;   98: .byte   0x00, 0x00
+;;       stmg    %r14, %r15, 0x70(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r3, %r4
+;;       algfi   %r3, 0xffff0001
+;;       jgnle   0x6c
+;;       lg      %r5, 0x58(%r2)
+;;       clgr    %r3, %r5
+;;       jgh     0x98
+;;       ag      %r4, 0x50(%r2)
+;;       llilh   %r5, 0xffff
+;;       llc     %r2, 0(%r5, %r4)
+;;       lmg     %r14, %r15, 0x110(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00

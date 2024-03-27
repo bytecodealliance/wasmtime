@@ -107,12 +107,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
-        assert_ne!(
-            call_conv,
-            isa::CallConv::Winch,
-            "aarch64 does not support the 'winch' calling convention yet"
-        );
-
         if matches!(call_conv, isa::CallConv::Tail) {
             return compute_arg_locs_tail(params, add_ret_area_ptr, args);
         }

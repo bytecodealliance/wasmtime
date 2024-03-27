@@ -19,41 +19,41 @@
     i32.load offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: stp     x29, x30, [sp, #-0x10]!
-;;    4: mov     x29, sp
-;;    8: mov     w13, #-0xfffc
-;;    c: adds    x13, x2, x13
-;;   10: b.hs    #0x44
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w13, #-0xfffc
+;;       adds    x13, x2, x13
+;;       b.hs    #0x44
 ;;   14: ldr     x14, [x0, #0x58]
-;;   18: ldr     x0, [x0, #0x50]
-;;   1c: mov     x15, #0
-;;   20: add     x0, x0, x2
-;;   24: mov     x1, #0xffff0000
-;;   28: add     x0, x0, x1
-;;   2c: cmp     x13, x14
-;;   30: csel    x15, x15, x0, hi
-;;   34: csdb
-;;   38: str     w3, [x15]
-;;   3c: ldp     x29, x30, [sp], #0x10
-;;   40: ret
+;;       ldr     x0, [x0, #0x50]
+;;       mov     x15, #0
+;;       add     x0, x0, x2
+;;       mov     x1, #0xffff0000
+;;       add     x0, x0, x1
+;;       cmp     x13, x14
+;;       csel    x15, x15, x0, hi
+;;       csdb
+;;       str     w3, [x15]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;   44: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   60: stp     x29, x30, [sp, #-0x10]!
-;;   64: mov     x29, sp
-;;   68: mov     w13, #-0xfffc
-;;   6c: adds    x13, x2, x13
-;;   70: b.hs    #0xa4
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w13, #-0xfffc
+;;       adds    x13, x2, x13
+;;       b.hs    #0xa4
 ;;   74: ldr     x14, [x0, #0x58]
-;;   78: ldr     x0, [x0, #0x50]
-;;   7c: mov     x15, #0
-;;   80: add     x0, x0, x2
-;;   84: mov     x1, #0xffff0000
-;;   88: add     x0, x0, x1
-;;   8c: cmp     x13, x14
-;;   90: csel    x15, x15, x0, hi
-;;   94: csdb
-;;   98: ldr     w0, [x15]
-;;   9c: ldp     x29, x30, [sp], #0x10
-;;   a0: ret
+;;       ldr     x0, [x0, #0x50]
+;;       mov     x15, #0
+;;       add     x0, x0, x2
+;;       mov     x1, #0xffff0000
+;;       add     x0, x0, x1
+;;       cmp     x13, x14
+;;       csel    x15, x15, x0, hi
+;;       csdb
+;;       ldr     w0, [x15]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;   a4: .byte   0x1f, 0xc1, 0x00, 0x00

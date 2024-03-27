@@ -19,45 +19,45 @@
     i32.load offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: slli    a1, a2, 0x20
-;;   14: srli    a2, a1, 0x20
-;;   18: lui     a1, 0x10
-;;   1c: addi    a4, a1, -4
-;;   20: bltu    a4, a2, 0x2c
-;;   24: ld      a4, 0x50(a0)
-;;   28: add     a2, a4, a2
-;;   2c: lui     a1, 0xffff
-;;   30: slli    a4, a1, 4
-;;   34: add     a2, a2, a4
-;;   38: sw      a3, 0(a2)
-;;   3c: ld      ra, 8(sp)
-;;   40: ld      s0, 0(sp)
-;;   44: addi    sp, sp, 0x10
-;;   48: ret
-;;   4c: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       slli    a1, a2, 0x20
+;;       srli    a2, a1, 0x20
+;;       lui     a1, 0x10
+;;       addi    a4, a1, -4
+;;       bltu    a4, a2, 0x2c
+;;       ld      a4, 0x50(a0)
+;;       add     a2, a4, a2
+;;       lui     a1, 0xffff
+;;       slli    a4, a1, 4
+;;       add     a2, a2, a4
+;;       sw      a3, 0(a2)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   50: addi    sp, sp, -0x10
-;;   54: sd      ra, 8(sp)
-;;   58: sd      s0, 0(sp)
-;;   5c: mv      s0, sp
-;;   60: slli    a1, a2, 0x20
-;;   64: srli    a2, a1, 0x20
-;;   68: lui     a1, 0x10
-;;   6c: addi    a3, a1, -4
-;;   70: bltu    a3, a2, 0x2c
-;;   74: ld      a3, 0x50(a0)
-;;   78: add     a2, a3, a2
-;;   7c: lui     a1, 0xffff
-;;   80: slli    a3, a1, 4
-;;   84: add     a2, a2, a3
-;;   88: lw      a0, 0(a2)
-;;   8c: ld      ra, 8(sp)
-;;   90: ld      s0, 0(sp)
-;;   94: addi    sp, sp, 0x10
-;;   98: ret
-;;   9c: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       slli    a1, a2, 0x20
+;;       srli    a2, a1, 0x20
+;;       lui     a1, 0x10
+;;       addi    a3, a1, -4
+;;       bltu    a3, a2, 0x2c
+;;       ld      a3, 0x50(a0)
+;;       add     a2, a3, a2
+;;       lui     a1, 0xffff
+;;       slli    a3, a1, 4
+;;       add     a2, a2, a3
+;;       lw      a0, 0(a2)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00

@@ -19,45 +19,45 @@
     i32.load offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: lui     a4, 0x10
-;;   14: addi    a4, a4, -4
-;;   18: sltu    a4, a4, a2
-;;   1c: ld      a5, 0x50(a0)
-;;   20: add     a5, a5, a2
-;;   24: lui     a2, 0xffff
-;;   28: slli    a0, a2, 4
-;;   2c: add     a5, a5, a0
-;;   30: neg     a1, a4
-;;   34: not     a4, a1
-;;   38: and     a5, a5, a4
-;;   3c: sw      a3, 0(a5)
-;;   40: ld      ra, 8(sp)
-;;   44: ld      s0, 0(sp)
-;;   48: addi    sp, sp, 0x10
-;;   4c: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       lui     a4, 0x10
+;;       addi    a4, a4, -4
+;;       sltu    a4, a4, a2
+;;       ld      a5, 0x50(a0)
+;;       add     a5, a5, a2
+;;       lui     a2, 0xffff
+;;       slli    a0, a2, 4
+;;       add     a5, a5, a0
+;;       neg     a1, a4
+;;       not     a4, a1
+;;       and     a5, a5, a4
+;;       sw      a3, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
 ;;
 ;; wasm[0]::function[1]:
-;;   50: addi    sp, sp, -0x10
-;;   54: sd      ra, 8(sp)
-;;   58: sd      s0, 0(sp)
-;;   5c: mv      s0, sp
-;;   60: lui     a3, 0x10
-;;   64: addi    a4, a3, -4
-;;   68: sltu    a3, a4, a2
-;;   6c: ld      a4, 0x50(a0)
-;;   70: add     a4, a4, a2
-;;   74: lui     a2, 0xffff
-;;   78: slli    a5, a2, 4
-;;   7c: add     a4, a4, a5
-;;   80: neg     a1, a3
-;;   84: not     a3, a1
-;;   88: and     a5, a4, a3
-;;   8c: lw      a0, 0(a5)
-;;   90: ld      ra, 8(sp)
-;;   94: ld      s0, 0(sp)
-;;   98: addi    sp, sp, 0x10
-;;   9c: ret
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       lui     a3, 0x10
+;;       addi    a4, a3, -4
+;;       sltu    a3, a4, a2
+;;       ld      a4, 0x50(a0)
+;;       add     a4, a4, a2
+;;       lui     a2, 0xffff
+;;       slli    a5, a2, 4
+;;       add     a4, a4, a5
+;;       neg     a1, a3
+;;       not     a3, a1
+;;       and     a5, a4, a3
+;;       lw      a0, 0(a5)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret

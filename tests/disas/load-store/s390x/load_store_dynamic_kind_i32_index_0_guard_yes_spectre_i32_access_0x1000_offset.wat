@@ -19,38 +19,38 @@
     i32.load offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: stmg    %r8, %r15, 0x40(%r15)
-;;    6: lgr     %r1, %r15
-;;    a: aghi    %r15, -0xa0
-;;    e: stg     %r1, 0(%r15)
-;;   14: lgr     %r3, %r4
-;;   18: lg      %r4, 0x58(%r2)
-;;   1e: llgfr   %r3, %r3
-;;   22: aghik   %r8, %r4, -0x1004
-;;   28: lghi    %r4, 0
-;;   2c: lgr     %r9, %r3
-;;   30: ag      %r9, 0x50(%r2)
-;;   36: aghik   %r2, %r9, 0x1000
-;;   3c: clgr    %r3, %r8
-;;   40: locgrh  %r2, %r4
-;;   44: strv    %r5, 0(%r2)
-;;   4a: lmg     %r8, %r15, 0xe0(%r15)
-;;   50: br      %r14
+;;       stmg    %r8, %r15, 0x40(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lgr     %r3, %r4
+;;       lg      %r4, 0x58(%r2)
+;;       llgfr   %r3, %r3
+;;       aghik   %r8, %r4, -0x1004
+;;       lghi    %r4, 0
+;;       lgr     %r9, %r3
+;;       ag      %r9, 0x50(%r2)
+;;       aghik   %r2, %r9, 0x1000
+;;       clgr    %r3, %r8
+;;       locgrh  %r2, %r4
+;;       strv    %r5, 0(%r2)
+;;       lmg     %r8, %r15, 0xe0(%r15)
+;;       br      %r14
 ;;
 ;; wasm[0]::function[1]:
-;;   54: stmg    %r8, %r15, 0x40(%r15)
-;;   5a: lgr     %r1, %r15
-;;   5e: aghi    %r15, -0xa0
-;;   62: stg     %r1, 0(%r15)
-;;   68: lg      %r3, 0x58(%r2)
-;;   6e: llgfr   %r5, %r4
-;;   72: aghik   %r4, %r3, -0x1004
-;;   78: lghi    %r3, 0
-;;   7c: lgr     %r8, %r5
-;;   80: ag      %r8, 0x50(%r2)
-;;   86: aghik   %r2, %r8, 0x1000
-;;   8c: clgr    %r5, %r4
-;;   90: locgrh  %r2, %r3
-;;   94: lrv     %r2, 0(%r2)
-;;   9a: lmg     %r8, %r15, 0xe0(%r15)
-;;   a0: br      %r14
+;;       stmg    %r8, %r15, 0x40(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       lg      %r3, 0x58(%r2)
+;;       llgfr   %r5, %r4
+;;       aghik   %r4, %r3, -0x1004
+;;       lghi    %r3, 0
+;;       lgr     %r8, %r5
+;;       ag      %r8, 0x50(%r2)
+;;       aghik   %r2, %r8, 0x1000
+;;       clgr    %r5, %r4
+;;       locgrh  %r2, %r3
+;;       lrv     %r2, 0(%r2)
+;;       lmg     %r8, %r15, 0xe0(%r15)
+;;       br      %r14

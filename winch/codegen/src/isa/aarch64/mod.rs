@@ -147,6 +147,7 @@ impl TargetIsa for Aarch64 {
         _result: &MachBufferFinalized<Final>,
         _kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
     ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
-        todo!()
+        // TODO: should fill this in with an actual implementation
+        Ok(None)
     }
 }

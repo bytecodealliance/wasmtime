@@ -52,7 +52,7 @@ use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
-use wasmtime::{Engine, OptLevel};
+use wasmtime::{Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
 
 fn main() -> Result<()> {
@@ -139,6 +139,8 @@ enum TestKind {
     Compile,
     /// Test the CLIF output, optimized.
     Optimize,
+    /// Alias for "compile" plus `-C compiler=winch`
+    Winch,
 }
 
 impl Test {
@@ -194,6 +196,9 @@ impl Test {
                 config.emit_clif(tempdir.path());
             }
             TestKind::Compile => {}
+            TestKind::Winch => {
+                config.strategy(Strategy::Winch);
+            }
         }
         let engine = Engine::new(&config).context("failed to create engine")?;
         let module = wat::parse_file(&self.path)?;
@@ -236,7 +241,7 @@ impl Test {
                 });
                 Ok(CompileOutput::Clif(functions))
             }
-            TestKind::Compile => Ok(CompileOutput::Elf(elf)),
+            TestKind::Compile | TestKind::Winch => Ok(CompileOutput::Elf(elf)),
         }
     }
 
@@ -291,7 +296,7 @@ fn assert_output(
         CompileOutput::Clif(funcs) => {
             for mut func in funcs {
                 match kind {
-                    TestKind::Compile => unreachable!(),
+                    TestKind::Compile | TestKind::Winch => unreachable!(),
                     TestKind::Optimize => {
                         let mut ctx = cranelift_codegen::Context::for_function(func.clone());
                         ctx.optimize(isa, &mut Default::default())
@@ -316,7 +321,9 @@ fn assert_output(
 }
 
 fn disas_elf(disas: &capstone::Capstone, result: &mut String, elf: &[u8]) -> Result<()> {
+    use capstone::InsnGroupType::{CS_GRP_JUMP, CS_GRP_RET};
     use object::{Endianness, Object, ObjectSection, ObjectSymbol};
+
     let elf = object::read::elf::ElfFile64::<Endianness>::parse(elf)?;
     let text = elf.section_by_name(".text").unwrap();
     let text = text.data()?;
@@ -338,8 +345,32 @@ fn disas_elf(disas: &capstone::Capstone, result: &mut String, elf: &[u8]) -> Res
             result.push_str("\n");
         }
         writeln!(result, "{name}:")?;
+
+        // By default don't write all the offsets of all the instructions. That
+        // means that small changes in the instruction sequence cause large
+        // diffs which aren't always the most readable. As a rough balance,
+        // print offset of instructions-after-jumps and anything-after-ret as
+        // that's a decent-enough heuristic for jump targets.
+        let mut prev_jump = false;
+        let mut write_offsets = false;
+
         for inst in disas.disasm_all(bytes, sym.address())?.iter() {
-            write!(result, "{:>4x}: ", inst.address())?;
+            let detail = disas.insn_detail(&inst).ok();
+            let detail = detail.as_ref();
+            let is_jump = detail
+                .map(|d| {
+                    d.groups()
+                        .iter()
+                        .find(|g| g.0 as u32 == CS_GRP_JUMP)
+                        .is_some()
+                })
+                .unwrap_or(false);
+
+            if write_offsets || (prev_jump && !is_jump) {
+                write!(result, "{:>4x}: ", inst.address())?;
+            } else {
+                write!(result, "      ")?;
+            }
 
             match (inst.mnemonic(), inst.op_str()) {
                 (Some(i), Some(o)) => {
@@ -352,6 +383,21 @@ fn disas_elf(disas: &capstone::Capstone, result: &mut String, elf: &[u8]) -> Res
                 (Some(i), None) => writeln!(result, "{i}")?,
                 _ => unreachable!(),
             }
+
+            prev_jump = is_jump;
+
+            // Flip write_offsets to true once we've seen a `ret`, as
+            // instructions that follow the return are often related to trap
+            // tables.
+            write_offsets = write_offsets
+                || detail
+                    .map(|d| {
+                        d.groups()
+                            .iter()
+                            .find(|g| g.0 as u32 == CS_GRP_RET)
+                            .is_some()
+                    })
+                    .unwrap_or(false);
         }
     }
     Ok(())

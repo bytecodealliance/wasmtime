@@ -19,37 +19,37 @@
     i32.load offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: addi    sp, sp, -0x10
-;;    4: sd      ra, 8(sp)
-;;    8: sd      s0, 0(sp)
-;;    c: mv      s0, sp
-;;   10: ld      a1, 0x58(a0)
-;;   14: bltu    a1, a2, 0x28
-;;   18: ld      a4, 0x50(a0)
-;;   1c: add     a2, a4, a2
-;;   20: lui     t6, 1
-;;   24: add     t6, t6, a2
-;;   28: sw      a3, 0(t6)
-;;   2c: ld      ra, 8(sp)
-;;   30: ld      s0, 0(sp)
-;;   34: addi    sp, sp, 0x10
-;;   38: ret
-;;   3c: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x58(a0)
+;;       bltu    a1, a2, 0x28
+;;       ld      a4, 0x50(a0)
+;;       add     a2, a4, a2
+;;       lui     t6, 1
+;;       add     t6, t6, a2
+;;       sw      a3, 0(t6)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   40: addi    sp, sp, -0x10
-;;   44: sd      ra, 8(sp)
-;;   48: sd      s0, 0(sp)
-;;   4c: mv      s0, sp
-;;   50: ld      a1, 0x58(a0)
-;;   54: bltu    a1, a2, 0x28
-;;   58: ld      a3, 0x50(a0)
-;;   5c: add     a2, a3, a2
-;;   60: lui     t6, 1
-;;   64: add     t6, t6, a2
-;;   68: lw      a0, 0(t6)
-;;   6c: ld      ra, 8(sp)
-;;   70: ld      s0, 0(sp)
-;;   74: addi    sp, sp, 0x10
-;;   78: ret
-;;   7c: .byte   0x00, 0x00, 0x00, 0x00
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       ld      a1, 0x58(a0)
+;;       bltu    a1, a2, 0x28
+;;       ld      a3, 0x50(a0)
+;;       add     a2, a3, a2
+;;       lui     t6, 1
+;;       add     t6, t6, a2
+;;       lw      a0, 0(t6)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00

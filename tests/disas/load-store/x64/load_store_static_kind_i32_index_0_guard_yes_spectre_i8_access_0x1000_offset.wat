@@ -19,35 +19,35 @@
     i32.load8_u offset=0x1000))
 
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    %rdi, %rax
-;;    7: movl    %edx, %edi
-;;    9: xorq    %rsi, %rsi
-;;    c: movq    %rax, %rdx
-;;    f: movq    0x50(%rdx), %rax
-;;   13: leaq    0x1000(%rax, %rdi), %r11
-;;   1b: cmpq    0xe(%rip), %rdi
-;;   22: cmovaq  %rsi, %r11
-;;   26: movb    %cl, (%r11)
-;;   29: movq    %rbp, %rsp
-;;   2c: popq    %rbp
-;;   2d: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    %rdi, %rax
+;;       movl    %edx, %edi
+;;       xorq    %rsi, %rsi
+;;       movq    %rax, %rdx
+;;       movq    0x50(%rdx), %rax
+;;       leaq    0x1000(%rax, %rdi), %r11
+;;       cmpq    0xe(%rip), %rdi
+;;       cmovaq  %rsi, %r11
+;;       movb    %cl, (%r11)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   2e: addb    %al, (%rax)
 ;;
 ;; wasm[0]::function[1]:
-;;   40: pushq   %rbp
-;;   41: movq    %rsp, %rbp
-;;   44: movq    %rdi, %rcx
-;;   47: movl    %edx, %edi
-;;   49: xorq    %rsi, %rsi
-;;   4c: movq    0x50(%rcx), %rax
-;;   50: leaq    0x1000(%rax, %rdi), %r11
-;;   58: cmpq    0x11(%rip), %rdi
-;;   5f: cmovaq  %rsi, %r11
-;;   63: movzbq  (%r11), %rax
-;;   67: movq    %rbp, %rsp
-;;   6a: popq    %rbp
-;;   6b: retq
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    %rdi, %rcx
+;;       movl    %edx, %edi
+;;       xorq    %rsi, %rsi
+;;       movq    0x50(%rcx), %rax
+;;       leaq    0x1000(%rax, %rdi), %r11
+;;       cmpq    0x11(%rip), %rdi
+;;       cmovaq  %rsi, %r11
+;;       movzbq  (%r11), %rax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;   6c: addb    %al, (%rax)
 ;;   6e: addb    %al, (%rax)

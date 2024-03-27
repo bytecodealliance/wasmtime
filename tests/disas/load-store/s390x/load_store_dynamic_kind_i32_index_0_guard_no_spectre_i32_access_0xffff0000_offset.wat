@@ -19,39 +19,39 @@
     i32.load offset=0xffff0000))
 
 ;; wasm[0]::function[0]:
-;;    0: stmg    %r12, %r15, 0x60(%r15)
-;;    6: lgr     %r1, %r15
-;;    a: aghi    %r15, -0xa0
-;;    e: stg     %r1, 0(%r15)
-;;   14: llgfr   %r12, %r4
-;;   18: llilf   %r3, 0xffff0004
-;;   1e: algfr   %r3, %r4
-;;   22: jgnle   0x24
-;;   28: lg      %r4, 0x58(%r2)
-;;   2e: clgr    %r3, %r4
-;;   32: jgh     0x50
-;;   38: ag      %r12, 0x50(%r2)
-;;   3e: llilh   %r3, 0xffff
-;;   42: strv    %r5, 0(%r3, %r12)
-;;   48: lmg     %r12, %r15, 0x100(%r15)
-;;   4e: br      %r14
-;;   50: .byte   0x00, 0x00
+;;       stmg    %r12, %r15, 0x60(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       llgfr   %r12, %r4
+;;       llilf   %r3, 0xffff0004
+;;       algfr   %r3, %r4
+;;       jgnle   0x24
+;;       lg      %r4, 0x58(%r2)
+;;       clgr    %r3, %r4
+;;       jgh     0x50
+;;       ag      %r12, 0x50(%r2)
+;;       llilh   %r3, 0xffff
+;;       strv    %r5, 0(%r3, %r12)
+;;       lmg     %r12, %r15, 0x100(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
-;;   54: stmg    %r14, %r15, 0x70(%r15)
-;;   5a: lgr     %r1, %r15
-;;   5e: aghi    %r15, -0xa0
-;;   62: stg     %r1, 0(%r15)
-;;   68: llgfr   %r5, %r4
-;;   6c: llilf   %r3, 0xffff0004
-;;   72: algfr   %r3, %r4
-;;   76: jgnle   0x78
-;;   7c: lg      %r4, 0x58(%r2)
-;;   82: clgr    %r3, %r4
-;;   86: jgh     0xa4
-;;   8c: ag      %r5, 0x50(%r2)
-;;   92: llilh   %r3, 0xffff
-;;   96: lrv     %r2, 0(%r3, %r5)
-;;   9c: lmg     %r14, %r15, 0x110(%r15)
-;;   a2: br      %r14
-;;   a4: .byte   0x00, 0x00
+;;       stmg    %r14, %r15, 0x70(%r15)
+;;       lgr     %r1, %r15
+;;       aghi    %r15, -0xa0
+;;       stg     %r1, 0(%r15)
+;;       llgfr   %r5, %r4
+;;       llilf   %r3, 0xffff0004
+;;       algfr   %r3, %r4
+;;       jgnle   0x78
+;;       lg      %r4, 0x58(%r2)
+;;       clgr    %r3, %r4
+;;       jgh     0xa4
+;;       ag      %r5, 0x50(%r2)
+;;       llilh   %r3, 0xffff
+;;       lrv     %r2, 0(%r3, %r5)
+;;       lmg     %r14, %r15, 0x110(%r15)
+;;       br      %r14
+;;       .byte   0x00, 0x00

@@ -35,26 +35,26 @@
     drop))
 
 ;; wasm[0]::function[0]:
-;;    0: pushq   %rbp
-;;    1: movq    %rsp, %rbp
-;;    4: movq    0x48(%rdi), %r10
-;;    8: movq    8(%r10), %rax
-;;    c: movl    $0x10000, %r10d
-;;   12: xorq    %rdx, %rdx
-;;   15: divq    %r10
-;;   18: movq    %rax, %r9
-;;   1b: shll    $0x10, %r9d
-;;   1f: leal    4(%rax), %r10d
-;;   23: cmpl    %r10d, %r9d
-;;   26: jbe     0x45
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x48(%rdi), %r10
+;;       movq    8(%r10), %rax
+;;       movl    $0x10000, %r10d
+;;       xorq    %rdx, %rdx
+;;       divq    %r10
+;;       movq    %rax, %r9
+;;       shll    $0x10, %r9d
+;;       leal    4(%rax), %r10d
+;;       cmpl    %r10d, %r9d
+;;       jbe     0x45
 ;;   2c: testl   %eax, %eax
-;;   2e: jle     0x45
+;;       jle     0x45
 ;;   34: movq    0x48(%rdi), %rcx
-;;   38: movq    (%rcx), %rcx
-;;   3b: movl    %eax, %edx
-;;   3d: movl    (%rcx, %rdx), %edi
-;;   40: jmp     0x47
+;;       movq    (%rcx), %rcx
+;;       movl    %eax, %edx
+;;       movl    (%rcx, %rdx), %edi
+;;       jmp     0x47
 ;;   45: xorl    %edi, %edi
-;;   47: movq    %rbp, %rsp
-;;   4a: popq    %rbp
-;;   4b: retq
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
