@@ -1733,7 +1733,8 @@ pub(crate) fn emit(
 
             // The total size that we're going to copy, including the return address and frame
             // pointer that are pushed on the stack already.
-            let size = i32::try_from(state.nominal_sp_to_fp()).unwrap() + 16;
+            let size = i32::try_from(state.nominal_sp_to_fp()).unwrap()
+                + i32::try_from(state.frame_layout().setup_area_size).unwrap();
 
             debug_assert_eq!(size % 8, 0);
 
@@ -1771,7 +1772,8 @@ pub(crate) fn emit(
 
             // The total size that we're going to copy, including the return address and frame
             // pointer that are pushed on the stack alreadcy.
-            let size = i32::try_from(state.nominal_sp_to_fp()).unwrap() + 16;
+            let size = i32::try_from(state.nominal_sp_to_fp()).unwrap()
+                + i32::try_from(state.frame_layout().setup_area_size).unwrap();
 
             debug_assert_eq!(size % 8, 0);
 
