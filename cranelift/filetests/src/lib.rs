@@ -20,7 +20,6 @@ mod subtest;
 mod test_alias_analysis;
 mod test_cat;
 mod test_compile;
-mod test_dce;
 mod test_domtree;
 mod test_interpret;
 mod test_legalizer;
@@ -89,7 +88,6 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
         "alias-analysis" => test_alias_analysis::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
-        "dce" => test_dce::subtest(parsed),
         "domtree" => test_domtree::subtest(parsed),
         "interpret" => test_interpret::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
