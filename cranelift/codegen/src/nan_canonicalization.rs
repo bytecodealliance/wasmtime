@@ -5,7 +5,7 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::condcodes::FloatCC;
 use crate::ir::immediates::{Ieee32, Ieee64};
-use crate::ir::types;
+use crate::ir::types::{self};
 use crate::ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
 use crate::opts::MemFlags;
 use crate::timing;
@@ -65,16 +65,23 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
     let new_res = pos.func.dfg.replace_result(val, val_type);
     let _next_inst = pos.next_inst().expect("block missing terminator!");
 
-    // Insert a comparison instruction, to check if `inst_res` is NaN. Select
-    // the canonical NaN value if `val` is NaN, assign the result to `inst`.
-    let is_nan = pos.ins().fcmp(FloatCC::NotEqual, new_res, new_res);
-
-    let scalar_select = |pos: &mut FuncCursor, canon_nan: Value| {
-        pos.ins()
-            .with_result(val)
-            .select(is_nan, canon_nan, new_res);
+    let scalar_select = |pos: &mut FuncCursor, canon_nan: Value, ty: types::Type| {
+        let canon_nan = pos.ins().scalar_to_vector(ty, canon_nan);
+        let new_res = pos.ins().scalar_to_vector(ty, new_res);
+        // Insert a comparison instruction, to check if `inst_res` is NaN (comparing
+        // against NaN is always unordered). Select the canonical NaN value if `val`
+        // is NaN, assign the result to `inst`.
+        let is_nan = pos.ins().fcmp(FloatCC::Unordered, new_res, new_res);
+        let is_nan = pos.ins().bitcast(ty, MemFlags::new(), is_nan);
+        let simd_result = pos.ins().bitselect(is_nan, canon_nan, new_res);
+        pos.ins().with_result(val).extractlane(simd_result, 0);
     };
+
     let vector_select = |pos: &mut FuncCursor, canon_nan: Value| {
+        // Insert a comparison instruction, to check if `inst_res` is NaN (comparing
+        // against NaN is always unordered). Select the canonical NaN value if `val`
+        // is NaN, assign the result to `inst`.
+        let is_nan = pos.ins().fcmp(FloatCC::Unordered, new_res, new_res);
         let is_nan = pos.ins().bitcast(val_type, MemFlags::new(), is_nan);
         pos.ins()
             .with_result(val)
@@ -84,11 +91,11 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
     match val_type {
         types::F32 => {
             let canon_nan = pos.ins().f32const(Ieee32::with_bits(CANON_32BIT_NAN));
-            scalar_select(pos, canon_nan);
+            scalar_select(pos, canon_nan, types::F32X4);
         }
         types::F64 => {
             let canon_nan = pos.ins().f64const(Ieee64::with_bits(CANON_64BIT_NAN));
-            scalar_select(pos, canon_nan);
+            scalar_select(pos, canon_nan, types::F64X2);
         }
         types::F32X4 => {
             let canon_nan = pos.ins().f32const(Ieee32::with_bits(CANON_32BIT_NAN));
