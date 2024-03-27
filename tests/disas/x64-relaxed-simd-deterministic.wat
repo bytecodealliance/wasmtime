@@ -81,9 +81,9 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       sarb    $0xff, %bh
+;;   8e: addb    %al, (%rax)
+;;   90: addb    %al, (%rax)
+;;   92: sarb    $0xff, %bh
 ;;
 ;; wasm[0]::function[3]:
 ;;       pushq   %rbp
@@ -97,10 +97,10 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       loopne  0xd3
+;;   cc: addb    %al, (%rax)
+;;   ce: addb    %al, (%rax)
+;;   d0: addb    %al, (%rax)
+;;   d2: loopne  0xd3
 ;;
 ;; wasm[0]::function[4]:
 ;;       pushq   %rbp
@@ -135,18 +135,18 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addl    %eax, (%rax)
-;;       addl    %eax, (%rax)
-;;       addl    %eax, (%rax)
-;;       addl    %eax, (%rax)
-;;       addl    %eax, (%rax)
-;;       addl    %eax, (%rax)
-;;       addl    %eax, (%rax)
-;;       addl    %eax, (%rax)
+;;  172: addb    %al, (%rax)
+;;  174: addb    %al, (%rax)
+;;  176: addb    %al, (%rax)
+;;  178: addb    %al, (%rax)
+;;  17a: addb    %al, (%rax)
+;;  17c: addb    %al, (%rax)
+;;  17e: addb    %al, (%rax)
+;;  180: addl    %eax, (%rax)
+;;  182: addl    %eax, (%rax)
+;;  184: addl    %eax, (%rax)
+;;  186: addl    %eax, (%rax)
+;;  188: addl    %eax, (%rax)
+;;  18a: addl    %eax, (%rax)
+;;  18c: addl    %eax, (%rax)
+;;  18e: addl    %eax, (%rax)

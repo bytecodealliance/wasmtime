@@ -24,11 +24,11 @@
 ;;       ldr     x6, [x0, #0x58]
 ;;       cmp     x2, x6
 ;;       b.hs    #0x24
-;;       ldr     x8, [x0, #0x50]
+;;   14: ldr     x8, [x0, #0x50]
 ;;       strb    w3, [x8, x2]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;       .byte   0x1f, 0xc1, 0x00, 0x00
+;;   24: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
@@ -36,8 +36,8 @@
 ;;       ldr     x6, [x0, #0x58]
 ;;       cmp     x2, x6
 ;;       b.hs    #0x64
-;;       ldr     x8, [x0, #0x50]
+;;   54: ldr     x8, [x0, #0x50]
 ;;       ldrb    w0, [x8, x2]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;       .byte   0x1f, 0xc1, 0x00, 0x00
+;;   64: .byte   0x1f, 0xc1, 0x00, 0x00

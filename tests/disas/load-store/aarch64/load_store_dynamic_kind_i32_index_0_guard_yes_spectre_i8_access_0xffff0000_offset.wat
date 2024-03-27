@@ -25,7 +25,7 @@
 ;;       mov     w15, #-0xffff
 ;;       adds    x14, x14, x15
 ;;       b.hs    #0x48
-;;       ldr     x15, [x0, #0x58]
+;;   18: ldr     x15, [x0, #0x58]
 ;;       ldr     x1, [x0, #0x50]
 ;;       mov     x0, #0
 ;;       add     x1, x1, w2, uxtw
@@ -37,7 +37,7 @@
 ;;       strb    w3, [x0]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;       .byte   0x1f, 0xc1, 0x00, 0x00
+;;   48: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
@@ -46,7 +46,7 @@
 ;;       mov     w15, #-0xffff
 ;;       adds    x14, x14, x15
 ;;       b.hs    #0xa8
-;;       ldr     x15, [x0, #0x58]
+;;   78: ldr     x15, [x0, #0x58]
 ;;       ldr     x1, [x0, #0x50]
 ;;       mov     x0, #0
 ;;       add     x1, x1, w2, uxtw
@@ -58,4 +58,4 @@
 ;;       ldrb    w0, [x0]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;       .byte   0x1f, 0xc1, 0x00, 0x00
+;;   a8: .byte   0x1f, 0xc1, 0x00, 0x00

@@ -47,14 +47,14 @@
 ;;       leal    4(%rax), %r10d
 ;;       cmpl    %r10d, %r9d
 ;;       jbe     0x45
-;;       testl   %eax, %eax
+;;   2c: testl   %eax, %eax
 ;;       jle     0x45
-;;       movq    0x48(%rdi), %rcx
+;;   34: movq    0x48(%rdi), %rcx
 ;;       movq    (%rcx), %rcx
 ;;       movl    %eax, %edx
 ;;       movl    (%rcx, %rdx), %edi
 ;;       jmp     0x47
-;;       xorl    %edi, %edi
+;;   45: xorl    %edi, %edi
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

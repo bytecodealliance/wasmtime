@@ -26,12 +26,12 @@
 ;;       subq    $0x1001, %r9
 ;;       cmpq    %r9, %r11
 ;;       ja      0x2c
-;;       movq    0x50(%rdi), %rdi
+;;   1b: movq    0x50(%rdi), %rdi
 ;;       movb    %cl, 0x1000(%rdi, %r11)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       ud2
+;;   2c: ud2
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
@@ -41,9 +41,9 @@
 ;;       subq    $0x1001, %r9
 ;;       cmpq    %r9, %r11
 ;;       ja      0x5d
-;;       movq    0x50(%rdi), %rdi
+;;   4b: movq    0x50(%rdi), %rdi
 ;;       movzbq  0x1000(%rdi, %r11), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       ud2
+;;   5d: ud2

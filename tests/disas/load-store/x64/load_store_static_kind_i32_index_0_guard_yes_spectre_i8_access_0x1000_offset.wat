@@ -33,7 +33,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       addb    %al, (%rax)
+;;   2e: addb    %al, (%rax)
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
@@ -49,5 +49,5 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
+;;   6c: addb    %al, (%rax)
+;;   6e: addb    %al, (%rax)

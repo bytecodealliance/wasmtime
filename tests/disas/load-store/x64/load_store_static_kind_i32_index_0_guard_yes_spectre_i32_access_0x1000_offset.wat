@@ -33,9 +33,9 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       addb    %al, (%rax)
-;;       cld
-;;       outl    %eax, %dx
+;;   2e: addb    %al, (%rax)
+;;   30: cld
+;;   31: outl    %eax, %dx
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
@@ -51,7 +51,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;       addb    %al, (%rax)
-;;       addb    %al, (%rax)
-;;       addb    %bh, %ah
-;;       outl    %eax, %dx
+;;   6b: addb    %al, (%rax)
+;;   6d: addb    %al, (%rax)
+;;   6f: addb    %bh, %ah
+;;   71: outl    %eax, %dx
