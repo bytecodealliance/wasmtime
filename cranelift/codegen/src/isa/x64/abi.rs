@@ -931,8 +931,7 @@ impl X64CallSite {
         self.emit_args(ctx, args);
         self.emit_stack_ret_arg_for_tail_call(ctx);
 
-        // Finally, emit the macro instruction to copy the new stack frame over
-        // our current one and do the actual tail call!
+        // Finally, do the actual tail call!
         let dest = self.dest().clone();
         let info = Box::new(ReturnCallInfo {
             uses: self.take_uses(),

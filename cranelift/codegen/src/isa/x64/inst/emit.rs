@@ -1732,7 +1732,7 @@ pub(crate) fn emit(
             .emit(&[], sink, info, state);
 
             // The total size that we're going to copy, including the return address and frame
-            // pointer that are pushed on the stack alreadcy.
+            // pointer that are pushed on the stack already.
             let size = i32::try_from(state.nominal_sp_to_fp()).unwrap() + 16;
 
             debug_assert_eq!(size % 8, 0);
