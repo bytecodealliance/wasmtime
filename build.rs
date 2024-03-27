@@ -281,16 +281,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             testsuite == "function_references" || testsuite == "tail_call"
         }
 
-        "riscv64" => {
-            // This test case is disabled because it relies on `fvpromote_low`
-            // not flipping the sign bit of the input when it is a NaN. This
-            // is allowed by the spec. It's worth keeping the testcase as is
-            // since it is stressing a specific codegen bug in another arch.
-            //
-            // See #6961 for more details
-            testname == "issue_3327_bnot_lowering"
-        }
-
         _ => false,
     }
 }
