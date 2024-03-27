@@ -27,16 +27,15 @@ name = "uap"
 harness = false
 
 [dependencies]
-anyhow = "1.0.80"
+anyhow = "1.0.81"
 cap-std = "3.0.0"
 env_logger = { version = "0.11", optional = true }
 log = "0.4.21"
-rayon = "1.9.0"
+rayon = "1.10.0"
 structopt = { version = "0.3.26", optional = true }
-wasm-encoder = "0.201.0"
-wasmparser = "0.201.0"
+wasm-encoder = "0.202.0"
+wasmparser = "0.202.0"
 wasmtime = { workspace = true }
-wasmtime-wasi = { workspace = true }
 wasi-common = { workspace = true }
 
 # Enable this dependency to get messages with WAT disassemblies when certain
@@ -46,17 +45,16 @@ workspace = true
 optional = true
 
 [workspace.dependencies]
-wasmprinter = "0.201.0"
-wasmtime = "18"
-wasmtime-wasi = "18"
-wasi-common = "18"
+wasmprinter = "0.202.0"
+wasmtime = "19"
+wasi-common = "19"
 
 
 [dev-dependencies]
 criterion = "0.5.1"
 env_logger = "0.11.3"
 wasmprinter = { workspace = true }
-wat = "1.201.0"
+wat = "1.202.0"
 
 [workspace]
 members = [

@@ -66,8 +66,17 @@ pub fn dummy_value(val_ty: ValType) -> Val {
         ValType::F32 => Val::F32(0),
         ValType::F64 => Val::F64(0),
         ValType::V128 => Val::V128(0.into()),
-        ValType::ExternRef => Val::ExternRef(None),
-        ValType::FuncRef => Val::FuncRef(None),
+        ValType::Ref(ref_type) => {
+            if ref_type.matches(&RefType::EXTERNREF) {
+                Val::ExternRef(None)
+            } else if ref_type.matches(&RefType::FUNCREF) {
+                Val::FuncRef(None)
+            } else if ref_type.matches(&RefType::NULLFUNCREF) {
+                Val::FuncRef(None)
+            } else {
+                panic!("Unknown RefType {:?}", ref_type);
+            }
+        }
     }
 }
 

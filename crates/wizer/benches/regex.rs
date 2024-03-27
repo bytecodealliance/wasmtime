@@ -26,25 +26,25 @@ fn bench_regex(c: &mut Criterion) {
     let mut group = c.benchmark_group("regex");
     group.bench_function("control", |b| {
         let engine = wasmtime::Engine::default();
-        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
+        let wasi = wasi_common::sync::WasiCtxBuilder::new().build();
         let mut store = wasmtime::Store::new(&engine, wasi);
         let module =
             wasmtime::Module::new(store.engine(), &include_bytes!("regex_bench.control.wasm"))
                 .unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
-        wasmtime_wasi::sync::add_to_linker(&mut linker, |s| s).unwrap();
+        wasi_common::sync::add_to_linker(&mut linker, |s| s).unwrap();
 
         b.iter(|| run_iter(&linker, &module, &mut store));
     });
     group.bench_function("wizer", |b| {
         let engine = wasmtime::Engine::default();
-        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
+        let wasi = wasi_common::sync::WasiCtxBuilder::new().build();
         let mut store = wasmtime::Store::new(&engine, wasi);
         let module =
             wasmtime::Module::new(store.engine(), &include_bytes!("regex_bench.control.wasm"))
                 .unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
-        wasmtime_wasi::sync::add_to_linker(&mut linker, |s| s).unwrap();
+        wasi_common::sync::add_to_linker(&mut linker, |s| s).unwrap();
 
         b.iter(|| run_iter(&linker, &module, &mut store));
     });

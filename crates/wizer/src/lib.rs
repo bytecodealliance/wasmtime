@@ -17,6 +17,7 @@ mod snapshot;
 mod stack_ext;
 mod translate;
 
+use wasi_common::sync::WasiCtxBuilder;
 /// Re-export wasmtime so users can align with our version. This is
 /// especially useful when providing a custom Linker.
 pub use wasmtime;
@@ -31,7 +32,6 @@ use std::rc::Rc;
 use structopt::StructOpt;
 use wasi_common::WasiCtx;
 use wasmtime::{Engine, Extern};
-use wasmtime_wasi::WasiCtxBuilder;
 
 const DEFAULT_INHERIT_STDIO: bool = true;
 const DEFAULT_INHERIT_ENV: bool = false;
@@ -776,9 +776,9 @@ impl Wizer {
         }
         for dir in &self.dirs {
             log::debug!("Preopening directory: {}", dir.display());
-            let preopened = wasmtime_wasi::sync::Dir::open_ambient_dir(
+            let preopened = wasi_common::sync::Dir::open_ambient_dir(
                 dir,
-                wasmtime_wasi::sync::ambient_authority(),
+                wasi_common::sync::ambient_authority(),
             )
             .with_context(|| format!("failed to open directory: {}", dir.display()))?;
             ctx.preopened_dir(preopened, dir)?;
@@ -789,9 +789,9 @@ impl Wizer {
                 guest_dir.display(),
                 host_dir.display()
             );
-            let preopened = wasmtime_wasi::sync::Dir::open_ambient_dir(
+            let preopened = wasi_common::sync::Dir::open_ambient_dir(
                 host_dir,
-                wasmtime_wasi::sync::ambient_authority(),
+                wasi_common::sync::ambient_authority(),
             )
             .with_context(|| format!("failed to open directory: {}", host_dir.display()))?;
             ctx.preopened_dir(preopened, guest_dir)?;
@@ -834,7 +834,7 @@ impl Wizer {
         };
 
         if self.allow_wasi {
-            wasmtime_wasi::add_to_linker(&mut linker, |ctx: &mut Option<WasiCtx>| {
+            wasi_common::sync::add_to_linker(&mut linker, |ctx: &mut Option<WasiCtx>| {
                 ctx.as_mut().unwrap()
             })?;
         }
