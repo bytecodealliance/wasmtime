@@ -15,7 +15,7 @@ pub mod sync {
                 "wasi:filesystem/types/error-code" => FsError,
             },
             with: {
-                // These interfaces comes from the outer module, as it's
+                // These interfaces come from the outer module, as it's
                 // sync/async agnostic.
                 "wasi:clocks": crate::bindings::clocks,
                 "wasi:random": crate::bindings::random,
