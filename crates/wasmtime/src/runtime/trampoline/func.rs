@@ -3,7 +3,6 @@
 use crate::type_registry::RegisteredType;
 use crate::{code_memory::CodeMemory, Engine, FuncType, ValRaw};
 use anyhow::Result;
-use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use wasmtime_runtime::{
     StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
@@ -47,7 +46,7 @@ unsafe extern "C" fn array_call_shim<F>(
     // below will trigger a longjmp, which won't run local destructors if we
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
-    let result = panic::catch_unwind(AssertUnwindSafe(|| {
+    let result = wasmtime_runtime::catch_unwind_and_longjmp(|| {
         let vmctx = VMArrayCallHostFuncContext::from_opaque(vmctx);
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also
@@ -57,22 +56,17 @@ unsafe extern "C" fn array_call_shim<F>(
         let state = &*(state as *const _ as *const TrampolineState<F>);
         let values_vec = std::slice::from_raw_parts_mut(values_vec, values_vec_len);
         (state.func)(VMContext::from_opaque(caller_vmctx), values_vec)
-    }));
+    });
 
     match result {
-        Ok(Ok(())) => {}
+        Ok(()) => {}
 
         // If a trap was raised (an error returned from the imported function)
         // then we smuggle the trap through `Box<dyn Error>` through to the
         // call-site, which gets unwrapped in `Trap::from_runtime` later on as we
         // convert from the internal `Trap` type to our own `Trap` type in this
         // crate.
-        Ok(Err(trap)) => crate::trap::raise(trap.into()),
-
-        // And finally if the imported function panicked, then we trigger the
-        // form of unwinding that's safe to jump over wasm code on all
-        // platforms.
-        Err(panic) => wasmtime_runtime::resume_panic(panic),
+        Err(trap) => crate::trap::raise(trap.into()),
     }
 }
 

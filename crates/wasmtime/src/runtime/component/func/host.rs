@@ -6,7 +6,6 @@ use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
 use std::any::Any;
 use std::mem::{self, MaybeUninit};
-use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
@@ -291,10 +290,9 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 }
 
 unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
-    match panic::catch_unwind(AssertUnwindSafe(func)) {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) => crate::trap::raise(e),
-        Err(e) => wasmtime_runtime::resume_panic(e),
+    match wasmtime_runtime::catch_unwind_and_longjmp(func) {
+        Ok(()) => {}
+        Err(e) => crate::trap::raise(e),
     }
 }
 
