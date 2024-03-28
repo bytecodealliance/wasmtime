@@ -66,7 +66,7 @@ pub struct CompiledFunction {
 }
 
 impl CompiledFunction {
-    /// Creates a [CompiledFunction] from a [cranelift_codegen::MachBufferFinalized<Final>]
+    /// Creates a [CompiledFunction] from a [`cranelift_codegen::MachBufferFinalized<Final>`]
     /// This function uses the information in the machine buffer to derive the traps and relocations
     /// fields. The compiled function metadata is loaded with the default values.
     pub fn new(
