@@ -8,7 +8,7 @@ mod backtrace;
 mod coredump;
 #[cfg(not(feature = "coredump"))]
 #[path = "traphandlers/coredump_disabled.rs"]
-mod coredump_disabled;
+mod coredump;
 
 use crate::sys::traphandlers;
 use crate::{Instance, VMContext, VMRuntimeLimits};
