@@ -523,7 +523,10 @@ pub enum FixedEncoding {
 }
 
 impl FixedEncoding {
-    pub(crate) fn width(&self) -> u8 {
+    /// Returns the byte width of unit loads/stores for this encoding, for
+    /// example the unit length is multiplied by this return value to get the
+    /// byte width of a string.
+    pub fn width(&self) -> u8 {
         match self {
             FixedEncoding::Utf8 => 1,
             FixedEncoding::Utf16 => 2,
