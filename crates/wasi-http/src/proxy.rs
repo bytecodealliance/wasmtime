@@ -12,7 +12,7 @@ wasmtime::component::bindgen!({
 
 pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView + wasmtime_wasi::WasiView + bindings::http::types::Host,
+    T: WasiHttpView + wasmtime_wasi::WasiView,
 {
     wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
     wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
@@ -47,18 +47,24 @@ pub mod sync {
         async: false,
         with: {
             "wasi:http": bindings::http, // http is in this crate
-            "wasi:io": wasmtime_wasi::bindings::sync_io, // io is sync
+            "wasi:io": wasmtime_wasi::bindings::sync, // io is sync
             "wasi": wasmtime_wasi::bindings, // everything else
         },
     });
 
     pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
     where
-        T: WasiHttpView + wasmtime_wasi::WasiView + bindings::http::types::Host,
+        T: WasiHttpView + wasmtime_wasi::WasiView,
     {
-        // TODO: this shouldn't be required, but the adapter unconditionally pulls in all of these
-        // dependencies.
-        wasmtime_wasi::command::sync::add_to_linker(l)?;
+        wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::sync::io::poll::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::sync::io::streams::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::io::error::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::cli::stdin::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::cli::stdout::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::cli::stderr::add_to_linker(l, |t| t)?;
+        wasmtime_wasi::bindings::random::random::add_to_linker(l, |t| t)?;
 
         add_only_http_to_linker(l)?;
 

@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
+use wasmtime_wasi::WasiView;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -262,20 +263,6 @@ impl RunCommand {
         Ok(())
     }
 
-    fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
-        let mut preopen_dirs = Vec::new();
-
-        for (host, guest) in self.dirs.iter() {
-            preopen_dirs.push((
-                guest.clone(),
-                Dir::open_ambient_dir(host, ambient_authority())
-                    .with_context(|| format!("failed to open directory '{}'", host))?,
-            ));
-        }
-
-        Ok(preopen_dirs)
-    }
-
     fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
         let mut listeners = vec![];
 
@@ -484,7 +471,7 @@ impl RunCommand {
 
                 let component = module.unwrap_component();
 
-                let (command, _instance) = wasmtime_wasi::command::sync::Command::instantiate(
+                let (command, _instance) = wasmtime_wasi::bindings::sync::Command::instantiate(
                     &mut *store,
                     component,
                     linker,
@@ -654,16 +641,20 @@ impl RunCommand {
                         // default-disabled in the future.
                         (Some(true), _) | (None, Some(false) | None) => {
                             if self.run.common.wasi.preview0 != Some(false) {
-                                wasmtime_wasi::preview0::add_to_linker_sync(linker, |t| t)?;
+                                wasmtime_wasi::preview0::add_to_linker_sync(linker, |t| {
+                                    t.preview2_ctx()
+                                })?;
                             }
-                            wasmtime_wasi::preview1::add_to_linker_sync(linker, |t| t)?;
+                            wasmtime_wasi::preview1::add_to_linker_sync(linker, |t| {
+                                t.preview2_ctx()
+                            })?;
                             self.set_preview2_ctx(store)?;
                         }
                     }
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    wasmtime_wasi::command::sync::add_to_linker(linker)?;
+                    wasmtime_wasi::add_to_linker_sync(linker)?;
                     self.set_preview2_ctx(store)?;
                 }
             }
@@ -798,8 +789,10 @@ impl RunCommand {
             num_fd += 1;
         }
 
-        for (name, dir) in self.compute_preopen_dirs()? {
-            builder.preopened_dir(dir, name)?;
+        for (host, guest) in self.dirs.iter() {
+            let dir = Dir::open_ambient_dir(host, ambient_authority())
+                .with_context(|| format!("failed to open directory '{}'", host))?;
+            builder.preopened_dir(dir, guest)?;
         }
 
         store.data_mut().preview1_ctx = Some(builder.build());
@@ -844,13 +837,13 @@ impl RunCommand {
             bail!("components do not support --tcplisten");
         }
 
-        for (name, dir) in self.compute_preopen_dirs()? {
+        for (host, guest) in self.dirs.iter() {
             builder.preopened_dir(
-                dir,
+                host,
+                guest,
                 wasmtime_wasi::DirPerms::all(),
                 wasmtime_wasi::FilePerms::all(),
-                name,
-            );
+            )?;
         }
 
         if self.run.common.wasi.inherit_network == Some(true) {
@@ -866,7 +859,7 @@ impl RunCommand {
             builder.allow_udp(enable);
         }
 
-        let ctx = builder.build();
+        let ctx = builder.build_p1();
         store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
         Ok(())
     }
@@ -879,16 +872,7 @@ struct Host {
     // The Mutex is only needed to satisfy the Sync constraint but we never
     // actually perform any locking on it as we use Mutex::get_mut for every
     // access.
-    preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::WasiCtx>>>,
-
-    // Resource table for preview2 if the `preview2_ctx` is in use, otherwise
-    // "just" an empty table.
-    preview2_table: Arc<Mutex<wasmtime::component::ResourceTable>>,
-
-    // State necessary for the preview1 implementation of WASI backed by the
-    // preview2 host implementation. Only used with the `--preview2` flag right
-    // now when running core modules.
-    preview2_adapter: Arc<wasmtime_wasi::preview1::WasiPreview1Adapter>,
+    preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::preview1::WasiP1Ctx>>>,
 
     #[cfg(feature = "wasi-nn")]
     wasi_nn: Option<Arc<WasiNnCtx>>,
@@ -901,16 +885,12 @@ struct Host {
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
 }
 
-impl wasmtime_wasi::WasiView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table)
-            .expect("wasmtime_wasi is not compatible with threads")
-            .get_mut()
-            .unwrap()
-    }
-
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        let ctx = self.preview2_ctx.as_mut().unwrap();
+impl Host {
+    fn preview2_ctx(&mut self) -> &mut wasmtime_wasi::preview1::WasiP1Ctx {
+        let ctx = self
+            .preview2_ctx
+            .as_mut()
+            .expect("wasip2 is not configured");
         Arc::get_mut(ctx)
             .expect("wasmtime_wasi is not compatible with threads")
             .get_mut()
@@ -918,14 +898,13 @@ impl wasmtime_wasi::WasiView for Host {
     }
 }
 
-impl wasmtime_wasi::preview1::WasiPreview1View for Host {
-    fn adapter(&self) -> &wasmtime_wasi::preview1::WasiPreview1Adapter {
-        &self.preview2_adapter
+impl WasiView for Host {
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        self.preview2_ctx().table()
     }
 
-    fn adapter_mut(&mut self) -> &mut wasmtime_wasi::preview1::WasiPreview1Adapter {
-        Arc::get_mut(&mut self.preview2_adapter)
-            .expect("wasmtime_wasi is not compatible with threads")
+    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
+        self.preview2_ctx().ctx()
     }
 }
 
@@ -937,10 +916,7 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     }
 
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        Arc::get_mut(&mut self.preview2_table)
-            .expect("preview2 is not compatible with threads")
-            .get_mut()
-            .unwrap()
+        self.preview2_ctx().table()
     }
 }
 
