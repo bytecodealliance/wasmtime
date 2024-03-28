@@ -2,6 +2,7 @@
 use crate::runtime::type_registry::TypeRegistry;
 use crate::Config;
 use anyhow::{Context, Result};
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
 use once_cell::sync::OnceCell;

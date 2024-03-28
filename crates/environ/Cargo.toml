@@ -25,8 +25,8 @@ thiserror = { workspace = true }
 serde = "1.0.188"
 serde_derive = "1.0.188"
 log = { workspace = true }
-gimli = { workspace = true, features = ["write"] }
-object = { workspace = true, features = ['write_core'] }
+gimli = { workspace = true }
+object = { workspace = true }
 rustc-demangle = { version = "0.1.16", optional = true }
 target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
@@ -50,3 +50,4 @@ component-model = [
 ]
 demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
+compile = ['gimli/write', 'object/write_core']

@@ -4,14 +4,13 @@
 //! steps.
 
 use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
-use anyhow::{Error, Result};
-use object::write::WritableBuffer;
+use anyhow::Result;
 use std::str;
 use std::sync::Arc;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FinishedObject, FuncIndex,
-    FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex, ObjectBuilder,
-    PrimaryMap, StackMapInformation, WasmFunctionInfo,
+    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FuncIndex, FunctionLoc,
+    FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap, StackMapInformation,
+    WasmFunctionInfo,
 };
 use wasmtime_runtime::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 
@@ -342,82 +341,5 @@ impl<'a> SymbolizeContext<'a> {
     /// to calculate lookup values into the DWARF.
     pub fn code_section_offset(&self) -> u64 {
         self.code_section_offset
-    }
-}
-
-/// Write an object out to an [`MmapVec`] so that it can be marked executable
-/// before running.
-///
-/// The returned `MmapVec` will contain the serialized version of `obj`
-/// and is sized appropriately to the exact size of the object serialized.
-pub fn finish_object(obj: ObjectBuilder<'_>) -> Result<MmapVec> {
-    Ok(<MmapVecWrapper as FinishedObject>::finish_object(obj)?.0)
-}
-
-pub(crate) struct MmapVecWrapper(pub MmapVec);
-
-impl FinishedObject for MmapVecWrapper {
-    fn finish_object(obj: ObjectBuilder<'_>) -> Result<Self> {
-        let mut result = ObjectMmap::default();
-        return match obj.finish(&mut result) {
-            Ok(()) => {
-                assert!(result.mmap.is_some(), "no reserve");
-                let mmap = result.mmap.expect("reserve not called");
-                assert_eq!(mmap.len(), result.len);
-                Ok(MmapVecWrapper(mmap))
-            }
-            Err(e) => match result.err.take() {
-                Some(original) => Err(original.context(e)),
-                None => Err(e.into()),
-            },
-        };
-
-        /// Helper struct to implement the `WritableBuffer` trait from the `object`
-        /// crate.
-        ///
-        /// This enables writing an object directly into an mmap'd memory so it's
-        /// immediately usable for execution after compilation. This implementation
-        /// relies on a call to `reserve` happening once up front with all the needed
-        /// data, and the mmap internally does not attempt to grow afterwards.
-        #[derive(Default)]
-        struct ObjectMmap {
-            mmap: Option<MmapVec>,
-            len: usize,
-            err: Option<Error>,
-        }
-
-        impl WritableBuffer for ObjectMmap {
-            fn len(&self) -> usize {
-                self.len
-            }
-
-            fn reserve(&mut self, additional: usize) -> Result<(), ()> {
-                assert!(self.mmap.is_none(), "cannot reserve twice");
-                self.mmap = match MmapVec::with_capacity(additional) {
-                    Ok(mmap) => Some(mmap),
-                    Err(e) => {
-                        self.err = Some(e);
-                        return Err(());
-                    }
-                };
-                Ok(())
-            }
-
-            fn resize(&mut self, new_len: usize) {
-                // Resizing always appends 0 bytes and since new mmaps start out as 0
-                // bytes we don't actually need to do anything as part of this other
-                // than update our own length.
-                if new_len <= self.len {
-                    return;
-                }
-                self.len = new_len;
-            }
-
-            fn write_bytes(&mut self, val: &[u8]) {
-                let mmap = self.mmap.as_mut().expect("write before reserve");
-                mmap[self.len..][..val.len()].copy_from_slice(val);
-                self.len += val.len();
-            }
-        }
     }
 }
