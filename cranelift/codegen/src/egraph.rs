@@ -566,6 +566,10 @@ impl<'a> EgraphPass<'a> {
     /// only refer to its subset that exists at this stage, to
     /// maintain acyclicity.)
     fn remove_pure_and_optimize(&mut self) {
+        // This pass relies on every value having a unique name, so first
+        // eliminate any value aliases.
+        self.func.dfg.resolve_all_aliases();
+
         let mut cursor = FuncCursor::new(self.func);
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
@@ -661,7 +665,6 @@ impl<'a> EgraphPass<'a> {
 
                         // Rewrite args of *all* instructions using the
                         // value-to-opt-value map.
-                        cursor.func.dfg.resolve_aliases_in_arguments(inst);
                         cursor.func.dfg.map_inst_values(inst, |arg| {
                             let new_value = value_to_opt_value[arg];
                             trace!("rewriting arg {} of inst {} to {}", arg, inst, new_value);
