@@ -1577,6 +1577,15 @@
 (rule (lower (insertlane vec @ (value_type $I64X2) val (u8_from_uimm8 1)))
       (x64_punpcklqdq vec (x64_movq_to_xmm val)))
 
+;; (i64x2.replace_lane 1) with a splat as source for lane 0 -- we can elide
+;; the splat and just do a move. This turns out to be a common pattern when
+;; constructing an i64x2 out of two i64s.
+(rule 3 (lower (insertlane (has_type $I64X2 (splat lane0))
+                           lane1
+                           (u8_from_uimm8 1)))
+        (if-let $true (use_sse41))
+        (x64_pinsrq (bitcast_gpr_to_xmm $I64 lane0) lane1 1))
+
 (rule 1 (lower (insertlane vec @ (value_type $F32X4) (sinkable_load val) (u8_from_uimm8 idx)))
   (if-let $true (use_sse41))
   (x64_insertps vec val (sse_insertps_lane_imm idx)))
@@ -4257,6 +4266,11 @@
 (rule (lower (has_type ty (vconst const)))
       ;; TODO use Inst::gen_constant() instead.
       (x64_xmm_load_const ty (const_to_vconst const)))
+
+;; Special case for a zero-vector: don't load, xor instead.
+(rule 1 (lower (has_type ty (vconst (u128_from_constant 0))))
+    (let ((dst Xmm (xmm_uninit_value)))
+      (x64_pxor dst dst)))
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
