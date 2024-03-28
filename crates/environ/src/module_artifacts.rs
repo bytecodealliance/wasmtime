@@ -115,7 +115,7 @@ pub struct Metadata {
     pub dwarf: Vec<(u8, Range<u64>)>,
 }
 
-/// Value of a configured setting for a [`Compiler`]
+/// Value of a configured setting for a [`Compiler`](crate::Compiler)
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
 pub enum FlagValue<'a> {
     /// Name of the value that has been configured for this setting.
