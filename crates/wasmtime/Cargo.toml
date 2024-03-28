@@ -167,7 +167,7 @@ wmemcheck = ["wasmtime-runtime?/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
 demangle = ["wasmtime-environ/demangle"]
 
 # Enable support for generating core dumps on traps.
-coredump = ["dep:wasm-encoder", "runtime"]
+coredump = ["dep:wasm-encoder", "runtime", "wasmtime-runtime/coredump"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.

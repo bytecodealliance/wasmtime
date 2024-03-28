@@ -20,19 +20,21 @@ pub struct CoreDumpStack {
     pub operand_stack: Vec<Vec<CoreDumpValue>>,
 }
 
-impl CoreDumpStack {
-    /// Capture a core dump of the current wasm state
-    pub fn new(
-        cts: &CallThreadState,
+impl CallThreadState {
+    pub(super) fn capture_coredump(
+        &self,
         limits: *const VMRuntimeLimits,
         trap_pc_and_fp: Option<(usize, usize)>,
-    ) -> Self {
-        let bt = unsafe { Backtrace::new_with_trap_state(limits, cts, trap_pc_and_fp) };
+    ) -> Option<CoreDumpStack> {
+        if !self.capture_coredump {
+            return None;
+        }
+        let bt = unsafe { Backtrace::new_with_trap_state(limits, self, trap_pc_and_fp) };
 
-        Self {
+        Some(CoreDumpStack {
             bt,
             locals: vec![],
             operand_stack: vec![],
-        }
+        })
     }
 }
