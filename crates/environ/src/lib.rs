@@ -11,7 +11,6 @@ mod builtin;
 mod demangling;
 mod module;
 mod module_artifacts;
-mod module_environ;
 mod module_types;
 pub mod obj;
 mod ref_bits;
@@ -26,7 +25,6 @@ pub use crate::builtin::*;
 pub use crate::demangling::*;
 pub use crate::module::*;
 pub use crate::module_artifacts::*;
-pub use crate::module_environ::*;
 pub use crate::module_types::*;
 pub use crate::ref_bits::*;
 pub use crate::scopevec::ScopeVec;
@@ -39,7 +37,11 @@ pub use object;
 #[cfg(feature = "compile")]
 mod compile;
 #[cfg(feature = "compile")]
+mod module_environ;
+#[cfg(feature = "compile")]
 pub use crate::compile::*;
+#[cfg(feature = "compile")]
+pub use crate::module_environ::*;
 
 #[cfg(feature = "component-model")]
 pub mod component;
