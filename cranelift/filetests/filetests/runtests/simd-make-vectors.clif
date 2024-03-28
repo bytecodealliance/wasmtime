@@ -1,0 +1,39 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %i64x2_make0() -> i64x2 {
+block0:
+    v0 = vconst.i64x2 [0 0]
+    return v0
+}
+
+; run: %i64x2_make0() == [0 0]
+
+function %i64x2_make1(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = vconst.i64x2 [0 0]
+    v2 = insertlane.i64x2 v1, v0, 0
+    return v2
+}
+
+; run: %i64x2_make1(0) == [0 0]
+; run: %i64x2_make1(0x123456789abcdef0) == [0x123456789abcdef0 0]
+
+function %i64x2_make2(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+    v2 = splat.i64x2 v0
+    v3 = insertlane.i64x2 v2, v1, 1
+    return v3
+}
+
+; run: %i64x2_make2(0, 0) == [0 0]
+; run: %i64x2_make2(0x123456789abcdef0, 0) == [0x123456789abcdef0 0]
+; run: %i64x2_make2(0, 0x123456789abcdef0) == [0 0x123456789abcdef0]
+; run: %i64x2_make2(0x123456789abcdef0, 0x0fedcba987654321) == [0x123456789abcdef0 0x0fedcba987654321]
