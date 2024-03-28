@@ -9,7 +9,6 @@ use anyhow::{bail, Context as _, Error, Result};
 use std::ffi::c_void;
 use std::future::Future;
 use std::mem;
-use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
@@ -2156,20 +2155,13 @@ macro_rules! impl_into_func {
                     $( $args: WasmTy, )*
                     R: WasmRet,
                 {
-                    enum CallResult<U> {
-                        Ok(U),
-                        Trap(anyhow::Error),
-                        Panic(Box<dyn std::any::Any + Send>),
-                    }
-
-                    // Note that this `result` is intentionally scoped into a
-                    // separate block. Handling traps and panics will involve
+                    // Note that this function is intentionally scoped into a
+                    // separate closure. Handling traps and panics will involve
                     // longjmp-ing from this function which means we won't run
                     // destructors. As a result anything requiring a destructor
-                    // should be part of this block, and the long-jmp-ing
-                    // happens after the block in handling `CallResult`.
-                    let caller_vmctx = VMContext::from_opaque(caller_vmctx);
-                    let result = Caller::with(caller_vmctx, |mut caller| {
+                    // should be part of this closure, and the long-jmp-ing
+                    // happens after the closure in handling the result.
+                    let run = move |mut caller: Caller<'_, T>| {
                         let vmctx = VMNativeCallHostFuncContext::from_opaque(vmctx);
                         let state = (*vmctx).host_state();
 
@@ -2180,59 +2172,45 @@ macro_rules! impl_into_func {
                         let state = &*(state as *const _ as *const HostFuncState<F>);
                         let func = &state.func;
 
-                        let ret = {
-                            panic::catch_unwind(AssertUnwindSafe(|| {
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
-                                    return R::fallible_from_error(trap);
-                                }
+                        let ret = 'ret: {
+                            if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
+                                break 'ret R::fallible_from_error(trap);
+                            }
 
-                                let mut store = AutoAssertNoGc::new(caller.store.0);
-                                $(let $args = $args::from_abi($args, &mut store);)*
-                                let _ = &mut store;
-                                drop(store);
+                            let mut store = AutoAssertNoGc::new(caller.store.0);
+                            $(let $args = $args::from_abi($args, &mut store);)*
+                            let _ = &mut store;
+                            drop(store);
 
-                                let r = func(
-                                    caller.sub_caller(),
-                                    $( $args, )*
-                                );
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
-                                    return R::fallible_from_error(trap);
-                                }
-                                r.into_fallible()
-                            }))
+                            let r = func(
+                                caller.sub_caller(),
+                                $( $args, )*
+                            );
+                            if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
+                                break 'ret R::fallible_from_error(trap);
+                            }
+                            r.into_fallible()
                         };
 
-                        // Note that we need to be careful when dealing with traps
-                        // here. Traps are implemented with longjmp/setjmp meaning
-                        // that it's not unwinding and consequently no Rust
-                        // destructors are run. We need to be careful to ensure that
-                        // nothing on the stack needs a destructor when we exit
-                        // abnormally from this `match`, e.g. on `Err`, on
-                        // cross-store-issues, or if `Ok(Err)` is raised.
-                        match ret {
-                            Err(panic) => CallResult::Panic(panic),
-                            Ok(ret) => {
-                                // Because the wrapped function is not `unsafe`, we
-                                // can't assume it returned a value that is
-                                // compatible with this store.
-                                if !ret.compatible_with_store(caller.store.0) {
-                                    CallResult::Trap(anyhow::anyhow!("host function attempted to return cross-`Store` value to Wasm"))
-                                } else {
-                                    let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
-                                    match ret.into_abi_for_ret(&mut store, retptr) {
-                                        Ok(val) => CallResult::Ok(val),
-                                        Err(trap) => CallResult::Trap(trap.into()),
-                                    }
-                                }
-
-                            }
+                        if !ret.compatible_with_store(caller.store.0) {
+                            bail!("host function attempted to return cross-`Store` value to Wasm")
+                        } else {
+                            let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
+                            let ret = ret.into_abi_for_ret(&mut store, retptr)?;
+                            Ok(ret)
                         }
+                    };
+
+                    // With nothing else on the stack move `run` into this
+                    // closure and then run it as part of `Caller::with`.
+                    let result = wasmtime_runtime::catch_unwind_and_longjmp(move || {
+                        let caller_vmctx = VMContext::from_opaque(caller_vmctx);
+                        Caller::with(caller_vmctx, run)
                     });
 
                     match result {
-                        CallResult::Ok(val) => val,
-                        CallResult::Trap(err) => crate::trap::raise(err),
-                        CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
+                        Ok(val) => val,
+                        Err(err) => crate::trap::raise(err),
                     }
                 }
 

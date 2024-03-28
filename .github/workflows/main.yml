@@ -322,6 +322,12 @@ jobs:
     - run: cargo check -p wasmtime-c-api --no-default-features --features wat
     - run: cargo check -p wasmtime-c-api --no-default-features --features wasi
 
+    # Check that wasmtime-runtime compiles with panic=abort since there's some
+    # #[cfg] for specifically panic=abort there.
+    - run: cargo check -p wasmtime-runtime
+      env:
+        RUSTFLAGS: -Cpanic=abort
+
     # Check a few builds of the cranelift backend
     # - only x86 backend support,
     # - only arm64 backend support,
