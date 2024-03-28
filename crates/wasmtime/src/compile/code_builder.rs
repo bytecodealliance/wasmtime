@@ -179,11 +179,13 @@ impl<'a> CodeBuilder<'a> {
                         // Implementation of how to serialize artifacts
                         |(_engine, _wasm, _), (code, _info_and_types)| Some(code.mmap().to_vec()),
                         // Cache hit, deserialize the provided artifacts
-                        |(engine, _wasm, _), serialized_bytes| {
-                            let code = engine
-                                .0
-                                .load_code_bytes(&serialized_bytes, ObjectKind::Module)
-                                .ok()?;
+                        |(engine, wasm, _), serialized_bytes| {
+                            let kind = if wasmparser::Parser::is_component(&wasm) {
+                                ObjectKind::Component
+                            } else {
+                                ObjectKind::Module
+                            };
+                            let code = engine.0.load_code_bytes(&serialized_bytes, kind).ok()?;
                             Some((code, None))
                         },
                     )?;

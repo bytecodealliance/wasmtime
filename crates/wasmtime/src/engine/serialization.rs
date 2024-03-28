@@ -812,4 +812,36 @@ Caused by:
 
         Ok(())
     }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    #[cfg(feature = "component-model")]
+    fn components_are_cached() -> Result<()> {
+        use crate::component::Component;
+
+        let td = TempDir::new()?;
+        let config_path = td.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            &format!(
+                "
+                    [cache]
+                    enabled = true
+                    directory = '{}'
+                ",
+                td.path().join("cache").display()
+            ),
+        )?;
+        let mut cfg = Config::new();
+        cfg.cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Component::new(&engine, "(component (core module (func)))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Component::new(&engine, "(component (core module (func)))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+
+        Ok(())
+    }
 }
