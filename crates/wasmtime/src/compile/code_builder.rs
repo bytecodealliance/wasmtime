@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::borrow::Cow;
 use std::path::Path;
 
-/// Builder-style structure used to create a [`Module`] or
+/// Builder-style structure used to create a [`Module`](crate::module::Module) or
 /// pre-compile a module to a serialized list of bytes.
 ///
 /// This structure can be used for more advanced configuration when compiling a
