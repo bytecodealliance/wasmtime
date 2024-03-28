@@ -254,11 +254,17 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
-        #[cfg(feature = "gc")]
-        ret.wasm_reference_types(true);
-        #[cfg(not(feature = "gc"))]
-        {
-            ret.features.reference_types = false;
+        // Conditionally enabled features depending on compile-time crate
+        // features. Note that if these features are disabled then `Config` has
+        // no way of re-enabling them.
+        ret.features.reference_types = cfg!(feature = "gc");
+        ret.features.threads = cfg!(feature = "threads");
+        ret.features.component_model = cfg!(feature = "component-model");
+
+        // If GC is disabled at compile time also disable it in features
+        // forcibly irrespective of `wasmparser` defaults. Note that these also
+        // aren't yet fully implemented in Wasmtime.
+        if !cfg!(feature = "gc") {
             ret.features.function_references = false;
             ret.features.gc = false;
         }
@@ -266,8 +272,6 @@ impl Config {
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
-        #[cfg(feature = "component-model")]
-        ret.wasm_component_model(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
         // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
@@ -718,6 +722,8 @@ impl Config {
     ///
     /// [threads]: https://github.com/webassembly/threads
     /// [wasi-threads]: https://github.com/webassembly/wasi-threads
+    #[cfg(feature = "threads")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "threads")))]
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.features.threads = enable;
         self

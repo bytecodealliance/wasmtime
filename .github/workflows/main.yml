@@ -300,6 +300,9 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features runtime,gc
     - run: cargo check -p wasmtime --no-default-features --features cranelift,gc
     - run: cargo check -p wasmtime --no-default-features --features runtime
+    - run: cargo check -p wasmtime --no-default-features --features threads
+    - run: cargo check -p wasmtime --no-default-features --features runtime,threads
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,threads
     - run: cargo check --features component-model
     - run: cargo check -p wasmtime --features incremental-cache
 

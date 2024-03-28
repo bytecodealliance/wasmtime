@@ -330,6 +330,8 @@ default = [
   "addr2line",
   "debug-builtins",
   "component-model",
+  "threads",
+  "gc",
 
   # Enable some nice features of clap by default, but they come at a binary size
   # cost, so allow disabling this through disabling of our own `default`
@@ -359,7 +361,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # These features are all included in the `default` set above and this is
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
-wasi-threads = ["dep:wasmtime-wasi-threads"]
+wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
@@ -377,6 +379,8 @@ profiling = ["wasmtime/profiling"]
 coredump = ["wasmtime-cli-flags/coredump"]
 addr2line = ["wasmtime/addr2line"]
 debug-builtins = ["wasmtime/debug-builtins"]
+threads = ["wasmtime-cli-flags/threads"]
+gc = ["wasmtime-cli-flags/gc"]
 
 # Enables compatibility shims with Wasmtime 13 and prior's CLI.
 old-cli = []

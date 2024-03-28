@@ -51,3 +51,4 @@ component-model = [
 demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
 compile = ['gimli/write', 'object/write_core']
+threads = []
