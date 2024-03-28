@@ -162,7 +162,8 @@ impl<'a> CodeBuilder<'a> {
     }
 
     /// Same as [`CodeBuilder::compile_module_serialized`] except that it
-    /// compiles a serialized [`Component`] instead of a module.
+    /// compiles a serialized [`Component`](crate::component::Component)
+    /// instead of a module.
     #[cfg(feature = "component-model")]
     #[cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
     pub fn compile_component_serialized(&self) -> Result<Vec<u8>> {
