@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["camel_case"],"mod":["formats","instructions","isa","operands","settings","types","typevar"]};

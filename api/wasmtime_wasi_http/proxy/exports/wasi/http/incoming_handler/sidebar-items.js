@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Guest"],"type":["IncomingRequest","ResponseOutparam"]};

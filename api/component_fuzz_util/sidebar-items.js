@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EXPORT_FUNCTION","IMPORT_FUNCTION","MAX_TYPE_DEPTH"],"enum":["StringEncoding","Type"],"fn":["rust_type"],"struct":["Declarations","TestCase","VecInRange"]};

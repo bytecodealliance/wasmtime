@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_wasi_snapshot_preview1_to_linker"]};

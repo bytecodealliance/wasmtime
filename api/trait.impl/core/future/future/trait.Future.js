@@ -1,0 +1,5 @@
+(function() {var implementors = {
+"wasmtime_c_api":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"wasmtime_c_api/struct.wasmtime_async_continuation_t.html\" title=\"struct wasmtime_c_api::wasmtime_async_continuation_t\">wasmtime_async_continuation_t</a>"]],
+"wasmtime_environ":[],
+"wasmtime_wasi":[["impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"wasmtime_wasi/runtime/struct.AbortOnDropJoinHandle.html\" title=\"struct wasmtime_wasi::runtime::AbortOnDropJoinHandle\">AbortOnDropJoinHandle</a>&lt;T&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

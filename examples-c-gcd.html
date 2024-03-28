@@ -1,0 +1,386 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Calculating the GCD - Wasmtime</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">2.</strong> Using the Wasmtime CLI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cli-install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="cli-options.html"><strong aria-hidden="true">2.2.</strong> CLI Options</a></li><li class="chapter-item expanded "><a href="cli-logging.html"><strong aria-hidden="true">2.3.</strong> CLI Logging</a></li><li class="chapter-item expanded "><a href="cli-cache.html"><strong aria-hidden="true">2.4.</strong> Cache Configuration</a></li></ol></li><li class="chapter-item expanded "><a href="lang.html"><strong aria-hidden="true">3.</strong> Using the Wasmtime API</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lang-rust.html"><strong aria-hidden="true">3.1.</strong> Rust</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-rust-hello-world.html"><strong aria-hidden="true">3.1.1.</strong> Hello, world!</a></li><li class="chapter-item expanded "><a href="examples-rust-gcd.html"><strong aria-hidden="true">3.1.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-rust-memory.html"><strong aria-hidden="true">3.1.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-rust-wasi.html"><strong aria-hidden="true">3.1.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-rust-linking.html"><strong aria-hidden="true">3.1.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-rust-debugging.html"><strong aria-hidden="true">3.1.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-rust-core-dumps.html"><strong aria-hidden="true">3.1.7.</strong> Core Dumps</a></li><li class="chapter-item expanded "><a href="examples-rust-multi-value.html"><strong aria-hidden="true">3.1.8.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-c.html"><strong aria-hidden="true">3.2.</strong> C</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-c-hello-world.html"><strong aria-hidden="true">3.2.1.</strong> Hello, World!</a></li><li class="chapter-item expanded "><a href="examples-c-gcd.html" class="active"><strong aria-hidden="true">3.2.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-c-memory.html"><strong aria-hidden="true">3.2.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-c-wasi.html"><strong aria-hidden="true">3.2.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-c-linking.html"><strong aria-hidden="true">3.2.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-c-debugging.html"><strong aria-hidden="true">3.2.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-c-multi-value.html"><strong aria-hidden="true">3.2.7.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-python.html"><strong aria-hidden="true">3.3.</strong> Python</a></li><li class="chapter-item expanded "><a href="lang-dotnet.html"><strong aria-hidden="true">3.4.</strong> .NET</a></li><li class="chapter-item expanded "><a href="lang-go.html"><strong aria-hidden="true">3.5.</strong> Go</a></li><li class="chapter-item expanded "><a href="lang-bash.html"><strong aria-hidden="true">3.6.</strong> Bash</a></li><li class="chapter-item expanded "><a href="lang-ruby.html"><strong aria-hidden="true">3.7.</strong> Ruby</a></li><li class="chapter-item expanded "><a href="lang-elixir.html"><strong aria-hidden="true">3.8.</strong> Elixir</a></li></ol></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">4.</strong> Further Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging.html"><strong aria-hidden="true">4.1.</strong> Debugging WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging-native-debugger.html"><strong aria-hidden="true">4.1.1.</strong> Debugging with gdb and lldb</a></li><li class="chapter-item expanded "><a href="examples-debugging-core-dumps.html"><strong aria-hidden="true">4.1.2.</strong> Debugging with Core Dumps</a></li></ol></li><li class="chapter-item expanded "><a href="examples-profiling.html"><strong aria-hidden="true">4.2.</strong> Profiling WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-profiling-perf.html"><strong aria-hidden="true">4.2.1.</strong> Profiling with Perf</a></li><li class="chapter-item expanded "><a href="examples-profiling-vtune.html"><strong aria-hidden="true">4.2.2.</strong> Profiling with VTune</a></li><li class="chapter-item expanded "><a href="examples-profiling-samply.html"><strong aria-hidden="true">4.2.3.</strong> Profiling with samply</a></li><li class="chapter-item expanded "><a href="examples-profiling-guest.html"><strong aria-hidden="true">4.2.4.</strong> Cross-platform Profiling</a></li></ol></li><li class="chapter-item expanded "><a href="wmemcheck.html"><strong aria-hidden="true">4.3.</strong> Checking Guests' Memory Accesses</a></li><li class="chapter-item expanded "><a href="examples-minimal.html"><strong aria-hidden="true">4.4.</strong> Building a minimal embedding</a></li></ol></li><li class="chapter-item expanded "><a href="stability.html"><strong aria-hidden="true">5.</strong> Stability</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="stability-release.html"><strong aria-hidden="true">5.1.</strong> Release Process</a></li><li class="chapter-item expanded "><a href="stability-tiers.html"><strong aria-hidden="true">5.2.</strong> Tiers of support</a></li><li class="chapter-item expanded "><a href="stability-platform-support.html"><strong aria-hidden="true">5.3.</strong> Platform Support</a></li></ol></li><li class="chapter-item expanded "><a href="security.html"><strong aria-hidden="true">6.</strong> Security</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="security-disclosure.html"><strong aria-hidden="true">6.1.</strong> Disclosure Policy</a></li><li class="chapter-item expanded "><a href="security-what-is-considered-a-security-vulnerability.html"><strong aria-hidden="true">6.2.</strong> What is considered a security bug?</a></li></ol></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-architecture.html"><strong aria-hidden="true">7.1.</strong> Architecture</a></li><li class="chapter-item expanded "><a href="contributing-building.html"><strong aria-hidden="true">7.2.</strong> Building</a></li><li class="chapter-item expanded "><a href="contributing-testing.html"><strong aria-hidden="true">7.3.</strong> Testing</a></li><li class="chapter-item expanded "><a href="contributing-fuzzing.html"><strong aria-hidden="true">7.4.</strong> Fuzzing</a></li><li class="chapter-item expanded "><a href="contributing-ci.html"><strong aria-hidden="true">7.5.</strong> CI</a></li><li class="chapter-item expanded "><a href="contributing-reducing-test-cases.html"><strong aria-hidden="true">7.6.</strong> Reducing Test Cases</a></li><li class="chapter-item expanded "><a href="contributing-cross-compiling.html"><strong aria-hidden="true">7.7.</strong> Cross Compiling</a></li><li class="chapter-item expanded "><a href="contributing-coding-guidelines.html"><strong aria-hidden="true">7.8.</strong> Coding Guidelines</a></li><li class="chapter-item expanded "><a href="contributing-development-process.html"><strong aria-hidden="true">7.9.</strong> Development Process</a></li><li class="chapter-item expanded "><a href="contributing-implementing-wasm-proposals.html"><strong aria-hidden="true">7.10.</strong> Implementing Wasm Proposals</a></li><li class="chapter-item expanded "><a href="contributing-maintainer-guidelines.html"><strong aria-hidden="true">7.11.</strong> Maintainer Guidelines</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-code-review.html"><strong aria-hidden="true">7.11.1.</strong> Code Review</a></li><li class="chapter-item expanded "><a href="contributing-release-process.html"><strong aria-hidden="true">7.11.2.</strong> Release Process</a></li></ol></li><li class="chapter-item expanded "><a href="contributing-governance.html"><strong aria-hidden="true">7.12.</strong> Governance</a></li><li class="chapter-item expanded "><a href="contributing-coc.html"><strong aria-hidden="true">7.13.</strong> Code of Conduct</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Wasmtime</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="calculating-the-gcd"><a class="header" href="#calculating-the-gcd">Calculating the GCD</a></h1>
+<p>You can also <a href="https://github.com/bytecodealliance/wasmtime/blob/main/examples/gcd.c">browse this source code online</a> and clone the wasmtime
+repository to run the example locally.</p>
+<p>This example shows off how run a wasm program which calculates the GCD of two
+numbers.</p>
+<h2 id="gcdwat"><a class="header" href="#gcdwat"><code>gcd.wat</code></a></h2>
+<pre><code class="language-wat">(module
+  (func $gcd (param i32 i32) (result i32)
+    (local i32)
+    block  ;; label = @1
+      block  ;; label = @2
+        local.get 0
+        br_if 0 (;@2;)
+        local.get 1
+        local.set 2
+        br 1 (;@1;)
+      end
+      loop  ;; label = @2
+        local.get 1
+        local.get 0
+        local.tee 2
+        i32.rem_u
+        local.set 0
+        local.get 2
+        local.set 1
+        local.get 0
+        br_if 0 (;@2;)
+      end
+    end
+    local.get 2
+  )
+  (export "gcd" (func $gcd))
+)
+
+</code></pre>
+<h2 id="gcdc"><a class="header" href="#gcdc"><code>gcd.c</code></a></h2>
+<pre><code class="language-c">/*
+Example of instantiating of the WebAssembly module and invoking its exported
+function.
+
+You can compile and run this example on Linux with:
+
+   cargo build --release -p wasmtime-c-api
+   cc examples/gcd.c \
+       -I crates/c-api/include \
+       target/release/libwasmtime.a \
+       -lpthread -ldl -lm \
+       -o gcd
+   ./gcd
+
+Note that on Windows and macOS the command will be similar, but you'll need
+to tweak the `-lpthread` and such annotations.
+
+You can also build using cmake:
+
+mkdir build &amp;&amp; cd build &amp;&amp; cmake .. &amp;&amp; cmake --build . --target wasmtime-gcd
+*/
+
+#include &lt;assert.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;wasm.h&gt;
+#include &lt;wasmtime.h&gt;
+
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap);
+
+int main() {
+  int ret = 0;
+  // Set up our context
+  wasm_engine_t *engine = wasm_engine_new();
+  assert(engine != NULL);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
+  assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
+
+  // Load our input file to parse it next
+  FILE *file = fopen("examples/gcd.wat", "r");
+  if (!file) {
+    printf("&gt; Error loading file!\n");
+    return 1;
+  }
+  fseek(file, 0L, SEEK_END);
+  size_t file_size = ftell(file);
+  fseek(file, 0L, SEEK_SET);
+  wasm_byte_vec_t wat;
+  wasm_byte_vec_new_uninitialized(&amp;wat, file_size);
+  if (fread(wat.data, file_size, 1, file) != 1) {
+    printf("&gt; Error loading module!\n");
+    return 1;
+  }
+  fclose(file);
+
+  // Parse the wat into the binary wasm format
+  wasm_byte_vec_t wasm;
+  wasmtime_error_t *error = wasmtime_wat2wasm(wat.data, wat.size, &amp;wasm);
+  if (error != NULL)
+    exit_with_error("failed to parse wat", error, NULL);
+  wasm_byte_vec_delete(&amp;wat);
+
+  // Compile and instantiate our module
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t *)wasm.data, wasm.size, &amp;module);
+  if (module == NULL)
+    exit_with_error("failed to compile module", error, NULL);
+  wasm_byte_vec_delete(&amp;wasm);
+
+  wasm_trap_t *trap = NULL;
+  wasmtime_instance_t instance;
+  error = wasmtime_instance_new(context, module, NULL, 0, &amp;instance, &amp;trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to instantiate", error, trap);
+
+  // Lookup our `gcd` export function
+  wasmtime_extern_t gcd;
+  bool ok = wasmtime_instance_export_get(context, &amp;instance, "gcd", 3, &amp;gcd);
+  assert(ok);
+  assert(gcd.kind == WASMTIME_EXTERN_FUNC);
+
+  // And call it!
+  int a = 6;
+  int b = 27;
+  wasmtime_val_t params[2];
+  params[0].kind = WASMTIME_I32;
+  params[0].of.i32 = a;
+  params[1].kind = WASMTIME_I32;
+  params[1].of.i32 = b;
+  wasmtime_val_t results[1];
+  error =
+      wasmtime_func_call(context, &amp;gcd.of.func, params, 2, results, 1, &amp;trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call gcd", error, trap);
+  assert(results[0].kind == WASMTIME_I32);
+
+  printf("gcd(%d, %d) = %d\n", a, b, results[0].of.i32);
+
+  // Clean up after ourselves at this point
+  ret = 0;
+
+  wasmtime_module_delete(module);
+  wasmtime_store_delete(store);
+  wasm_engine_delete(engine);
+  return ret;
+}
+
+static void exit_with_error(const char *message, wasmtime_error_t *error,
+                            wasm_trap_t *trap) {
+  fprintf(stderr, "error: %s\n", message);
+  wasm_byte_vec_t error_message;
+  if (error != NULL) {
+    wasmtime_error_message(error, &amp;error_message);
+  } else {
+    wasm_trap_message(trap, &amp;error_message);
+  }
+  fprintf(stderr, "%.*s\n", (int)error_message.size, error_message.data);
+  wasm_byte_vec_delete(&amp;error_message);
+  exit(1);
+}
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="examples-c-hello-world.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="examples-c-memory.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="examples-c-hello-world.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="examples-c-memory.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["HostFields","HostFutureIncomingResponse"],"fn":["default_send_request"],"struct":["HostIncomingRequest","HostIncomingResponse","HostOutgoingRequest","HostOutgoingResponse","HostRequestOptions","HostResponseOutparam","IncomingResponseInternal","OutgoingRequest","WasiHttpCtx"],"trait":["WasiHttpView"],"type":["FieldMap"]};

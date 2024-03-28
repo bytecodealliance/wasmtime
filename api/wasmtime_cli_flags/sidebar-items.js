@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["wasmtime_option_group"],"mod":["opt"],"struct":["CodegenOptions","CommonOptions","DebugOptions","OptimizeOptions","WasiNnGraph","WasiOptions","WasmOptions"]};

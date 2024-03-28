@@ -1,0 +1,379 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Profiling with Perf - Wasmtime</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">2.</strong> Using the Wasmtime CLI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cli-install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="cli-options.html"><strong aria-hidden="true">2.2.</strong> CLI Options</a></li><li class="chapter-item expanded "><a href="cli-logging.html"><strong aria-hidden="true">2.3.</strong> CLI Logging</a></li><li class="chapter-item expanded "><a href="cli-cache.html"><strong aria-hidden="true">2.4.</strong> Cache Configuration</a></li></ol></li><li class="chapter-item expanded "><a href="lang.html"><strong aria-hidden="true">3.</strong> Using the Wasmtime API</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lang-rust.html"><strong aria-hidden="true">3.1.</strong> Rust</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-rust-hello-world.html"><strong aria-hidden="true">3.1.1.</strong> Hello, world!</a></li><li class="chapter-item expanded "><a href="examples-rust-gcd.html"><strong aria-hidden="true">3.1.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-rust-memory.html"><strong aria-hidden="true">3.1.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-rust-wasi.html"><strong aria-hidden="true">3.1.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-rust-linking.html"><strong aria-hidden="true">3.1.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-rust-debugging.html"><strong aria-hidden="true">3.1.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-rust-core-dumps.html"><strong aria-hidden="true">3.1.7.</strong> Core Dumps</a></li><li class="chapter-item expanded "><a href="examples-rust-multi-value.html"><strong aria-hidden="true">3.1.8.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-c.html"><strong aria-hidden="true">3.2.</strong> C</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-c-hello-world.html"><strong aria-hidden="true">3.2.1.</strong> Hello, World!</a></li><li class="chapter-item expanded "><a href="examples-c-gcd.html"><strong aria-hidden="true">3.2.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-c-memory.html"><strong aria-hidden="true">3.2.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-c-wasi.html"><strong aria-hidden="true">3.2.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-c-linking.html"><strong aria-hidden="true">3.2.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-c-debugging.html"><strong aria-hidden="true">3.2.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-c-multi-value.html"><strong aria-hidden="true">3.2.7.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-python.html"><strong aria-hidden="true">3.3.</strong> Python</a></li><li class="chapter-item expanded "><a href="lang-dotnet.html"><strong aria-hidden="true">3.4.</strong> .NET</a></li><li class="chapter-item expanded "><a href="lang-go.html"><strong aria-hidden="true">3.5.</strong> Go</a></li><li class="chapter-item expanded "><a href="lang-bash.html"><strong aria-hidden="true">3.6.</strong> Bash</a></li><li class="chapter-item expanded "><a href="lang-ruby.html"><strong aria-hidden="true">3.7.</strong> Ruby</a></li><li class="chapter-item expanded "><a href="lang-elixir.html"><strong aria-hidden="true">3.8.</strong> Elixir</a></li></ol></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">4.</strong> Further Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging.html"><strong aria-hidden="true">4.1.</strong> Debugging WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging-native-debugger.html"><strong aria-hidden="true">4.1.1.</strong> Debugging with gdb and lldb</a></li><li class="chapter-item expanded "><a href="examples-debugging-core-dumps.html"><strong aria-hidden="true">4.1.2.</strong> Debugging with Core Dumps</a></li></ol></li><li class="chapter-item expanded "><a href="examples-profiling.html"><strong aria-hidden="true">4.2.</strong> Profiling WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-profiling-perf.html" class="active"><strong aria-hidden="true">4.2.1.</strong> Profiling with Perf</a></li><li class="chapter-item expanded "><a href="examples-profiling-vtune.html"><strong aria-hidden="true">4.2.2.</strong> Profiling with VTune</a></li><li class="chapter-item expanded "><a href="examples-profiling-samply.html"><strong aria-hidden="true">4.2.3.</strong> Profiling with samply</a></li><li class="chapter-item expanded "><a href="examples-profiling-guest.html"><strong aria-hidden="true">4.2.4.</strong> Cross-platform Profiling</a></li></ol></li><li class="chapter-item expanded "><a href="wmemcheck.html"><strong aria-hidden="true">4.3.</strong> Checking Guests' Memory Accesses</a></li><li class="chapter-item expanded "><a href="examples-minimal.html"><strong aria-hidden="true">4.4.</strong> Building a minimal embedding</a></li></ol></li><li class="chapter-item expanded "><a href="stability.html"><strong aria-hidden="true">5.</strong> Stability</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="stability-release.html"><strong aria-hidden="true">5.1.</strong> Release Process</a></li><li class="chapter-item expanded "><a href="stability-tiers.html"><strong aria-hidden="true">5.2.</strong> Tiers of support</a></li><li class="chapter-item expanded "><a href="stability-platform-support.html"><strong aria-hidden="true">5.3.</strong> Platform Support</a></li></ol></li><li class="chapter-item expanded "><a href="security.html"><strong aria-hidden="true">6.</strong> Security</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="security-disclosure.html"><strong aria-hidden="true">6.1.</strong> Disclosure Policy</a></li><li class="chapter-item expanded "><a href="security-what-is-considered-a-security-vulnerability.html"><strong aria-hidden="true">6.2.</strong> What is considered a security bug?</a></li></ol></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-architecture.html"><strong aria-hidden="true">7.1.</strong> Architecture</a></li><li class="chapter-item expanded "><a href="contributing-building.html"><strong aria-hidden="true">7.2.</strong> Building</a></li><li class="chapter-item expanded "><a href="contributing-testing.html"><strong aria-hidden="true">7.3.</strong> Testing</a></li><li class="chapter-item expanded "><a href="contributing-fuzzing.html"><strong aria-hidden="true">7.4.</strong> Fuzzing</a></li><li class="chapter-item expanded "><a href="contributing-ci.html"><strong aria-hidden="true">7.5.</strong> CI</a></li><li class="chapter-item expanded "><a href="contributing-reducing-test-cases.html"><strong aria-hidden="true">7.6.</strong> Reducing Test Cases</a></li><li class="chapter-item expanded "><a href="contributing-cross-compiling.html"><strong aria-hidden="true">7.7.</strong> Cross Compiling</a></li><li class="chapter-item expanded "><a href="contributing-coding-guidelines.html"><strong aria-hidden="true">7.8.</strong> Coding Guidelines</a></li><li class="chapter-item expanded "><a href="contributing-development-process.html"><strong aria-hidden="true">7.9.</strong> Development Process</a></li><li class="chapter-item expanded "><a href="contributing-implementing-wasm-proposals.html"><strong aria-hidden="true">7.10.</strong> Implementing Wasm Proposals</a></li><li class="chapter-item expanded "><a href="contributing-maintainer-guidelines.html"><strong aria-hidden="true">7.11.</strong> Maintainer Guidelines</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-code-review.html"><strong aria-hidden="true">7.11.1.</strong> Code Review</a></li><li class="chapter-item expanded "><a href="contributing-release-process.html"><strong aria-hidden="true">7.11.2.</strong> Release Process</a></li></ol></li><li class="chapter-item expanded "><a href="contributing-governance.html"><strong aria-hidden="true">7.12.</strong> Governance</a></li><li class="chapter-item expanded "><a href="contributing-coc.html"><strong aria-hidden="true">7.13.</strong> Code of Conduct</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Wasmtime</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="using-perf-on-linux"><a class="header" href="#using-perf-on-linux">Using <code>perf</code> on Linux</a></h1>
+<p>One profiler supported by Wasmtime is the <a href="https://perf.wiki.kernel.org/index.php/Main_Page"><code>perf</code>
+profiler</a> for Linux. This is
+an extremely powerful profiler with lots of documentation on the web, but for
+the rest of this section we'll assume you're running on Linux and already have
+<code>perf</code> installed.</p>
+<p>There are two profiling agents for <code>perf</code>:</p>
+<ul>
+<li>a very simple one that will map code regions to symbol names: <code>perfmap</code>.</li>
+<li>a more detailed one that can provide additional information and mappings between the source
+language statements and generated JIT code: <code>jitdump</code>.</li>
+</ul>
+<h2 id="profiling-with-perfmap"><a class="header" href="#profiling-with-perfmap">Profiling with <code>perfmap</code></a></h2>
+<p>Simple profiling support with <code>perf</code> generates a "perf map" file that the <code>perf</code> CLI will
+automatically look for, when running into unresolved symbols. This requires runtime support from
+Wasmtime itself, so you will need to manually change a few things to enable profiling support in
+your application. Enabling runtime support depends on how you're using Wasmtime:</p>
+<ul>
+<li>
+<p><strong>Rust API</strong> - you'll want to call the [<code>Config::profiler</code>] method with
+<code>ProfilingStrategy::PerfMap</code> to enable profiling of your wasm modules.</p>
+</li>
+<li>
+<p><strong>C API</strong> - you'll want to call the <code>wasmtime_config_profiler_set</code> API with a
+<code>WASMTIME_PROFILING_STRATEGY_PERFMAP</code> value.</p>
+</li>
+<li>
+<p><strong>Command Line</strong> - you'll want to pass the <code>--profile=perfmap</code> flag on the command
+line.</p>
+</li>
+</ul>
+<p>Once perfmap support is enabled, you'll use <code>perf record</code> like usual to record
+your application's performance.</p>
+<p>For example if you're using the CLI, you'll execute:</p>
+<pre><code class="language-sh">$ perf record -k mono wasmtime --profile=perfmap foo.wasm
+</code></pre>
+<p>This will create a <code>perf.data</code> file as per usual, but it will <em>also</em> create a
+<code>/tmp/perf-XXXX.map</code> file. This extra <code>.map</code> file is the perf map file which is
+specified by <code>perf</code> and Wasmtime generates at runtime.</p>
+<p>After that you can explore the <code>perf.data</code> profile as you usually would, for example with:</p>
+<pre><code class="language-sh">$ perf report --input perf.data
+</code></pre>
+<p>You should be able to see time spent in wasm functions, generate flamegraphs based on that, etc..
+You should also see entries for wasm functions show up as one function and the name of each
+function matches the debug name section in the wasm file.</p>
+<p>Note that support for perfmap is still relatively new in Wasmtime, so if you
+have any problems, please don't hesitate to <a href="https://github.com/bytecodealliance/wasmtime/issues/new">file an issue</a>!</p>
+<h2 id="profiling-with-jitdump"><a class="header" href="#profiling-with-jitdump">Profiling with <code>jitdump</code></a></h2>
+<p>Profiling support with <code>perf</code> uses the "jitdump" support in the <code>perf</code> CLI. This
+requires runtime support from Wasmtime itself, so you will need to manually
+change a few things to enable profiling support in your application. First
+you'll want to make sure that Wasmtime is compiled with the <code>jitdump</code> Cargo
+feature (which is enabled by default). Otherwise enabling runtime support
+depends on how you're using Wasmtime:</p>
+<ul>
+<li>
+<p><strong>Rust API</strong> - you'll want to call the [<code>Config::profiler</code>] method with
+<code>ProfilingStrategy::JitDump</code> to enable profiling of your wasm modules.</p>
+</li>
+<li>
+<p><strong>C API</strong> - you'll want to call the <code>wasmtime_config_profiler_set</code> API with a
+<code>WASMTIME_PROFILING_STRATEGY_JITDUMP</code> value.</p>
+</li>
+<li>
+<p><strong>Command Line</strong> - you'll want to pass the <code>--profile=jitdump</code> flag on the command
+line.</p>
+</li>
+</ul>
+<p>Once jitdump support is enabled, you'll use <code>perf record</code> like usual to record
+your application's performance. You'll need to also be sure to pass the
+<code>--clockid mono</code> or <code>-k mono</code> flag to <code>perf record</code>.</p>
+<p>For example if you're using the CLI, you'll execute:</p>
+<pre><code class="language-sh">$ perf record -k mono wasmtime --profile=jitdump foo.wasm
+</code></pre>
+<p>This will create a <code>perf.data</code> file as per usual, but it will <em>also</em> create a
+<code>jit-XXXX.dump</code> file. This extra <code>*.dump</code> file is the jitdump file which is
+specified by <code>perf</code> and Wasmtime generates at runtime.</p>
+<p>The next thing you need to do is to merge the <code>*.dump</code> file into the
+<code>perf.data</code> file, which you can do with the <code>perf inject</code> command:</p>
+<pre><code class="language-sh">$ perf inject --jit --input perf.data --output perf.jit.data
+</code></pre>
+<p>This will read <code>perf.data</code>, automatically pick up the <code>*.dump</code> file that's
+correct, and then create <code>perf.jit.data</code> which merges all the JIT information
+together. This should also create a lot of <code>jitted-XXXX-N.so</code> files in the
+current directory which are ELF images for all the JIT functions that were
+created by Wasmtime.</p>
+<p>After that you can explore the <code>perf.jit.data</code> profile as you usually would,
+for example with:</p>
+<pre><code class="language-sh">$ perf report --input perf.jit.data
+</code></pre>
+<p>You should be able to annotate wasm functions and see their raw assembly. You
+should also see entries for wasm functions show up as one function and the
+name of each function matches the debug name section in the wasm file.</p>
+<p>Note that support for jitdump is still relatively new in Wasmtime, so if you
+have any problems, please don't hesitate to <a href="https://github.com/bytecodealliance/wasmtime/issues/new">file an issue</a>!</p>
+<h3 id="perf-and-dwarf-information"><a class="header" href="#perf-and-dwarf-information"><code>perf</code> and DWARF information</a></h3>
+<p>If the jitdump profile doesn't give you enough information by default, you can
+also enable dwarf debug information to be generated for JIT code which should
+give the <code>perf</code> profiler more information about what's being profiled. This can
+include information like more descriptive function names, filenames, and line
+numbers.</p>
+<p>Enabling dwarf debug information for JIT code depends on how you're using
+Wasmtime:</p>
+<ul>
+<li>
+<p><strong>Rust API</strong> - you'll want to call the <a href="https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.debug_info"><code>Config::debug_info</code></a> method.</p>
+</li>
+<li>
+<p><strong>C API</strong> - you'll want to call the <code>wasmtime_config_debug_info_set</code> API.</p>
+</li>
+<li>
+<p><strong>Command Line</strong> - you'll want to pass the <code>-g</code> flag on the command line.</p>
+</li>
+</ul>
+<p>You shouldn't need to do anything else to get this information into <code>perf</code>. The
+perf collection data should automatically pick up all this dwarf debug
+information.</p>
+<h3 id="perf-example"><a class="header" href="#perf-example"><code>perf</code> example</a></h3>
+<p>Let's run through a quick example with <code>perf</code> to get the feel for things. First
+let's take a look at some wasm:</p>
+<pre><pre class="playground"><code class="language-rust">fn main() {
+    let n = 42;
+    println!("fib({}) = {}", n, fib(n));
+}
+
+fn fib(n: u32) -&gt; u32 {
+    if n &lt;= 2 {
+        1
+    } else {
+        fib(n - 1) + fib(n - 2)
+    }
+}</code></pre></pre>
+<p>To collect perf information for this wasm module we'll execute:</p>
+<pre><code class="language-sh">$ rustc --target wasm32-wasi fib.rs -O
+$ perf record -k mono wasmtime --profile=jitdump fib.wasm
+fib(42) = 267914296
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.147 MB perf.data (3435 samples) ]
+$ perf inject --jit --input perf.data --output perf.jit.data
+</code></pre>
+<p>And we should have all our information now! We can execute <code>perf report</code> for
+example to see that 99% of our runtime (as expected) is spent in our <code>fib</code>
+function. Note that the symbol has been demangled to <code>fib::fib</code> which is what
+the Rust symbol is:</p>
+<pre><code class="language-sh">$ perf report --input perf.jit.data
+</code></pre>
+<p><img src="assets/perf-report-fib.png" alt="perf report output" /></p>
+<p>Alternatively we could also use <code>perf annotate</code> to take a look at the
+disassembly of the <code>fib</code> function, seeing what the JIT generated:</p>
+<pre><code class="language-sh">$ perf annotate --input perf.jit.data
+</code></pre>
+<p><img src="assets/perf-annotate-fib.png" alt="perf annotate output" /></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="examples-profiling.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="examples-profiling-vtune.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="examples-profiling.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="examples-profiling-vtune.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

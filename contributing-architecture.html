@@ -1,0 +1,691 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Architecture - Wasmtime</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">2.</strong> Using the Wasmtime CLI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cli-install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="cli-options.html"><strong aria-hidden="true">2.2.</strong> CLI Options</a></li><li class="chapter-item expanded "><a href="cli-logging.html"><strong aria-hidden="true">2.3.</strong> CLI Logging</a></li><li class="chapter-item expanded "><a href="cli-cache.html"><strong aria-hidden="true">2.4.</strong> Cache Configuration</a></li></ol></li><li class="chapter-item expanded "><a href="lang.html"><strong aria-hidden="true">3.</strong> Using the Wasmtime API</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lang-rust.html"><strong aria-hidden="true">3.1.</strong> Rust</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-rust-hello-world.html"><strong aria-hidden="true">3.1.1.</strong> Hello, world!</a></li><li class="chapter-item expanded "><a href="examples-rust-gcd.html"><strong aria-hidden="true">3.1.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-rust-memory.html"><strong aria-hidden="true">3.1.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-rust-wasi.html"><strong aria-hidden="true">3.1.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-rust-linking.html"><strong aria-hidden="true">3.1.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-rust-debugging.html"><strong aria-hidden="true">3.1.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-rust-core-dumps.html"><strong aria-hidden="true">3.1.7.</strong> Core Dumps</a></li><li class="chapter-item expanded "><a href="examples-rust-multi-value.html"><strong aria-hidden="true">3.1.8.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-c.html"><strong aria-hidden="true">3.2.</strong> C</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-c-hello-world.html"><strong aria-hidden="true">3.2.1.</strong> Hello, World!</a></li><li class="chapter-item expanded "><a href="examples-c-gcd.html"><strong aria-hidden="true">3.2.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-c-memory.html"><strong aria-hidden="true">3.2.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-c-wasi.html"><strong aria-hidden="true">3.2.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-c-linking.html"><strong aria-hidden="true">3.2.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-c-debugging.html"><strong aria-hidden="true">3.2.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-c-multi-value.html"><strong aria-hidden="true">3.2.7.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-python.html"><strong aria-hidden="true">3.3.</strong> Python</a></li><li class="chapter-item expanded "><a href="lang-dotnet.html"><strong aria-hidden="true">3.4.</strong> .NET</a></li><li class="chapter-item expanded "><a href="lang-go.html"><strong aria-hidden="true">3.5.</strong> Go</a></li><li class="chapter-item expanded "><a href="lang-bash.html"><strong aria-hidden="true">3.6.</strong> Bash</a></li><li class="chapter-item expanded "><a href="lang-ruby.html"><strong aria-hidden="true">3.7.</strong> Ruby</a></li><li class="chapter-item expanded "><a href="lang-elixir.html"><strong aria-hidden="true">3.8.</strong> Elixir</a></li></ol></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">4.</strong> Further Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging.html"><strong aria-hidden="true">4.1.</strong> Debugging WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging-native-debugger.html"><strong aria-hidden="true">4.1.1.</strong> Debugging with gdb and lldb</a></li><li class="chapter-item expanded "><a href="examples-debugging-core-dumps.html"><strong aria-hidden="true">4.1.2.</strong> Debugging with Core Dumps</a></li></ol></li><li class="chapter-item expanded "><a href="examples-profiling.html"><strong aria-hidden="true">4.2.</strong> Profiling WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-profiling-perf.html"><strong aria-hidden="true">4.2.1.</strong> Profiling with Perf</a></li><li class="chapter-item expanded "><a href="examples-profiling-vtune.html"><strong aria-hidden="true">4.2.2.</strong> Profiling with VTune</a></li><li class="chapter-item expanded "><a href="examples-profiling-samply.html"><strong aria-hidden="true">4.2.3.</strong> Profiling with samply</a></li><li class="chapter-item expanded "><a href="examples-profiling-guest.html"><strong aria-hidden="true">4.2.4.</strong> Cross-platform Profiling</a></li></ol></li><li class="chapter-item expanded "><a href="wmemcheck.html"><strong aria-hidden="true">4.3.</strong> Checking Guests' Memory Accesses</a></li><li class="chapter-item expanded "><a href="examples-minimal.html"><strong aria-hidden="true">4.4.</strong> Building a minimal embedding</a></li></ol></li><li class="chapter-item expanded "><a href="stability.html"><strong aria-hidden="true">5.</strong> Stability</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="stability-release.html"><strong aria-hidden="true">5.1.</strong> Release Process</a></li><li class="chapter-item expanded "><a href="stability-tiers.html"><strong aria-hidden="true">5.2.</strong> Tiers of support</a></li><li class="chapter-item expanded "><a href="stability-platform-support.html"><strong aria-hidden="true">5.3.</strong> Platform Support</a></li></ol></li><li class="chapter-item expanded "><a href="security.html"><strong aria-hidden="true">6.</strong> Security</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="security-disclosure.html"><strong aria-hidden="true">6.1.</strong> Disclosure Policy</a></li><li class="chapter-item expanded "><a href="security-what-is-considered-a-security-vulnerability.html"><strong aria-hidden="true">6.2.</strong> What is considered a security bug?</a></li></ol></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-architecture.html" class="active"><strong aria-hidden="true">7.1.</strong> Architecture</a></li><li class="chapter-item expanded "><a href="contributing-building.html"><strong aria-hidden="true">7.2.</strong> Building</a></li><li class="chapter-item expanded "><a href="contributing-testing.html"><strong aria-hidden="true">7.3.</strong> Testing</a></li><li class="chapter-item expanded "><a href="contributing-fuzzing.html"><strong aria-hidden="true">7.4.</strong> Fuzzing</a></li><li class="chapter-item expanded "><a href="contributing-ci.html"><strong aria-hidden="true">7.5.</strong> CI</a></li><li class="chapter-item expanded "><a href="contributing-reducing-test-cases.html"><strong aria-hidden="true">7.6.</strong> Reducing Test Cases</a></li><li class="chapter-item expanded "><a href="contributing-cross-compiling.html"><strong aria-hidden="true">7.7.</strong> Cross Compiling</a></li><li class="chapter-item expanded "><a href="contributing-coding-guidelines.html"><strong aria-hidden="true">7.8.</strong> Coding Guidelines</a></li><li class="chapter-item expanded "><a href="contributing-development-process.html"><strong aria-hidden="true">7.9.</strong> Development Process</a></li><li class="chapter-item expanded "><a href="contributing-implementing-wasm-proposals.html"><strong aria-hidden="true">7.10.</strong> Implementing Wasm Proposals</a></li><li class="chapter-item expanded "><a href="contributing-maintainer-guidelines.html"><strong aria-hidden="true">7.11.</strong> Maintainer Guidelines</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-code-review.html"><strong aria-hidden="true">7.11.1.</strong> Code Review</a></li><li class="chapter-item expanded "><a href="contributing-release-process.html"><strong aria-hidden="true">7.11.2.</strong> Release Process</a></li></ol></li><li class="chapter-item expanded "><a href="contributing-governance.html"><strong aria-hidden="true">7.12.</strong> Governance</a></li><li class="chapter-item expanded "><a href="contributing-coc.html"><strong aria-hidden="true">7.13.</strong> Code of Conduct</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Wasmtime</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="architecture-of-wasmtime"><a class="header" href="#architecture-of-wasmtime">Architecture of Wasmtime</a></h1>
+<p>This document is intended to give an overview of the implementation of Wasmtime.
+This will explain the purposes of the various <code>wasmtime-*</code> crates that the main
+<code>wasmtime</code> crate depends on. For even more detailed information it's recommended
+to review the code itself and find the comments contained within.</p>
+<h2 id="the-wasmtime-crate"><a class="header" href="#the-wasmtime-crate">The <code>wasmtime</code> crate</a></h2>
+<p>The main entry point for Wasmtime is the <code>wasmtime</code> crate itself. Wasmtime is
+designed such that the <code>wasmtime</code> crate is nearly a 100% safe API (safe in the
+Rust sense) modulo some small and well-documented functions as to why they're
+<code>unsafe</code>. The <code>wasmtime</code> crate provides features and access to WebAssembly
+primitives and functionality, such as compiling modules, instantiating them,
+calling functions, etc.</p>
+<p>At this time the <code>wasmtime</code> crate is the first crate that is intended to be
+consumed by users. First in this sense means that everything <code>wasmtime</code> depends
+on is thought of as an internal dependency. We publish crates to crates.io but
+put very little effort into having a "nice" API for internal crates or worrying
+about breakage between versions of internal crates. This primarily means that
+all the other crates discussed here are considered internal dependencies of
+Wasmtime and don't show up in the public API of Wasmtime at all. To use some
+Cargo terminology, all the <code>wasmtime-*</code> crates that <code>wasmtime</code> depends on are
+"private" dependencies.</p>
+<p>Additionally at this time the safe/unsafe boundary between Wasmtime's internal
+crates is not the most well-defined. There are methods that should be marked
+<code>unsafe</code> which aren't, and <code>unsafe</code> methods do not have exhaustive documentation
+as to why they are <code>unsafe</code>. This is an ongoing matter of improvement, however,
+where the goal is to have safe methods be actually safe in the Rust sense,
+as well as having documentation for <code>unsafe</code> methods which clearly lists why
+they are <code>unsafe</code>.</p>
+<h2 id="important-concepts"><a class="header" href="#important-concepts">Important concepts</a></h2>
+<p>To preface discussion of more nitty-gritty internals, it's important to have a
+few concepts in the back of your head. These are some of the important types and
+their implications in Wasmtime:</p>
+<ul>
+<li>
+<p><code>wasmtime::Engine</code> - this is a global compilation context which is sort of the
+"root context". An <code>Engine</code> is typically created once per program and is
+expected to be shared across many threads (internally it's atomically
+reference counted). Each <code>Engine</code> stores configuration values and other
+cross-thread data such as type interning for <code>Module</code> instances. The main
+thing to remember for <code>Engine</code> is that any mutation of its internals typically
+involves acquiring a lock, whereas for <code>Store</code> below no locks are necessary.</p>
+</li>
+<li>
+<p><code>wasmtime::Store</code> - this is the concept of a "store" in WebAssembly. While
+there's also a formal definition to go off of, it can be thought of as a bag
+of related WebAssembly objects. This includes instances, globals, memories,
+tables, etc. A <code>Store</code> does not implement any form of garbage collection of
+the internal items (there is a <code>gc</code> function but that's just for <code>externref</code>
+values). This means that once you create an <code>Instance</code> or a <code>Table</code> the memory
+is not actually released until the <code>Store</code> itself is deallocated. A <code>Store</code> is
+sort of a "context" used for almost all wasm operations. <code>Store</code> also contains
+instance handles which recursively refer back to the <code>Store</code>, leading to a
+good bit of aliasing of pointers within the <code>Store</code>. The important thing for
+now, though, is to know that <code>Store</code> is a unit of isolation. WebAssembly
+objects are always entirely contained within a <code>Store</code>, and at this time
+nothing can cross between stores (except scalars if you manually hook it up).
+In other words, wasm objects from different stores cannot interact with each
+other. A <code>Store</code> cannot be used simultaneously from multiple threads (almost
+all operations require <code>&amp;mut self</code>).</p>
+</li>
+<li>
+<p><code>wasmtime_runtime::InstanceHandle</code> - this is the low-level representation of a
+WebAssembly instance. At the same time this is also used as the representation
+for all host-defined objects. For example if you call <code>wasmtime::Memory::new</code>
+it'll create an <code>InstanceHandle</code> under the hood. This is a very <code>unsafe</code> type
+that should probably have all of its functions marked <code>unsafe</code> or otherwise
+have more strict guarantees documented about it, but it's an internal type
+that we don't put much thought into for public consumption at this time. An
+<code>InstanceHandle</code> doesn't know how to deallocate itself and relies on the
+caller to manage its memory. Currently this is either allocated on-demand
+(with <code>malloc</code>) or in a pooling fashion (using the pooling allocator). The
+<code>deallocate</code> method is different in these two paths (as well as the
+<code>allocate</code> method).</p>
+<p>An <code>InstanceHandle</code> is laid out in memory with some Rust-owned values first
+capturing the dynamic state of memories/tables/etc. Most of these fields are
+unused for host-defined objects that serve one purpose (e.g. a
+<code>wasmtime::Table::new</code>), but for an instantiated WebAssembly module these
+fields will have more information. After an <code>InstanceHandle</code> in memory is a
+<code>VMContext</code>, which will be discussed next. <code>InstanceHandle</code> values are the
+main internal runtime representation and what the <code>wasmtime_runtime</code> crate
+works with. The <code>wasmtime::Store</code> holds onto all these <code>InstanceHandle</code> values
+and deallocates them at the appropriate time. From the runtime perspective it
+simplifies things so the graph of wasm modules communicating to each other is
+reduced to simply <code>InstanceHandle</code> values all talking to themselves.</p>
+</li>
+<li>
+<p><code>wasmtime_runtime::VMContext</code> - this is a raw pointer, within an allocation of
+an <code>InstanceHandle</code>, that is passed around in JIT code. A <code>VMContext</code> does not
+have a structure defined in Rust (it's a 0-sized structure) because its
+contents are dynamically determined based on the <code>VMOffsets</code>, or the source
+wasm module it came from. Each <code>InstanceHandle</code> has a "shape" of a <code>VMContext</code>
+corresponding with it. For example a <code>VMContext</code> stores all values of
+WebAssembly globals, but if a wasm module has no globals then the size of this
+array will be 0 and it won't be allocated. The intention of a <code>VMContext</code> is
+to be an efficient in-memory representation of all wasm module state that JIT
+code may access. The layout of <code>VMContext</code> is dynamically determined by a
+module and JIT code is specialized for this one structure. This means that the
+structure is efficiently accessed by JIT code, but less efficiently accessed
+by native host code. A non-exhaustive list of purposes of the <code>VMContext</code> is
+to:</p>
+<ul>
+<li>Store WebAssembly instance state such as global values, pointers to tables,
+pointers to memory, and pointers to other JIT functions.</li>
+<li>Separate wasm imports and local state. Imported values have pointers stored
+to their actual values, and local state has the state defined inline.</li>
+<li>Hold a pointer to the stack limit at which point JIT code will trigger a
+stack overflow.</li>
+<li>Hold a pointer to a <code>VMExternRefActivationsTable</code> for fast-path insertion of
+<code>externref</code> values into the table.</li>
+<li>Hold a pointer to a <code>*mut dyn wasmtime_runtime::Store</code> so store-level
+operations can be performed in libcalls.</li>
+</ul>
+<p>A comment about the layout of a <code>VMContext</code> can be found in the <code>vmoffsets.rs</code>
+file.</p>
+</li>
+<li>
+<p><code>wasmtime::Module</code> - this is the representation of a compiled WebAssembly
+module. At this time Wasmtime always assumes that a wasm module is always
+compiled to native JIT code. <code>Module</code> holds the results of said compilation,
+and currently Cranelift can be used for compiling. It is a goal of
+Wasmtime to support other modes of representing modules but those are not
+implemented today just yet, only Cranelift is implemented and supported.</p>
+</li>
+<li>
+<p><code>wasmtime_environ::Module</code> - this is a descriptor of a wasm module's type and
+structure without holding any actual JIT code. An instance of this type is
+created very early on in the compilation process, and it is not modified when
+functions themselves are actually compiled. This holds the internal type
+representation and state about functions, globals, etc. In a sense this can be
+thought of as the result of validation or typechecking a wasm module, although
+it doesn't have information such as the types of each opcode or minute
+function-level details like that.</p>
+</li>
+</ul>
+<h2 id="compiling-a-module"><a class="header" href="#compiling-a-module">Compiling a module</a></h2>
+<p>With a high-level overview and some background information of types, this will
+next walk through the steps taken to compile a WebAssembly module. The main
+entry point for this is the <code>wasmtime::Module::from_binary</code> API. There are a
+number of other entry points that deal with surface-level details like
+translation from text-to-binary, loading from the filesystem, etc.</p>
+<p>Compilation is roughly broken down into a few phases:</p>
+<ol>
+<li>
+<p>First compilation walks over the WebAssembly module validating everything
+except function bodies. This synchronous pass over a wasm module creates a
+<code>wasmtime_environ::Module</code> instance and additionally prepares for function
+compilation. Note that with the module linking proposal one input module may
+end up creating a number of output modules to process. Each module is
+processed independently and all further steps are parallelized on a
+per-module basis. Note that parsing and validation of the WebAssembly module
+happens with the <code>wasmparser</code> crate. Validation is interleaved with parsing,
+validating parsed values before using them.</p>
+</li>
+<li>
+<p>Next all functions within a module are validated and compiled in parallel.
+No inter-procedural analysis is done and each function is compiled as its
+own little island of code at this time. This is the point where the meat of
+Cranelift is invoked on a per-function basis.</p>
+</li>
+<li>
+<p>The compilation results at this point are all woven into a
+<code>wasmtime_jit::CompilationArtifacts</code> structure. This holds module information
+(<code>wasmtime_environ::Module</code>), compiled JIT code (stored as an ELF image), and
+miscellaneous other information about functions such as platform-agnostic
+unwinding information, per-function trap tables (indicating which JIT
+instructions can trap and what the trap means), per-function address maps
+(mapping from JIT addresses back to wasm offsets), and debug information
+(parsed from DWARF information in the wasm module). These results are inert
+and can't actually be executed, but they're appropriate at this point to
+serialize to disk or begin the next phase...</p>
+</li>
+<li>
+<p>The final step is to actually place all code into a form that's ready to get
+executed. This starts from the <code>CompilationArtifacts</code> of the previous step.
+Here a new memory mapping is allocated and the JIT code is copied into this
+memory mapping. This memory mapping is then switched from read/write to
+read/execute so it's actually executable JIT code at this point. This is
+where various hooks like loading debuginfo, informing JIT profilers of new
+code, etc, all happens. At this point a <code>wasmtime_jit::CompiledModule</code> is
+produced and this is itself wrapped up in a <code>wasmtime::Module</code>. At this
+point the module is ready to be instantiated.</p>
+</li>
+</ol>
+<p>A <code>wasmtime::Module</code> is an atomically-reference-counted object where upon
+instantiation into a <code>Store</code>, the <code>Store</code> will hold a strong reference to the
+internals of the module. This means that all instances of a <code>wasmtime::Module</code>
+share the same compiled code. Additionally a <code>wasmtime::Module</code> is one of the
+few objects that lives outside of a <code>wasmtime::Store</code>. This means that
+<code>wasmtime::Module</code>'s reference counting is its own form of memory management.</p>
+<p>Note that the property of sharing a module's compiled code across all
+instantiations has interesting implications on what the compiled code can
+assume. For example Wasmtime implements a form of type interning, but the
+interned types happen at a few different levels. Within a module we deduplicate
+function types, but across modules in a <code>Store</code> types need to be represented
+with the same value. This means that if the same module is instantiated into
+many stores its same function type may take on many values, so the compiled
+code can't assume a particular value for a function type. (more on type
+information later). The general gist though is that compiled code leans
+relatively heavily on the <code>VMContext</code> for contextual input because the JIT code
+is intended to be so widely reusable.</p>
+<h3 id="trampolines"><a class="header" href="#trampolines">Trampolines</a></h3>
+<p>An important aspect to also cover for compilation is the creation of
+trampolines. Trampolines in this case refer to code executed by Wasmtime to
+enter WebAssembly code. The host may not always have prior knowledge about the
+signature of the WebAssembly function that it wants to call. Wasmtime JIT code
+is compiled with native ABIs (e.g. params/results in registers according to
+System V on Unix), which means that a Wasmtime embedding doesn't have an easy
+way to enter JIT code.</p>
+<p>This problem is what the trampolines compiled into a module solve, which is to
+provide a function with a known ABI that will call into a function with a
+specific other type signature/ABI. Wasmtime collects all the exported functions
+of a module and creates a set of their type signatures. Note that exported in
+this context actually means "possibly exported" which includes things like
+insertion into a global/function table, conversion to a <code>funcref</code>, etc. A
+trampoline is generated for each of these type signatures and stored along with
+the JIT code for the rest of the module.</p>
+<p>These trampolines are then used with the <code>wasmtime::Func::call</code> API where in
+that specific case because we don't know the ABI of the target function the
+trampoline (with a known ABI) is used and has all the parameters/results passed
+through the stack.</p>
+<p>Another point of note is that trampolines are not deduplicated at this time.
+Each compiled module contains its own set of trampolines, and if two compiled
+modules have the same types then they'll have different copies of the same
+trampoline.</p>
+<h3 id="type-interning-and-vmsharedsignatureindex"><a class="header" href="#type-interning-and-vmsharedsignatureindex">Type Interning and <code>VMSharedSignatureIndex</code></a></h3>
+<p>One important point to talk about with compilation is the
+<code>VMSharedSignatureIndex</code> type and how it's used. The <code>call_indirect</code> opcode in
+wasm compares an actual function's signature against the function signature of
+the instruction, trapping if the signatures mismatch. This is implemented in
+Wasmtime as an integer comparison, and the comparison happens on a
+<code>VMSharedSignatureIndex</code> value. This index is an intern'd representation of a
+function type.</p>
+<p>The scope of interning for <code>VMSharedSignatureIndex</code> happens at the
+<code>wasmtime::Engine</code> level. Modules are compiled into an <code>Engine</code>. Insertion of a
+<code>Module</code> into an <code>Engine</code> will assign a <code>VMSharedSignatureIndex</code> to all of the
+types found within the module.</p>
+<p>The <code>VMSharedSignatureIndex</code> values for a module are local to that one
+instantiation of a <code>Module</code> (and they may change on each insertion of a
+<code>Module</code> into a different <code>Engine</code>). These are used during the instantiation
+process by the runtime to assign a type ID effectively to all functions for
+imports and such.</p>
+<h2 id="instantiating-a-module"><a class="header" href="#instantiating-a-module">Instantiating a module</a></h2>
+<p>Once a module has been compiled it's typically then instantiated to actually
+get access to the exports and call wasm code. Instantiation always happens
+within a <code>wasmtime::Store</code> and the created instance (plus all exports) are tied
+to the <code>Store</code>.</p>
+<p>Instantiation itself (<code>crates/wasmtime/src/instance.rs</code>) may look complicated,
+but this is primarily due to the implementation of the Module Linking proposal.
+The rough flow of instantiation looks like:</p>
+<ol>
+<li>
+<p>First all imports are type-checked. The provided list of imports is
+cross-referenced with the list of imports recorded in the
+<code>wasmtime_environ::Module</code> and all types are verified to line up and match
+(according to the core wasm specification's definition of type matching).</p>
+</li>
+<li>
+<p>Each <code>wasmtime_environ::Module</code> has a list of initializers that need to be
+completed before instantiation is finished. For MVP wasm this only involves
+loading the import into the correct index array, but for module linking this
+could involve instantiating other modules, handling <code>alias</code> fields, etc. In
+any case the result of this step is a <code>wasmtime_runtime::Imports</code> array which
+has the values for all imported items into the wasm module. Note that in
+this case an import is typically some sort of raw pointer to the actual
+state plus the <code>VMContext</code> of the instance that was imported from. The
+final result of this step is an <code>InstanceAllocationRequest</code>, which is then
+submitted to the configured instance allocator, either on-demand or pooling.</p>
+</li>
+<li>
+<p>The <code>InstanceHandle</code> corresponding to this instance is allocated. How this
+is allocated depends on the strategy (malloc for on-demand, slab allocation
+for pooling). In addition to initialization of the fields of <code>InstanceHandle</code>
+this also initializes all the fields of the <code>VMContext</code> for this handle
+(which as mentioned above is adjacent to the <code>InstanceHandle</code> allocation
+after it in memory). This does not process any data segments, element
+segments, or the <code>start</code> function at this time.</p>
+</li>
+<li>
+<p>At this point the <code>InstanceHandle</code> is stored within the <code>Store</code>. This is
+the "point of no return" where the handle must be kept alive for the same
+lifetime as the <code>Store</code> itself. If an initialization step fails then the
+instance may still have had its functions, for example, inserted into an
+imported table via an element segment. This means that even if we fail to
+initialize this instance its state could still be visible to other
+instances/objects so we need to keep it alive regardless.</p>
+</li>
+<li>
+<p>The final step is performing wasm-defined instantiation. This involves
+processing element segments, data segments, the <code>start</code> function, etc. Most
+of this is just translating from Wasmtime's internal representation to the
+specification's required behavior.</p>
+</li>
+</ol>
+<p>Another part worth pointing out for instantiating a module is that a
+<code>ModuleRegistry</code> is maintained within a <code>Store</code> of all instantiated modules
+into the store. The purpose of this registry is to retain a strong reference to
+items in the module needed to run instances. This includes the JIT code
+primarily but also has information such as the <code>VMSharedSignatureIndex</code>
+registration, metadata about function addresses and such, etc. Much of this
+data is stored into a <code>GLOBAL_MODULES</code> map for later access during traps.</p>
+<h2 id="traps"><a class="header" href="#traps">Traps</a></h2>
+<p>Once instances have been created and wasm starts running most things are fairly
+standard. Trampolines are used to enter wasm (or we can enter with a known ABI
+if using <code>wasmtime::TypedFunc</code>) and JIT code generally does what it does to
+execute wasm. An important aspect of the implementation to cover, however, is
+traps.</p>
+<p>Wasmtime today implements traps with <code>longjmp</code> and <code>setjmp</code>. The <code>setjmp</code>
+function cannot be defined in Rust (even unsafely --
+(https://github.com/rust-lang/rfcs/issues/2625) so the
+<code>crates/runtime/src/helpers.c</code> file actually calls setjmp/longjmp. Note that in
+general the operation of <code>longjmp</code> is not safe to execute in Rust because it
+skips stack-based destructors, so after <code>setjmp</code> when we call back into Rust to
+execute wasm we need to be careful in Wasmtime to not have any significant
+destructors on the stack once wasm is called.</p>
+<p>Traps can happen from a few different sources:</p>
+<ul>
+<li>
+<p>Explicit traps - these can happen when a host call returns a trap, for
+example. These bottom out in <code>raise_user_trap</code> or <code>raise_lib_trap</code>, both of
+which immediately call <code>longjmp</code> to go back to the wasm starting point. Note
+that these, like when calling wasm, have to have callers be very careful to
+not have any destructors on the stack.</p>
+</li>
+<li>
+<p>Signals - this is the main vector for trap. Basically we use segfault and
+illegal instructions to implement traps in wasm code itself. Segfaults arise
+when linear memory accesses go out of bounds and illegal instructions are how
+the wasm <code>unreachable</code> instruction is implemented. In both of these cases
+Wasmtime installs a platform-specific signal handler to catch the signal,
+inspect the state of the signal, and then handle it. Note that Wasmtime tries
+to only catch signals that happen from JIT code itself as to not accidentally
+cover up other bugs. Exiting a signal handler happens via <code>longjmp</code> to get
+back to the original wasm call-site.</p>
+</li>
+</ul>
+<p>The general idea is that Wasmtime has very tight control over the stack frames
+of wasm (naturally via Cranelift) and also very tight control over the code that
+executes just before we enter wasm (aka before the <code>setjmp</code>) and just after we
+reenter back into wasm (aka frames before a possible <code>longjmp</code>).</p>
+<p>The signal handler for Wasmtime uses the <code>GLOBAL_MODULES</code> map populated during
+instantiation to determine whether a program counter that triggered a signal is
+indeed a valid wasm trap. This should be true except for cases where the host
+program has another bug that triggered the signal.</p>
+<p>A final note worth mentioning is that Wasmtime uses the Rust <code>backtrace</code> crate
+to capture a stack trace when a wasm exception occurs. This forces Wasmtime to
+generate native platform-specific unwinding information to correctly unwind the
+stack and generate a stack trace for wasm code. This does have other benefits as
+well such as improving generic sampling profilers when used with Wasmtime.</p>
+<h2 id="linear-memory"><a class="header" href="#linear-memory">Linear Memory</a></h2>
+<p>Linear memory in Wasmtime is implemented effectively with <code>mmap</code> (or the
+platform equivalent thereof), but there are some subtle nuances that are worth
+pointing out here too. The implementation of linear memory is relatively
+configurable which gives rise to a number of situations that both the runtime
+and generated code need to handle.</p>
+<p>First there are a number of properties about linear memory which can be
+configured:</p>
+<ul>
+<li><code>wasmtime::Config::static_memory_maximum_size</code></li>
+<li><code>wasmtime::Config::static_memory_guard_size</code></li>
+<li><code>wasmtime::Config::dynamic_memory_guard_size</code></li>
+<li><code>wasmtime::Config::guard_before_linear_memory</code></li>
+</ul>
+<p>The methods on <code>Config</code> have a good bit of documentation to go over some
+nitty-gritty, but the general gist is that Wasmtime has two modes of memory:
+static and dynamic. Static memories represent an address space reservation that
+never moves and pages are committed to represent memory growth. Dynamic
+memories represent allocations where the committed portion exactly matches the
+wasm memory's size and growth happens by allocating a bigger chunk of memory.</p>
+<p>The guard size configuration indicates the size of the guard region that
+happens after linear memory. This guard size affects whether generated JIT code
+emits bounds checks or not. Bounds checks are elided if out-of-bounds addresses
+provably encounter the guard pages.</p>
+<p>The <code>guard_before_linear_memory</code> configuration additionally places guard pages
+in front of linear memory as well as after linear memory (the same size on both
+ends). This is only used to protect against possible Cranelift bugs and
+otherwise serves no purpose.</p>
+<p>The defaults for Wasmtime on 64-bit platforms are:</p>
+<ul>
+<li>4GB static maximum size meaning all 32-bit memories are static and 64-bit
+memories are dynamic.</li>
+<li>2GB static guard size meaning all loads/stores with less than 2GB offset
+don't need bounds checks with 32-bit memories.</li>
+<li>Guard pages before linear memory are enabled.</li>
+</ul>
+<p>Altogether this means that 32-bit linear memories result in an 8GB virtual
+address space reservation by default in Wasmtime. With the pooling allocator
+where we know that linear memories are contiguous this results in a 6GB
+reservation per memory because the guard region after one memory is the guard
+region before the next.</p>
+<p>Note that 64-bit memories (the memory64 proposal for WebAssembly) can be
+configured to be static but will never be able to elide bounds checks at this
+time. This configuration is possible through the <code>static_memory_forced</code>
+configuration option. Additionally note that support for 64-bit memories in
+Wasmtime is functional but not yet tuned at this time so there's probably still
+some performance work and better defaults to manage.</p>
+<h2 id="tables-and-externref"><a class="header" href="#tables-and-externref">Tables and <code>externref</code></a></h2>
+<p>WebAssembly tables contain reference types, currently either <code>funcref</code> or
+<code>externref</code>. A <code>funcref</code> in Wasmtime is represented as <code>*mut VMCallerCheckedFuncRef</code> and an <code>externref</code> is represented as <code>VMExternRef</code>
+(which is internally <code>*mut VMExternData</code>). Tables are consequently represented
+as vectors of pointers.  Table storage memory management by default goes through
+Rust's <code>Vec</code> which uses <code>malloc</code> and friends for memory. With the pooling
+allocator this uses preallocated memory for storage.</p>
+<p>As mentioned previously <code>Store</code> has no form of internal garbage
+collection for wasm objects themselves so a <code>funcref</code> table in wasm is pretty
+simple in that there's no lifetime management of any of the pointers stored
+within, they're simply assumed to be valid for as long as the table is in use.</p>
+<p>For tables of <code>externref</code> the story is more complicated. The <code>VMExternRef</code> is a
+version of <code>Arc&lt;dyn Any&gt;</code> but specialized in Wasmtime so JIT code knows where
+the offset of the reference count field to directly manipulate it is.
+Furthermore tables of <code>externref</code> values need to manage the reference count
+field themselves, since the pointer stored in the table is required to have a
+strong reference count allocated to it.</p>
+<h2 id="gc-and-externref"><a class="header" href="#gc-and-externref">GC and <code>externref</code></a></h2>
+<p>Wasmtime implements the <code>externref</code> type of WebAssembly with an
+atomically-reference-counted pointer. Note that the atomic part is not needed
+by wasm itself but rather from the Rust embedding environment where it must be
+safe to send <code>ExternRef</code> values to other threads. Wasmtime also does not
+come with a cycle collector so cycles of host-allocated <code>ExternRef</code> objects
+will leak.</p>
+<p>Despite reference counting, though, a <code>Store::gc</code> method exists. This is an
+implementation detail of how reference counts are managed while wasm code is
+executing. Instead of managing the reference count of an <code>externref</code> value
+individually as it moves around on the stack Wasmtime implements "deferred
+reference counting" where there's an overly conservative list of <code>ExternRef</code>
+values that may be in use, and periodically a GC is performed to make this
+overly conservative list a precise one. This leverages the stack map support
+of Cranelift plus the backtracing support of <code>backtrace</code> to determine live
+roots on the stack. The <code>Store::gc</code> method forces the
+possibly-overly-conservative list to become a precise list of <code>externref</code>
+values that are actively in use on the stack.</p>
+<h2 id="index-of-crates"><a class="header" href="#index-of-crates">Index of crates</a></h2>
+<p>The main Wasmtime internal crates are:</p>
+<ul>
+<li><code>wasmtime</code> - the safe public API of <code>wasmtime</code>.</li>
+<li><code>wasmtime-runtime</code> - low-level runtime implementation of Wasmtime. This
+is where <code>VMContext</code> and <code>InstanceHandle</code> live. This crate is theoretically
+agnostic to how JIT code was compiled and the runtime that it's running
+within.</li>
+<li><code>wasmtime-environ</code> - low-level compilation support. This is where translation
+of the <code>Module</code> and its environment happens, although no compilation actually
+happens in this crate (although it defines an interface for compilers). The
+results of this crate are handed off to other crates for actual compilation.</li>
+<li><code>wasmtime-cranelift</code> - implementation of function-level compilation using
+Cranelift.</li>
+</ul>
+<p>Note that at this time Cranelift is a required dependency of wasmtime. Most of
+the types exported from <code>wasmtime-environ</code> use cranelift types in their API. One
+day it's a goal, though, to remove the required cranelift dependency and have
+<code>wasmtime-environ</code> be a relatively standalone crate.</p>
+<p>In addition to the above crates there are some other miscellaneous crates that
+<code>wasmtime</code> depends on:</p>
+<ul>
+<li><code>wasmtime-cache</code> - optional dependency to manage default caches on the
+filesystem. This is enabled in the CLI by default but not enabled in the
+<code>wasmtime</code> crate by default.</li>
+<li><code>wasmtime-fiber</code> - implementation of stack-switching used by <code>async</code> support
+in Wasmtime</li>
+<li><code>wasmtime-debug</code> - implementation of mapping wasm dwarf debug information to
+native dwarf debug information.</li>
+<li><code>wasmtime-profiling</code> - implementation of hooking up generated JIT code to
+standard profiling runtimes.</li>
+<li><code>wasmtime-obj</code> - implementation of creating an ELF image from compiled
+functions.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="contributing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="contributing-building.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="contributing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="contributing-building.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MpkEnabled"],"fn":["allow","current_mask","is_supported","keys"],"struct":["ProtectionKey","ProtectionMask"]};

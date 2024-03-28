@@ -1,0 +1,17 @@
+{
+  "name": "wasi-demo",
+  "version": "1.0.0",
+  "description": "WasmTime WASI demo in AssemblyScript",
+  "main": "index.js",
+  "scripts": {
+    "build": "asc wasi-demo.ts --target wasi-demo",
+    "demo": "wasmtime ./build/wasi-demo.wasm"
+  },
+  "author": "Jairus Tanaka (JairusSW)",
+  "license": "MIT",
+  "dependencies": {
+    "@assemblyscript/wasi-shim": "^0.1.0",
+    "assemblyscript": "^0.27.1",
+    "as-rainbow": "^0.1.0"
+  }
+}

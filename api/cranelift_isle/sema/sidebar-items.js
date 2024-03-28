@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConstructorKind","Expr","ExtractorKind","Pattern","ReturnKind","TermKind","Type"],"struct":["BoundVar","ExternalSig","Field","FieldId","IfLet","Rule","RuleId","Sym","Term","TermEnv","TermFlags","TermId","TypeEnv","TypeId","VarId","Variant","VariantId","VisitedExpr"],"trait":["ExprVisitor","PatternVisitor","RuleVisitor"]};

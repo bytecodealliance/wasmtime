@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Trait that represents the hooks needed to implement an instance allocator."><title>InstanceAllocatorImpl in wasmtime_runtime - Rust</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime_runtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (1388d7a06 2024-03-20)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime_runtime/index.html">wasmtime_runtime</a><span class="version">20.0.0</span></h2></div><h2 class="location"><a href="#">InstanceAllocatorImpl</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.allocate_fiber_stack">allocate_fiber_stack</a></li><li><a href="#tymethod.allocate_memory">allocate_memory</a></li><li><a href="#tymethod.allocate_table">allocate_table</a></li><li><a href="#tymethod.allow_all_pkeys">allow_all_pkeys</a></li><li><a href="#tymethod.deallocate_fiber_stack">deallocate_fiber_stack</a></li><li><a href="#tymethod.deallocate_memory">deallocate_memory</a></li><li><a href="#tymethod.deallocate_table">deallocate_table</a></li><li><a href="#tymethod.decrement_component_instance_count">decrement_component_instance_count</a></li><li><a href="#tymethod.decrement_core_instance_count">decrement_core_instance_count</a></li><li><a href="#tymethod.increment_component_instance_count">increment_component_instance_count</a></li><li><a href="#tymethod.increment_core_instance_count">increment_core_instance_count</a></li><li><a href="#tymethod.next_available_pkey">next_available_pkey</a></li><li><a href="#tymethod.purge_module">purge_module</a></li><li><a href="#tymethod.restrict_to_pkey">restrict_to_pkey</a></li><li><a href="#tymethod.validate_component_impl">validate_component_impl</a></li><li><a href="#tymethod.validate_module_impl">validate_module_impl</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate wasmtime_runtime</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../wasmtime_runtime/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">wasmtime_runtime</a>::<wbr><a class="trait" href="#">InstanceAllocatorImpl</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime_runtime/instance/allocator.rs.html#152-293">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe trait InstanceAllocatorImpl {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 16 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.validate_component_impl" class="fn">validate_component_impl</a>&lt;'a&gt;(
+        &amp;self,
+        component: &amp;Component,
+        offsets: &amp;VMComponentOffsets&lt;HostPtr&gt;,
+        get_module: &amp;'a dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(StaticModuleIndex) -&gt; &amp;'a Module
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.validate_module_impl" class="fn">validate_module_impl</a>(
+        &amp;self,
+        module: &amp;Module,
+        offsets: &amp;VMOffsets&lt;HostPtr&gt;
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.increment_component_instance_count" class="fn">increment_component_instance_count</a>(&amp;self) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.decrement_component_instance_count" class="fn">decrement_component_instance_count</a>(&amp;self);
+<span class="item-spacer"></span>    fn <a href="#tymethod.increment_core_instance_count" class="fn">increment_core_instance_count</a>(&amp;self) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.decrement_core_instance_count" class="fn">decrement_core_instance_count</a>(&amp;self);
+<span class="item-spacer"></span>    unsafe fn <a href="#tymethod.allocate_memory" class="fn">allocate_memory</a>(
+        &amp;self,
+        request: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+        memory_plan: &amp;MemoryPlan,
+        memory_index: DefinedMemoryIndex
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(<a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>, <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>)&gt;;
+<span class="item-spacer"></span>    unsafe fn <a href="#tymethod.deallocate_memory" class="fn">deallocate_memory</a>(
+        &amp;self,
+        memory_index: DefinedMemoryIndex,
+        allocation_index: <a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>,
+        memory: <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>
+    );
+<span class="item-spacer"></span>    unsafe fn <a href="#tymethod.allocate_table" class="fn">allocate_table</a>(
+        &amp;self,
+        req: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+        table_plan: &amp;TablePlan,
+        table_index: DefinedTableIndex
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(<a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>, <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>)&gt;;
+<span class="item-spacer"></span>    unsafe fn <a href="#tymethod.deallocate_table" class="fn">deallocate_table</a>(
+        &amp;self,
+        table_index: DefinedTableIndex,
+        allocation_index: <a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>,
+        table: <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.allocate_fiber_stack" class="fn">allocate_fiber_stack</a>(&amp;self) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="../wasmtime_fiber/struct.FiberStack.html" title="struct wasmtime_fiber::FiberStack">FiberStack</a>&gt;;
+<span class="item-spacer"></span>    unsafe fn <a href="#tymethod.deallocate_fiber_stack" class="fn">deallocate_fiber_stack</a>(&amp;self, stack: &amp;<a class="struct" href="../wasmtime_fiber/struct.FiberStack.html" title="struct wasmtime_fiber::FiberStack">FiberStack</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.purge_module" class="fn">purge_module</a>(&amp;self, module: <a class="struct" href="struct.CompiledModuleId.html" title="struct wasmtime_runtime::CompiledModuleId">CompiledModuleId</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.next_available_pkey" class="fn">next_available_pkey</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="mpk/struct.ProtectionKey.html" title="struct wasmtime_runtime::mpk::ProtectionKey">ProtectionKey</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.restrict_to_pkey" class="fn">restrict_to_pkey</a>(&amp;self, pkey: <a class="struct" href="mpk/struct.ProtectionKey.html" title="struct wasmtime_runtime::mpk::ProtectionKey">ProtectionKey</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.allow_all_pkeys" class="fn">allow_all_pkeys</a>(&amp;self);
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Trait that represents the hooks needed to implement an instance allocator.</p>
+<p>Implement this trait when implementing new instance allocators, but don’t
+use this trait when you need an instance allocator. Instead use the
+<code>InstanceAllocator</code> trait for that, which has additional helper methods and
+a blanket implementation for all types that implement this trait.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>This trait is unsafe as it requires knowledge of Wasmtime’s runtime
+internals to implement correctly.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.validate_component_impl" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#156-161">source</a><h4 class="code-header">fn <a href="#tymethod.validate_component_impl" class="fn">validate_component_impl</a>&lt;'a&gt;(
+    &amp;self,
+    component: &amp;Component,
+    offsets: &amp;VMComponentOffsets&lt;HostPtr&gt;,
+    get_module: &amp;'a dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(StaticModuleIndex) -&gt; &amp;'a Module
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Validate whether a component (including all of its contained core
+modules) is allocatable by this instance allocator.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.validate_module_impl" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#164">source</a><h4 class="code-header">fn <a href="#tymethod.validate_module_impl" class="fn">validate_module_impl</a>(
+    &amp;self,
+    module: &amp;Module,
+    offsets: &amp;VMOffsets&lt;HostPtr&gt;
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Validate whether a module is allocatable by this instance allocator.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.increment_component_instance_count" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#185">source</a><h4 class="code-header">fn <a href="#tymethod.increment_component_instance_count" class="fn">increment_component_instance_count</a>(&amp;self) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Increment the count of concurrent component instances that are currently
+allocated, if applicable.</p>
+<p>Not all instance allocators will have limits for the maximum number of
+concurrent component instances that can be live at the same time, and
+these allocators may implement this method with a no-op.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.decrement_component_instance_count" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#188">source</a><h4 class="code-header">fn <a href="#tymethod.decrement_component_instance_count" class="fn">decrement_component_instance_count</a>(&amp;self)</h4></section></summary><div class="docblock"><p>The dual of <code>increment_component_instance_count</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.increment_core_instance_count" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#196">source</a><h4 class="code-header">fn <a href="#tymethod.increment_core_instance_count" class="fn">increment_core_instance_count</a>(&amp;self) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Increment the count of concurrent core module instances that are
+currently allocated, if applicable.</p>
+<p>Not all instance allocators will have limits for the maximum number of
+concurrent core module instances that can be live at the same time, and
+these allocators may implement this method with a no-op.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.decrement_core_instance_count" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#199">source</a><h4 class="code-header">fn <a href="#tymethod.decrement_core_instance_count" class="fn">decrement_core_instance_count</a>(&amp;self)</h4></section></summary><div class="docblock"><p>The dual of <code>increment_core_instance_count</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.allocate_memory" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#207-212">source</a><h4 class="code-header">unsafe fn <a href="#tymethod.allocate_memory" class="fn">allocate_memory</a>(
+    &amp;self,
+    request: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+    memory_plan: &amp;MemoryPlan,
+    memory_index: DefinedMemoryIndex
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(<a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>, <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>)&gt;</h4></section></summary><div class="docblock"><p>Allocate a memory for an instance.</p>
+<h5 id="unsafety"><a class="doc-anchor" href="#unsafety">§</a>Unsafety</h5>
+<p>The memory and its associated module must have already been validated by
+<code>Self::validate_module</code> and passed that validation.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.deallocate_memory" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#221-226">source</a><h4 class="code-header">unsafe fn <a href="#tymethod.deallocate_memory" class="fn">deallocate_memory</a>(
+    &amp;self,
+    memory_index: DefinedMemoryIndex,
+    allocation_index: <a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>,
+    memory: <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>
+)</h4></section></summary><div class="docblock"><p>Deallocate an instance’s previously allocated memory.</p>
+<h5 id="unsafety-1"><a class="doc-anchor" href="#unsafety-1">§</a>Unsafety</h5>
+<p>The memory must have previously been allocated by
+<code>Self::allocate_memory</code>, be at the given index, and must currently be
+allocated. It must never be used again.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.allocate_table" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#234-239">source</a><h4 class="code-header">unsafe fn <a href="#tymethod.allocate_table" class="fn">allocate_table</a>(
+    &amp;self,
+    req: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+    table_plan: &amp;TablePlan,
+    table_index: DefinedTableIndex
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(<a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>, <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>)&gt;</h4></section></summary><div class="docblock"><p>Allocate a table for an instance.</p>
+<h5 id="unsafety-2"><a class="doc-anchor" href="#unsafety-2">§</a>Unsafety</h5>
+<p>The table and its associated module must have already been validated by
+<code>Self::validate_module</code> and passed that validation.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.deallocate_table" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#248-253">source</a><h4 class="code-header">unsafe fn <a href="#tymethod.deallocate_table" class="fn">deallocate_table</a>(
+    &amp;self,
+    table_index: DefinedTableIndex,
+    allocation_index: <a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>,
+    table: <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>
+)</h4></section></summary><div class="docblock"><p>Deallocate an instance’s previously allocated table.</p>
+<h5 id="unsafety-3"><a class="doc-anchor" href="#unsafety-3">§</a>Unsafety</h5>
+<p>The table must have previously been allocated by <code>Self::allocate_table</code>,
+be at the given index, and must currently be allocated. It must never be
+used again.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.allocate_fiber_stack" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#257">source</a><h4 class="code-header">fn <a href="#tymethod.allocate_fiber_stack" class="fn">allocate_fiber_stack</a>(&amp;self) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="../wasmtime_fiber/struct.FiberStack.html" title="struct wasmtime_fiber::FiberStack">FiberStack</a>&gt;</h4></section></summary><div class="docblock"><p>Allocates a fiber stack for calling async functions on.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.deallocate_fiber_stack" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#267">source</a><h4 class="code-header">unsafe fn <a href="#tymethod.deallocate_fiber_stack" class="fn">deallocate_fiber_stack</a>(&amp;self, stack: &amp;<a class="struct" href="../wasmtime_fiber/struct.FiberStack.html" title="struct wasmtime_fiber::FiberStack">FiberStack</a>)</h4></section></summary><div class="docblock"><p>Deallocates a fiber stack that was previously allocated with
+<code>allocate_fiber_stack</code>.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>The provided stack is required to have been allocated with
+<code>allocate_fiber_stack</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.purge_module" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#274">source</a><h4 class="code-header">fn <a href="#tymethod.purge_module" class="fn">purge_module</a>(&amp;self, module: <a class="struct" href="struct.CompiledModuleId.html" title="struct wasmtime_runtime::CompiledModuleId">CompiledModuleId</a>)</h4></section></summary><div class="docblock"><p>Purges all lingering resources related to <code>module</code> from within this
+allocator.</p>
+<p>Primarily present for the pooling allocator to remove mappings of
+this module from slots in linear memory.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.next_available_pkey" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#281">source</a><h4 class="code-header">fn <a href="#tymethod.next_available_pkey" class="fn">next_available_pkey</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="mpk/struct.ProtectionKey.html" title="struct wasmtime_runtime::mpk::ProtectionKey">ProtectionKey</a>&gt;</h4></section></summary><div class="docblock"><p>Use the next available protection key.</p>
+<p>The pooling allocator can use memory protection keys (MPK) for
+compressing the guard regions protecting against OOB. Each
+pool-allocated store needs its own key.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.restrict_to_pkey" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#289">source</a><h4 class="code-header">fn <a href="#tymethod.restrict_to_pkey" class="fn">restrict_to_pkey</a>(&amp;self, pkey: <a class="struct" href="mpk/struct.ProtectionKey.html" title="struct wasmtime_runtime::mpk::ProtectionKey">ProtectionKey</a>)</h4></section></summary><div class="docblock"><p>Restrict access to memory regions protected by <code>pkey</code>.</p>
+<p>This is useful for the pooling allocator, which can use memory
+protection keys (MPK). Note: this may still allow access to other
+protection keys, such as the default kernel key; see implementations of
+this.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.allow_all_pkeys" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#292">source</a><h4 class="code-header">fn <a href="#tymethod.allow_all_pkeys" class="fn">allow_all_pkeys</a>(&amp;self)</h4></section></summary><div class="docblock"><p>Allow access to memory regions protected by any protection key.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-InstanceAllocatorImpl-for-OnDemandInstanceAllocator" class="impl"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator/on_demand.rs.html#66-196">source</a><a href="#impl-InstanceAllocatorImpl-for-OnDemandInstanceAllocator" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.InstanceAllocatorImpl.html" title="trait wasmtime_runtime::InstanceAllocatorImpl">InstanceAllocatorImpl</a> for <a class="struct" href="struct.OnDemandInstanceAllocator.html" title="struct wasmtime_runtime::OnDemandInstanceAllocator">OnDemandInstanceAllocator</a></h3></section><section id="impl-InstanceAllocatorImpl-for-PoolingInstanceAllocator" class="impl"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator/pooling.rs.html#348-561">source</a><a href="#impl-InstanceAllocatorImpl-for-PoolingInstanceAllocator" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.InstanceAllocatorImpl.html" title="trait wasmtime_runtime::InstanceAllocatorImpl">InstanceAllocatorImpl</a> for <a class="struct" href="struct.PoolingInstanceAllocator.html" title="struct wasmtime_runtime::PoolingInstanceAllocator">PoolingInstanceAllocator</a></h3></section></div><script src="../trait.impl/wasmtime_runtime/instance/allocator/trait.InstanceAllocatorImpl.js" async></script></section></div></main></body></html>

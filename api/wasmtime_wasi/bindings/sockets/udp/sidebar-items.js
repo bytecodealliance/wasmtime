@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_to_linker"],"struct":["IncomingDatagram","IncomingDatagramStream","OutgoingDatagram","OutgoingDatagramStream","UdpSocket"],"trait":["Host","HostIncomingDatagramStream","HostOutgoingDatagramStream","HostUdpSocket"],"type":["ErrorCode","IpAddressFamily","IpSocketAddress","Network","Pollable"]};

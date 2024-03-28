@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ShutdownType"],"struct":["TcpSocket"],"type":["Duration","ErrorCode","InputStream","IpAddressFamily","IpSocketAddress","Network","OutputStream","Pollable"]};

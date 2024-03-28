@@ -1,0 +1,129 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A C API for benchmarking Wasmtime’s WebAssembly compilation, instantiation, and execution."><title>wasmtime_bench_api - Rust</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime_bench_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (1388d7a06 2024-03-20)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime_bench_api/index.html">wasmtime_bench_api</a><span class="version">20.0.0</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#constants">Constants</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../wasmtime_bench_api/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">wasmtime_bench_api</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime_bench_api/lib.rs.html#1-557">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A C API for benchmarking Wasmtime’s WebAssembly compilation, instantiation,
+and execution.</p>
+<p>The API expects calls that match the following state machine:</p>
+<div class="example-wrap"><pre class="language-text"><code>              |
+              |
+              V
+.---&gt; wasm_bench_create
+|        |        |
+|        |        |
+|        |        V
+|        |   wasm_bench_compile
+|        |     |            |
+|        |     |            |     .----.
+|        |     |            |     |    |
+|        |     |            V     V    |
+|        |     |     wasm_bench_instantiate &lt;------.
+|        |     |            |        |             |
+|        |     |            |        |             |
+|        |     |            |        |             |
+|        |     |     .------&#39;        &#39;-----&gt; wasm_bench_execute
+|        |     |     |                             |
+|        |     |     |                             |
+|        V     V     V                             |
+&#39;------ wasm_bench_free &lt;--------------------------&#39;
+              |
+              |
+              V
+</code></pre></div>
+<p>All API calls must happen on the same thread.</p>
+<p>Functions which return pointers use null as an error value. Function which
+return <code>int</code> use <code>0</code> as OK and non-zero as an error value.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+<span class="kw">use </span>wasmtime_bench_api::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>working_dir = std::env::current_dir().unwrap().display().to_string();
+<span class="kw">let </span>stdout_path = <span class="string">"./stdout.log"</span>;
+<span class="kw">let </span>stderr_path = <span class="string">"./stderr.log"</span>;
+
+<span class="comment">// Functions to start/end timers for compilation.
+//
+// The `compilation_timer` pointer configured in the `WasmBenchConfig` is
+// passed through.
+</span><span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn </span>compilation_start(timer: <span class="kw-2">*mut </span>u8) {
+    <span class="comment">// Start your compilation timer here.
+</span>}
+<span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn </span>compilation_end(timer: <span class="kw-2">*mut </span>u8) {
+    <span class="comment">// End your compilation timer here.
+</span>}
+
+<span class="comment">// Similar for instantiation.
+</span><span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn </span>instantiation_start(timer: <span class="kw-2">*mut </span>u8) {
+    <span class="comment">// Start your instantiation timer here.
+</span>}
+<span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn </span>instantiation_end(timer: <span class="kw-2">*mut </span>u8) {
+    <span class="comment">// End your instantiation timer here.
+</span>}
+
+<span class="comment">// Similar for execution.
+</span><span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn </span>execution_start(timer: <span class="kw-2">*mut </span>u8) {
+    <span class="comment">// Start your execution timer here.
+</span>}
+<span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn </span>execution_end(timer: <span class="kw-2">*mut </span>u8) {
+    <span class="comment">// End your execution timer here.
+</span>}
+
+<span class="kw">let </span>config = WasmBenchConfig {
+    working_dir_ptr: working_dir.as_ptr(),
+    working_dir_len: working_dir.len(),
+    stdout_path_ptr: stdout_path.as_ptr(),
+    stdout_path_len: stdout_path.len(),
+    stderr_path_ptr: stderr_path.as_ptr(),
+    stderr_path_len: stderr_path.len(),
+    stdin_path_ptr: ptr::null(),
+    stdin_path_len: <span class="number">0</span>,
+    compilation_timer: ptr::null_mut(),
+    compilation_start,
+    compilation_end,
+    instantiation_timer: ptr::null_mut(),
+    instantiation_start,
+    instantiation_end,
+    execution_timer: ptr::null_mut(),
+    execution_start,
+    execution_end,
+    execution_flags_ptr: ptr::null(),
+    execution_flags_len: <span class="number">0</span>,
+};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bench_api = ptr::null_mut();
+<span class="kw">unsafe </span>{
+    <span class="kw">let </span>code = wasm_bench_create(config, <span class="kw-2">&amp;mut </span>bench_api);
+    <span class="macro">assert_eq!</span>(code, OK);
+    <span class="macro">assert!</span>(!bench_api.is_null());
+};
+
+<span class="kw">let </span>wasm = wat::parse_bytes(<span class="string">br#"
+    (module
+        (func $bench_start (import "bench" "start"))
+        (func $bench_end (import "bench" "end"))
+        (func $start (export "_start")
+            call $bench_start
+            i32.const 1
+            i32.const 2
+            i32.add
+            drop
+            call $bench_end
+        )
+    )
+"#</span>).unwrap();
+
+<span class="comment">// This will call the `compilation_{start,end}` timing functions on success.
+</span><span class="kw">let </span>code = <span class="kw">unsafe </span>{ wasm_bench_compile(bench_api, wasm.as_ptr(), wasm.len()) };
+<span class="macro">assert_eq!</span>(code, OK);
+
+<span class="comment">// This will call the `instantiation_{start,end}` timing functions on success.
+</span><span class="kw">let </span>code = <span class="kw">unsafe </span>{ wasm_bench_instantiate(bench_api) };
+<span class="macro">assert_eq!</span>(code, OK);
+
+<span class="comment">// This will call the `execution_{start,end}` timing functions on success.
+</span><span class="kw">let </span>code = <span class="kw">unsafe </span>{ wasm_bench_execute(bench_api) };
+<span class="macro">assert_eq!</span>(code, OK);
+
+<span class="kw">unsafe </span>{
+    wasm_bench_free(bench_api);
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.WasmBenchConfig.html" title="struct wasmtime_bench_api::WasmBenchConfig">WasmBenchConfig</a></div><div class="desc docblock-short">Configuration options for the benchmark.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.ERR.html" title="constant wasmtime_bench_api::ERR">ERR</a></div></li><li><div class="item-name"><a class="constant" href="constant.OK.html" title="constant wasmtime_bench_api::OK">OK</a></div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.wasm_bench_compile.html" title="fn wasmtime_bench_api::wasm_bench_compile">wasm_bench_compile</a></div><div class="desc docblock-short">Compile the Wasm benchmark module.</div></li><li><div class="item-name"><a class="fn" href="fn.wasm_bench_create.html" title="fn wasmtime_bench_api::wasm_bench_create">wasm_bench_create</a></div><div class="desc docblock-short">Exposes a C-compatible way of creating the engine from the bytes of a single
+Wasm module.</div></li><li><div class="item-name"><a class="fn" href="fn.wasm_bench_execute.html" title="fn wasmtime_bench_api::wasm_bench_execute">wasm_bench_execute</a></div><div class="desc docblock-short">Execute the Wasm benchmark module.</div></li><li><div class="item-name"><a class="fn" href="fn.wasm_bench_free.html" title="fn wasmtime_bench_api::wasm_bench_free">wasm_bench_free</a></div><div class="desc docblock-short">Free the engine state allocated by this library.</div></li><li><div class="item-name"><a class="fn" href="fn.wasm_bench_instantiate.html" title="fn wasmtime_bench_api::wasm_bench_instantiate">wasm_bench_instantiate</a></div><div class="desc docblock-short">Instantiate the Wasm benchmark module.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ExitCode.html" title="type wasmtime_bench_api::ExitCode">ExitCode</a></div></li></ul></section></div></main></body></html>

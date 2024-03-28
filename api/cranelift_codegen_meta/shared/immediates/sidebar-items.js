@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["new_enum","new_imm"],"struct":["Immediates"]};

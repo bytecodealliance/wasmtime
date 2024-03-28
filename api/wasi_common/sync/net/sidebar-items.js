@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Socket"],"fn":["filetype_from","get_fd_flags","is_read_write"],"struct":["TcpListener","TcpStream","UnixListener","UnixStream"]};

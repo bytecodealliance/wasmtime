@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["OptName"],"struct":["CommaSeparated","CommaSeparatedParser","OptionDesc"],"trait":["WasmtimeOption","WasmtimeOptionValue"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["emit_dynamic_vectors","emit_type","emit_types","emit_vectors","generate"]};

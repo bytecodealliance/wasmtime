@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CodegenSettings","CompilerStrategy","DiffValue","DiffValueType","InstanceAllocationStrategy","MemoryConfig"],"mod":["api","component_types","table_ops"],"struct":["Config","ModuleConfig","NormalMemoryConfig","PoolingAllocationConfig","SingleInstModule","Stacks","UnalignedMemory","UnalignedMemoryCreator","WasmtimeConfig","WastTest"]};

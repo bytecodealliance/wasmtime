@@ -1,0 +1,426 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Release Process - Wasmtime</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">2.</strong> Using the Wasmtime CLI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cli-install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="cli-options.html"><strong aria-hidden="true">2.2.</strong> CLI Options</a></li><li class="chapter-item expanded "><a href="cli-logging.html"><strong aria-hidden="true">2.3.</strong> CLI Logging</a></li><li class="chapter-item expanded "><a href="cli-cache.html"><strong aria-hidden="true">2.4.</strong> Cache Configuration</a></li></ol></li><li class="chapter-item expanded "><a href="lang.html"><strong aria-hidden="true">3.</strong> Using the Wasmtime API</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lang-rust.html"><strong aria-hidden="true">3.1.</strong> Rust</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-rust-hello-world.html"><strong aria-hidden="true">3.1.1.</strong> Hello, world!</a></li><li class="chapter-item expanded "><a href="examples-rust-gcd.html"><strong aria-hidden="true">3.1.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-rust-memory.html"><strong aria-hidden="true">3.1.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-rust-wasi.html"><strong aria-hidden="true">3.1.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-rust-linking.html"><strong aria-hidden="true">3.1.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-rust-debugging.html"><strong aria-hidden="true">3.1.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-rust-core-dumps.html"><strong aria-hidden="true">3.1.7.</strong> Core Dumps</a></li><li class="chapter-item expanded "><a href="examples-rust-multi-value.html"><strong aria-hidden="true">3.1.8.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-c.html"><strong aria-hidden="true">3.2.</strong> C</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-c-hello-world.html"><strong aria-hidden="true">3.2.1.</strong> Hello, World!</a></li><li class="chapter-item expanded "><a href="examples-c-gcd.html"><strong aria-hidden="true">3.2.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-c-memory.html"><strong aria-hidden="true">3.2.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-c-wasi.html"><strong aria-hidden="true">3.2.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-c-linking.html"><strong aria-hidden="true">3.2.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-c-debugging.html"><strong aria-hidden="true">3.2.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-c-multi-value.html"><strong aria-hidden="true">3.2.7.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-python.html"><strong aria-hidden="true">3.3.</strong> Python</a></li><li class="chapter-item expanded "><a href="lang-dotnet.html"><strong aria-hidden="true">3.4.</strong> .NET</a></li><li class="chapter-item expanded "><a href="lang-go.html"><strong aria-hidden="true">3.5.</strong> Go</a></li><li class="chapter-item expanded "><a href="lang-bash.html"><strong aria-hidden="true">3.6.</strong> Bash</a></li><li class="chapter-item expanded "><a href="lang-ruby.html"><strong aria-hidden="true">3.7.</strong> Ruby</a></li><li class="chapter-item expanded "><a href="lang-elixir.html"><strong aria-hidden="true">3.8.</strong> Elixir</a></li></ol></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">4.</strong> Further Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging.html"><strong aria-hidden="true">4.1.</strong> Debugging WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging-native-debugger.html"><strong aria-hidden="true">4.1.1.</strong> Debugging with gdb and lldb</a></li><li class="chapter-item expanded "><a href="examples-debugging-core-dumps.html"><strong aria-hidden="true">4.1.2.</strong> Debugging with Core Dumps</a></li></ol></li><li class="chapter-item expanded "><a href="examples-profiling.html"><strong aria-hidden="true">4.2.</strong> Profiling WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-profiling-perf.html"><strong aria-hidden="true">4.2.1.</strong> Profiling with Perf</a></li><li class="chapter-item expanded "><a href="examples-profiling-vtune.html"><strong aria-hidden="true">4.2.2.</strong> Profiling with VTune</a></li><li class="chapter-item expanded "><a href="examples-profiling-samply.html"><strong aria-hidden="true">4.2.3.</strong> Profiling with samply</a></li><li class="chapter-item expanded "><a href="examples-profiling-guest.html"><strong aria-hidden="true">4.2.4.</strong> Cross-platform Profiling</a></li></ol></li><li class="chapter-item expanded "><a href="wmemcheck.html"><strong aria-hidden="true">4.3.</strong> Checking Guests' Memory Accesses</a></li><li class="chapter-item expanded "><a href="examples-minimal.html"><strong aria-hidden="true">4.4.</strong> Building a minimal embedding</a></li></ol></li><li class="chapter-item expanded "><a href="stability.html"><strong aria-hidden="true">5.</strong> Stability</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="stability-release.html"><strong aria-hidden="true">5.1.</strong> Release Process</a></li><li class="chapter-item expanded "><a href="stability-tiers.html"><strong aria-hidden="true">5.2.</strong> Tiers of support</a></li><li class="chapter-item expanded "><a href="stability-platform-support.html"><strong aria-hidden="true">5.3.</strong> Platform Support</a></li></ol></li><li class="chapter-item expanded "><a href="security.html"><strong aria-hidden="true">6.</strong> Security</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="security-disclosure.html"><strong aria-hidden="true">6.1.</strong> Disclosure Policy</a></li><li class="chapter-item expanded "><a href="security-what-is-considered-a-security-vulnerability.html"><strong aria-hidden="true">6.2.</strong> What is considered a security bug?</a></li></ol></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-architecture.html"><strong aria-hidden="true">7.1.</strong> Architecture</a></li><li class="chapter-item expanded "><a href="contributing-building.html"><strong aria-hidden="true">7.2.</strong> Building</a></li><li class="chapter-item expanded "><a href="contributing-testing.html"><strong aria-hidden="true">7.3.</strong> Testing</a></li><li class="chapter-item expanded "><a href="contributing-fuzzing.html"><strong aria-hidden="true">7.4.</strong> Fuzzing</a></li><li class="chapter-item expanded "><a href="contributing-ci.html"><strong aria-hidden="true">7.5.</strong> CI</a></li><li class="chapter-item expanded "><a href="contributing-reducing-test-cases.html"><strong aria-hidden="true">7.6.</strong> Reducing Test Cases</a></li><li class="chapter-item expanded "><a href="contributing-cross-compiling.html"><strong aria-hidden="true">7.7.</strong> Cross Compiling</a></li><li class="chapter-item expanded "><a href="contributing-coding-guidelines.html"><strong aria-hidden="true">7.8.</strong> Coding Guidelines</a></li><li class="chapter-item expanded "><a href="contributing-development-process.html"><strong aria-hidden="true">7.9.</strong> Development Process</a></li><li class="chapter-item expanded "><a href="contributing-implementing-wasm-proposals.html"><strong aria-hidden="true">7.10.</strong> Implementing Wasm Proposals</a></li><li class="chapter-item expanded "><a href="contributing-maintainer-guidelines.html"><strong aria-hidden="true">7.11.</strong> Maintainer Guidelines</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-code-review.html"><strong aria-hidden="true">7.11.1.</strong> Code Review</a></li><li class="chapter-item expanded "><a href="contributing-release-process.html" class="active"><strong aria-hidden="true">7.11.2.</strong> Release Process</a></li></ol></li><li class="chapter-item expanded "><a href="contributing-governance.html"><strong aria-hidden="true">7.12.</strong> Governance</a></li><li class="chapter-item expanded "><a href="contributing-coc.html"><strong aria-hidden="true">7.13.</strong> Code of Conduct</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Wasmtime</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="release-process"><a class="header" href="#release-process">Release Process</a></h1>
+<p>This is intended to serve as documentation for Wasmtime's release process. It's
+largely an internal checklist for those of us performing a Wasmtime release, but
+others might be curious in this as well!</p>
+<h2 id="releasing-a-major-version"><a class="header" href="#releasing-a-major-version">Releasing a major version</a></h2>
+<p>Major versions of Wasmtime are released once-a-month. Most of this is automatic
+and all that needs to be done is to merge GitHub PRs that CI will
+generate. At a high-level the structure of Wasmtime's release process is:</p>
+<ul>
+<li>On the 5th of every month a new <code>release-X.Y.Z</code> branch is created with the
+current contents of <code>main</code>.</li>
+<li>On the 20th of every month this release branch is published to crates.io and
+release artifacts are built.</li>
+</ul>
+<p>This means that Wasmtime releases are always at least two weeks behind
+development on <code>main</code> and additionally happen once a month. The lag time behind
+<code>main</code> is intended to give time to fuzz changes on <code>main</code> as well as allow
+testing for any users using <code>main</code>. It's expected, though, that most consumers
+will likely use the release branches of wasmtime.</p>
+<p>A detailed list of all the steps in the release automation process are below.
+The steps requiring interactions are <strong>bolded</strong>, otherwise everything else is
+automatic and this is documenting what automation does.</p>
+<ol>
+<li>On the 5th of every month, (configured via
+<code>.github/workflows/release-process.yml</code>) a CI job
+will run and do these steps:
+<ul>
+<li>Download the current <code>main</code> branch</li>
+<li>Push the <code>main</code> branch to <code>release-X.Y.Z</code></li>
+<li>Run <code>./scripts/publish.rs</code> with the <code>bump</code> argument</li>
+<li>Commit the changes</li>
+<li>Push these changes to a temporary <code>ci/*</code> branch</li>
+<li>Open a PR with this branch against <code>main</code></li>
+<li>This step can also be <a href="https://github.com/bytecodealliance/wasmtime/actions/workflows/release-process.yml">triggered manually</a> with the <code>main</code>
+branch and the <code>cut</code> argument.</li>
+</ul>
+</li>
+<li><strong>A maintainer of Wasmtime merges this PR</strong>
+<ul>
+<li>It's intended that this PR can be immediately merged as the release branch
+has been created and all it's doing is bumping the version.</li>
+</ul>
+</li>
+<li><strong>Time passes and the <code>release-X.Y.Z</code> branch is maintained</strong>
+<ul>
+<li>All changes land on <code>main</code> first, then are backported to <code>release-X.Y.Z</code> as
+necessary.</li>
+<li>Even changes to <code>RELEASES.md</code> are pushed to <code>main</code> first.</li>
+</ul>
+</li>
+<li>On the 20th of every month (same CI job as before) another CI job will run
+performing:
+<ul>
+<li>Download the current <code>main</code> branch.</li>
+<li>Update the release date of <code>X.Y.Z</code> to today in <code>RELEASES.md</code></li>
+<li>Open a PR against <code>main</code> for this change</li>
+<li>Reset to <code>release-X.Y.Z</code></li>
+<li>Update the release date of <code>X.Y.Z</code> to today in <code>RELEASES.md</code></li>
+<li>Add a special marker to the commit message to indicate a tag should be made.</li>
+<li>Open a PR against <code>release-X.Y.Z</code> for this change</li>
+<li>This step can also be <a href="https://github.com/bytecodealliance/wasmtime/actions/workflows/release-process.yml">triggered manually</a> with the <code>main</code>
+branch and the <code>release-latest</code> argument.</li>
+</ul>
+</li>
+<li><strong>A maintainer of Wasmtime merges these two PRs</strong>
+<ul>
+<li>The PR against <code>main</code> is a small update to the release notes and should be
+mergeable immediately.</li>
+<li>The PR against <code>release-X.Y.Z</code>, when merged, will trigger the next steps due
+to the marker in the commit message. A maintainer should double-check there
+are <a href="https://github.com/bytecodealliance/wasmtime/issues?q=RUSTSEC+is%3Aissue+is%3Aopen+">no open security issues</a>, but otherwise it's expected
+that all other release issues are resolved by this point.</li>
+</ul>
+</li>
+<li>The <code>.github/workflow/push-tag.yml</code> workflow is triggered on all commits
+including the one just created with a PR merge. This workflow will:
+<ul>
+<li>Scan the git logs of pushed changes for the special marker added by
+<code>release-process.yml</code>.</li>
+<li>If found, tags the current <code>main</code> commit and pushes that to the main
+repository.</li>
+</ul>
+</li>
+<li>Once a tag is created CI runs in full on the tag itself. CI for tags will
+create a GitHub release with release artifacts and it will also publish
+crates to crates.io. This is orchestrated by <code>.github/workflows/main.yml</code>.</li>
+</ol>
+<p>If all goes well you won't have to read up much on this and after hitting the
+Big Green Button for the automatically created PRs everything will merrily
+carry on its way.</p>
+<h2 id="releasing-a-patch-version"><a class="header" href="#releasing-a-patch-version">Releasing a patch version</a></h2>
+<p>Making a patch release is somewhat more manual than a major version, but like
+before there's automation to help guide the process as well and take care of
+more mundane bits.</p>
+<p>This is a list of steps taken to perform a patch release for 2.0.1 for example.
+Like above human interaction is indicated with <strong>bold</strong> text in these steps.</p>
+<ol>
+<li><strong>Necessary changes are backported to the <code>release-2.0.0</code> branch from
+<code>main</code></strong>
+<ul>
+<li>All changes must land on <code>main</code> first (if applicable) and then get
+backported to an older branch. Release branches should already exist from
+the above major release steps.</li>
+<li>CI may not have been run in some time for release branches so it may be
+necessary to backport CI fixes and updates from <code>main</code> as well.</li>
+<li>When merging backports maintainers need to double-check that the
+<code>PUBLIC_CRATES</code> listed in <code>scripts/publish.rs</code> do not have
+semver-API-breaking changes (in the strictest sense). All security fixes
+must be done in such a way that the API doesn't break between the patch
+version and the original version.</li>
+<li>Don't forget to write patch notes in <code>RELEASES.md</code> for backported changes.</li>
+</ul>
+</li>
+<li><strong>The patch release process is <a href="https://github.com/bytecodealliance/wasmtime/actions/workflows/release-process.yml">triggered manually</a> with
+the <code>release-2.0.0</code> branch and the <code>release-patch</code> argument</strong>
+<ul>
+<li>This will run the <code>release-process.yml</code> workflow. The <code>scripts/publish.rs</code>
+script will be run with the <code>bump-patch</code> argument.</li>
+<li>The changes will be committed with a special marker indicating a release
+needs to be made.</li>
+<li>A PR will be created from a temporary <code>ci/*</code> branch to the <code>release-2.0.0</code>
+branch which, when merged, will trigger the release process.</li>
+</ul>
+</li>
+<li><strong>Review the generated PR and merge it</strong>
+<ul>
+<li>This will resume from step 6 above in the major release process where the
+special marker in the commit message generated by CI will trigger a tag to
+get pushed which will further trigger the rest of the release process.</li>
+<li>Please make sure to update the <code>RELEASES.md</code> at this point to include the
+<code>Released on</code> date by pushing directly to the branch associated with the
+PR.</li>
+</ul>
+</li>
+<li><strong>Forward-port the release notes to main</strong>
+<ul>
+<li>Once the release is done, please forward-port the release notes to the
+<code>RELEASES.md</code> on the main branch, to ensure consistency in future releases.</li>
+</ul>
+</li>
+</ol>
+<p>After a patch release has been made you'll also want to double-check that the
+release notes on the patch branch are in sync with the <code>main</code> branch.</p>
+<h2 id="releasing-a-security-patch"><a class="header" href="#releasing-a-security-patch">Releasing a security patch</a></h2>
+<p>When making a patch release that has a security-related fix the contents of the
+patch are often kept private until the day of the patch release which means that
+the process here is slightly different from the patch release process above. In
+addition the precise <a href="https://github.com/bytecodealliance/rfcs/pull/20">runbook is currently under discussion in an
+RFC</a> for security patches, so
+this intends to document what we've been doing so far and it'll get updated when
+the runbook is merged.</p>
+<ol>
+<li><strong>The fix for the security issue is developed in a GitHub Security
+Advisory</strong>
+<ul>
+<li>This will not have any CI run, it's recommended to run <code>./ci/run-tests.sh</code>
+locally at least.</li>
+<li>Develop fixes for all branches that will get a patch release in the
+advisory, one PR per branch. When the advisory is published all branches
+will be merged simultaneously. Be sure to run <code>./ci/run-tests.sh</code> in each
+branch.</li>
+<li>Don't forget to update <code>RELEASES.md</code> with notes about the release on
+each branch.</li>
+</ul>
+</li>
+<li><strong>Send a PR for the version bump when an email goes out announcing there will
+be a security release</strong>
+<ul>
+<li>An email is sent to the bytecodealliance security mailing list ahead of a
+patch release to announce that a patch release will happen. At this time you
+should <a href="https://github.com/bytecodealliance/wasmtime/actions/workflows/release-process.yml">trigger the version bump</a> against the appropriate
+<code>release-x.y.z</code> branches with the <code>release-patch</code> argument.</li>
+<li>This will send a PR, but you should not merge it. Instead use this PR and
+the time ahead of the security release to fix any issues with CI. Older
+<code>release-x.y.z</code> branches haven't run CI in awhile so they may need to
+backport fixes of one variety or another. DO NOT include the actual fix for
+the security issue into the PR, that comes in the next step.</li>
+</ul>
+</li>
+<li><strong>Make the advisories/patches public</strong>
+<ul>
+<li>Publishing the GitHub Security Advisory will merge all the PRs into each
+branch from the advisory. Note that CI will run for release branches but
+<code>main</code> will probably fail CI since it expected to be merged through the
+merge queue, but that's ok.</li>
+<li>Double-check that CI for release branches finishes and completes
+successfully.</li>
+</ul>
+</li>
+<li><strong>Merge the version-bump PR</strong>
+<ul>
+<li>Like the patch release process this will kick everything else into motion.
+Note that the actual security fixes should be merged either before or as
+part of this PR.</li>
+</ul>
+</li>
+</ol>
+<p>After a security release has been made you'll also want to double-check that
+the release notes on the branch are in sync with the <code>main</code> branch.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="contributing-code-review.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="contributing-governance.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="contributing-code-review.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="contributing-governance.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DOC_TEXT"],"fn":["document"]};

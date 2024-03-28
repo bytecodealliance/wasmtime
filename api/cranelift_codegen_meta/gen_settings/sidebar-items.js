@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ParentGroup","SettingOrPreset"],"fn":["gen_constructor","gen_descriptors","gen_display","gen_enum_all","gen_enum_types","gen_getter","gen_getters","gen_group","gen_iterator","gen_pred_getter","gen_template","gen_to_and_from_str","generate"]};

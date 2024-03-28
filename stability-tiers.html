@@ -1,0 +1,496 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Tiers of support - Wasmtime</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">2.</strong> Using the Wasmtime CLI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cli-install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="cli-options.html"><strong aria-hidden="true">2.2.</strong> CLI Options</a></li><li class="chapter-item expanded "><a href="cli-logging.html"><strong aria-hidden="true">2.3.</strong> CLI Logging</a></li><li class="chapter-item expanded "><a href="cli-cache.html"><strong aria-hidden="true">2.4.</strong> Cache Configuration</a></li></ol></li><li class="chapter-item expanded "><a href="lang.html"><strong aria-hidden="true">3.</strong> Using the Wasmtime API</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lang-rust.html"><strong aria-hidden="true">3.1.</strong> Rust</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-rust-hello-world.html"><strong aria-hidden="true">3.1.1.</strong> Hello, world!</a></li><li class="chapter-item expanded "><a href="examples-rust-gcd.html"><strong aria-hidden="true">3.1.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-rust-memory.html"><strong aria-hidden="true">3.1.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-rust-wasi.html"><strong aria-hidden="true">3.1.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-rust-linking.html"><strong aria-hidden="true">3.1.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-rust-debugging.html"><strong aria-hidden="true">3.1.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-rust-core-dumps.html"><strong aria-hidden="true">3.1.7.</strong> Core Dumps</a></li><li class="chapter-item expanded "><a href="examples-rust-multi-value.html"><strong aria-hidden="true">3.1.8.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-c.html"><strong aria-hidden="true">3.2.</strong> C</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-c-hello-world.html"><strong aria-hidden="true">3.2.1.</strong> Hello, World!</a></li><li class="chapter-item expanded "><a href="examples-c-gcd.html"><strong aria-hidden="true">3.2.2.</strong> Calculating the GCD</a></li><li class="chapter-item expanded "><a href="examples-c-memory.html"><strong aria-hidden="true">3.2.3.</strong> Using Linear Memory</a></li><li class="chapter-item expanded "><a href="examples-c-wasi.html"><strong aria-hidden="true">3.2.4.</strong> WASI</a></li><li class="chapter-item expanded "><a href="examples-c-linking.html"><strong aria-hidden="true">3.2.5.</strong> Linking Modules</a></li><li class="chapter-item expanded "><a href="examples-c-debugging.html"><strong aria-hidden="true">3.2.6.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="examples-c-multi-value.html"><strong aria-hidden="true">3.2.7.</strong> Using Multi-Value</a></li></ol></li><li class="chapter-item expanded "><a href="lang-python.html"><strong aria-hidden="true">3.3.</strong> Python</a></li><li class="chapter-item expanded "><a href="lang-dotnet.html"><strong aria-hidden="true">3.4.</strong> .NET</a></li><li class="chapter-item expanded "><a href="lang-go.html"><strong aria-hidden="true">3.5.</strong> Go</a></li><li class="chapter-item expanded "><a href="lang-bash.html"><strong aria-hidden="true">3.6.</strong> Bash</a></li><li class="chapter-item expanded "><a href="lang-ruby.html"><strong aria-hidden="true">3.7.</strong> Ruby</a></li><li class="chapter-item expanded "><a href="lang-elixir.html"><strong aria-hidden="true">3.8.</strong> Elixir</a></li></ol></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">4.</strong> Further Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging.html"><strong aria-hidden="true">4.1.</strong> Debugging WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-debugging-native-debugger.html"><strong aria-hidden="true">4.1.1.</strong> Debugging with gdb and lldb</a></li><li class="chapter-item expanded "><a href="examples-debugging-core-dumps.html"><strong aria-hidden="true">4.1.2.</strong> Debugging with Core Dumps</a></li></ol></li><li class="chapter-item expanded "><a href="examples-profiling.html"><strong aria-hidden="true">4.2.</strong> Profiling WebAssembly</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="examples-profiling-perf.html"><strong aria-hidden="true">4.2.1.</strong> Profiling with Perf</a></li><li class="chapter-item expanded "><a href="examples-profiling-vtune.html"><strong aria-hidden="true">4.2.2.</strong> Profiling with VTune</a></li><li class="chapter-item expanded "><a href="examples-profiling-samply.html"><strong aria-hidden="true">4.2.3.</strong> Profiling with samply</a></li><li class="chapter-item expanded "><a href="examples-profiling-guest.html"><strong aria-hidden="true">4.2.4.</strong> Cross-platform Profiling</a></li></ol></li><li class="chapter-item expanded "><a href="wmemcheck.html"><strong aria-hidden="true">4.3.</strong> Checking Guests' Memory Accesses</a></li><li class="chapter-item expanded "><a href="examples-minimal.html"><strong aria-hidden="true">4.4.</strong> Building a minimal embedding</a></li></ol></li><li class="chapter-item expanded "><a href="stability.html"><strong aria-hidden="true">5.</strong> Stability</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="stability-release.html"><strong aria-hidden="true">5.1.</strong> Release Process</a></li><li class="chapter-item expanded "><a href="stability-tiers.html" class="active"><strong aria-hidden="true">5.2.</strong> Tiers of support</a></li><li class="chapter-item expanded "><a href="stability-platform-support.html"><strong aria-hidden="true">5.3.</strong> Platform Support</a></li></ol></li><li class="chapter-item expanded "><a href="security.html"><strong aria-hidden="true">6.</strong> Security</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="security-disclosure.html"><strong aria-hidden="true">6.1.</strong> Disclosure Policy</a></li><li class="chapter-item expanded "><a href="security-what-is-considered-a-security-vulnerability.html"><strong aria-hidden="true">6.2.</strong> What is considered a security bug?</a></li></ol></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-architecture.html"><strong aria-hidden="true">7.1.</strong> Architecture</a></li><li class="chapter-item expanded "><a href="contributing-building.html"><strong aria-hidden="true">7.2.</strong> Building</a></li><li class="chapter-item expanded "><a href="contributing-testing.html"><strong aria-hidden="true">7.3.</strong> Testing</a></li><li class="chapter-item expanded "><a href="contributing-fuzzing.html"><strong aria-hidden="true">7.4.</strong> Fuzzing</a></li><li class="chapter-item expanded "><a href="contributing-ci.html"><strong aria-hidden="true">7.5.</strong> CI</a></li><li class="chapter-item expanded "><a href="contributing-reducing-test-cases.html"><strong aria-hidden="true">7.6.</strong> Reducing Test Cases</a></li><li class="chapter-item expanded "><a href="contributing-cross-compiling.html"><strong aria-hidden="true">7.7.</strong> Cross Compiling</a></li><li class="chapter-item expanded "><a href="contributing-coding-guidelines.html"><strong aria-hidden="true">7.8.</strong> Coding Guidelines</a></li><li class="chapter-item expanded "><a href="contributing-development-process.html"><strong aria-hidden="true">7.9.</strong> Development Process</a></li><li class="chapter-item expanded "><a href="contributing-implementing-wasm-proposals.html"><strong aria-hidden="true">7.10.</strong> Implementing Wasm Proposals</a></li><li class="chapter-item expanded "><a href="contributing-maintainer-guidelines.html"><strong aria-hidden="true">7.11.</strong> Maintainer Guidelines</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing-code-review.html"><strong aria-hidden="true">7.11.1.</strong> Code Review</a></li><li class="chapter-item expanded "><a href="contributing-release-process.html"><strong aria-hidden="true">7.11.2.</strong> Release Process</a></li></ol></li><li class="chapter-item expanded "><a href="contributing-governance.html"><strong aria-hidden="true">7.12.</strong> Governance</a></li><li class="chapter-item expanded "><a href="contributing-coc.html"><strong aria-hidden="true">7.13.</strong> Code of Conduct</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Wasmtime</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="tiers-of-support-in-wasmtime"><a class="header" href="#tiers-of-support-in-wasmtime">Tiers of Support in Wasmtime</a></h1>
+<p>Wasmtime's support for platforms and features can be distinguished with three
+different tiers of support. The description of these tiers are intended to be
+inspired by the <a href="https://doc.rust-lang.org/rustc/target-tier-policy.html">Rust compiler's support tiers for
+targets</a> but are
+additionally tailored for Wasmtime. Wasmtime's tiered support additionally
+applies not only to platforms/targets themselves but additionally features
+implemented within Wasmtime itself.</p>
+<p>The purpose of this document is to provide a means by which to evaluate the
+inclusion of new features and support for existing features within Wasmtime.
+This should not be used to "lawyer" a change into Wasmtime on a precise
+technical detail or similar since this document is itself not 100% precise and
+will change over time.</p>
+<h2 id="current-tier-status"><a class="header" href="#current-tier-status">Current Tier Status</a></h2>
+<p>For explanations of what each tier means see below.</p>
+<h4 id="tier-1"><a class="header" href="#tier-1">Tier 1</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Category</th><th>Description</th></tr></thead><tbody>
+<tr><td>Target</td><td><code>x86_64-apple-darwin</code></td></tr>
+<tr><td>Target</td><td><code>x86_64-pc-windows-msvc</code></td></tr>
+<tr><td>Target</td><td><code>x86_64-unknown-linux-gnu</code></td></tr>
+<tr><td>WASI Proposal</td><td><code>wasi_snapshot_preview1</code></td></tr>
+<tr><td>WASI Proposal</td><td><code>wasi_unstable</code></td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md"><code>mutable-globals</code></a></td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md"><code>sign-extension-ops</code></a></td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/spec/blob/master/proposals/nontrapping-float-to-int-conversion/Overview.md"><code>nontrapping-float-to-int-conversion</code></a></td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/spec/blob/master/proposals/multi-value/Overview.md"><code>multi-value</code></a></td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/bulk-memory-operations/blob/master/proposals/bulk-memory-operations/Overview.md"><code>bulk-memory</code></a></td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/reference-types/blob/master/proposals/reference-types/Overview.md"><code>reference-types</code></a></td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md"><code>simd</code></a></td></tr>
+</tbody></table>
+</div>
+<h4 id="tier-2"><a class="header" href="#tier-2">Tier 2</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Category</th><th>Description</th><th>Missing Tier 1 Requirements</th></tr></thead><tbody>
+<tr><td>Target</td><td><code>aarch64-unknown-linux-gnu</code></td><td>Continuous fuzzing</td></tr>
+<tr><td>Target</td><td><code>s390x-unknown-linux-gnu</code></td><td>Continuous fuzzing</td></tr>
+<tr><td>Target</td><td><code>x86_64-pc-windows-gnu</code></td><td>Clear owner of the target</td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md"><code>memory64</code></a></td><td>Unstable wasm proposal</td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md"><code>multi-memory</code></a></td><td>Unstable wasm proposal</td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md"><code>threads</code></a></td><td>Unstable wasm proposal</td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md"><code>component-model</code></a></td><td>Unstable wasm proposal</td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/tail-call/blob/main/proposals/tail-call/Overview.md"><code>tail-call</code></a></td><td>Unstable wasm proposal, performance work</td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md"><code>relaxed-simd</code></a></td><td>Unstable wasm proposal</td></tr>
+<tr><td>WebAssembly Proposal</td><td><a href="https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md"><code>function-references</code></a></td><td>Unstable wasm proposal</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-io"><code>wasi-io</code></a></td><td>Unstable WASI proposal</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-clocks"><code>wasi-clocks</code></a></td><td>Unstable WASI proposal</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-filesystem"><code>wasi-filesystem</code></a></td><td>Unstable WASI proposal</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-random"><code>wasi-random</code></a></td><td>Unstable WASI proposal</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-poll"><code>wasi-poll</code></a></td><td>Unstable WASI proposal</td></tr>
+</tbody></table>
+</div>
+<h4 id="tier-3"><a class="header" href="#tier-3">Tier 3</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Category</th><th>Description</th><th>Missing Tier 2 Requirements</th></tr></thead><tbody>
+<tr><td>Target</td><td><code>aarch64-apple-darwin</code></td><td>CI testing</td></tr>
+<tr><td>Target</td><td><code>aarch64-pc-windows-msvc</code></td><td>CI testing, unwinding, full-time maintainer</td></tr>
+<tr><td>Target</td><td><code>riscv64gc-unknown-linux-gnu</code></td><td>full-time maintainer</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-nn"><code>wasi-nn</code></a></td><td>More expansive CI testing</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-threads"><code>wasi-threads</code></a></td><td>More CI, unstable proposal</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-sockets"><code>wasi-sockets</code></a></td><td>Complete implementation</td></tr>
+<tr><td>WASI Proposal</td><td><a href="https://github.com/WebAssembly/wasi-http"><code>wasi-http</code></a></td><td>Complete implementation</td></tr>
+<tr><td><em>misc</em></td><td>Non-Wasmtime Cranelift usage <sup class="footnote-reference"><a href="#1">1</a></sup></td><td>CI testing, full-time maintainer</td></tr>
+<tr><td><em>misc</em></td><td>DWARF debugging <sup class="footnote-reference"><a href="#2">2</a></sup></td><td>CI testing, full-time maintainer, improved quality</td></tr>
+</tbody></table>
+</div>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>This is intended to encompass features that Cranelift supports as a
+general-purpose code generator such as integer value types other than <code>i32</code> and
+<code>i64</code>, non-Wasmtime calling conventions, code model settings, relocation
+restrictions, etc. These features aren't covered by Wasmtime's usage of
+Cranelift because the WebAssembly instruction set doesn't leverage them. This
+means that they receive far less testing and fuzzing than the parts of Cranelift
+exercised by Wasmtime.</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
+<p>Currently there is no active maintainer of DWARF debugging support and
+support is currently best-effort. Additionally there are known shortcomings
+and bugs. At this time there's no developer time to improve the situation here
+as well.</p>
+</div>
+<h4 id="unsupported-features-and-platforms"><a class="header" href="#unsupported-features-and-platforms">Unsupported features and platforms</a></h4>
+<p>While this is not an exhaustive list, Wasmtime does not currently have support
+for the following features. Note that this is intended to document Wasmtime's
+current state and does not mean Wasmtime does not want to ever support these
+features; rather design discussion and PRs are welcome for many of the below
+features to figure out how best to implement them and at least move them to Tier
+3 above.</p>
+<ul>
+<li>Target: ARM 32-bit</li>
+<li>Target: WebAssembly (compiling Wasmtime to WebAssembly itself)</li>
+<li>Target: <a href="https://github.com/bytecodealliance/wasmtime/issues/5499">FreeBSD</a></li>
+<li>Target: <a href="https://github.com/bytecodealliance/wasmtime/issues/6962">NetBSD/OpenBSD</a></li>
+<li>Target: <a href="https://github.com/bytecodealliance/wasmtime/issues/1980">i686 (32-bit Intel targets)</a></li>
+<li>Target: Android</li>
+<li>Target: MIPS</li>
+<li>Target: SPARC</li>
+<li>Target: PowerPC</li>
+<li>Target: RISC-V 32-bit</li>
+<li><a href="https://github.com/WebAssembly/branch-hinting">WebAssembly proposal: <code>branch-hinting</code></a></li>
+<li><a href="https://github.com/WebAssembly/exception-handling">WebAssembly proposal: <code>exception-handling</code></a></li>
+<li><a href="https://github.com/WebAssembly/extended-const">WebAssembly proposal: <code>extended-const</code></a></li>
+<li><a href="https://github.com/WebAssembly/flexible-vectors">WebAssembly proposal: <code>flexible-vectors</code></a></li>
+<li><a href="https://github.com/WebAssembly/gc">WebAssembly proposal: <code>gc</code></a></li>
+<li><a href="https://github.com/WebAssembly/memory-control">WebAssembly proposal: <code>memory-control</code></a></li>
+<li><a href="https://github.com/WebAssembly/stack-switching">WebAssembly proposal: <code>stack-switching</code></a></li>
+<li><a href="https://github.com/proxy-wasm/spec">WASI proposal: <code>proxy-wasm</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-blob-store">WASI proposal: <code>wasi-blob-store</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-crypto">WASI proposal: <code>wasi-crypto</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-data">WASI proposal: <code>wasi-data</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-distributed-lock-service">WASI proposal: <code>wasi-distributed-lock-service</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-grpc">WASI proposal: <code>wasi-grpc</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-kv-store">WASI proposal: <code>wasi-kv-store</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-message-queue">WASI proposal: <code>wasi-message-queue</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-parallel">WASI proposal: <code>wasi-parallel</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-pubsub">WASI proposal: <code>wasi-pubsub</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-runtime-config">WASI proposal: <code>wasi-runtime-config</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-sql">WASI proposal: <code>wasi-sql</code></a></li>
+<li><a href="https://github.com/WebAssembly/wasi-url">WASI proposal: <code>wasi-url</code></a></li>
+</ul>
+<h2 id="tier-details"><a class="header" href="#tier-details">Tier Details</a></h2>
+<p>Wasmtime's precise definitions of tiers are not guaranteed to be constant over
+time, so these descriptions are likely to change over time. Tier 1 is classified
+as the highest level of support, confidence, and correctness for a component.
+Each tier additionally encompasses all the guarantees of previous tiers.</p>
+<p>Features classified under a particular tier may already meet the criteria for
+later tiers as well. In situations like this it's not intended to use these
+guidelines to justify removal of a feature at any one point in time. Guidance is
+provided here for phasing out unmaintained features but it should be clear under
+what circumstances work "can be avoided" for each tier.</p>
+<h4 id="tier-3---not-production-ready"><a class="header" href="#tier-3---not-production-ready">Tier 3 - Not Production Ready</a></h4>
+<p>The general idea behind Tier 3 is that this is the baseline for inclusion of
+code into the Wasmtime project. This is not intended to be a catch-all "if a
+patch is sent it will be merged" tier. Instead the goal of this tier is to
+outline what is expected of contributors adding new features to Wasmtime which
+might be experimental at the time of addition. This is intentionally not a
+relaxed tier of restrictions but already implies a significant commitment of
+effort to a feature being included within Wasmtime.</p>
+<p>Tier 3 features include:</p>
+<ul>
+<li>
+<p>Inclusion of a feature does not impose unnecessary maintenance overhead on
+other components/features. Some examples of additions to Wasmtime which would
+not be accepted are:</p>
+<ul>
+<li>An experimental feature doubles the time of CI for all PRs.</li>
+<li>A change which makes it significantly more difficult to architecturally
+change Wasmtime's internal implementation.</li>
+<li>A change which makes building Wasmtime more difficult for unrelated
+developers.</li>
+</ul>
+<p>In general Tier 3 features are off-by-default at compile time but still
+tested-by-default on CI.</p>
+</li>
+<li>
+<p>New features of Wasmtime cannot have major known bugs at the time of
+inclusion. Landing a feature in Wasmtime requires the feature to be correct
+and bug-free as best can be evaluated at the time of inclusion. Inevitably
+bugs will be found and that's ok, but anything identified during review must
+be addressed.</p>
+</li>
+<li>
+<p>Code included into the Wasmtime project must be of an acceptable level of
+quality relative to the rest of the code in Wasmtime.</p>
+</li>
+<li>
+<p>There must be a path to a feature being finished at the time of inclusion.
+Adding a new backend to Cranelift for example is a significant undertaking
+which may not be able to be done in a single PR. Partial implementations of a
+feature are acceptable so long as there's a clear path forward and schedule
+for completing the feature.</p>
+</li>
+<li>
+<p>New components in Wasmtime must have a clearly identified owner who is willing
+to be "on the hook" for review, updates to the internals of Wasmtime, etc. For
+example a new backend in Cranelift would need to have a maintainer who is
+willing to respond to changes in Cranelift's interfaces and the needs of
+Wasmtime.</p>
+</li>
+</ul>
+<p>This baseline level of support notably does not require any degree of testing,
+fuzzing, or verification. As a result components classified as Tier 3 are
+generally not production-ready as they have not been battle-tested much.</p>
+<p>Features classified as Tier 3 may be disabled in CI or removed from the
+repository as well. If a Tier 3 feature is preventing development of other
+features then the owner will be notified. If no response is heard from within a
+week then the feature will be disabled in CI. If no further response happens
+for a month then the feature may be removed from the repository.</p>
+<h4 id="tier-2---almost-production-ready"><a class="header" href="#tier-2---almost-production-ready">Tier 2 - Almost Production Ready</a></h4>
+<p>This tier is meant to encompass features and components of Wasmtime which are
+well-maintained, tested well, but don't necessarily meet the stringent criteria
+for Tier 1. Features in this category may already be "production ready" and safe
+to use.</p>
+<p>Tier 2 features include:</p>
+<ul>
+<li>
+<p>Tests are run in CI for the Wasmtime project for this feature and everything
+passes. For example a Tier 2 platform runs in CI directly or via emulation.
+Features are otherwise fully tested on CI.</p>
+</li>
+<li>
+<p>Complete implementations for anything that's part of Tier 1. For example
+all Tier 2 targets must implement all of the Tier 1 WebAssembly proposals,
+and all Tier 2 features must be implemented on all Tier 1 targets.</p>
+</li>
+<li>
+<p>All existing developers are expected to handle minor changes which affect Tier
+2 components. For example if Cranelift's interfaces change then the developer
+changing the interface is expected to handle the changes for Tier 2
+architectures so long as the affected part is relatively minor. Note that if a
+more substantial change is required to a Tier 2 component then that falls
+under the next bullet.</p>
+</li>
+<li>
+<p>Maintainers of a Tier 2 feature are responsive (reply to requests within a
+week) and are available to accommodate architectural changes that affect their
+component. For example more expansive work beyond the previous bullet where
+contributors can't easily handle changes are expected to be guided or
+otherwise implemented by Tier 2 maintainers.</p>
+</li>
+<li>
+<p>Major changes otherwise requiring an RFC that affect Tier 2 components are
+required to consult Tier 2 maintainers in the course of the RFC. Major changes
+to Tier 2 components themselves do not require an RFC, however.</p>
+</li>
+</ul>
+<p>Features at this tier generally are not turned off or disabled for very long.
+Maintainers are already required to be responsive to changes and will be
+notified of any unrelated change which affects their component. It's recommended
+that if a component breaks for one reason or another due to an unrelated change
+that the maintainer either contributes to the PR-in-progress or otherwise has a
+schedule for the implementation of the feature.</p>
+<h4 id="tier-1---production-ready"><a class="header" href="#tier-1---production-ready">Tier 1 - Production Ready</a></h4>
+<p>This tier is intended to be the highest level of support in Wasmtime for any
+particular feature, indicating that it is suitable for production environments.
+This conveys a high level of confidence in the Wasmtime project about the
+specified features.</p>
+<p>Tier 1 features include:</p>
+<ul>
+<li>
+<p>Continuous fuzzing is required for WebAssembly proposals. This means that any
+WebAssembly proposal must have support in the <code>wasm-smith</code> crate and existing
+fuzz targets must be running and exercising the new code paths. Where possible
+differential fuzzing should also be implemented to compare results with other
+implementations.</p>
+</li>
+<li>
+<p>Continuous fuzzing is required for the architecture of supported targets. For
+example currently there are three x86_64 targets that are considered Tier 1
+but only <code>x86_64-unknown-linux-gnu</code> is fuzzed.</p>
+</li>
+<li>
+<p>CVEs and security releases will be performed as necessary for any bugs found
+in features and targets.</p>
+</li>
+<li>
+<p>Major changes affecting this component may require help from maintainers with
+specialized expertise, but otherwise it should be reasonable to expect most
+Wasmtime developers to be able to maintain Tier 1 features.</p>
+</li>
+<li>
+<p>Major changes affecting Tier 1 features require an RFC and prior agreement on
+the change before an implementation is committed.</p>
+</li>
+</ul>
+<p>A major inclusion point for this tier is intended to be the continuous fuzzing
+of Wasmtime. This implies a significant commitment of resources for fixing
+issues, hardware to execute Wasmtime, etc. Additionally this tier comes with the
+broadest expectation of "burden on everyone else" in terms of what changes
+everyone is generally expected to handle.</p>
+<p>Features classified as Tier 1 are rarely, if ever, turned off or removed from
+Wasmtime.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="stability-release.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="stability-platform-support.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="stability-release.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="stability-platform-support.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

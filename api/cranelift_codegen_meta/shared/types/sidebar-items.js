@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Float","Int","Reference"],"struct":["FloatIterator","IntIterator","ReferenceIterator"]};

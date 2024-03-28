@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Def","Expr","Extern","Pattern","Pragma","TypeValue"],"struct":["Converter","Decl","Defs","Extractor","Field","Ident","IfLet","LetDef","Rule","Type","Variant"]};

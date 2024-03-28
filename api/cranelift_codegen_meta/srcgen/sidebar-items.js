@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["_indent","parse_multiline"],"macro":["fmtln"],"static":["SHIFTWIDTH"],"struct":["Formatter","Match"]};

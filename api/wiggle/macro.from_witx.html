@@ -1,0 +1,149 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This macro expands to a set of `pub` Rust modules:"><title>from_witx in wiggle - Rust</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wiggle" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (1388d7a06 2024-03-20)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wiggle/index.html">wiggle</a><span class="version">20.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../wiggle/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">wiggle</a>::<wbr><a class="macro" href="#">from_witx</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/wiggle_macro/lib.rs.html#149">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>from_witx!() { <span class="comment">/* proc-macro */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This macro expands to a set of <code>pub</code> Rust modules:</p>
+<ul>
+<li>
+<p>The <code>types</code> module contains definitions for each <code>typename</code> declared in
+the witx document. Type names are translated to the Rust-idiomatic
+CamelCase.</p>
+</li>
+<li>
+<p>For each <code>module</code> defined in the witx document, a Rust module is defined
+containing definitions for that module. Module names are translated to the
+Rust-idiomatic snake_case.</p>
+<ul>
+<li>
+<p>For each <code>@interface func</code> defined in a witx module, an abi-level
+function is generated which takes ABI-level arguments, along with
+a ref that impls the module trait, and a <code>GuestMemory</code> implementation.
+Users typically won’t use these abi-level functions: Either the
+<code>wasmtime_integration</code> macro or the <code>lucet-wiggle</code> crates adapt these
+to work with a particular WebAssembly engine.</p>
+</li>
+<li>
+<p>A public “module trait” is defined (called the module name, in
+SnakeCase) which has a <code>&amp;self</code> method for each function in the
+module. These methods takes idiomatic Rust types for each argument
+and return <code>Result&lt;($return_types),$error_type&gt;</code></p>
+</li>
+<li>
+<p>When the <code>wiggle</code> crate is built with the <code>wasmtime_integration</code>
+feature, each module contains an <code>add_to_linker</code> function to add it to
+a <code>wasmtime::Linker</code>.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>Arguments are provided using Rust struct value syntax.</p>
+<ul>
+<li><code>witx</code> takes a list of string literal paths. Paths are relative to the
+CARGO_MANIFEST_DIR of the crate where the macro is invoked. Alternatively,
+<code>witx_literal</code> takes a string containing a complete witx document.</li>
+<li>Optional: <code>errors</code> takes a mapping of witx identifiers to types, e.g
+<code>{ errno =&gt; YourErrnoType }</code>. This allows you to use the <code>UserErrorConversion</code>
+trait to map these rich errors into the flat witx type, or to terminate
+WebAssembly execution by trapping.
+<ul>
+<li>Instead of requiring the user to define an error type, wiggle can
+generate an error type for the user which has conversions to/from
+the base type, and permits trapping, using the syntax
+<code>errno =&gt; trappable AnErrorType</code>.</li>
+</ul>
+</li>
+<li>Optional: <code>async</code> takes a set of witx modules and functions which are
+made Rust <code>async</code> functions in the module trait.</li>
+</ul>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wiggle::GuestPtr;
+<span class="macro">wiggle::from_witx!</span>({
+    witx_literal: <span class="string">"
+        (typename $errno
+          (enum (@witx tag u32)
+            $ok
+            $invalid_arg
+            $io
+            $overflow))
+         (typename $alias_to_float f32)
+         (module $example
+           (@interface func (export \"int_float_args\")
+             (param $an_int u32)
+             (param $some_floats (list f32))
+             (result $r (expected (error $errno))))
+           (@interface func (export \"double_int_return_float\")
+             (param $an_int u32)
+             (result $r (expected $alias_to_float (error $errno)))))
+    "</span>,
+    errors: { errno =&gt; YourRichError },
+    <span class="kw">async</span>: { example::double_int_return_float },
+});
+
+<span class="doccomment">/// Witx generates a set of traits, which the user must impl on a
+/// type they define. We call this the ctx type. It stores any context
+/// these functions need to execute.
+</span><span class="kw">pub struct </span>YourCtxType {}
+
+<span class="doccomment">/// Witx provides a hook to translate "rich" (arbitrary Rust type) errors
+/// into the flat error enums used at the WebAssembly interface. You will
+/// need to impl the `types::UserErrorConversion` trait to provide a translation
+/// from this rich type.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">pub enum </span>YourRichError {
+    InvalidArg(String),
+    Io(std::io::Error),
+    Overflow,
+    Trap(String),
+}
+
+<span class="doccomment">/// The above witx text contains one module called `$example`. So, we must
+/// implement this one method trait for our ctx type.
+</span><span class="attr">#[wiggle::async_trait]
+</span><span class="doccomment">/// We specified in the `async_` field that `example::double_int_return_float`
+/// is an asynchronous method. Therefore, we use the `async_trait` proc macro
+/// to define this trait, so that `double_int_return_float` can be an `async fn`.
+/// `wiggle::async_trait` is defined as `#[async_trait::async_trait(?Send)]` -
+/// in wiggle, async methods do not have the Send constaint.
+</span><span class="kw">impl </span>example::Example <span class="kw">for </span>YourCtxType {
+    <span class="doccomment">/// The arrays module has two methods, shown here.
+    /// Note that the `GuestPtr` type comes from `wiggle`,
+    /// whereas the witx-defined types like `Excuse` and `Errno` come
+    /// from the `pub mod types` emitted by the `wiggle::from_witx!`
+    /// invocation above.
+    </span><span class="kw">fn </span>int_float_args(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _int: u32, _floats: <span class="kw-2">&amp;</span>GuestPtr&lt;[f32]&gt;)
+        -&gt; <span class="prelude-ty">Result</span>&lt;(), YourRichError&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
+    <span class="kw">async fn </span>double_int_return_float(<span class="kw-2">&amp;mut </span><span class="self">self</span>, int: u32)
+        -&gt; <span class="prelude-ty">Result</span>&lt;f32, YourRichError&gt; {
+        <span class="prelude-val">Ok</span>(int.checked_mul(<span class="number">2</span>).ok_or(YourRichError::Overflow)<span class="question-mark">? </span><span class="kw">as </span>f32)
+    }
+}
+
+<span class="doccomment">/// For all types used in the `error` an `expected` in the witx document,
+/// you must implement `GuestErrorType` which tells wiggle-generated
+/// code what value to return when the method returns Ok(...).
+</span><span class="kw">impl </span>wiggle::GuestErrorType <span class="kw">for </span>types::Errno {
+    <span class="kw">fn </span>success() -&gt; <span class="self">Self </span>{
+        <span class="macro">unimplemented!</span>()
+    }
+}
+
+<span class="doccomment">/// If you specify a `error` mapping to the macro, you must implement the
+/// `types::UserErrorConversion` for your ctx type as well. This trait gives
+/// you an opportunity to store or log your rich error type, while returning
+/// a basic witx enum to the WebAssembly caller. It also gives you the ability
+/// to terminate WebAssembly execution by trapping.
+
+</span><span class="kw">impl </span>types::UserErrorConversion <span class="kw">for </span>YourCtxType {
+    <span class="kw">fn </span>errno_from_your_rich_error(<span class="kw-2">&amp;mut </span><span class="self">self</span>, e: YourRichError)
+        -&gt; <span class="prelude-ty">Result</span>&lt;types::Errno, wiggle::wasmtime_crate::Error&gt;
+    {
+        <span class="macro">println!</span>(<span class="string">"Rich error: {:?}"</span>, e);
+        <span class="kw">match </span>e {
+            YourRichError::InvalidArg{..} =&gt; <span class="prelude-val">Ok</span>(types::Errno::InvalidArg),
+            YourRichError::Io{..} =&gt; <span class="prelude-val">Ok</span>(types::Errno::Io),
+            YourRichError::Overflow =&gt; <span class="prelude-val">Ok</span>(types::Errno::Overflow),
+            YourRichError::Trap(s) =&gt; <span class="prelude-val">Err</span>(wiggle::wasmtime_crate::Error::msg(s)),
+        }
+    }
+}
+</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SystemTimeSpec"],"struct":["WasiClocks","WasiMonotonicOffsetClock"],"trait":["WasiMonotonicClock","WasiSystemClock"]};

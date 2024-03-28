@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Binding","Constraint","Overlap"],"fn":["build"],"struct":["BindingId","Rule","RuleSet","TupleIndex"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["now","resolution"],"struct":["Datetime"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PredicateNode","PresetType","ProtoSpecificSetting","SpecificSetting"],"struct":["BoolSetting","BoolSettingIndex","Predicate","Preset","PresetIndex","ProtoPredicate","ProtoSetting","Setting","SettingGroup","SettingGroupBuilder"],"type":["SettingPredicateNumber"]};

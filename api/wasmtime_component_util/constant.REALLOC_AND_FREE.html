@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A simple bump allocator which can be used with modules"><title>REALLOC_AND_FREE in wasmtime_component_util - Rust</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime_component_util" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (1388d7a06 2024-03-20)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc constant"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime_component_util/index.html">wasmtime_component_util</a><span class="version">20.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../wasmtime_component_util/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Constant <a href="index.html">wasmtime_component_util</a>::<wbr><a class="constant" href="#">REALLOC_AND_FREE</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime_component_util/lib.rs.html#91-180">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const REALLOC_AND_FREE: &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a> = r#&quot;
+    (global $last (mut i32) (i32.const 8))
+    (func $realloc (export &quot;realloc&quot;)
+        (param $old_ptr i32)
+        (param $old_size i32)
+        (param $align i32)
+        (param $new_size i32)
+        (result i32)
+
+        (local $ret i32)
+
+        ;; Test if the old pointer is non-null
+        local.get $old_ptr
+        if
+            ;; If the old size is bigger than the new size then
+            ;; this is a shrink and transparently allow it
+            local.get $old_size
+            local.get $new_size
+            i32.gt_u
+            if
+                local.get $old_ptr
+                return
+            end
+
+            ;; otherwise fall through to allocate a new chunk which will later
+            ;; copy data over
+        end
+
+        ;; align up `$last`
+        (global.set $last
+            (i32.and
+                (i32.add
+                    (global.get $last)
+                    (i32.add
+                        (local.get $align)
+                        (i32.const -1)))
+                (i32.xor
+                    (i32.add
+                        (local.get $align)
+                        (i32.const -1))
+                    (i32.const -1))))
+
+        ;; save the current value of `$last` as the return value
+        global.get $last
+        local.set $ret
+
+        ;; bump our pointer
+        (global.set $last
+            (i32.add
+                (global.get $last)
+                (local.get $new_size)))
+
+        ;; while `memory.size` is less than `$last`, grow memory
+        ;; by one page
+        (loop $loop
+            (if
+                (i32.lt_u
+                    (i32.mul (memory.size) (i32.const 65536))
+                    (global.get $last))
+                (then
+                    i32.const 1
+                    memory.grow
+                    ;; test to make sure growth succeeded
+                    i32.const -1
+                    i32.eq
+                    if unreachable end
+
+                    br $loop)))
+
+
+        ;; ensure anything necessary is set to valid data by spraying a bit
+        ;; pattern that is invalid
+        local.get $ret
+        i32.const 0xde
+        local.get $new_size
+        memory.fill
+
+        ;; If the old pointer is present then that means this was a reallocation
+        ;; of an existing chunk which means the existing data must be copied.
+        local.get $old_ptr
+        if
+            local.get $ret          ;; destination
+            local.get $old_ptr      ;; source
+            local.get $old_size     ;; size
+            memory.copy
+        end
+
+        local.get $ret
+    )
+&quot;#;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A simple bump allocator which can be used with modules</p>
+</div></details></section></div></main></body></html>

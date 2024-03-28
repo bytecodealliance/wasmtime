@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SpecExport","SpecValue"],"fn":["export","instantiate","interpret","interpret_legacy","setup_ocaml_runtime","support_compiled_in"],"struct":["SpecInstance"]};

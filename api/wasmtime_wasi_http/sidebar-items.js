@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["http_request_error","hyper_request_error","hyper_response_error"],"mod":["bindings","body","http_impl","io","proxy","types","types_impl"]};

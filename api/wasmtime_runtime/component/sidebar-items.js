@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CallContexts","ComponentInstance","InstanceFlags","OwnedComponentInstance","ResourceTable","ResourceTables","VMComponentContext","VMLowering"],"trait":["ComponentRuntimeInfo"],"type":["VMLoweringCallee"]};

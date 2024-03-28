@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["insecure","insecure_seed","random"]};

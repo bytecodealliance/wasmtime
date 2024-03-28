@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"wasmtime_wasi_http":[["impl&lt;T: AsyncRead + <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Unpin.html\" title=\"trait core::marker::Unpin\">Unpin</a>&gt; Read for <a class=\"struct\" href=\"wasmtime_wasi_http/io/struct.TokioIo.html\" title=\"struct wasmtime_wasi_http::io::TokioIo\">TokioIo</a>&lt;T&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

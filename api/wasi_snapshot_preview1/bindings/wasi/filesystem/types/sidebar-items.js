@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Advice","DescriptorType","ErrorCode","NewTimestamp"],"fn":["filesystem_error_code"],"struct":["Descriptor","DescriptorFlags","DescriptorStat","DirectoryEntry","DirectoryEntryStream","MetadataHashValue","OpenFlags","PathFlags"],"type":["Datetime","Error","Filesize","InputStream","LinkCount","OutputStream"]};

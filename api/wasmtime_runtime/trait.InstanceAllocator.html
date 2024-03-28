@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A thing that can allocate instances."><title>InstanceAllocator in wasmtime_runtime - Rust</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime_runtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (1388d7a06 2024-03-20)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime_runtime/index.html">wasmtime_runtime</a><span class="version">20.0.0</span></h2></div><h2 class="location"><a href="#">InstanceAllocator</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.allocate_memories">allocate_memories</a></li><li><a href="#method.allocate_module">allocate_module</a></li><li><a href="#method.allocate_tables">allocate_tables</a></li><li><a href="#method.deallocate_memories">deallocate_memories</a></li><li><a href="#method.deallocate_module">deallocate_module</a></li><li><a href="#method.deallocate_tables">deallocate_tables</a></li><li><a href="#method.validate_component">validate_component</a></li><li><a href="#method.validate_module">validate_module</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate wasmtime_runtime</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../wasmtime_runtime/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">wasmtime_runtime</a>::<wbr><a class="trait" href="#">InstanceAllocator</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime_runtime/instance/allocator.rs.html#300-485">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait InstanceAllocator: <a class="trait" href="trait.InstanceAllocatorImpl.html" title="trait wasmtime_runtime::InstanceAllocatorImpl">InstanceAllocatorImpl</a> {
+    // Provided methods
+    fn <a href="#method.validate_component" class="fn">validate_component</a>&lt;'a&gt;(
+        &amp;self,
+        component: &amp;Component,
+        offsets: &amp;VMComponentOffsets&lt;HostPtr&gt;,
+        get_module: &amp;'a dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(StaticModuleIndex) -&gt; &amp;'a Module
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.validate_module" class="fn">validate_module</a>(
+        &amp;self,
+        module: &amp;Module,
+        offsets: &amp;VMOffsets&lt;HostPtr&gt;
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.allocate_module" class="fn">allocate_module</a>(
+        &amp;self,
+        request: <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="struct.InstanceHandle.html" title="struct wasmtime_runtime::InstanceHandle">InstanceHandle</a>&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.deallocate_module" class="fn">deallocate_module</a>(&amp;self, handle: &amp;mut <a class="struct" href="struct.InstanceHandle.html" title="struct wasmtime_runtime::InstanceHandle">InstanceHandle</a>) { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.allocate_memories" class="fn">allocate_memories</a>(
+        &amp;self,
+        request: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+        memories: &amp;mut PrimaryMap&lt;DefinedMemoryIndex, (<a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>, <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>)&gt;
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.deallocate_memories" class="fn">deallocate_memories</a>(
+        &amp;self,
+        memories: &amp;mut PrimaryMap&lt;DefinedMemoryIndex, (<a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>, <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>)&gt;
+    ) { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.allocate_tables" class="fn">allocate_tables</a>(
+        &amp;self,
+        request: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+        tables: &amp;mut PrimaryMap&lt;DefinedTableIndex, (<a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>, <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>)&gt;
+    ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.deallocate_tables" class="fn">deallocate_tables</a>(
+        &amp;self,
+        tables: &amp;mut PrimaryMap&lt;DefinedTableIndex, (<a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>, <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>)&gt;
+    ) { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A thing that can allocate instances.</p>
+<p>Don’t implement this trait directly, instead implement
+<code>InstanceAllocatorImpl</code> and you’ll get this trait for free via a blanket
+impl.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.validate_component" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#304-311">source</a><h4 class="code-header">fn <a href="#method.validate_component" class="fn">validate_component</a>&lt;'a&gt;(
+    &amp;self,
+    component: &amp;Component,
+    offsets: &amp;VMComponentOffsets&lt;HostPtr&gt;,
+    get_module: &amp;'a dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(StaticModuleIndex) -&gt; &amp;'a Module
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Validate whether a component (including all of its contained core
+modules) is allocatable with this instance allocator.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.validate_module" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#315-317">source</a><h4 class="code-header">fn <a href="#method.validate_module" class="fn">validate_module</a>(
+    &amp;self,
+    module: &amp;Module,
+    offsets: &amp;VMOffsets&lt;HostPtr&gt;
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Validate whether a core module is allocatable with this instance
+allocator.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.allocate_module" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#332-368">source</a><h4 class="code-header">unsafe fn <a href="#method.allocate_module" class="fn">allocate_module</a>(
+    &amp;self,
+    request: <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="struct.InstanceHandle.html" title="struct wasmtime_runtime::InstanceHandle">InstanceHandle</a>&gt;</h4></section></summary><div class="docblock"><p>Allocates a fresh <code>InstanceHandle</code> for the <code>req</code> given.</p>
+<p>This will allocate memories and tables internally from this allocator
+and weave that altogether into a final and complete <code>InstanceHandle</code>
+ready to be registered with a store.</p>
+<p>Note that the returned instance must still have <code>.initialize(..)</code> called
+on it to complete the instantiation process.</p>
+<h5 id="unsafety"><a class="doc-anchor" href="#unsafety">§</a>Unsafety</h5>
+<p>The request’s associated module, memories, tables, and vmctx must have
+already have been validated by <code>Self::validate_module</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.deallocate_module" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#378-388">source</a><h4 class="code-header">unsafe fn <a href="#method.deallocate_module" class="fn">deallocate_module</a>(&amp;self, handle: &amp;mut <a class="struct" href="struct.InstanceHandle.html" title="struct wasmtime_runtime::InstanceHandle">InstanceHandle</a>)</h4></section></summary><div class="docblock"><p>Deallocates the provided instance.</p>
+<p>This will null-out the pointer within <code>handle</code> and otherwise reclaim
+resources such as tables, memories, and the instance memory itself.</p>
+<h5 id="unsafety-1"><a class="doc-anchor" href="#unsafety-1">§</a>Unsafety</h5>
+<p>The instance must have previously been allocated by <code>Self::allocate</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.allocate_memories" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#397-421">source</a><h4 class="code-header">unsafe fn <a href="#method.allocate_memories" class="fn">allocate_memories</a>(
+    &amp;self,
+    request: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+    memories: &amp;mut PrimaryMap&lt;DefinedMemoryIndex, (<a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>, <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>)&gt;
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Allocate the memories for the given instance allocation request, pushing
+them into <code>memories</code>.</p>
+<h5 id="unsafety-2"><a class="doc-anchor" href="#unsafety-2">§</a>Unsafety</h5>
+<p>The request’s associated module and memories must have previously been
+validated by <code>Self::validate_module</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.deallocate_memories" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#429-440">source</a><h4 class="code-header">unsafe fn <a href="#method.deallocate_memories" class="fn">deallocate_memories</a>(
+    &amp;self,
+    memories: &amp;mut PrimaryMap&lt;DefinedMemoryIndex, (<a class="struct" href="struct.MemoryAllocationIndex.html" title="struct wasmtime_runtime::MemoryAllocationIndex">MemoryAllocationIndex</a>, <a class="struct" href="struct.Memory.html" title="struct wasmtime_runtime::Memory">Memory</a>)&gt;
+)</h4></section></summary><div class="docblock"><p>Deallocate all the memories in the given primary map.</p>
+<h5 id="unsafety-3"><a class="doc-anchor" href="#unsafety-3">§</a>Unsafety</h5>
+<p>The memories must have previously been allocated by
+<code>Self::allocate_memories</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.allocate_tables" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#449-469">source</a><h4 class="code-header">unsafe fn <a href="#method.allocate_tables" class="fn">allocate_tables</a>(
+    &amp;self,
+    request: &amp;mut <a class="struct" href="struct.InstanceAllocationRequest.html" title="struct wasmtime_runtime::InstanceAllocationRequest">InstanceAllocationRequest</a>&lt;'_&gt;,
+    tables: &amp;mut PrimaryMap&lt;DefinedTableIndex, (<a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>, <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>)&gt;
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.75/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Allocate tables for the given instance allocation request, pushing them
+into <code>tables</code>.</p>
+<h5 id="unsafety-4"><a class="doc-anchor" href="#unsafety-4">§</a>Unsafety</h5>
+<p>The request’s associated module and tables must have previously been
+validated by <code>Self::validate_module</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.deallocate_tables" class="method"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#477-484">source</a><h4 class="code-header">unsafe fn <a href="#method.deallocate_tables" class="fn">deallocate_tables</a>(
+    &amp;self,
+    tables: &amp;mut PrimaryMap&lt;DefinedTableIndex, (<a class="struct" href="struct.TableAllocationIndex.html" title="struct wasmtime_runtime::TableAllocationIndex">TableAllocationIndex</a>, <a class="enum" href="enum.Table.html" title="enum wasmtime_runtime::Table">Table</a>)&gt;
+)</h4></section></summary><div class="docblock"><p>Deallocate all the tables in the given primary map.</p>
+<h5 id="unsafety-5"><a class="doc-anchor" href="#unsafety-5">§</a>Unsafety</h5>
+<p>The tables must have previously been allocated by
+<code>Self::allocate_tables</code>.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-InstanceAllocator-for-T" class="impl"><a class="src rightside" href="../src/wasmtime_runtime/instance/allocator.rs.html#490">source</a><a href="#impl-InstanceAllocator-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="trait.InstanceAllocatorImpl.html" title="trait wasmtime_runtime::InstanceAllocatorImpl">InstanceAllocatorImpl</a>&gt; <a class="trait" href="trait.InstanceAllocator.html" title="trait wasmtime_runtime::InstanceAllocator">InstanceAllocator</a> for T</h3></section></div><script src="../trait.impl/wasmtime_runtime/instance/allocator/trait.InstanceAllocator.js" async></script></section></div></main></body></html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate bindings for a WIT world."><title>bindgen in wasmtime::component - Rust</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (1388d7a06 2024-03-20)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime/index.html">wasmtime</a><span class="version">20.0.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime::component</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../wasmtime/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">wasmtime</a>::<wbr><a href="index.html">component</a>::<wbr><a class="macro" href="#">bindgen</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/wasmtime_component_macro/lib.rs.html#44">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>bindgen!() { <span class="comment">/* proc-macro */</span> }</code></pre><span class="item-info"><div class="stab portability">Available on <strong>crate features <code>runtime</code> and <code>component-model</code></strong> only.</div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate bindings for a <a href="https://component-model.bytecodealliance.org/design/worlds.html">WIT world</a>.</p>
+<p>This macro ingests a <a href="https://component-model.bytecodealliance.org/design/worlds.html">WIT world</a> and will generate all the necessary
+bindings for instantiating components that ascribe to the <code>world</code>. This
+provides a higher-level representation of working with a component than the
+raw <a href="struct.Instance.html" title="struct wasmtime::component::Instance"><code>Instance</code></a> type which must be manually-type-checked and manually have
+its imports provided via the <a href="struct.Linker.html" title="struct wasmtime::component::Linker"><code>Linker</code></a> type.</p>
+<p>The most basic usage of this macro is:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">wasmtime::component::bindgen!</span>();</code></pre></div>
+<p>This will parse your projects <a href="https://component-model.bytecodealliance.org/design/packages.html">WIT package</a> in a <code>wit</code> directory adjacent to
+your crate’s <code>Cargo.toml</code>. All of the <code>*.wit</code> files in that directory are
+parsed and then the single <code>world</code> found will be used for bindings.</p>
+<p>For example if your project contained:</p>
+<div class="example-wrap"><pre class="language-text"><code>// wit/my-component.wit
+
+package my:project;
+
+world hello-world {
+    import name: func() -&gt; string;
+    export greet: func();
+}
+</code></pre></div>
+<p>Then you can interact with the generated bindings like so:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasmtime::component::<span class="kw-2">*</span>;
+<span class="kw">use </span>wasmtime::{Config, Engine, Store};
+
+<span class="macro">bindgen!</span>();
+
+<span class="kw">struct </span>MyState {
+    name: String,
+}
+
+<span class="comment">// Imports into the world, like the `name` import for this world, are
+// satisfied through traits.
+</span><span class="kw">impl </span>HelloWorldImports <span class="kw">for </span>MyState {
+    <span class="comment">// Note the `Result` return value here where `Ok` is returned back to
+    // the component and `Err` will raise a trap.
+    </span><span class="kw">fn </span>name(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; wasmtime::Result&lt;String&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.name.clone())
+    }
+}
+
+<span class="kw">fn </span>main() -&gt; wasmtime::Result&lt;()&gt; {
+    <span class="comment">// Configure an `Engine` and compile the `Component` that is being run for
+    // the application.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>config = Config::new();
+    config.wasm_component_model(<span class="bool-val">true</span>);
+    <span class="kw">let </span>engine = Engine::new(<span class="kw-2">&amp;</span>config)<span class="question-mark">?</span>;
+    <span class="kw">let </span>component = Component::from_file(<span class="kw-2">&amp;</span>engine, <span class="string">"./your-component.wasm"</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// Instantiation of bindings always happens through a `Linker`.
+    // Configuration of the linker is done through a generated `add_to_linker`
+    // method on the bindings structure.
+    //
+    // Note that the closure provided here is a projection from `T` in
+    // `Store&lt;T&gt;` to `&amp;mut U` where `U` implements the `HelloWorldImports`
+    // trait. In this case the `T`, `MyState`, is stored directly in the
+    // structure so no projection is necessary here.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>linker = Linker::new(<span class="kw-2">&amp;</span>engine);
+    HelloWorld::add_to_linker(<span class="kw-2">&amp;mut </span>linker, |state: <span class="kw-2">&amp;mut </span>MyState| state)<span class="question-mark">?</span>;
+
+    <span class="comment">// As with the core wasm API of Wasmtime instantiation occurs within a
+    // `Store`. The bindings structure contains an `instantiate` method which
+    // takes the store, component, and linker. This returns the `bindings`
+    // structure which is an instance of `HelloWorld` and supports typed access
+    // to the exports of the component.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>store = Store::new(
+        <span class="kw-2">&amp;</span>engine,
+        MyState {
+            name: <span class="string">"me"</span>.to_string(),
+        },
+    );
+    <span class="kw">let </span>(bindings, <span class="kw">_</span>) = HelloWorld::instantiate(<span class="kw-2">&amp;mut </span>store, <span class="kw-2">&amp;</span>component, <span class="kw-2">&amp;</span>linker)<span class="question-mark">?</span>;
+
+    <span class="comment">// Here our `greet` function doesn't take any parameters for the component,
+    // but in the Wasmtime embedding API the first argument is always a `Store`.
+    </span>bindings.call_greet(<span class="kw-2">&amp;mut </span>store)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>The function signatures within generated traits and on generated exports
+match the component-model signatures as specified in the WIT <code>world</code> item.
+Note that WIT also has support for importing and exports interfaces within
+worlds, which can be bound here as well:</p>
+<p>For example this WIT input</p>
+<div class="example-wrap"><pre class="language-text"><code>// wit/my-component.wit
+
+package my:project;
+
+interface host {
+    gen-random-integer: func() -&gt; u32;
+    sha256: func(bytes: list&lt;u8&gt;) -&gt; string;
+}
+
+world hello-world {
+    import host;
+
+    export demo: interface {
+        run: func();
+    }
+}
+</code></pre></div>
+<p>Then you can interact with the generated bindings like so:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasmtime::component::<span class="kw-2">*</span>;
+<span class="kw">use </span>wasmtime::{Config, Engine, Store};
+<span class="kw">use </span>my::project::host::Host;
+
+<span class="macro">bindgen!</span>();
+
+<span class="kw">struct </span>MyState {
+    <span class="comment">// ...
+</span>}
+
+<span class="comment">// Note that the trait here is per-interface and within a submodule now.
+</span><span class="kw">impl </span>Host <span class="kw">for </span>MyState {
+    <span class="kw">fn </span>gen_random_integer(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; wasmtime::Result&lt;u32&gt; {
+        <span class="prelude-val">Ok</span>(rand::thread_rng().gen())
+    }
+
+    <span class="kw">fn </span>sha256(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: Vec&lt;u8&gt;) -&gt; wasmtime::Result&lt;String&gt; {
+        <span class="comment">// ...
+    </span>}
+}
+
+<span class="kw">fn </span>main() -&gt; wasmtime::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>config = Config::new();
+    config.wasm_component_model(<span class="bool-val">true</span>);
+    <span class="kw">let </span>engine = Engine::new(<span class="kw-2">&amp;</span>config)<span class="question-mark">?</span>;
+    <span class="kw">let </span>component = Component::from_file(<span class="kw-2">&amp;</span>engine, <span class="string">"./your-component.wasm"</span>)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>linker = Linker::new(<span class="kw-2">&amp;</span>engine);
+    HelloWorld::add_to_linker(<span class="kw-2">&amp;mut </span>linker, |state: <span class="kw-2">&amp;mut </span>MyState| state)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>store = Store::new(
+        <span class="kw-2">&amp;</span>engine,
+        MyState { <span class="comment">/* ... */ </span>},
+    );
+    <span class="kw">let </span>(bindings, <span class="kw">_</span>) = HelloWorld::instantiate(<span class="kw-2">&amp;mut </span>store, <span class="kw-2">&amp;</span>component, <span class="kw-2">&amp;</span>linker)<span class="question-mark">?</span>;
+
+    <span class="comment">// Note that the `demo` method returns a `&amp;Demo` through which we can
+    // run the methods on that interface.
+    </span>bindings.demo().call_run(<span class="kw-2">&amp;mut </span>store)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>The generated bindings can additionally be explored more fully with <code>cargo doc</code> to see what types and traits and such are generated.</p>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>This procedural macro accepts a few different syntaxes. The primary purpose
+of this macro is to locate a WIT package, parse it, and then extract a
+<code>world</code> from the parsed package. There are then codegen-specific options to
+the bindings themselves which can additionally be specified.</p>
+<p>Usage of this macro looks like:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Parse the `wit/` folder adjacent to this crate's `Cargo.toml` and look
+// for a single `world` in it. There must be exactly one for this to
+// succeed.
+</span><span class="macro">bindgen!</span>();
+
+<span class="comment">// Parse the `wit/` folder adjacent to this crate's `Cargo.toml` and look
+// for the world `foo` contained in it.
+</span><span class="macro">bindgen!</span>(<span class="string">"foo"</span>);
+
+<span class="comment">// Parse the folder `other/wit/folder` adjacent to `Cargo.toml`.
+</span><span class="macro">bindgen!</span>(<span class="kw">in </span><span class="string">"other/wit/folder"</span>);
+<span class="macro">bindgen!</span>(<span class="string">"foo" </span><span class="kw">in </span><span class="string">"other/wit/folder"</span>);
+
+<span class="comment">// Parse the file `foo.wit` as a single-file WIT package with no
+// dependencies.
+</span><span class="macro">bindgen!</span>(<span class="string">"foo" </span><span class="kw">in </span><span class="string">"foo.wit"</span>);</code></pre></div>
+<p>A more configured version of invoking this macro looks like:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">bindgen!</span>({
+    world: <span class="string">"foo"</span>, <span class="comment">// not needed if `path` has one `world`
+
+    // same as in `bindgen!(in "other/wit/folder")
+    </span>path: <span class="string">"other/wit/folder"</span>,
+
+    <span class="comment">// Instead of `path` the WIT document can be provided inline if
+    // desired.
+    </span>inline: <span class="string">"
+        package my:inline;
+
+        world foo {
+            // ...
+        }
+    "</span>,
+
+    <span class="comment">// Add calls to `tracing::span!` before each import or export is called
+    // to log arguments and return values.
+    //
+    // This option defaults to `false`.
+    </span>tracing: <span class="bool-val">true</span>,
+
+    <span class="comment">// Imports will be async functions through #[async_trait] and exports
+    // are also invoked as async functions. Requires `Config::async_support`
+    // to be `true`.
+    //
+    // Note that this is only async for the host as the guest will still
+    // appear as if it's invoking blocking functions.
+    //
+    // This option defaults to `false`.
+    </span><span class="kw">async</span>: <span class="bool-val">true</span>,
+
+    <span class="comment">// Alternative mode of async configuration where this still implies
+    // async instantiation happens, for example, but more control is
+    // provided over which imports are async and which aren't.
+    //
+    // Note that in this mode all exports are still async.
+    </span><span class="kw">async</span>: {
+        <span class="comment">// All imports are async except for functions with these names
+        </span>except_imports: [<span class="string">"foo"</span>, <span class="string">"bar"</span>],
+
+        <span class="comment">// All imports are synchronous except for functions with these names
+        //
+        // Note that this key cannot be specified with `except_imports`,
+        // only one or the other is accepted.
+        </span>only_imports: [<span class="string">"foo"</span>, <span class="string">"bar"</span>],
+    },
+
+    <span class="comment">// This can be used to translate WIT return values of the form
+    // `result&lt;T, error-type&gt;` into `Result&lt;T, RustErrorType&gt;` in Rust.
+    // Users must define `RustErrorType` and the `Host` trait for the
+    // interface which defines `error-type` will have a method
+    // called `convert_error_type` which converts `RustErrorType`
+    // into `wasmtime::Result&lt;ErrorType&gt;`. This conversion can either
+    // return the raw WIT error (`ErrorType` here) or a trap.
+    //
+    // By default this option is not specified.
+    </span>trappable_error_type: {
+        <span class="string">"wasi:io/streams/stream-error" </span>=&gt; RustErrorType,
+    },
+
+    <span class="comment">// All generated bindgen types are "owned" meaning types like `String`
+    // are used instead of `&amp;str`, for example. This is the default and
+    // ensures that the same type used in both imports and exports uses the
+    // same generated type.
+    </span>ownership: Owning,
+
+    <span class="comment">// Alternative to `Owning` above where borrowed types attempt to be used
+    // instead. The `duplicate_if_necessary` configures whether duplicate
+    // Rust types will be generated for the same WIT type if necessary, for
+    // example when a type is used both as an import and an export.
+    </span>ownership: Borrowing {
+        duplicate_if_necessary: <span class="bool-val">true
+    </span>},
+
+    <span class="comment">// Restrict the code generated to what's needed for the interface
+    // imports in the inlined WIT document fragment.
+    </span>interfaces: <span class="string">"
+        import wasi:cli/command;
+    "</span>,
+
+    <span class="comment">// Remap imported interfaces or resources to types defined in Rust
+    // elsewhere. Using this option will prevent any code from being
+    // generated for interfaces mentioned here. Resources named here will
+    // not have a type generated to represent the resource.
+    //
+    // Interfaces mapped with this option should be previously generated
+    // with an invocation of this macro. Resources need to be mapped to a
+    // Rust type name.
+    </span>with: {
+        <span class="comment">// This can be used to indicate that entire interfaces have
+        // bindings generated elsewhere with a path pointing to the
+        // bindinges-generated module.
+        </span><span class="string">"wasi:random/random"</span>: wasmtime_wasi::bindings::random::random,
+
+        <span class="comment">// Similarly entire packages can also be specified.
+        </span><span class="string">"wasi:cli"</span>: wasmtime_wasi::bindings::cli,
+
+        <span class="comment">// Or, if applicable, entire namespaces can additionally be mapped.
+        </span><span class="string">"wasi"</span>: wasmtime_wasi::bindings,
+
+        <span class="comment">// Versions are supported if multiple versions are in play:
+        </span><span class="string">"wasi:http/types@0.2.0"</span>: wasmtime_wasi_http::bindings::http::types,
+        <span class="string">"wasi:http@0.2.0"</span>: wasmtime_wasi_http::bindings::http,
+
+        <span class="comment">// The `with` key can also be used to specify the `T` used in
+        // import bindings of `Resource&lt;T&gt;`. This can be done to configure
+        // which typed resource shows up in generated bindings and can be
+        // useful when working with the typed methods of `ResourceTable`.
+        </span><span class="string">"wasi:filesystem/types/descriptor"</span>: MyDescriptorType,
+    },
+});</code></pre></div>
+</div></details></section></div></main></body></html>

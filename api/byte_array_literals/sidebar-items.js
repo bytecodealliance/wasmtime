@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["str","str_nl"]};

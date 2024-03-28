@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["instance_network"],"type":["Network"]};

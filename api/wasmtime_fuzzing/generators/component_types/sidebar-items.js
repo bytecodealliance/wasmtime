@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["arbitrary_val","static_api_test"]};

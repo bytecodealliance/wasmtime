@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"wasi_common":[["impl <a class=\"trait\" href=\"wasi_common/trait.RngCore.html\" title=\"trait wasi_common::RngCore\">RngCore</a> for <a class=\"struct\" href=\"wasi_common/random/struct.Deterministic.html\" title=\"struct wasi_common::random::Deterministic\">Deterministic</a>"]],
+"wasmtime_wasi":[["impl <a class=\"trait\" href=\"https://rust-random.github.io/rand/rand_core/trait.RngCore.html\" title=\"trait rand_core::RngCore\">RngCore</a> for <a class=\"struct\" href=\"wasmtime_wasi/struct.Deterministic.html\" title=\"struct wasmtime_wasi::Deterministic\">Deterministic</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

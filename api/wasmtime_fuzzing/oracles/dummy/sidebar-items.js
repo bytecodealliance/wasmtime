@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["dummy_extern","dummy_func","dummy_global","dummy_linker","dummy_memory","dummy_table","dummy_value","dummy_values"]};

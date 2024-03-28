@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["now","resolution","subscribe_duration","subscribe_instant"],"type":["Duration","Instant","Pollable"]};
