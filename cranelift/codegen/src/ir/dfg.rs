@@ -426,6 +426,8 @@ impl DataFlowGraph {
 
         // Now aliases don't point to other aliases, so we can replace any use
         // of an alias with the final value in constant time.
+
+        // Rewrite InstructionData in `self.insts`.
         for inst in self.insts.0.values_mut() {
             inst.map_values(&mut self.value_lists, &mut self.jump_tables, |arg| {
                 if let ValueData::Alias { original, .. } = self.values[arg].into() {
@@ -435,6 +437,50 @@ impl DataFlowGraph {
                 }
             });
         }
+
+        // - `results` and block-params in `blocks` are not aliases, by
+        //   definition.
+        // - `dynamic_types` has no values.
+        // - `value_lists` can only be accessed via references from elsewhere.
+        // - `values` only has value references in aliases (which we've
+        //   removed), and unions (but the egraph pass ensures there are no
+        //   aliases before creating unions).
+
+        // Merge `facts` from any alias onto the aliased value. Note that if
+        // there was a chain of aliases, at this point every alias that was in
+        // the chain points to the same final value, so their facts will all be
+        // merged together.
+        for value in self.facts.keys() {
+            if let ValueData::Alias { original, .. } = self.values[value].into() {
+                if let Some(new_fact) = self.facts[value].take() {
+                    match &mut self.facts[original] {
+                        Some(old_fact) => *old_fact = Fact::intersect(old_fact, &new_fact),
+                        old_fact => *old_fact = Some(new_fact),
+                    }
+                }
+            }
+        }
+
+        // - `signatures`, `old_signatures`, and `ext_funcs` have no values.
+
+        if let Some(values_labels) = &mut self.values_labels {
+            // Debug info is best-effort. If any is attached to value aliases,
+            // just discard it.
+            values_labels.retain(|&k, _| !matches!(self.values[k].into(), ValueData::Alias { .. }));
+
+            // If debug-info says a value should have the same labels as another
+            // value, then make sure that target is not a value alias.
+            for value_label in values_labels.values_mut() {
+                if let ValueLabelAssignments::Alias { value, .. } = value_label {
+                    if let ValueData::Alias { original, .. } = self.values[*value].into() {
+                        *value = original;
+                    }
+                }
+            }
+        }
+
+        // - `constants` and `immediates` have no values.
+        // - `jump_tables` is updated together with instruction-data above.
 
         // Delete all aliases now that there are no uses left.
         for value in self.values.values_mut() {
