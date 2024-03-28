@@ -38,18 +38,24 @@ pub const MAX_FLAT_PARAMS: usize = 16;
 pub const MAX_FLAT_RESULTS: usize = 1;
 
 mod artifacts;
-mod compiler;
-pub mod dfg;
 mod info;
-mod translate;
 mod types;
 mod vmcomponent_offsets;
 pub use self::artifacts::*;
-pub use self::compiler::*;
 pub use self::info::*;
-pub use self::translate::*;
 pub use self::types::*;
 pub use self::vmcomponent_offsets::*;
+
+#[cfg(feature = "compile")]
+mod compiler;
+#[cfg(feature = "compile")]
+pub mod dfg;
+#[cfg(feature = "compile")]
+mod translate;
+#[cfg(feature = "compile")]
+pub use self::compiler::*;
+#[cfg(feature = "compile")]
+pub use self::translate::*;
 
 /// Helper macro to iterate over the transcoders that the host will provide
 /// adapter modules through libcalls.

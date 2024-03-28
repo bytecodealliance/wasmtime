@@ -8,11 +8,9 @@
 
 mod address_map;
 mod builtin;
-mod compilation;
 mod demangling;
 mod module;
 mod module_artifacts;
-mod module_environ;
 mod module_types;
 pub mod obj;
 mod ref_bits;
@@ -24,10 +22,9 @@ mod vmoffsets;
 
 pub use crate::address_map::*;
 pub use crate::builtin::*;
-pub use crate::compilation::*;
 pub use crate::demangling::*;
 pub use crate::module::*;
-pub use crate::module_environ::*;
+pub use crate::module_artifacts::*;
 pub use crate::module_types::*;
 pub use crate::ref_bits::*;
 pub use crate::scopevec::ScopeVec;
@@ -37,13 +34,18 @@ pub use crate::tunables::*;
 pub use crate::vmoffsets::*;
 pub use object;
 
-pub use crate::module_artifacts::{
-    CompiledFunctionInfo, CompiledModuleInfo, FinishedObject, FunctionName, Metadata, ObjectBuilder,
-};
+#[cfg(feature = "compile")]
+mod compile;
+#[cfg(feature = "compile")]
+mod module_environ;
+#[cfg(feature = "compile")]
+pub use crate::compile::*;
+#[cfg(feature = "compile")]
+pub use crate::module_environ::*;
 
 #[cfg(feature = "component-model")]
 pub mod component;
-#[cfg(feature = "component-model")]
+#[cfg(all(feature = "component-model", feature = "compile"))]
 pub mod fact;
 
 // Reexport all of these type-level since they're quite commonly used and it's

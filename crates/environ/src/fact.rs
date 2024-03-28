@@ -21,7 +21,7 @@
 use crate::component::dfg::CoreDef;
 use crate::component::{
     Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, FlatType, InterfaceType,
-    StringEncoding, TypeFuncIndex,
+    StringEncoding, Transcode, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
 use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
@@ -34,8 +34,6 @@ mod signature;
 mod trampoline;
 mod transcode;
 mod traps;
-
-pub use self::transcode::{FixedEncoding, Transcode};
 
 /// Representation of an adapter module.
 pub struct Module<'a> {

@@ -26,6 +26,7 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
+#[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 #[cfg(feature = "pooling-allocator")]
 use wasmtime_runtime::mpk;
@@ -158,7 +159,7 @@ struct CompilerConfig {
     target: Option<target_lexicon::Triple>,
     settings: HashMap<String, String>,
     flags: HashSet<String>,
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<std::path::PathBuf>,
     wmemcheck: bool,
@@ -172,6 +173,7 @@ impl CompilerConfig {
             target: None,
             settings: HashMap::new(),
             flags: HashSet::new(),
+            #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
             cache_store: None,
             clif_dir: None,
             wmemcheck: false,
@@ -1894,6 +1896,7 @@ impl Config {
             compiler.enable(flag)?;
         }
 
+        #[cfg(feature = "incremental-cache")]
         if let Some(cache_store) = &self.compiler_config.cache_store {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }

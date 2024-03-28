@@ -3,13 +3,13 @@
 
 use crate::{obj, Tunables};
 use crate::{
-    BuiltinFunctionIndex, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, StackMap, WasmError, WasmFuncType,
+    BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionBodyData, FunctionLoc,
+    ModuleTranslation, ModuleTypesBuilder, ObjectKind, PrimaryMap, WasmError, WasmFuncType,
+    WasmFunctionInfo,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
-use serde_derive::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt;
@@ -17,37 +17,13 @@ use std::path;
 use std::sync::Arc;
 use thiserror::Error;
 
-/// Information about a function, such as trap information, address map,
-/// and stack maps.
-#[derive(Serialize, Deserialize, Default)]
-#[allow(missing_docs)]
-pub struct WasmFunctionInfo {
-    pub start_srcloc: FilePos,
-    pub stack_maps: Box<[StackMapInformation]>,
-}
+mod address_map;
+mod module_artifacts;
+mod trap_encoding;
 
-/// Description of where a function is located in the text section of a
-/// compiled image.
-#[derive(Copy, Clone, Serialize, Deserialize)]
-pub struct FunctionLoc {
-    /// The byte offset from the start of the text section where this
-    /// function starts.
-    pub start: u32,
-    /// The byte length of this function's function body.
-    pub length: u32,
-}
-
-/// The offset within a function of a GC safepoint, and its associated stack
-/// map.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct StackMapInformation {
-    /// The offset of the GC safepoint within the function's native code. It is
-    /// relative to the beginning of the function.
-    pub code_offset: u32,
-
-    /// The stack map for identifying live GC refs at the GC safepoint.
-    pub stack_map: StackMap,
-}
+pub use self::address_map::*;
+pub use self::module_artifacts::*;
+pub use self::trap_encoding::*;
 
 /// An error while compiling WebAssembly to machine code.
 #[derive(Error, Debug)]
@@ -169,14 +145,6 @@ pub enum SettingKind {
     Bool,
     /// The setting is a preset.
     Preset,
-}
-
-/// Types of objects that can be created by `Compiler::object`
-pub enum ObjectKind {
-    /// A core wasm compilation artifact
-    Module,
-    /// A component compilation artifact
-    Component,
 }
 
 /// An implementation of a compiler which can compile WebAssembly functions to
@@ -417,26 +385,5 @@ pub trait Compiler: Send + Sync {
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         // By default, an ISA cannot create a System V CIE.
         None
-    }
-}
-
-/// Value of a configured setting for a [`Compiler`]
-#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
-pub enum FlagValue<'a> {
-    /// Name of the value that has been configured for this setting.
-    Enum(&'a str),
-    /// The numerical value of the configured settings.
-    Num(u8),
-    /// Whether the setting is on or off.
-    Bool(bool),
-}
-
-impl fmt::Display for FlagValue<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Enum(v) => v.fmt(f),
-            Self::Num(v) => v.fmt(f),
-            Self::Bool(v) => v.fmt(f),
-        }
     }
 }

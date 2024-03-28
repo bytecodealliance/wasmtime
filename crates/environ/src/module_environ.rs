@@ -4,13 +4,15 @@ use crate::module::{
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
-    GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, TableIndex, TableInitialValue,
-    Tunables, TypeConvert, TypeIndex, Unsigned, WasmError, WasmHeapType, WasmResult, WasmValType,
-    WasmparserTypeConverter,
+    GlobalInit, InitMemory, MemoryIndex, ModuleTypesBuilder, PrimaryMap, StaticMemoryInitializer,
+    TableIndex, TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError,
+    WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use anyhow::{bail, Result};
+use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::types::{CoreTypeId, Types};
@@ -899,5 +901,346 @@ impl TypeConvert for ModuleEnvironment<'_, '_> {
             module: &self.result.module,
         }
         .lookup_heap_type(index)
+    }
+}
+
+impl ModuleTranslation<'_> {
+    /// Attempts to convert segmented memory initialization into static
+    /// initialization for the module that this translation represents.
+    ///
+    /// If this module's memory initialization is not compatible with paged
+    /// initialization then this won't change anything. Otherwise if it is
+    /// compatible then the `memory_initialization` field will be updated.
+    ///
+    /// Takes a `page_size` argument in order to ensure that all
+    /// initialization is page-aligned for mmap-ability, and
+    /// `max_image_size_always_allowed` to control how we decide
+    /// whether to use static init.
+    ///
+    /// We will try to avoid generating very sparse images, which are
+    /// possible if e.g. a module has an initializer at offset 0 and a
+    /// very high offset (say, 1 GiB). To avoid this, we use a dual
+    /// condition: we always allow images less than
+    /// `max_image_size_always_allowed`, and the embedder of Wasmtime
+    /// can set this if desired to ensure that static init should
+    /// always be done if the size of the module or its heaps is
+    /// otherwise bounded by the system. We also allow images with
+    /// static init data bigger than that, but only if it is "dense",
+    /// defined as having at least half (50%) of its pages with some
+    /// data.
+    ///
+    /// We could do something slightly better by building a dense part
+    /// and keeping a sparse list of outlier/leftover segments (see
+    /// issue #3820). This would also allow mostly-static init of
+    /// modules that have some dynamically-placed data segments. But,
+    /// for now, this is sufficient to allow a system that "knows what
+    /// it's doing" to always get static init.
+    pub fn try_static_init(&mut self, page_size: u64, max_image_size_always_allowed: u64) {
+        // This method only attempts to transform a `Segmented` memory init
+        // into a `Static` one, no other state.
+        if !self.module.memory_initialization.is_segmented() {
+            return;
+        }
+
+        // First a dry run of memory initialization is performed. This
+        // collects information about the extent of memory initialized for each
+        // memory as well as the size of all data segments being copied in.
+        struct Memory {
+            data_size: u64,
+            min_addr: u64,
+            max_addr: u64,
+            // The `usize` here is a pointer into `self.data` which is the list
+            // of data segments corresponding to what was found in the original
+            // wasm module.
+            segments: Vec<(usize, StaticMemoryInitializer)>,
+        }
+        let mut info = PrimaryMap::with_capacity(self.module.memory_plans.len());
+        for _ in 0..self.module.memory_plans.len() {
+            info.push(Memory {
+                data_size: 0,
+                min_addr: u64::MAX,
+                max_addr: 0,
+                segments: Vec::new(),
+            });
+        }
+        let mut idx = 0;
+        let ok = self.module.memory_initialization.init_memory(
+            &mut (),
+            InitMemory::CompileTime(&self.module),
+            |(), memory, init| {
+                // Currently `Static` only applies to locally-defined memories,
+                // so if a data segment references an imported memory then
+                // transitioning to a `Static` memory initializer is not
+                // possible.
+                if self.module.defined_memory_index(memory).is_none() {
+                    return false;
+                };
+                let info = &mut info[memory];
+                let data_len = u64::from(init.data.end - init.data.start);
+                if data_len > 0 {
+                    info.data_size += data_len;
+                    info.min_addr = info.min_addr.min(init.offset);
+                    info.max_addr = info.max_addr.max(init.offset + data_len);
+                    info.segments.push((idx, init.clone()));
+                }
+                idx += 1;
+                true
+            },
+        );
+        if !ok {
+            return;
+        }
+
+        // Validate that the memory information collected is indeed valid for
+        // static memory initialization.
+        for info in info.values().filter(|i| i.data_size > 0) {
+            let image_size = info.max_addr - info.min_addr;
+
+            // If the range of memory being initialized is less than twice the
+            // total size of the data itself then it's assumed that static
+            // initialization is ok. This means we'll at most double memory
+            // consumption during the memory image creation process, which is
+            // currently assumed to "probably be ok" but this will likely need
+            // tweaks over time.
+            if image_size < info.data_size.saturating_mul(2) {
+                continue;
+            }
+
+            // If the memory initialization image is larger than the size of all
+            // data, then we still allow memory initialization if the image will
+            // be of a relatively modest size, such as 1MB here.
+            if image_size < max_image_size_always_allowed {
+                continue;
+            }
+
+            // At this point memory initialization is concluded to be too
+            // expensive to do at compile time so it's entirely deferred to
+            // happen at runtime.
+            return;
+        }
+
+        // Here's where we've now committed to changing to static memory. The
+        // memory initialization image is built here from the page data and then
+        // it's converted to a single initializer.
+        let data = mem::replace(&mut self.data, Vec::new());
+        let mut map = PrimaryMap::with_capacity(info.len());
+        let mut module_data_size = 0u32;
+        for (memory, info) in info.iter() {
+            // Create the in-memory `image` which is the initialized contents of
+            // this linear memory.
+            let extent = if info.segments.len() > 0 {
+                (info.max_addr - info.min_addr) as usize
+            } else {
+                0
+            };
+            let mut image = Vec::with_capacity(extent);
+            for (idx, init) in info.segments.iter() {
+                let data = &data[*idx];
+                assert_eq!(data.len(), init.data.len());
+                let offset = usize::try_from(init.offset - info.min_addr).unwrap();
+                if image.len() < offset {
+                    image.resize(offset, 0u8);
+                    image.extend_from_slice(data);
+                } else {
+                    image.splice(
+                        offset..(offset + data.len()).min(image.len()),
+                        data.iter().copied(),
+                    );
+                }
+            }
+            assert_eq!(image.len(), extent);
+            assert_eq!(image.capacity(), extent);
+            let mut offset = if info.segments.len() > 0 {
+                info.min_addr
+            } else {
+                0
+            };
+
+            // Chop off trailing zeros from the image as memory is already
+            // zero-initialized. Note that `i` is the position of a nonzero
+            // entry here, so to not lose it we truncate to `i + 1`.
+            if let Some(i) = image.iter().rposition(|i| *i != 0) {
+                image.truncate(i + 1);
+            }
+
+            // Also chop off leading zeros, if any.
+            if let Some(i) = image.iter().position(|i| *i != 0) {
+                offset += i as u64;
+                image.drain(..i);
+            }
+            let mut len = u64::try_from(image.len()).unwrap();
+
+            // The goal is to enable mapping this image directly into memory, so
+            // the offset into linear memory must be a multiple of the page
+            // size. If that's not already the case then the image is padded at
+            // the front and back with extra zeros as necessary
+            if offset % page_size != 0 {
+                let zero_padding = offset % page_size;
+                self.data.push(vec![0; zero_padding as usize].into());
+                offset -= zero_padding;
+                len += zero_padding;
+            }
+            self.data.push(image.into());
+            if len % page_size != 0 {
+                let zero_padding = page_size - (len % page_size);
+                self.data.push(vec![0; zero_padding as usize].into());
+                len += zero_padding;
+            }
+
+            // Offset/length should now always be page-aligned.
+            assert!(offset % page_size == 0);
+            assert!(len % page_size == 0);
+
+            // Create the `StaticMemoryInitializer` which describes this image,
+            // only needed if the image is actually present and has a nonzero
+            // length. The `offset` has been calculates above, originally
+            // sourced from `info.min_addr`. The `data` field is the extent
+            // within the final data segment we'll emit to an ELF image, which
+            // is the concatenation of `self.data`, so here it's the size of
+            // the section-so-far plus the current segment we're appending.
+            let len = u32::try_from(len).unwrap();
+            let init = if len > 0 {
+                Some(StaticMemoryInitializer {
+                    offset,
+                    data: module_data_size..module_data_size + len,
+                })
+            } else {
+                None
+            };
+            let idx = map.push(init);
+            assert_eq!(idx, memory);
+            module_data_size += len;
+        }
+        self.data_align = Some(page_size);
+        self.module.memory_initialization = MemoryInitialization::Static { map };
+    }
+
+    /// Attempts to convert the module's table initializers to
+    /// FuncTable form where possible. This enables lazy table
+    /// initialization later by providing a one-to-one map of initial
+    /// table values, without having to parse all segments.
+    pub fn try_func_table_init(&mut self) {
+        // This should be large enough to support very large Wasm
+        // modules with huge funcref tables, but small enough to avoid
+        // OOMs or DoS on truly sparse tables.
+        const MAX_FUNC_TABLE_SIZE: u32 = 1024 * 1024;
+
+        // First convert any element-initialized tables to images of just that
+        // single function if the minimum size of the table allows doing so.
+        for ((_, init), (_, plan)) in self
+            .module
+            .table_initialization
+            .initial_values
+            .iter_mut()
+            .zip(
+                self.module
+                    .table_plans
+                    .iter()
+                    .skip(self.module.num_imported_tables),
+            )
+        {
+            let table_size = plan.table.minimum;
+            if table_size > MAX_FUNC_TABLE_SIZE {
+                continue;
+            }
+            if let TableInitialValue::FuncRef(val) = *init {
+                *init = TableInitialValue::Null {
+                    precomputed: vec![val; table_size as usize],
+                };
+            }
+        }
+
+        let mut segments = mem::take(&mut self.module.table_initialization.segments)
+            .into_iter()
+            .peekable();
+
+        // The goal of this loop is to interpret a table segment and apply it
+        // "statically" to a local table. This will iterate over segments and
+        // apply them one-by-one to each table.
+        //
+        // If any segment can't be applied, however, then this loop exits and
+        // all remaining segments are placed back into the segment list. This is
+        // because segments are supposed to be initialized one-at-a-time which
+        // means that intermediate state is visible with respect to traps. If
+        // anything isn't statically known to not trap it's pessimistically
+        // assumed to trap meaning all further segment initializers must be
+        // applied manually at instantiation time.
+        while let Some(segment) = segments.peek() {
+            let defined_index = match self.module.defined_table_index(segment.table_index) {
+                Some(index) => index,
+                // Skip imported tables: we can't provide a preconstructed
+                // table for them, because their values depend on the
+                // imported table overlaid with whatever segments we have.
+                None => break,
+            };
+
+            // If the base of this segment is dynamic, then we can't
+            // include it in the statically-built array of initial
+            // contents.
+            if segment.base.is_some() {
+                break;
+            }
+
+            // Get the end of this segment. If out-of-bounds, or too
+            // large for our dense table representation, then skip the
+            // segment.
+            let top = match segment.offset.checked_add(segment.elements.len()) {
+                Some(top) => top,
+                None => break,
+            };
+            let table_size = self.module.table_plans[segment.table_index].table.minimum;
+            if top > table_size || top > MAX_FUNC_TABLE_SIZE {
+                break;
+            }
+
+            match self.module.table_plans[segment.table_index]
+                .table
+                .wasm_ty
+                .heap_type
+            {
+                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {}
+                // If this is not a funcref table, then we can't support a
+                // pre-computed table of function indices. Technically this
+                // initializer won't trap so we could continue processing
+                // segments, but that's left as a future optimization if
+                // necessary.
+                WasmHeapType::Extern => break,
+            }
+
+            // Function indices can be optimized here, but fully general
+            // expressions are deferred to get evaluated at runtime.
+            let function_elements = match &segment.elements {
+                TableSegmentElements::Functions(indices) => indices,
+                TableSegmentElements::Expressions(_) => break,
+            };
+
+            let precomputed =
+                match &mut self.module.table_initialization.initial_values[defined_index] {
+                    TableInitialValue::Null { precomputed } => precomputed,
+
+                    // If this table is still listed as an initial value here
+                    // then that means the initial size of the table doesn't
+                    // support a precomputed function list, so skip this.
+                    // Technically this won't trap so it's possible to process
+                    // further initializers, but that's left as a future
+                    // optimization.
+                    TableInitialValue::FuncRef(_) | TableInitialValue::GlobalGet(_) => break,
+                };
+
+            // At this point we're committing to pre-initializing the table
+            // with the `segment` that's being iterated over. This segment is
+            // applied to the `precomputed` list for the table by ensuring
+            // it's large enough to hold the segment and then copying the
+            // segment into the precomputed list.
+            if precomputed.len() < top as usize {
+                precomputed.resize(top as usize, FuncIndex::reserved_value());
+            }
+            let dst = &mut precomputed[(segment.offset as usize)..(top as usize)];
+            dst.copy_from_slice(&function_elements);
+
+            // advance the iterator to see the next segment
+            let _ = segments.next();
+        }
+        self.module.table_initialization.segments = segments.collect();
     }
 }
