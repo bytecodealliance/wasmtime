@@ -10,7 +10,7 @@ pub struct FunctionStore<'a> {
     function_names: HashMap<String, FuncIndex>,
 }
 
-/// An opaque reference to a [`Function`](Function) stored in the [FunctionStore].
+/// An opaque reference to a [`Function`] stored in the [FunctionStore].
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FuncIndex(u32);
 entity_impl!(FuncIndex, "fn");

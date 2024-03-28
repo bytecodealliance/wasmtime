@@ -9,7 +9,7 @@ use std::sync::atomic::{
 /// indicate whether the function was successful and subsequent results are valid,
 /// or whether an error occured. This trait allows wiggle to return the correct
 /// value when the interface function's idiomatic Rust method returns
-/// Ok(<rest of return values>).
+/// `Ok(<rest of return values>)`.
 pub trait GuestErrorType {
     fn success() -> Self;
 }
