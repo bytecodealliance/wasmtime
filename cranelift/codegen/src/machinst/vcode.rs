@@ -1652,7 +1652,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
 /// [MachBuffer].
 ///
 /// First, during the lowering phase, constants are inserted using
-/// [VCodeConstants.insert]; an intermediate handle, [VCodeConstant], tracks what constants are
+/// [VCodeConstants.insert]; an intermediate handle, `VCodeConstant`, tracks what constants are
 /// used in this phase. Some deduplication is performed, when possible, as constant
 /// values are inserted.
 ///
@@ -1718,12 +1718,12 @@ impl VCodeConstants {
         self.constants.len()
     }
 
-    /// Iterate over the [VCodeConstant] keys inserted in this structure.
+    /// Iterate over the `VCodeConstant` keys inserted in this structure.
     pub fn keys(&self) -> Keys<VCodeConstant> {
         self.constants.keys()
     }
 
-    /// Iterate over the [VCodeConstant] keys and the data (as a byte slice) inserted in this
+    /// Iterate over the `VCodeConstant` keys and the data (as a byte slice) inserted in this
     /// structure.
     pub fn iter(&self) -> impl Iterator<Item = (VCodeConstant, &VCodeConstantData)> {
         self.constants.iter()

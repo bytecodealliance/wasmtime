@@ -174,7 +174,7 @@ impl DynamicType {
 
 /// An opaque reference to a global value.
 ///
-/// A `GlobalValue` is a [`Value`](Value) that will be live across the entire
+/// A `GlobalValue` is a [`Value`] that will be live across the entire
 /// function lifetime. It can be preloaded from other global values.
 ///
 /// You can create a `GlobalValue` in the following ways:

@@ -902,7 +902,7 @@ impl<'a, T> std::ops::Deref for GuestCow<'a, T> {
 ///   only by manually performing borrow-checking of the underlying regions that
 ///   are accessed; this kind of borrowing is wrapped up in the [`GuestSlice`]
 ///   and [`GuestSliceMut`] smart pointers (see
-///   [`UnsafeGuestSlice::shared_borrow`], [`UnsafeGuestSlice::mut_borrow`]).
+///   `UnsafeGuestSlice::shared_borrow`, `UnsafeGuestSlice::mut_borrow`).
 pub struct UnsafeGuestSlice<'a, T> {
     /// A raw pointer to the bytes in memory.
     ptr: &'a [UnsafeCell<T>],

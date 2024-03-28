@@ -202,7 +202,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         }
     }
 
-    /// Resolves [GlobalData] of a global at the given index.
+    /// Resolves `GlobalData` of a global at the given index.
     pub fn resolve_global(&mut self, index: GlobalIndex) -> GlobalData {
         let ty = self.translation.module.globals[index].wasm_ty;
         let val = || match self.translation.module.defined_global_index(index) {
@@ -254,7 +254,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         }
     }
 
-    /// Resolve a [HeapData] from a [MemoryIndex].
+    /// Resolve a `HeapData` from a [MemoryIndex].
     // TODO: (@saulecabrera)
     // Handle shared memories when implementing support for Wasm Threads.
     pub fn resolve_heap(&mut self, index: MemoryIndex) -> HeapData {

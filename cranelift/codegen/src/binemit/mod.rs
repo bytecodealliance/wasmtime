@@ -97,25 +97,25 @@ pub enum Reloc {
     /// The non-PLT version of this relocation has been deprecated.
     ///
     /// This is the `R_RISCV_CALL_PLT` relocation from the RISC-V ELF psABI document.
-    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#procedure-calls
+    /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#procedure-calls>
     RiscvCallPlt,
 
     /// RISC-V TLS GD: High 20 bits of 32-bit PC-relative TLS GD GOT reference,
     ///
     /// This is the `R_RISCV_TLS_GD_HI20` relocation from the RISC-V ELF psABI document.
-    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic
+    /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic>
     RiscvTlsGdHi20,
 
     /// Low 12 bits of a 32-bit PC-relative relocation (I-Type instruction)
     ///
     /// This is the `R_RISCV_PCREL_LO12_I` relocation from the RISC-V ELF psABI document.
-    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+    /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
     RiscvPCRelLo12I,
 
     /// High 20 bits of a 32-bit PC-relative GOT offset relocation
     ///
     /// This is the `R_RISCV_GOT_HI20` relocation from the RISC-V ELF psABI document.
-    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+    /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
     RiscvGotHi20,
 
     /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT

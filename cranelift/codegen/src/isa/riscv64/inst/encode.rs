@@ -1,7 +1,7 @@
 //! Contains the RISC-V instruction encoding logic.
 //!
 //! These formats are specified in the RISC-V specification in section 2.2.
-//! See: https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
+//! See: <https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf>
 //!
 //! Some instructions especially in extensions have slight variations from
 //! the base RISC-V specification.

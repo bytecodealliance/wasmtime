@@ -96,7 +96,7 @@ pub enum CallingConvention {
     AppleAarch64,
     /// The default calling convention for Winch. It largely follows SystemV
     /// for parameter and result handling. This calling convention is part of
-    /// Winch's default ABI [crate::abi::ABI].
+    /// Winch's default ABI `crate::abi::ABI`.
     Default,
 }
 
