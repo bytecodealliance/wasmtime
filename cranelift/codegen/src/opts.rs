@@ -83,8 +83,7 @@ where
 
     fn next(&mut self, ctx: &mut IsleContext<'a, 'b, 'c>) -> Option<Self::Output> {
         while let Some(value) = self.stack.pop() {
-            debug_assert_ne!(value, Value::reserved_value());
-            let value = ctx.ctx.func.dfg.resolve_aliases(value);
+            debug_assert!(ctx.ctx.func.dfg.value_is_real(value));
             trace!("iter: value {:?}", value);
             match ctx.ctx.func.dfg.value_def(value) {
                 ValueDef::Union(x, y) => {
