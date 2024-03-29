@@ -167,7 +167,8 @@ impl<'a> CodeBuilder<'a> {
         Ok(self)
     }
 
-    fn dwarf_package_binary(&self) -> &Option<Cow<'_, [u8]>> {
+    /// Gets the DWARF package.
+    pub fn dwarf_package_binary(&self) -> &Option<Cow<'_, [u8]>> {
         return &self.dwarf_package;
     }
 
