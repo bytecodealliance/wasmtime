@@ -2,6 +2,7 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
 };
+use crate::prelude::*;
 use crate::sys::vm::{commit_stack_pages, reset_stack_pages_to_zero};
 use crate::{Mmap, PoolingInstanceAllocatorConfig};
 use anyhow::{anyhow, bail, Context, Result};

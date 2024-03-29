@@ -20,7 +20,7 @@ workspace = true
 features = ["component-model"]
 
 [dependencies]
-wasmtime-runtime = { workspace = true, optional = true }
+wasmtime-runtime = { workspace = true, optional = true, features = ['std'] }
 wasmtime-environ = { workspace = true }
 wasmtime-jit-debug = { workspace = true, features = [
   "perf_jitdump",

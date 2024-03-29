@@ -2,6 +2,7 @@ use rustix::fd::AsRawFd;
 use rustix::mm::{mmap, mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
 use std::fs::File;
 use std::io;
+#[cfg(feature = "std")]
 use std::sync::Arc;
 
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
@@ -103,12 +104,14 @@ pub unsafe fn madvise_dontneed(ptr: *mut u8, len: usize) -> io::Result<()> {
 
 #[derive(Debug)]
 pub enum MemoryImageSource {
+    #[cfg(feature = "std")]
     Mmap(Arc<File>),
     #[cfg(target_os = "linux")]
     Memfd(memfd::Memfd),
 }
 
 impl MemoryImageSource {
+    #[cfg(feature = "std")]
     pub fn from_file(file: &Arc<File>) -> Option<MemoryImageSource> {
         Some(MemoryImageSource::Mmap(file.clone()))
     }
@@ -170,6 +173,7 @@ impl MemoryImageSource {
 
     fn as_file(&self) -> &File {
         match self {
+            #[cfg(feature = "std")]
             MemoryImageSource::Mmap(file) => file,
             #[cfg(target_os = "linux")]
             MemoryImageSource::Memfd(memfd) => memfd.as_file(),

@@ -9,7 +9,8 @@ mod disabled;
 pub use disabled::*;
 
 use crate::SendSyncPtr;
-use std::ptr::NonNull;
+use core::fmt;
+use core::ptr::NonNull;
 use wasmtime_environ::StackMap;
 
 /// Used by the runtime to lookup information about a module given a
@@ -33,8 +34,8 @@ pub trait ModuleInfo {
 #[repr(transparent)]
 pub struct VMGcRef(SendSyncPtr<u8>);
 
-impl std::fmt::Pointer for VMGcRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Pointer for VMGcRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.as_non_null().fmt(f)
     }
 }

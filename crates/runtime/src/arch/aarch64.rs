@@ -3,14 +3,14 @@
 /// AArch64 uses vector registered which here is used with a vector type.
 /// Note that the specific type shouldn't matter too much but the choice
 /// of using a vector is the significant part.
-pub type V128Abi = std::arch::aarch64::uint8x16_t;
+pub type V128Abi = core::arch::aarch64::uint8x16_t;
 
 #[inline]
 #[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {
     let stack_pointer: usize;
     unsafe {
-        std::arch::asm!(
+        core::arch::asm!(
             "mov {}, sp",
             out(reg) stack_pointer,
             options(nostack,nomem),
@@ -40,7 +40,7 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
     // the implementation is backward-compatible and there is no duplication.
     // However, this instruction requires the LR register for both its input and
     // output.
-    std::arch::asm!(
+    core::arch::asm!(
         "mov lr, {pc}",
         "xpaclri",
         "mov {pc}, lr",

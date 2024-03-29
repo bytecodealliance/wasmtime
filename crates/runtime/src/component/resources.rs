@@ -23,8 +23,9 @@
 //! about ABI details can be found in lifting/lowering thoughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
+use crate::prelude::*;
 use anyhow::{bail, Result};
-use std::mem;
+use core::mem;
 use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::PrimaryMap;
 

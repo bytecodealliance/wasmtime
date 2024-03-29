@@ -1,6 +1,6 @@
 //! Unique IDs for modules in the runtime.
 
-use std::{
+use core::{
     num::NonZeroU64,
     sync::atomic::{AtomicU64, Ordering},
 };

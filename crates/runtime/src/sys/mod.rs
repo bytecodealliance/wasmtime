@@ -18,16 +18,8 @@ cfg_if::cfg_if! {
     } else if #[cfg(unix)] {
         mod unix;
         pub use unix::*;
-    } else if #[cfg(wasmtime_custom_platform)] {
+    } else {
         mod custom;
         pub use custom::*;
-    } else {
-        compile_error!(
-            "Wasmtime is being compiled for a platform \
-             that it does not support. If this platform is \
-             one you would like to see supported you may file an \
-             issue on Wasmtime's issue tracker: \
-             https://github.com/bytecodealliance/wasmtime/issues/new\
-        ");
     }
 }

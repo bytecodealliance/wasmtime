@@ -55,6 +55,7 @@ use super::{
     MemoryAllocationIndex,
 };
 use crate::mpk::{self, ProtectionKey, ProtectionMask};
+use crate::prelude::*;
 use crate::{
     CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory, MemoryImageSlot, Mmap,
     MpkEnabled, PoolingInstanceAllocatorConfig,

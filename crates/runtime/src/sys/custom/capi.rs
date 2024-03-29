@@ -186,4 +186,15 @@ extern "C" {
     /// Note that mappings created from this image are not guaranteed to be
     /// deallocated and/or unmapped before this is called.
     pub fn wasmtime_memory_image_free(image: *mut wasmtime_memory_image);
+
+    /// Wasmtime requires a single pointer's space of TLS to be used at runtime,
+    /// and this function returns the current value of the TLS variable.
+    ///
+    /// This value should default to `NULL`.
+    pub fn wasmtime_tls_get() -> *mut u8;
+
+    /// Sets the current TLS value for Wasmtime to the provided value.
+    ///
+    /// This value should be returned when later calling `wasmtime_tls_get`.
+    pub fn wasmtime_tls_set(ptr: *mut u8);
 }

@@ -62,7 +62,7 @@ use crate::{Instance, TrapReason};
 use anyhow::bail;
 use anyhow::Result;
 #[cfg(feature = "threads")]
-use std::time::{Duration, Instant};
+use core::time::Duration;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -122,7 +122,7 @@ pub mod raw {
                     }
                     $(
                         #[cfg(not($attr))]
-                        std::process::abort();
+                        unreachable!();
                     )?
                 }
 
@@ -360,7 +360,7 @@ unsafe fn table_get_lazy_init_func_ref(
     index: u32,
 ) -> *mut u8 {
     let table_index = TableIndex::from_u32(table_index);
-    let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
+    let table = instance.get_table_with_lazy_init(table_index, core::iter::once(index));
     let elem = (*table)
         .get(index)
         .expect("table access already bounds-checked");
@@ -373,7 +373,7 @@ unsafe fn table_get_lazy_init_func_ref(
 unsafe fn drop_externref(_instance: &mut Instance, externref: *mut u8) {
     use crate::VMGcRef;
 
-    let non_null = std::ptr::NonNull::new(externref).unwrap();
+    let non_null = core::ptr::NonNull::new(externref).unwrap();
     let gc_ref = VMGcRef::from_non_null(non_null);
     crate::gc::VMExternData::drop_and_dealloc(gc_ref);
 }
@@ -405,7 +405,7 @@ unsafe fn externref_global_get(instance: &mut Instance, index: u32) -> *mut u8 {
     let limits = *instance.runtime_limits();
     let global = instance.defined_or_imported_global_ptr(index);
     match (*global).as_externref().clone() {
-        None => std::ptr::null_mut(),
+        None => core::ptr::null_mut(),
         Some(externref) => {
             let raw = externref.as_raw();
             let (activations_table, module_info_lookup) =
@@ -428,7 +428,7 @@ unsafe fn externref_global_set(instance: &mut Instance, index: u32, externref: *
     // value. This protects against an `externref` with a `Drop` implementation
     // that calls back into Wasm and touches this global again (we want to avoid
     // it observing a halfway-deinitialized value).
-    let old = std::mem::replace((*global).as_externref_mut(), externref);
+    let old = core::mem::replace((*global).as_externref_mut(), externref);
     drop(old);
 }
 
@@ -456,7 +456,7 @@ fn memory_atomic_wait32(
     timeout: u64,
 ) -> Result<u32, Trap> {
     // convert timeout to Instant, before any wait happens on locking
-    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+    let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
     Ok(instance
         .get_runtime_memory(memory)
@@ -473,7 +473,7 @@ fn memory_atomic_wait64(
     timeout: u64,
 ) -> Result<u32, Trap> {
     // convert timeout to Instant, before any wait happens on locking
-    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+    let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
     Ok(instance
         .get_runtime_memory(memory)
@@ -629,27 +629,45 @@ fn update_mem_size(instance: &mut Instance, num_pages: u32) {
 #[allow(missing_docs)]
 pub mod relocs {
     pub extern "C" fn floorf32(f: f32) -> f32 {
-        f.floor()
+        #[cfg(feature = "std")]
+        return f.floor();
+        #[cfg(not(feature = "std"))]
+        return libm::floorf(f);
     }
 
     pub extern "C" fn floorf64(f: f64) -> f64 {
-        f.floor()
+        #[cfg(feature = "std")]
+        return f.floor();
+        #[cfg(not(feature = "std"))]
+        return libm::floor(f);
     }
 
     pub extern "C" fn ceilf32(f: f32) -> f32 {
-        f.ceil()
+        #[cfg(feature = "std")]
+        return f.ceil();
+        #[cfg(not(feature = "std"))]
+        return libm::ceilf(f);
     }
 
     pub extern "C" fn ceilf64(f: f64) -> f64 {
-        f.ceil()
+        #[cfg(feature = "std")]
+        return f.ceil();
+        #[cfg(not(feature = "std"))]
+        return libm::ceil(f);
     }
 
     pub extern "C" fn truncf32(f: f32) -> f32 {
-        f.trunc()
+        #[cfg(feature = "std")]
+        return f.trunc();
+        #[cfg(not(feature = "std"))]
+        return libm::truncf(f);
     }
 
     pub extern "C" fn truncf64(f: f64) -> f64 {
-        f.trunc()
+        #[cfg(feature = "std")]
+        return f.trunc();
+        #[cfg(not(feature = "std"))]
+        return libm::trunc(f);
     }
 
     const TOINT_32: f32 = 1.0 / f32::EPSILON;
@@ -676,7 +694,15 @@ pub mod relocs {
             }
             x
         } else {
-            (x.abs() + TOINT_32 - TOINT_32).copysign(x)
+            #[cfg(feature = "std")]
+            let abs = x.abs();
+            #[cfg(not(feature = "std"))]
+            let abs = libm::fabsf(x);
+            let nearest = abs + TOINT_32 - TOINT_32;
+            #[cfg(feature = "std")]
+            return nearest.copysign(x);
+            #[cfg(not(feature = "std"))]
+            return libm::copysignf(nearest, x);
         }
     }
 
@@ -695,22 +721,36 @@ pub mod relocs {
             }
             x
         } else {
-            (x.abs() + TOINT_64 - TOINT_64).copysign(x)
+            #[cfg(feature = "std")]
+            let abs = x.abs();
+            #[cfg(not(feature = "std"))]
+            let abs = libm::fabs(x);
+            let nearest = abs + TOINT_64 - TOINT_64;
+            #[cfg(feature = "std")]
+            return nearest.copysign(x);
+            #[cfg(not(feature = "std"))]
+            return libm::copysign(nearest, x);
         }
     }
 
     pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
-        a.mul_add(b, c)
+        #[cfg(feature = "std")]
+        return a.mul_add(b, c);
+        #[cfg(not(feature = "std"))]
+        return libm::fmaf(a, b, c);
     }
 
     pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
-        a.mul_add(b, c)
+        #[cfg(feature = "std")]
+        return a.mul_add(b, c);
+        #[cfg(not(feature = "std"))]
+        return libm::fma(a, b, c);
     }
 
     // This intrinsic is only used on x86_64 platforms as an implementation of
     // the `pshufb` instruction when SSSE3 is not available.
     #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::__m128i;
+    use core::arch::x86_64::__m128i;
     #[cfg(target_arch = "x86_64")]
     #[allow(improper_ctypes_definitions)]
     pub extern "C" fn x86_pshufb(a: __m128i, b: __m128i) -> __m128i {

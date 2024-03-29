@@ -563,6 +563,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn test_pooling_allocator_with_memory_pages_exceeded() {

@@ -6,10 +6,11 @@
 #![allow(missing_docs)]
 
 use crate::{ModuleInfoLookup, VMRuntimeLimits};
-use std::any::Any;
-use std::cmp;
-use std::hash::Hasher;
-use std::ops::Deref;
+use core::any::Any;
+use core::cmp;
+use core::fmt;
+use core::hash::Hasher;
+use core::ops::Deref;
 
 #[derive(Clone)]
 enum Uninhabited {}
@@ -17,8 +18,8 @@ enum Uninhabited {}
 #[derive(Clone)]
 pub struct VMExternRef(Uninhabited);
 
-impl std::fmt::Pointer for VMExternRef {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Pointer for VMExternRef {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {}
     }
 }

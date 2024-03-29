@@ -2,10 +2,12 @@ use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle};
 use crate::memory::Memory;
 use crate::mpk::ProtectionKey;
+use crate::prelude::*;
 use crate::table::{Table, TableElementType};
 use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
+use alloc::sync::Arc;
 use anyhow::{anyhow, bail, Result};
-use std::{alloc, any::Any, mem, ptr, sync::Arc};
+use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, TableSegment,
@@ -382,7 +384,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         let layout = Instance::alloc_layout(handle.instance().offsets());
         let ptr = handle.instance.take().unwrap();
         ptr::drop_in_place(ptr.as_ptr());
-        alloc::dealloc(ptr.as_ptr().cast(), layout);
+        alloc::alloc::dealloc(ptr.as_ptr().cast(), layout);
 
         self.decrement_core_instance_count();
     }
@@ -532,7 +534,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 let funcref = instance.get_func_ref(*idx).unwrap();
                 let table = unsafe { &mut *instance.get_defined_table(table) };
                 let init = (0..table.size()).map(|_| funcref);
-                table.init_func(0, init)?;
+                table.init_func(0, init).err2anyhow()?;
             }
 
             TableInitialValue::GlobalGet(idx) => unsafe {
@@ -542,12 +544,12 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                     TableElementType::Func => {
                         let funcref = (*global).as_func_ref();
                         let init = (0..table.size()).map(|_| funcref);
-                        table.init_func(0, init)?;
+                        table.init_func(0, init).err2anyhow()?;
                     }
                     TableElementType::Extern => {
                         let externref = (*global).as_externref();
                         let init = (0..table.size()).map(|_| externref.clone());
-                        table.init_extern(0, init)?;
+                        table.init_extern(0, init).err2anyhow()?;
                     }
                 }
             },
@@ -563,13 +565,15 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     // segments (FuncTable mode) to initialize.
     for segment in module.table_initialization.segments.iter() {
         let start = get_table_init_start(segment, instance)?;
-        instance.table_init_segment(
-            segment.table_index,
-            &segment.elements,
-            start,
-            0,
-            segment.elements.len(),
-        )?;
+        instance
+            .table_init_segment(
+                segment.table_index,
+                &segment.elements,
+                start,
+                0,
+                segment.elements.len(),
+            )
+            .err2anyhow()?;
     }
 
     Ok(())
@@ -676,7 +680,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
         },
     );
     if !ok {
-        return Err(Trap::MemoryOutOfBounds.into());
+        return Err(Trap::MemoryOutOfBounds).err2anyhow();
     }
 
     Ok(())

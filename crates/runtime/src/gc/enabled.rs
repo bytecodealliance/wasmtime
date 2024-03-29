@@ -99,15 +99,17 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
+use crate::prelude::*;
 use crate::{Backtrace, ModuleInfoLookup, SendSyncPtr, VMGcRef, VMRuntimeLimits};
-use std::alloc::Layout;
-use std::any::Any;
-use std::cell::{Cell, UnsafeCell};
-use std::cmp;
-use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
-use std::mem;
-use std::ptr::{self, NonNull};
+use alloc::alloc::Layout;
+use core::any::Any;
+use core::cell::{Cell, UnsafeCell};
+use core::cmp;
+use core::fmt;
+use core::hash::{Hash, Hasher};
+use core::mem;
+use core::ptr::{self, NonNull};
+use hashbrown::HashSet;
 
 /// An external reference to some opaque data.
 ///
@@ -165,14 +167,8 @@ impl VMGcRef {
     /// Get this GC reference as a `VMExternRef`.
     pub fn as_extern_ref(&self) -> &VMExternRef {
         assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
-        assert_eq!(
-            std::mem::size_of::<VMExternRef>(),
-            std::mem::size_of::<VMGcRef>()
-        );
-        assert_eq!(
-            std::mem::align_of::<VMExternRef>(),
-            std::mem::align_of::<VMGcRef>()
-        );
+        assert_eq!(mem::size_of::<VMExternRef>(), mem::size_of::<VMGcRef>());
+        assert_eq!(mem::align_of::<VMExternRef>(), mem::align_of::<VMGcRef>());
         let ptr = self as *const VMGcRef;
         unsafe { &*(ptr.cast::<VMExternRef>()) }
     }
@@ -180,14 +176,8 @@ impl VMGcRef {
     /// Get this GC reference as a mutable `VMExternRef`.
     pub fn as_extern_ref_mut(&mut self) -> &mut VMExternRef {
         assert!(Self::ONLY_EXTERN_REF_IMPLEMENTED_YET);
-        assert_eq!(
-            std::mem::size_of::<VMExternRef>(),
-            std::mem::size_of::<VMGcRef>()
-        );
-        assert_eq!(
-            std::mem::align_of::<VMExternRef>(),
-            std::mem::align_of::<VMGcRef>()
-        );
+        assert_eq!(mem::size_of::<VMExternRef>(), mem::size_of::<VMGcRef>());
+        assert_eq!(mem::align_of::<VMExternRef>(), mem::align_of::<VMGcRef>());
         let ptr = self as *mut VMGcRef;
         unsafe { &mut *(ptr.cast::<VMExternRef>()) }
     }
@@ -220,9 +210,9 @@ pub(crate) struct VMExternData {
 unsafe impl Send for VMExternRef {}
 unsafe impl Sync for VMExternRef {}
 
-impl std::fmt::Pointer for VMExternRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Pointer::fmt(&self.0, f)
+impl fmt::Pointer for VMExternRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Pointer::fmt(&self.0, f)
     }
 }
 
@@ -269,7 +259,7 @@ impl VMExternData {
 
         let value_and_padding_size = round_up_to_align(value_size, extern_data_align).unwrap();
 
-        let alloc_align = std::cmp::max(value_align, extern_data_align);
+        let alloc_align = cmp::max(value_align, extern_data_align);
         let alloc_size = value_and_padding_size + extern_data_size;
 
         debug_assert!(
@@ -313,7 +303,7 @@ impl VMExternData {
         };
 
         ptr::drop_in_place(data.as_ptr());
-        std::alloc::dealloc(alloc_ptr, layout);
+        alloc::alloc::dealloc(alloc_ptr, layout);
     }
 
     #[inline]
@@ -362,9 +352,9 @@ impl VMExternRef {
             let (layout, footer_offset) =
                 VMExternData::layout_for(mem::size_of::<T>(), mem::align_of::<T>());
 
-            let alloc_ptr = std::alloc::alloc(layout);
+            let alloc_ptr = alloc::alloc::alloc(layout);
             let alloc_ptr = NonNull::new(alloc_ptr).unwrap_or_else(|| {
-                std::alloc::handle_alloc_error(layout);
+                alloc::alloc::handle_alloc_error(layout);
             });
 
             let value_ptr = alloc_ptr.cast::<T>();
@@ -416,7 +406,7 @@ impl VMExternRef {
     /// Use `from_gc_ref` to recreate the `VMExternRef`.
     pub unsafe fn into_gc_ref(self) -> VMGcRef {
         let gc_ref = self.0;
-        std::mem::forget(self);
+        mem::forget(self);
         gc_ref
     }
 
@@ -479,7 +469,7 @@ impl VMExternRef {
     /// Use `from_raw` to recreate the `VMExternRef`.
     pub unsafe fn into_raw(self) -> *mut u8 {
         let raw = self.0;
-        std::mem::forget(self);
+        mem::forget(self);
         raw.as_ptr()
     }
 
@@ -900,7 +890,7 @@ impl VMExternRefActivationsTable {
     pub fn set_gc_okay(&mut self, okay: bool) -> bool {
         #[cfg(debug_assertions)]
         {
-            return std::mem::replace(&mut self.gc_okay, okay);
+            return mem::replace(&mut self.gc_okay, okay);
         }
         #[cfg(not(debug_assertions))]
         {
@@ -915,7 +905,7 @@ struct DebugOnly<T> {
     inner: T,
 }
 
-impl<T> std::ops::Deref for DebugOnly<T> {
+impl<T> core::ops::Deref for DebugOnly<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -930,7 +920,7 @@ impl<T> std::ops::Deref for DebugOnly<T> {
     }
 }
 
-impl<T> std::ops::DerefMut for DebugOnly<T> {
+impl<T> core::ops::DerefMut for DebugOnly<T> {
     fn deref_mut(&mut self) -> &mut T {
         if cfg!(debug_assertions) {
             &mut self.inner
@@ -1014,7 +1004,7 @@ pub unsafe fn gc(
             Some(sm) => sm,
             None => {
                 log::trace!("No stack map for this Wasm frame");
-                return std::ops::ControlFlow::Continue(());
+                return core::ops::ControlFlow::Continue(());
             }
         };
         log::trace!(
@@ -1040,7 +1030,7 @@ pub unsafe fn gc(
             }
 
             let stack_slot = stack_slot as *const *mut u8;
-            let r = std::ptr::read(stack_slot);
+            let r = core::ptr::read(stack_slot);
             log::trace!("Stack slot @ {:p} = {:p}", stack_slot, r);
 
             if let Some(gc_ref) = VMGcRef::from_ptr(r) {
@@ -1058,7 +1048,7 @@ pub unsafe fn gc(
             }
         }
 
-        std::ops::ControlFlow::Continue(())
+        core::ops::ControlFlow::Continue(())
     });
     log::trace!("end GC trace");
 

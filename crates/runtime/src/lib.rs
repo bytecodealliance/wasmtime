@@ -2,12 +2,23 @@
 
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
+#![no_std]
 
+// auto-enable std on known platforms where std is available to get the `sys`
+// module working without invasive changes for no-std.
+#[cfg(any(feature = "std", unix, windows))]
+#[macro_use]
+extern crate std;
+
+extern crate alloc;
+
+use wasmtime_environ::prelude;
+
+use alloc::sync::Arc;
 use anyhow::{Error, Result};
-use std::fmt;
-use std::ptr::NonNull;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
+use core::fmt;
+use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
 
 mod arch;

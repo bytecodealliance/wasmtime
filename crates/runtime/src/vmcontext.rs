@@ -4,14 +4,14 @@
 mod vm_host_func_context;
 
 use crate::gc::VMExternRef;
+use core::cell::UnsafeCell;
+use core::ffi::c_void;
+use core::marker;
+use core::mem;
+use core::ptr::NonNull;
+use core::sync::atomic::{AtomicUsize, Ordering};
+use core::u32;
 use sptr::Strict;
-use std::cell::UnsafeCell;
-use std::ffi::c_void;
-use std::marker;
-use std::mem;
-use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::u32;
 pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
 use wasmtime_environ::{BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC};
 

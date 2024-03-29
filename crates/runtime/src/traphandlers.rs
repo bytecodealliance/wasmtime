@@ -10,13 +10,13 @@ mod coredump;
 #[path = "traphandlers/coredump_disabled.rs"]
 mod coredump;
 
+use crate::prelude::*;
 use crate::sys::traphandlers;
 use crate::{Instance, VMContext, VMRuntimeLimits};
 use anyhow::Error;
-use std::cell::{Cell, UnsafeCell};
-use std::mem::MaybeUninit;
-use std::ptr;
-use std::sync::Once;
+use core::cell::{Cell, UnsafeCell};
+use core::mem::MaybeUninit;
+use core::ptr;
 
 pub use self::backtrace::{Backtrace, Frame};
 pub use self::coredump::CoreDumpStack;
@@ -35,25 +35,56 @@ pub(crate) static mut GET_WASM_TRAP: fn(usize) -> Option<wasmtime_environ::Trap>
 /// This will configure global state such as signal handlers to prepare the
 /// process to receive wasm traps.
 ///
-/// This function must not only be called globally once before entering
-/// WebAssembly but it must also be called once-per-thread that enters
-/// WebAssembly. Currently in wasmtime's integration this function is called on
-/// creation of a `Engine`.
-///
-/// The `is_wasm_pc` argument is used when a trap happens to determine if a
+/// The `get_wasm_trap` argument is used when a trap happens to determine if a
 /// program counter is the pc of an actual wasm trap or not. This is then used
 /// to disambiguate faults that happen due to wasm and faults that happen due to
 /// bugs in Rust or elsewhere.
+///
+/// # Panics
+///
+/// This function will panic on macOS if it is called twice or more times with
+/// different values of `macos_use_mach_ports`.
+///
+/// This function will also panic if the `std` feature is disabled and it's
+/// called concurrently.
 pub fn init_traps(
     get_wasm_trap: fn(usize) -> Option<wasmtime_environ::Trap>,
     macos_use_mach_ports: bool,
 ) {
-    static INIT: Once = Once::new();
-
-    INIT.call_once(|| unsafe {
+    let run_init = || unsafe {
         GET_WASM_TRAP = get_wasm_trap;
         traphandlers::platform_init(macos_use_mach_ports);
-    });
+    };
+
+    #[cfg(feature = "std")]
+    {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+
+        INIT.call_once(run_init);
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
+
+        // 0: not initialized
+        // 1: in the process of calling `run_init`
+        // 2: initialized
+        static INIT_STATE: AtomicU32 = AtomicU32::new(0);
+
+        match INIT_STATE.compare_exchange(0, 1, Relaxed, Relaxed) {
+            Ok(0) => {
+                run_init();
+                let prev = INIT_STATE.swap(2, Relaxed);
+                assert_eq!(prev, 0);
+            }
+            Err(1) => {
+                panic!("concurrent initialization is not supported with `std` feature disabled")
+            }
+            Err(2) => {}
+            _ => unreachable!(),
+        }
+    }
 
     #[cfg(target_os = "macos")]
     assert_eq!(
@@ -128,7 +159,7 @@ pub unsafe fn raise_lib_trap(trap: wasmtime_environ::Trap) -> ! {
 pub unsafe fn catch_unwind_and_longjmp<R>(f: impl FnOnce() -> R) -> R {
     // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
     // panics to rethrow.
-    #[cfg(panic = "unwind")]
+    #[cfg(all(feature = "std", panic = "unwind"))]
     {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
             Ok(ret) => ret,
@@ -140,7 +171,7 @@ pub unsafe fn catch_unwind_and_longjmp<R>(f: impl FnOnce() -> R) -> R {
     // since it won't actually catch anything. Note that
     // `std::panic::catch_unwind` will technically optimize to this but having
     // this branch avoids using the `std::panic` module entirely.
-    #[cfg(not(panic = "unwind"))]
+    #[cfg(not(all(feature = "std", panic = "unwind")))]
     {
         f()
     }
@@ -279,7 +310,7 @@ where
             backtrace,
             coredumpstack,
         })),
-        #[cfg(panic = "unwind")]
+        #[cfg(all(feature = "std", panic = "unwind"))]
         Err((UnwindReason::Panic(panic), _, _)) => std::panic::resume_unwind(panic),
     };
 
@@ -389,14 +420,14 @@ mod call_thread_state {
         pub(crate) unsafe fn pop(&self) {
             let prev = self.prev.replace(ptr::null());
             let head = tls::raw::replace(prev);
-            assert!(std::ptr::eq(head, self));
+            assert!(core::ptr::eq(head, self));
         }
     }
 }
 pub use call_thread_state::*;
 
 enum UnwindReason {
-    #[cfg(panic = "unwind")]
+    #[cfg(all(feature = "std", panic = "unwind"))]
     Panic(Box<dyn std::any::Any + Send>),
     Trap(TrapReason),
 }
@@ -426,7 +457,7 @@ impl CallThreadState {
             // hypothetical backtrace to and it doesn't really make sense to try
             // in the first place since this is a Rust problem rather than a
             // Wasm problem.
-            #[cfg(panic = "unwind")]
+            #[cfg(all(feature = "std", panic = "unwind"))]
             UnwindReason::Panic(_) => (None, None),
             // And if we are just propagating an existing trap that already has
             // a backtrace attached to it, then there is no need to capture a
@@ -538,7 +569,7 @@ impl CallThreadState {
 
     pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &Self> + 'a {
         let mut state = Some(self);
-        std::iter::from_fn(move || {
+        core::iter::from_fn(move || {
             let this = state?;
             state = unsafe { this.prev().as_ref() };
             Some(this)
@@ -553,8 +584,8 @@ impl CallThreadState {
 // the caller to the trap site.
 pub(crate) mod tls {
     use super::CallThreadState;
-    use std::mem;
-    use std::ops::Range;
+    use core::mem;
+    use core::ops::Range;
 
     pub use raw::Ptr;
 
@@ -574,32 +605,40 @@ pub(crate) mod tls {
     // these functions are free to be inlined.
     pub(super) mod raw {
         use super::CallThreadState;
-        use std::cell::Cell;
-        use std::ptr;
+        use sptr::Strict;
 
         pub type Ptr = *const CallThreadState;
 
-        // The first entry here is the `Ptr` which is what's used as part of the
-        // public interface of this module. The second entry is a boolean which
-        // allows the runtime to perform per-thread initialization if necessary
-        // for handling traps (e.g. setting up ports on macOS and sigaltstack on
-        // Unix).
-        thread_local!(static PTR: Cell<(Ptr, bool)> = const { Cell::new((ptr::null(), false)) });
+        const _: () = {
+            assert!(core::mem::align_of::<CallThreadState>() > 1);
+        };
+
+        fn tls_get() -> (Ptr, bool) {
+            let mut initialized = false;
+            let p = Strict::map_addr(crate::sys::tls_get(), |a| {
+                initialized = (a & 1) != 0;
+                a & !1
+            });
+            (p.cast(), initialized)
+        }
+
+        fn tls_set(ptr: Ptr, initialized: bool) {
+            let encoded = Strict::map_addr(ptr, |a| a | usize::from(initialized));
+            crate::sys::tls_set(encoded.cast_mut().cast::<u8>());
+        }
 
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
         pub fn replace(val: Ptr) -> Ptr {
-            PTR.with(|p| {
-                // When a new value is configured that means that we may be
-                // entering WebAssembly so check to see if this thread has
-                // performed per-thread initialization for traps.
-                let (prev, initialized) = p.get();
-                if !initialized {
-                    super::super::lazy_per_thread_init();
-                }
-                p.set((val, true));
-                prev
-            })
+            // When a new value is configured that means that we may be
+            // entering WebAssembly so check to see if this thread has
+            // performed per-thread initialization for traps.
+            let (prev, initialized) = tls_get();
+            if !initialized {
+                super::super::lazy_per_thread_init();
+            }
+            tls_set(val, true);
+            prev
         }
 
         /// Eagerly initialize thread-local runtime functionality. This will be performed
@@ -607,20 +646,18 @@ pub(crate) mod tls {
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
         pub fn initialize() {
-            PTR.with(|p| {
-                let (state, initialized) = p.get();
-                if initialized {
-                    return;
-                }
-                super::super::lazy_per_thread_init();
-                p.set((state, true));
-            })
+            let (state, initialized) = tls_get();
+            if initialized {
+                return;
+            }
+            super::super::lazy_per_thread_init();
+            tls_set(state, true);
         }
 
         #[cfg_attr(feature = "async", inline(never))] // see module docs
         #[cfg_attr(not(feature = "async"), inline)]
         pub fn get() -> Ptr {
-            PTR.with(|p| p.get().0)
+            tls_get().0
         }
     }
 
@@ -644,7 +681,7 @@ pub(crate) mod tls {
         /// Creates new state that initially starts as null.
         pub fn new() -> AsyncWasmCallState {
             AsyncWasmCallState {
-                state: std::ptr::null_mut(),
+                state: core::ptr::null_mut(),
             }
         }
 
@@ -673,7 +710,7 @@ pub(crate) mod tls {
             let ret = PreviousAsyncWasmCallState { state: raw::get() };
             let mut ptr = self.state;
             while let Some(state) = ptr.as_ref() {
-                ptr = state.prev.replace(std::ptr::null_mut());
+                ptr = state.prev.replace(core::ptr::null_mut());
                 state.push();
             }
             ret

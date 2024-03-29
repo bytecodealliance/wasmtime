@@ -5,6 +5,7 @@
 use crate::export::Export;
 use crate::gc::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
+use crate::prelude::*;
 use crate::table::{Table, TableElement, TableElementType};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
@@ -15,16 +16,16 @@ use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo,
     SendSyncPtr, Store, VMFunctionBody, VMSharedTypeIndex, WasmFault,
 };
+use alloc::alloc::Layout;
+use alloc::sync::Arc;
 use anyhow::Error;
 use anyhow::Result;
+use core::any::Any;
+use core::ops::Range;
+use core::ptr::NonNull;
+use core::sync::atomic::AtomicU64;
+use core::{mem, ptr};
 use sptr::Strict;
-use std::alloc::{self, Layout};
-use std::any::Any;
-use std::ops::Range;
-use std::ptr::NonNull;
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-use std::{mem, ptr};
 use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
@@ -167,9 +168,9 @@ impl Instance {
     ) -> InstanceHandle {
         // The allocation must be *at least* the size required of `Instance`.
         let layout = Self::alloc_layout(req.runtime_info.offsets());
-        let ptr = alloc::alloc(layout);
+        let ptr = alloc::alloc::alloc(layout);
         if ptr.is_null() {
-            alloc::handle_alloc_error(layout);
+            alloc::alloc::handle_alloc_error(layout);
         }
         let ptr = ptr.cast::<Instance>();
 
@@ -191,7 +192,7 @@ impl Instance {
                 host_state: req.host_state,
                 vmctx_self_reference: SendSyncPtr::new(NonNull::new(ptr.add(1).cast()).unwrap()),
                 vmctx: VMContext {
-                    _marker: std::marker::PhantomPinned,
+                    _marker: core::marker::PhantomPinned,
                 },
                 #[cfg(feature = "wmemcheck")]
                 wmemcheck_state: {
@@ -506,7 +507,7 @@ impl Instance {
         // today so the `sptr` crate is used. This crate provides the extension
         // trait `Strict` but the method names conflict with the nightly methods
         // so a different syntax is used to invoke methods here.
-        let addr = std::ptr::addr_of!(self.vmctx);
+        let addr = ptr::addr_of!(self.vmctx);
         Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
     }
 
@@ -729,7 +730,7 @@ impl Instance {
         // Safety: we have a `&mut self`, so we have exclusive access
         // to this Instance.
         unsafe {
-            std::ptr::write(into, func_ref);
+            ptr::write(into, func_ref);
         }
     }
 
@@ -835,7 +836,7 @@ impl Instance {
                     dst,
                     elements
                         .iter()
-                        .map(|idx| self.get_func_ref(*idx).unwrap_or(std::ptr::null_mut())),
+                        .map(|idx| self.get_func_ref(*idx).unwrap_or(ptr::null_mut())),
                 )?;
             }
             TableSegmentElements::Expressions(exprs) => {
@@ -849,7 +850,7 @@ impl Instance {
                         table.init_func(
                             dst,
                             exprs.iter().map(|expr| match expr {
-                                TableElementExpression::Null => std::ptr::null_mut(),
+                                TableElementExpression::Null => ptr::null_mut(),
                                 TableElementExpression::Function(idx) => {
                                     self.get_func_ref(*idx).unwrap()
                                 }
@@ -1096,7 +1097,7 @@ impl Instance {
                 let func_index = precomputed.get(i as usize).cloned();
                 let func_ref = func_index
                     .and_then(|func_index| self.get_func_ref(func_index))
-                    .unwrap_or(std::ptr::null_mut());
+                    .unwrap_or(ptr::null_mut());
                 self.tables[idx]
                     .1
                     .set(i, TableElement::FuncRef(func_ref))
@@ -1151,7 +1152,7 @@ impl Instance {
         store: StorePtr,
         imports: Imports,
     ) {
-        assert!(std::ptr::eq(module, self.module().as_ref()));
+        assert!(ptr::eq(module, self.module().as_ref()));
 
         *self.vmctx_plus_offset_mut(offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
         self.set_callee(None);

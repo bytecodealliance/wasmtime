@@ -6,8 +6,8 @@ use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::mpk::ProtectionKey;
 use crate::table::Table;
 use crate::CompiledModuleId;
+use alloc::sync::Arc;
 use anyhow::Result;
-use std::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, VMOffsets,
 };

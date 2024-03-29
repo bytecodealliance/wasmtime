@@ -1,6 +1,6 @@
 use crate::traphandlers::{tls, TrapTest};
 use crate::VMContext;
-use std::mem;
+use core::mem;
 
 pub use crate::sys::capi::{self, wasmtime_longjmp};
 

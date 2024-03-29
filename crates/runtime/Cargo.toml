@@ -16,11 +16,10 @@ workspace = true
 [dependencies]
 wasmtime-wmemcheck = { workspace = true, optional = true }
 wasmtime-asm-macros = { workspace = true }
-wasmtime-environ = { workspace = true, features = ['std'] }
+wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int"], optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
-libc = { workspace = true }
 log = { workspace = true }
 memoffset = "0.9.0"
 indexmap = { workspace = true }
@@ -30,6 +29,14 @@ paste = "1.0.3"
 encoding_rs = { version = "0.8.31", optional = true }
 sptr = "0.3.2"
 wasm-encoder = { workspace = true, optional = true }
+libm = "0.2.7"
+hashbrown = { workspace = true }
+
+# auto-enable anyhow/std for unix/windows targets which currently all have std
+# anyway, as this enables `cargo build -p wasmtime-runtime` without having to do
+# extra changes to the `sys/{unix,windows}` modules.
+[target.'cfg(any(unix, windows))'.dependencies]
+anyhow = { workspace = true, features = ['std'] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 memfd = "0.6.2"
@@ -38,6 +45,7 @@ memfd = "0.6.2"
 mach2 = "0.4.1"
 
 [target.'cfg(unix)'.dependencies]
+libc = { version = "0.2.112", default-features = false }
 rustix = { workspace = true, features = ["mm"] }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
@@ -60,16 +68,24 @@ once_cell = { workspace = true }
 proptest = "1.0.0"
 rand = { version = "0.8.3", features = ['small_rng'] }
 
+# auto-enable the `std` feature for tests, it's not supported to test on no-std
+# at this time.
+wasmtime-runtime = { workspace = true, features = ['std'] }
+
 [build-dependencies]
 cc = "1.0"
 wasmtime-versioned-export-macros = { workspace = true }
 
 [features]
-async = ["dep:wasmtime-fiber"]
-pooling-allocator = []
+# Features that all require `std`
+async = ["dep:wasmtime-fiber", "std"]
+pooling-allocator = ["std"]
+wmemcheck = ['dep:wasmtime-wmemcheck', 'std']
+debug-builtins = ['dep:wasmtime-jit-debug', 'std']
+coredump = ["dep:wasm-encoder", 'std']
+threads = ["wasmtime-environ/threads", "std"]
+std = ['wasmtime-environ/std']
+
+# Features that don't require `std`
 component-model = ["wasmtime-environ/component-model", "dep:encoding_rs"]
-wmemcheck = ['dep:wasmtime-wmemcheck']
-debug-builtins = ['dep:wasmtime-jit-debug']
 gc = ["wasmtime-environ/gc"]
-coredump = ["dep:wasm-encoder"]
-threads = ["wasmtime-environ/threads"]

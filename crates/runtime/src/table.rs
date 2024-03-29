@@ -5,12 +5,13 @@
 #![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
 
 use crate::gc::VMExternRef;
+use crate::prelude::*;
 use crate::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::{SendSyncPtr, Store};
 use anyhow::{bail, format_err, Error, Result};
+use core::ops::Range;
+use core::ptr::{self, NonNull};
 use sptr::Strict;
-use std::ops::Range;
-use std::ptr::{self, NonNull};
 use wasmtime_environ::{
     TablePlan, Trap, WasmHeapType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
 };

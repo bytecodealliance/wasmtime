@@ -21,11 +21,12 @@
 //! frame is a host frame).
 
 use crate::arch;
+use crate::prelude::*;
 use crate::{
     traphandlers::{tls, CallThreadState},
     VMRuntimeLimits,
 };
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]
@@ -108,7 +109,7 @@ impl Backtrace {
             // trampoline did not get a chance to save the last Wasm PC and FP,
             // and we need to use the plumbed-through values instead.
             Some((pc, fp)) => {
-                assert!(std::ptr::eq(limits, state.limits));
+                assert!(core::ptr::eq(limits, state.limits));
                 (pc, fp)
             }
             // Either there is no Wasm currently on the stack, or we exited Wasm
@@ -120,7 +121,7 @@ impl Backtrace {
             }
         };
 
-        let activations = std::iter::once((
+        let activations = core::iter::once((
             last_wasm_exit_pc,
             last_wasm_exit_fp,
             *(*limits).last_wasm_entry_sp.get(),
@@ -128,7 +129,7 @@ impl Backtrace {
         .chain(
             state
                 .iter()
-                .filter(|state| std::ptr::eq(limits, state.limits))
+                .filter(|state| core::ptr::eq(limits, state.limits))
                 .map(|state| {
                     (
                         state.old_last_wasm_exit_pc(),
