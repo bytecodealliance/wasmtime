@@ -7,6 +7,6 @@ license = "Apache-2.0 WITH LLVM-exception"
 publish = false
 
 [dependencies]
-cranelift-isle = { version = "*", path = "../isle/", features = ["fancy-errors", "logging"] }
+cranelift-isle = { version = "*", path = "../isle/", features = ["fancy-errors", "logging", "printer"] }
 env_logger = { workspace = true }
 clap = { workspace = true, features = ['default'] }
