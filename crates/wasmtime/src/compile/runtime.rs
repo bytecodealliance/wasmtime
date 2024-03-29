@@ -11,9 +11,10 @@ use wasmtime_runtime::MmapVec;
 impl<'a> CodeBuilder<'a> {
     fn compile_cached<T>(
         &self,
-        build_artifacts: fn(&Engine, &[u8]) -> Result<(MmapVecWrapper, Option<T>)>,
+        build_artifacts: fn(&Engine, &[u8], Option<&[u8]>) -> Result<(MmapVecWrapper, Option<T>)>,
     ) -> Result<(Arc<CodeMemory>, Option<T>)> {
         let wasm = self.wasm_binary()?;
+        let dwarf_package = self.dwarf_package_binary();
 
         self.engine
             .check_compatible_with_native_host()
@@ -24,6 +25,7 @@ impl<'a> CodeBuilder<'a> {
             let state = (
                 HashedEngineCompileEnv(self.engine),
                 &wasm,
+                &dwarf_package,
                 // Don't hash this as it's just its own "pure" function pointer.
                 NotHashed(build_artifacts),
             );
@@ -32,21 +34,22 @@ impl<'a> CodeBuilder<'a> {
                     .get_data_raw(
                         &state,
                         // Cache miss, compute the actual artifacts
-                        |(engine, wasm, build_artifacts)| -> Result<_> {
-                            let (mmap, info) = (build_artifacts.0)(engine.0, wasm)?;
+                        |(engine, wasm, dwarf_package, build_artifacts)| -> Result<_> {
+                            let (mmap, info) =
+                                (build_artifacts.0)(engine.0, wasm, dwarf_package.as_deref())?;
                             let code = publish_mmap(mmap.0)?;
                             Ok((code, info))
                         },
                         // Implementation of how to serialize artifacts
-                        |(_engine, _wasm, _), (code, _info_and_types)| Some(code.mmap().to_vec()),
+                        |(_engine, _wasm, _, _), (code, _info_and_types)| {
+                            Some(code.mmap().to_vec())
+                        },
                         // Cache hit, deserialize the provided artifacts
-                        |(engine, wasm, _), serialized_bytes| {
-                            let kind = if wasmparser::Parser::is_component(&wasm) {
-                                ObjectKind::Component
-                            } else {
-                                ObjectKind::Module
-                            };
-                            let code = engine.0.load_code_bytes(&serialized_bytes, kind).ok()?;
+                        |(engine, _wasm, _, _), serialized_bytes| {
+                            let code = engine
+                                .0
+                                .load_code_bytes(&serialized_bytes, ObjectKind::Module)
+                                .ok()?;
                             Some((code, None))
                         },
                     )?;

@@ -3,7 +3,6 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::{path::Path, time::Duration};
-
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 

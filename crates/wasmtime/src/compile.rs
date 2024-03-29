@@ -42,11 +42,6 @@ use wasmtime_environ::{
 mod code_builder;
 pub use self::code_builder::{CodeBuilder, HashedEngineCompileEnv};
 
-#[cfg(feature = "runtime")]
-mod runtime;
-#[cfg(feature = "runtime")]
-pub use self::runtime::finish_object;
-
 /// Converts an input binary-encoded WebAssembly module to compilation
 /// artifacts and type information.
 ///
