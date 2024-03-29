@@ -37,10 +37,12 @@ $ ls -l ./target/release/wasmtime
 Much better, but still relatively large! The next thing that can be done is to
 disable the default features of the `wasmtime-cli` crate. This will remove all
 optional functionality from the crate and strip it down to the bare bones
-functionality.
+functionality. Note though that `run` is included to keep the ability to run
+precompiled WebAssembly files as otherwise the CLI doesn't have any
+functionality which isn't too useful.
 
 ```shell
-$ cargo build --release --no-default-features
+$ cargo build --release --no-default-features --features run
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    6.7M Oct 18 08:37 target/release/wasmtime
 ```
@@ -61,7 +63,7 @@ feature which sets the `max_level_off` feature for the `log` and `tracing`
 crate.
 
 ```shell
-$ cargo build --release --no-default-features --features disable-logging
+$ cargo build --release --no-default-features --features run,disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    6.7M Oct 18 08:37 target/release/wasmtime
 ```
@@ -79,7 +81,7 @@ this.
 
 ```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
-$ cargo build --release --no-default-features --features disable-logging
+$ cargo build --release --no-default-features --features run,disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    6.8M Oct 18 08:40 target/release/wasmtime
 ```
@@ -99,7 +101,7 @@ executable.
 ```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
-$ cargo build --release --no-default-features --features disable-logging
+$ cargo build --release --no-default-features --features run,disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    5.0M Oct 18 08:40 target/release/wasmtime
 ```
@@ -114,7 +116,7 @@ to compile than previously. Here LTO is configured with
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
-$ cargo build --release --no-default-features --features disable-logging
+$ cargo build --release --no-default-features --features run,disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    3.3M Oct 18 08:42 target/release/wasmtime
 ```
@@ -129,7 +131,7 @@ $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-$ cargo build --release --no-default-features --features disable-logging
+$ cargo build --release --no-default-features --features run,disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    3.3M Oct 18 08:43 target/release/wasmtime
 ```
@@ -150,7 +152,7 @@ $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
-$ cargo build --release --no-default-features --features disable-logging
+$ cargo build --release --no-default-features --features run,disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    2.4M Oct 18 08:44 target/release/wasmtime
 ```
@@ -172,7 +174,7 @@ $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
-$ cargo +nightly build --release --no-default-features --features disable-logging
+$ cargo +nightly build --release --no-default-features --features run,disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    2.4M Oct 18 08:43 target/release/wasmtime
 ```
@@ -190,7 +192,7 @@ $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
-$ cargo +nightly build --release --no-default-features --features disable-logging \
+$ cargo +nightly build --release --no-default-features --features run,disable-logging \
     -Z build-std=std,panic_abort --target aarch64-apple-darwin
 $ ls -l ./target/aarch64-apple-darwin/release/wasmtime
 -rwxr-xr-x@ 1 root  root    2.3M Oct 18 09:39 target/aarch64-apple-darwin/release/wasmtime
@@ -209,7 +211,7 @@ $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
-$ cargo +nightly build --release --no-default-features --features disable-logging \
+$ cargo +nightly build --release --no-default-features --features run,disable-logging \
     -Z build-std=std,panic_abort --target aarch64-apple-darwin \
     -Z build-std-features=
 $ ls -l ./target/aarch64-apple-darwin/release/wasmtime
