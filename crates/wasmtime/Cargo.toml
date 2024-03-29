@@ -41,8 +41,8 @@ libc = "0.2"
 cfg-if = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }
-serde = "1.0.188"
-serde_derive = "1.0.188"
+serde = { workspace = true }
+serde_derive = { workspace = true }
 serde_json = { workspace = true }
 bincode = "1.2.1"
 indexmap = { workspace = true }
