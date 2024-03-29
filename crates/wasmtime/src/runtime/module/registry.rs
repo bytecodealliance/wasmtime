@@ -34,9 +34,9 @@ pub struct ModuleRegistry {
 }
 
 struct LoadedCode {
-    /// Representation of loaded code which could be either a component or a
-    /// module.
-    code: Arc<CodeObject>,
+    /// Kept alive here in the store to have a strong reference to keep the
+    /// relevant code mapped while the store is alive.
+    _code: Arc<CodeObject>,
 
     /// Modules found within `self.code`, keyed by start address here of the
     /// address of the first function in the module.
@@ -153,7 +153,7 @@ impl ModuleRegistry {
         }
 
         let mut item = LoadedCode {
-            code: code.clone(),
+            _code: code.clone(),
             modules: Default::default(),
         };
         if let Some(module) = module {
@@ -162,12 +162,6 @@ impl ModuleRegistry {
         let prev = self.loaded_code.insert(end_addr, (start_addr, item));
         assert!(prev.is_none());
         id
-    }
-
-    /// Fetches trap information about a program counter in a backtrace.
-    pub fn lookup_trap_code(&self, pc: usize) -> Option<Trap> {
-        let (code, offset) = self.code(pc)?;
-        wasmtime_environ::lookup_trap_code(code.code.code_memory().trap_data(), offset)
     }
 
     /// Fetches frame information about a program counter in a backtrace.
@@ -260,21 +254,21 @@ type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
 /// Returns whether the `pc`, according to globally registered information,
 /// is a wasm trap or not.
-pub fn is_wasm_trap_pc(pc: usize) -> bool {
+pub fn get_wasm_trap(pc: usize) -> Option<Trap> {
     let (code, text_offset) = {
         let all_modules = GLOBAL_CODE.read().unwrap();
 
         let (end, (start, module)) = match all_modules.range(pc..).next() {
             Some(info) => info,
-            None => return false,
+            None => return None,
         };
         if pc < *start || *end < pc {
-            return false;
+            return None;
         }
         (module.clone(), pc - *start)
     };
 
-    wasmtime_environ::lookup_trap_code(code.trap_data(), text_offset).is_some()
+    wasmtime_environ::lookup_trap_code(code.trap_data(), text_offset)
 }
 
 /// Registers a new region of code.

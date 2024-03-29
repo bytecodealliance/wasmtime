@@ -10,6 +10,9 @@ fn main() {
         "/post",
         Some(b"{\"foo\": \"bar\"}"),
         None,
+        None,
+        None,
+        None,
     )
     .context("/post")
     .unwrap();

@@ -7,9 +7,8 @@ use crate::{
     types::{ExportType, ExternType, ImportType},
     Engine,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use once_cell::sync::OnceCell;
-use std::fs;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
@@ -27,7 +26,7 @@ use wasmtime_runtime::{
 mod registry;
 
 pub use registry::{
-    is_wasm_trap_pc, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
+    get_wasm_trap, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
 };
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -64,10 +63,6 @@ pub use registry::{
 /// Using `clone` on a `Module` is a cheap operation. It will not create an
 /// entirely new module, but rather just a new reference to the existing module.
 /// In other words it's a shallow copy, not a deep copy.
-///
-/// ##  [`ModuleBuilder`] - a builder module that can be used to fuse DWRF `.dwp`
-/// packages with a WebAssembly module function for the purposes of debugging.
-/// TODO: more docs...
 ///
 /// ## Examples
 ///
@@ -242,10 +237,9 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        let bytes = bytes.as_ref();
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(bytes)?;
-        Self::from_binary(engine, &bytes, None)
+        crate::CodeBuilder::new(engine)
+            .wasm(bytes.as_ref(), None)?
+            .compile_module()
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given
@@ -279,44 +273,9 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
-        let file = file.as_ref();
-        match Self::new(
-            engine,
-            &fs::read(file)
-                .with_context(|| format!("failed to read input file: {}", file.display()))?,
-        ) {
-            Ok(m) => Ok(m),
-            Err(e) => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "wat")] {
-                        let mut e = e.downcast::<wat::Error>()?;
-                        e.set_path(file);
-                        bail!(e)
-                    } else {
-                        Err(e)
-                    }
-                }
-            }
-        }
-    }
-
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    fn compute_artifacts<'a>(
-        engine: &HashedEngineCompileEnv<'a>,
-        wasm: &[u8],
-        dwarf_package_binary: Option<&'a [u8]>,
-    ) -> Result<(Arc<CodeMemory>, Option<(CompiledModuleInfo, ModuleTypes)>), anyhow::Error> {
-        use crate::{compile::build_artifacts, instantiate::MmapVecWrapper};
-
-        let (mmap, info) = build_artifacts::<MmapVecWrapper>(engine.0, wasm, dwarf_package_binary)?;
-        let code = publish_mmap(mmap.0)?;
-        return Ok((code, info));
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm_file(file.as_ref())?
+            .compile_module()
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -352,59 +311,28 @@ impl Module {
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn from_binary(
+    pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
+        crate::CodeBuilder::new(engine)
+            .wasm(binary, None)?
+            .wat(false)?
+            .compile_module()
+    }
+
+    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
+    /// data and DWARF pacakage binary.
+    ///
+    /// Simlilar to [`Module::from_binary`] but with the addition of the DWARF
+    /// package binary.
+    pub fn from_binary_and_dwp(
         engine: &Engine,
         binary: &[u8],
-        dwarf_package_binary: Option<&[u8]>,
+        dwp_binary: &[u8],
     ) -> Result<Module> {
-        engine
-            .check_compatible_with_native_host()
-            .context("compilation settings are not compatible with the native host")?;
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "cache")] {
-
-                let state = (HashedEngineCompileEnv(engine), binary,
-                    dwarf_package_binary);
-                let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
-                    "wasmtime",
-                    engine.cache_config(),
-                )
-                .get_data_raw(
-                    &state,
-
-                    // Cache miss, compute the actual artifacts
-                    |(engine, wasm, dwarf_package)| {
-                        Self::compute_artifacts(engine, wasm, *dwarf_package)
-                    },
-
-                    // Implementation of how to serialize artifacts
-                    |(_engine, _wasm, _dwarf_package), (code, _info_and_types)| {
-                        Some(code.mmap().to_vec())
-                    },
-
-                    // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm, _dwarf_package), serialized_bytes| {
-                        let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Module).ok()?;
-                        Some((code, None))
-                    },
-                )?;
-            } else {
-                use crate::{instantiate::MmapVecWrapper, compile::build_artifacts};
-
-                let (mmap, info_and_types) = build_artifacts::<MmapVecWrapper>(engine, binary, dwarf_package_binary)?;
-                let code = publish_mmap(mmap.0)?;
-
-                fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-                    let mut code = CodeMemory::new(mmap)?;
-                    code.publish()?;
-                    Ok(Arc::new(code))
-                }
-            }
-        };
-
-        let info_and_types = info_and_types.map(|(info, types)| (info, types.into()));
-        return Self::from_parts(engine, code, info_and_types);
+        crate::CodeBuilder::new(engine)
+            .wasm(binary, None)?
+            .wat(false)?
+            .dwarf_package(dwp_binary, None)?
+            .compile_module()
     }
 
     /// Creates a new WebAssembly `Module` from the contents of the given `file`
@@ -437,7 +365,9 @@ impl Module {
             return Module::from_parts(engine, code, None);
         }
 
-        Module::new(engine, &*mmap)
+        crate::CodeBuilder::new(engine)
+            .wasm(&mmap, Some(file.as_ref()))?
+            .compile_module()
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -522,7 +452,7 @@ impl Module {
     /// The `info_and_types` argument is `None` when a module is being
     /// deserialized from a precompiled artifact or it's `Some` if it was just
     /// compiled and the values are already available.
-    fn from_parts(
+    pub(crate) fn from_parts(
         engine: &Engine,
         code_memory: Arc<CodeMemory>,
         info_and_types: Option<(CompiledModuleInfo, ModuleTypes)>,
@@ -1141,35 +1071,6 @@ pub struct ModuleExport {
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Module>();
-}
-
-/// This is a helper struct used when caching to hash the state of an `Engine`
-/// used for module compilation.
-///
-/// The hash computed for this structure is used to key the global wasmtime
-/// cache and dictates whether artifacts are reused. Consequently the contents
-/// of this hash dictate when artifacts are or aren't re-used.
-#[cfg(any(feature = "cranelift", feature = "winch"))]
-pub(crate) struct HashedEngineCompileEnv<'a>(pub &'a Engine);
-
-#[cfg(any(feature = "cranelift", feature = "winch"))]
-impl std::hash::Hash for HashedEngineCompileEnv<'_> {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
-        // Hash the compiler's state based on its target and configuration.
-        let compiler = self.0.compiler();
-        compiler.triple().hash(hasher);
-        compiler.flags().hash(hasher);
-        compiler.isa_flags().hash(hasher);
-
-        // Hash configuration state read for compilation
-        let config = self.0.config();
-        self.0.tunables().hash(hasher);
-        config.features.hash(hasher);
-        config.wmemcheck.hash(hasher);
-
-        // Catch accidental bugs of reusing across crate versions.
-        config.module_version.hash(hasher);
-    }
 }
 
 impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {

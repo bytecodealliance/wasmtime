@@ -338,8 +338,14 @@ impl<'a, T> LowerContext<'a, T> {
     ///
     /// Note that this is a special case for `Resource<T>`. Most of the time a
     /// host value shouldn't be lowered with a lowering context.
-    pub fn host_resource_lower_own(&mut self, rep: u32) -> Result<HostResourceIndex> {
-        self.resource_tables().host_resource_lower_own(rep)
+    pub fn host_resource_lower_own(
+        &mut self,
+        rep: u32,
+        dtor: Option<NonNull<VMFuncRef>>,
+        flags: Option<InstanceFlags>,
+    ) -> Result<HostResourceIndex> {
+        self.resource_tables()
+            .host_resource_lower_own(rep, dtor, flags)
     }
 
     /// Returns the underlying resource type for the `ty` table specified.
@@ -491,8 +497,14 @@ impl<'a> LiftContext<'a> {
 
     /// Lowers a resource into the host-owned table, returning the index it was
     /// inserted at.
-    pub fn host_resource_lower_own(&mut self, rep: u32) -> Result<HostResourceIndex> {
-        self.resource_tables().host_resource_lower_own(rep)
+    pub fn host_resource_lower_own(
+        &mut self,
+        rep: u32,
+        dtor: Option<NonNull<VMFuncRef>>,
+        flags: Option<InstanceFlags>,
+    ) -> Result<HostResourceIndex> {
+        self.resource_tables()
+            .host_resource_lower_own(rep, dtor, flags)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was

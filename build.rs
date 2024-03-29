@@ -241,6 +241,10 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             return denylist || ref_types || simd;
         }
 
+        if testsuite == "memory64" {
+            return testname.starts_with("simd") || testname.starts_with("threads");
+        }
+
         if testsuite != "winch" {
             return true;
         }

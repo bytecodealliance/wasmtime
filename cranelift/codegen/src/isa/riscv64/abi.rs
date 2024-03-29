@@ -87,17 +87,20 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         16
     }
 
-    fn compute_arg_locs<'a, I>(
+    fn compute_arg_locs(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        params: I,
+        params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-        mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(u32, Option<usize>)>
-    where
-        I: IntoIterator<Item = &'a ir::AbiParam>,
-    {
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<(u32, Option<usize>)> {
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "riscv64 does not support the 'winch' calling convention yet"
+        );
+
         // All registers that can be used as parameters or rets.
         // both start and end are included.
         let (x_start, x_end, f_start, f_end) = match (call_conv, args_or_rets) {

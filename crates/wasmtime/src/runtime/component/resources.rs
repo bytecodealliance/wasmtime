@@ -1,15 +1,14 @@
 use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
-use crate::component::instance::RuntimeImport;
-use crate::component::linker::ResourceImportIndex;
 use crate::component::matching::InstanceType;
-use crate::component::{ComponentType, InstancePre, Lift, Lower};
+use crate::component::{ComponentType, Lift, Lower};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{AsContextMut, StoreContextMut, Trap};
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Result};
 use std::any::TypeId;
 use std::fmt;
 use std::marker;
 use std::mem::MaybeUninit;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType, ResourceIndex,
@@ -336,7 +335,14 @@ pub struct HostResourceTables<'a> {
 #[derive(Default)]
 pub struct HostResourceData {
     cur_generation: u32,
-    generation_of_table_slot: Vec<u32>,
+    table_slot_metadata: Vec<TableSlot>,
+}
+
+#[derive(Copy, Clone)]
+struct TableSlot {
+    generation: u32,
+    flags: Option<InstanceFlags>,
+    dtor: Option<SendSyncPtr<VMFuncRef>>,
 }
 
 /// Host representation of an index into a table slot.
@@ -388,42 +394,43 @@ impl<'a> HostResourceTables<'a> {
     /// Lifts an `own` resource that resides in the host's tables at the `idx`
     /// specified into its `rep`.
     ///
-    /// This method additionally takes an `expected` type which the resource is
-    /// expected to have. All host resources are stored into a single table so
-    /// this is used to perform a runtime check to ensure that the resource
-    /// still has the same type as when it was originally inserted.
-    ///
     /// # Errors
     ///
-    /// Returns an error if `idx` doesn't point to a valid owned resource, if
-    /// `idx` can't be lifted as an `own` (e.g. it has active borrows), or if
-    /// the resource at `idx` does not have the type `expected`.
+    /// Returns an error if `idx` doesn't point to a valid owned resource, or
+    /// if `idx` can't be lifted as an `own` (e.g. it has active borrows).
     pub fn host_resource_lift_own(&mut self, idx: HostResourceIndex) -> Result<u32> {
-        let idx = self.validate_host_index(idx, true)?;
+        let (idx, _) = self.validate_host_index(idx, true)?;
         self.tables.resource_lift_own(None, idx)
     }
 
     /// See [`HostResourceTables::host_resource_lift_own`].
     pub fn host_resource_lift_borrow(&mut self, idx: HostResourceIndex) -> Result<u32> {
-        let idx = self.validate_host_index(idx, false)?;
+        let (idx, _) = self.validate_host_index(idx, false)?;
         self.tables.resource_lift_borrow(None, idx)
     }
 
     /// Lowers an `own` resource to be owned by the host.
     ///
     /// This returns a new index into the host's set of resource tables which
-    /// will point to the `rep` specified as well as recording that it has the
-    /// `ty` specified. The returned index is suitable for conversion into
-    /// either [`Resource`] or [`ResourceAny`].
-    pub fn host_resource_lower_own(&mut self, rep: u32) -> Result<HostResourceIndex> {
+    /// will point to the `rep` specified. The returned index is suitable for
+    /// conversion into either [`Resource`] or [`ResourceAny`].
+    ///
+    /// The `dtor` and instance `flags` are specified as well to know what
+    /// destructor to run when this resource is destroyed.
+    pub fn host_resource_lower_own(
+        &mut self,
+        rep: u32,
+        dtor: Option<NonNull<VMFuncRef>>,
+        flags: Option<InstanceFlags>,
+    ) -> Result<HostResourceIndex> {
         let idx = self.tables.resource_lower_own(None, rep)?;
-        Ok(self.new_host_index(idx))
+        Ok(self.new_host_index(idx, dtor, flags))
     }
 
     /// See [`HostResourceTables::host_resource_lower_own`].
     pub fn host_resource_lower_borrow(&mut self, rep: u32) -> Result<HostResourceIndex> {
         let idx = self.tables.resource_lower_borrow(None, rep)?;
-        Ok(self.new_host_index(idx))
+        Ok(self.new_host_index(idx, None, None))
     }
 
     /// Validates that `idx` is still valid for the host tables, notably
@@ -433,19 +440,20 @@ impl<'a> HostResourceTables<'a> {
     /// The `is_removal` option indicates whether or not this table access will
     /// end up removing the element from the host table. In such a situation the
     /// current generation number is incremented.
-    fn validate_host_index(&mut self, idx: HostResourceIndex, is_removal: bool) -> Result<u32> {
-        let actual = usize::try_from(idx.index()).ok().and_then(|i| {
-            self.host_resource_data
-                .generation_of_table_slot
-                .get(i)
-                .copied()
-        });
+    fn validate_host_index(
+        &mut self,
+        idx: HostResourceIndex,
+        is_removal: bool,
+    ) -> Result<(u32, Option<TableSlot>)> {
+        let actual = usize::try_from(idx.index())
+            .ok()
+            .and_then(|i| self.host_resource_data.table_slot_metadata.get(i).copied());
 
         // If `idx` is out-of-bounds then skip returning an error. In such a
         // situation the operation that this is guarding will return a more
         // precise error, such as a lift operation.
         if let Some(actual) = actual {
-            if actual != idx.gen() {
+            if actual.generation != idx.gen() {
                 bail!("host-owned resource is being used with the wrong type");
             }
         }
@@ -457,7 +465,7 @@ impl<'a> HostResourceTables<'a> {
             self.host_resource_data.cur_generation += 1;
         }
 
-        Ok(idx.index())
+        Ok((idx.index(), actual))
     }
 
     /// Creates a new `HostResourceIndex` which will point to the raw table
@@ -465,24 +473,37 @@ impl<'a> HostResourceTables<'a> {
     ///
     /// This will register metadata necessary to track the current generation
     /// in the returned `HostResourceIndex` as well.
-    fn new_host_index(&mut self, idx: u32) -> HostResourceIndex {
-        let list = &mut self.host_resource_data.generation_of_table_slot;
-        let gen = self.host_resource_data.cur_generation;
+    fn new_host_index(
+        &mut self,
+        idx: u32,
+        dtor: Option<NonNull<VMFuncRef>>,
+        flags: Option<InstanceFlags>,
+    ) -> HostResourceIndex {
+        let list = &mut self.host_resource_data.table_slot_metadata;
+        let info = TableSlot {
+            generation: self.host_resource_data.cur_generation,
+            flags,
+            dtor: dtor.map(SendSyncPtr::new),
+        };
         match list.get_mut(idx as usize) {
-            Some(slot) => *slot = gen,
+            Some(slot) => *slot = info,
             None => {
                 // Resource handles start at 1, not zero, so push two elements
                 // for the first resource handle.
                 if list.is_empty() {
                     assert_eq!(idx, 1);
-                    list.push(0);
+                    list.push(TableSlot {
+                        generation: 0,
+                        flags: None,
+                        dtor: None,
+                    });
                 }
                 assert_eq!(idx as usize, list.len());
-                list.push(gen);
+                list.push(info);
             }
         }
 
-        HostResourceIndex::new(idx, gen)
+        HostResourceIndex::new(idx, info.generation)
     }
 
     /// Drops a host-owned resource from host tables.
@@ -497,9 +518,12 @@ impl<'a> HostResourceTables<'a> {
     /// Returns an error if `idx` doesn't point to a valid resource, points to
     /// an `own` with active borrows, or if it doesn't have the type `expected`
     /// in the host tables.
-    pub fn host_resource_drop(&mut self, idx: HostResourceIndex) -> Result<Option<u32>> {
-        let idx = self.validate_host_index(idx, true)?;
-        self.tables.resource_drop(None, idx)
+    fn host_resource_drop(&mut self, idx: HostResourceIndex) -> Result<Option<(u32, TableSlot)>> {
+        let (idx, slot) = self.validate_host_index(idx, true)?;
+        match self.tables.resource_drop(None, idx)? {
+            Some(rep) => Ok(Some((rep, slot.unwrap()))),
+            None => Ok(None),
+        }
     }
 
     /// Lowers an `own` resource into the guest, converting the `rep` specified
@@ -663,8 +687,11 @@ where
                     // state.
                     //
                     // Afterwards this is the same as the `idx` case below.
+                    //
+                    // Note that flags/dtor are passed as `None` here since
+                    // `Resource<T>` doesn't offer destruction support.
                     ResourceState::NotInTable => {
-                        let idx = cx.host_resource_lower_own(self.rep)?;
+                        let idx = cx.host_resource_lower_own(self.rep, None, None)?;
                         let prev = self.state.swap(ResourceState::Index(idx));
                         assert_eq!(prev, ResourceState::NotInTable);
                         cx.host_resource_lift_borrow(idx)?
@@ -737,18 +764,24 @@ where
         mut store: impl AsContextMut,
     ) -> Result<Self> {
         let store = store.as_context_mut();
-        let store_id = store.0.id();
         let mut tables = HostResourceTables::new_host(store.0);
-        let ResourceAny { idx, ty, own_state } = resource;
+        let ResourceAny { idx, ty, owned } = resource;
         ensure!(ty == ResourceType::host::<T>(), "resource type mismatch");
-        let (state, rep) = if let Some(OwnState { store, dtor, flags }) = own_state {
-            assert_eq!(store_id, store, "wrong store used to convert resource");
-            assert!(dtor.is_some(), "destructor must be set");
-            assert!(flags.is_none(), "flags must not be set");
+        let (state, rep) = if owned {
             let rep = tables.host_resource_lift_own(idx)?;
             (AtomicResourceState::NOT_IN_TABLE, rep)
         } else {
+            // For borrowed handles, first acquire the `rep` via lifting the
+            // borrow. Afterwards though remove any dynamic state associated
+            // with this borrow. `Resource<T>` doesn't participate in dynamic
+            // state tracking and it's assumed embedders know what they're
+            // doing, so the drop call will clear out that a borrow is active
+            //
+            // Note that the result of `drop` should always be `None` as it's a
+            // borrowed handle, so assert so.
             let rep = tables.host_resource_lift_borrow(idx)?;
+            let res = tables.host_resource_drop(idx)?;
+            assert!(res.is_none());
             (AtomicResourceState::BORROW, rep)
         };
         Ok(Resource {
@@ -759,13 +792,8 @@ where
     }
 
     /// See [`ResourceAny::try_from_resource`]
-    pub fn try_into_resource_any<U>(
-        self,
-        store: impl AsContextMut,
-        instance: &InstancePre<U>,
-        idx: ResourceImportIndex,
-    ) -> Result<ResourceAny> {
-        ResourceAny::try_from_resource(self, store, instance, idx)
+    pub fn try_into_resource_any(self, store: impl AsContextMut) -> Result<ResourceAny> {
+        ResourceAny::try_from_resource(self, store)
     }
 }
 
@@ -865,14 +893,7 @@ impl<T> fmt::Debug for Resource<T> {
 pub struct ResourceAny {
     idx: HostResourceIndex,
     ty: ResourceType,
-    own_state: Option<OwnState>,
-}
-
-#[derive(Copy, Clone)]
-struct OwnState {
-    store: StoreId,
-    flags: Option<InstanceFlags>,
-    dtor: Option<SendSyncPtr<VMFuncRef>>,
+    owned: bool,
 }
 
 impl ResourceAny {
@@ -880,63 +901,38 @@ impl ResourceAny {
     ///
     /// * `resource` is the resource to convert.
     /// * `store` is the store to place the returned resource into.
-    /// * `instance_pre` is the instance from where `idx` below was derived.
-    /// * `idx` is the [`ResourceImportIndex`] returned by [`Linker::resource`].
     ///
-    /// [`Linker::resource`]: crate::component::LinkerInstance::resource
+    /// The returned `ResourceAny` will not have a destructor attached to it
+    /// meaning that if `resource_drop` is called then it will not invoked a
+    /// host-defined destructor. This is similar to how `Resource<T>` does not
+    /// have a destructor associated with it.
     ///
     /// # Errors
     ///
-    /// This method will return an error if `idx` isn't valid for
-    /// `instance_pre` or if `resource` is not of the correct type for the
-    /// `idx` import.
-    pub fn try_from_resource<T: 'static, U>(
+    /// This method will return an error if `resource` has already been "taken"
+    /// and has ownership transferred elsewhere which can happen in situations
+    /// such as when it's already lowered into a component.
+    pub fn try_from_resource<T: 'static>(
         resource: Resource<T>,
         mut store: impl AsContextMut,
-        instance_pre: &InstancePre<U>,
-        idx: ResourceImportIndex,
     ) -> Result<Self> {
         let Resource { rep, state, .. } = resource;
         let store = store.as_context_mut();
-        let import = instance_pre
-            .resource_import(idx)
-            .context("import not found")?;
-        let RuntimeImport::Resource {
-            ty, dtor_funcref, ..
-        } = import
-        else {
-            bail!("import is not a resource")
-        };
-        ensure!(*ty == ResourceType::host::<T>(), "resource type mismatch");
 
         let mut tables = HostResourceTables::new_host(store.0);
-        let (idx, own_state) = match state.get() {
-            ResourceState::Borrow => (tables.host_resource_lower_borrow(rep)?, None),
+        let (idx, owned) = match state.get() {
+            ResourceState::Borrow => (tables.host_resource_lower_borrow(rep)?, false),
             ResourceState::NotInTable => {
-                let idx = tables.host_resource_lower_own(rep)?;
-                (
-                    idx,
-                    Some(OwnState {
-                        dtor: Some(dtor_funcref.into()),
-                        flags: None,
-                        store: store.0.id(),
-                    }),
-                )
+                let idx = tables.host_resource_lower_own(rep, None, None)?;
+                (idx, true)
             }
             ResourceState::Taken => bail!("host resource already consumed"),
-            ResourceState::Index(idx) => (
-                idx,
-                Some(OwnState {
-                    dtor: Some(dtor_funcref.into()),
-                    flags: None,
-                    store: store.0.id(),
-                }),
-            ),
+            ResourceState::Index(idx) => (idx, true),
         };
         Ok(Self {
             idx,
-            ty: *ty,
-            own_state,
+            ty: ResourceType::host::<T>(),
+            owned,
         })
     }
 
@@ -960,7 +956,7 @@ impl ResourceAny {
     /// Returns whether this is an owned resource, and if not it's a borrowed
     /// resource.
     pub fn owned(&self) -> bool {
-        self.own_state.is_some()
+        self.owned
     }
 
     /// Destroy this resource and release any state associated with it.
@@ -1002,25 +998,17 @@ impl ResourceAny {
         //
         // This could fail if the index is invalid or if this is removing an
         // `Own` entry which is currently being borrowed.
-        let rep = HostResourceTables::new_host(store.0).host_resource_drop(self.idx)?;
+        let pair = HostResourceTables::new_host(store.0).host_resource_drop(self.idx)?;
 
-        let (rep, state) = match (rep, &self.own_state) {
-            (Some(rep), Some(state)) => (rep, state),
+        let (rep, slot) = match (pair, self.owned) {
+            (Some(pair), true) => pair,
 
             // A `borrow` was removed from the table and no further
             // destruction, e.g. the destructor, is required so we're done.
-            (None, None) => return Ok(()),
+            (None, false) => return Ok(()),
 
             _ => unreachable!(),
         };
-
-        // Double-check that accessing the raw pointers on `state` are safe due
-        // to the presence of `store` above.
-        assert_eq!(
-            store.0.id(),
-            state.store,
-            "wrong store used to destroy resource"
-        );
 
         // Implement the reentrance check required by the canonical ABI. Note
         // that this happens whether or not a destructor is present.
@@ -1028,7 +1016,7 @@ impl ResourceAny {
         // Note that this should be safe because the raw pointer access in
         // `flags` is valid due to `store` being the owner of the flags and
         // flags are never destroyed within the store.
-        if let Some(flags) = state.flags {
+        if let Some(flags) = slot.flags {
             unsafe {
                 if !flags.may_enter() {
                     bail!(Trap::CannotEnterComponent);
@@ -1036,7 +1024,7 @@ impl ResourceAny {
             }
         }
 
-        let dtor = match state.dtor {
+        let dtor = match slot.dtor {
             Some(dtor) => dtor.as_non_null(),
             None => return Ok(()),
         };
@@ -1075,15 +1063,11 @@ impl ResourceAny {
             InterfaceType::Own(t) => {
                 let ty = cx.resource_type(t);
                 let (rep, dtor, flags) = cx.guest_resource_lift_own(t, index)?;
-                let idx = cx.host_resource_lower_own(rep)?;
+                let idx = cx.host_resource_lower_own(rep, dtor, flags)?;
                 Ok(ResourceAny {
                     idx,
                     ty,
-                    own_state: Some(OwnState {
-                        dtor: dtor.map(SendSyncPtr::new),
-                        flags,
-                        store: cx.store_id(),
-                    }),
+                    owned: true,
                 })
             }
             InterfaceType::Borrow(t) => {
@@ -1093,7 +1077,7 @@ impl ResourceAny {
                 Ok(ResourceAny {
                     idx,
                     ty,
-                    own_state: None,
+                    owned: false,
                 })
             }
             _ => bad_type_info(),
@@ -1147,23 +1131,3 @@ unsafe impl Lift for ResourceAny {
         ResourceAny::lift_from_index(cx, ty, index)
     }
 }
-
-impl fmt::Debug for OwnState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OwnState")
-            .field("store", &self.store)
-            .finish()
-    }
-}
-
-// This is a loose definition for `Val` primarily so it doesn't need to be
-// strictly 100% correct, and equality of resources is a bit iffy anyway, so
-// ignore equality here and only factor in the indices and other metadata in
-// `ResourceAny`.
-impl PartialEq for OwnState {
-    fn eq(&self, _other: &OwnState) -> bool {
-        true
-    }
-}
-
-impl Eq for OwnState {}

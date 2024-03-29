@@ -16,7 +16,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, w
-;   sd a0, 0(a1)
+;   sd a0, 0(a1) ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i64_sym(i64) {
@@ -41,7 +41,7 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %sym 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   fence rw, w
-;   sd a0, 0(a2)
+;   sd a0, 0(a2) ; trap: heap_oob
 ;   ret
 
 function %atomic_store_imm_i64(i64) {
@@ -63,7 +63,7 @@ block0(v0: i64):
 ;   lui a2, 3
 ;   addi a4, a2, 0x39
 ;   fence rw, w
-;   sd a4, 0(a0)
+;   sd a4, 0(a0) ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i32(i32, i64) {
@@ -80,7 +80,7 @@ block0(v0: i32, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, w
-;   sw a0, 0(a1)
+;   sw a0, 0(a1) ; trap: heap_oob
 ;   ret
 
 function %atomic_store_i32_sym(i32) {
@@ -105,7 +105,7 @@ block0(v0: i32):
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %sym 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   fence rw, w
-;   sw a0, 0(a2)
+;   sw a0, 0(a2) ; trap: heap_oob
 ;   ret
 
 function %atomic_store_imm_i32(i64) {
@@ -127,6 +127,6 @@ block0(v0: i64):
 ;   lui a2, 3
 ;   addi a4, a2, 0x39
 ;   fence rw, w
-;   sw a4, 0(a0)
+;   sw a4, 0(a0) ; trap: heap_oob
 ;   ret
 

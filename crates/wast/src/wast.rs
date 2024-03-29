@@ -137,8 +137,8 @@ where
     }
 
     /// Register "spectest" which is used by the spec testsuite.
-    pub fn register_spectest(&mut self, use_shared_memory: bool) -> Result<()> {
-        link_spectest(&mut self.core_linker, &mut self.store, use_shared_memory)?;
+    pub fn register_spectest(&mut self, config: &SpectestConfig) -> Result<()> {
+        link_spectest(&mut self.core_linker, &mut self.store, config)?;
         #[cfg(feature = "component-model")]
         link_component_spectest(&mut self.component_linker)?;
         Ok(())
@@ -186,16 +186,11 @@ where
             }
             #[cfg(feature = "component-model")]
             Export::Component(func) => {
-                let params = func.params(&self.store);
-                if exec.args.len() != params.len() {
-                    bail!("mismatched number of parameters")
-                }
                 let values = exec
                     .args
                     .iter()
-                    .zip(params.iter())
-                    .map(|(v, t)| match v {
-                        WastArg::Component(v) => component::val(v, t),
+                    .map(|v| match v {
+                        WastArg::Component(v) => component::val(v),
                         WastArg::Core(_) => bail!("expected core function, found component"),
                     })
                     .collect::<Result<Vec<_>>>()?;

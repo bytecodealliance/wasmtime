@@ -9,8 +9,8 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    types::*, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef, Function,
-    LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
+    types::*, AliasRegion, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef,
+    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -916,7 +916,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::GetFramePointer),
                 (Opcode::GetStackPointer),
                 (Opcode::GetReturnAddress),
-                (Opcode::TableAddr),
                 (Opcode::Null),
                 (Opcode::X86Blendv),
                 (Opcode::IcmpImm),
@@ -1091,7 +1090,6 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::StackStore => insert_stack_store,
         InstructionFormat::Store => insert_load_store,
         InstructionFormat::StoreNoOffset => insert_load_store,
-        InstructionFormat::TableAddr => todo!(),
         InstructionFormat::Ternary => insert_opcode,
         InstructionFormat::TernaryImm8 => insert_ins_ext_lane,
         InstructionFormat::Trap => todo!(),
@@ -1178,12 +1176,12 @@ impl AACategory {
     }
 
     pub fn update_memflags(&self, flags: &mut MemFlags) {
-        match self {
-            AACategory::Other => {}
-            AACategory::Heap => flags.set_heap(),
-            AACategory::Table => flags.set_table(),
-            AACategory::VmCtx => flags.set_vmctx(),
-        }
+        flags.set_alias_region(match self {
+            AACategory::Other => None,
+            AACategory::Heap => Some(AliasRegion::Heap),
+            AACategory::Table => Some(AliasRegion::Table),
+            AACategory::VmCtx => Some(AliasRegion::Vmctx),
+        })
     }
 }
 

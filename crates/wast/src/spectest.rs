@@ -1,24 +1,53 @@
 use wasmtime::*;
 
+/// Configuration of how spectest primitives work.
+pub struct SpectestConfig {
+    /// Whether or not to have a `shared_memory` definition.
+    pub use_shared_memory: bool,
+    /// Whether or not spectest functions that print things actually print things.
+    pub suppress_prints: bool,
+}
+
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
 pub fn link_spectest<T>(
     linker: &mut Linker<T>,
     store: &mut Store<T>,
-    use_shared_memory: bool,
+    config: &SpectestConfig,
 ) -> Result<()> {
+    let suppress = config.suppress_prints;
     linker.func_wrap("spectest", "print", || {})?;
-    linker.func_wrap("spectest", "print_i32", |val: i32| println!("{}: i32", val))?;
-    linker.func_wrap("spectest", "print_i64", |val: i64| println!("{}: i64", val))?;
-    linker.func_wrap("spectest", "print_f32", |val: f32| println!("{}: f32", val))?;
-    linker.func_wrap("spectest", "print_f64", |val: f64| println!("{}: f64", val))?;
-    linker.func_wrap("spectest", "print_i32_f32", |i: i32, f: f32| {
-        println!("{}: i32", i);
-        println!("{}: f32", f);
+    linker.func_wrap("spectest", "print_i32", move |val: i32| {
+        if !suppress {
+            println!("{}: i32", val)
+        }
     })?;
-    linker.func_wrap("spectest", "print_f64_f64", |f1: f64, f2: f64| {
-        println!("{}: f64", f1);
-        println!("{}: f64", f2);
+    linker.func_wrap("spectest", "print_i64", move |val: i64| {
+        if !suppress {
+            println!("{}: i64", val)
+        }
+    })?;
+    linker.func_wrap("spectest", "print_f32", move |val: f32| {
+        if !suppress {
+            println!("{}: f32", val)
+        }
+    })?;
+    linker.func_wrap("spectest", "print_f64", move |val: f64| {
+        if !suppress {
+            println!("{}: f64", val)
+        }
+    })?;
+    linker.func_wrap("spectest", "print_i32_f32", move |i: i32, f: f32| {
+        if !suppress {
+            println!("{}: i32", i);
+            println!("{}: f32", f);
+        }
+    })?;
+    linker.func_wrap("spectest", "print_f64_f64", move |f1: f64, f2: f64| {
+        if !suppress {
+            println!("{}: f64", f1);
+            println!("{}: f64", f2);
+        }
     })?;
 
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
@@ -45,7 +74,7 @@ pub fn link_spectest<T>(
     let memory = Memory::new(&mut *store, ty)?;
     linker.define(&mut *store, "spectest", "memory", memory)?;
 
-    if use_shared_memory {
+    if config.use_shared_memory {
         let ty = MemoryType::shared(1, 1);
         let memory = Memory::new(&mut *store, ty)?;
         linker.define(&mut *store, "spectest", "shared_memory", memory)?;

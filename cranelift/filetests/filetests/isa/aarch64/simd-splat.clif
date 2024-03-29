@@ -16,7 +16,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld1r {v0.2d}, [x0]
+;   ld1r {v0.2d}, [x0] ; trap: heap_oob
 ;   ret
 
 function %splat_load2(i64) -> i64x2 {
@@ -35,7 +35,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x2, x0, #0x64
-;   ld1r {v0.2d}, [x2]
+;   ld1r {v0.2d}, [x2] ; trap: heap_oob
 ;   ret
 
 function %splat_load3(i64) -> i64x2 {
@@ -56,7 +56,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   mov x2, #0xfff0000
 ;   add x4, x0, x2
-;   ld1r {v0.2d}, [x4]
+;   ld1r {v0.2d}, [x4] ; trap: heap_oob
 ;   ret
 
 function %splat_load4(i64, i64) -> i64x2 {
@@ -76,7 +76,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x4, x0, x1
-;   ld1r {v0.2d}, [x4]
+;   ld1r {v0.2d}, [x4] ; trap: heap_oob
 ;   ret
 
 function %splat_load5(i64, i64) -> i64x2 {
@@ -98,7 +98,7 @@ block0(v0: i64, v1: i64):
 ; block0: ; offset 0x0
 ;   add x5, x0, x1
 ;   add x4, x5, #0x64
-;   ld1r {v0.2d}, [x4]
+;   ld1r {v0.2d}, [x4] ; trap: heap_oob
 ;   ret
 
 function %splat_load6(i64, i64) -> i64x2 {
@@ -123,6 +123,6 @@ block0(v0: i64, v1: i64):
 ;   mov x6, #2
 ;   madd x6, x1, x6, x0
 ;   add x5, x6, #0x64
-;   ld1r {v0.2d}, [x5]
+;   ld1r {v0.2d}, [x5] ; trap: heap_oob
 ;   ret
 

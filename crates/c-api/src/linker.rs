@@ -22,6 +22,13 @@ pub extern "C" fn wasmtime_linker_new(engine: &wasm_engine_t) -> Box<wasmtime_li
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_linker_clone(linker: &wasmtime_linker_t) -> Box<wasmtime_linker_t> {
+    Box::new(wasmtime_linker_t {
+        linker: linker.linker.clone(),
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_linker_allow_shadowing(
     linker: &mut wasmtime_linker_t,
     allow_shadowing: bool,

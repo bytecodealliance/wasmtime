@@ -125,21 +125,7 @@ fn api_proxy_streaming() {}
 wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
-    with: {
-       "wasi:io/streams": wasmtime_wasi::bindings::io::streams,
-       "wasi:filesystem/types": wasmtime_wasi::bindings::filesystem::types,
-       "wasi:filesystem/preopens": wasmtime_wasi::bindings::filesystem::preopens,
-       "wasi:cli/environment": wasmtime_wasi::bindings::cli::environment,
-       "wasi:cli/exit": wasmtime_wasi::bindings::cli::exit,
-       "wasi:cli/stdin": wasmtime_wasi::bindings::cli::stdin,
-       "wasi:cli/stdout": wasmtime_wasi::bindings::cli::stdout,
-       "wasi:cli/stderr": wasmtime_wasi::bindings::cli::stderr,
-       "wasi:cli/terminal_input": wasmtime_wasi::bindings::cli::terminal_input,
-       "wasi:cli/terminal_output": wasmtime_wasi::bindings::cli::terminal_output,
-       "wasi:cli/terminal_stdin": wasmtime_wasi::bindings::cli::terminal_stdin,
-       "wasi:cli/terminal_stdout": wasmtime_wasi::bindings::cli::terminal_stdout,
-       "wasi:cli/terminal_stderr": wasmtime_wasi::bindings::cli::terminal_stderr,
-    },
+    with: { "wasi": wasmtime_wasi::bindings },
     ownership: Borrowing {
         duplicate_if_necessary: false
     }

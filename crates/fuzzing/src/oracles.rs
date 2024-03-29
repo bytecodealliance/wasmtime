@@ -256,8 +256,18 @@ fn compile_module(
     config: &generators::Config,
 ) -> Option<Module> {
     log_wasm(bytes);
+
+    fn is_pcc_error(e: &anyhow::Error) -> bool {
+        // NOTE: please keep this predicate in sync with the display format of CodegenError,
+        // defined in `wasmtime/cranelift/codegen/src/result.rs`
+        e.to_string().to_lowercase().contains("proof-carrying-code")
+    }
+
     match config.compile(engine, bytes) {
         Ok(module) => Some(module),
+        Err(e) if is_pcc_error(&e) => {
+            panic!("pcc error in input: {e:#?}");
+        }
         Err(_) if known_valid == KnownValid::No => None,
         Err(e) => {
             if let generators::InstanceAllocationStrategy::Pooling(c) = &config.wasmtime.strategy {
@@ -574,17 +584,31 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
     }
 }
 
-/// Executes the wast `test` spectest with the `config` specified.
+/// Executes the wast `test` with the `config` specified.
 ///
-/// Ensures that spec tests pass regardless of the `Config`.
-pub fn spectest(fuzz_config: generators::Config, test: generators::SpecTest) {
+/// Ensures that wast tests pass regardless of the `Config`.
+pub fn wast_test(fuzz_config: generators::Config, test: generators::WastTest) {
     crate::init_fuzzing();
-    if !fuzz_config.is_spectest_compliant() {
+    if !fuzz_config.is_wast_test_compliant() {
         return;
     }
+
+    // Fuel and epochs don't play well with threads right now, so exclude any
+    // thread-spawning test if it looks like threads are spawned in that case.
+    if fuzz_config.wasmtime.consume_fuel || fuzz_config.wasmtime.epoch_interruption {
+        if test.contents.contains("(thread") {
+            return;
+        }
+    }
+
     log::debug!("running {:?}", test.file);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
-    wast_context.register_spectest(false).unwrap();
+    wast_context
+        .register_spectest(&wasmtime_wast::SpectestConfig {
+            use_shared_memory: false,
+            suppress_prints: true,
+        })
+        .unwrap();
     wast_context
         .run_buffer(test.file, test.contents.as_bytes())
         .unwrap();
@@ -883,7 +907,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
     linker
         .root()
-        .func_new(&component, IMPORT_FUNCTION, {
+        .func_new(IMPORT_FUNCTION, {
             move |mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
                   params: &[Val],
                   results: &mut [Val]|

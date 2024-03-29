@@ -10,9 +10,6 @@ use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 #[cfg(feature = "component-model")]
 use wasmtime::component::Component;
 
-#[cfg(any(feature = "cranelift", feature = "winch"))]
-use wasmtime::module_builder::ModuleBuilder;
-
 pub enum RunTarget {
     Core(Module),
 
@@ -199,19 +196,24 @@ impl RunCommon {
                     e.set_path(path);
                     e
                 })?;
-                let _ = path;
                 if wasmparser::Parser::is_component(&bytes) {
                     #[cfg(feature = "component-model")]
                     {
                         self.ensure_allow_components()?;
-                        RunTarget::Component(Component::new(engine, &bytes)?)
+                        let component = wasmtime::CodeBuilder::new(engine)
+                            .wasm(&bytes, Some(path))?
+                            .compile_component()?;
+                        RunTarget::Component(component)
                     }
                     #[cfg(not(feature = "component-model"))]
                     {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    RunTarget::Core(ModuleBuilder::new(engine).wasm_path(path).compile(&bytes)?)
+                    let module = wasmtime::CodeBuilder::new(engine)
+                        .wasm(&bytes, Some(path))?
+                        .compile_module()?;
+                    RunTarget::Core(module)
                 }
             }
             #[cfg(not(any(feature = "cranelift", feature = "winch")))]

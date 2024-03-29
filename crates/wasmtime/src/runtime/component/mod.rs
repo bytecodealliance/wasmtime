@@ -57,11 +57,11 @@ pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
 pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
-pub use self::linker::{Linker, LinkerInstance, ResourceImportIndex};
+pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};
-pub use self::values::{Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Val, Variant};
+pub use self::values::Val;
 
 pub(crate) use self::resources::HostResourceData;
 
@@ -414,7 +414,25 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // with an invocation of this macro. Resources need to be mapped to a
 ///     // Rust type name.
 ///     with: {
-///         "wasi:random/random": some::other::wasi::random::random,
+///         // This can be used to indicate that entire interfaces have
+///         // bindings generated elsewhere with a path pointing to the
+///         // bindinges-generated module.
+///         "wasi:random/random": wasmtime_wasi::bindings::random::random,
+///
+///         // Similarly entire packages can also be specified.
+///         "wasi:cli": wasmtime_wasi::bindings::cli,
+///
+///         // Or, if applicable, entire namespaces can additionally be mapped.
+///         "wasi": wasmtime_wasi::bindings,
+///
+///         // Versions are supported if multiple versions are in play:
+///         "wasi:http/types@0.2.0": wasmtime_wasi_http::bindings::http::types,
+///         "wasi:http@0.2.0": wasmtime_wasi_http::bindings::http,
+///
+///         // The `with` key can also be used to specify the `T` used in
+///         // import bindings of `Resource<T>`. This can be done to configure
+///         // which typed resource shows up in generated bindings and can be
+///         // useful when working with the typed methods of `ResourceTable`.
 ///         "wasi:filesystem/types/descriptor": MyDescriptorType,
 ///     },
 /// });

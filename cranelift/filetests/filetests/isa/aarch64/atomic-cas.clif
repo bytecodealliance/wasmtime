@@ -40,10 +40,10 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   mov x25, x0
 ;   mov x26, x1
 ;   mov x28, x2
-;   ldaxr w27, [x25]
+;   ldaxr w27, [x25] ; trap: heap_oob
 ;   cmp x27, x26
 ;   b.ne #0x34
-;   stlxr w24, w28, [x25]
+;   stlxr w24, w28, [x25] ; trap: heap_oob
 ;   cbnz x24, #0x20
 ;   cmp w27, w26
 ;   cset x0, eq

@@ -1,7 +1,8 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
 use super::{
-    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, UnalignedMemoryCreator,
+    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, NormalMemoryConfig,
+    UnalignedMemoryCreator,
 };
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
@@ -100,12 +101,12 @@ impl Config {
         self.module_config.generate(input, default_fuel)
     }
 
-    /// Tests whether this configuration is capable of running all spec tests.
-    pub fn is_spectest_compliant(&self) -> bool {
+    /// Tests whether this configuration is capable of running all wast tests.
+    pub fn is_wast_test_compliant(&self) -> bool {
         let config = &self.module_config.config;
 
         // Check for wasm features that must be disabled to run spec tests
-        if config.memory64_enabled || config.threads_enabled {
+        if config.memory64_enabled {
             return false;
         }
 
@@ -114,6 +115,8 @@ impl Config {
             || !config.reference_types_enabled
             || !config.multi_value_enabled
             || !config.simd_enabled
+            || !config.threads_enabled
+            || config.max_memories <= 1
         {
             return false;
         }
@@ -213,6 +216,8 @@ impl Config {
                     );
                 }
             }
+
+            cfg.cranelift_pcc(self.wasmtime.pcc);
         }
 
         // Vary the memory configuration, but only if threads are not enabled.
@@ -226,7 +231,20 @@ impl Config {
         //   `CustomUnaligned` variant isn't actually safe to use with a shared
         //   memory.
         if !self.module_config.config.threads_enabled {
-            match &self.wasmtime.memory_config {
+            // If PCC is enabled, force other options to be compatible: PCC is currently only
+            // supported when bounds checks are elided.
+            let memory_config = if self.wasmtime.pcc {
+                MemoryConfig::Normal(NormalMemoryConfig {
+                    static_memory_maximum_size: Some(4 << 30), // 4 GiB
+                    static_memory_guard_size: Some(2 << 30),   // 2 GiB
+                    dynamic_memory_guard_size: Some(0),
+                    guard_before_linear_memory: false,
+                })
+            } else {
+                self.wasmtime.memory_config.clone()
+            };
+
+            match &memory_config {
                 MemoryConfig::Normal(memory_config) => {
                     cfg.static_memory_maximum_size(
                         memory_config.static_memory_maximum_size.unwrap_or(0),
@@ -324,7 +342,6 @@ impl Config {
     pub fn disable_unimplemented_winch_proposals(&mut self) {
         self.module_config.config.simd_enabled = false;
         self.module_config.config.relaxed_simd_enabled = false;
-        self.module_config.config.memory64_enabled = false;
         self.module_config.config.gc_enabled = false;
         self.module_config.config.threads_enabled = false;
         self.module_config.config.tail_call_enabled = false;
@@ -412,7 +429,7 @@ pub struct WasmtimeConfig {
     canonicalize_nans: bool,
     interruptable: bool,
     pub(crate) consume_fuel: bool,
-    epoch_interruption: bool,
+    pub(crate) epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
     pub memory_config: MemoryConfig,
     force_jump_veneers: bool,
@@ -427,6 +444,9 @@ pub struct WasmtimeConfig {
     native_unwind_info: bool,
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
+
+    /// Whether or not fuzzing should enable PCC.
+    pcc: bool,
 }
 
 impl WasmtimeConfig {

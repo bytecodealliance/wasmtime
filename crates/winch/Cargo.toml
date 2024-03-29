@@ -17,10 +17,14 @@ wasmtime-environ = { workspace = true }
 anyhow = { workspace = true }
 object = { workspace = true }
 cranelift-codegen = { workspace = true }
+wasmtime-cranelift = { workspace = true }
 wasmtime-cranelift-shared = { workspace = true }
 wasmparser = { workspace = true }
 gimli = { workspace = true }
 
 [features]
-component-model = ["wasmtime-environ/component-model"]
+component-model = [
+    "wasmtime-environ/component-model",
+    "wasmtime-cranelift/component-model",
+]
 all-arch = ["winch-codegen/all-arch"]

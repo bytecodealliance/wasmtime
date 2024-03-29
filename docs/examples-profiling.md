@@ -20,14 +20,16 @@ platforms:
 - For Intel's x86 CPUs on Linux or Windows, we support
   [VTune](./examples-profiling-vtune.md).
 
-- For everything else, see the cross-platform profiler below.
+- For Linux and macOS, we support [samply](./examples-profiling-samply.md).
+
+- For everything else, see the [cross-platform
+  profiler](./examples-profiling-guest.md).
 
 The native profilers can measure time spent in WebAssembly guest code as well as
 time spent in the Wasmtime host and potentially even time spent in the kernel.
 This provides a comprehensive view of performance.
 
-If the native profiling tools don't work for you, Wasmtime also provides a
-[cross-platform profiler](./examples-profiling-guest.md). This profiler can only
-measure time spent in WebAssembly guest code, and its timing measurements are
-not as precise as the native profilers. However, it works on every platform that
-Wasmtime supports.
+The cross-platform-profiler can only measure time spent in WebAssembly guest
+code, and its timing measurements are not as precise as the native profilers.
+However, it works on every platform that Wasmtime supports.
+

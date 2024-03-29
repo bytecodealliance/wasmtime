@@ -365,6 +365,7 @@ impl Context {
             "About to optimize with egraph phase:\n{}",
             self.func.display()
         );
+        let fisa = fisa.into();
         self.compute_loop_analysis();
         let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
         let mut pass = EgraphPass::new(
@@ -372,6 +373,7 @@ impl Context {
             &self.domtree,
             &self.loop_analysis,
             &mut alias_analysis,
+            &fisa.flags,
             ctrl_plane,
         );
         pass.run();

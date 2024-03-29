@@ -1428,7 +1428,7 @@ pub(crate) fn emit(
             let alternative = allocs.next(alternative.to_reg());
             let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(alternative, dst);
-            let consequent = consequent.clone().to_reg_mem().with_allocs(allocs);
+            let consequent = allocs.next(consequent.clone().to_reg());
 
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
             // this doesn't clobber flags. Make sure to not do so here.
@@ -1447,7 +1447,7 @@ pub(crate) fn emit(
                     SseOpcode::Movdqa
                 }
             };
-            let inst = Inst::xmm_unary_rm_r(op, consequent, Writable::from_reg(dst));
+            let inst = Inst::xmm_unary_rm_r(op, consequent.into(), Writable::from_reg(dst));
             inst.emit(&[], sink, info, state);
 
             sink.bind_label(next, state.ctrl_plane_mut());
@@ -2226,6 +2226,7 @@ pub(crate) fn emit(
                 SseOpcode::Cvtsd2ss => (LegacyPrefixes::_F2, 0x0F5A, 2),
                 SseOpcode::Sqrtss => (LegacyPrefixes::_F3, 0x0F51, 2),
                 SseOpcode::Sqrtsd => (LegacyPrefixes::_F2, 0x0F51, 2),
+                SseOpcode::Unpcklpd => (LegacyPrefixes::_66, 0x0F14, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -2451,6 +2452,7 @@ pub(crate) fn emit(
                 AvxOpcode::Vcvtsd2ss => (LP::_F2, OM::_0F, 0x5A),
                 AvxOpcode::Vsqrtss => (LP::_F3, OM::_0F, 0x51),
                 AvxOpcode::Vsqrtsd => (LP::_F2, OM::_0F, 0x51),
+                AvxOpcode::Vunpcklpd => (LP::_66, OM::_0F, 0x14),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()

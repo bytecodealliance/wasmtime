@@ -3,7 +3,7 @@
 pub use emit_state::EmitState;
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{types, ExternalName, LibCall, Opcode, RelSourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, LibCall, Opcode, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
@@ -1624,7 +1624,7 @@ impl PrettyPrint for Inst {
                 let size = u8::try_from(ty.bytes()).unwrap();
                 let alternative = pretty_print_reg(alternative.to_reg(), size, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size, allocs);
-                let consequent = consequent.pretty_print(size, allocs);
+                let consequent = pretty_print_reg(consequent.to_reg(), size, allocs);
                 let suffix = match *ty {
                     types::F64 => "sd",
                     types::F32 => "ss",
@@ -2334,7 +2334,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_use(alternative.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
-            consequent.get_operands(collector);
+            collector.reg_use(consequent.to_reg());
         }
         Inst::Push64 { src } => {
             src.get_operands(collector);
@@ -2366,6 +2366,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             let info = info.as_ref().expect("CallInfo is expected in this path");
             match dest {
                 RegMem::Reg { reg } if info.callee_conv == CallConv::Tail => {
+                    // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+                    // This shouldn't be a fixed register constraint.
+                    collector.reg_fixed_use(*reg, regs::r15())
+                }
+                RegMem::Reg { reg } if info.callee_conv == CallConv::Winch => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
                     // This shouldn't be a fixed register constraint.
                     collector.reg_fixed_use(*reg, regs::r15())

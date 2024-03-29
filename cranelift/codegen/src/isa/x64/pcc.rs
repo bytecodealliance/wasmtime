@@ -4,7 +4,7 @@ use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::isa::x64::args::AvxOpcode;
 use crate::isa::x64::inst::args::{
-    AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SyntheticAmode,
+    AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SseOpcode, SyntheticAmode,
     ToWritableReg, CC,
 };
 use crate::isa::x64::inst::Inst;
@@ -259,8 +259,8 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst_lo, 64, 64)?;
-            undefined_result(ctx, vcode, dst_hi, 64, 64)?;
+            undefined_result(ctx, vcode, dst_lo, 64, size.to_bits().into())?;
+            undefined_result(ctx, vcode, dst_hi, 64, size.to_bits().into())?;
             Ok(())
         }
         Inst::Mul8 { dst, ref src2, .. } => {
@@ -270,7 +270,7 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst, 64, 64)?;
+            undefined_result(ctx, vcode, dst, 64, 16)?;
             Ok(())
         }
         Inst::IMul {
@@ -285,7 +285,7 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst, 64, 64)?;
+            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
             Ok(())
         }
         Inst::IMulImm {
@@ -300,7 +300,7 @@ pub(crate) fn check(
                 }
                 RegMem::Reg { .. } => {}
             }
-            undefined_result(ctx, vcode, dst, 64, 64)?;
+            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
             Ok(())
         }
         Inst::CheckedSRemSeq {
@@ -514,19 +514,7 @@ pub(crate) fn check(
             _ => undefined_result(ctx, vcode, dst, 64, 64),
         },
 
-        Inst::XmmCmove {
-            dst,
-            ref consequent,
-            ..
-        } => {
-            match <&RegMem>::from(consequent) {
-                RegMem::Mem { ref addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
+        Inst::XmmCmove { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 
         Inst::Push64 { ref src } => match <&RegMemImm>::from(src) {
             RegMemImm::Mem { ref addr } => {
@@ -551,6 +539,35 @@ pub(crate) fn check(
             match <&RegMem>::from(src2) {
                 RegMem::Mem { ref addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::XmmUnaryRmRUnaligned {
+            dst,
+            ref src,
+            op: SseOpcode::Movss,
+            ..
+        } => {
+            match <&RegMem>::from(src) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, F32, 32)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+        Inst::XmmUnaryRmRUnaligned {
+            dst,
+            ref src,
+            op: SseOpcode::Movsd,
+            ..
+        } => {
+            match <&RegMem>::from(src) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, F64, 64)?;
                 }
                 RegMem::Reg { .. } => {}
             }
@@ -609,17 +626,17 @@ pub(crate) fn check(
             src: ref src2,
             ..
         } => {
-            let size = match op {
-                AvxOpcode::Vmovss => 32,
-                AvxOpcode::Vmovsd => 64,
+            let (ty, size) = match op {
+                AvxOpcode::Vmovss => (F32, 32),
+                AvxOpcode::Vmovsd => (F64, 64),
 
                 // We assume all other operations happen on 128-bit values.
-                _ => 128,
+                _ => (I8X16, 128),
             };
 
             match <&RegMem>::from(src2) {
                 RegMem::Mem { ref addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, size)?;
+                    check_load(ctx, None, addr, vcode, ty, size)?;
                 }
                 RegMem::Reg { .. } => {}
             }
@@ -663,6 +680,24 @@ pub(crate) fn check(
         }
 
         Inst::XmmToGprVex { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::XmmMovRM {
+            ref dst,
+            op: SseOpcode::Movss,
+            ..
+        } => {
+            check_store(ctx, None, dst, vcode, F32)?;
+            Ok(())
+        }
+
+        Inst::XmmMovRM {
+            ref dst,
+            op: SseOpcode::Movsd,
+            ..
+        } => {
+            check_store(ctx, None, dst, vcode, F64)?;
+            Ok(())
+        }
 
         Inst::XmmMovRM { ref dst, .. } | Inst::XmmMovRMImm { ref dst, .. } => {
             check_store(ctx, None, dst, vcode, I8X16)?;

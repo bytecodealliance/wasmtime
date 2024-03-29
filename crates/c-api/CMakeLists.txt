@@ -107,16 +107,14 @@ else()
 	endif()
 endif()
 
-target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include
-	${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include)
+target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 include(GNUInstallDirs)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime.h
 	${CMAKE_CURRENT_SOURCE_DIR}/include/wasi.h
 	${CMAKE_CURRENT_SOURCE_DIR}/include/doc-wasm.h
-	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include/wasm.h
-	${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include/wasm.hh
+	${CMAKE_CURRENT_SOURCE_DIR}/include/wasm.h
+	${CMAKE_CURRENT_SOURCE_DIR}/include/wasm.hh
 	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/wasmtime
 	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

@@ -125,9 +125,17 @@ pub enum MemoryError {
     #[error("Requested an offset of {offset} but max was {max}")]
     InvalidOffset { offset: u64, max: u64 },
     #[error("Load of {load_size} bytes is larger than available size at address {addr:?}")]
-    OutOfBoundsLoad { addr: Address, load_size: usize },
+    OutOfBoundsLoad {
+        addr: Address,
+        load_size: usize,
+        mem_flags: MemFlags,
+    },
     #[error("Store of {store_size} bytes is larger than available size at address {addr:?}")]
-    OutOfBoundsStore { addr: Address, store_size: usize },
+    OutOfBoundsStore {
+        addr: Address,
+        store_size: usize,
+        mem_flags: MemFlags,
+    },
     #[error("Load of {load_size} bytes is misaligned at address {addr:?}")]
     MisalignedLoad { addr: Address, load_size: usize },
     #[error("Store of {store_size} bytes is misaligned at address {addr:?}")]

@@ -86,10 +86,7 @@ impl Engine {
             // Ensure that wasmtime_runtime's signal handlers are configured. This
             // is the per-program initialization required for handling traps, such
             // as configuring signals, vectored exception handlers, etc.
-            wasmtime_runtime::init_traps(
-                crate::module::is_wasm_trap_pc,
-                config.macos_use_mach_ports,
-            );
+            wasmtime_runtime::init_traps(crate::module::get_wasm_trap, config.macos_use_mach_ports);
             #[cfg(feature = "debug-builtins")]
             wasmtime_runtime::debug_builtins::ensure_exported();
         }
@@ -517,10 +514,9 @@ impl Engine {
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_artifacts::<Vec<u8>>(self, &bytes, None)?;
-        Ok(v)
+        crate::CodeBuilder::new(self)
+            .wasm(bytes, None)?
+            .compile_module_serialized()
     }
 
     /// Same as [`Engine::precompile_module`] except for a
@@ -528,10 +524,9 @@ impl Engine {
     #[cfg(feature = "component-model")]
     #[cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(&bytes)?;
-        let (v, _) = crate::compile::build_component_artifacts::<Vec<u8>>(self, &bytes)?;
-        Ok(v)
+        crate::CodeBuilder::new(self)
+            .wasm(bytes, None)?
+            .compile_component_serialized()
     }
 
     /// Produces a blob of bytes by serializing the `engine`'s configuration data to
@@ -659,7 +654,7 @@ impl Engine {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
-        crate::module::HashedEngineCompileEnv(self)
+        crate::compile::HashedEngineCompileEnv(self)
     }
 
     /// Executes `f1` and `f2` in parallel if parallel compilation is enabled at

@@ -405,10 +405,6 @@ impl Amode {
         }
     }
 
-    pub(crate) fn can_trap(&self) -> bool {
-        !self.get_flags().notrap()
-    }
-
     pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         // The order in which we consume allocs here must match the
         // order in which we produce operands in get_operands() above.
@@ -1151,6 +1147,7 @@ pub enum SseOpcode {
     Ucomiss,
     Ucomisd,
     Unpcklps,
+    Unpcklpd,
     Unpckhps,
     Xorps,
     Xorpd,
@@ -1309,7 +1306,8 @@ impl SseOpcode {
             | SseOpcode::Punpcklqdq
             | SseOpcode::Punpckhqdq
             | SseOpcode::Pshuflw
-            | SseOpcode::Pshufhw => SSE2,
+            | SseOpcode::Pshufhw
+            | SseOpcode::Unpcklpd => SSE2,
 
             SseOpcode::Pabsb
             | SseOpcode::Pabsw
@@ -1566,6 +1564,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",
             SseOpcode::Movddup => "movddup",
+            SseOpcode::Unpcklpd => "unpcklpd",
         };
         write!(fmt, "{}", name)
     }
@@ -1767,7 +1766,8 @@ impl AvxOpcode {
             | AvxOpcode::Vsqrtss
             | AvxOpcode::Vsqrtsd
             | AvxOpcode::Vroundss
-            | AvxOpcode::Vroundsd => {
+            | AvxOpcode::Vroundsd
+            | AvxOpcode::Vunpcklpd => {
                 smallvec![InstructionSet::AVX]
             }
 

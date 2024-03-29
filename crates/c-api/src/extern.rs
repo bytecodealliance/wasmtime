@@ -3,7 +3,7 @@ use crate::{
     CStoreContext, StoreRef,
 };
 use std::mem::ManuallyDrop;
-use wasmtime::{Extern, Func, Global, Memory, Table};
+use wasmtime::{Extern, Func, Global, Memory, SharedMemory, Table};
 
 #[derive(Clone)]
 pub struct wasm_extern_t {
@@ -82,6 +82,7 @@ pub const WASMTIME_EXTERN_FUNC: wasmtime_extern_kind_t = 0;
 pub const WASMTIME_EXTERN_GLOBAL: wasmtime_extern_kind_t = 1;
 pub const WASMTIME_EXTERN_TABLE: wasmtime_extern_kind_t = 2;
 pub const WASMTIME_EXTERN_MEMORY: wasmtime_extern_kind_t = 3;
+pub const WASMTIME_EXTERN_SHAREDMEMORY: wasmtime_extern_kind_t = 4;
 
 #[repr(C)]
 pub union wasmtime_extern_union {
@@ -89,6 +90,17 @@ pub union wasmtime_extern_union {
     pub table: Table,
     pub global: Global,
     pub memory: Memory,
+    pub sharedmemory: ManuallyDrop<Box<SharedMemory>>,
+}
+
+impl Drop for wasmtime_extern_t {
+    fn drop(&mut self) {
+        if self.kind == WASMTIME_EXTERN_SHAREDMEMORY {
+            unsafe {
+                ManuallyDrop::drop(&mut self.of.sharedmemory);
+            }
+        }
+    }
 }
 
 impl wasmtime_extern_t {
@@ -98,7 +110,8 @@ impl wasmtime_extern_t {
             WASMTIME_EXTERN_GLOBAL => Extern::Global(self.of.global),
             WASMTIME_EXTERN_TABLE => Extern::Table(self.of.table),
             WASMTIME_EXTERN_MEMORY => Extern::Memory(self.of.memory),
-            other => panic!("unknown wasm_extern_kind_t: {}", other),
+            WASMTIME_EXTERN_SHAREDMEMORY => Extern::SharedMemory((**self.of.sharedmemory).clone()),
+            other => panic!("unknown wasmtime_extern_kind_t: {}", other),
         }
     }
 }
@@ -122,7 +135,12 @@ impl From<Extern> for wasmtime_extern_t {
                 kind: WASMTIME_EXTERN_MEMORY,
                 of: wasmtime_extern_union { memory },
             },
-            Extern::SharedMemory(_memory) => todo!(),
+            Extern::SharedMemory(sharedmemory) => wasmtime_extern_t {
+                kind: WASMTIME_EXTERN_SHAREDMEMORY,
+                of: wasmtime_extern_union {
+                    sharedmemory: ManuallyDrop::new(Box::new(sharedmemory)),
+                },
+            },
         }
     }
 }

@@ -492,9 +492,9 @@ where
         let memory_index = MemoryIndex::from_u32(memarg.memory);
         let heap = self.env.resolve_heap(memory_index);
         let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None));
-        let offset = bounds::ensure_index_and_offset(self.masm, index, memarg.offset, ptr_size);
+        let offset =
+            bounds::ensure_index_and_offset(self.masm, index, memarg.offset, heap.ty.into());
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
-        let scratch = <M::ABI as ABI>::scratch_reg();
 
         let addr = match heap.style {
             // == Dynamic Heaps ==
@@ -509,19 +509,27 @@ where
                     bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
 
                 let index_reg = index.as_typed_reg().reg;
+                // Allocate a temporary register to hold
+                //      index + offset + access_size
+                //  which will serve as the check condition.
+                let index_offset_and_access_size = self.context.any_gpr(self.masm);
 
-                // Move the value of the index to the scratch register
-                // to perform the overflow check to avoid clobbering the
-                // initial index value.
-                self.masm.mov(index_reg.into(), scratch, heap.ty.into());
+                // Move the value of the index to the
+                // index_offset_and_access_size register to perform the overflow
+                // check to avoid clobbering the initial index value.
+                self.masm.mov(
+                    index_reg.into(),
+                    index_offset_and_access_size,
+                    heap.ty.into(),
+                );
                 // Perform
                 // index = index + offset + access_size, trapping if the
                 // addition overflows.
                 self.masm.checked_uadd(
-                    scratch,
-                    scratch,
+                    index_offset_and_access_size,
+                    index_offset_and_access_size,
                     RegImm::i64(offset_with_access_size as i64),
-                    ptr_size,
+                    heap.ty.into(),
                     TrapCode::HeapOutOfBounds,
                 );
 
@@ -534,14 +542,18 @@ where
                     bounds,
                     index,
                     offset,
-                    |masm, bounds, index| {
-                        let index_reg = index.as_typed_reg().reg;
+                    |masm, bounds, _| {
                         let bounds_reg = bounds.as_typed_reg().reg;
-                        masm.cmp(bounds_reg.into(), index_reg.into(), heap.ty.into());
+                        masm.cmp(
+                            bounds_reg.into(),
+                            index_offset_and_access_size.into(),
+                            heap.ty.into(),
+                        );
                         IntCmpKind::GtU
                     },
                 );
                 self.context.free_reg(bounds.as_typed_reg().reg);
+                self.context.free_reg(index_offset_and_access_size);
                 Some(addr)
             }
 
@@ -616,7 +628,11 @@ where
                     |masm, bounds, index| {
                         let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
                         let index_reg = index.as_typed_reg().reg;
-                        masm.cmp(RegImm::i64(adjusted_bounds as i64), index_reg, ptr_size);
+                        masm.cmp(
+                            RegImm::i64(adjusted_bounds as i64),
+                            index_reg,
+                            heap.ty.into(),
+                        );
                         IntCmpKind::GtU
                     },
                 );

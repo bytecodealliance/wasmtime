@@ -10,6 +10,7 @@ use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, OperandSize,
     RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
 };
+use crate::reg::Reg;
 use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
 use regalloc2::RegClass;
@@ -1593,8 +1594,24 @@ where
         //   [ vmctx, delta, index ]
         self.context.stack.extend([mem.try_into().unwrap()]);
 
+        let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
         let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>();
-        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin))
+        FnCall::emit::<M, M::Ptr>(self.masm, &mut self.context, Callee::Builtin(builtin));
+
+        // The memory32_grow builtin returns a pointer type, therefore we must
+        // ensure that the return type is representative of the address space of
+        // the heap type.
+        match (self.env.ptr_type(), heap.ty) {
+            (WasmValType::I64, WasmValType::I64) => {}
+            // When the heap type is smaller than the pointer type, we adjust
+            // the result of the memory32_grow builtin.
+            (WasmValType::I64, WasmValType::I32) => {
+                let top: Reg = self.context.pop_to_reg(self.masm, None).into();
+                self.masm.wrap(top.into(), top.into());
+                self.context.stack.push(TypedReg::i32(top).into());
+            }
+            _ => unimplemented!("Support for 32-bit platforms"),
+        }
     }
 
     fn visit_data_drop(&mut self, data_index: u32) {

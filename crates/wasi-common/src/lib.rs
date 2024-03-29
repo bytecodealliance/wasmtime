@@ -68,6 +68,7 @@
 //! interface to plug in its own implementations of each of these resources.
 
 #![warn(clippy::cast_sign_loss)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod clocks;
 mod ctx;
@@ -79,9 +80,11 @@ pub mod random;
 pub mod sched;
 pub mod snapshots;
 mod string_array;
+#[cfg_attr(docsrs, doc(cfg(feature = "sync")))]
 #[cfg(feature = "sync")]
 pub mod sync;
 pub mod table;
+#[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
 #[cfg(feature = "tokio")]
 pub mod tokio;
 
@@ -150,6 +153,7 @@ macro_rules! define_wasi {
 /// Note: this function is designed for usage where it is acceptable for
 /// Wasmtime failures to terminate the parent process, such as in the Wasmtime
 /// CLI; this would not be suitable for use in multi-tenant embeddings.
+#[cfg_attr(docsrs, doc(cfg(feature = "exit")))]
 #[cfg(feature = "exit")]
 pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
     use std::process;

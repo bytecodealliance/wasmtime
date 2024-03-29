@@ -5,18 +5,8 @@ wasmtime::component::bindgen!({
     tracing: true,
     async: true,
     with: {
-        "wasi:cli/stderr": wasmtime_wasi::bindings::cli::stderr,
-        "wasi:cli/stdin": wasmtime_wasi::bindings::cli::stdin,
-        "wasi:cli/stdout": wasmtime_wasi::bindings::cli::stdout,
-        "wasi:clocks/monotonic-clock": wasmtime_wasi::bindings::clocks::monotonic_clock,
-        "wasi:clocks/timezone": wasmtime_wasi::bindings::clocks::timezone,
-        "wasi:clocks/wall-clock": wasmtime_wasi::bindings::clocks::wall_clock,
-        "wasi:http/incoming-handler": bindings::http::incoming_handler,
-        "wasi:http/outgoing-handler": bindings::http::outgoing_handler,
-        "wasi:http/types": bindings::http::types,
-        "wasi:io/streams": wasmtime_wasi::bindings::io::streams,
-        "wasi:io/poll": wasmtime_wasi::bindings::io::poll,
-        "wasi:random/random": wasmtime_wasi::bindings::random::random,
+        "wasi:http": bindings::http,
+        "wasi": wasmtime_wasi::bindings,
     },
 });
 
@@ -56,18 +46,9 @@ pub mod sync {
         tracing: true,
         async: false,
         with: {
-            "wasi:cli/stderr": wasmtime_wasi::bindings::cli::stderr,
-            "wasi:cli/stdin": wasmtime_wasi::bindings::cli::stdin,
-            "wasi:cli/stdout": wasmtime_wasi::bindings::cli::stdout,
-            "wasi:clocks/monotonic-clock": wasmtime_wasi::bindings::clocks::monotonic_clock,
-            "wasi:clocks/timezone": wasmtime_wasi::bindings::clocks::timezone,
-            "wasi:clocks/wall-clock": wasmtime_wasi::bindings::clocks::wall_clock,
-            "wasi:http/incoming-handler": bindings::http::incoming_handler,
-            "wasi:http/outgoing-handler": bindings::http::outgoing_handler,
-            "wasi:http/types": bindings::http::types,
-            "wasi:io/streams": wasmtime_wasi::bindings::io::streams,
-            "wasi:poll/poll": wasmtime_wasi::bindings::poll::poll,
-            "wasi:random/random": wasmtime_wasi::bindings::random::random,
+            "wasi:http": bindings::http, // http is in this crate
+            "wasi:io": wasmtime_wasi::bindings::sync_io, // io is sync
+            "wasi": wasmtime_wasi::bindings, // everything else
         },
     });
 

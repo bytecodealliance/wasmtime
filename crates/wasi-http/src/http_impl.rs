@@ -22,15 +22,15 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
 
         let connect_timeout = opts
             .and_then(|opts| opts.connect_timeout)
-            .unwrap_or(std::time::Duration::from_millis(600 * 1000));
+            .unwrap_or(std::time::Duration::from_secs(600));
 
         let first_byte_timeout = opts
             .and_then(|opts| opts.first_byte_timeout)
-            .unwrap_or(std::time::Duration::from_millis(600 * 1000));
+            .unwrap_or(std::time::Duration::from_secs(600));
 
         let between_bytes_timeout = opts
             .and_then(|opts| opts.between_bytes_timeout)
-            .unwrap_or(std::time::Duration::from_millis(600 * 1000));
+            .unwrap_or(std::time::Duration::from_secs(600));
 
         let req = self.table().delete(request_id)?;
         let mut builder = hyper::Request::builder();

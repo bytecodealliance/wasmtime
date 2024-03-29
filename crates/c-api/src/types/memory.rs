@@ -109,6 +109,11 @@ pub extern "C" fn wasmtime_memorytype_is64(mt: &wasm_memorytype_t) -> bool {
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_memorytype_isshared(mt: &wasm_memorytype_t) -> bool {
+    mt.ty().ty.is_shared()
+}
+
+#[no_mangle]
 pub extern "C" fn wasm_memorytype_as_externtype(ty: &wasm_memorytype_t) -> &wasm_externtype_t {
     &ty.ext
 }

@@ -1,3 +1,5 @@
+#[cfg(feature = "preview1")]
+use crate::WasiP1Ctx;
 use crate::{
     clocks::{
         host::{monotonic_clock, wall_clock},
@@ -28,6 +30,7 @@ pub struct WasiCtxBuilder {
     wall_clock: Box<dyn HostWallClock + Send>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     allowed_network_uses: AllowedNetworkUses,
+    allow_blocking_current_thread: bool,
     built: bool,
 }
 
@@ -78,6 +81,7 @@ impl WasiCtxBuilder {
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
             allowed_network_uses: AllowedNetworkUses::default(),
+            allow_blocking_current_thread: false,
             built: false,
         }
     }
@@ -113,6 +117,37 @@ impl WasiCtxBuilder {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
 
+    /// Configures whether or not blocking operations made through this
+    /// `WasiCtx` are allowed to block the current thread.
+    ///
+    /// WASI is currently implemented on top of the Rust
+    /// [Tokio](https://tokio.rs/) library. While most WASI APIs are
+    /// non-blocking some are instead blocking from the perspective of
+    /// WebAssembly. For example opening a file is a blocking operation with
+    /// respect to WebAssembly but it's implemented as an asynchronous operation
+    /// on the host. This is currently done with Tokio's
+    /// [`spawn_blocking`](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html).
+    ///
+    /// When WebAssembly is used in a synchronous context, for example when
+    /// [`Config::async_support`] is disabled, then this asynchronous operation
+    /// is quickly turned back into a synchronous operation with a `block_on` in
+    /// Rust. This switching back-and-forth between a blocking a non-blocking
+    /// context can have overhead, and this option exists to help alleviate this
+    /// overhead.
+    ///
+    /// This option indicates that for WASI functions that are blocking from the
+    /// perspective of WebAssembly it's ok to block the native thread as well.
+    /// This means that this back-and-forth between async and sync won't happen
+    /// and instead blocking operations are performed on-thread (such as opening
+    /// a file). This can improve the performance of WASI operations when async
+    /// support is disabled.
+    ///
+    /// [`Config::async_support`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
+    pub fn allow_blocking_current_thread(&mut self, enable: bool) -> &mut Self {
+        self.allow_blocking_current_thread = enable;
+        self
+    }
+
     pub fn envs(&mut self, env: &[(impl AsRef<str>, impl AsRef<str>)]) -> &mut Self {
         self.env.extend(
             env.iter()
@@ -127,6 +162,10 @@ impl WasiCtxBuilder {
         self
     }
 
+    pub fn inherit_env(&mut self) -> &mut Self {
+        self.envs(&std::env::vars().collect::<Vec<(String, String)>>())
+    }
+
     pub fn args(&mut self, args: &[impl AsRef<str>]) -> &mut Self {
         self.args.extend(args.iter().map(|a| a.as_ref().to_owned()));
         self
@@ -135,6 +174,10 @@ impl WasiCtxBuilder {
     pub fn arg(&mut self, arg: impl AsRef<str>) -> &mut Self {
         self.args.push(arg.as_ref().to_owned());
         self
+    }
+
+    pub fn inherit_args(&mut self) -> &mut Self {
+        self.args(&std::env::args().collect::<Vec<String>>())
     }
 
     pub fn preopened_dir(
@@ -152,7 +195,13 @@ impl WasiCtxBuilder {
             open_mode |= OpenMode::WRITE;
         }
         self.preopens.push((
-            Dir::new(dir, perms, file_perms, open_mode),
+            Dir::new(
+                dir,
+                perms,
+                file_perms,
+                open_mode,
+                self.allow_blocking_current_thread,
+            ),
             path.as_ref().to_owned(),
         ));
         self
@@ -253,6 +302,7 @@ impl WasiCtxBuilder {
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
+            allow_blocking_current_thread,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -271,7 +321,14 @@ impl WasiCtxBuilder {
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
+            allow_blocking_current_thread,
         }
+    }
+
+    #[cfg(feature = "preview1")]
+    pub fn build_p1(&mut self) -> WasiP1Ctx {
+        let wasi = self.build();
+        WasiP1Ctx::new(wasi)
     }
 }
 
@@ -294,6 +351,7 @@ pub struct WasiCtx {
     pub(crate) stderr: Box<dyn StdoutStream>,
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
+    pub(crate) allow_blocking_current_thread: bool,
 }
 
 pub struct AllowedNetworkUses {

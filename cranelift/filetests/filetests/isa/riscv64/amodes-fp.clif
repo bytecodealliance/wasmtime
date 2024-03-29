@@ -29,7 +29,7 @@ block0:
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   ld a0, 0x18(s0)
+;   ld a0, 0x18(s0) ; trap: heap_oob
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

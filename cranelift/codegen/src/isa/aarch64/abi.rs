@@ -99,18 +99,21 @@ impl ABIMachineSpec for AArch64MachineDeps {
         16
     }
 
-    fn compute_arg_locs<'a, I>(
+    fn compute_arg_locs(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        params: I,
+        params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-        mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(u32, Option<usize>)>
-    where
-        I: IntoIterator<Item = &'a ir::AbiParam>,
-    {
-        if call_conv == isa::CallConv::Tail {
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<(u32, Option<usize>)> {
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "aarch64 does not support the 'winch' calling convention yet"
+        );
+
+        if matches!(call_conv, isa::CallConv::Tail) {
             return compute_arg_locs_tail(params, add_ret_area_ptr, args);
         }
 
@@ -1106,10 +1109,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Tail {
-            TAIL_CLOBBERS
-        } else {
-            DEFAULT_AAPCS_CLOBBERS
+        match call_conv_of_callee {
+            isa::CallConv::Tail => ALL_CLOBBERS,
+            _ => DEFAULT_AAPCS_CLOBBERS,
         }
     }
 
@@ -1291,15 +1293,12 @@ impl AArch64CallSite {
     }
 }
 
-fn compute_arg_locs_tail<'a, I>(
-    params: I,
+fn compute_arg_locs_tail(
+    params: &[ir::AbiParam],
     add_ret_area_ptr: bool,
-    mut args: ArgsAccumulator<'_>,
-) -> CodegenResult<(u32, Option<usize>)>
-where
-    I: IntoIterator<Item = &'a ir::AbiParam>,
-{
-    let mut xregs = TAIL_CLOBBERS
+    mut args: ArgsAccumulator,
+) -> CodegenResult<(u32, Option<usize>)> {
+    let mut xregs = ALL_CLOBBERS
         .into_iter()
         .filter(|r| r.class() == RegClass::Int)
         // We reserve `x0` for the return area pointer. For simplicity, we
@@ -1313,7 +1312,7 @@ where
         // indirect calls. So skip `x1` also, reserving it for that role.
         .skip(2);
 
-    let mut vregs = TAIL_CLOBBERS
+    let mut vregs = ALL_CLOBBERS
         .into_iter()
         .filter(|r| r.class() == RegClass::Float);
 
@@ -1542,8 +1541,8 @@ const fn default_aapcs_clobbers() -> PRegSet {
 
 const DEFAULT_AAPCS_CLOBBERS: PRegSet = default_aapcs_clobbers();
 
-// NB: The `tail` calling convention clobbers all allocatable registers.
-const TAIL_CLOBBERS: PRegSet = PRegSet::empty()
+// For calling conventions that clobber all registers.
+const ALL_CLOBBERS: PRegSet = PRegSet::empty()
     .with(xreg_preg(0))
     .with(xreg_preg(1))
     .with(xreg_preg(2))

@@ -340,3 +340,135 @@ block0(v0: f32):
 ;   popq %rbp
 ;   retq
 
+
+
+function %load32_lane_coalesced(i64, i32x4) -> i32x4 {
+block0(v0: i64, v1: i32x4):
+    v2 = load.i32 v0
+    v3 = insertlane.i32x4 v1, v2, 3
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pinsrd  $3, %xmm0, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pinsrd $3, (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load16_lane_coalesced(i64, i16x8) -> i16x8 {
+block0(v0: i64, v1: i16x8):
+    v2 = load.i16 v0
+    v3 = insertlane.i16x8 v1, v2, 3
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pinsrw  $3, %xmm0, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pinsrw $3, (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load8_lane_coalesced(i64, i8x16) -> i8x16 {
+block0(v0: i64, v1: i8x16):
+    v2 = load.i8 v0
+    v3 = insertlane.i8x16 v1, v2, 3
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pinsrb  $3, %xmm0, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pinsrb $3, (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store32_lane_coalesced(i64, i32x4) {
+block0(v0: i64, v1: i32x4):
+    v2 = extractlane.i32x4 v1, 3
+    store.i32 v2, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pextrd  $3, %xmm0, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pextrd $3, %xmm0, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store8_lane_coalesced(i64, i16x8) {
+block0(v0: i64, v1: i16x8):
+    v2 = extractlane.i16x8 v1, 3
+    store.i16 v2, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pextrw  $3, %xmm0, 0(%rdi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pextrw $3, %xmm0, (%rdi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

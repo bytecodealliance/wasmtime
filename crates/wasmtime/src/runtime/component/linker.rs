@@ -6,17 +6,14 @@ use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
-use anyhow::{anyhow, bail, Context, Result};
-use indexmap::IndexMap;
+use anyhow::{bail, Context, Result};
 use semver::Version;
 use std::collections::hash_map::{Entry, HashMap};
 use std::future::Future;
 use std::marker;
-use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
-use wasmtime_environ::component::TypeDef;
-use wasmtime_environ::{EntityRef, PrimaryMap};
+use wasmtime_environ::PrimaryMap;
 
 /// A type used to instantiate [`Component`]s.
 ///
@@ -64,7 +61,6 @@ pub struct Linker<T> {
     strings: Strings,
     map: NameMap,
     path: Vec<usize>,
-    resource_imports: usize,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -76,7 +72,6 @@ impl<T> Clone for Linker<T> {
             strings: self.strings.clone(),
             map: self.map.clone(),
             path: self.path.clone(),
-            resource_imports: self.resource_imports.clone(),
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -100,48 +95,8 @@ pub struct LinkerInstance<'a, T> {
     path_len: usize,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
-    resource_imports: &'a mut usize,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
-}
-
-/// Index correlating a resource definition to the import path.
-/// This is assigned by [`Linker::resource`] and may be used to associate it to
-/// [`RuntimeImportIndex`](wasmtime_environ::component::RuntimeImportIndex)
-/// at a later stage
-///
-/// [`Linker::resource`]: crate::component::LinkerInstance::resource
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ResourceImportIndex(usize);
-
-impl EntityRef for ResourceImportIndex {
-    fn new(idx: usize) -> Self {
-        Self(idx)
-    }
-
-    fn index(self) -> usize {
-        self.0
-    }
-}
-
-impl Deref for ResourceImportIndex {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<usize> for ResourceImportIndex {
-    fn from(idx: usize) -> Self {
-        Self(idx)
-    }
-}
-
-impl From<ResourceImportIndex> for usize {
-    fn from(idx: ResourceImportIndex) -> Self {
-        idx.0
-    }
 }
 
 #[derive(Clone, Default)]
@@ -184,11 +139,7 @@ pub(crate) enum Definition {
     Instance(NameMap),
     Func(Arc<HostFunc>),
     Module(Module),
-    Resource(
-        ResourceImportIndex,
-        ResourceType,
-        Arc<crate::func::HostFunc>,
-    ),
+    Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
 impl<T> Linker<T> {
@@ -201,7 +152,6 @@ impl<T> Linker<T> {
             map: NameMap::default(),
             allow_shadowing: false,
             path: Vec::new(),
-            resource_imports: 0,
             _marker: marker::PhantomData,
         }
     }
@@ -229,7 +179,6 @@ impl<T> Linker<T> {
             path_len: 0,
             strings: &mut self.strings,
             map: &mut self.map,
-            resource_imports: &mut self.resource_imports,
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -259,7 +208,7 @@ impl<T> Linker<T> {
         for (_idx, (name, ty)) in env_component.import_types.iter() {
             let import = self.map.get(name, &self.strings);
             cx.definition(ty, import)
-                .with_context(|| format!("import `{name}` has the wrong type"))?;
+                .with_context(|| format!("component imports {desc} `{name}`, but a matching implementation was not found in the linker", desc = ty.desc()))?;
         }
         Ok(cx)
     }
@@ -304,7 +253,6 @@ impl<T> Linker<T> {
         // component-compile-time.
         let env_component = component.env_component();
         let mut imports = PrimaryMap::with_capacity(env_component.imports.len());
-        let mut resource_imports = PrimaryMap::from(vec![None; self.resource_imports]);
         for (idx, (import, names)) in env_component.imports.iter() {
             let (root, _) = &env_component.import_types[*import];
 
@@ -321,14 +269,11 @@ impl<T> Linker<T> {
             let import = match cur {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
-                Definition::Resource(res_idx, t, dtor) => {
-                    resource_imports[*res_idx] = Some(idx);
-                    RuntimeImport::Resource {
-                        ty: t.clone(),
-                        _dtor: dtor.clone(),
-                        dtor_funcref: component.resource_drop_func_ref(dtor),
-                    }
-                }
+                Definition::Resource(t, dtor) => RuntimeImport::Resource {
+                    ty: t.clone(),
+                    _dtor: dtor.clone(),
+                    dtor_funcref: component.resource_drop_func_ref(dtor),
+                },
 
                 // This is guaranteed by the compilation process that "leaf"
                 // runtime imports are never instances.
@@ -337,7 +282,7 @@ impl<T> Linker<T> {
             let i = imports.push(import);
             assert_eq!(i, idx);
         }
-        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports, resource_imports) })
+        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports) })
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.
@@ -402,7 +347,6 @@ impl<T> LinkerInstance<'_, T> {
             path_len: self.path_len,
             strings: self.strings,
             map: self.map,
-            resource_imports: self.resource_imports,
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -466,53 +410,112 @@ impl<T> LinkerInstance<'_, T> {
         self.func_wrap(name, ff)
     }
 
-    /// Define a new host-provided function using dynamic types.
+    /// Define a new host-provided function using dynamically typed values.
     ///
-    /// `name` must refer to a function type import in `component`.  If and when
-    /// that import is invoked by the component, the specified `func` will be
-    /// called, which must return a `Val` which is an instance of the result
-    /// type of the import.
-    pub fn func_new<
-        F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
-    >(
+    /// The `name` provided is the name of the function to define and the
+    /// `func` provided is the host-defined closure to invoke when this
+    /// function is called.
+    ///
+    /// This function is the "dynamic" version of defining a host function as
+    /// compared to [`LinkerInstance::func_wrap`]. With
+    /// [`LinkerInstance::func_wrap`] a function's type is statically known but
+    /// with this method the `func` argument's type isn't known ahead of time.
+    /// That means that `func` can be by imported component so long as it's
+    /// imported as a matching name.
+    ///
+    /// Type information will be available at execution time, however. For
+    /// example when `func` is invoked the second argument, a `&[Val]` list,
+    /// contains [`Val`] entries that say what type they are. Additionally the
+    /// third argument, `&mut [Val]`, is the expected number of results. Note
+    /// that the expected types of the results cannot be learned during the
+    /// execution of `func`. Learning that would require runtime introspection
+    /// of a component.
+    ///
+    /// Return values, stored in the third argument of `&mut [Val]`, are
+    /// type-checked at runtime to ensure that they have the appropriate type.
+    /// A trap will be raised if they do not have the right type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wasmtime::{Store, Engine};
+    /// use wasmtime::component::{Component, Linker, Val};
+    ///
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let engine = Engine::default();
+    /// let component = Component::new(
+    ///     &engine,
+    ///     r#"
+    ///         (component
+    ///             (import "thunk" (func $thunk))
+    ///             (import "is-even" (func $is-even (param "x" u32) (result bool)))
+    ///
+    ///             (core module $m
+    ///                 (import "" "thunk" (func $thunk))
+    ///                 (import "" "is-even" (func $is-even (param i32) (result i32)))
+    ///
+    ///                 (func (export "run")
+    ///                     call $thunk
+    ///
+    ///                     (call $is-even (i32.const 1))
+    ///                     if unreachable end
+    ///
+    ///                     (call $is-even (i32.const 2))
+    ///                     i32.eqz
+    ///                     if unreachable end
+    ///                 )
+    ///             )
+    ///             (core func $thunk (canon lower (func $thunk)))
+    ///             (core func $is-even (canon lower (func $is-even)))
+    ///             (core instance $i (instantiate $m
+    ///                 (with "" (instance
+    ///                     (export "thunk" (func $thunk))
+    ///                     (export "is-even" (func $is-even))
+    ///                 ))
+    ///             ))
+    ///
+    ///             (func (export "run") (canon lift (core func $i "run")))
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// let mut linker = Linker::<()>::new(&engine);
+    ///
+    /// // Sample function that takes no arguments.
+    /// linker.root().func_new("thunk", |_store, params, results| {
+    ///     assert!(params.is_empty());
+    ///     assert!(results.is_empty());
+    ///     println!("Look ma, host hands!");
+    ///     Ok(())
+    /// })?;
+    ///
+    /// // This function takes one argument and returns one result.
+    /// linker.root().func_new("is-even", |_store, params, results| {
+    ///     assert_eq!(params.len(), 1);
+    ///     let param = match params[0] {
+    ///         Val::U32(n) => n,
+    ///         _ => panic!("unexpected type"),
+    ///     };
+    ///
+    ///     assert_eq!(results.len(), 1);
+    ///     results[0] = Val::Bool(param % 2 == 0);
+    ///     Ok(())
+    /// })?;
+    ///
+    /// let mut store = Store::new(&engine, ());
+    /// let instance = linker.instantiate(&mut store, &component)?;
+    /// let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    /// run.call(&mut store, ())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn func_new(
         &mut self,
-        component: &Component,
         name: &str,
-        func: F,
+        func: impl Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
-        let mut map = &component
-            .env_component()
-            .import_types
-            .values()
-            .map(|(k, v)| (k.clone(), *v))
-            .collect::<IndexMap<_, _>>();
-
-        for name in self.path.iter().copied().take(self.path_len) {
-            let name = self.strings.strings[name].deref();
-            if let Some(ty) = map.get(name) {
-                if let TypeDef::ComponentInstance(index) = ty {
-                    map = &component.types()[*index].exports;
-                } else {
-                    bail!("import `{name}` has the wrong type (expected a component instance)");
-                }
-            } else {
-                bail!("import `{name}` not found");
-            }
-        }
-
-        if let Some(ty) = map.get(name) {
-            if let TypeDef::ComponentFunc(index) = ty {
-                self.insert(
-                    name,
-                    Definition::Func(HostFunc::new_dynamic(func, *index, component.types())),
-                )?;
-                Ok(())
-            } else {
-                bail!("import `{name}` has the wrong type (expected a function)");
-            }
-        } else {
-            Err(anyhow!("import `{name}` not found"))
-        }
+        self.insert(name, Definition::Func(HostFunc::new_dynamic(func)))?;
+        Ok(())
     }
 
     /// Define a new host-provided async function using dynamic types.
@@ -521,7 +524,7 @@ impl<T> LinkerInstance<'_, T> {
     /// host function.
     #[cfg(feature = "async")]
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
-    pub fn func_new_async<F>(&mut self, component: &Component, name: &str, f: F) -> Result<()>
+    pub fn func_new_async<F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
@@ -541,7 +544,7 @@ impl<T> LinkerInstance<'_, T> {
             let mut future = Pin::from(f(store.as_context_mut(), params, results));
             unsafe { async_cx.block_on(future.as_mut()) }?
         };
-        self.func_new(component, name, ff)
+        self.func_new(name, ff)
     }
 
     /// Defines a [`Module`] within this instance.
@@ -581,18 +584,13 @@ impl<T> LinkerInstance<'_, T> {
         name: &str,
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
-    ) -> Result<ResourceImportIndex> {
+    ) -> Result<()> {
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
         ));
-        let idx = ResourceImportIndex::new(*self.resource_imports);
-        *self.resource_imports = self
-            .resource_imports
-            .checked_add(1)
-            .context("resource import count would overflow")?;
-        self.insert(name, Definition::Resource(idx, ty, dtor))?;
-        Ok(idx)
+        self.insert(name, Definition::Resource(ty, dtor))?;
+        Ok(())
     }
 
     /// Defines a nested instance within this instance.

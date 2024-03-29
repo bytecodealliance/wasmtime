@@ -4,7 +4,6 @@
 use super::evex::{Register, RegisterOrAmode};
 use super::rex::{LegacyPrefixes, OpcodeMap};
 use super::ByteSink;
-use crate::ir::TrapCode;
 use crate::isa::x64::args::Amode;
 use crate::isa::x64::encoding::rex;
 use crate::isa::x64::inst::Inst;
@@ -251,8 +250,8 @@ impl VexInstruction {
     /// Emit the VEX-encoded instruction to the provided buffer.
     pub fn encode(&self, sink: &mut MachBuffer<Inst>) {
         if let RegisterOrAmode::Amode(amode) = &self.rm {
-            if amode.can_trap() {
-                sink.add_trap(TrapCode::HeapOutOfBounds);
+            if let Some(trap_code) = amode.get_flags().trap_code() {
+                sink.add_trap(trap_code);
             }
         }
 

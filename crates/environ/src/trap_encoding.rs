@@ -98,6 +98,42 @@ pub enum Trap {
     // if adding a variant here be sure to update the `check!` macro below
 }
 
+impl Trap {
+    /// Converts a byte back into a `Trap` if its in-bounds
+    pub fn from_u8(byte: u8) -> Option<Trap> {
+        // FIXME: this could use some sort of derive-like thing to avoid having to
+        // deduplicate the names here.
+        //
+        // This simply converts from the a `u8`, to the `Trap` enum.
+        macro_rules! check {
+            ($($name:ident)*) => ($(if byte == Trap::$name as u8 {
+                return Some(Trap::$name);
+            })*);
+        }
+
+        check! {
+            StackOverflow
+            MemoryOutOfBounds
+            HeapMisaligned
+            TableOutOfBounds
+            IndirectCallToNull
+            BadSignature
+            IntegerOverflow
+            IntegerDivisionByZero
+            BadConversionToInteger
+            UnreachableCodeReached
+            Interrupt
+            AlwaysTrapAdapter
+            OutOfFuel
+            AtomicWaitNonSharedMemory
+            NullReference
+            CannotEnterComponent
+        }
+
+        None
+    }
+}
+
 impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Trap::*;
@@ -206,40 +242,9 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
         .binary_search_by_key(&offset, |val| val.get(LittleEndian))
         .ok()?;
     debug_assert!(index < traps.len());
-    let trap = *traps.get(index)?;
+    let byte = *traps.get(index)?;
 
-    // FIXME: this could use some sort of derive-like thing to avoid having to
-    // deduplicate the names here.
-    //
-    // This simply converts from the `trap`, a `u8`, to the `Trap` enum.
-    macro_rules! check {
-        ($($name:ident)*) => ($(if trap == Trap::$name as u8 {
-            return Some(Trap::$name);
-        })*);
-    }
-
-    check! {
-        StackOverflow
-        MemoryOutOfBounds
-        HeapMisaligned
-        TableOutOfBounds
-        IndirectCallToNull
-        BadSignature
-        IntegerOverflow
-        IntegerDivisionByZero
-        BadConversionToInteger
-        UnreachableCodeReached
-        Interrupt
-        AlwaysTrapAdapter
-        OutOfFuel
-        AtomicWaitNonSharedMemory
-        NullReference
-        CannotEnterComponent
-    }
-
-    if cfg!(debug_assertions) {
-        panic!("missing mapping for {}", trap);
-    } else {
-        None
-    }
+    let trap = Trap::from_u8(byte);
+    debug_assert!(trap.is_some(), "missing mapping for {}", byte);
+    trap
 }

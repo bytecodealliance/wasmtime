@@ -120,8 +120,7 @@ where
             InstructionData::Load { offset, .. }
             | InstructionData::Store { offset, .. }
             | InstructionData::StackLoad { offset, .. }
-            | InstructionData::StackStore { offset, .. }
-            | InstructionData::TableAddr { offset, .. } => DataValue::from(offset),
+            | InstructionData::StackStore { offset, .. } => DataValue::from(offset),
             // 64-bit.
             InstructionData::UnaryImm { imm, .. }
             | InstructionData::BinaryImm64 { imm, .. }
@@ -161,8 +160,12 @@ where
         MemoryError::InvalidAddressType(_) => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidOffset { .. } => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,
-        MemoryError::OutOfBoundsStore { .. } => TrapCode::HeapOutOfBounds,
-        MemoryError::OutOfBoundsLoad { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::OutOfBoundsStore { mem_flags, .. } => mem_flags
+            .trap_code()
+            .expect("store with notrap flag should not trap"),
+        MemoryError::OutOfBoundsLoad { mem_flags, .. } => mem_flags
+            .trap_code()
+            .expect("load with notrap flag should not trap"),
         MemoryError::MisalignedLoad { .. } => TrapCode::HeapMisaligned,
         MemoryError::MisalignedStore { .. } => TrapCode::HeapMisaligned,
     };
@@ -549,28 +552,6 @@ where
             let arg0 = arg(0);
             state.set_pinned_reg(arg0);
             ControlFlow::Continue
-        }
-        Opcode::TableAddr => {
-            if let InstructionData::TableAddr { table, offset, .. } = inst {
-                let table = &state.get_current_function().tables[table];
-                let base = state.resolve_global_value(table.base_gv)?;
-                let bound = state.resolve_global_value(table.bound_gv)?;
-                let index_ty = table.index_type;
-                let element_size = DataValue::int(u64::from(table.element_size) as i128, index_ty)?;
-                let inst_offset = DataValue::int(i32::from(offset) as i128, index_ty)?;
-
-                let byte_offset = arg(0).mul(element_size.clone())?.add(inst_offset)?;
-                let bound_bytes = bound.mul(element_size)?;
-                if byte_offset > bound_bytes {
-                    return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                        TrapCode::HeapOutOfBounds,
-                    )));
-                }
-
-                assign(base.add(byte_offset)?)
-            } else {
-                unreachable!()
-            }
         }
         Opcode::Iconst => assign(DataValueExt::int(imm().into_int_signed()?, ctrl_ty)?),
         Opcode::F32const => assign(imm()),

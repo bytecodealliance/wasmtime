@@ -25,6 +25,12 @@ fn http_outbound_request_get() -> Result<()> {
 }
 
 #[test_log::test]
+fn http_outbound_request_timeout() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server)
+}
+
+#[test_log::test]
 fn http_outbound_request_post() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_POST_COMPONENT, &server)

@@ -1,10 +1,11 @@
+use crate::component::matching::InstanceType;
+use crate::component::types;
 use crate::{
-    code::CodeObject, code_memory::CodeMemory, instantiate::MmapVecWrapper,
-    type_registry::TypeCollection, Engine, Module, ResourcesRequired,
+    code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
+    ResourcesRequired,
 };
 use crate::{FuncType, ValType};
-use anyhow::{bail, Context, Result};
-use std::fs;
+use anyhow::Result;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
@@ -149,10 +150,9 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
-        let bytes = bytes.as_ref();
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(bytes)?;
-        Component::from_binary(engine, &bytes)
+        crate::CodeBuilder::new(engine)
+            .wasm(bytes.as_ref(), None)?
+            .compile_component()
     }
 
     /// Compiles a new WebAssembly component from a wasm file on disk pointed
@@ -163,23 +163,9 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
-        match Self::new(
-            engine,
-            &fs::read(&file).with_context(|| "failed to read input file")?,
-        ) {
-            Ok(m) => Ok(m),
-            Err(e) => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "wat")] {
-                        let mut e = e.downcast::<wat::Error>()?;
-                        e.set_path(file);
-                        bail!(e)
-                    } else {
-                        Err(e)
-                    }
-                }
-            }
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm_file(file.as_ref())?
+            .compile_component()
     }
 
     /// Compiles a new WebAssembly component from the in-memory wasm image
@@ -194,56 +180,10 @@ impl Component {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
-        use crate::compile::build_component_artifacts;
-        use crate::module::HashedEngineCompileEnv;
-        use wasmtime_runtime::MmapVec;
-
-        engine
-            .check_compatible_with_native_host()
-            .context("compilation settings are not compatible with the native host")?;
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "cache")] {
-                let state = (HashedEngineCompileEnv(engine), binary);
-                let (code, artifacts) = wasmtime_cache::ModuleCacheEntry::new(
-                    "wasmtime",
-                    engine.cache_config(),
-                )
-                .get_data_raw(
-                    &state,
-
-                    // Cache miss, compute the actual artifacts
-                    |(engine, wasm)| -> Result<_> {
-                        let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine.0, wasm)?;
-                        let code = publish_mmap(mmap.0)?;
-                        Ok((code, Some(artifacts)))
-                    },
-
-                    // Implementation of how to serialize artifacts
-                    |(_engine, _wasm), (code, _info_and_types)| {
-                        Some(code.mmap().to_vec())
-                    },
-
-                    // Cache hit, deserialize the provided artifacts
-                    |(engine, _wasm), serialized_bytes| {
-                        let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Component).ok()?;
-                        Some((code, None))
-                    },
-                )?;
-            } else {
-                let (mmap, artifacts) = build_component_artifacts::<MmapVecWrapper>(engine, binary)?;
-                let artifacts = Some(artifacts);
-                let code = publish_mmap(mmap.0)?;
-            }
-        };
-
-        return Component::from_parts(engine, code, artifacts);
-
-        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-            let mut code = CodeMemory::new(mmap)?;
-            code.publish()?;
-            Ok(Arc::new(code))
-        }
+        crate::CodeBuilder::new(engine)
+            .wasm(binary, None)?
+            .wat(false)?
+            .compile_component()
     }
 
     /// Same as [`Module::deserialize`], but for components.
@@ -284,11 +224,146 @@ impl Component {
         Component::from_parts(engine, code, None)
     }
 
+    /// Returns the type of this component as a [`types::Component`].
+    ///
+    /// This method enables runtime introspection of the type of a component
+    /// before instantiation, if necessary.
+    ///
+    /// ## Component types and Resources
+    ///
+    /// An important point to note here is that the precise type of imports and
+    /// exports of a component change when it is instantiated with respect to
+    /// resources. For example a [`Component`] represents an un-instantiated
+    /// component meaning that its imported resources are represeted as abstract
+    /// resource types. These abstract types are not equal to any other
+    /// component's types.
+    ///
+    /// For example:
+    ///
+    /// ```
+    /// # use wasmtime::Engine;
+    /// # use wasmtime::component::Component;
+    /// # use wasmtime::component::types::ComponentItem;
+    /// # fn main() -> wasmtime::Result<()> {
+    /// # let engine = Engine::default();
+    /// let a = Component::new(&engine, r#"
+    ///     (component (import "x" (type (sub resource))))
+    /// "#)?;
+    /// let b = Component::new(&engine, r#"
+    ///     (component (import "x" (type (sub resource))))
+    /// "#)?;
+    ///
+    /// let (_, a_ty) = a.component_type().imports(&engine).next().unwrap();
+    /// let (_, b_ty) = b.component_type().imports(&engine).next().unwrap();
+    ///
+    /// let a_ty = match a_ty {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// let b_ty = match b_ty {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// assert!(a_ty != b_ty);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Additionally, however, these abstract types are "substituted" during
+    /// instantiation meaning that a component type will appear to have changed
+    /// once it is instantiated.
+    ///
+    /// ```
+    /// # use wasmtime::{Engine, Store};
+    /// # use wasmtime::component::{Component, Linker, ResourceType};
+    /// # use wasmtime::component::types::ComponentItem;
+    /// # fn main() -> wasmtime::Result<()> {
+    /// # let engine = Engine::default();
+    /// // Here this component imports a resource and then exports it as-is
+    /// // which means that the export is equal to the import.
+    /// let a = Component::new(&engine, r#"
+    ///     (component
+    ///         (import "x" (type $x (sub resource)))
+    ///         (export "x" (type $x))
+    ///     )
+    /// "#)?;
+    ///
+    /// let (_, import) = a.component_type().imports(&engine).next().unwrap();
+    /// let (_, export) = a.component_type().exports(&engine).next().unwrap();
+    ///
+    /// let import = match import {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// let export = match export {
+    ///     ComponentItem::Resource(ty) => ty,
+    ///     _ => unreachable!(),
+    /// };
+    /// assert_eq!(import, export);
+    ///
+    /// // However after instantiation the resource type "changes"
+    /// let mut store = Store::new(&engine, ());
+    /// let mut linker = Linker::new(&engine);
+    /// linker.root().resource("x", ResourceType::host::<()>(), |_, _| Ok(()))?;
+    /// let instance = linker.instantiate(&mut store, &a)?;
+    /// let instance_ty = instance.exports(&mut store).root().resource("x").unwrap();
+    ///
+    /// // Here `instance_ty` is not the same as either `import` or `export`,
+    /// // but it is equal to what we provided as an import.
+    /// assert!(instance_ty != import);
+    /// assert!(instance_ty != export);
+    /// assert!(instance_ty == ResourceType::host::<()>());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Finally, each instantiation of an exported resource from a component is
+    /// considered "fresh" for all instantiations meaning that different
+    /// instantiations will have different exported resource types:
+    ///
+    /// ```
+    /// # use wasmtime::{Engine, Store};
+    /// # use wasmtime::component::{Component, Linker};
+    /// # fn main() -> wasmtime::Result<()> {
+    /// # let engine = Engine::default();
+    /// let a = Component::new(&engine, r#"
+    ///     (component
+    ///         (type $x (resource (rep i32)))
+    ///         (export "x" (type $x))
+    ///     )
+    /// "#)?;
+    ///
+    /// let mut store = Store::new(&engine, ());
+    /// let linker = Linker::new(&engine);
+    /// let instance1 = linker.instantiate(&mut store, &a)?;
+    /// let instance2 = linker.instantiate(&mut store, &a)?;
+    ///
+    /// let x1 = instance1.exports(&mut store).root().resource("x").unwrap();
+    /// let x2 = instance2.exports(&mut store).root().resource("x").unwrap();
+    ///
+    /// // Despite these two resources being the same export of the same
+    /// // component they come from two different instances meaning that their
+    /// // types will be unique.
+    /// assert!(x1 != x2);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn component_type(&self) -> types::Component {
+        let resources = Arc::new(PrimaryMap::new());
+        types::Component::from(
+            self.inner.ty,
+            &InstanceType {
+                types: self.types(),
+                resources: &resources,
+            },
+        )
+    }
+
     /// Final assembly step for a component from its in-memory representation.
     ///
     /// If the `artifacts` are specified as `None` here then they will be
     /// deserialized from `code_memory`.
-    fn from_parts(
+    pub(crate) fn from_parts(
         engine: &Engine,
         code_memory: Arc<CodeMemory>,
         artifacts: Option<ComponentArtifacts>,

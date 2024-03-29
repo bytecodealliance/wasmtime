@@ -6,7 +6,7 @@ use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use target_lexicon::{Architecture, PointerWidth};
+use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -1009,9 +1009,14 @@ impl Config {
     /// Configures whether Cranelift should perform a NaN-canonicalization pass.
     ///
     /// When Cranelift is used as a code generation backend this will configure
-    /// it to replace NaNs with a single canonical value. This is useful for users
-    /// requiring entirely deterministic WebAssembly computation.
-    /// This is not required by the WebAssembly spec, so it is not enabled by default.
+    /// it to replace NaNs with a single canonical value. This is useful for
+    /// users requiring entirely deterministic WebAssembly computation.  This is
+    /// not required by the WebAssembly spec, so it is not enabled by default.
+    ///
+    /// Note that this option affects not only WebAssembly's `f32` and `f64`
+    /// types but additionally the `v128` type. This option will cause
+    /// operations using any of these types to have extra checks placed after
+    /// them to normalize NaN values as needed.
     ///
     /// The default value for this is `false`
     #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -1684,11 +1689,7 @@ impl Config {
         let mut tunables = Tunables::default_host();
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let mut tunables = match &self.compiler_config.target.as_ref() {
-            Some(target) => match target.pointer_width() {
-                Ok(PointerWidth::U32) => Tunables::default_u32(),
-                Ok(PointerWidth::U64) => Tunables::default_u64(),
-                _ => bail!("unknown pointer width"),
-            },
+            Some(target) => Tunables::default_for_target(target)?,
             None => Tunables::default_host(),
         };
 
@@ -1721,6 +1722,16 @@ impl Config {
             debug_adapter_modules
             relaxed_simd_deterministic
             tail_callable
+        }
+
+        // If we're going to compile with winch, we must use the winch calling convention.
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            tunables.winch_callable = match self.compiler_config.strategy {
+                Strategy::Auto => !cfg!(feature = "cranelift") && cfg!(feature = "winch"),
+                Strategy::Cranelift => false,
+                Strategy::Winch => true,
+            };
         }
 
         if tunables.static_memory_offset_guard_size < tunables.dynamic_memory_offset_guard_size {

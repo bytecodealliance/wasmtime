@@ -25,9 +25,6 @@ pub(crate) mod uninhabited;
 pub(crate) mod v128;
 pub(crate) mod values;
 
-/// Module to facilitate building of a WebAssembly module with a DWARF package.
-pub mod module_builder;
-
 #[cfg(feature = "component-model")]
 pub mod component;
 

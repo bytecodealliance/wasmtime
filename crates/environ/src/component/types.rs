@@ -8,7 +8,7 @@ use cranelift_entity::EntityRef;
 use indexmap::{IndexMap, IndexSet};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::ops::Index;
 use wasmparser::names::KebabString;
 use wasmparser::types;
@@ -757,19 +757,20 @@ impl ComponentTypesBuilder {
                 if case.refines.is_some() {
                     bail!("refines is not supported at this time");
                 }
-                Ok(VariantCase {
-                    name: name.to_string(),
-                    ty: match &case.ty.as_ref() {
+                Ok((
+                    name.to_string(),
+                    match &case.ty.as_ref() {
                         Some(ty) => Some(self.valtype(types, ty)?),
                         None => None,
                     },
-                })
+                ))
             })
-            .collect::<Result<Box<[_]>>>()?;
-        let (info, abi) = VariantInfo::new(cases.iter().map(|c| {
-            c.ty.as_ref()
-                .map(|ty| self.component_types.canonical_abi(ty))
-        }));
+            .collect::<Result<IndexMap<_, _>>>()?;
+        let (info, abi) = VariantInfo::new(
+            cases
+                .iter()
+                .map(|(_, c)| c.as_ref().map(|ty| self.component_types.canonical_abi(ty))),
+        );
         Ok(self.add_variant_type(TypeVariant { cases, abi, info }))
     }
 
@@ -804,7 +805,10 @@ impl ComponentTypesBuilder {
     }
 
     fn enum_type(&mut self, variants: &IndexSet<KebabString>) -> TypeEnumIndex {
-        let names = variants.iter().map(|s| s.to_string()).collect::<Box<[_]>>();
+        let names = variants
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<IndexSet<_>>();
         let (info, abi) = VariantInfo::new(names.iter().map(|_| None));
         self.add_enum_type(TypeEnum { names, abi, info })
     }
@@ -1003,7 +1007,7 @@ pub enum TypeDef {
     ComponentInstance(TypeComponentInstanceIndex),
     /// A component function, not to be confused with a core wasm function.
     ComponentFunc(TypeFuncIndex),
-    /// An interface type.
+    /// An type in an interface.
     Interface(InterfaceType),
     /// A core wasm module and its type.
     Module(TypeModuleIndex),
@@ -1014,6 +1018,21 @@ pub enum TypeDef {
     /// Note that different resource tables may point to the same underlying
     /// actual resource type, but that's a private detail.
     Resource(TypeResourceTableIndex),
+}
+
+impl TypeDef {
+    /// A human readable description of what kind of type definition this is.
+    pub fn desc(&self) -> &str {
+        match self {
+            TypeDef::Component(_) => "component",
+            TypeDef::ComponentInstance(_) => "instance",
+            TypeDef::ComponentFunc(_) => "function",
+            TypeDef::Interface(_) => "type",
+            TypeDef::Module(_) => "core module",
+            TypeDef::CoreFunc(_) => "core function",
+            TypeDef::Resource(_) => "resource",
+        }
+    }
 }
 
 // NB: Note that maps below are stored as an `IndexMap` now but the order
@@ -1485,24 +1504,23 @@ pub struct RecordField {
 /// Variants are close to Rust `enum` declarations where a value is one of many
 /// cases and each case has a unique name and an optional payload associated
 /// with it.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
 pub struct TypeVariant {
     /// The list of cases that this variant can take.
-    pub cases: Box<[VariantCase]>,
+    pub cases: IndexMap<String, Option<InterfaceType>>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
     pub info: VariantInfo,
 }
 
-/// One case of a `variant` type which contains the name of the variant as well
-/// as the payload.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct VariantCase {
-    /// Name of the variant, unique amongst all cases in a variant.
-    pub name: String,
-    /// Optional type associated with this payload.
-    pub ty: Option<InterfaceType>,
+impl Hash for TypeVariant {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        let TypeVariant { cases, abi, info } = self;
+        cases.as_slice().hash(h);
+        abi.hash(h);
+        info.hash(h);
+    }
 }
 
 /// Shape of a "tuple" type in interface types.
@@ -1521,12 +1539,20 @@ pub struct TypeTuple {
 ///
 /// This can be thought of as a record-of-bools, although the representation is
 /// more efficient as bitflags.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
 pub struct TypeFlags {
     /// The names of all flags, all of which are unique.
-    pub names: Box<[String]>,
+    pub names: IndexSet<String>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
+}
+
+impl Hash for TypeFlags {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        let TypeFlags { names, abi } = self;
+        names.as_slice().hash(h);
+        abi.hash(h);
+    }
 }
 
 /// Shape of an "enum" type in interface types, not to be confused with a Rust
@@ -1534,14 +1560,23 @@ pub struct TypeFlags {
 ///
 /// In interface types enums are simply a bag of names, and can be seen as a
 /// variant where all payloads are `Unit`.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
 pub struct TypeEnum {
     /// The names of this enum, all of which are unique.
-    pub names: Box<[String]>,
+    pub names: IndexSet<String>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
     pub info: VariantInfo,
+}
+
+impl Hash for TypeEnum {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        let TypeEnum { names, abi, info } = self;
+        names.as_slice().hash(h);
+        abi.hash(h);
+        info.hash(h);
+    }
 }
 
 /// Shape of an "option" interface type.
@@ -1909,7 +1944,7 @@ impl TypeInformation {
         self.build_variant(
             ty.cases
                 .iter()
-                .map(|c| c.ty.as_ref().map(|ty| types.type_information(ty))),
+                .map(|(_, c)| c.as_ref().map(|ty| types.type_information(ty))),
         )
     }
 

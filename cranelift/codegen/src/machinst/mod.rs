@@ -306,9 +306,6 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
-    /// Update the emission state to indicate instructions are associated with a
-    /// particular RelSourceLoc.
-    fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
     /// The emission state holds ownership of a control plane, so it doesn't
     /// have to be passed around explicitly too much. `ctrl_plane_mut` may
     /// be used if temporary access to the control plane is needed by some

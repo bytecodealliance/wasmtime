@@ -85,6 +85,11 @@ typedef uint8_t wasmtime_extern_kind_t;
 /// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
 /// memory
 #define WASMTIME_EXTERN_MEMORY 3
+/// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
+/// shared memory
+#define WASMTIME_EXTERN_SHAREDMEMORY 4
+
+struct wasmtime_sharedmemory;
 
 /**
  * \typedef wasmtime_extern_union_t
@@ -105,6 +110,8 @@ typedef union wasmtime_extern_union {
   wasmtime_table_t table;
   /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_MEMORY
   wasmtime_memory_t memory;
+  /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_SHAREDMEMORY
+  struct wasmtime_sharedmemory *sharedmemory;
 } wasmtime_extern_union_t;
 
 /**

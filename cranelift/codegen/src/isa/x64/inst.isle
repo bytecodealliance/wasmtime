@@ -243,7 +243,7 @@
        ;; XMM conditional move; overwrites the destination register.
        (XmmCmove (ty Type)
                  (cc CC)
-                 (consequent XmmMemAligned)
+                 (consequent Xmm)
                  (alternative Xmm)
                  (dst WritableXmm))
 
@@ -966,6 +966,7 @@
             Ucomiss
             Ucomisd
             Unpcklps
+            Unpcklpd
             Unpckhps
             Xorps
             Xorpd
@@ -1279,6 +1280,7 @@
             Vpunpckhwd
             Vpunpcklwd
             Vunpcklps
+            Vunpcklpd
             Vunpckhps
             Vandnps
             Vandnpd
@@ -1568,7 +1570,7 @@
 (extern constructor xmm_to_xmm_mem xmm_to_xmm_mem)
 
 ;; Construct a new `XmmMem` from an `RegMem`.
-(decl xmm_mem_to_reg_mem (XmmMem) RegMem)
+(decl pure xmm_mem_to_reg_mem (XmmMem) RegMem)
 (extern constructor xmm_mem_to_reg_mem xmm_mem_to_reg_mem)
 
 ;; Convert a `GprMem` to a `RegMem`.
@@ -2842,7 +2844,7 @@
          (MInst.Cmove size cc consequent alternative dst)
          dst)))
 
-(decl cmove_xmm (Type CC XmmMemAligned Xmm) ConsumesFlags)
+(decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -2895,7 +2897,7 @@
          cmove2
          dst)))
 
-(decl cmove_or_xmm (Type CC CC XmmMemAligned Xmm) ConsumesFlags)
+(decl cmove_or_xmm (Type CC CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm))
             (tmp WritableXmm (temp_writable_xmm))
@@ -3295,6 +3297,14 @@
 (rule 1 (x64_unpcklps src1 src2)
       (if-let $true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vunpcklps) src1 src2))
+
+;; Helper for creating `unpcklpd` instructions.
+(decl x64_unpcklpd (Xmm XmmMem) Xmm)
+(rule 0 (x64_unpcklpd src1 src2)
+      (xmm_rm_r (SseOpcode.Unpcklpd) src1 src2))
+(rule 1 (x64_unpcklpd src1 src2)
+      (if-let $true (use_avx))
+      (xmm_rmir_vex (AvxOpcode.Vunpcklpd) src1 src2))
 
 ;; Helper for creating `unpckhps` instructions.
 (decl x64_unpckhps (Xmm XmmMem) Xmm)
@@ -3751,20 +3761,51 @@
       (xmm_vex_pinsr (AvxOpcode.Vpinsrq) src1 src2 lane))
 
 ;; Helper for creating `roundss` instructions.
+;;
+;; NB: the non-AVX variant of this instruction does not require that the operand
+;; is aligned, but the instruction variant used here requires it to be aligned.
+;; This means that if the operand here points to memory then we'll eagerly load
+;; it, but the eager load will load too much (the full register width of 16
+;; bytes). To fix this a `put_xmm_mem_in_xmm` helper is used to force the
+;; operand to be a register where the load is done with the appropriate type if
+;; it's in memory.
+;;
+;; Some more discussion of this can be found on #8112. Ideally this would use
+;; a variant that allows an unaligned `XmmMem` in the instruction variant.
+;; Either that or the auto-conversion to aligned memory is removed and/or starts
+;; to require a type.
+;;
+;; Also note that the argument here isn't changed to `Xmm` instead of `XmmMem`
+;; because the AVX variant, when available, doesn't need alignment and can
+;; pass through the `src1` argument as-is.
 (decl x64_roundss (XmmMem RoundImm) Xmm)
 (rule (x64_roundss src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundss) src1 (encode_round_imm round)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundss) (put_xmm_mem_in_xmm $F32 src1) (encode_round_imm round)))
 (rule 1 (x64_roundss src1 round)
         (if-let $true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundss) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
+;;
+;; NB: see `x64_roundss` above for `put_xmm_mem_in_xmm` in call.
 (decl x64_roundsd (XmmMem RoundImm) Xmm)
 (rule (x64_roundsd src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) src1 (encode_round_imm round)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) (put_xmm_mem_in_xmm $F64 src1) (encode_round_imm round)))
 (rule 1 (x64_roundsd src1 round)
         (if-let $true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundsd) src1 (encode_round_imm round)))
+
+;; Helper for forcing an `XmmMem` to be placed into an `Xmm` register.
+;;
+;; If it's already in a register it stays there, otherwise it turns into a
+;; load instruction with the destination register as output.
+(decl put_xmm_mem_in_xmm (Type XmmMem) Xmm)
+(rule (put_xmm_mem_in_xmm ty xmm_mem)
+      (if-let (RegMem.Reg r) (xmm_mem_to_reg_mem xmm_mem))
+      (xmm_new r))
+(rule (put_xmm_mem_in_xmm ty xmm_mem)
+      (if-let (RegMem.Mem amode) (xmm_mem_to_reg_mem xmm_mem))
+      (x64_load ty amode (ExtKind.None)))
 
 ;; Helper for creating `roundps` instructions.
 (decl x64_roundps (XmmMem RoundImm) Xmm)

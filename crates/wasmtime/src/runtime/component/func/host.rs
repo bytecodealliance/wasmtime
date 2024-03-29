@@ -1,17 +1,17 @@
 use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
-use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Type, Val};
+use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use std::any::Any;
 use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, TypeFuncIndex,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, InterfaceType, StringEncoding, TypeFuncIndex, MAX_FLAT_PARAMS,
+    MAX_FLAT_RESULTS,
 };
 use wasmtime_runtime::component::{
     InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
@@ -71,27 +71,16 @@ impl HostFunc {
         }
     }
 
-    pub(crate) fn new_dynamic<T, F>(
-        func: F,
-        index: TypeFuncIndex,
-        types: &Arc<ComponentTypes>,
-    ) -> Arc<HostFunc>
+    pub(crate) fn new_dynamic<T, F>(func: F) -> Arc<HostFunc>
     where
         F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     {
         Arc::new(HostFunc {
             entrypoint: dynamic_entrypoint::<T, F>,
-            typecheck: Box::new({
-                let types = types.clone();
-
-                move |expected_index, expected_types| {
-                    if index == expected_index && std::ptr::eq(&*types, &**expected_types.types) {
-                        Ok(())
-                    } else {
-                        Err(anyhow!("function type mismatch"))
-                    }
-                }
-            }),
+            // This function performs dynamic type checks and subsequently does
+            // not need to perform up-front type checks. Instead everything is
+            // dynamically managed at runtime.
+            typecheck: Box::new(move |_expected_index, _expected_types| Ok(())),
             func: Box::new(func),
         })
     }
@@ -383,10 +372,6 @@ where
     flags.set_may_leave(false);
 
     let mut cx = LowerContext::new(store, &options, types, instance);
-    let instance = cx.instance_type();
-    for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-        Type::from(ty, &instance).is_supertype_of(val)?;
-    }
     if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
         let mut dst = storage[..cnt].iter_mut();
         for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {

@@ -20,8 +20,8 @@ block0(v0: i64, v1: i64, v2: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lg %r0, 0(%r3)
-;   csg %r0, %r4, 0(%r3)
+;   lg %r0, 0(%r3) ; trap: heap_oob
+;   csg %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 6
 ;   lgr %r2, %r0
 ;   br %r14
@@ -41,8 +41,8 @@ block0(v0: i64, v1: i64, v2: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   l %r0, 0(%r3)
-;   cs %r0, %r4, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
+;   cs %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 4
 ;   lgr %r2, %r0
 ;   br %r14
@@ -66,11 +66,11 @@ block0(v0: i64, v1: i64, v2: i16):
 ; block0: ; offset 0x0
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   risbgn %r1, %r4, 0x20, 0x30, 0x10
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0xe
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -96,11 +96,11 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   risbgn %r1, %r4, 0x20, 0x28, 0x18
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x10
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -118,7 +118,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   laag %r2, %r3, 0(%r2)
+;   laag %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_add_i32(i64, i32) -> i32 {
@@ -134,7 +134,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   laa %r2, %r3, 0(%r2)
+;   laa %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_add_i16(i64, i64, i16) -> i16 {
@@ -158,11 +158,11 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x10
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   ar %r1, %r4
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -190,11 +190,11 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x18
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   ar %r1, %r4
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -214,7 +214,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lcgr %r5, %r3
-;   laag %r2, %r5, 0(%r2)
+;   laag %r2, %r5, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_sub_i32(i64, i32) -> i32 {
@@ -232,7 +232,7 @@ block0(v0: i64, v1: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lcr %r5, %r3
-;   laa %r2, %r5, 0(%r2)
+;   laa %r2, %r5, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_sub_i16(i64, i64, i16) -> i16 {
@@ -256,11 +256,11 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x10
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   sr %r1, %r4
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -288,11 +288,11 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x18
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   sr %r1, %r4
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -310,7 +310,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lang %r2, %r3, 0(%r2)
+;   lang %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_and_i32(i64, i32) -> i32 {
@@ -326,7 +326,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lan %r2, %r3, 0(%r2)
+;   lan %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_and_i16(i64, i64, i16) -> i16 {
@@ -348,11 +348,11 @@ block0(v0: i64, v1: i64, v2: i16):
 ; block0: ; offset 0x0
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rnsbg %r1, %r4, 0x20, 0x30, 0x10
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0xe
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -378,11 +378,11 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rnsbg %r1, %r4, 0x20, 0x28, 0x18
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x10
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -400,7 +400,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   laog %r2, %r3, 0(%r2)
+;   laog %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_or_i32(i64, i32) -> i32 {
@@ -416,7 +416,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lao %r2, %r3, 0(%r2)
+;   lao %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_or_i16(i64, i64, i16) -> i16 {
@@ -438,11 +438,11 @@ block0(v0: i64, v1: i64, v2: i16):
 ; block0: ; offset 0x0
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rosbg %r1, %r4, 0x20, 0x30, 0x10
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0xe
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -468,11 +468,11 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rosbg %r1, %r4, 0x20, 0x28, 0x18
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x10
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -490,7 +490,7 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   laxg %r2, %r3, 0(%r2)
+;   laxg %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_xor_i32(i64, i32) -> i32 {
@@ -506,7 +506,7 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lax %r2, %r3, 0(%r2)
+;   lax %r2, %r3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %atomic_rmw_xor_i16(i64, i64, i16) -> i16 {
@@ -528,11 +528,11 @@ block0(v0: i64, v1: i64, v2: i16):
 ; block0: ; offset 0x0
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rxsbg %r1, %r4, 0x20, 0x30, 0x10
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0xe
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -558,11 +558,11 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rxsbg %r1, %r4, 0x20, 0x28, 0x18
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x10
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -582,11 +582,11 @@ block0(v0: i64, v1: i64, v2: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lg %r0, 0(%r3)
+;   lg %r0, 0(%r3) ; trap: heap_oob
 ;   ngrk %r1, %r0, %r4
 ;   xilf %r1, 0xffffffff
 ;   xihf %r1, 0xffffffff
-;   csg %r0, %r1, 0(%r3)
+;   csg %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 6
 ;   lgr %r2, %r0
 ;   br %r14
@@ -606,10 +606,10 @@ block0(v0: i64, v1: i64, v2: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   nrk %r1, %r0, %r4
 ;   xilf %r1, 0xffffffff
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 4
 ;   lgr %r2, %r0
 ;   br %r14
@@ -633,12 +633,12 @@ block0(v0: i64, v1: i64, v2: i16):
 ; block0: ; offset 0x0
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rnsbg %r1, %r4, 0x20, 0x30, 0x10
 ;   xilf %r1, 0xffff0000
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0xe
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -664,12 +664,12 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   rnsbg %r1, %r4, 0x20, 0x28, 0x18
 ;   xilf %r1, 0xff000000
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x10
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -689,10 +689,10 @@ block0(v0: i64, v1: i64, v2: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lg %r0, 0(%r3)
+;   lg %r0, 0(%r3) ; trap: heap_oob
 ;   cgr %r4, %r0
 ;   jgnl 0x1c
-;   csg %r0, %r4, 0(%r3)
+;   csg %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 6
 ;   lgr %r2, %r0
 ;   br %r14
@@ -712,10 +712,10 @@ block0(v0: i64, v1: i64, v2: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   cr %r4, %r0
 ;   jgnl 0x16
-;   cs %r0, %r4, 0(%r3)
+;   cs %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 4
 ;   lgr %r2, %r0
 ;   br %r14
@@ -741,13 +741,13 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x10
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   cr %r4, %r1
 ;   jgnl 0x38
 ;   risbgn %r1, %r4, 0x20, 0x30, 0
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -775,13 +775,13 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x18
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   cr %r4, %r1
 ;   jgnl 0x3a
 ;   risbgn %r1, %r4, 0x20, 0x28, 0
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -801,10 +801,10 @@ block0(v0: i64, v1: i64, v2: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lg %r0, 0(%r3)
+;   lg %r0, 0(%r3) ; trap: heap_oob
 ;   cgr %r4, %r0
 ;   jgnh 0x1c
-;   csg %r0, %r4, 0(%r3)
+;   csg %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 6
 ;   lgr %r2, %r0
 ;   br %r14
@@ -824,10 +824,10 @@ block0(v0: i64, v1: i64, v2: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   cr %r4, %r0
 ;   jgnh 0x16
-;   cs %r0, %r4, 0(%r3)
+;   cs %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 4
 ;   lgr %r2, %r0
 ;   br %r14
@@ -853,13 +853,13 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x10
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   cr %r4, %r1
 ;   jgnh 0x38
 ;   risbgn %r1, %r4, 0x20, 0x30, 0
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -887,13 +887,13 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x18
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   cr %r4, %r1
 ;   jgnh 0x3a
 ;   risbgn %r1, %r4, 0x20, 0x28, 0
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -913,10 +913,10 @@ block0(v0: i64, v1: i64, v2: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lg %r0, 0(%r3)
+;   lg %r0, 0(%r3) ; trap: heap_oob
 ;   clgr %r4, %r0
 ;   jgnl 0x1c
-;   csg %r0, %r4, 0(%r3)
+;   csg %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 6
 ;   lgr %r2, %r0
 ;   br %r14
@@ -936,10 +936,10 @@ block0(v0: i64, v1: i64, v2: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   clr %r4, %r0
 ;   jgnl 0x16
-;   cs %r0, %r4, 0(%r3)
+;   cs %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 4
 ;   lgr %r2, %r0
 ;   br %r14
@@ -965,13 +965,13 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x10
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   clr %r4, %r1
 ;   jgnl 0x38
 ;   risbgn %r1, %r4, 0x20, 0x30, 0
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -999,13 +999,13 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x18
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   clr %r4, %r1
 ;   jgnl 0x3a
 ;   risbgn %r1, %r4, 0x20, 0x28, 0
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14
@@ -1025,10 +1025,10 @@ block0(v0: i64, v1: i64, v2: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lg %r0, 0(%r3)
+;   lg %r0, 0(%r3) ; trap: heap_oob
 ;   clgr %r4, %r0
 ;   jgnh 0x1c
-;   csg %r0, %r4, 0(%r3)
+;   csg %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 6
 ;   lgr %r2, %r0
 ;   br %r14
@@ -1048,10 +1048,10 @@ block0(v0: i64, v1: i64, v2: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   clr %r4, %r0
 ;   jgnh 0x16
-;   cs %r0, %r4, 0(%r3)
+;   cs %r0, %r4, 0(%r3) ; trap: heap_oob
 ;   jglh 4
 ;   lgr %r2, %r0
 ;   br %r14
@@ -1077,13 +1077,13 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r2, %r3, 3
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x10
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   clr %r4, %r1
 ;   jgnh 0x38
 ;   risbgn %r1, %r4, 0x20, 0x30, 0
 ;   rll %r1, %r1, 0(%r2)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
 ;   rll %r2, %r0, 0x10(%r2)
 ;   br %r14
@@ -1111,13 +1111,13 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 0xfffc
 ;   sllk %r4, %r4, 0x18
 ;   lcr %r5, %r2
-;   l %r0, 0(%r3)
+;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r2)
 ;   clr %r4, %r1
 ;   jgnh 0x3a
 ;   risbgn %r1, %r4, 0x20, 0x28, 0
 ;   rll %r1, %r1, 0(%r5)
-;   cs %r0, %r1, 0(%r3)
+;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
 ;   rll %r2, %r0, 8(%r2)
 ;   br %r14

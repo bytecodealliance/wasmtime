@@ -1,4 +1,6 @@
+use anyhow::{anyhow, bail, Result};
 use serde_derive::{Deserialize, Serialize};
+use target_lexicon::{PointerWidth, Triple};
 
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize, Debug)]
@@ -54,6 +56,9 @@ pub struct Tunables {
 
     /// Whether or not Wasm functions can be tail-called or not.
     pub tail_callable: bool,
+
+    /// Whether or not Wasm functions target the winch abi.
+    pub winch_callable: bool,
 }
 
 impl Tunables {
@@ -67,6 +72,18 @@ impl Tunables {
             Tunables::default_u64()
         } else {
             panic!("unsupported target_pointer_width");
+        }
+    }
+
+    /// Returns the default set of tunables for the given target triple.
+    pub fn default_for_target(target: &Triple) -> Result<Self> {
+        match target
+            .pointer_width()
+            .map_err(|_| anyhow!("failed to retrieve target pointer width"))?
+        {
+            PointerWidth::U32 => Ok(Tunables::default_u32()),
+            PointerWidth::U64 => Ok(Tunables::default_u64()),
+            _ => bail!("unsupported target pointer width"),
         }
     }
 
@@ -92,6 +109,7 @@ impl Tunables {
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
             tail_callable: false,
+            winch_callable: false,
         }
     }
 

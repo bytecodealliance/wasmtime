@@ -24,7 +24,7 @@ pub use traphandlers::SignalHandler;
 ///
 /// This is initialized during `init_traps` below. The definition lives within
 /// `wasmtime` currently.
-pub(crate) static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
+pub(crate) static mut GET_WASM_TRAP: fn(usize) -> Option<wasmtime_environ::Trap> = |_| None;
 
 /// This function is required to be called before any WebAssembly is entered.
 /// This will configure global state such as signal handlers to prepare the
@@ -39,11 +39,14 @@ pub(crate) static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
 /// program counter is the pc of an actual wasm trap or not. This is then used
 /// to disambiguate faults that happen due to wasm and faults that happen due to
 /// bugs in Rust or elsewhere.
-pub fn init_traps(is_wasm_pc: fn(usize) -> bool, macos_use_mach_ports: bool) {
+pub fn init_traps(
+    get_wasm_trap: fn(usize) -> Option<wasmtime_environ::Trap>,
+    macos_use_mach_ports: bool,
+) {
     static INIT: Once = Once::new();
 
     INIT.call_once(|| unsafe {
-        IS_WASM_PC = is_wasm_pc;
+        GET_WASM_TRAP = get_wasm_trap;
         traphandlers::platform_init(macos_use_mach_ports);
     });
 
@@ -157,6 +160,9 @@ pub enum TrapReason {
         /// fault-based traps which are one of the main ways, but not the only
         /// way, to run wasm.
         faulting_addr: Option<usize>,
+
+        /// The trap code associated with this trap.
+        trap: wasmtime_environ::Trap,
     },
 
     /// A trap raised from a wasm libcall
@@ -196,6 +202,22 @@ impl From<wasmtime_environ::Trap> for TrapReason {
     fn from(code: wasmtime_environ::Trap) -> Self {
         TrapReason::Wasm(code)
     }
+}
+
+/// Return value from `test_if_trap`.
+pub(crate) enum TrapTest {
+    /// Not a wasm trap, need to delegate to whatever process handler is next.
+    NotWasm,
+    /// This trap was handled by the embedder via custom embedding APIs.
+    HandledByEmbedder,
+    /// This is a wasm trap, it needs to be handled.
+    #[cfg_attr(miri, allow(dead_code))]
+    Trap {
+        /// How to longjmp back to the original wasm frame.
+        jmp_buf: *const u8,
+        /// The trap code of this trap.
+        trap: wasmtime_environ::Trap,
+    },
 }
 
 /// Catches any wasm traps that happen within the execution of `closure`,
@@ -406,14 +428,14 @@ impl CallThreadState {
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
     #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
-    pub(crate) fn take_jmp_buf_if_trap(
+    pub(crate) fn test_if_trap(
         &self,
         pc: *const u8,
         call_handler: impl Fn(&SignalHandler) -> bool,
-    ) -> *const u8 {
+    ) -> TrapTest {
         // If we haven't even started to handle traps yet, bail out.
         if self.jmp_buf.get().is_null() {
-            return ptr::null();
+            return TrapTest::NotWasm;
         }
 
         // First up see if any instance registered has a custom trap handler,
@@ -421,18 +443,22 @@ impl CallThreadState {
         // return that the trap was handled.
         if let Some(handler) = self.signal_handler {
             if unsafe { call_handler(&*handler) } {
-                return 1 as *const _;
+                return TrapTest::HandledByEmbedder;
             }
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if unsafe { !IS_WASM_PC(pc as usize) } {
-            return ptr::null();
-        }
+        let trap = match unsafe { GET_WASM_TRAP(pc as usize) } {
+            Some(trap) => trap,
+            None => return TrapTest::NotWasm,
+        };
 
         // If all that passed then this is indeed a wasm trap, so return the
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
-        self.take_jmp_buf()
+        TrapTest::Trap {
+            jmp_buf: self.take_jmp_buf(),
+            trap,
+        }
     }
 
     pub(crate) fn take_jmp_buf(&self) -> *const u8 {
@@ -440,7 +466,13 @@ impl CallThreadState {
     }
 
     #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
-    pub(crate) fn set_jit_trap(&self, pc: *const u8, fp: usize, faulting_addr: Option<usize>) {
+    pub(crate) fn set_jit_trap(
+        &self,
+        pc: *const u8,
+        fp: usize,
+        faulting_addr: Option<usize>,
+        trap: wasmtime_environ::Trap,
+    ) {
         let backtrace = self.capture_backtrace(self.limits, Some((pc as usize, fp)));
         let coredump = self.capture_coredump(self.limits, Some((pc as usize, fp)));
         unsafe {
@@ -448,6 +480,7 @@ impl CallThreadState {
                 UnwindReason::Trap(TrapReason::Jit {
                     pc: pc as usize,
                     faulting_addr,
+                    trap,
                 }),
                 backtrace,
                 coredump,
@@ -485,15 +518,6 @@ impl CallThreadState {
             state = unsafe { this.prev().as_ref() };
             Some(this)
         })
-    }
-}
-
-struct ResetCell<'a, T: Copy>(&'a Cell<T>, T);
-
-impl<T: Copy> Drop for ResetCell<'_, T> {
-    #[inline]
-    fn drop(&mut self) {
-        self.0.set(self.1);
     }
 }
 

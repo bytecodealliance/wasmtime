@@ -231,21 +231,10 @@ fn parse_bool_value(value: &str) -> SetResult<bool> {
 fn parse_enum_value(value: &str, choices: &[&str]) -> SetResult<u8> {
     match choices.iter().position(|&tag| tag == value) {
         Some(idx) => Ok(idx as u8),
-        None => {
-            // TODO: Use `join` instead of this code, once
-            // https://github.com/rust-lang/rust/issues/27747 is resolved.
-            let mut all_choices = String::new();
-            let mut first = true;
-            for choice in choices {
-                if first {
-                    first = false
-                } else {
-                    all_choices += ", ";
-                }
-                all_choices += choice;
-            }
-            Err(SetError::BadValue(format!("any among {}", all_choices)))
-        }
+        None => Err(SetError::BadValue(format!(
+            "any among {}",
+            choices.join(", ")
+        ))),
     }
 }
 

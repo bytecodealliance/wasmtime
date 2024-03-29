@@ -1838,21 +1838,29 @@
 ;;
 ;; This allows us to skip the mask expansion step and use the more efficient
 ;; vmerge.vvm instruction.
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
+;;
+;; We should be careful to ensure that the mask and the vmerge have the
+;; same type. So that we don't generate a mask with length 16 (i.e. for i8x16), and then
+;; only copy the first few lanes of the result to the destination register because
+;; the bitselect has a different length (i.e. i64x2).
+;;
+;; See: https://github.com/bytecodealliance/wasmtime/issues/8131
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
   (let ((mask VReg (gen_icmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
   (let ((mask VReg (gen_fcmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (bitcast _ (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (bitcast _ (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
   (let ((mask VReg (gen_fcmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (bitcast _ (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (bitcast _ (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
   (let ((mask VReg (gen_icmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
 
 ;;;;;  Rules for `isplit`;;;;;;;;;

@@ -220,21 +220,23 @@ impl ABIMachineSpec for S390xMachineDeps {
         8
     }
 
-    fn compute_arg_locs<'a, I>(
+    fn compute_arg_locs(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        params: I,
+        params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-        mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(u32, Option<usize>)>
-    where
-        I: IntoIterator<Item = &'a ir::AbiParam>,
-    {
+        mut args: ArgsAccumulator,
+    ) -> CodegenResult<(u32, Option<usize>)> {
         assert_ne!(
             call_conv,
             isa::CallConv::Tail,
             "s390x does not support the 'tail' calling convention yet"
+        );
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Winch,
+            "s390x does not support the 'winch' calling convention yet"
         );
 
         let mut next_gpr = 0;

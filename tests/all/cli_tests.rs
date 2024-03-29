@@ -521,6 +521,15 @@ fn specify_env() -> Result<()> {
         .output()?;
     assert!(output.status.success());
 
+    // Inherit all env vars
+    let output = get_wasmtime_command()?
+        .args(&["run", "-Sinherit-env", "tests/all/cli_tests/print_env.wat"])
+        .env("FOO", "bar")
+        .output()?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("FOO=bar"), "bad output: {stdout}");
+
     Ok(())
 }
 
@@ -1490,7 +1499,7 @@ mod test_programs {
             &[
                 "-Ccache=no",
                 "-Wcomponent-model",
-                "-Scommon,http,preview2",
+                "-Scli,http,preview2",
                 HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
             ],
             None,
@@ -1587,4 +1596,11 @@ mod test_programs {
         assert!(output.status.success());
         Ok(())
     }
+}
+
+#[test]
+fn settings_command() -> Result<()> {
+    let output = run_wasmtime(&["settings"])?;
+    assert!(output.contains("Cranelift settings for target"));
+    Ok(())
 }

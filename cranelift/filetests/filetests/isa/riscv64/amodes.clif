@@ -21,7 +21,7 @@ block0(v0: i64, v1: i32):
 ; block0: ; offset 0x0
 ;   sext.w a5, a1
 ;   add a5, a0, a5
-;   lw a0, 0(a5)
+;   lw a0, 0(a5) ; trap: heap_oob
 ;   ret
 
 function %f6(i64, i32) -> i32 {
@@ -43,7 +43,7 @@ block0(v0: i64, v1: i32):
 ; block0: ; offset 0x0
 ;   sext.w a5, a1
 ;   add a5, a5, a0
-;   lw a0, 0(a5)
+;   lw a0, 0(a5) ; trap: heap_oob
 ;   ret
 
 function %f7(i32, i32) -> i32 {
@@ -72,7 +72,7 @@ block0(v0: i32, v1: i32):
 ;   slli a1, a1, 0x20
 ;   srli a4, a1, 0x20
 ;   add a2, a3, a4
-;   lw a0, 0(a2)
+;   lw a0, 0(a2) ; trap: heap_oob
 ;   ret
 
 function %f8(i64, i32) -> i32 {
@@ -101,7 +101,7 @@ block0(v0: i64, v1: i32):
 ;   addi a1, a1, 0x20
 ;   add a1, a1, a0
 ;   add a1, a1, a1
-;   lw a0, 4(a1)
+;   lw a0, 4(a1) ; trap: heap_oob
 ;   ret
 
 function %f9(i64, i64, i64) -> i32 {
@@ -125,7 +125,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0: ; offset 0x0
 ;   add a0, a0, a1
 ;   add a0, a0, a2
-;   lw a0, 0x30(a0)
+;   lw a0, 0x30(a0) ; trap: heap_oob
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -152,7 +152,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lui t6, 1
 ;   addi t6, t6, 4
 ;   add t6, t6, a0
-;   lw a0, 0(t6)
+;   lw a0, 0(t6) ; trap: heap_oob
 ;   ret
 
 function %f10() -> i32 {
@@ -171,7 +171,7 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a1, zero, 0x4d2
-;   lw a0, 0(a1)
+;   lw a0, 0(a1) ; trap: heap_oob
 ;   ret
 
 function %f11(i64) -> i32 {
@@ -191,7 +191,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   lui t6, 0x800
 ;   add t6, t6, a0
-;   lw a0, 0(t6)
+;   lw a0, 0(t6) ; trap: heap_oob
 ;   ret
 
 function %f12(i64) -> i32 {
@@ -209,7 +209,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lw a0, -4(a0)
+;   lw a0, -4(a0) ; trap: heap_oob
 ;   ret
 
 function %f13(i64) -> i32 {
@@ -230,7 +230,7 @@ block0(v0: i64):
 ;   lui t6, 0x3b9ad
 ;   addi t6, t6, -0x600
 ;   add t6, t6, a0
-;   lw a0, 0(t6)
+;   lw a0, 0(t6) ; trap: heap_oob
 ;   ret
 
 function %f14(i32) -> i32 {
@@ -249,7 +249,7 @@ block0(v0: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a3, a0
-;   lw a0, 0(a3)
+;   lw a0, 0(a3) ; trap: heap_oob
 ;   ret
 
 function %f15(i32, i32) -> i32 {
@@ -274,7 +274,7 @@ block0(v0: i32, v1: i32):
 ;   sext.w a0, a0
 ;   sext.w a1, a1
 ;   add a0, a0, a1
-;   lw a0, 0(a0)
+;   lw a0, 0(a0) ; trap: heap_oob
 ;   ret
 
 function %f18(i64, i64, i64) -> i32 {
@@ -300,7 +300,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   addi a3, a1, -2
 ;   slli a1, a3, 0x20
 ;   srli a3, a1, 0x20
-;   lh a0, 0(a3)
+;   lh a0, 0(a3) ; trap: heap_oob
 ;   ret
 
 function %f19(i64, i64, i64) -> i32 {
@@ -326,7 +326,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   addi a3, a1, 2
 ;   slli a1, a3, 0x20
 ;   srli a3, a1, 0x20
-;   lh a0, 0(a3)
+;   lh a0, 0(a3) ; trap: heap_oob
 ;   ret
 
 function %f20(i64, i64, i64) -> i32 {
@@ -350,7 +350,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lui a0, 0xfffff
 ;   addi a2, a0, -2
 ;   sext.w a1, a2
-;   lh a0, 0(a1)
+;   lh a0, 0(a1) ; trap: heap_oob
 ;   ret
 
 function %f21(i64, i64, i64) -> i32 {
@@ -374,7 +374,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lui a0, 1
 ;   addi a2, a0, 2
 ;   sext.w a1, a2
-;   lh a0, 0(a1)
+;   lh a0, 0(a1) ; trap: heap_oob
 ;   ret
 
 function %i128(i64) -> i128 {
@@ -396,11 +396,11 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld a2, 0(a0)
+;   ld a2, 0(a0) ; trap: heap_oob
 ;   mv a4, a2
-;   ld a1, 8(a0)
-;   sd a2, 0(a0)
-;   sd a1, 8(a0)
+;   ld a1, 8(a0) ; trap: heap_oob
+;   sd a2, 0(a0) ; trap: heap_oob
+;   sd a1, 8(a0) ; trap: heap_oob
 ;   mv a0, a4
 ;   ret
 
@@ -423,11 +423,11 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld a2, 0x10(a0)
+;   ld a2, 0x10(a0) ; trap: heap_oob
 ;   mv a4, a2
-;   ld a1, 0x18(a0)
-;   sd a2, 0x10(a0)
-;   sd a1, 0x18(a0)
+;   ld a1, 0x18(a0) ; trap: heap_oob
+;   sd a2, 0x10(a0) ; trap: heap_oob
+;   sd a1, 0x18(a0) ; trap: heap_oob
 ;   mv a0, a4
 ;   ret
 
@@ -450,11 +450,11 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld a2, 0x1f8(a0)
+;   ld a2, 0x1f8(a0) ; trap: heap_oob
 ;   mv a4, a2
-;   ld a1, 0x200(a0)
-;   sd a2, 0x1f8(a0)
-;   sd a1, 0x200(a0)
+;   ld a1, 0x200(a0) ; trap: heap_oob
+;   sd a2, 0x1f8(a0) ; trap: heap_oob
+;   sd a1, 0x200(a0) ; trap: heap_oob
 ;   mv a0, a4
 ;   ret
 
@@ -477,11 +477,11 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld a2, -0x200(a0)
+;   ld a2, -0x200(a0) ; trap: heap_oob
 ;   mv a4, a2
-;   ld a1, -0x1f8(a0)
-;   sd a2, -0x200(a0)
-;   sd a1, -0x1f8(a0)
+;   ld a1, -0x1f8(a0) ; trap: heap_oob
+;   sd a2, -0x200(a0) ; trap: heap_oob
+;   sd a1, -0x1f8(a0) ; trap: heap_oob
 ;   mv a0, a4
 ;   ret
 
@@ -505,11 +505,11 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld a2, 0x20(a0)
+;   ld a2, 0x20(a0) ; trap: heap_oob
 ;   mv a4, a2
-;   ld a1, 0x28(a0)
-;   sd a2, 0x20(a0)
-;   sd a1, 0x28(a0)
+;   ld a1, 0x28(a0) ; trap: heap_oob
+;   sd a2, 0x20(a0) ; trap: heap_oob
+;   sd a1, 0x28(a0) ; trap: heap_oob
 ;   mv a0, a4
 ;   ret
 
@@ -533,10 +533,10 @@ block0(v0: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a4, a0
-;   ld a0, 0(a4)
-;   ld a1, 8(a4)
-;   sd a0, 0(a4)
-;   sd a1, 8(a4)
+;   ld a0, 0(a4) ; trap: heap_oob
+;   ld a1, 8(a4) ; trap: heap_oob
+;   sd a0, 0(a4) ; trap: heap_oob
+;   sd a1, 8(a4) ; trap: heap_oob
 ;   ret
 
 function %i128_32bit_sextend(i64, i32) -> i128 {
@@ -565,11 +565,11 @@ block0(v0: i64, v1: i32):
 ; block0: ; offset 0x0
 ;   sext.w a1, a1
 ;   add a0, a0, a1
-;   ld a5, 0x18(a0)
+;   ld a5, 0x18(a0) ; trap: heap_oob
 ;   mv a2, a5
-;   ld a1, 0x20(a0)
-;   sd a5, 0x18(a0)
-;   sd a1, 0x20(a0)
+;   ld a1, 0x20(a0) ; trap: heap_oob
+;   sd a5, 0x18(a0) ; trap: heap_oob
+;   sd a1, 0x20(a0) ; trap: heap_oob
 ;   mv a0, a2
 ;   ret
 
@@ -587,6 +587,6 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ld a0, 8(sp)
+;   ld a0, 8(sp) ; trap: heap_oob
 ;   ret
 

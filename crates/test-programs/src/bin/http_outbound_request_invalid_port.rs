@@ -8,6 +8,9 @@ fn main() {
         "/",
         None,
         None,
+        None,
+        None,
+        None,
     );
 
     assert!(res.is_err());

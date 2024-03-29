@@ -65,7 +65,11 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - run: git ls-files '*.h' '*.c' '*.cpp' | grep -v wasmtime-platform.h | xargs clang-format-15 --dry-run --Werror --verbose
+    - run: |
+        git ls-files '*.h' '*.c' '*.cpp' | \
+          grep -v wasmtime-platform.h | \
+          grep -v wasm.h | \
+          xargs clang-format-15 --dry-run --Werror --verbose
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
@@ -212,7 +216,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-02-22
+        toolchain: nightly-2024-03-11
 
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -268,7 +272,6 @@ jobs:
   # double-check that Rust code compiles and is likely to work everywhere else.
   checks:
     needs: determine
-    if: needs.determine.outputs.run-full
     name: Check
     runs-on: ubuntu-latest
     env:
@@ -337,7 +340,7 @@ jobs:
     # Check whether `wasmtime` cross-compiles to aarch64-linux-android
     - run: rustup target add aarch64-linux-android
     - name: Set up JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
@@ -354,6 +357,17 @@ jobs:
     # Run clippy configuration
     - run: rustup component add clippy
     - run: cargo clippy --workspace
+
+    # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
+    # that there's no git changes.
+    - name: Re-vendor WIT
+      run: ./ci/vendor-wit.sh
+    - run: git diff --exit-code
+
+    # Re-vendor the C API and make sure it's up-to-date.
+    - name: Re-vendor WIT
+      run: ./ci/vendor-c-api-headers.sh
+    - run: git diff --exit-code
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
@@ -397,7 +411,7 @@ jobs:
     # happen upstream. This is periodically updated through a PR.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-02-22
+        toolchain: nightly-2024-03-11
 
     # Ensure that fuzzers sitll build.
     #
@@ -527,12 +541,6 @@ jobs:
         RUST_BACKTRACE: 1
       if: matrix.target == '' && matrix.os != 'windows-latest' && needs.determine.outputs.test-capi
 
-    # Ensure wit definitions are in sync: both wasmtime-wasi and wasmtime-wasi-http need their own
-    # copy of the wit definitions so publishing works, but we need to ensure they are identical copies.
-    - name: Check that the wasi and wasi-http wit directories agree
-      run: |
-        diff -ru crates/wasi/wit crates/wasi-http/wit
-
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
     - name: CPU information
@@ -560,7 +568,7 @@ jobs:
         fi
 
     # Build and test all features
-    - run: ./ci/run-tests.sh --locked
+    - run: ./ci/run-tests.sh ${{ matrix.extra_features }} --locked
       env:
         RUST_BACKTRACE: 1
 
@@ -723,7 +731,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-02-22
+        toolchain: nightly-2024-03-11
     - run: rustup component add rust-src miri
     - uses: actions/cache@v4
       with:

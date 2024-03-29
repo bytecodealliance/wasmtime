@@ -102,10 +102,6 @@ impl MemArg {
         }
     }
 
-    pub(crate) fn can_trap(&self) -> bool {
-        !self.get_flags().notrap()
-    }
-
     /// Edit registers with allocations.
     pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
@@ -185,10 +181,6 @@ impl MemArgPair {
             }
             _ => None,
         }
-    }
-
-    pub(crate) fn can_trap(&self) -> bool {
-        !self.flags.notrap()
     }
 
     /// Edit registers with allocations.

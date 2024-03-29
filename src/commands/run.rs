@@ -207,15 +207,26 @@ impl RunCommand {
             }
         }
 
+        // Pre-emptively initialize and install a Tokio runtime ambiently in the
+        // environment when executing the module. Without this whenever a WASI
+        // call is made that needs to block on a future a Tokio runtime is
+        // configured and entered, and this appears to be slower than simply
+        // picking an existing runtime out of the environment and using that.
+        // The goal of this is to improve the performance of WASI-related
+        // operations that block in the CLI since the CLI doesn't use async to
+        // invoke WebAssembly.
+        let result = wasmtime_wasi::runtime::with_ambient_tokio_runtime(|| {
+            self.load_main_module(&mut store, &mut linker, &main, modules)
+                .with_context(|| {
+                    format!(
+                        "failed to run main module `{}`",
+                        self.module_and_args[0].to_string_lossy()
+                    )
+                })
+        });
+
         // Load the main wasm module.
-        match self
-            .load_main_module(&mut store, &mut linker, &main, modules)
-            .with_context(|| {
-                format!(
-                    "failed to run main module `{}`",
-                    self.module_and_args[0].to_string_lossy()
-                )
-            }) {
+        match result {
             Ok(()) => (),
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
@@ -607,7 +618,22 @@ impl RunCommand {
         store: &mut Store<Host>,
         module: &RunTarget,
     ) -> Result<()> {
-        if self.run.common.wasi.common != Some(false) {
+        let mut cli = self.run.common.wasi.cli;
+
+        // Accept -Scommon as a deprecated alias for -Scli.
+        if let Some(common) = self.run.common.wasi.common {
+            if cli.is_some() {
+                bail!(
+                    "The -Scommon option should not be use with -Scli as it is a deprecated alias"
+                );
+            } else {
+                // In the future, we may add a warning here to tell users to use
+                // `-S cli` instead of `-S common`.
+                cli = Some(common);
+            }
+        }
+
+        if cli != Some(false) {
             match linker {
                 CliLinker::Core(linker) => {
                     match (self.run.common.wasi.preview2, self.run.common.wasi.threads) {
@@ -628,9 +654,9 @@ impl RunCommand {
                         // default-disabled in the future.
                         (Some(true), _) | (None, Some(false) | None) => {
                             if self.run.common.wasi.preview0 != Some(false) {
-                                wasmtime_wasi::preview0::add_to_linker_sync(linker)?;
+                                wasmtime_wasi::preview0::add_to_linker_sync(linker, |t| t)?;
                             }
-                            wasmtime_wasi::preview1::add_to_linker_sync(linker)?;
+                            wasmtime_wasi::preview1::add_to_linker_sync(linker, |t| t)?;
                             self.set_preview2_ctx(store)?;
                         }
                     }
@@ -740,6 +766,11 @@ impl RunCommand {
         let mut builder = WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?)?;
 
+        if self.run.common.wasi.inherit_env == Some(true) {
+            for (k, v) in std::env::vars() {
+                builder.env(&k, &v)?;
+            }
+        }
         for (key, value) in self.vars.iter() {
             let value = match value {
                 Some(value) => value.clone(),
@@ -779,6 +810,17 @@ impl RunCommand {
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
 
+        // It's ok to block the current thread since we're the only thread in
+        // the program as the CLI. This helps improve the performance of some
+        // blocking operations in WASI, for example, by skipping the
+        // back-and-forth between sync and async.
+        builder.allow_blocking_current_thread(true);
+
+        if self.run.common.wasi.inherit_env == Some(true) {
+            for (k, v) in std::env::vars() {
+                builder.env(&k, &v);
+            }
+        }
         for (key, value) in self.vars.iter() {
             let value = match value {
                 Some(value) => value.clone(),
