@@ -99,6 +99,7 @@ default = [
   'debug-builtins',
   'runtime',
   'component-model',
+  'threads',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -191,3 +192,6 @@ runtime = ["dep:wasmtime-runtime", "dep:wasmtime-jit-icache-coherence", "dep:was
 # When the `runtime` Cargo feature is enabled, this feature gates the ability to
 # load and run Wasm that uses those proposals.
 gc = ["wasmtime-environ/gc", "wasmtime-runtime?/gc", "wasmtime-cranelift?/gc"]
+
+# Enable runtime support for the WebAssembly threads proposal.
+threads = ["wasmtime-runtime?/threads", "wasmtime-cranelift?/threads"]

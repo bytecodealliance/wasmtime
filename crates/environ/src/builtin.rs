@@ -29,10 +29,13 @@ macro_rules! foreach_builtin_function {
             // Returns an index for Wasm's `table.fill` instruction for `funcref`s.
             table_fill_func_ref(vmctx: vmctx, table: i32, dst: i32, val: pointer, len: i32);
             // Returns an index for wasm's `memory.atomic.notify` instruction.
+            #[cfg(feature = "threads")]
             memory_atomic_notify(vmctx: vmctx, memory: i32, addr: i64, count: i32) -> i32;
             // Returns an index for wasm's `memory.atomic.wait32` instruction.
+            #[cfg(feature = "threads")]
             memory_atomic_wait32(vmctx: vmctx, memory: i32, addr: i64, expected: i32, timeout: i64) -> i32;
             // Returns an index for wasm's `memory.atomic.wait64` instruction.
+            #[cfg(feature = "threads")]
             memory_atomic_wait64(vmctx: vmctx, memory: i32, addr: i64, expected: i64, timeout: i64) -> i32;
             // Invoked when fuel has run out while executing a function.
             out_of_gas(vmctx: vmctx);

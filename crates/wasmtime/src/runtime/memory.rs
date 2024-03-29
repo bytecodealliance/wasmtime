@@ -725,6 +725,8 @@ impl SharedMemory {
     /// Construct a [`SharedMemory`] by providing both the `minimum` and
     /// `maximum` number of 64K-sized pages. This call allocates the necessary
     /// pages on the system.
+    #[cfg(feature = "threads")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "threads")))]
     pub fn new(engine: &Engine, ty: MemoryType) -> Result<Self> {
         if !ty.is_shared() {
             bail!("shared memory must have the `shared` flag enabled on its memory type")
@@ -921,11 +923,11 @@ impl SharedMemory {
                 .get_defined_memory(wasmtime_export.index)
                 .as_mut()
                 .unwrap();
-            let shared_memory = memory
-                .as_shared_memory()
-                .expect("unable to convert from a shared memory")
-                .clone();
-            Self(shared_memory, store.engine().clone())
+            match memory.as_shared_memory() {
+                #[cfg_attr(not(feature = "threads"), allow(unreachable_code))]
+                Some(mem) => Self(mem.clone(), store.engine().clone()),
+                None => panic!("unable to convert from a shared memory"),
+            }
         })
     }
 }

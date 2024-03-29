@@ -229,6 +229,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         )
     }
 
+    #[cfg(feature = "threads")]
     fn get_memory_atomic_wait(
         &mut self,
         func: &mut Function,
@@ -2602,21 +2603,31 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         expected: ir::Value,
         timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
-        let implied_ty = pos.func.dfg.value_type(expected);
-        let (wait_func, memory_index) =
-            self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
+        #[cfg(feature = "threads")]
+        {
+            let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
+            let implied_ty = pos.func.dfg.value_type(expected);
+            let (wait_func, memory_index) =
+                self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
 
-        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+            let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
 
-        let vmctx = self.vmctx_val(&mut pos);
+            let vmctx = self.vmctx_val(&mut pos);
 
-        let call_inst = pos.ins().call(
-            wait_func,
-            &[vmctx, memory_index_arg, addr, expected, timeout],
-        );
+            let call_inst = pos.ins().call(
+                wait_func,
+                &[vmctx, memory_index_arg, addr, expected, timeout],
+            );
 
-        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+            Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+        }
+        #[cfg(not(feature = "threads"))]
+        {
+            let _ = (&mut pos, memory_index, addr, expected, timeout);
+            Err(wasmtime_environ::WasmError::Unsupported(
+                "threads support disabled at compile time".to_string(),
+            ))
+        }
     }
 
     fn translate_atomic_notify(
@@ -2627,16 +2638,26 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         addr: ir::Value,
         count: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
-        let atomic_notify = self.builtin_functions.memory_atomic_notify(&mut pos.func);
+        #[cfg(feature = "threads")]
+        {
+            let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
+            let atomic_notify = self.builtin_functions.memory_atomic_notify(&mut pos.func);
 
-        let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
-        let vmctx = self.vmctx_val(&mut pos);
-        let call_inst = pos
-            .ins()
-            .call(atomic_notify, &[vmctx, memory_index_arg, addr, count]);
+            let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
+            let vmctx = self.vmctx_val(&mut pos);
+            let call_inst = pos
+                .ins()
+                .call(atomic_notify, &[vmctx, memory_index_arg, addr, count]);
 
-        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+            Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+        }
+        #[cfg(not(feature = "threads"))]
+        {
+            let _ = (&mut pos, memory_index, addr, count);
+            Err(wasmtime_environ::WasmError::Unsupported(
+                "threads support disabled at compile time".to_string(),
+            ))
+        }
     }
 
     fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {

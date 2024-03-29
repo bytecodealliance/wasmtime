@@ -317,6 +317,7 @@ impl Instance {
     }
 
     /// Get a locally defined or imported memory.
+    #[cfg(feature = "threads")]
     pub(crate) fn get_runtime_memory(&mut self, index: MemoryIndex) -> &mut Memory {
         if let Some(defined_index) = self.module().defined_memory_index(index) {
             unsafe { &mut *self.get_defined_memory(defined_index) }

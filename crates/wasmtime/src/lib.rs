@@ -246,6 +246,14 @@
 //! * `component-model` - Enabled by default, this enables support for the
 //!   [`wasmtime::component`](component) API for working with components.
 //!
+//! * `gc` - Enabled by default, this enables support for a number of
+//!   WebAssembly proposals such as `reference-types`, `function-references`,
+//!   and `gc`. Note that the implementation of the `gc` proposal itself is not
+//!   yet complete at this time.
+//!
+//! * `threads` - Enabled by default, this enables compile-time support for the
+//!   WebAssembly `threads` proposal, notably shared memories.
+//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!

@@ -61,6 +61,7 @@ use crate::{Instance, TrapReason};
 #[cfg(feature = "wmemcheck")]
 use anyhow::bail;
 use anyhow::Result;
+#[cfg(feature = "threads")]
 use std::time::{Duration, Instant};
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap, Unsigned};
 #[cfg(feature = "wmemcheck")]
@@ -435,6 +436,7 @@ unsafe fn externref_global_set(instance: &mut Instance, index: u32, externref: *
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.
+#[cfg(feature = "threads")]
 fn memory_atomic_notify(
     instance: &mut Instance,
     memory_index: u32,
@@ -448,6 +450,7 @@ fn memory_atomic_notify(
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
+#[cfg(feature = "threads")]
 fn memory_atomic_wait32(
     instance: &mut Instance,
     memory_index: u32,
@@ -464,6 +467,7 @@ fn memory_atomic_wait32(
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
+#[cfg(feature = "threads")]
 fn memory_atomic_wait64(
     instance: &mut Instance,
     memory_index: u32,
