@@ -1,3 +1,5 @@
+#![no_std]
+
 /// Represents the possible sizes in bytes of the discriminant of a variant type in the component model
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DiscriminantSize {
