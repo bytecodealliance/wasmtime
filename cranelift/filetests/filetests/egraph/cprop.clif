@@ -282,3 +282,33 @@ block0(v0: i32):
 ; check: v3 = iconst.i32 1
 ; nextln: v4 = iadd v0, v3  ; v3 = 1
 ; nextln: return v4
+
+function %bswap_i16() -> i16 {
+block0:
+    v0 = iconst.i16 0x1234
+    v1 = bswap v0
+    return v1
+}
+
+; check: v2 = iconst.i16 0x3412
+; nextln: return v2
+
+function %bswap_i32() -> i32 {
+block0:
+    v0 = iconst.i32 0x1234_5678
+    v1 = bswap v0
+    return v1
+}
+
+; check: v2 = iconst.i32 0x7856_3412
+; nextln: return v2
+
+function %bswap_i64() -> i64 {
+block0:
+    v0 = iconst.i64 0x1234_5678_9abc_def0
+    v1 = bswap v0
+    return v1
+}
+
+; check: v2 = iconst.i64 0xf0de_bc9a_7856_3412
+; nextln: return v2

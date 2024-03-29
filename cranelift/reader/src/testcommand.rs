@@ -4,7 +4,7 @@
 //! The general syntax is:
 //!
 //! <pre>
-//! test <i>&lt;command&gt;</i> </i>[options]</i>...
+//! test <i>&lt;command&gt;</i> <i>[options]</i>...
 //! </pre>
 //!
 //! The options are either a single identifier flag, or setting values like `identifier=value`.

@@ -85,10 +85,12 @@ block0(v0: r64):
 
 ; VCode:
 ; block0:
+;   lgr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   lgr %r2, %r2
 ;   br %r14
 
 function %bitcast_i64_r64(i64) -> r64 {
@@ -99,10 +101,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
+;   lgr %r2, %r2
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   lgr %r2, %r2
 ;   br %r14
 
 function %bitcast_r64_r64(r64) -> r64 {

@@ -2,7 +2,7 @@ use crate::compiler::Compiler;
 use anyhow::{bail, Result};
 use std::sync::Arc;
 use target_lexicon::Triple;
-use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
+use wasmtime_cranelift::isa_builder::IsaBuilder;
 use wasmtime_environ::{CompilerBuilder, Setting};
 use winch_codegen::{isa, TargetIsa};
 

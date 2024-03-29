@@ -188,7 +188,7 @@ pub(crate) fn check(
             dst,
             ..
         } => check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-            Ok(Fact::constant(64, 0))
+            Ok(Some(Fact::constant(64, 0)))
         }),
 
         Inst::AluConstOp { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
@@ -319,7 +319,7 @@ pub(crate) fn check(
 
         Inst::Imm { simm64, dst, .. } => {
             check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                Ok(Fact::constant(64, simm64))
+                Ok(Some(Fact::constant(64, simm64)))
             })
         }
 
@@ -629,6 +629,10 @@ pub(crate) fn check(
             let (ty, size) = match op {
                 AvxOpcode::Vmovss => (F32, 32),
                 AvxOpcode::Vmovsd => (F64, 64),
+                AvxOpcode::Vpinsrb => (I8, 8),
+                AvxOpcode::Vpinsrw => (I16, 16),
+                AvxOpcode::Vpinsrd => (I32, 32),
+                AvxOpcode::Vpinsrq => (I64, 64),
 
                 // We assume all other operations happen on 128-bit values.
                 _ => (I8X16, 128),
@@ -767,6 +771,29 @@ pub(crate) fn check(
             RegMem::Reg { .. } => Ok(()),
         },
 
+        Inst::XmmRmRImm {
+            dst,
+            ref src2,
+            size,
+            op,
+            ..
+        } if op.has_scalar_src2() => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(
+                        ctx,
+                        None,
+                        addr,
+                        vcode,
+                        size.to_type(),
+                        size.to_bits().into(),
+                    )?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_reg())
+        }
+
         Inst::XmmRmRImm { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {
                 RegMem::Mem { ref addr } => {
@@ -781,6 +808,8 @@ pub(crate) fn check(
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
         | Inst::Ret { .. }
+        | Inst::GrowArgumentArea { .. }
+        | Inst::ShrinkArgumentArea { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::TrapIf { .. }
@@ -917,8 +946,8 @@ fn check_mem<'a>(
                 loaded_fact,
                 result_fact
             );
-            if ctx.subsumes_fact_optionals(Some(&loaded_fact), result_fact) {
-                Ok(Some(loaded_fact.clone()))
+            if ctx.subsumes_fact_optionals(loaded_fact.as_ref(), result_fact) {
+                Ok(loaded_fact.clone())
             } else {
                 Err(PccError::UnsupportedFact)
             }

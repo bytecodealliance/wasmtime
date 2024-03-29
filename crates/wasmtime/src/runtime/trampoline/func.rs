@@ -85,7 +85,7 @@ pub fn create_array_call_function<F>(
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
-    use crate::instantiate::finish_object;
+    use crate::compile::finish_object;
     use std::ptr;
 
     let mut obj = engine

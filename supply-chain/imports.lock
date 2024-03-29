@@ -876,9 +876,21 @@ when = "2024-02-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-encoder]]
+version = "0.202.0"
+when = "2024-03-26"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasm-metadata]]
 version = "0.201.0"
 when = "2024-02-27"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasm-metadata]]
+version = "0.202.0"
+when = "2024-03-26"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -888,9 +900,21 @@ when = "2024-02-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-mutate]]
+version = "0.202.0"
+when = "2024-03-26"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasm-smith]]
 version = "0.201.0"
 when = "2024-02-27"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasm-smith]]
+version = "0.202.0"
+when = "2024-03-26"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -900,9 +924,21 @@ when = "2024-02-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmparser]]
+version = "0.202.0"
+when = "2024-03-26"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmprinter]]
 version = "0.201.0"
 when = "2024-02-27"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmprinter]]
+version = "0.202.0"
+when = "2024-03-26"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -949,12 +985,6 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cranelift]]
-version = "18.0.2"
-when = "2024-02-28"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift-shared]]
 version = "18.0.2"
 when = "2024-02-28"
 user-id = 73222
@@ -1056,9 +1086,21 @@ when = "2024-02-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wast]]
+version = "202.0.0"
+when = "2024-03-26"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wat]]
 version = "1.201.0"
 when = "2024-02-27"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wat]]
+version = "1.202.0"
+when = "2024-03-26"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1314,9 +1356,21 @@ when = "2024-02-27"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-component]]
+version = "0.202.0"
+when = "2024-03-26"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-parser]]
 version = "0.201.0"
 when = "2024-02-27"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-parser]]
+version = "0.202.0"
+when = "2024-03-26"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1422,12 +1476,31 @@ criteria = "safe-to-run"
 version = "0.4.4"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
+[[audits.google.audits.libtest-mimic]]
+who = "Dennis Kempin <denniskempin@google.com>"
+criteria = "safe-to-run"
+version = "0.6.0"
+notes = "Used in tests only"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.google.audits.libtest-mimic]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-run"
+delta = "0.6.0 -> 0.6.1"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
 [[audits.google.audits.pin-project-lite]]
 who = "David Koloski <dkoloski@google.com>"
 criteria = "safe-to-deploy"
 version = "0.2.9"
 notes = "Reviewed on https://fxrev.dev/824504"
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
+
+[[audits.google.audits.threadpool]]
+who = "Dennis Kempin <denniskempin@google.com>"
+criteria = "safe-to-run"
+version = "1.8.1"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
 [[audits.google.audits.version_check]]
 who = "George Burgess IV <gbiv@google.com>"

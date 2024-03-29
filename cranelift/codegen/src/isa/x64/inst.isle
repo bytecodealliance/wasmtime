@@ -541,6 +541,23 @@
        (ReturnCallUnknown (callee RegMem)
                           (info BoxReturnCallInfo))
 
+       ;; GrowArgumentArea does a memmove of everything in the frame except for
+       ;; the argument area, to make room for more arguments. That includes all
+       ;; the stack slots, the callee-saved registers, and the saved FP and
+       ;; return address. To keep the stack pointers in sync with that change,
+       ;; it also subtracts the given amount from both the FP and SP registers.
+       (GrowArgumentArea (amount u32)
+                         (tmp WritableGpr))
+
+       ;; ShrinkArgumentArea does a memmove of everything in the frame except
+       ;; for the argument area, to trim space for fewer arguments. That
+       ;; includes all the stack slots, the callee-saved registers, and the
+       ;; saved FP and return address. To keep the stack pointers in sync with
+       ;; that change, it also adds the given amount to both the FP and SP
+       ;; registers.
+       (ShrinkArgumentArea (amount u32)
+                           (tmp WritableGpr))
+
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
         (args VecArgPair))
@@ -5225,6 +5242,20 @@
 (rule (synthetic_amode_to_xmm_mem_aligned mode) (synthetic_amode_to_xmm_mem mode))
 (decl put_in_xmm_mem_aligned (Value) XmmMemAligned)
 (rule (put_in_xmm_mem_aligned val) (put_in_xmm_mem val))
+
+;; Copy a GPR of the given type to a new GPR.
+;;
+;; Generally, regalloc should take care of this kind of thing for us. This is
+;; only useful for implementing things like `bitcast` from an `r64` to an `i64`
+;; to avoid conflicting constraints on a single aliased value by splitting the
+;; value into two parts.
+(decl copy_gpr (Type Gpr) Gpr)
+(rule (copy_gpr ty src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovRR (operand_size_of_type_32_64 ty)
+                                       src
+                                       dst))))
+        dst))
 
 (decl mov_to_preg (PReg Gpr) SideEffectNoResult)
 (rule (mov_to_preg dst src)

@@ -215,7 +215,7 @@ impl ServeCommand {
         // bindings which adds just those interfaces that the proxy interface
         // uses.
         if cli == Some(true) {
-            wasmtime_wasi::command::add_to_linker(linker)?;
+            wasmtime_wasi::add_to_linker_async(linker)?;
             wasmtime_wasi_http::proxy::add_only_http_to_linker(linker)?;
         } else {
             wasmtime_wasi_http::proxy::add_to_linker(linker)?;

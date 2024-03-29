@@ -1,4 +1,4 @@
-use crate::{handle_result, wasm_engine_t, wasm_memorytype_t, wasmtime_error_t, wasmtime_extern_t};
+use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t, wasmtime_extern_t};
 use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
 use wasmtime::{Extern, SharedMemory};
@@ -8,8 +8,9 @@ type wasmtime_sharedmemory_t = SharedMemory;
 wasmtime_c_api_macros::declare_own!(wasmtime_sharedmemory_t);
 
 #[no_mangle]
+#[cfg(feature = "threads")]
 pub extern "C" fn wasmtime_sharedmemory_new(
-    engine: &wasm_engine_t,
+    engine: &crate::wasm_engine_t,
     ty: &wasm_memorytype_t,
     ret: &mut *mut wasmtime_sharedmemory_t,
 ) -> Option<Box<wasmtime_error_t>> {

@@ -83,8 +83,7 @@ where
 
     fn next(&mut self, ctx: &mut IsleContext<'a, 'b, 'c>) -> Option<Self::Output> {
         while let Some(value) = self.stack.pop() {
-            debug_assert_ne!(value, Value::reserved_value());
-            let value = ctx.ctx.func.dfg.resolve_aliases(value);
+            debug_assert!(ctx.ctx.func.dfg.value_is_real(value));
             trace!("iter: value {:?}", value);
             match ctx.ctx.func.dfg.value_def(value) {
                 ValueDef::Union(x, y) => {
@@ -280,5 +279,17 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
 
     fn f64_from_sint(&mut self, n: i64) -> Ieee64 {
         Ieee64::with_float(n as f64)
+    }
+
+    fn u64_bswap16(&mut self, n: u64) -> u64 {
+        (n as u16).swap_bytes() as u64
+    }
+
+    fn u64_bswap32(&mut self, n: u64) -> u64 {
+        (n as u32).swap_bytes() as u64
+    }
+
+    fn u64_bswap64(&mut self, n: u64) -> u64 {
+        n.swap_bytes()
     }
 }

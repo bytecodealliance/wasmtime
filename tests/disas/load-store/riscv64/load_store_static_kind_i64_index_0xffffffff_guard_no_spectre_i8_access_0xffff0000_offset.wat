@@ -18,62 +18,42 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   lui a4,16
-;;   addi a1,a4,-1
-;;   bgtu a2,a1,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a0,80(a0)
-;;   add a0,a0,a2
-;;   lui a5,65535
-;;   slli a1,a5,4
-;;   add a0,a0,a1
-;;   sb a3,0(a0)
-;;   j label2
-;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[0]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       lui     a4, 0x10
+;;       addi    a1, a4, -1
+;;       bltu    a1, a2, 0x2c
+;;       ld      a0, 0x50(a0)
+;;       add     a0, a0, a2
+;;       lui     a5, 0xffff
+;;       slli    a1, a5, 4
+;;       add     a0, a0, a1
+;;       sb      a3, 0(a0)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
-;; function u0:1:
-;;   addi sp,sp,-16
-;;   sd ra,8(sp)
-;;   sd fp,0(sp)
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mv fp,sp
-;;   ld t6,8(a0)
-;;   ld t6,0(t6)
-;;   trap_if stk_ovf##(sp ult t6)
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   lui a4,16
-;;   addi a1,a4,-1
-;;   bgtu a2,a1,taken(label3),not_taken(label1)
-;; block1:
-;;   ld a0,80(a0)
-;;   add a0,a0,a2
-;;   lui a5,65535
-;;   slli a1,a5,4
-;;   add a0,a0,a1
-;;   lbu a0,0(a0)
-;;   j label2
-;; block2:
-;;   ld ra,8(sp)
-;;   ld fp,0(sp)
-;;   addi sp,sp,16
-;;   ret
-;; block3:
-;;   udf##trap_code=heap_oob
+;; wasm[0]::function[1]:
+;;       addi    sp, sp, -0x10
+;;       sd      ra, 8(sp)
+;;       sd      s0, 0(sp)
+;;       mv      s0, sp
+;;       lui     a4, 0x10
+;;       addi    a1, a4, -1
+;;       bltu    a1, a2, 0x2c
+;;       ld      a0, 0x50(a0)
+;;       add     a0, a0, a2
+;;       lui     a5, 0xffff
+;;       slli    a1, a5, 4
+;;       add     a0, a0, a1
+;;       lbu     a0, 0(a0)
+;;       ld      ra, 8(sp)
+;;       ld      s0, 0(sp)
+;;       addi    sp, sp, 0x10
+;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00

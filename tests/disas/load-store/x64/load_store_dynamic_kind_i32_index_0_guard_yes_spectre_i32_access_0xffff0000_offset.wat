@@ -18,58 +18,48 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %r11d
-;;   movq    %r11, %rdx
-;;   addq    %rdx, const(0), %rdx
-;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %r9
-;;   xorq    %r8, %r8, %r8
-;;   addq    %r11, 80(%rdi), %r11
-;;   movl    $-65536, %r10d
-;;   lea     0(%r11,%r10,1), %r10
-;;   cmpq    %r9, %rdx
-;;   cmovnbeq %r8, %r10, %r10
-;;   movl    %ecx, 0(%r10)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r11d
+;;       movq    %r11, %rdx
+;;       addq    0x2f(%rip), %rdx
+;;       jb      0x3a
+;;   17: movq    0x58(%rdi), %r9
+;;       xorq    %r8, %r8
+;;       addq    0x50(%rdi), %r11
+;;       movl    $0xffff0000, %r10d
+;;       addq    %r11, %r10
+;;       cmpq    %r9, %rdx
+;;       cmovaq  %r8, %r10
+;;       movl    %ecx, (%r10)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   3a: ud2
+;;   3c: addb    %al, (%rax)
+;;   3e: addb    %al, (%rax)
+;;   40: addb    $0, %al
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %r11d
-;;   movq    %r11, %rcx
-;;   addq    %rcx, const(0), %rcx
-;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %r8
-;;   xorq    %rdx, %rdx, %rdx
-;;   addq    %r11, 80(%rdi), %r11
-;;   movl    $-65536, %r9d
-;;   lea     0(%r11,%r9,1), %r9
-;;   cmpq    %r8, %rcx
-;;   cmovnbeq %rdx, %r9, %r9
-;;   movl    0(%r9), %eax
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r11d
+;;       movq    %r11, %rcx
+;;       addq    0x2f(%rip), %rcx
+;;       jb      0x8a
+;;   67: movq    0x58(%rdi), %r8
+;;       xorq    %rdx, %rdx
+;;       addq    0x50(%rdi), %r11
+;;       movl    $0xffff0000, %r9d
+;;       addq    %r11, %r9
+;;       cmpq    %r8, %rcx
+;;       cmovaq  %rdx, %r9
+;;       movl    (%r9), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   8a: ud2
+;;   8c: addb    %al, (%rax)
+;;   8e: addb    %al, (%rax)
+;;   90: addb    $0, %al

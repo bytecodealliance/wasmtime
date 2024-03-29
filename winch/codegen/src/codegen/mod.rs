@@ -5,7 +5,6 @@ use crate::{
     masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::TypedReg,
 };
-
 use anyhow::Result;
 use smallvec::SmallVec;
 use wasmparser::{
@@ -94,9 +93,8 @@ where
             .unwrap_reg()
             .into();
 
-        // We need to use the vmctx paramter before pinning it for stack checking, and we don't
-        // have any callee save registers in the winch calling convention.
-        self.masm.prologue(vmctx, &[]);
+        // We need to use the vmctx paramter before pinning it for stack checking.
+        self.masm.prologue(vmctx);
 
         // Pin the `VMContext` pointer.
         self.masm
@@ -317,7 +315,7 @@ where
         }
         debug_assert_eq!(self.context.stack.len(), 0);
         self.masm.free_stack(self.context.frame.locals_size);
-        self.masm.epilogue(&[]);
+        self.masm.epilogue();
         Ok(())
     }
 
@@ -434,7 +432,8 @@ where
         // This is safe since the FnCall::emit call below, will ensure
         // that the result register is placed on the value stack.
         self.context.free_reg(elem_value);
-        FnCall::emit::<M, M::Ptr>(
+        FnCall::emit::<M>(
+            &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),

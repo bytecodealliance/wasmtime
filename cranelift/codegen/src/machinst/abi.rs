@@ -524,10 +524,16 @@ pub trait ABIMachineSpec {
     ) -> SmallInstVec<Self::I>;
 
     /// Generate the usual frame-restore sequence for this architecture.
-    /// This includes generating the actual return instruction(s).
     fn gen_epilogue_frame_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        isa_flags: &Self::F,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Self::I>;
+
+    /// Generate a return instruction.
+    fn gen_return(
+        call_conv: isa::CallConv,
         isa_flags: &Self::F,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I>;
@@ -981,6 +987,7 @@ impl std::ops::Index<Sig> for SigSet {
 }
 
 /// Structure describing the layout of a function's stack frame.
+#[derive(Clone, Debug, Default)]
 pub struct FrameLayout {
     /// N.B. The areas whose sizes are given in this structure fully
     /// cover the current function's stack frame, from high to low
@@ -1880,7 +1887,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// This should include any stack frame or other setup necessary to use the
     /// other methods (`load_arg`, `store_retval`, and spillslot accesses.)
     pub fn gen_prologue(&self) -> SmallInstVec<M::I> {
-        let frame_layout = self.frame_layout.as_ref().unwrap();
+        let frame_layout = self.frame_layout();
         let mut insts = smallvec![];
 
         // Set up frame.
@@ -1947,7 +1954,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// emitting this in the lowering logic), because the epilogue code comes
     /// before the return and the two are likely closely related.
     pub fn gen_epilogue(&self) -> SmallInstVec<M::I> {
-        let frame_layout = self.frame_layout.as_ref().unwrap();
+        let frame_layout = self.frame_layout();
         let mut insts = smallvec![];
 
         // Restore clobbered registers.
@@ -1963,10 +1970,17 @@ impl<M: ABIMachineSpec> Callee<M> {
         // the CFG, so early returns in the middle of function bodies would cause an incorrect
         // offset for the rest of the body.
 
-        // Tear down frame and return.
+        // Tear down frame.
         insts.extend(M::gen_epilogue_frame_restore(
             self.call_conv,
             &self.flags,
+            &self.isa_flags,
+            &frame_layout,
+        ));
+
+        // And return.
+        insts.extend(M::gen_return(
+            self.call_conv,
             &self.isa_flags,
             &frame_layout,
         ));
@@ -1975,25 +1989,27 @@ impl<M: ABIMachineSpec> Callee<M> {
         insts
     }
 
+    /// Return a reference to the computed frame layout information. This
+    /// function will panic if it's called before [`Self::compute_frame_layout`].
+    pub fn frame_layout(&self) -> &FrameLayout {
+        self.frame_layout
+            .as_ref()
+            .expect("frame layout not computed before prologue generation")
+    }
+
     /// Returns the full frame size for the given function, after prologue
     /// emission has run. This comprises the spill slots and stack-storage
     /// slots as well as storage for clobbered callee-save registers, but
     /// not arguments arguments pushed at callsites within this function,
     /// or other ephemeral pushes.
     pub fn frame_size(&self) -> u32 {
-        let frame_layout = self
-            .frame_layout
-            .as_ref()
-            .expect("frame size not computed before prologue generation");
+        let frame_layout = self.frame_layout();
         frame_layout.clobber_size + frame_layout.fixed_frame_storage_size
     }
 
     /// Returns offset from the nominal SP to caller's SP.
     pub fn nominal_sp_to_caller_sp_offset(&self) -> u32 {
-        let frame_layout = self
-            .frame_layout
-            .as_ref()
-            .expect("frame size not computed before prologue generation");
+        let frame_layout = self.frame_layout();
         frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.setup_area_size
@@ -2055,8 +2071,14 @@ impl<M: ABIMachineSpec> Callee<M> {
 /// The register or stack slot location of an argument.
 #[derive(Clone, Debug)]
 pub enum ArgLoc {
+    /// The physical register that the value will be passed through.
     Reg(PReg),
-    Stack(StackAMode),
+
+    /// The offset into the argument area where this value will be passed. It's up to the consumer
+    /// of the `ArgLoc::Stack` variant to decide how to find the argument area that the `offset`
+    /// value is relative to. Depending on the abi, this may end up being relative to SP or FP, for
+    /// example with a tail call where the frame is reused.
+    Stack { offset: i64, ty: ir::Type },
 }
 
 /// An input argument to a call instruction: the vreg that is used,
@@ -2120,6 +2142,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs: &SigSet,
         sig_ref: ir::SigRef,
         extname: &ir::ExternalName,
+        opcode: ir::Opcode,
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
@@ -2132,7 +2155,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             defs: smallvec![],
             clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
-            opcode: ir::Opcode::Call,
+            opcode,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2199,6 +2222,17 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
     pub(crate) fn take_uses(self) -> CallArgList {
         self.uses
+    }
+
+    pub(crate) fn sig<'a>(&self, sigs: &'a SigSet) -> &'a SigData {
+        &sigs[self.sig]
+    }
+
+    pub(crate) fn is_tail_call(&self) -> bool {
+        matches!(
+            self.opcode,
+            ir::Opcode::ReturnCall | ir::Opcode::ReturnCallIndirect
+        )
     }
 }
 
@@ -2316,7 +2350,22 @@ impl<M: ABIMachineSpec> CallSite<M> {
                     vreg,
                     preg: preg.into(),
                 }),
-                ArgLoc::Stack(amode) => ctx.emit(M::gen_store_stack(amode, vreg, amode.get_type())),
+                ArgLoc::Stack { offset, ty } => {
+                    let amode = if self.is_tail_call() {
+                        assert!(
+                            self.flags.preserve_frame_pointers(),
+                            "tail calls require frame pointers to be enabled"
+                        );
+
+                        StackAMode::FPOffset(
+                            offset + M::fp_to_arg_offset(self.caller_conv, &self.flags),
+                            ty,
+                        )
+                    } else {
+                        StackAMode::SPOffset(offset, ty)
+                    };
+                    ctx.emit(M::gen_store_stack(amode, vreg, ty))
+                }
             }
         }
     }
@@ -2403,10 +2452,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                 } else {
                                     (*from_reg, ty)
                                 };
-                            locs.push((
-                                data.into(),
-                                ArgLoc::Stack(StackAMode::SPOffset(offset, ty)),
-                            ));
+                            locs.push((data.into(), ArgLoc::Stack { offset, ty }));
                         }
                     }
                 }
@@ -2431,7 +2477,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                     ABIArgSlot::Reg { reg, .. } => ArgLoc::Reg(reg.into()),
                     ABIArgSlot::Stack { offset, .. } => {
                         let ty = M::word_type();
-                        ArgLoc::Stack(StackAMode::SPOffset(offset, ty))
+                        ArgLoc::Stack { offset, ty }
                     }
                 };
                 locs.push((tmp.into(), loc));

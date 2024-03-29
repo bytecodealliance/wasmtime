@@ -118,6 +118,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
+            Opcode::ReturnCall,
             distance,
             caller_conv,
             self.backend.flags().clone(),

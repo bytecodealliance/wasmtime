@@ -18,60 +18,50 @@
     local.get 0
     i32.load8_u offset=0xffff0000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %r9d
-;;   movq    %r9, %rsi
-;;   addq    %rsi, const(0), %rsi
-;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %rax
-;;   cmpq    %rax, %rsi
-;;   jnbe    label3; j label1
-;; block1:
-;;   addq    %r9, 80(%rdi), %r9
-;;   movl    $-65536, %edx
-;;   movb    %cl, 0(%r9,%rdx,1)
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r9d
+;;       movq    %r9, %rsi
+;;       addq    0x2f(%rip), %rsi
+;;       jb      0x38
+;;   17: movq    0x58(%rdi), %rax
+;;       cmpq    %rax, %rsi
+;;       ja      0x36
+;;   24: addq    0x50(%rdi), %r9
+;;       movl    $0xffff0000, %edx
+;;       movb    %cl, (%r9, %rdx)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   36: ud2
+;;   38: ud2
+;;   3a: addb    %al, (%rax)
+;;   3c: addb    %al, (%rax)
+;;   3e: addb    %al, (%rax)
+;;   40: addl    %eax, (%rax)
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %r9d
-;;   movq    %r9, %rsi
-;;   addq    %rsi, const(0), %rsi
-;;   jb #trap=heap_oob
-;;   movq    88(%rdi), %rax
-;;   cmpq    %rax, %rsi
-;;   jnbe    label3; j label1
-;; block1:
-;;   addq    %r9, 80(%rdi), %r9
-;;   movl    $-65536, %ecx
-;;   movzbq  0(%r9,%rcx,1), %rax
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r9d
+;;       movq    %r9, %rsi
+;;       addq    0x2f(%rip), %rsi
+;;       jb      0x89
+;;   67: movq    0x58(%rdi), %rax
+;;       cmpq    %rax, %rsi
+;;       ja      0x87
+;;   74: addq    0x50(%rdi), %r9
+;;       movl    $0xffff0000, %ecx
+;;       movzbq  (%r9, %rcx), %rax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   87: ud2
+;;   89: ud2
+;;   8b: addb    %al, (%rax)
+;;   8d: addb    %al, (%rax)
+;;   8f: addb    %al, (%rcx)
+;;   91: addb    %bh, %bh
+;;   93: incl    (%rax)
+;;   95: addb    %al, (%rax)

@@ -189,9 +189,7 @@ impl Instance {
                 dropped_elements,
                 dropped_data,
                 host_state: req.host_state,
-                vmctx_self_reference: SendSyncPtr::new(
-                    NonNull::new(ptr.cast::<u8>().add(mem::size_of::<Instance>()).cast()).unwrap(),
-                ),
+                vmctx_self_reference: SendSyncPtr::new(NonNull::new(ptr.add(1).cast()).unwrap()),
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
                 },
@@ -236,8 +234,7 @@ impl Instance {
     #[inline]
     pub unsafe fn from_vmctx<R>(vmctx: *mut VMContext, f: impl FnOnce(&mut Instance) -> R) -> R {
         let ptr = vmctx
-            .cast::<u8>()
-            .sub(mem::size_of::<Instance>())
+            .byte_sub(mem::size_of::<Instance>())
             .cast::<Instance>();
         f(&mut *ptr)
     }
@@ -251,16 +248,14 @@ impl Instance {
     /// `VMContext` object trailing this instance.
     unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
         self.vmctx()
-            .cast::<u8>()
-            .add(usize::try_from(offset).unwrap())
+            .byte_add(usize::try_from(offset).unwrap())
             .cast()
     }
 
     /// Dual of `vmctx_plus_offset`, but for mutability.
     unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: u32) -> *mut T {
         self.vmctx()
-            .cast::<u8>()
-            .add(usize::try_from(offset).unwrap())
+            .byte_add(usize::try_from(offset).unwrap())
             .cast()
     }
 
@@ -322,6 +317,7 @@ impl Instance {
     }
 
     /// Get a locally defined or imported memory.
+    #[cfg(feature = "threads")]
     pub(crate) fn get_runtime_memory(&mut self, index: MemoryIndex) -> &mut Memory {
         if let Some(defined_index) = self.module().defined_memory_index(index) {
             unsafe { &mut *self.get_defined_memory(defined_index) }

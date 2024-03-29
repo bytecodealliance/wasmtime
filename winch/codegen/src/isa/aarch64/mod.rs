@@ -8,7 +8,7 @@ use crate::{
     regalloc::RegAlloc,
     regset::RegBitSet,
     stack::Stack,
-    BuiltinFunctions, TrampolineKind,
+    BuiltinFunctions,
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
@@ -17,6 +17,7 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 mod abi;
@@ -90,7 +91,7 @@ impl TargetIsa for Aarch64 {
         types: &ModuleTypesBuilder,
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
-    ) -> Result<MachBufferFinalized<Final>> {
+    ) -> Result<CompiledFunction> {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
         let mut body = body.get_binary_reader();
@@ -122,7 +123,12 @@ impl TargetIsa for Aarch64 {
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
-        Ok(masm.finalize())
+        let names = codegen.env.take_name_map();
+        Ok(CompiledFunction::new(
+            masm.finalize(),
+            names,
+            self.function_alignment(),
+        ))
     }
 
     fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
@@ -136,19 +142,12 @@ impl TargetIsa for Aarch64 {
         32
     }
 
-    fn compile_trampoline(
-        &self,
-        _ty: &WasmFuncType,
-        _kind: TrampolineKind,
-    ) -> Result<MachBufferFinalized<Final>> {
-        todo!()
-    }
-
     fn emit_unwind_info(
         &self,
         _result: &MachBufferFinalized<Final>,
         _kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
     ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
-        todo!()
+        // TODO: should fill this in with an actual implementation
+        Ok(None)
     }
 }

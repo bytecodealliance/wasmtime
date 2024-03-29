@@ -26,21 +26,26 @@ use crate::Engine;
 use anyhow::{Context, Result};
 use std::{
     any::Any,
-    collections::{btree_map, BTreeMap, BTreeSet, HashMap},
+    collections::{btree_map, BTreeMap, BTreeSet, HashMap, HashSet},
     mem,
 };
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex, FinishedObject,
-    FuncIndex, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex,
-    WasmFunctionInfo,
+    BuiltinFunctionIndex, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex,
+    FinishedObject, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
+    RelocationTarget, StaticModuleIndex, WasmFunctionInfo,
 };
 
 mod code_builder;
 pub use self::code_builder::{CodeBuilder, HashedEngineCompileEnv};
+
+#[cfg(feature = "runtime")]
+mod runtime;
+#[cfg(feature = "runtime")]
+pub use self::runtime::finish_object;
 
 /// Converts an input binary-encoded WebAssembly module to compilation
 /// artifacts and type information.
@@ -222,6 +227,7 @@ impl CompileKey {
     const ARRAY_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(1);
     const NATIVE_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(2);
     const WASM_TO_NATIVE_TRAMPOLINE_KIND: u32 = Self::new_kind(3);
+    const WASM_TO_BUILTIN_TRAMPOLINE_KIND: u32 = Self::new_kind(4);
 
     const fn new_kind(kind: u32) -> u32 {
         assert!(kind < (1 << Self::KIND_BITS));
@@ -260,12 +266,19 @@ impl CompileKey {
             index: index.as_u32(),
         }
     }
+
+    fn wasm_to_builtin_trampoline(index: BuiltinFunctionIndex) -> Self {
+        Self {
+            namespace: Self::WASM_TO_BUILTIN_TRAMPOLINE_KIND,
+            index: index.index(),
+        }
+    }
 }
 
 #[cfg(feature = "component-model")]
 impl CompileKey {
-    const TRAMPOLINE_KIND: u32 = Self::new_kind(4);
-    const RESOURCE_DROP_WASM_TO_NATIVE_KIND: u32 = Self::new_kind(5);
+    const TRAMPOLINE_KIND: u32 = Self::new_kind(5);
+    const RESOURCE_DROP_WASM_TO_NATIVE_KIND: u32 = Self::new_kind(6);
 
     fn trampoline(index: wasmtime_environ::component::TrampolineIndex) -> Self {
         Self {
@@ -501,7 +514,13 @@ impl<'a> CompileInputs<'a> {
         let compiler = engine.compiler();
 
         // Compile each individual input in parallel.
-        let raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
+        let mut raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
+
+        // Now that all functions have been compiled see if any
+        // wasmtime-builtin functions are necessary. If so those need to be
+        // collected and then those trampolines additionally need to be
+        // compiled.
+        compile_required_builtins(engine, &mut raw_outputs)?;
 
         // Bucket the outputs by kind.
         let mut outputs: BTreeMap<u32, Vec<CompileOutput>> = BTreeMap::new();
@@ -509,22 +528,46 @@ impl<'a> CompileInputs<'a> {
             outputs.entry(output.key.kind()).or_default().push(output);
         }
 
-        // Assert that the elements within a bucket are all sorted as we expect
-        // them to be.
-        fn is_sorted_by_key<T, K>(items: &[T], f: impl Fn(&T) -> K) -> bool
-        where
-            K: PartialOrd,
-        {
-            items
-                .windows(2)
-                .all(|window| f(&window[0]) <= f(&window[1]))
-        }
-        debug_assert!(outputs
-            .values()
-            .all(|funcs| is_sorted_by_key(funcs, |x| x.key)));
-
         Ok(UnlinkedCompileOutputs { outputs })
     }
+}
+
+fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutput>) -> Result<()> {
+    let compiler = engine.compiler();
+    let mut builtins = HashSet::new();
+    let mut new_inputs: Vec<CompileInput<'_>> = Vec::new();
+
+    let compile_builtin = |builtin: BuiltinFunctionIndex| {
+        Box::new(move |compiler: &dyn Compiler| {
+            let symbol = format!("wasmtime_builtin_{}", builtin.name());
+            Ok(CompileOutput {
+                key: CompileKey::wasm_to_builtin_trampoline(builtin),
+                symbol,
+                function: CompiledFunction::Function(compiler.compile_wasm_to_builtin(builtin)?),
+                info: None,
+            })
+        })
+    };
+
+    for output in raw_outputs.iter() {
+        let f = match &output.function {
+            CompiledFunction::Function(f) => f,
+            #[cfg(feature = "component-model")]
+            CompiledFunction::AllCallFunc(_) => continue,
+        };
+        for reloc in compiler.compiled_function_relocation_targets(&**f) {
+            match reloc {
+                RelocationTarget::Builtin(i) => {
+                    if builtins.insert(i) {
+                        new_inputs.push(compile_builtin(i));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    raw_outputs.extend(engine.run_maybe_parallel(new_inputs, |c| c(compiler))?);
+    Ok(())
 }
 
 #[derive(Default)]
@@ -623,19 +666,28 @@ impl FunctionIndices {
         let symbol_ids_and_locs = compiler.append_code(
             &mut obj,
             &compiled_funcs,
-            &|caller_index: usize, callee_index: FuncIndex| {
-                let module = self
-                    .compiled_func_index_to_module
-                    .get(&caller_index)
-                    .copied()
-                    .expect("should only reloc inside wasm function callers");
-                let def_func_index = translations[module]
-                    .module
-                    .defined_func_index(callee_index)
-                    .unwrap();
-                self.indices[&CompileKey::WASM_FUNCTION_KIND]
-                    [&CompileKey::wasm_function(module, def_func_index)]
-                    .unwrap_function()
+            &|caller_index: usize, callee: RelocationTarget| match callee {
+                RelocationTarget::Wasm(callee_index) => {
+                    let module = self
+                        .compiled_func_index_to_module
+                        .get(&caller_index)
+                        .copied()
+                        .expect("should only reloc inside wasm function callers");
+                    let def_func_index = translations[module]
+                        .module
+                        .defined_func_index(callee_index)
+                        .unwrap();
+                    self.indices[&CompileKey::WASM_FUNCTION_KIND]
+                        [&CompileKey::wasm_function(module, def_func_index)]
+                        .unwrap_function()
+                }
+                RelocationTarget::Builtin(builtin) => self.indices
+                    [&CompileKey::WASM_TO_BUILTIN_TRAMPOLINE_KIND]
+                    [&CompileKey::wasm_to_builtin_trampoline(builtin)]
+                    .unwrap_function(),
+                RelocationTarget::HostLibcall(_) => {
+                    unreachable!("relocation is resolved at runtime, not compile time");
+                }
             },
         )?;
 
@@ -674,6 +726,13 @@ impl FunctionIndices {
 
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);
         let mut artifacts = Artifacts::default();
+
+        // Remove this as it's not needed by anything below and we'll debug
+        // assert `self.indices` is empty, so this is acknowledgement that this
+        // is a pure runtime implementation detail and not needed in any
+        // metadata generated below.
+        self.indices
+            .remove(&CompileKey::WASM_TO_BUILTIN_TRAMPOLINE_KIND);
 
         // Finally, build our binary artifacts that map things like `FuncIndex`
         // to a function location and all of that using the indices we saved

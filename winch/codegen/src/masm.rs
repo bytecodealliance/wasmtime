@@ -2,7 +2,7 @@ use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
-    ir::{Endianness, LibCall, MemFlags},
+    ir::{Endianness, LibCall, MemFlags, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -365,9 +365,9 @@ pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
     /// A function call to a local function.
-    Direct(u32),
+    Direct(UserExternalNameRef),
     /// Call to a well known LibCall.
-    Known(LibCall),
+    LibCall(LibCall),
 }
 
 impl CalleeKind {
@@ -376,14 +376,14 @@ impl CalleeKind {
         Self::Indirect(reg)
     }
 
-    /// Creates a direct callee kind from a function index.
-    pub fn direct(index: u32) -> Self {
-        Self::Direct(index)
+    /// Creates a direct callee kind from a function name.
+    pub fn direct(name: UserExternalNameRef) -> Self {
+        Self::Direct(name)
     }
 
     /// Creates a known callee kind from a libcall.
-    pub fn known(call: LibCall) -> Self {
-        Self::Known(call)
+    pub fn libcall(call: LibCall) -> Self {
+        Self::LibCall(call)
     }
 }
 
@@ -468,10 +468,9 @@ pub(crate) trait MacroAssembler {
     type ABI: abi::ABI;
 
     /// Emit the function prologue.
-    fn prologue(&mut self, vmctx: Reg, clobbers: &[(Reg, OperandSize)]) {
+    fn prologue(&mut self, vmctx: Reg) {
         self.frame_setup();
         self.check_stack(vmctx);
-        self.save_clobbers(clobbers);
     }
 
     /// Generate the frame setup sequence.
@@ -480,29 +479,11 @@ pub(crate) trait MacroAssembler {
     /// Generate the frame restore sequence.
     fn frame_restore(&mut self);
 
-    /// Save all the given clobbered registers to the stack. By default this is the same as pushing
-    /// the registers, however it's present in the [`MacroAssembler`] trait to ensure that it's
-    /// possible to add unwind info for register saves in backends.
-    fn save_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        for &(reg, size) in clobbers {
-            self.push(reg, size);
-        }
-    }
-
-    /// Restore all clobbered registers, assumed to be passed in the same order as to
-    /// [`save_clobbers`].
-    fn restore_clobbers(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        for &(reg, size) in clobbers.iter().rev() {
-            self.pop(reg, size);
-        }
-    }
-
     /// Emit a stack check.
     fn check_stack(&mut self, vmctx: Reg);
 
     /// Emit the function epilogue.
-    fn epilogue(&mut self, clobbers: &[(Reg, OperandSize)]) {
-        self.restore_clobbers(clobbers);
+    fn epilogue(&mut self) {
         self.frame_restore();
     }
 

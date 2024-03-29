@@ -1,16 +1,15 @@
+use crate::utils::{iterate_files, read_to_string};
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cranelift_codegen::control::ControlPlane;
+use cranelift_codegen::ir::Function;
 use cranelift_codegen::Context;
 use cranelift_reader::parse_sets_and_triple;
-use cranelift_wasm::DummyEnvironment;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use std::collections::HashSet;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{fs, io};
-
-static WASM_MAGIC: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 
 /// Harvest candidates for superoptimization from a Wasm or Clif file.
 ///
@@ -19,7 +18,7 @@ static WASM_MAGIC: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 #[derive(Parser)]
 pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.
-    input: PathBuf,
+    input: Vec<PathBuf>,
 
     /// Specify the directory where harvested left-hand side files should be
     /// written to.
@@ -48,15 +47,6 @@ pub fn run(options: &Options) -> Result<()> {
         anyhow::bail!("`souper-harvest` requires a target isa");
     }
 
-    let stdin = io::stdin();
-    let mut input: Box<dyn io::BufRead> = if options.input == Path::new("-") {
-        Box::new(stdin.lock())
-    } else {
-        Box::new(io::BufReader::new(
-            fs::File::open(&options.input).context("failed to open input file")?,
-        ))
-    };
-
     match fs::create_dir_all(&options.output_dir) {
         Ok(_) => {}
         Err(e)
@@ -76,26 +66,6 @@ pub fn run(options: &Options) -> Result<()> {
             ))
         }
     }
-
-    let mut contents = vec![];
-    input
-        .read_to_end(&mut contents)
-        .context("failed to read input file")?;
-
-    let funcs = if &contents[..WASM_MAGIC.len()] == WASM_MAGIC {
-        let mut dummy_environ = DummyEnvironment::new(fisa.isa.unwrap().frontend_config());
-        cranelift_wasm::translate_module(&contents, &mut dummy_environ)
-            .context("failed to translate Wasm module to clif")?;
-        dummy_environ
-            .info
-            .function_bodies
-            .iter()
-            .map(|(_, f)| f.clone())
-            .collect()
-    } else {
-        let contents = String::from_utf8(contents)?;
-        cranelift_reader::parse_functions(&contents)?
-    };
 
     let (send, recv) = std::sync::mpsc::channel::<String>();
 
@@ -128,20 +98,31 @@ pub fn run(options: &Options) -> Result<()> {
         }
     });
 
-    funcs
-        .into_par_iter()
-        .map_with(send, move |send, func| {
-            let mut ctx = Context::new();
-            ctx.func = func;
-
-            ctx.optimize(fisa.isa.unwrap(), &mut ControlPlane::default())
-                .context("failed to run optimizations")?;
-
-            ctx.souper_harvest(send)
-                .context("failed to run souper harvester")?;
-
-            Ok(())
+    iterate_files(&options.input)
+        .par_bridge()
+        .flat_map(|path| {
+            parse_input(path)
+                .unwrap_or_else(|e| {
+                    println!("{e:?}");
+                    Vec::new()
+                })
+                .into_par_iter()
         })
+        .map_init(
+            move || (send.clone(), Context::new()),
+            move |(send, ctx), func| {
+                ctx.clear();
+                ctx.func = func;
+
+                ctx.optimize(fisa.isa.unwrap(), &mut ControlPlane::default())
+                    .context("failed to run optimizations")?;
+
+                ctx.souper_harvest(send)
+                    .context("failed to run souper harvester")?;
+
+                Ok(())
+            },
+        )
         .collect::<Result<()>>()?;
 
     match writing_thread.join() {
@@ -150,4 +131,11 @@ pub fn run(options: &Options) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn parse_input(path: PathBuf) -> Result<Vec<Function>> {
+    let contents = read_to_string(&path)?;
+    let funcs = cranelift_reader::parse_functions(&contents)
+        .with_context(|| format!("parse error in {}", path.display()))?;
+    Ok(funcs)
 }

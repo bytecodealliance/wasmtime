@@ -23,6 +23,7 @@
 
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, ensure, Context, Result};
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 // TODO: remove workaround for NativeFile/File, see https://github.com/bytecodealliance/wasmtime/pull/8055#issuecomment-2008572665
 // and https://github.com/gimli-rs/object/pull/649
@@ -114,6 +115,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     bincode::deserialize::<Metadata<'_>>(data)?.check_compatible(engine)
 }
 
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Metadata<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
@@ -811,6 +813,38 @@ Caused by:
         assert_ne!(custom_version_hash, default_version_hash);
         assert_ne!(custom_version_hash, none_version_hash);
         assert_ne!(default_version_hash, none_version_hash);
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    #[cfg(feature = "component-model")]
+    fn components_are_cached() -> Result<()> {
+        use crate::component::Component;
+
+        let td = TempDir::new()?;
+        let config_path = td.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            &format!(
+                "
+                    [cache]
+                    enabled = true
+                    directory = '{}'
+                ",
+                td.path().join("cache").display()
+            ),
+        )?;
+        let mut cfg = Config::new();
+        cfg.cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Component::new(&engine, "(component (core module (func)))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Component::new(&engine, "(component (core module (func)))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         Ok(())
     }

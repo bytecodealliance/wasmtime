@@ -71,13 +71,13 @@ impl FiberStack {
             )?;
 
             rustix::mm::mprotect(
-                mmap.cast::<u8>().add(page_size).cast(),
+                mmap.byte_add(page_size).cast(),
                 size,
                 rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE,
             )?;
 
             Ok(Self::Default {
-                top: mmap.cast::<u8>().add(mmap_len),
+                top: mmap.byte_add(mmap_len).cast(),
                 len: mmap_len,
                 mmap: true,
             })

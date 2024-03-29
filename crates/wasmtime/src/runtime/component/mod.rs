@@ -38,8 +38,68 @@
 //! It's recommended to read over the [documentation for the Component
 //! Model][Component Model] to get an overview about how to build components
 //! from various languages.
+//!
+//! ## Example Usage
+//!
+//! Imagine you have the following WIT package definition in a file called world.wit
+//! along with a component (my_component.wasm) that targets `my-world`:
+//!
+//! ```text,ignore
+//! package component:my-package;
+//!
+//! world my-world {
+//!     import name: func() -> string;
+//!     export greet: func() -> string;
+//! }
+//! ```
+//!
+//! You can instantiate and call the component like so:
+//!
+//! ```
+//! fn main() -> wasmtime::Result<()> {
+//!     #   if true { return Ok(()) }
+//!     // Instantiate the engine and store
+//!     let engine = wasmtime::Engine::default();
+//!     let mut store = wasmtime::Store::new(&engine, ());
+//!
+//!     // Load the component from disk
+//!     let bytes = std::fs::read("my_component.wasm")?;
+//!     let component = wasmtime::component::Component::new(&engine, bytes)?;
+//!
+//!     // Configure the linker
+//!     let mut linker = wasmtime::component::Linker::new(&engine);
+//!     // The component expects one import `name` that
+//!     // takes no params and returns a string
+//!     linker
+//!         .root()
+//!         .func_wrap("name", |_store, _params: ()| {
+//!             Ok((String::from("Alice"),))
+//!         })?;
+//!
+//!     // Instantiate the component
+//!     let instance = linker.instantiate(&mut store, &component)?;
+//!
+//!     // Call the `greet` function
+//!     let func = instance.get_func(&mut store, "greet").expect("greet export not found");
+//!     let mut result = [wasmtime::component::Val::String("".into())];
+//!     func.call(&mut store, &[], &mut result)?;
+//!
+//!     // This should print out `Greeting: [String("Hello, Alice!")]`
+//!     println!("Greeting: {:?}", result);
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Manually configuring the linker and calling untyped component exports is
+//! a bit tedious and error prone. The [`bindgen!`] macro can be used to
+//! generate bindings eliminating much of this boilerplate.
+//!
+//! See the docs for [`bindgen!`] for more information on how to use it.
 
 #![cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
+// rustdoc appears to lie about a warning above, so squelch it for now.
+#![allow(rustdoc::redundant_explicit_links)]
 
 mod component;
 mod func;

@@ -18,48 +18,36 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %esi
-;;   xorq    %r11, %r11, %r11
-;;   movq    %rsi, %r10
-;;   addq    %r10, 80(%rdi), %r10
-;;   cmpq    const(0), %rsi
-;;   cmovnbeq %r11, %r10, %r10
-;;   movl    %ecx, 0(%r10)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %esi
+;;       xorq    %r11, %r11
+;;       movq    %rsi, %r10
+;;       addq    0x50(%rdi), %r10
+;;       cmpq    0x11(%rip), %rsi
+;;       cmovaq  %r11, %r10
+;;       movl    %ecx, (%r10)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   23: addb    %al, (%rax)
+;;   25: addb    %al, (%rax)
+;;   27: addb    %bh, %ah
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %esi
-;;   xorq    %r11, %r11, %r11
-;;   movq    %rsi, %r10
-;;   addq    %r10, 80(%rdi), %r10
-;;   cmpq    const(0), %rsi
-;;   cmovnbeq %r11, %r10, %r10
-;;   movl    0(%r10), %eax
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %esi
+;;       xorq    %r11, %r11
+;;       movq    %rsi, %r10
+;;       addq    0x50(%rdi), %r10
+;;       cmpq    0x11(%rip), %rsi
+;;       cmovaq  %r11, %r10
+;;       movl    (%r10), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   53: addb    %al, (%rax)
+;;   55: addb    %al, (%rax)
+;;   57: addb    %bh, %ah

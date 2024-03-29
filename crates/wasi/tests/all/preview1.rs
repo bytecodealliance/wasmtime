@@ -10,8 +10,8 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config)?;
-    let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker, |t| t)?;
+    let mut linker = Linker::<Ctx>::new(&engine);
+    add_to_linker_async(&mut linker, |t| &mut t.wasi)?;
 
     let module = Module::from_file(&engine, path)?;
     let (mut store, _td) = store(&engine, name, inherit_stdio)?;

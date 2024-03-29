@@ -159,7 +159,7 @@ where
                 #[cfg(not(feature = "component-model"))]
                 Wat::Component(_) => bail!("component-model support not enabled"),
             }),
-            WastExecute::Get { module, global } => self.get(module.map(|s| s.name()), global),
+            WastExecute::Get { module, global, .. } => self.get(module.map(|s| s.name()), global),
         }
     }
 

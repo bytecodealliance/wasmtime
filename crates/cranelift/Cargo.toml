@@ -16,14 +16,13 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 log = { workspace = true }
-wasmtime-environ = { workspace = true }
+wasmtime-environ = { workspace = true, features = ['compile'] }
 cranelift-wasm = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["host-arch"] }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-native = { workspace = true }
 cranelift-control = { workspace = true }
-wasmtime-cranelift-shared = { workspace = true }
 wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
 gimli = { workspace = true }
@@ -41,3 +40,4 @@ component-model = ["wasmtime-environ/component-model"]
 incremental-cache = ["cranelift-codegen/incremental-cache"]
 wmemcheck = []
 gc = ["wasmtime-environ/gc"]
+threads = ["wasmtime-environ/threads"]

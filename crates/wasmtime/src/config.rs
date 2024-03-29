@@ -26,6 +26,7 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
+#[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 #[cfg(feature = "pooling-allocator")]
 use wasmtime_runtime::mpk;
@@ -158,7 +159,7 @@ struct CompilerConfig {
     target: Option<target_lexicon::Triple>,
     settings: HashMap<String, String>,
     flags: HashSet<String>,
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<std::path::PathBuf>,
     wmemcheck: bool,
@@ -172,6 +173,7 @@ impl CompilerConfig {
             target: None,
             settings: HashMap::new(),
             flags: HashSet::new(),
+            #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
             cache_store: None,
             clif_dir: None,
             wmemcheck: false,
@@ -252,11 +254,17 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
-        #[cfg(feature = "gc")]
-        ret.wasm_reference_types(true);
-        #[cfg(not(feature = "gc"))]
-        {
-            ret.features.reference_types = false;
+        // Conditionally enabled features depending on compile-time crate
+        // features. Note that if these features are disabled then `Config` has
+        // no way of re-enabling them.
+        ret.features.reference_types = cfg!(feature = "gc");
+        ret.features.threads = cfg!(feature = "threads");
+        ret.features.component_model = cfg!(feature = "component-model");
+
+        // If GC is disabled at compile time also disable it in features
+        // forcibly irrespective of `wasmparser` defaults. Note that these also
+        // aren't yet fully implemented in Wasmtime.
+        if !cfg!(feature = "gc") {
             ret.features.function_references = false;
             ret.features.gc = false;
         }
@@ -264,8 +272,6 @@ impl Config {
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
-        #[cfg(feature = "component-model")]
-        ret.wasm_component_model(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
         // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
@@ -716,6 +722,8 @@ impl Config {
     ///
     /// [threads]: https://github.com/webassembly/threads
     /// [wasi-threads]: https://github.com/webassembly/wasi-threads
+    #[cfg(feature = "threads")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "threads")))]
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.features.threads = enable;
         self
@@ -1894,6 +1902,7 @@ impl Config {
             compiler.enable(flag)?;
         }
 
+        #[cfg(feature = "incremental-cache")]
         if let Some(cache_store) = &self.compiler_config.cache_store {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }

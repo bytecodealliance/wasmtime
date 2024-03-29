@@ -14,7 +14,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-wasmtime-wmemcheck = { workspace = true }
+wasmtime-wmemcheck = { workspace = true, optional = true }
 wasmtime-asm-macros = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
@@ -29,7 +29,7 @@ anyhow = { workspace = true }
 paste = "1.0.3"
 encoding_rs = { version = "0.8.31", optional = true }
 sptr = "0.3.2"
-wasm-encoder = { workspace = true }
+wasm-encoder = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 memfd = "0.6.2"
@@ -65,9 +65,11 @@ cc = "1.0"
 wasmtime-versioned-export-macros = { workspace = true }
 
 [features]
-async = ["wasmtime-fiber"]
+async = ["dep:wasmtime-fiber"]
 pooling-allocator = []
 component-model = ["wasmtime-environ/component-model", "dep:encoding_rs"]
-wmemcheck = []
-debug-builtins = ['wasmtime-jit-debug']
+wmemcheck = ['dep:wasmtime-wmemcheck']
+debug-builtins = ['dep:wasmtime-jit-debug']
 gc = ["wasmtime-environ/gc"]
+coredump = ["dep:wasm-encoder"]
+threads = ["wasmtime-environ/threads"]

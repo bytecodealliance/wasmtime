@@ -9,6 +9,7 @@
 // then we also make sure that stderr is empty to confirm that no weird panics
 // happened or anything like that.
 
+use libtest_mimic::{Arguments, Trial};
 use std::env;
 use std::future::Future;
 use std::io::{self, Write};
@@ -190,10 +191,14 @@ fn main() {
             test();
         }
         Err(_) => {
+            let mut trials = Vec::new();
             for (name, _test, stack_overflow) in tests {
-                println!("running {name}");
-                run_test(name, *stack_overflow);
+                trials.push(Trial::test(name.to_string(), || {
+                    run_test(name, *stack_overflow);
+                    Ok(())
+                }));
             }
+            libtest_mimic::run(&Arguments::from_args(), trials).exit()
         }
     }
 }

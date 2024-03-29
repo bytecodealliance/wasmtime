@@ -109,9 +109,6 @@ audit-as-crates-io = true
 [policy.wasmtime-cranelift]
 audit-as-crates-io = true
 
-[policy.wasmtime-cranelift-shared]
-audit-as-crates-io = true
-
 [policy.wasmtime-environ]
 audit-as-crates-io = true
 

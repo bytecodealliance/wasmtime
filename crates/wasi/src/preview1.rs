@@ -1,5 +1,71 @@
+//! Bindings for WASIp1 aka Preview 1 aka `wasi_snapshot_preview1`.
+//!
+//! This module contains runtime support for configuring and executing
+//! WASIp1-using core WebAssembly modules. Support for WASIp1 is built on top of
+//! support for WASIp2 available at [the crate root](crate), but that's just an
+//! internal implementation detail.
+//!
+//! Unlike the crate root support for WASIp1 centers around two APIs:
+//!
+//! * [`WasiP1Ctx`]
+//! * [`add_to_linker_sync`] (or [`add_to_linker_async`])
+//!
+//! First a [`WasiCtxBuilder`] will be used and finalized with the [`build_p1`]
+//! method to create a [`WasiCtx`]. Next a [`wasmtime::Linker`] is configured
+//! with WASI imports by using the `add_to_linker_*` desired (sync or async
+//! depending on [`Config::async_support`]).
+//!
+//! Note that WASIp1 is not as extensible or configurable as WASIp2 so the
+//! support in this module is enough to run wasm modules but any customization
+//! beyond that [`WasiCtxBuilder`] already supports is not possible yet.
+//!
+//! [`WasiCtxBuilder`]: crate::WasiCtxBuilder
+//! [`build_p1`]: crate::WasiCtxBuilder::build_p1
+//! [`Config::async_support`]: wasmtime::Config::async_support
+//!
+//! # Components vs Modules
+//!
+//! Note that WASIp1 does not work for components at this time, only core wasm
+//! modules. That means this module is only for users of [`wasmtime::Module`]
+//! and [`wasmtime::Linker`], for example. If you're using
+//! [`wasmtime::component::Component`] or [`wasmtime::component::Linker`] you'll
+//! want the WASIp2 [support this crate has](crate) instead.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use wasmtime::{Result, Engine, Linker, Module, Store};
+//! use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+//! use wasmtime_wasi::WasiCtxBuilder;
+//!
+//! // An example of executing a WASIp1 "command"
+//! fn main() -> Result<()> {
+//!     let args = std::env::args().skip(1).collect::<Vec<_>>();
+//!     let engine = Engine::default();
+//!     let module = Module::from_file(&engine, &args[0])?;
+//!
+//!     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
+//!     preview1::add_to_linker_async(&mut linker, |t| t)?;
+//!     let pre = linker.instantiate_pre(&module)?;
+//!
+//!     let wasi_ctx = WasiCtxBuilder::new()
+//!         .inherit_stdio()
+//!         .inherit_env()
+//!         .args(&args)
+//!         .build_p1();
+//!
+//!     let mut store = Store::new(&engine, wasi_ctx);
+//!     let instance = pre.instantiate(&mut store)?;
+//!     let func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
+//!     func.call(&mut store, ())?;
+//!
+//!     Ok(())
+//! }
+//! ```
+
+#![cfg_attr(docsrs, doc(cfg(feature = "preview1")))]
+
 use crate::bindings::{
-    self,
     cli::{
         stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
         terminal_stdout,
@@ -8,7 +74,7 @@ use crate::bindings::{
     filesystem::{preopens, types as filesystem},
     io::{poll, streams},
 };
-use crate::{FsError, IsATTY, StreamError, StreamResult, WasiView};
+use crate::{FsError, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiView};
 use anyhow::{bail, Context};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashSet};
@@ -20,6 +86,81 @@ use std::sync::Arc;
 use wasmtime::component::Resource;
 use wiggle::tracing::instrument;
 use wiggle::{GuestError, GuestPtr, GuestStrCow, GuestType};
+
+// Bring all WASI traits in scope that this implementation builds on.
+use crate::bindings::cli::environment::Host as _;
+use crate::bindings::filesystem::types::HostDescriptor as _;
+use crate::bindings::io::poll::Host as _;
+use crate::bindings::random::random::Host as _;
+
+/// Structure containing state for WASIp1.
+///
+/// This structure is created through [`WasiCtxBuilder::build_p1`] and is
+/// configured through the various methods of [`WasiCtxBuilder`]. This structure
+/// itself implements generated traits for WASIp1 as well as [`WasiView`] to
+/// have access to WASIp2.
+///
+/// Instances of [`WasiP1Ctx`] are typically stored within the `T` of
+/// [`Store<T>`](wasmtime::Store).
+///
+/// [`WasiCtxBuilder::build_p1`]: crate::WasiCtxBuilder::build_p1
+/// [`WasiCtxBuilder`]: crate::WasiCtxBuilder
+///
+/// # Examples
+///
+/// ```no_run
+/// use wasmtime::{Result, Linker};
+/// use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+/// use wasmtime_wasi::WasiCtxBuilder;
+///
+/// struct MyState {
+///     // ... custom state as necessary ...
+///
+///     wasi: WasiP1Ctx,
+/// }
+///
+/// impl MyState {
+///     fn new() -> MyState {
+///         MyState {
+///             // .. initialize custom state if needed ..
+///
+///             wasi: WasiCtxBuilder::new()
+///                 .arg("./foo.wasm")
+///                 // .. more customization if necesssary ..
+///                 .build_p1(),
+///         }
+///     }
+/// }
+///
+/// fn add_to_linker(linker: &mut Linker<MyState>) -> Result<()> {
+///     preview1::add_to_linker_sync(linker, |my_state| &mut my_state.wasi)?;
+///     Ok(())
+/// }
+/// ```
+pub struct WasiP1Ctx {
+    table: ResourceTable,
+    wasi: WasiCtx,
+    adapter: WasiPreview1Adapter,
+}
+
+impl WasiP1Ctx {
+    pub(crate) fn new(wasi: WasiCtx) -> Self {
+        Self {
+            table: ResourceTable::new(),
+            wasi,
+            adapter: WasiPreview1Adapter::new(),
+        }
+    }
+}
+
+impl WasiView for WasiP1Ctx {
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.table
+    }
+    fn ctx(&mut self) -> &mut WasiCtx {
+        &mut self.wasi
+    }
+}
 
 #[derive(Debug)]
 struct File {
@@ -163,7 +304,7 @@ enum Descriptor {
 }
 
 #[derive(Debug, Default)]
-pub struct WasiPreview1Adapter {
+struct WasiPreview1Adapter {
     descriptors: Option<Descriptors>,
 }
 
@@ -313,16 +454,9 @@ impl Descriptors {
 }
 
 impl WasiPreview1Adapter {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
-}
-
-// Any context that needs to support preview 1 will impl this trait. They can
-// construct the needed member with WasiPreview1Adapter::new().
-pub trait WasiPreview1View: WasiView {
-    fn adapter(&self) -> &WasiPreview1Adapter;
-    fn adapter_mut(&mut self) -> &mut WasiPreview1Adapter;
 }
 
 /// A mutably-borrowed [`WasiPreview1View`] implementation, which provides access to the stored
@@ -334,20 +468,20 @@ pub trait WasiPreview1View: WasiView {
 // of the [`WasiPreview1View`] to provide means to return mutably and immutably borrowed [`Descriptors`]
 // without having to rely on something like `Arc<Mutex<Descriptors>>`, while also being able to
 // call methods like [`Descriptor::is_file`] and hiding complexity from preview1 method implementations.
-struct Transaction<'a, T: WasiPreview1View + ?Sized> {
-    view: &'a mut T,
+struct Transaction<'a> {
+    view: &'a mut WasiP1Ctx,
     descriptors: Descriptors,
 }
 
-impl<T: WasiPreview1View + ?Sized> Drop for Transaction<'_, T> {
+impl Drop for Transaction<'_> {
     /// Record changes in the [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     fn drop(&mut self) {
         let descriptors = mem::take(&mut self.descriptors);
-        self.view.adapter_mut().descriptors = Some(descriptors);
+        self.view.adapter.descriptors = Some(descriptors);
     }
 }
 
-impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
+impl Transaction<'_> {
     /// Borrows [`Descriptor`] corresponding to `fd`.
     ///
     /// # Errors
@@ -427,22 +561,11 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 }
 
-trait WasiPreview1ViewExt:
-    WasiPreview1View
-    + preopens::Host
-    + stdin::Host
-    + stdout::Host
-    + stderr::Host
-    + terminal_input::Host
-    + terminal_output::Host
-    + terminal_stdin::Host
-    + terminal_stdout::Host
-    + terminal_stderr::Host
-{
+impl WasiP1Ctx {
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`Transaction`] on success
-    fn transact(&mut self) -> Result<Transaction<'_, Self>, types::Error> {
-        let descriptors = if let Some(descriptors) = self.adapter_mut().descriptors.take() {
+    fn transact(&mut self) -> Result<Transaction<'_>, types::Error> {
+        let descriptors = if let Some(descriptors) = self.adapter.descriptors.take() {
             descriptors
         } else {
             Descriptors::new(self)?
@@ -488,21 +611,150 @@ trait WasiPreview1ViewExt:
     }
 }
 
-impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
-
-pub fn add_to_linker_async<T: Send, W: WasiPreview1View>(
+/// Adds asynchronous versions of all WASIp1 functions to the
+/// [`wasmtime::Linker`] provided.
+///
+/// This method will add WASIp1 functions to `linker`. The `f` closure provided
+/// is used to project from the `T` state that `Linker` is associated with to a
+/// [`WasiP1Ctx`]. If `T` is `WasiP1Ctx` itself then this is the identity
+/// closure, but otherwise it must project out the field where `WasiP1Ctx` is
+/// stored within `T`.
+///
+/// The state provided by `f` is used to implement all WASIp1 functions and
+/// provides configuration to know what to return.
+///
+/// Note that this function is intended for use with
+/// [`Config::async_support(true)`]. If you're looking for a synchronous version
+/// see [`add_to_linker_sync`].
+///
+/// [`Config::async_support(true)`]: wasmtime::Config::async_support
+///
+/// # Examples
+///
+/// If the `T` in `Linker<T>` is just `WasiP1Ctx`:
+///
+/// ```no_run
+/// use wasmtime::{Result, Linker, Engine, Config};
+/// use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///
+///     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
+///     preview1::add_to_linker_async(&mut linker, |cx| cx)?;
+///
+///     // ... continue to add more to `linker` as necessary and use it ...
+///
+///     Ok(())
+/// }
+/// ```
+///
+/// If the `T` in `Linker<T>` is custom state:
+///
+/// ```no_run
+/// use wasmtime::{Result, Linker, Engine, Config};
+/// use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+///
+/// struct MyState {
+///     // .. other custom state here ..
+///
+///     wasi: WasiP1Ctx,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///
+///     let mut linker: Linker<MyState> = Linker::new(&engine);
+///     preview1::add_to_linker_async(&mut linker, |cx| &mut cx.wasi)?;
+///
+///     // ... continue to add more to `linker` as necessary and use it ...
+///
+///     Ok(())
+/// }
+/// ```
+pub fn add_to_linker_async<T: Send>(
     linker: &mut wasmtime::Linker<T>,
-    f: impl Fn(&mut T) -> &mut W + Copy + Send + Sync + 'static,
+    f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
     crate::preview1::wasi_snapshot_preview1::add_to_linker(linker, f)
 }
 
-pub fn add_to_linker_sync<T: Send, W: WasiPreview1View>(
+/// Adds synchronous versions of all WASIp1 functions to the
+/// [`wasmtime::Linker`] provided.
+///
+/// This method will add WASIp1 functions to `linker`. The `f` closure provided
+/// is used to project from the `T` state that `Linker` is associated with to a
+/// [`WasiP1Ctx`]. If `T` is `WasiP1Ctx` itself then this is the identity
+/// closure, but otherwise it must project out the field where `WasiP1Ctx` is
+/// stored within `T`.
+///
+/// The state provided by `f` is used to implement all WASIp1 functions and
+/// provides configuration to know what to return.
+///
+/// Note that this function is intended for use with
+/// [`Config::async_support(false)`]. If you're looking for a synchronous version
+/// see [`add_to_linker_async`].
+///
+/// [`Config::async_support(false)`]: wasmtime::Config::async_support
+///
+/// # Examples
+///
+/// If the `T` in `Linker<T>` is just `WasiP1Ctx`:
+///
+/// ```no_run
+/// use wasmtime::{Result, Linker, Engine, Config};
+/// use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///
+///     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
+///     preview1::add_to_linker_async(&mut linker, |cx| cx)?;
+///
+///     // ... continue to add more to `linker` as necessary and use it ...
+///
+///     Ok(())
+/// }
+/// ```
+///
+/// If the `T` in `Linker<T>` is custom state:
+///
+/// ```no_run
+/// use wasmtime::{Result, Linker, Engine, Config};
+/// use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+///
+/// struct MyState {
+///     // .. other custom state here ..
+///
+///     wasi: WasiP1Ctx,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///
+///     let mut linker: Linker<MyState> = Linker::new(&engine);
+///     preview1::add_to_linker_async(&mut linker, |cx| &mut cx.wasi)?;
+///
+///     // ... continue to add more to `linker` as necessary and use it ...
+///
+///     Ok(())
+/// }
+/// ```
+pub fn add_to_linker_sync<T: Send>(
     linker: &mut wasmtime::Linker<T>,
-    f: impl Fn(&mut T) -> &mut W + Copy + Send + Sync + 'static,
+    f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
     crate::preview1::sync::add_wasi_snapshot_preview1_to_linker(linker, f)
 }
+
 // Generate the wasi_snapshot_preview1::WasiSnapshotPreview1 trait,
 // and the module types.
 // None of the generated modules, traits, or types should be used externally
@@ -835,19 +1087,7 @@ fn first_non_empty_iovec<'a>(iovs: &types::IovecArray<'a>) -> Result<Option<Gues
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiPreview1Adapter struct.
-impl<
-        T: WasiPreview1View
-            + bindings::cli::environment::Host
-            + bindings::cli::exit::Host
-            + bindings::filesystem::preopens::Host
-            + bindings::filesystem::types::Host
-            + bindings::io::poll::Host
-            + bindings::random::random::Host
-            + bindings::io::streams::Host
-            + bindings::clocks::monotonic_clock::Host
-            + bindings::clocks::wall_clock::Host,
-    > wasi_snapshot_preview1::WasiSnapshotPreview1 for T
-{
+impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     #[instrument(skip(self))]
     fn args_get<'b>(
         &mut self,

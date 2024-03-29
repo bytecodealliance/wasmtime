@@ -18,7 +18,6 @@ anyhow = { workspace = true }
 object = { workspace = true }
 cranelift-codegen = { workspace = true }
 wasmtime-cranelift = { workspace = true }
-wasmtime-cranelift-shared = { workspace = true }
 wasmparser = { workspace = true }
 gimli = { workspace = true }
 

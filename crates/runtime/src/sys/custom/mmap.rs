@@ -42,10 +42,10 @@ impl Mmap {
     }
 
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
-        let ptr = self.memory.as_ptr().cast::<u8>();
+        let ptr = self.memory.as_ptr();
         unsafe {
             cvt(capi::wasmtime_mprotect(
-                ptr.add(start).cast(),
+                ptr.byte_add(start).cast(),
                 len,
                 capi::PROT_READ | capi::PROT_WRITE,
             ))?;
@@ -74,7 +74,7 @@ impl Mmap {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        let base = self.memory.as_ptr().cast::<u8>().add(range.start).cast();
+        let base = self.memory.as_ptr().byte_add(range.start).cast();
         let len = range.end - range.start;
 
         // not mapped into the C API at this time.
@@ -89,7 +89,7 @@ impl Mmap {
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        let base = self.memory.as_ptr().cast::<u8>().add(range.start).cast();
+        let base = self.memory.as_ptr().byte_add(range.start).cast();
         let len = range.end - range.start;
 
         cvt(capi::wasmtime_mprotect(base, len, capi::PROT_READ))?;

@@ -165,8 +165,8 @@ impl FromStr for ConstantData {
     }
 }
 
-/// Maintains the mapping between a constant handle (i.e.  [`Constant`](crate::ir::Constant)) and
-/// its constant data (i.e.  [`ConstantData`](crate::ir::ConstantData)).
+/// Maintains the mapping between a constant handle (i.e.  [`Constant`]) and
+/// its constant data (i.e.  [`ConstantData`]).
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantPool {

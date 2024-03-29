@@ -18,50 +18,34 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %r9d
-;;   cmpq    const(0), %r9
-;;   jnbe    label3; j label1
-;; block1:
-;;   movq    80(%rdi), %r11
-;;   movl    %ecx, 0(%r11,%r9,1)
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r9d
+;;       cmpq    0x1a(%rip), %r9
+;;       ja      0x21
+;;   14: movq    0x50(%rdi), %r11
+;;       movl    %ecx, (%r11, %r9)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   21: ud2
+;;   23: addb    %al, (%rax)
+;;   25: addb    %al, (%rax)
+;;   27: addb    %bh, %ah
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %r9d
-;;   cmpq    const(0), %r9
-;;   jnbe    label3; j label1
-;; block1:
-;;   movq    80(%rdi), %r11
-;;   movl    0(%r11,%r9,1), %eax
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %r9d
+;;       cmpq    0x1a(%rip), %r9
+;;       ja      0x51
+;;   44: movq    0x50(%rdi), %r11
+;;       movl    (%r11, %r9), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   51: ud2
+;;   53: addb    %al, (%rax)
+;;   55: addb    %al, (%rax)
+;;   57: addb    %bh, %ah

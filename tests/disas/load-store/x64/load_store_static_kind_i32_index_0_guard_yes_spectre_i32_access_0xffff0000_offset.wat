@@ -18,52 +18,34 @@
     local.get 0
     i32.load offset=0xffff0000))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %eax
-;;   xorq    %rdx, %rdx, %rdx
-;;   movq    %rax, %r8
-;;   addq    %r8, 80(%rdi), %r8
-;;   movl    $-65536, %edi
-;;   lea     0(%r8,%rdi,1), %rsi
-;;   cmpq    $65532, %rax
-;;   cmovnbeq %rdx, %rsi, %rsi
-;;   movl    %ecx, 0(%rsi)
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %eax
+;;       xorq    %rdx, %rdx
+;;       movq    %rax, %r8
+;;       addq    0x50(%rdi), %r8
+;;       movl    $0xffff0000, %edi
+;;       leaq    (%r8, %rdi), %rsi
+;;       cmpq    $0xfffc, %rax
+;;       cmovaq  %rdx, %rsi
+;;       movl    %ecx, (%rsi)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movl    %edx, %eax
-;;   xorq    %rcx, %rcx, %rcx
-;;   movq    %rax, %rdx
-;;   addq    %rdx, 80(%rdi), %rdx
-;;   movl    $-65536, %edi
-;;   lea     0(%rdx,%rdi,1), %rsi
-;;   cmpq    $65532, %rax
-;;   cmovnbeq %rcx, %rsi, %rsi
-;;   movl    0(%rsi), %eax
-;;   jmp     label1
-;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movl    %edx, %eax
+;;       xorq    %rcx, %rcx
+;;       movq    %rax, %rdx
+;;       addq    0x50(%rdi), %rdx
+;;       movl    $0xffff0000, %edi
+;;       leaq    (%rdx, %rdi), %rsi
+;;       cmpq    $0xfffc, %rax
+;;       cmovaq  %rcx, %rsi
+;;       movl    (%rsi), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq

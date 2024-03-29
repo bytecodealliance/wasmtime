@@ -363,6 +363,13 @@ impl Table {
         store: &mut dyn Store,
     ) -> Result<Option<u32>, Error> {
         let old_size = self.size();
+
+        // Don't try to resize the table if its size isn't changing, just return
+        // success.
+        if delta == 0 {
+            return Ok(Some(old_size));
+        }
+
         let new_size = match old_size.checked_add(delta) {
             Some(s) => s,
             None => {
@@ -375,6 +382,9 @@ impl Table {
             return Ok(None);
         }
 
+        // The WebAssembly spec requires failing a `table.grow` request if
+        // it exceeds the declared limits of the table. We may have set lower
+        // limits in the instance allocator as well.
         if let Some(max) = self.maximum() {
             if new_size > max {
                 store.table_grow_failed(format_err!("Table maximum size exceeded"))?;
@@ -395,6 +405,13 @@ impl Table {
                 *size = new_size;
             }
             Table::Dynamic { elements, .. } => {
+                // This call to `resize` could move the base address of
+                // `elements`. If this table's limits declare it to be
+                // fixed-size, then during AOT compilation we may have promised
+                // Cranelift that the table base address won't change, so it
+                // is allowed to optimize loading the base address. However, in
+                // that case the above checks that delta is non-zero and the new
+                // size doesn't exceed the maximum mean we can't get here.
                 elements.resize(new_size as usize, None);
             }
         }

@@ -1,17 +1,9 @@
-#[cfg(all(feature = "runtime", feature = "component-model"))]
-use crate::component::Component;
 use crate::Engine;
-#[cfg(feature = "runtime")]
-use crate::{instantiate::MmapVecWrapper, CodeMemory, Module};
 use anyhow::{anyhow, bail, Context, Result};
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::Arc;
-use wasmtime_environ::ObjectKind;
-#[cfg(feature = "runtime")]
-use wasmtime_runtime::MmapVec;
 
-/// Builder-style structure used to create a [`Module`](crate::Module) or
+/// Builder-style structure used to create a [`Module`](crate::module::Module) or
 /// pre-compile a module to a serialized list of bytes.
 ///
 /// This structure can be used for more advanced configuration when compiling a
@@ -45,7 +37,7 @@ use wasmtime_runtime::MmapVec;
 /// [`wasm`]: CodeBuilder::wasm
 /// [`wasm_file`]: CodeBuilder::wasm_file
 pub struct CodeBuilder<'a> {
-    engine: &'a Engine,
+    pub(super) engine: &'a Engine,
     wasm: Option<Cow<'a, [u8]>>,
     wasm_path: Option<Cow<'a, Path>>,
     dwarf_package: Option<Cow<'a, [u8]>>,
@@ -141,7 +133,7 @@ impl<'a> CodeBuilder<'a> {
         Ok(self)
     }
 
-    fn wasm_binary(&self) -> Result<Cow<'_, [u8]>> {
+    pub(super) fn wasm_binary(&self) -> Result<Cow<'_, [u8]>> {
         let wasm = self
             .wasm
             .as_ref()
@@ -193,68 +185,6 @@ impl<'a> CodeBuilder<'a> {
         Ok(self)
     }
 
-    #[cfg(feature = "runtime")]
-    fn compile_cached<T>(
-        &self,
-        build_artifacts: fn(&Engine, &[u8], Option<&[u8]>) -> Result<(MmapVecWrapper, Option<T>)>,
-    ) -> Result<(Arc<CodeMemory>, Option<T>)> {
-        let wasm = self.wasm_binary()?;
-        let dwarf_package = self.dwarf_package_binary();
-
-        self.engine
-            .check_compatible_with_native_host()
-            .context("compilation settings are not compatible with the native host")?;
-
-        #[cfg(feature = "cache")]
-        {
-            let state = (
-                HashedEngineCompileEnv(self.engine),
-                &wasm,
-                &dwarf_package,
-                // Don't hash this as it's just its own "pure" function pointer.
-                NotHashed(build_artifacts),
-            );
-            let (code, info_and_types) =
-                wasmtime_cache::ModuleCacheEntry::new("wasmtime", self.engine.cache_config())
-                    .get_data_raw(
-                        &state,
-                        // Cache miss, compute the actual artifacts
-                        |(engine, wasm, dwarf_package, build_artifacts)| -> Result<_> {
-                            let (mmap, info) =
-                                (build_artifacts.0)(engine.0, wasm, dwarf_package.as_deref())?;
-                            let code = publish_mmap(mmap.0)?;
-                            Ok((code, info))
-                        },
-                        // Implementation of how to serialize artifacts
-                        |(_engine, _wasm, _, _), (code, _info_and_types)| {
-                            Some(code.mmap().to_vec())
-                        },
-                        // Cache hit, deserialize the provided artifacts
-                        |(engine, _wasm, _, _), serialized_bytes| {
-                            let code = engine
-                                .0
-                                .load_code_bytes(&serialized_bytes, ObjectKind::Module)
-                                .ok()?;
-                            Some((code, None))
-                        },
-                    )?;
-            return Ok((code, info_and_types));
-        }
-
-        #[cfg(not(feature = "cache"))]
-        {
-            let (mmap, info_and_types) = build_artifacts(self.engine, &wasm)?;
-            let code = publish_mmap(mmap.0)?;
-            return Ok((code, info_and_types));
-        }
-
-        struct NotHashed<T>(T);
-
-        impl<T> std::hash::Hash for NotHashed<T> {
-            fn hash<H: std::hash::Hasher>(&self, _hasher: &mut H) {}
-        }
-    }
-
     /// Finishes this compilation and produces a serialized list of bytes.
     ///
     /// This method requires that either [`CodeBuilder::wasm`] or
@@ -278,38 +208,15 @@ impl<'a> CodeBuilder<'a> {
         Ok(v)
     }
 
-    /// Same as [`CodeBuilder::compile_module_serialized`] except that a
-    /// [`Module`](crate::Module) is produced instead.
-    ///
-    /// Note that this method will cache compilations if the `cache` feature is
-    /// enabled and turned on in [`Config`](crate::Config).
-    #[cfg(feature = "runtime")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
-    pub fn compile_module(&self) -> Result<Module> {
-        let (code, info_and_types) = self.compile_cached(super::build_artifacts)?;
-        Module::from_parts(self.engine, code, info_and_types)
-    }
-
     /// Same as [`CodeBuilder::compile_module_serialized`] except that it
-    /// compiles a serialized [`Component`] instead of a module.
+    /// compiles a serialized [`Component`](crate::component::Component)
+    /// instead of a module.
     #[cfg(feature = "component-model")]
     #[cfg_attr(docsrs, doc(cfg(feature = "component-model")))]
     pub fn compile_component_serialized(&self) -> Result<Vec<u8>> {
         let bytes = self.wasm_binary()?;
         let (v, _) = super::build_component_artifacts(self.engine, &bytes, None)?;
         Ok(v)
-    }
-
-    /// Same as [`CodeBuilder::compile_module`] except that it compiles a
-    /// [`Component`] instead of a module.
-    #[cfg(all(feature = "runtime", feature = "component-model"))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "runtime", feature = "component-model")))
-    )]
-    pub fn compile_component(&self) -> Result<Component> {
-        let (code, artifacts) = self.compile_cached(super::build_component_artifacts)?;
-        Component::from_parts(self.engine, code, artifacts)
     }
 }
 
@@ -338,11 +245,4 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
         // Catch accidental bugs of reusing across crate versions.
         config.module_version.hash(hasher);
     }
-}
-
-#[cfg(feature = "runtime")]
-fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-    let mut code = CodeMemory::new(mmap)?;
-    code.publish()?;
-    Ok(Arc::new(code))
 }

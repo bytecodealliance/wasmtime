@@ -96,6 +96,9 @@ cranelift-codegen = { workspace = true }
 cranelift-reader = { workspace = true }
 toml = { workspace = true }
 similar = { workspace = true }
+libtest-mimic = "0.7.0"
+capstone = { workspace = true }
+object = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
@@ -119,7 +122,6 @@ members = [
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
-  "crates/winch",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
@@ -127,8 +129,7 @@ members = [
   "examples/min-platform",
   "examples/min-platform/embedding",
   "fuzz",
-  "winch",
-  "winch/codegen", "crates/slab",
+  "winch/codegen",
 ]
 exclude = [
   'docs/rust_wasi_markdown_parser',
@@ -140,7 +141,7 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2021"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-rust-version = "1.74.0"
+rust-version = "1.75.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
@@ -163,7 +164,6 @@ wasmtime-c-api-macros = { path = "crates/c-api-macros", version = "=20.0.0" }
 wasmtime-cache = { path = "crates/cache", version = "=20.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=20.0.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=20.0.0" }
-wasmtime-cranelift-shared = { path = "crates/cranelift-shared", version = "=20.0.0" }
 wasmtime-winch = { path = "crates/winch", version = "=20.0.0" }
 wasmtime-environ = { path = "crates/environ", version = "=20.0.0" }
 wasmtime-explorer = { path = "crates/explorer", version = "=20.0.0" }
@@ -209,8 +209,6 @@ cranelift-control = { path = "cranelift/control", version = "0.107.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.107.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.18.0" }
-winch-filetests = { path = "winch/filetests" }
-winch-test-macros = { path = "winch/test-macros" }
 
 wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
 byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }
@@ -236,15 +234,15 @@ rustix = "0.38.31"
 wit-bindgen = { version = "0.22.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.201.0"
-wat = "1.201.0"
-wast = "201.0.0"
-wasmprinter = "0.201.0"
-wasm-encoder = "0.201.0"
-wasm-smith = "0.201.0"
-wasm-mutate = "0.201.0"
-wit-parser = "0.201.0"
-wit-component = "0.201.0"
+wasmparser = "0.202.0"
+wat = "1.202.0"
+wast = "202.0.0"
+wasmprinter = "0.202.0"
+wasm-encoder = "0.202.0"
+wasm-smith = "0.202.0"
+wasm-mutate = "0.202.0"
+wit-parser = "0.202.0"
+wit-component = "0.202.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -332,6 +330,8 @@ default = [
   "addr2line",
   "debug-builtins",
   "component-model",
+  "threads",
+  "gc",
 
   # Enable some nice features of clap by default, but they come at a binary size
   # cost, so allow disabling this through disabling of our own `default`
@@ -361,7 +361,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # These features are all included in the `default` set above and this is
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
-wasi-threads = ["dep:wasmtime-wasi-threads"]
+wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 component-model = [
@@ -379,6 +379,8 @@ profiling = ["wasmtime/profiling"]
 coredump = ["wasmtime-cli-flags/coredump"]
 addr2line = ["wasmtime/addr2line"]
 debug-builtins = ["wasmtime/debug-builtins"]
+threads = ["wasmtime-cli-flags/threads"]
+gc = ["wasmtime-cli-flags/gc"]
 
 # Enables compatibility shims with Wasmtime 13 and prior's CLI.
 old-cli = []

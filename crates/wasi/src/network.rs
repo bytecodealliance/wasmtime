@@ -1,5 +1,4 @@
-use crate::bindings::sockets::network::{Ipv4Address, Ipv6Address};
-use crate::bindings::wasi::sockets::network::ErrorCode;
+use crate::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
 use crate::TrappableError;
 use std::net::SocketAddr;
 use std::sync::Arc;

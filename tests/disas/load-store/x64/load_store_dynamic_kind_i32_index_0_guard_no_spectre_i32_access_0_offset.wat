@@ -18,54 +18,32 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r9
-;;   movl    %edx, %r11d
-;;   subq    %r9, $4, %r9
-;;   cmpq    %r9, %r11
-;;   jnbe    label3; j label1
-;; block1:
-;;   movq    80(%rdi), %rdi
-;;   movl    %ecx, 0(%rdi,%r11,1)
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x58(%rdi), %r9
+;;       movl    %edx, %r11d
+;;       subq    $4, %r9
+;;       cmpq    %r9, %r11
+;;       ja      0x25
+;;   18: movq    0x50(%rdi), %rdi
+;;       movl    %ecx, (%rdi, %r11)
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   25: ud2
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   movq    88(%rdi), %r9
-;;   movl    %edx, %r11d
-;;   subq    %r9, $4, %r9
-;;   cmpq    %r9, %r11
-;;   jnbe    label3; j label1
-;; block1:
-;;   movq    80(%rdi), %rdi
-;;   movl    0(%rdi,%r11,1), %eax
-;;   jmp     label2
-;; block2:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
-;; block3:
-;;   ud2 heap_oob
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    0x58(%rdi), %r9
+;;       movl    %edx, %r11d
+;;       subq    $4, %r9
+;;       cmpq    %r9, %r11
+;;       ja      0x55
+;;   48: movq    0x50(%rdi), %rdi
+;;       movl    (%rdi, %r11), %eax
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   55: ud2

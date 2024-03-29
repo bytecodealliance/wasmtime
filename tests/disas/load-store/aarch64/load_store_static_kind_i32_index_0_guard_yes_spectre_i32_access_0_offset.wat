@@ -18,50 +18,32 @@
     local.get 0
     i32.load offset=0))
 
-;; function u0:0:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   mov w10, w2
-;;   movz x11, #0
-;;   ldr x12, [x0, #80]
-;;   add x12, x12, x2, UXTW
-;;   orr x9, xzr, #4294967292
-;;   subs xzr, x10, x9
-;;   csel x12, x11, x12, hi
-;;   csdb
-;;   str w3, [x12]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[0]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w10, w2
+;;       mov     x11, #0
+;;       ldr     x12, [x0, #0x50]
+;;       add     x12, x12, w2, uxtw
+;;       orr     x9, xzr, #0xfffffffc
+;;       cmp     x10, x9
+;;       csel    x12, x11, x12, hi
+;;       csdb
+;;       str     w3, [x12]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
 ;;
-;; function u0:1:
-;;   stp fp, lr, [sp, #-16]!
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   mov fp, sp
-;;   ldr x16, [x0, #8]
-;;   ldr x16, [x16]
-;;   subs xzr, sp, x16, UXTX
-;;   b.lo #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   mov w10, w2
-;;   movz x11, #0
-;;   ldr x12, [x0, #80]
-;;   add x12, x12, x2, UXTW
-;;   orr x9, xzr, #4294967292
-;;   subs xzr, x10, x9
-;;   csel x12, x11, x12, hi
-;;   csdb
-;;   ldr w0, [x12]
-;;   b label1
-;; block1:
-;;   ldp fp, lr, [sp], #16
-;;   ret
+;; wasm[0]::function[1]:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       mov     w10, w2
+;;       mov     x11, #0
+;;       ldr     x12, [x0, #0x50]
+;;       add     x12, x12, w2, uxtw
+;;       orr     x9, xzr, #0xfffffffc
+;;       cmp     x10, x9
+;;       csel    x12, x11, x12, hi
+;;       csdb
+;;       ldr     w0, [x12]
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret

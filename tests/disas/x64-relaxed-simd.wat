@@ -37,129 +37,85 @@
   )
 )
 
-;; function u0:0:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   jmp     label1
-;; block1:
-;;   cvttps2dq %xmm0, %xmm0
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       cvttps2dq %xmm0, %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
-;; function u0:1:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   jmp     label1
-;; block1:
-;;   uninit  %xmm1
-;;   xorps   %xmm1, %xmm1, %xmm1
-;;   maxps   %xmm0, %xmm1, %xmm0
-;;   pcmpeqd %xmm1, %xmm1, %xmm1
-;;   psrld   %xmm1, $1, %xmm1
-;;   cvtdq2ps %xmm1, %xmm2
-;;   cvttps2dq %xmm0, %xmm1
-;;   subps   %xmm0, %xmm2, %xmm0
-;;   cmpps   $2, %xmm2, %xmm0, %xmm2
-;;   cvttps2dq %xmm0, %xmm0
-;;   pxor    %xmm0, %xmm2, %xmm0
-;;   uninit  %xmm4
-;;   pxor    %xmm4, %xmm4, %xmm4
-;;   pmaxsd  %xmm0, %xmm4, %xmm0
-;;   paddd   %xmm0, %xmm1, %xmm0
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       xorps   %xmm1, %xmm1
+;;       maxps   %xmm1, %xmm0
+;;       pcmpeqd %xmm1, %xmm1
+;;       psrld   $1, %xmm1
+;;       cvtdq2ps %xmm1, %xmm2
+;;       cvttps2dq %xmm0, %xmm1
+;;       subps   %xmm2, %xmm0
+;;       cmpleps %xmm0, %xmm2
+;;       cvttps2dq %xmm0, %xmm0
+;;       pxor    %xmm2, %xmm0
+;;       pxor    %xmm4, %xmm4
+;;       pmaxsd  %xmm4, %xmm0
+;;       paddd   %xmm1, %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
-;; function u0:2:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   jmp     label1
-;; block1:
-;;   cvttpd2dq %xmm0, %xmm0
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[2]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       cvttpd2dq %xmm0, %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
-;; function u0:3:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   jmp     label1
-;; block1:
-;;   uninit  %xmm6
-;;   xorpd   %xmm6, %xmm6, %xmm6
-;;   maxpd   %xmm0, %xmm6, %xmm0
-;;   minpd   %xmm0, const(0), %xmm0
-;;   roundpd $3, %xmm0, %xmm0
-;;   addpd   %xmm0, const(1), %xmm0
-;;   shufps  $136, %xmm0, %xmm6, %xmm0
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[3]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       xorpd   %xmm6, %xmm6
+;;       maxpd   %xmm6, %xmm0
+;;       minpd   0x1c(%rip), %xmm0
+;;       roundpd $3, %xmm0, %xmm0
+;;       addpd   0x1e(%rip), %xmm0
+;;       shufps  $0x88, %xmm6, %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   8b: addb    %al, (%rax)
+;;   8d: addb    %al, (%rax)
+;;   8f: addb    %al, (%rax)
+;;   91: addb    %ah, %al
 ;;
-;; function u0:4:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   jmp     label1
-;; block1:
-;;   movdqa  %xmm0, %xmm7
-;;   movdqa  %xmm1, %xmm0
-;;   pmaddubsw %xmm0, %xmm7, %xmm0
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[4]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movdqa  %xmm0, %xmm7
+;;       movdqa  %xmm1, %xmm0
+;;       pmaddubsw %xmm7, %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
 ;;
-;; function u0:5:
-;;   pushq   %rbp
-;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
-;;   movq    8(%rdi), %r10
-;;   movq    0(%r10), %r10
-;;   cmpq    %rsp, %r10
-;;   jnbe #trap=stk_ovf
-;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
-;; block0:
-;;   jmp     label1
-;; block1:
-;;   pmaddubsw %xmm1, %xmm0, %xmm1
-;;   pmaddwd %xmm1, const(0), %xmm1
-;;   movdqa  %xmm1, %xmm0
-;;   paddd   %xmm0, %xmm2, %xmm0
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
-;;   ret
+;; wasm[0]::function[5]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       pmaddubsw %xmm0, %xmm1
+;;       pmaddwd 0xf(%rip), %xmm1
+;;       movdqa  %xmm1, %xmm0
+;;       paddd   %xmm2, %xmm0
+;;       movq    %rbp, %rsp
+;;       popq    %rbp
+;;       retq
+;;   ee: addb    %al, (%rax)
+;;   f0: addl    %eax, (%rax)
+;;   f2: addl    %eax, (%rax)
+;;   f4: addl    %eax, (%rax)
+;;   f6: addl    %eax, (%rax)
+;;   f8: addl    %eax, (%rax)
+;;   fa: addl    %eax, (%rax)
+;;   fc: addl    %eax, (%rax)
+;;   fe: addl    %eax, (%rax)

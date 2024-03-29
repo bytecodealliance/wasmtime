@@ -158,7 +158,7 @@ jobs:
         else
           pr=${{ github.event.number }}
           gh pr view $pr --json commits | tee commits.log
-          gh pr diff $pr --name-only | tee names.log
+          gh pr diff $pr --name-only | tee names.log || echo "failed to get files"
           if [ "${{ github.base_ref }}" != "main" ]; then
             run_full=true
           elif grep -q 'prtest:full' commits.log; then
@@ -216,7 +216,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-03-11
+        toolchain: nightly-2024-03-21
 
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -300,6 +300,9 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features runtime,gc
     - run: cargo check -p wasmtime --no-default-features --features cranelift,gc
     - run: cargo check -p wasmtime --no-default-features --features runtime
+    - run: cargo check -p wasmtime --no-default-features --features threads
+    - run: cargo check -p wasmtime --no-default-features --features runtime,threads
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,threads
     - run: cargo check --features component-model
     - run: cargo check -p wasmtime --features incremental-cache
 
@@ -411,7 +414,7 @@ jobs:
     # happen upstream. This is periodically updated through a PR.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-03-11
+        toolchain: nightly-2024-03-21
 
     # Ensure that fuzzers sitll build.
     #
@@ -731,7 +734,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2024-03-11
+        toolchain: nightly-2024-03-21
     - run: rustup component add rust-src miri
     - uses: actions/cache@v4
       with:

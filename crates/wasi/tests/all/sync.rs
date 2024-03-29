@@ -1,7 +1,8 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::command::sync::{add_to_linker, Command};
+use wasmtime_wasi::add_to_linker_sync;
+use wasmtime_wasi::bindings::sync::Command;
 
 fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
@@ -10,7 +11,7 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     config.wasm_component_model(true);
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
-    add_to_linker(&mut linker)?;
+    add_to_linker_sync(&mut linker)?;
 
     let (mut store, _td) = store(&engine, name, inherit_stdio)?;
     let component = Component::from_file(&engine, path)?;

@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 /// the file descriptor table. This wrapper is only necessary due to the
 /// signature of `fd_fdstat_set_flags`; if that changes, there are a variety of
 /// improvements that can be made (TODO:
-/// https://github.com/bytecodealliance/wasmtime/issues/5643).
+/// <https://github.com/bytecodealliance/wasmtime/issues/5643)>.
 #[derive(Clone)]
 pub struct WasiCtx(Arc<WasiCtxInner>);
 

@@ -8,11 +8,12 @@ use sptr::Strict;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::marker;
+use std::mem;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
 pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
-use wasmtime_environ::{DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC};
+use wasmtime_environ::{BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC};
 
 /// A function pointer that exposes the array calling convention.
 ///
@@ -712,7 +713,6 @@ macro_rules! define_builtin_array {
         #[repr(C)]
         pub struct VMBuiltinFunctionsArray {
             $(
-                $( #[ $attr ] )*
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -723,8 +723,7 @@ macro_rules! define_builtin_array {
             #[allow(unused_doc_comments)]
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
                 $(
-                    $( #[ $attr ] )*
-                    $name: crate::libcalls::trampolines::$name,
+                    $name: crate::libcalls::raw::$name,
                 )*
             };
         }
@@ -738,6 +737,14 @@ macro_rules! define_builtin_array {
 }
 
 wasmtime_environ::foreach_builtin_function!(define_builtin_array);
+
+const _: () = {
+    assert!(
+        mem::size_of::<VMBuiltinFunctionsArray>()
+            == mem::size_of::<usize>()
+                * (BuiltinFunctionIndex::builtin_functions_total_number() as usize)
+    )
+};
 
 /// The storage for a WebAssembly invocation argument
 ///

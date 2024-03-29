@@ -48,7 +48,7 @@ impl BackendFromDir for OnnxBackend {
     }
 }
 
-struct ONNXGraph(Arc<Mutex<Session>>, ExecutionTarget);
+struct ONNXGraph(Arc<Mutex<Session>>, #[allow(dead_code)] ExecutionTarget);
 
 unsafe impl Send for ONNXGraph {}
 unsafe impl Sync for ONNXGraph {}

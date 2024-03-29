@@ -107,12 +107,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
-        assert_ne!(
-            call_conv,
-            isa::CallConv::Winch,
-            "aarch64 does not support the 'winch' calling convention yet"
-        );
-
         if matches!(call_conv, isa::CallConv::Tail) {
             return compute_arg_locs_tail(params, add_ret_area_ptr, args);
         }
@@ -619,7 +613,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn gen_epilogue_frame_restore(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        isa_flags: &aarch64_settings::Flags,
+        _isa_flags: &aarch64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Inst> {
         let setup_frame = frame_layout.setup_area_size > 0;
@@ -646,19 +640,28 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 frame_layout.stack_args_size.try_into().unwrap(),
             ));
         }
-        match select_api_key(isa_flags, call_conv, setup_frame) {
-            Some(key) => {
-                insts.push(Inst::AuthenticatedRet {
-                    key,
-                    is_hint: !isa_flags.has_pauth(),
-                });
-            }
-            None => {
-                insts.push(Inst::Ret {});
-            }
-        }
 
         insts
+    }
+
+    fn gen_return(
+        call_conv: isa::CallConv,
+        isa_flags: &aarch64_settings::Flags,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Inst> {
+        let setup_frame = frame_layout.setup_area_size > 0;
+
+        match select_api_key(isa_flags, call_conv, setup_frame) {
+            Some(key) => {
+                smallvec![Inst::AuthenticatedRet {
+                    key,
+                    is_hint: !isa_flags.has_pauth(),
+                }]
+            }
+            None => {
+                smallvec![Inst::Ret {}]
+            }
+        }
     }
 
     fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
