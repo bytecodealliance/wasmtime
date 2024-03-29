@@ -117,8 +117,13 @@ though to add vet entries this is done through one of a few methods:
 
 Note for the last case it's important to ensure that after you push to the PR
 any future updates pushed by the contributor either contain or don't overwrite
-your vet entries. It's recommended to add vet entries just before approval to
-minimize interference with the contributor.
+your vet entries. Also verify that if the PR branch is rebased or force-pushed,
+the details of your previously pushed vetting remain the same: e.g., versions
+were not bumped and descriptive reasons remain the same. If pushing a vetting
+commit to a contributor's PR and also asking for more changes, request that the
+contributor make the requested fixes in an additional commit rather than
+force-pushing a rewritten history, so your existing vetting commit remains
+untouched. These guidelines make it easier to verify no tampering has occurred
 
 ### Policy for adding `cargo vet` entries
 
