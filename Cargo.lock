@@ -3854,7 +3854,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "smallvec",
- "thiserror",
  "wasmparser 0.206.0",
 ]
 

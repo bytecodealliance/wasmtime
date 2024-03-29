@@ -234,7 +234,7 @@ rustix = "0.38.31"
 wit-bindgen = { version = "0.22.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.206.0"
+wasmparser = { version = "0.206.0", default-features = false }
 wat = "1.206.0"
 wast = "206.0.0"
 wasmprinter = "0.206.0"
@@ -265,7 +265,7 @@ heck = "0.4"
 similar = "2.1.0"
 toml = "0.8.10"
 # serde and serde_derive must have the same version
-serde = "1.0.188"
+serde = { version = "1.0.188", default-features = false, features = ['alloc'] }
 serde_derive = "1.0.188"
 serde_json = "1.0.80"
 glob = "0.3.0"
