@@ -12,5 +12,7 @@ edition.workspace = true
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
-thiserror = { workspace = true }
 wasmparser = { workspace = true }
+
+[features]
+std = ['wasmparser/std']
