@@ -20,7 +20,7 @@ cranelift-entity = { workspace = true }
 cranelift-control = { workspace = true }
 anyhow = { workspace = true }
 region = "2.2.0"
-libc = { version = "0.2.42" }
+libc = { workspace = true }
 target-lexicon = { workspace = true }
 memmap2 = { version = "0.2.1", optional = true }
 log = { workspace = true }

@@ -37,14 +37,14 @@ target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 anyhow = { workspace = true }
-libc = "0.2"
+libc = { workspace = true }
 cfg-if = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }
-serde = "1.0.188"
-serde_derive = "1.0.188"
+serde = { workspace = true }
+serde_derive = { workspace = true }
 serde_json = { workspace = true }
-bincode = "1.2.1"
+bincode = { workspace = true }
 indexmap = { workspace = true }
 paste = "1.0.3"
 once_cell = { workspace = true }

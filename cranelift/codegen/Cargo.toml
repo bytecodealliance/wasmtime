@@ -26,9 +26,9 @@ cranelift-control = { workspace = true }
 hashbrown = { workspace = true, features = ["raw"] }
 target-lexicon = { workspace = true }
 log = { workspace = true }
-serde = { version = "1.0.188", optional = true }
-serde_derive = { version = "1.0.188", optional = true }
-bincode = { version = "1.2.1", optional = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+bincode = { workspace = true, optional = true }
 gimli = { workspace = true, features = ["write"], optional = true }
 smallvec = { workspace = true }
 regalloc2 = { workspace = true, features = ["checker"] }

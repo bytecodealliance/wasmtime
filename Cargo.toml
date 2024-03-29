@@ -274,7 +274,7 @@ walkdir = "2.3.3"
 cfg-if = "1.0"
 tempfile = "3.1.0"
 filecheck = "0.5.0"
-libc = "0.2.60"
+libc = { version = "0.2.112", default-features = true }
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.26.0", features = [ "rt", "time" ] }
 hyper = "1.0.1"
@@ -290,6 +290,7 @@ test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
 humantime = "2.0.0"
+bincode = "1.2.1"
 
 # =============================================================================
 #
