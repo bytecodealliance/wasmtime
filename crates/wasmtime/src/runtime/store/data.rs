@@ -1,10 +1,11 @@
+use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
-use std::fmt;
-use std::marker;
-use std::num::NonZeroU64;
-use std::ops::{Index, IndexMut};
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use core::fmt;
+use core::marker;
+use core::num::NonZeroU64;
+use core::ops::{Index, IndexMut};
+use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 // This is defined here, in a private submodule, so we can explicitly reexport
 // it only as `pub(crate)`. This avoids a ton of

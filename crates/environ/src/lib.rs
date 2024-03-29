@@ -14,7 +14,7 @@ extern crate alloc;
 
 /// TODO
 pub mod prelude {
-    pub use crate::Err2Anyhow;
+    pub use crate::{Err2Anyhow, IntoAnyhow};
     pub use alloc::borrow::ToOwned;
     pub use alloc::boxed::Box;
     pub use alloc::format;
@@ -30,25 +30,40 @@ pub mod prelude {
 }
 
 /// TODO
+pub trait IntoAnyhow {
+    /// TODO
+    fn into_anyhow(self) -> anyhow::Error;
+}
+
+/// TODO
 pub trait Err2Anyhow<T> {
     /// TODO
     fn err2anyhow(self) -> anyhow::Result<T>;
 }
 
-#[cfg(feature = "std")]
-impl<T, E: Into<anyhow::Error>> Err2Anyhow<T> for Result<T, E> {
+impl<T, E: IntoAnyhow> Err2Anyhow<T> for Result<T, E> {
     fn err2anyhow(self) -> anyhow::Result<T> {
-        self.map_err(|e| e.into())
+        self.map_err(|e| e.into_anyhow())
+    }
+}
+
+#[cfg(feature = "std")]
+impl<T> IntoAnyhow for T
+where
+    T: Into<anyhow::Error>,
+{
+    fn into_anyhow(self) -> anyhow::Error {
+        self.into()
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl<T, E> Err2Anyhow<T> for Result<T, E>
+impl<T> IntoAnyhow for T
 where
-    E: core::fmt::Display + core::fmt::Debug + Send + Sync + 'static,
+    T: core::fmt::Display + core::fmt::Debug + Send + Sync + 'static,
 {
-    fn err2anyhow(self) -> anyhow::Result<T> {
-        self.map_err(anyhow::Error::msg)
+    fn into_anyhow(self) -> anyhow::Error {
+        anyhow::Error::msg(self)
     }
 }
 

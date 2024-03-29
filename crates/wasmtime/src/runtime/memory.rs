@@ -1,12 +1,14 @@
+use crate::prelude::*;
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
 use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use anyhow::{bail, Result};
-use std::cell::UnsafeCell;
-use std::ops::Range;
-use std::slice;
-use std::time::Duration;
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::ops::Range;
+use core::slice;
+use core::time::Duration;
 use wasmtime_environ::MemoryPlan;
 use wasmtime_runtime::{RuntimeLinearMemory, VMMemoryImport};
 
@@ -20,12 +22,13 @@ pub struct MemoryAccessError {
     _private: (),
 }
 
-impl std::fmt::Display for MemoryAccessError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for MemoryAccessError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "out of bounds memory access")
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for MemoryAccessError {}
 
 /// A WebAssembly linear memory.
@@ -582,7 +585,7 @@ impl Memory {
     /// Even if the same underlying memory definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Memory`s,
     /// this hash key will be consistent across all of these memories.
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq {
         store[self.0].definition as usize
     }
 }
@@ -931,8 +934,8 @@ impl SharedMemory {
     }
 }
 
-impl std::fmt::Debug for SharedMemory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for SharedMemory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SharedMemory").finish_non_exhaustive()
     }
 }

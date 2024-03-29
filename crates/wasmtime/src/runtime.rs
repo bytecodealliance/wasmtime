@@ -14,7 +14,6 @@ pub(crate) mod limits;
 pub(crate) mod linker;
 pub(crate) mod memory;
 pub(crate) mod module;
-pub(crate) mod profiling;
 pub(crate) mod resources;
 pub(crate) mod store;
 pub(crate) mod trampoline;
@@ -27,12 +26,6 @@ pub(crate) mod values;
 
 #[cfg(feature = "component-model")]
 pub mod component;
-
-#[cfg(feature = "async")]
-pub(crate) mod stack;
-
-#[cfg(feature = "coredump")]
-mod coredump;
 
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
@@ -70,11 +63,17 @@ pub use values::*;
 pub(crate) use uninhabited::*;
 
 #[cfg(feature = "profiling")]
+pub(crate) mod profiling;
+#[cfg(feature = "profiling")]
 pub use profiling::GuestProfiler;
 
 #[cfg(feature = "async")]
+pub(crate) mod stack;
+#[cfg(feature = "async")]
 pub use stack::*;
 
+#[cfg(feature = "coredump")]
+mod coredump;
 #[cfg(feature = "coredump")]
 pub use coredump::*;
 

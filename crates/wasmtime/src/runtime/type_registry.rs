@@ -3,26 +3,25 @@
 //! Helps implement fast indirect call signature checking, reference type
 //! casting, and etc.
 
+use crate::prelude::*;
 use crate::Engine;
-use std::{
+use alloc::sync::Arc;
+use core::{
     borrow::Borrow,
-    collections::{HashMap, HashSet},
-    fmt::Debug,
+    fmt::{self, Debug},
     hash::{Hash, Hasher},
     ops::Deref,
-    sync::{
-        atomic::{
-            AtomicUsize,
-            Ordering::{AcqRel, Acquire},
-        },
-        Arc, RwLock,
+    sync::atomic::{
+        AtomicUsize,
+        Ordering::{AcqRel, Acquire},
     },
 };
+use hashbrown::{HashMap, HashSet};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, TypeTrace,
     WasmFuncType,
 };
-use wasmtime_runtime::VMSharedTypeIndex;
+use wasmtime_runtime::{RwLock, VMSharedTypeIndex};
 use wasmtime_slab::{Id as SlabId, Slab};
 
 // ### Notes on the Lifetime Management of Types
@@ -93,7 +92,7 @@ pub struct TypeCollection {
 }
 
 impl Debug for TypeCollection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let TypeCollection {
             engine: _,
             types,
@@ -110,7 +109,7 @@ impl TypeCollection {
     pub fn new_for_module(engine: &Engine, types: &ModuleTypes) -> Self {
         let engine = engine.clone();
         let registry = engine.signatures();
-        let types = registry.0.write().unwrap().register_for_module(types);
+        let types = registry.0.write().register_for_module(types);
         let reverse_types = types.iter().map(|(k, v)| (*v, k)).collect();
 
         Self {
@@ -148,7 +147,6 @@ impl Drop for TypeCollection {
                 .signatures()
                 .0
                 .write()
-                .unwrap()
                 .unregister_type_collection(self);
         }
     }
@@ -178,7 +176,7 @@ pub struct RegisteredType {
 }
 
 impl Debug for RegisteredType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let RegisteredType { engine: _, entry } = self;
         f.debug_struct("RegisteredType")
             .field("entry", entry)
@@ -203,13 +201,12 @@ impl Drop for RegisteredType {
                 .signatures()
                 .0
                 .write()
-                .unwrap()
                 .unregister_entry(self.entry.0.index);
         }
     }
 }
 
-impl std::ops::Deref for RegisteredType {
+impl core::ops::Deref for RegisteredType {
     type Target = WasmFuncType;
 
     fn deref(&self) -> &Self::Target {
@@ -250,7 +247,7 @@ impl RegisteredType {
     /// engine's `TypeRegistry`.
     pub fn new(engine: &Engine, ty: WasmFuncType) -> RegisteredType {
         let entry = {
-            let mut inner = engine.signatures().0.write().unwrap();
+            let mut inner = engine.signatures().0.write();
 
             log::trace!("RegisteredType::new({ty:?})");
 
@@ -278,7 +275,7 @@ impl RegisteredType {
     pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
         let entry = {
             let id = shared_type_index_to_slab_id(index);
-            let inner = engine.signatures().0.read().unwrap();
+            let inner = engine.signatures().0.read();
             let e = inner.entries.get(id)?;
 
             // NB: make sure to incref while the lock is held to prevent:
@@ -634,7 +631,7 @@ impl TypeRegistry {
     /// other mechanism already keeping the type registered.
     pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<impl Deref<Target = WasmFuncType>> {
         let id = shared_type_index_to_slab_id(index);
-        let inner = self.0.read().unwrap();
+        let inner = self.0.read();
         inner.entries.get(id).cloned()
     }
 }

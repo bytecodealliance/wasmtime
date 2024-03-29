@@ -1,5 +1,7 @@
 use crate::module::ModuleRegistry;
-use std::{ptr::NonNull, sync::Arc};
+use crate::prelude::*;
+use alloc::sync::Arc;
+use core::ptr::NonNull;
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, VMNativeCallHostFuncContext};
 
 /// An arena of `VMFuncRef`s.

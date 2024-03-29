@@ -5,8 +5,8 @@ pub use rooting::*;
 
 use crate::store::AutoAssertNoGc;
 use crate::{AsContextMut, Result, StoreContext, StoreContextMut};
-use std::any::Any;
-use std::ffi::c_void;
+use core::any::Any;
+use core::ffi::c_void;
 use wasmtime_runtime::VMExternRef;
 
 /// An opaque, GC-managed reference to some host data that can be passed to
@@ -105,7 +105,7 @@ pub struct ExternRef {
 unsafe impl GcRefImpl for ExternRef {
     fn transmute_ref(index: &GcRootIndex) -> &Self {
         // Safety: `ExternRef` is a newtype of a `GcRootIndex`.
-        let me: &Self = unsafe { std::mem::transmute(index) };
+        let me: &Self = unsafe { core::mem::transmute(index) };
 
         // Assert we really are just a newtype of a `GcRootIndex`.
         assert!(matches!(

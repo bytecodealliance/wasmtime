@@ -2,7 +2,6 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
 };
-use crate::prelude::*;
 use crate::sys::vm::{commit_stack_pages, reset_stack_pages_to_zero};
 use crate::{Mmap, PoolingInstanceAllocatorConfig};
 use anyhow::{anyhow, bail, Context, Result};
@@ -177,6 +176,7 @@ impl StackPool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
     use crate::InstanceLimits;
 
     #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]

@@ -1,6 +1,9 @@
 use super::Resource;
-use std::any::Any;
-use std::collections::{BTreeSet, HashMap};
+use crate::prelude::*;
+use alloc::collections::BTreeSet;
+use core::any::Any;
+use core::fmt;
+use hashbrown::HashMap;
 
 #[derive(Debug)]
 /// Errors returned by operations on `ResourceTable`
@@ -16,8 +19,8 @@ pub enum ResourceTableError {
     HasChildren,
 }
 
-impl std::fmt::Display for ResourceTableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ResourceTableError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Full => write!(f, "resource table has no free keys"),
             Self::NotPresent => write!(f, "resource not present"),
@@ -26,6 +29,8 @@ impl std::fmt::Display for ResourceTableError {
         }
     }
 }
+
+#[cfg(feature = "std")]
 impl std::error::Error for ResourceTableError {}
 
 /// The `ResourceTable` type maps a `Resource<T>` to its `T`.
@@ -137,7 +142,7 @@ impl ResourceTable {
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     fn free_entry(&mut self, ix: usize) -> TableEntry {
-        let entry = match std::mem::replace(
+        let entry = match core::mem::replace(
             &mut self.entries[ix],
             Entry::Free {
                 next: self.free_head,

@@ -1,6 +1,6 @@
-use std::{ops::Range, sync::Arc};
-
+use crate::prelude::*;
 use anyhow::Error;
+use std::{ops::Range, sync::Arc};
 use wasmtime_fiber::{RuntimeFiberStack, RuntimeFiberStackCreator};
 
 /// A stack creator. Can be used to provide a stack creator to wasmtime

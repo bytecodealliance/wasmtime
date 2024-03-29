@@ -2,7 +2,7 @@ use crate::gc::ExternRef;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{AsContext, AsContextMut, Func, HeapType, RefType, Rooted, ValType, V128};
 use anyhow::{bail, Context, Result};
-use std::ptr;
+use core::ptr;
 use wasmtime_runtime::TableElement;
 
 pub use wasmtime_runtime::ValRaw;

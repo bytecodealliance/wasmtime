@@ -1,11 +1,12 @@
+use crate::prelude::*;
+use alloc::sync::Arc;
 use anyhow::{bail, ensure, Result};
+use core::fmt;
+use core::str::FromStr;
+use hashbrown::{HashMap, HashSet};
 use serde_derive::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::fmt;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
 use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
@@ -83,8 +84,8 @@ impl Default for ModuleVersionStrategy {
     }
 }
 
-impl std::hash::Hash for ModuleVersionStrategy {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+impl core::hash::Hash for ModuleVersionStrategy {
+    fn hash<H: core::hash::Hasher>(&self, hasher: &mut H) {
         match self {
             Self::WasmtimeVersion => env!("CARGO_PKG_VERSION").hash(hasher),
             Self::Custom(s) => s.hash(hasher),
@@ -471,9 +472,16 @@ impl Config {
             WasmBacktraceDetails::Disable => Some(false),
             WasmBacktraceDetails::Environment => {
                 self.wasm_backtrace_details_env_used = true;
-                std::env::var("WASMTIME_BACKTRACE_DETAILS")
-                    .map(|s| Some(s == "1"))
-                    .unwrap_or(Some(false))
+                #[cfg(feature = "std")]
+                {
+                    std::env::var("WASMTIME_BACKTRACE_DETAILS")
+                        .map(|s| Some(s == "1"))
+                        .unwrap_or(Some(false))
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    Some(false)
+                }
             }
         };
         self

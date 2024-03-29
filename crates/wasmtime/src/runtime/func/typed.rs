@@ -5,10 +5,10 @@ use crate::{
     RefType, RootSet, Rooted, StoreContextMut, ValRaw, ValType,
 };
 use anyhow::{bail, Context, Result};
-use std::marker;
-use std::mem::{self, MaybeUninit};
-use std::os::raw::c_void;
-use std::ptr::{self, NonNull};
+use core::ffi::c_void;
+use core::marker;
+use core::mem::{self, MaybeUninit};
+use core::ptr::{self, NonNull};
 use wasmtime_runtime::{
     VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedTypeIndex,
 };

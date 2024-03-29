@@ -25,9 +25,9 @@ impl ResourcesRequired {
     pub(crate) fn add(&mut self, other: &ResourcesRequired) {
         self.num_memories += other.num_memories;
         self.max_initial_memory_size =
-            std::cmp::max(self.max_initial_memory_size, other.max_initial_memory_size);
+            core::cmp::max(self.max_initial_memory_size, other.max_initial_memory_size);
         self.num_tables += other.num_tables;
         self.max_initial_table_size =
-            std::cmp::max(self.max_initial_table_size, other.max_initial_table_size);
+            core::cmp::max(self.max_initial_table_size, other.max_initial_table_size);
     }
 }

@@ -1,15 +1,16 @@
 use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower};
+use crate::prelude::*;
 use crate::store::{StoreId, StoreOpaque};
 use crate::{AsContextMut, StoreContextMut, Trap};
 use anyhow::{bail, ensure, Result};
-use std::any::TypeId;
-use std::fmt;
-use std::marker;
-use std::mem::MaybeUninit;
-use std::ptr::NonNull;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use core::any::TypeId;
+use core::fmt;
+use core::marker;
+use core::mem::MaybeUninit;
+use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType, ResourceIndex,
     TypeResourceTableIndex,

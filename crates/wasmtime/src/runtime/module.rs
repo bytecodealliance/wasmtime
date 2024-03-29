@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::{
     code::CodeObject,
     code_memory::CodeMemory,
@@ -7,20 +8,21 @@ use crate::{
     types::{ExportType, ExternType, ImportType},
     Engine,
 };
+use alloc::sync::Arc;
 use anyhow::{bail, Result};
-use once_cell::sync::OnceCell;
-use std::mem;
-use std::ops::Range;
+use core::fmt;
+use core::mem;
+use core::ops::Range;
+use core::ptr::NonNull;
+#[cfg(feature = "std")]
 use std::path::Path;
-use std::ptr::NonNull;
-use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
     ObjectKind, VMOffsets,
 };
 use wasmtime_runtime::{
-    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
+    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, OnceLock, VMArrayCallFunction,
     VMNativeCallFunction, VMSharedTypeIndex, VMWasmCallFunction,
 };
 
@@ -153,7 +155,7 @@ struct ModuleInner {
     /// image this is a pretty expensive operation, so by deferring it this
     /// improves memory usage for modules that are created but may not ever be
     /// instantiated.
-    memory_images: OnceCell<Option<ModuleMemoryImages>>,
+    memory_images: OnceLock<Option<ModuleMemoryImages>>,
 
     /// Flag indicating whether this module can be serialized or not.
     serializable: bool,
@@ -162,8 +164,8 @@ struct ModuleInner {
     offsets: VMOffsets<HostPtr>,
 }
 
-impl std::fmt::Debug for Module {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Module {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Module")
             .field("name", &self.name())
             .finish_non_exhaustive()
@@ -273,6 +275,7 @@ impl Module {
     /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg(feature = "std")]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         crate::CodeBuilder::new(engine)
             .wasm_file(file.as_ref())?
@@ -342,6 +345,7 @@ impl Module {
     /// state of the file.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    #[cfg(feature = "std")]
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
         if &mmap[0..4] == b"\x7fELF" {
@@ -424,6 +428,7 @@ impl Module {
     /// This is because the file is mapped into memory and lazily loaded pages
     /// reflect the current state of the file, not necessarily the origianl
     /// state of the file.
+    #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let code = engine.load_code_file(path.as_ref(), ObjectKind::Module)?;
         Module::from_parts(engine, code, None)
@@ -446,7 +451,7 @@ impl Module {
         // already.
         let (info, types) = match info_and_types {
             Some((info, types)) => (info, types),
-            None => bincode::deserialize(code_memory.wasmtime_info())?,
+            None => postcard::from_bytes(code_memory.wasmtime_info()).err2anyhow()?,
         };
 
         // Register function type signatures into the engine for the lifetime
@@ -488,7 +493,7 @@ impl Module {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 code,
-                memory_images: OnceCell::new(),
+                memory_images: OnceLock::new(),
                 module,
                 serializable,
                 offsets,
@@ -520,8 +525,8 @@ impl Module {
 
         let mut functions = Vec::new();
         for payload in Parser::new(0).parse_all(binary) {
-            let payload = payload?;
-            if let ValidPayload::Func(a, b) = validator.payload(&payload)? {
+            let payload = payload.err2anyhow()?;
+            if let ValidPayload::Func(a, b) = validator.payload(&payload).err2anyhow()? {
                 functions.push((a, b));
             }
             if let wasmparser::Payload::Version { encoding, .. } = &payload {
@@ -531,13 +536,15 @@ impl Module {
             }
         }
 
-        engine.run_maybe_parallel(functions, |(validator, body)| {
-            // FIXME: it would be best here to use a rayon-specific parallel
-            // iterator that maintains state-per-thread to share the function
-            // validator allocations (`Default::default` here) across multiple
-            // functions.
-            validator.into_validator(Default::default()).validate(&body)
-        })?;
+        engine
+            .run_maybe_parallel(functions, |(validator, body)| {
+                // FIXME: it would be best here to use a rayon-specific parallel
+                // iterator that maintains state-per-thread to share the function
+                // validator allocations (`Default::default` here) across multiple
+                // functions.
+                validator.into_validator(Default::default()).validate(&body)
+            })
+            .err2anyhow()?;
         Ok(())
     }
 
@@ -1224,7 +1231,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
 
     fn type_ids(&self) -> &[VMSharedTypeIndex] {
         match &self.one_signature {
-            Some(id) => std::slice::from_ref(id),
+            Some(id) => core::slice::from_ref(id),
             None => &[],
         }
     }

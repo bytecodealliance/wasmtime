@@ -1,5 +1,6 @@
+use crate::prelude::*;
 use anyhow::{bail, Result};
-use std::fmt::{self, Display};
+use core::fmt::{self, Display};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType,
     WasmHeapType, WasmRefType, WasmValType,

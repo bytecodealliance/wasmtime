@@ -31,6 +31,7 @@ sptr = "0.3.2"
 wasm-encoder = { workspace = true, optional = true }
 libm = "0.2.7"
 hashbrown = { workspace = true }
+once_cell = { workspace = true, optional = true }
 
 # auto-enable anyhow/std for unix/windows targets which currently all have std
 # anyway, as this enables `cargo build -p wasmtime-runtime` without having to do
@@ -84,7 +85,7 @@ wmemcheck = ['dep:wasmtime-wmemcheck', 'std']
 debug-builtins = ['dep:wasmtime-jit-debug', 'std']
 coredump = ["dep:wasm-encoder", 'std']
 threads = ["wasmtime-environ/threads", "std"]
-std = ['wasmtime-environ/std']
+std = ['wasmtime-environ/std', 'dep:once_cell', 'once_cell/std']
 
 # Features that don't require `std`
 component-model = ["wasmtime-environ/component-model", "dep:encoding_rs"]

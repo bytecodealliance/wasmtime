@@ -12,6 +12,7 @@
 //! installed](https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html#standalone)
 //! for this to work.
 
+use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
 use anyhow::Result;
 use ittapi::jit::MethodLoadBuilder;

@@ -1,6 +1,6 @@
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{GlobalType, HeapType, Mutability, Result, Val};
-use std::ptr;
+use core::ptr;
 use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
 #[repr(C)]

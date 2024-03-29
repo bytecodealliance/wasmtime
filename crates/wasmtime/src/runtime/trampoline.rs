@@ -12,11 +12,12 @@ pub(crate) use memory::MemoryCreatorProxy;
 use self::memory::create_memory;
 use self::table::create_table;
 use crate::module::BareModuleInfo;
+use crate::prelude::*;
 use crate::store::{InstanceId, StoreOpaque};
 use crate::{MemoryType, TableType};
+use alloc::sync::Arc;
 use anyhow::Result;
-use std::any::Any;
-use std::sync::Arc;
+use core::any::Any;
 use wasmtime_environ::{MemoryIndex, Module, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,

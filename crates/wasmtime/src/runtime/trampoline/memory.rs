@@ -1,10 +1,11 @@
 use crate::memory::{LinearMemory, MemoryCreator};
 use crate::module::BareModuleInfo;
+use crate::prelude::*;
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
+use alloc::sync::Arc;
 use anyhow::{anyhow, Result};
-use std::ops::Range;
-use std::sync::Arc;
+use core::ops::Range;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
     VMOffsets, WASM_PAGE_SIZE,
@@ -105,7 +106,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         true
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
         self
     }
 

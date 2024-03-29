@@ -1,4 +1,5 @@
 use crate::linker::DefinitionType;
+use crate::prelude::*;
 use crate::{type_registry::TypeCollection, Engine};
 use crate::{FuncType, Module};
 use anyhow::{anyhow, bail, Result};

@@ -84,6 +84,16 @@ pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 mod cow;
 pub use crate::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
+#[cfg(feature = "std")]
+mod sync_std;
+#[cfg(feature = "std")]
+pub use crate::sync_std::*;
+
+#[cfg_attr(feature = "std", allow(dead_code))]
+mod sync_nostd;
+#[cfg(not(feature = "std"))]
+pub use crate::sync_nostd::*;
+
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

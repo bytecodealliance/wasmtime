@@ -4,8 +4,8 @@ use crate::{
     AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref, Val, ValType,
 };
 use anyhow::{bail, Context, Result};
-use std::mem;
-use std::ptr;
+use core::mem;
+use core::ptr;
 
 /// A WebAssembly `global` value which can be read and written to.
 ///
@@ -206,7 +206,7 @@ impl Global {
     /// Even if the same underlying global definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Global`s,
     /// this hash key will be consistent across all of these globals.
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq {
         store[self.0].definition as usize
     }
 }

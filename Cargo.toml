@@ -25,7 +25,7 @@ path = "src/bin/wasmtime.rs"
 doc = false
 
 [dependencies]
-wasmtime = { workspace = true }
+wasmtime = { workspace = true, features = ['std'] }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-cli-flags = { workspace = true }
 wasmtime-cranelift = { workspace = true, optional = true }

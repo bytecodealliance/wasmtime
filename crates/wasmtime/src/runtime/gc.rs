@@ -8,7 +8,7 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 pub use disabled::*;
 
-use std::ops::Deref;
+use core::ops::Deref;
 
 /// A common trait implemented by all garbage-collected reference types.
 ///

@@ -1,7 +1,9 @@
+use crate::prelude::*;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_table_export;
 use crate::{AsContext, AsContextMut, ExternRef, Func, Ref, TableType};
 use anyhow::{anyhow, bail, Context, Result};
+use core::iter;
 use wasmtime_runtime::{self as runtime};
 
 /// A WebAssembly `table`, or an array of values.
@@ -106,7 +108,9 @@ impl Table {
         let init = init.into_table_element(store, ty.element())?;
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
-            (*table.wasmtime_table(store, std::iter::empty())).fill(0, init, ty.minimum())?;
+            (*table.wasmtime_table(store, iter::empty()))
+                .fill(0, init, ty.minimum())
+                .err2anyhow()?;
 
             Ok(table)
         }
@@ -147,7 +151,7 @@ impl Table {
     /// Panics if `store` does not own this table.
     pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Ref> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        let table = self.wasmtime_table(&mut store, std::iter::once(index));
+        let table = self.wasmtime_table(&mut store, iter::once(index));
         unsafe {
             match (*table).get(index)? {
                 runtime::TableElement::FuncRef(f) => {
@@ -185,7 +189,7 @@ impl Table {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store);
         let val = val.into_table_element(store, ty.element())?;
-        let table = self.wasmtime_table(store, std::iter::empty());
+        let table = self.wasmtime_table(store, iter::empty());
         unsafe {
             (*table)
                 .set(index, val)
@@ -231,7 +235,7 @@ impl Table {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store);
         let init = init.into_table_element(store, ty.element())?;
-        let table = self.wasmtime_table(store, std::iter::empty());
+        let table = self.wasmtime_table(store, iter::empty());
         unsafe {
             match (*table).grow(delta, init, store)? {
                 Some(size) => {
@@ -304,11 +308,11 @@ impl Table {
                  destination table's element type",
             )?;
 
-        let dst_table = dst_table.wasmtime_table(store, std::iter::empty());
+        let dst_table = dst_table.wasmtime_table(store, iter::empty());
         let src_range = src_index..(src_index.checked_add(len).unwrap_or(u32::MAX));
         let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
-            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)?;
+            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len).err2anyhow()?;
         }
         Ok(())
     }
@@ -334,9 +338,9 @@ impl Table {
         let ty = self.ty(&store);
         let val = val.into_table_element(store, ty.element())?;
 
-        let table = self.wasmtime_table(store, std::iter::empty());
+        let table = self.wasmtime_table(store, iter::empty());
         unsafe {
-            (*table).fill(dst, val, len)?;
+            (*table).fill(dst, val, len).err2anyhow()?;
         }
 
         Ok(())
@@ -367,7 +371,7 @@ impl Table {
     /// `StoreData` multiple times and becomes multiple `wasmtime::Table`s,
     /// this hash key will be consistent across all of these tables.
     #[allow(dead_code)] // Not used yet, but added for consistency.
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq {
         store[self.0].definition as usize
     }
 }

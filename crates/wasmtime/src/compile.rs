@@ -22,6 +22,7 @@
 //!   functions. It is up to the caller to serialize the relevant parts of the
 //!   `Artifacts` into the ELF file.
 
+use crate::prelude::*;
 use crate::Engine;
 use anyhow::{Context, Result};
 use std::{

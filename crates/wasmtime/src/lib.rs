@@ -269,6 +269,15 @@
 // most features enabled. This will present warnings in stripped-down doc builds
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
+#![no_std]
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
+extern crate alloc;
+
+use wasmtime_environ::prelude;
 
 #[cfg(feature = "runtime")]
 mod runtime;

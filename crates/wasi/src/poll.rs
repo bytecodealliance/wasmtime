@@ -1,7 +1,7 @@
 use crate::{bindings::io::poll, WasiView};
 use anyhow::{anyhow, Result};
+use hashbrown::HashMap;
 use std::any::Any;
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};

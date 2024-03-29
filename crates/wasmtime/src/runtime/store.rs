@@ -80,22 +80,23 @@ use crate::gc::RootSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::{BareModuleInfo, RegisteredModuleId};
+use crate::prelude::*;
 use crate::trampoline::VMHostGlobalContext;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory};
+use alloc::sync::Arc;
 use anyhow::{anyhow, bail, Result};
-use std::cell::UnsafeCell;
-use std::fmt;
-use std::future::Future;
-use std::marker;
-use std::mem::{self, ManuallyDrop};
-use std::num::NonZeroU64;
-use std::ops::{Deref, DerefMut};
-use std::pin::Pin;
-use std::ptr;
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::future::Future;
+use core::marker;
+use core::mem::{self, ManuallyDrop};
+use core::num::NonZeroU64;
+use core::ops::{Deref, DerefMut};
+use core::pin::Pin;
+use core::ptr;
+use core::sync::atomic::AtomicU64;
+use core::task::{Context, Poll};
 use wasmtime_runtime::mpk::{self, ProtectionKey, ProtectionMask};
 use wasmtime_runtime::{
     ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
@@ -412,7 +413,7 @@ impl<'a> AutoAssertNoGc<'a> {
     }
 }
 
-impl std::ops::Deref for AutoAssertNoGc<'_> {
+impl core::ops::Deref for AutoAssertNoGc<'_> {
     type Target = StoreOpaque;
 
     #[inline]
@@ -421,7 +422,7 @@ impl std::ops::Deref for AutoAssertNoGc<'_> {
     }
 }
 
-impl std::ops::DerefMut for AutoAssertNoGc<'_> {
+impl core::ops::DerefMut for AutoAssertNoGc<'_> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.store
@@ -556,7 +557,7 @@ impl<T> Store<T> {
             // the `Store` itself, and is a variant that we have to maintain
             // throughout Wasmtime.
             unsafe {
-                let traitobj = std::mem::transmute::<
+                let traitobj = core::mem::transmute::<
                     *mut (dyn wasmtime_runtime::Store + '_),
                     *mut (dyn wasmtime_runtime::Store + 'static),
                 >(&mut *inner);
@@ -610,7 +611,7 @@ impl<T> Store<T> {
         // there is a comment indicating this as well.
         unsafe {
             let mut inner = ManuallyDrop::take(&mut self.inner);
-            std::mem::forget(self);
+            core::mem::forget(self);
             ManuallyDrop::take(&mut inner.data)
         }
     }
@@ -1160,10 +1161,10 @@ fn set_fuel(
     let interval = yield_interval.unwrap_or(NonZeroU64::MAX).get();
     // If we're yielding periodically we only store the "active" amount of fuel into consumed_ptr
     // for the VM to use.
-    let injected = std::cmp::min(interval, new_fuel_amount);
+    let injected = core::cmp::min(interval, new_fuel_amount);
     // Fuel in the VM is stored as an i64, so we have to cap the amount of fuel we inject into the
     // VM at once to be i64 range.
-    let injected = std::cmp::min(injected, i64::MAX as u64);
+    let injected = core::cmp::min(injected, i64::MAX as u64);
     // Add whatever is left over after injection to the reserve for later use.
     *fuel_reserve = new_fuel_amount - injected;
     // Within the VM we increment to count fuel, so inject a negative amount. The VM will halt when
@@ -1637,27 +1638,37 @@ impl StoreOpaque {
             return fault;
         }
 
-        eprintln!(
-            "\
-Wasmtime caught a segfault for a wasm program because the faulting instruction
-is allowed to segfault due to how linear memories are implemented. The address
-that was accessed, however, is not known to any linear memory in use within this
-Store. This may be indicative of a critical bug in Wasmtime's code generation
-because all addresses which are known to be reachable from wasm won't reach this
-message.
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "std")] {
+                eprintln!(
+                    "\
+    Wasmtime caught a segfault for a wasm program because the faulting instruction
+    is allowed to segfault due to how linear memories are implemented. The address
+    that was accessed, however, is not known to any linear memory in use within this
+    Store. This may be indicative of a critical bug in Wasmtime's code generation
+    because all addresses which are known to be reachable from wasm won't reach this
+    message.
 
-    pc:      0x{pc:x}
-    address: 0x{addr:x}
+        pc:      0x{pc:x}
+        address: 0x{addr:x}
 
-This is a possible security issue because WebAssembly has accessed something it
-shouldn't have been able to. Other accesses may have succeeded and this one just
-happened to be caught. The process will now be aborted to prevent this damage
-from going any further and to alert what's going on. If this is a security
-issue please reach out to the Wasmtime team via its security policy
-at https://bytecodealliance.org/security.
-"
-        );
-        std::process::abort();
+    This is a possible security issue because WebAssembly has accessed something it
+    shouldn't have been able to. Other accesses may have succeeded and this one just
+    happened to be caught. The process will now be aborted to prevent this damage
+    from going any further and to alert what's going on. If this is a security
+    issue please reach out to the Wasmtime team via its security policy
+    at https://bytecodealliance.org/security.
+    "
+                );
+                std::process::abort();
+            } else if #[cfg(panic = "abort")] {
+                let _ = pc;
+                panic!("invalid fault");
+            } else {
+                compile_error!("either `std` or `panic=abort` must be enabled");
+                None
+            }
+        }
     }
 
     /// Retrieve the store's protection key.
@@ -1896,7 +1907,7 @@ impl<T> StoreContextMut<'_, T> {
                 unsafe {
                     let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
                     *self.current_poll_cx =
-                        std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
+                        core::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
                     // After that's set up we resume execution of the fiber, which
                     // may also start the fiber for the first time. This either
@@ -2167,7 +2178,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
     fn out_of_gas(&mut self) -> Result<()> {
         if !self.refuel() {
-            return Err(Trap::OutOfFuel.into());
+            return Err(Trap::OutOfFuel).err2anyhow();
         }
         #[cfg(feature = "async")]
         if self.fuel_yield_interval.is_some() {
@@ -2181,7 +2192,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         // multiple times.
         let mut behavior = self.epoch_deadline_behavior.take();
         let delta_result = match &mut behavior {
-            None => Err(Trap::Interrupt.into()),
+            None => Err(Trap::Interrupt).err2anyhow(),
             Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
                 let delta = match update {
                     UpdateDeadline::Continue(delta) => delta,

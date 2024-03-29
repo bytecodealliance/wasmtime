@@ -11,6 +11,7 @@
 //!         sudo perf report -i perf.jit.data -F+period,srcline
 //! Note: For descriptive results, the WASM file being executed should contain dwarf debug data
 
+use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
 use anyhow::Result;
 use std::process;

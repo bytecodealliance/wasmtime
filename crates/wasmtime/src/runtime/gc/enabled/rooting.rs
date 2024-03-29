@@ -102,14 +102,17 @@
 //! can. However, if you really must, consider also using an `AutoAssertNoGc`
 //! across the block of code that is manipulating raw GC references.
 
+use crate::prelude::*;
 use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use anyhow::anyhow;
-use std::{
-    fmt::Debug,
-    hash::Hash,
+use core::any;
+use core::marker;
+use core::{
+    fmt::{self, Debug},
+    hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
 };
 use wasmtime_runtime::{VMExternRef, VMGcRef};
@@ -335,7 +338,7 @@ impl GcRootIndex {
 struct PackedIndex(u32);
 
 impl Debug for PackedIndex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(index) = self.as_lifo() {
             f.debug_tuple("PackedIndex::Lifo").field(&index).finish()
         } else if let Some(id) = self.as_manual() {
@@ -754,14 +757,14 @@ unsafe fn clone_root(_store: &mut StoreOpaque, gc_ref: VMGcRef) -> VMGcRef {
 #[repr(transparent)]
 pub struct Rooted<T: GcRef> {
     inner: GcRootIndex,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: marker::PhantomData<T>,
 }
 
 impl<T: GcRef> Clone for Rooted<T> {
     fn clone(&self) -> Self {
         Rooted {
             inner: self.inner,
-            _phantom: std::marker::PhantomData,
+            _phantom: marker::PhantomData,
         }
     }
 }
@@ -769,8 +772,8 @@ impl<T: GcRef> Clone for Rooted<T> {
 impl<T: GcRef> Copy for Rooted<T> {}
 
 impl<T: GcRef> Debug for Rooted<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = format!("Rooted<{}>", std::any::type_name::<T>());
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = format!("Rooted<{}>", any::type_name::<T>());
         f.debug_struct(&name).field("inner", &self.inner).finish()
     }
 }
@@ -836,7 +839,7 @@ impl<T: GcRef> Rooted<T> {
                 generation,
                 index,
             },
-            _phantom: std::marker::PhantomData,
+            _phantom: marker::PhantomData,
         }
     }
 
@@ -1019,7 +1022,7 @@ impl<T: GcRef> Rooted<T> {
     /// [`ref_hash`][crate::Rooted::ref_hash] method instead.
     pub fn rooted_hash<H>(&self, state: &mut H)
     where
-        H: std::hash::Hasher,
+        H: Hasher,
     {
         self.inner.hash(state);
     }
@@ -1033,7 +1036,7 @@ impl<T: GcRef> Rooted<T> {
     /// [`rooted_hash`][crate::Rooted::rooted_hash] method instead.
     pub fn ref_hash<H>(&self, store: impl AsContext, state: &mut H) -> Result<()>
     where
-        H: std::hash::Hasher,
+        H: Hasher,
     {
         let gc_ref = self.try_gc_ref(store.as_context().0)?;
         gc_ref.hash(state);
@@ -1330,12 +1333,12 @@ where
     T: GcRef,
 {
     inner: GcRootIndex,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: marker::PhantomData<T>,
 }
 
 impl<T: GcRef> Debug for ManuallyRooted<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = format!("ManuallyRooted<{}>", std::any::type_name::<T>());
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = format!("ManuallyRooted<{}>", any::type_name::<T>());
         f.debug_struct(&name).field("inner", &self.inner).finish()
     }
 }
@@ -1368,7 +1371,7 @@ where
                 generation: 0,
                 index: PackedIndex::new_manual(id),
             },
-            _phantom: std::marker::PhantomData,
+            _phantom: marker::PhantomData,
         }
     }
 
@@ -1639,7 +1642,7 @@ where
     /// [`ref_hash`][crate::ManuallyRooted::ref_hash] method instead.
     pub fn rooted_hash<H>(&self, state: &mut H)
     where
-        H: std::hash::Hasher,
+        H: Hasher,
     {
         self.inner.hash(state);
     }
@@ -1653,7 +1656,7 @@ where
     /// [`rooted_hash`][crate::Rooted::rooted_hash] method instead.
     pub fn ref_hash<H>(&self, store: impl AsContext, state: &mut H)
     where
-        H: std::hash::Hasher,
+        H: Hasher,
     {
         let gc_ref = self
             .get_gc_ref(store.as_context().0)

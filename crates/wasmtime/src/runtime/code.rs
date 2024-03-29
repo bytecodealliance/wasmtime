@@ -1,5 +1,5 @@
 use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
-use std::sync::Arc;
+use alloc::sync::Arc;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
 use wasmtime_environ::ModuleTypes;

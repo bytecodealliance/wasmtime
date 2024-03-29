@@ -1,3 +1,4 @@
+use crate::prelude::*;
 #[allow(unused)]
 use anyhow::{bail, Result};
 
@@ -17,7 +18,7 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(unix)] {
+    if #[cfg(all(feature = "profiling", unix))] {
         mod perfmap;
         pub use perfmap::new as new_perfmap;
     } else {
@@ -35,11 +36,7 @@ cfg_if::cfg_if! {
         pub use vtune::new as new_vtune;
     } else {
         pub fn new_vtune() -> Result<Box<dyn ProfilingAgent>> {
-            if cfg!(feature = "profiling") {
-                bail!("VTune is not supported on this platform.");
-            } else {
-                bail!("VTune support disabled at compile time.");
-            }
+            bail!("VTune is not supported on this platform.");
         }
     }
 }

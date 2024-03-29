@@ -1,16 +1,20 @@
+use crate::prelude::*;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 use crate::Config;
+use alloc::string::String;
+use alloc::sync::Arc;
 use anyhow::{Context, Result};
+use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
-use once_cell::sync::OnceCell;
+#[cfg(feature = "std")]
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+use wasmtime_runtime::OnceLock;
 
 mod serialization;
 
@@ -59,7 +63,8 @@ struct EngineInner {
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
-    compatible_with_native_host: OnceCell<Result<(), String>>,
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    compatible_with_native_host: OnceLock<Result<(), String>>,
 }
 
 impl Default for Engine {
@@ -112,7 +117,8 @@ impl Engine {
                 epoch: AtomicU64::new(0),
                 #[cfg(feature = "runtime")]
                 unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator::new(),
-                compatible_with_native_host: OnceCell::new(),
+                #[cfg(any(feature = "cranelift", feature = "winch"))]
+                compatible_with_native_host: OnceLock::new(),
                 config,
                 tunables,
             }),
@@ -192,6 +198,7 @@ impl Engine {
     }
 
     /// Like [`Engine::detect_precompiled`], but performs the detection on a file.
+    #[cfg(feature = "std")]
     pub fn detect_precompiled_file(&self, path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
         serialization::detect_precompiled_file(path)
     }
@@ -216,11 +223,18 @@ impl Engine {
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
-        self.inner
-            .compatible_with_native_host
-            .get_or_init(|| self._check_compatible_with_native_host())
-            .clone()
-            .map_err(anyhow::Error::msg)
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            self.inner
+                .compatible_with_native_host
+                .get_or_init(|| self._check_compatible_with_native_host())
+                .clone()
+                .map_err(anyhow::Error::msg)
+        }
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        {
+            Ok(())
+        }
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
@@ -376,10 +390,10 @@ impl Engine {
             }
         }
 
-        #[allow(unused_assignments)]
+        #[allow(unused_assignments, unused_mut)]
         let mut enabled = None;
 
-        #[cfg(target_arch = "aarch64")]
+        #[cfg(all(target_arch = "aarch64", feature = "std"))]
         {
             enabled = match flag {
                 "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
@@ -407,7 +421,7 @@ impl Engine {
 
         // There is no is_s390x_feature_detected macro yet, so for now
         // we use getauxval from the libc crate directly.
-        #[cfg(all(target_arch = "s390x", target_os = "linux"))]
+        #[cfg(all(target_arch = "s390x", target_os = "linux", feature = "std"))]
         {
             let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
             const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
@@ -423,7 +437,7 @@ impl Engine {
             }
         }
 
-        #[cfg(target_arch = "riscv64")]
+        #[cfg(all(target_arch = "riscv64", feature = "std"))]
         {
             enabled = match flag {
                 // make sure `test_isa_flags_mismatch` test pass.
@@ -434,7 +448,7 @@ impl Engine {
             }
         }
 
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", feature = "std"))]
         {
             enabled = match flag {
                 "has_sse3" => Some(std::is_x86_feature_detected!("sse3")),
@@ -461,7 +475,7 @@ impl Engine {
             };
         }
 
-        #[cfg(target_family = "wasm")]
+        #[cfg(all(target_family = "wasm", feature = "std"))]
         {
             let _ = &mut enabled;
         }
@@ -474,8 +488,13 @@ impl Engine {
                     flag
                 ))
             }
-            // fall through
-            None => {}
+            None => {
+                // TODO
+                if !cfg!(feature = "std") {
+                    return Ok(());
+                }
+                // fall through
+            }
         }
 
         Err(format!(
@@ -540,6 +559,7 @@ impl Engine {
         serialization::append_compiler_info(self, obj, &serialization::Metadata::new(&self))
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
@@ -691,6 +711,7 @@ impl Engine {
     }
 
     /// Like `load_code_bytes`, but creates a mmap from a file on disk.
+    #[cfg(feature = "std")]
     pub(crate) fn load_code_file(
         &self,
         path: &Path,
@@ -719,13 +740,13 @@ impl Engine {
 /// A weak reference to an [`Engine`].
 #[derive(Clone)]
 pub struct EngineWeak {
-    inner: std::sync::Weak<EngineInner>,
+    inner: alloc::sync::Weak<EngineInner>,
 }
 
 impl EngineWeak {
     /// Upgrade this weak reference into an [`Engine`]. Returns `None` if
     /// strong references (the [`Engine`] type itself) no longer exist.
     pub fn upgrade(&self) -> Option<Engine> {
-        std::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
+        alloc::sync::Weak::upgrade(&self.inner).map(|inner| Engine { inner })
     }
 }
