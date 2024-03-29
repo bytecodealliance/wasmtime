@@ -8,6 +8,10 @@ readme = "../README.md"
 repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
 version = "0.107.0"
 
+[[test]]
+name = "printer_tests"
+required-features = ["printer"]
+
 [lints]
 workspace = true
 
