@@ -16,7 +16,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true, features = ['std'] }
 bumpalo = "3"
 capstone = { workspace = true, optional = true }
 cranelift-codegen-shared = { path = "./shared", version = "0.108.0" }

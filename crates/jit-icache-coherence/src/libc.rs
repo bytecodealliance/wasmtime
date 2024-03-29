@@ -1,14 +1,16 @@
-use std::ffi::c_void;
-use std::io::Result;
+use core::ffi::c_void;
 
 #[cfg(all(
     target_arch = "aarch64",
     any(target_os = "linux", target_os = "android")
 ))]
 mod details {
+    extern crate std;
+
     use super::*;
     use libc::{syscall, EINVAL, EPERM};
     use std::io::Error;
+    pub use std::io::Result;
 
     const MEMBARRIER_CMD_GLOBAL: libc::c_int = 1;
     const MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE: libc::c_int = 32;
@@ -87,7 +89,10 @@ mod details {
     any(target_os = "linux", target_os = "android")
 )))]
 mod details {
-    pub(crate) fn pipeline_flush_mt() -> std::io::Result<()> {
+    // NB: this uses `anyhow::Result` instead of `std::io::Result` to compile on
+    // `no_std`.
+    pub use anyhow::Result;
+    pub(crate) fn pipeline_flush_mt() -> Result<()> {
         Ok(())
     }
 }

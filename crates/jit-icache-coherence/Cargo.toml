@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 cfg-if = { workspace = true }
+anyhow = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true

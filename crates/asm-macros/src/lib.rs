@@ -6,6 +6,8 @@
 //! function) and additionally handles visibility across platforms. All symbols
 //! should be visible to Rust but not visible externally outside of a `*.so`.
 
+#![no_std]
+
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
         #[macro_export]
