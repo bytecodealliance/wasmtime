@@ -14,19 +14,19 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 bincode = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true }
 wasmtime-types = { workspace = true }
-wasmparser = { workspace = true }
+wasmparser = { workspace = true, features = ['std'] }
 indexmap = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 log = { workspace = true }
 gimli = { workspace = true }
-object = { workspace = true }
+object = { workspace = true, features = ['std'] }
 rustc-demangle = { version = "0.1.16", optional = true }
 target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }

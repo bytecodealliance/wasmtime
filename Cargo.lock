@@ -610,7 +610,7 @@ dependencies = [
  "cranelift-isle",
  "criterion",
  "gimli",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "log",
  "regalloc2",
  "serde",
@@ -682,7 +682,7 @@ name = "cranelift-frontend"
 version = "0.107.0"
 dependencies = [
  "cranelift-codegen",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "log",
  "similar",
  "smallvec",
@@ -752,7 +752,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-control",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "serde",
  "serde_derive",
 ]
@@ -842,7 +842,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "itertools 0.12.1",
  "log",
  "serde",
@@ -1390,9 +1390,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.14.0"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
  "ahash",
 ]
@@ -1549,7 +1549,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5477fe2230a79769d8dc68e0eabf5437907c0457a5614a9e8dddb67f65eb65d"
 dependencies = [
  "equivalent",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "serde",
 ]
 
@@ -1923,7 +1923,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8dd6c0cdf9429bce006e1362bfce61fa1bfd8c898a643ed8d2b471934701d3d"
 dependencies = [
  "crc32fast",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.3",
  "indexmap 2.0.0",
  "memchr",
 ]
@@ -3372,10 +3372,10 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.202.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6998515d3cf3f8b980ef7c11b29a9b1017d4cf86b99ae93b546992df9931413"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=nostd#38b0549ce4aeeff86b0e66310e71c38fc40c064b"
 dependencies = [
  "bitflags 2.4.1",
+ "hashbrown 0.14.3",
  "indexmap 2.0.0",
  "semver",
 ]
@@ -4506,3 +4506,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "postcard"
+version = "1.0.9"
+source = "git+https://github.com/jamesmunns/postcard#393e18aeee3fe59872ad9231da225170c8296d56"

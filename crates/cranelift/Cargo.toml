@@ -25,7 +25,7 @@ cranelift-native = { workspace = true }
 cranelift-control = { workspace = true }
 wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
-gimli = { workspace = true }
+gimli = { workspace = true, features = ['std'] }
 object = { workspace = true, features = ['write'] }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
