@@ -1,11 +1,11 @@
 use crate::component::*;
+use crate::prelude::*;
 use crate::{
     CompiledModuleInfo, EntityType, Module, ModuleTypes, ModuleTypesBuilder, PrimaryMap,
     TypeConvert, WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
-use indexmap::{IndexMap, IndexSet};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;

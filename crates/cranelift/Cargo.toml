@@ -25,8 +25,8 @@ cranelift-native = { workspace = true }
 cranelift-control = { workspace = true }
 wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
-gimli = { workspace = true }
-object = { workspace = true, features = ['write'] }
+gimli = { workspace = true, features = ['std'] }
+object = { workspace = true, features = ['write', 'std'] }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }

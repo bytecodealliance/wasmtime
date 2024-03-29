@@ -16,7 +16,7 @@ workspace = true
 cranelift-module = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["std"] }
 cranelift-control = { workspace = true }
-object = { workspace = true, features = ["write"] }
+object = { workspace = true, features = ["write", "std"] }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }

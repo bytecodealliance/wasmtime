@@ -28,6 +28,7 @@
 //! fused adapters, what arguments make their way to core wasm modules, etc.
 
 use crate::component::*;
+use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, PrimaryMap, WasmValType};
 use indexmap::IndexMap;
 use std::collections::HashMap;

@@ -1,6 +1,7 @@
 //! Data structures to provide transformation of the source
 
 use crate::obj::ELF_WASMTIME_ADDRMAP;
+use crate::prelude::*;
 use crate::InstructionAddressMap;
 use object::write::{Object, StandardSegment};
 use object::{LittleEndian, SectionKind, U32Bytes};

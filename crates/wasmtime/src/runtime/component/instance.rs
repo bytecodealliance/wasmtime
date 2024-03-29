@@ -8,10 +8,10 @@ use crate::runtime::vm::VMFuncRef;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
-use indexmap::IndexMap;
 use std::marker;
 use std::ptr::NonNull;
 use std::sync::Arc;
+use wasmtime_environ::prelude::IndexMap;
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 

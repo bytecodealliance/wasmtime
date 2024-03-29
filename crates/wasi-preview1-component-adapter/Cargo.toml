@@ -15,7 +15,7 @@ byte-array-literals = { workspace = true }
 
 [build-dependencies]
 wasm-encoder = { workspace = true }
-object = { workspace = true, default-features = false, features = ["archive"] }
+object = { workspace = true, default-features = false, features = ["archive", "std"] }
 
 [lib]
 test = false

@@ -28,6 +28,7 @@ use crate::fact::{
     AdapterData, Body, Context, Function, FunctionId, Helper, HelperLocation, HelperType, Module,
     Options,
 };
+use crate::prelude::*;
 use crate::{FuncIndex, GlobalIndex};
 use std::collections::HashMap;
 use std::mem;

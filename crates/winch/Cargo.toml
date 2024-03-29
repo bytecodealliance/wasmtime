@@ -15,11 +15,11 @@ winch-codegen = { workspace = true }
 target-lexicon = { workspace = true }
 wasmtime-environ = { workspace = true }
 anyhow = { workspace = true }
-object = { workspace = true }
+object = { workspace = true, features = ['std'] }
 cranelift-codegen = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 wasmparser = { workspace = true }
-gimli = { workspace = true }
+gimli = { workspace = true, features = ['std'] }
 
 [features]
 component-model = [

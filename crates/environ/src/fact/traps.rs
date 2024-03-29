@@ -18,6 +18,7 @@
 //! This information is currently encoded as a custom section in the wasm
 //! module.
 
+use crate::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use wasm_encoder::Encode;

@@ -1,4 +1,5 @@
 use crate::component::{AllCallFunc, ComponentTranslation, ComponentTypesBuilder, TrampolineIndex};
+use crate::prelude::*;
 use anyhow::Result;
 use std::any::Any;
 

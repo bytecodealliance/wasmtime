@@ -71,6 +71,7 @@ use crate::component::{
     ComponentTypes, ResourceIndex, RuntimeComponentInstanceIndex, TypeResourceTable,
     TypeResourceTableIndex,
 };
+use crate::prelude::*;
 use std::collections::HashMap;
 use wasmparser::types;
 
