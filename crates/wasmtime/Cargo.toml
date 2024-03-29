@@ -37,7 +37,7 @@ target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 anyhow = { workspace = true }
-libc = "0.2"
+libc = { workspace = true }
 cfg-if = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }

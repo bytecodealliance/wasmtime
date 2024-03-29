@@ -23,7 +23,7 @@ features = [
 ]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "android"))'.dependencies]
-libc = "0.2.42"
+libc = { workspace = true }
 
 [features]
 # Most modern CPUs are SMP (multicore). However, when only one core is present,
