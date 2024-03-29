@@ -47,8 +47,8 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
+use crate::prelude::*;
 use crate::{EntityIndex, PrimaryMap, WasmValType};
-use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_types::ModuleInternedTypeIndex;
 

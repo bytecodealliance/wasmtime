@@ -32,6 +32,7 @@ use crate::{FuncIndex, GlobalIndex};
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
+use std::prelude::v1::*;
 use wasm_encoder::{BlockType, Encode, Instruction, Instruction::*, MemArg, ValType};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 

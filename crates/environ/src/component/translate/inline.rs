@@ -47,6 +47,7 @@
 
 use crate::component::translate::*;
 use crate::EntityType;
+use anyhow::Result;
 use std::borrow::Cow;
 use wasmparser::types::ComponentAnyTypeId;
 

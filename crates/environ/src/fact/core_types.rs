@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::prelude::v1::*;
 use wasm_encoder::{TypeSection, ValType};
 
 /// A simple representation of the type section which automatically intern's

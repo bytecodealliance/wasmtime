@@ -1,7 +1,7 @@
 use crate::{Module, ModuleType, PrimaryMap, TypeConvert, WasmFuncType, WasmHeapType};
+use core::ops::Index;
+use hashbrown::HashMap;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::Index;
 use wasmparser::types::CoreTypeId;
 use wasmparser::UnpackedIndex;
 use wasmtime_types::{EngineOrModuleTypeIndex, ModuleInternedTypeIndex, TypeIndex};

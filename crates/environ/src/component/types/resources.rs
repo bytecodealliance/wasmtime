@@ -71,7 +71,8 @@ use crate::component::{
     ComponentTypes, ResourceIndex, RuntimeComponentInstanceIndex, TypeResourceTable,
     TypeResourceTableIndex,
 };
-use std::collections::HashMap;
+use crate::prelude::*;
+use hashbrown::HashMap;
 use wasmparser::types;
 
 /// Builder state used to translate wasmparser's `ResourceId` types to

@@ -20,6 +20,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::prelude::v1::*;
 use wasm_encoder::Encode;
 
 #[derive(Hash, PartialEq, Eq, Copy, Clone)]

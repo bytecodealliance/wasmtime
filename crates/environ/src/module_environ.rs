@@ -2,6 +2,7 @@ use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
     ModuleType, TableElementExpression, TablePlan, TableSegment, TableSegmentElements,
 };
+use crate::prelude::*;
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
     GlobalInit, InitMemory, MemoryIndex, ModuleTypesBuilder, PrimaryMap, StaticMemoryInitializer,
@@ -470,7 +471,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let mut exprs =
                                 Vec::with_capacity(usize::try_from(items.count()).unwrap());
                             for expr in items {
-                                let expr = match expr?.get_binary_reader().read_operator()? {
+                                let expr = match expr
+                                    .and_then(|e| e.get_binary_reader().read_operator())?
+                                {
                                     Operator::RefNull { .. } => TableElementExpression::Null,
                                     Operator::RefFunc { function_index } => {
                                         let func = FuncIndex::from_u32(function_index);

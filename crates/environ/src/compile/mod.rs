@@ -1,6 +1,7 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
+use crate::prelude::*;
 use crate::{obj, Tunables};
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionBodyData, FunctionLoc,
@@ -13,9 +14,8 @@ use object::{Architecture, BinaryFormat, FileFlags};
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt;
-use std::path;
+use std::path::Path;
 use std::sync::Arc;
-use thiserror::Error;
 
 mod address_map;
 mod module_artifacts;
@@ -26,19 +26,44 @@ pub use self::module_artifacts::*;
 pub use self::trap_encoding::*;
 
 /// An error while compiling WebAssembly to machine code.
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum CompileError {
     /// A wasm translation error occured.
-    #[error("WebAssembly translation error")]
-    Wasm(#[from] WasmError),
+    Wasm(WasmError),
 
     /// A compilation error occured.
-    #[error("Compilation error: {0}")]
     Codegen(String),
 
     /// A compilation error occured.
-    #[error("Debug info is not supported with this configuration")]
     DebugInfoNotSupported,
+}
+
+impl fmt::Display for CompileError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CompileError::Wasm(_) => write!(f, "WebAssembly translation error"),
+            CompileError::Codegen(s) => write!(f, "Compilation error: {s}"),
+            CompileError::DebugInfoNotSupported => {
+                write!(f, "Debug info is not supported with this configuration")
+            }
+        }
+    }
+}
+
+impl From<WasmError> for CompileError {
+    fn from(err: WasmError) -> CompileError {
+        CompileError::Wasm(err)
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CompileError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CompileError::Wasm(e) => Some(e),
+            _ => None,
+        }
+    }
 }
 
 /// What relocations can be applied against.
@@ -59,7 +84,7 @@ pub enum RelocationTarget {
 /// In theory, this could just be Cranelift's `CacheKvStore` trait, but it is not as we want to
 /// make sure that wasmtime isn't too tied to Cranelift internals (and as a matter of fact, we
 /// can't depend on the Cranelift trait here).
-pub trait CacheStore: Send + Sync + std::fmt::Debug {
+pub trait CacheStore: Send + Sync + fmt::Debug {
     /// Try to retrieve an arbitrary cache key entry, and returns a reference to bytes that were
     /// inserted via `Self::insert` before.
     fn get(&self, key: &[u8]) -> Option<Cow<[u8]>>;
@@ -79,7 +104,7 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()>;
 
     /// Enables clif output in the directory specified.
-    fn clif_dir(&mut self, _path: &path::Path) -> Result<()> {
+    fn clif_dir(&mut self, _path: &Path) -> Result<()> {
         anyhow::bail!("clif output not supported");
     }
 

@@ -1,11 +1,12 @@
 //! Data structures for representing decoded wasm modules.
 
+use crate::prelude::*;
 use crate::{PrimaryMap, Tunables, WASM_PAGE_SIZE};
+use alloc::collections::BTreeMap;
+use core::ops::Range;
 use cranelift_entity::{packed_option::ReservedValue, EntityRef};
 use indexmap::IndexMap;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::ops::Range;
 use wasmtime_types::*;
 
 /// Implementation styles for WebAssembly linear memory.
@@ -36,10 +37,10 @@ impl MemoryStyle {
         } else {
             crate::WASM32_MAX_PAGES
         };
-        let maximum = std::cmp::min(
+        let maximum = core::cmp::min(
             memory.maximum.unwrap_or(absolute_max_pages),
             if tunables.static_memory_bound_is_maximum {
-                std::cmp::min(tunables.static_memory_bound, absolute_max_pages)
+                core::cmp::min(tunables.static_memory_bound, absolute_max_pages)
             } else {
                 absolute_max_pages
             },
@@ -504,7 +505,7 @@ pub struct Module {
     pub initializers: Vec<Initializer>,
 
     /// Exported entities.
-    pub exports: IndexMap<String, EntityIndex>,
+    pub exports: IndexMap<String, EntityIndex, hashbrown::hash_map::DefaultHashBuilder>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,

@@ -1,6 +1,7 @@
 use crate::component::{AllCallFunc, ComponentTranslation, ComponentTypesBuilder, TrampolineIndex};
 use anyhow::Result;
 use std::any::Any;
+use std::prelude::v1::*;
 
 /// Compilation support necessary for components.
 pub trait ComponentCompiler: Send + Sync {

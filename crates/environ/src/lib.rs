@@ -5,6 +5,52 @@
 
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
+#![no_std]
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+extern crate alloc;
+
+/// TODO
+pub mod prelude {
+    pub use crate::Err2Anyhow;
+    pub use alloc::borrow::ToOwned;
+    pub use alloc::boxed::Box;
+    pub use alloc::format;
+    pub use alloc::string::{String, ToString};
+    pub use alloc::vec;
+    pub use alloc::vec::Vec;
+
+    /// TODO
+    pub type IndexMap<K, V, H = hashbrown::hash_map::DefaultHashBuilder> =
+        indexmap::IndexMap<K, V, H>;
+    /// TODO
+    pub type IndexSet<K, H = hashbrown::hash_map::DefaultHashBuilder> = indexmap::IndexSet<K, H>;
+}
+
+/// TODO
+pub trait Err2Anyhow<T> {
+    /// TODO
+    fn err2anyhow(self) -> anyhow::Result<T>;
+}
+
+#[cfg(feature = "std")]
+impl<T, E: Into<anyhow::Error>> Err2Anyhow<T> for Result<T, E> {
+    fn err2anyhow(self) -> anyhow::Result<T> {
+        self.map_err(|e| e.into())
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl<T, E> Err2Anyhow<T> for Result<T, E>
+where
+    E: core::fmt::Display + core::fmt::Debug + Send + Sync + 'static,
+{
+    fn err2anyhow(self) -> anyhow::Result<T> {
+        self.map_err(anyhow::Error::msg)
+    }
+}
 
 mod address_map;
 mod builtin;

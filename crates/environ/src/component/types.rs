@@ -1,15 +1,15 @@
 use crate::component::{Export, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
+use crate::prelude::*;
 use crate::{
     CompiledModuleInfo, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
     WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
+use core::hash::{Hash, Hasher};
+use core::ops::Index;
 use cranelift_entity::EntityRef;
-use indexmap::{IndexMap, IndexSet};
+use hashbrown::HashMap;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::ops::Index;
 use wasmparser::names::KebabString;
 use wasmparser::types;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
@@ -299,7 +299,7 @@ impl ComponentTypes {
 
 macro_rules! impl_index {
     ($(impl Index<$ty:ident> for ComponentTypes { $output:ident => $field:ident })*) => ($(
-        impl std::ops::Index<$ty> for ComponentTypes {
+        impl core::ops::Index<$ty> for ComponentTypes {
             type Output = $output;
             #[inline]
             fn index(&self, idx: $ty) -> &$output {
@@ -307,7 +307,7 @@ macro_rules! impl_index {
             }
         }
 
-        impl std::ops::Index<$ty> for ComponentTypesBuilder {
+        impl core::ops::Index<$ty> for ComponentTypesBuilder {
             type Output = $output;
             #[inline]
             fn index(&self, idx: $ty) -> &$output {
@@ -796,7 +796,7 @@ impl ComponentTypesBuilder {
         self.add_tuple_type(TypeTuple { types, abi })
     }
 
-    fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
+    fn flags_type<H>(&mut self, flags: &IndexSet<KebabString, H>) -> TypeFlagsIndex {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
             abi: CanonicalAbiInfo::flags(flags.len()),
@@ -804,7 +804,7 @@ impl ComponentTypesBuilder {
         self.add_flags_type(flags)
     }
 
-    fn enum_type(&mut self, variants: &IndexSet<KebabString>) -> TypeEnumIndex {
+    fn enum_type<H>(&mut self, variants: &IndexSet<KebabString, H>) -> TypeEnumIndex {
         let names = variants
             .iter()
             .map(|s| s.to_string())

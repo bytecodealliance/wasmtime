@@ -1,6 +1,7 @@
 use crate::component::Transcode;
 use crate::fact::core_types::CoreTypes;
 use crate::MemoryIndex;
+use std::prelude::v1::*;
 use wasm_encoder::{EntityType, ValType};
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]

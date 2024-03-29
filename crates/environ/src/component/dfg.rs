@@ -33,6 +33,7 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
+use std::prelude::v1::*;
 use wasmtime_types::ModuleInternedTypeIndex;
 
 #[derive(Default)]

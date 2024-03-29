@@ -27,6 +27,7 @@ use crate::fact::transcode::Transcoder;
 use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::prelude::v1::*;
 use wasm_encoder::*;
 
 mod core_types;
