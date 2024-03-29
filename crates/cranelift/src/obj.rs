@@ -188,7 +188,7 @@ impl<'a> ModuleTextBuilder<'a> {
                         Reloc::Abs8 => object::RelocationFlags::Generic {
                             encoding: object::RelocationEncoding::Generic,
                             kind: object::RelocationKind::Absolute,
-                            size: 8,
+                            size: 64,
                         },
                         other => unimplemented!("unimplemented relocation kind {other:?}"),
                     };

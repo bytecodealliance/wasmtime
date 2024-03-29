@@ -102,7 +102,7 @@ impl CodeMemory {
                     for (offset, reloc) in section.relocations() {
                         assert_eq!(reloc.kind(), object::RelocationKind::Absolute);
                         assert_eq!(reloc.encoding(), object::RelocationEncoding::Generic);
-                        assert_eq!(usize::from(reloc.size()), std::mem::size_of::<usize>());
+                        assert_eq!(usize::from(reloc.size()), std::mem::size_of::<usize>() * 8);
                         assert_eq!(reloc.addend(), 0);
                         let sym = match reloc.target() {
                             object::RelocationTarget::Symbol(id) => id,
