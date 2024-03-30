@@ -354,12 +354,7 @@ impl HostOutputStream for FileOutputStream {
             }
         });
         self.state = match result {
-            SpawnBlocking::Done(Ok(nwritten)) => {
-                if let FileOutputMode::Position(ref mut p) = &mut self.mode {
-                    *p += nwritten as u64;
-                }
-                OutputState::Ready
-            }
+            SpawnBlocking::Done(Ok(_)) => OutputState::Ready,
             SpawnBlocking::Done(Err(e)) => OutputState::Error(e),
             SpawnBlocking::Spawned(task) => OutputState::Waiting(task),
         };
