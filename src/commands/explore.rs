@@ -32,8 +32,10 @@ impl ExploreCommand {
 
         let config = self.common.config(self.target.as_deref())?;
 
-        let wasm = std::fs::read(&self.module)
+        let bytes = std::fs::read(&self.module)
             .with_context(|| format!("failed to read Wasm module: {}", self.module.display()))?;
+        let wasm = wat::parse_bytes(&bytes)
+            .with_context(|| format!("failed to parse Wasm module: {}", self.module.display()))?;
 
         let output = self
             .output
