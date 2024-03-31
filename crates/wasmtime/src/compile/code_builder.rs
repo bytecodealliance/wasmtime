@@ -80,6 +80,10 @@ impl<'a> CodeBuilder<'a> {
         }
         self.wasm = Some(wasm_bytes.into());
         self.wasm_path = wasm_path.map(|p| p.into());
+        if self.wasm_path.is_some() {
+            self.dwarf_package_from_wasm_path()?;
+        }
+
         Ok(self)
     }
 
@@ -123,13 +127,8 @@ impl<'a> CodeBuilder<'a> {
             .with_context(|| format!("failed to read input file: {}", file.display()))?;
         self.wasm = Some(wasm.into());
         self.wasm_path = Some(file.into());
+        self.dwarf_package_from_wasm_path()?;
 
-        let dwarf_package_path_buf = file.with_extension("dwp");
-        if dwarf_package_path_buf.exists() {
-            self.dwarf_package_path = Some(Cow::Owned(dwarf_package_path_buf.as_path().to_owned()));
-            let path = dwarf_package_path_buf.as_path();
-            self.dwarf_package_file(path)?;
-        }
         Ok(self)
     }
 
@@ -163,6 +162,17 @@ impl<'a> CodeBuilder<'a> {
         let dwarf_package = std::fs::read(file)
             .with_context(|| format!("failed to read dwarf input file: {}", file.display()))?;
         self.dwarf_package = Some(dwarf_package.into());
+
+        Ok(self)
+    }
+
+    fn dwarf_package_from_wasm_path(&mut self) -> Result<&mut Self> {
+        let dwarf_package_path_buf = self.wasm_path.as_ref().unwrap().with_extension("dwp");
+        if dwarf_package_path_buf.exists() {
+            self.dwarf_package_path = Some(Cow::Owned(dwarf_package_path_buf.as_path().to_owned()));
+            let path = dwarf_package_path_buf.as_path();
+            return self.dwarf_package_file(path);
+        }
 
         Ok(self)
     }

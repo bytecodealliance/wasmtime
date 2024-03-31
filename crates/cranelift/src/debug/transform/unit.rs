@@ -5,7 +5,7 @@ use super::line_program::clone_line_program;
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
-use super::{DebugInputContext, Reader, TransformError};
+use super::{DebugInputContext, Reader};
 use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctionsMetadata;
 use anyhow::{Context, Error};
@@ -349,7 +349,9 @@ where
                     vmctx_die_id,
                 )
             } else {
-                return Err(TransformError("Unexpected unit header").into());
+                // Can happen when the DWARF is split and we dont have the package/dwo files.
+                // This is a better user experience than errorring.
+                return Ok(None); // empty:
             }
         } else {
             return Ok(None); // empty

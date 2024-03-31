@@ -33,7 +33,7 @@ pub unsafe extern "C" fn wasm_module_new(
     store: &mut wasm_store_t,
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasm_module_t>> {
-    match Module::from_binary(store.store.context().engine(), binary.as_slice(), None) {
+    match Module::from_binary(store.store.context().engine(), binary.as_slice()) {
         Ok(module) => Some(Box::new(wasm_module_t::new(module))),
         Err(_) => None,
     }
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn wasmtime_module_new(
     out: &mut *mut wasmtime_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        Module::from_binary(&engine.engine, crate::slice_from_raw_parts(wasm, len), None),
+        Module::from_binary(&engine.engine, crate::slice_from_raw_parts(wasm, len)),
         |module| {
             *out = Box::into_raw(Box::new(wasmtime_module_t { module }));
         },

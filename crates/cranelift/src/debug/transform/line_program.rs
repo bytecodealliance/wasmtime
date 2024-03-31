@@ -79,13 +79,18 @@ where
         )?),
         None => None,
     };
-    let out_comp_name = clone_attr_string(
-        comp_name.as_ref().context("missing DW_AT_name attribute")?,
-        gimli::DW_FORM_strp,
-        unit,
-        dwarf,
-        out_strings,
-    )?;
+    let out_comp_name = match comp_name {
+        Some(_) => clone_attr_string(
+            comp_name
+                .as_ref()
+                .context("failed to read DW_AT_name attribute")?,
+            gimli::DW_FORM_strp,
+            unit,
+            dwarf,
+            out_strings,
+        )?,
+        _ => gimli::write::LineString::String("missing DW_AT_name attribute".into()),
+    };
 
     let program = debug_line.program(
         offset,
