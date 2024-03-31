@@ -17,13 +17,13 @@ use wasmtime_wasi_http::{
     body::HyperIncomingBody,
     io::TokioIo,
     types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequest},
-    WasiHttpCtx, WasiHttpView,
+    HttpResult, WasiHttpCtx, WasiHttpView,
 };
 
 mod http_server;
 
 type RequestSender = Arc<
-    dyn Fn(&mut Ctx, OutgoingRequest) -> wasmtime::Result<Resource<HostFutureIncomingResponse>>
+    dyn Fn(&mut Ctx, OutgoingRequest) -> HttpResult<Resource<HostFutureIncomingResponse>>
         + Send
         + Sync,
 >;
@@ -59,7 +59,7 @@ impl WasiHttpView for Ctx {
     fn send_request(
         &mut self,
         request: OutgoingRequest,
-    ) -> wasmtime::Result<Resource<HostFutureIncomingResponse>> {
+    ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
         if let Some(rejected_authority) = &self.rejected_authority {
             let (auth, _port) = request.authority.split_once(':').unwrap();
             if auth == rejected_authority {

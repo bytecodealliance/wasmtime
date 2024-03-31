@@ -1,6 +1,9 @@
+use crate::bindings::http::types::ErrorCode;
+pub use crate::error::{HttpError, HttpResult};
 pub use crate::types::{WasiHttpCtx, WasiHttpView};
 
 pub mod body;
+mod error;
 pub mod http_impl;
 pub mod io;
 pub mod proxy;
@@ -34,27 +37,28 @@ pub mod bindings {
             "wasi:http/types/incoming-request": super::types::HostIncomingRequest,
             "wasi:http/types/fields": super::types::HostFields,
             "wasi:http/types/request-options": super::types::HostRequestOptions,
-        }
+        },
+        trappable_error_type: {
+            "wasi:http/types/error-code" => crate::HttpError,
+        },
     });
 
     pub use wasi::http;
 }
 
-pub(crate) fn dns_error(rcode: String, info_code: u16) -> bindings::http::types::ErrorCode {
-    bindings::http::types::ErrorCode::DnsError(bindings::http::types::DnsErrorPayload {
+pub(crate) fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
+    ErrorCode::DnsError(bindings::http::types::DnsErrorPayload {
         rcode: Some(rcode),
         info_code: Some(info_code),
     })
 }
 
-pub(crate) fn internal_error(msg: String) -> bindings::http::types::ErrorCode {
-    bindings::http::types::ErrorCode::InternalError(Some(msg))
+pub(crate) fn internal_error(msg: String) -> ErrorCode {
+    ErrorCode::InternalError(Some(msg))
 }
 
 /// Translate a [`http::Error`] to a wasi-http `ErrorCode` in the context of a request.
-pub fn http_request_error(err: http::Error) -> bindings::http::types::ErrorCode {
-    use bindings::http::types::ErrorCode;
-
+pub fn http_request_error(err: http::Error) -> ErrorCode {
     if err.is::<http::uri::InvalidUri>() {
         return ErrorCode::HttpRequestUriInvalid;
     }
@@ -65,8 +69,7 @@ pub fn http_request_error(err: http::Error) -> bindings::http::types::ErrorCode 
 }
 
 /// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
-pub fn hyper_request_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
-    use bindings::http::types::ErrorCode;
+pub fn hyper_request_error(err: hyper::Error) -> ErrorCode {
     use std::error::Error;
 
     // If there's a source, we might be able to extract a wasi-http error from it.
@@ -82,8 +85,7 @@ pub fn hyper_request_error(err: hyper::Error) -> bindings::http::types::ErrorCod
 }
 
 /// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a response.
-pub fn hyper_response_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
-    use bindings::http::types::ErrorCode;
+pub fn hyper_response_error(err: hyper::Error) -> ErrorCode {
     use std::error::Error;
 
     if err.is_timeout() {

@@ -14,10 +14,14 @@ use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{
     bindings::io::streams::{InputStream, OutputStream},
-    Pollable,
+    Pollable, ResourceTableError,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
+    fn convert_error_code(&mut self, err: crate::HttpError) -> wasmtime::Result<types::ErrorCode> {
+        err.downcast()
+    }
+
     fn http_error_code(
         &mut self,
         err: wasmtime::component::Resource<types::IoError>,
@@ -49,7 +53,10 @@ fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
 
 /// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
 /// fields resource references another fields, the returned [`FieldMap`] will be cloned.
-fn move_fields(table: &mut ResourceTable, id: Resource<HostFields>) -> wasmtime::Result<FieldMap> {
+fn move_fields(
+    table: &mut ResourceTable,
+    id: Resource<HostFields>,
+) -> Result<FieldMap, ResourceTableError> {
     match table.delete(id)? {
         HostFields::Ref { parent, get_fields } => {
             let entry = table.get_any_mut(parent)?;
@@ -874,7 +881,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         &mut self,
         id: Resource<HostOutgoingBody>,
         ts: Option<Resource<Trailers>>,
-    ) -> wasmtime::Result<Result<(), types::ErrorCode>> {
+    ) -> crate::HttpResult<()> {
         let body = self.table().delete(id)?;
 
         let ts = if let Some(ts) = ts {
@@ -883,7 +890,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
             None
         };
 
-        Ok(body.finish(ts))
+        body.finish(ts)?;
+        Ok(())
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingBody>) -> wasmtime::Result<()> {

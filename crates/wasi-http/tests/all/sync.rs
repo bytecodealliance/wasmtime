@@ -96,3 +96,12 @@ fn http_outbound_request_content_length() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server)
 }
+
+#[test_log::test]
+fn http_outbound_request_missing_path_and_query() -> Result<()> {
+    let server = Server::http1()?;
+    run(
+        HTTP_OUTBOUND_REQUEST_MISSING_PATH_AND_QUERY_COMPONENT,
+        &server,
+    )
+}

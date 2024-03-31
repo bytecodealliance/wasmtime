@@ -97,3 +97,13 @@ async fn http_outbound_request_content_length() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn http_outbound_request_missing_path_and_query() -> Result<()> {
+    let server = Server::http1()?;
+    run(
+        HTTP_OUTBOUND_REQUEST_MISSING_PATH_AND_QUERY_COMPONENT,
+        &server,
+    )
+    .await
+}
