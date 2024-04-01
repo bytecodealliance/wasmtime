@@ -633,7 +633,6 @@ impl ObjectModule {
     }
 
     fn process_reloc(&self, record: &ModuleReloc) -> ObjectRelocRecord {
-        let mut addend = record.addend;
         let flags = match record.kind {
             Reloc::Abs4 => RelocationFlags::Generic {
                 kind: RelocationKind::Absolute,
@@ -693,7 +692,6 @@ impl ObjectModule {
                     object::BinaryFormat::MachO,
                     "MachOX86_64Tlv is not supported for this file format"
                 );
-                addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
                 RelocationFlags::MachO {
                     r_type: object::macho::X86_64_RELOC_TLV,
                     r_pcrel: true,
@@ -865,7 +863,7 @@ impl ObjectModule {
             offset: record.offset,
             name: record.name.clone(),
             flags,
-            addend,
+            addend: record.addend,
         }
     }
 }
