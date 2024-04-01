@@ -1,0 +1,370 @@
+test compile precise-output
+
+target riscv64
+
+;;;; Test passing `i64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i64(i64) -> i64 tail {
+block0(v0: i64):
+    v1 = iadd_imm.i64 v0, 10
+    return v1
+}
+
+; VCode:
+; block0:
+;   addi s1,s1,10
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi s1, s1, 0xa
+;   ret
+
+function %call_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_sym a2,%callee_i64+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ld ra, 8(s0)
+;   ld t6, 0(s0)
+;   addi sp, s0, 0x10
+;   mv s0, t6
+;   jr a2
+
+;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %colocated_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = colocated %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_sym a2,%callee_i64+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ld ra, 8(s0)
+;   ld t6, 0(s0)
+;   addi sp, s0, 0x10
+;   mv s0, t6
+;   jr a2
+
+;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_f64(f64) -> f64 tail {
+block0(v0: f64):
+    v1 = f64const 0x10.0
+    v2 = fadd.f64 v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   lui a3,1027
+;   slli a5,a3,40
+;   fmv.d.x fa1,a5
+;   fadd.d ft0,ft0,fa1,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a3, 0x403
+;   slli a5, a3, 0x28
+;   fmv.d.x fa1, a5
+;   fadd.d ft0, ft0, fa1, rne
+;   ret
+
+function %call_f64(f64) -> f64 tail {
+    sig0 = (f64) -> f64 tail
+    fn0 = %callee_f64(f64) -> f64 tail
+
+block0(v0: f64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_sym a2,%callee_f64+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 ft0=ft0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ld ra, 8(s0)
+;   ld t6, 0(s0)
+;   addi sp, s0, 0x10
+;   mv s0, t6
+;   jr a2
+
+;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i8(i8) -> i8 tail {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   andi a2,s1,255
+;   seqz s1,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a2, s1, 0xff
+;   seqz s1, a2
+;   ret
+
+function %call_i8(i8) -> i8 tail {
+    sig0 = (i8) -> i8 tail
+    fn0 = %callee_i8(i8) -> i8 tail
+
+block0(v0: i8):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_sym a2,%callee_i8+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ld ra, 8(s0)
+;   ld t6, 0(s0)
+;   addi sp, s0, 0x10
+;   mv s0, t6
+;   jr a2
+
+;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %tail_caller_stack_args() -> i64 tail {
+    fn0 = %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    v26 = func_addr.i64 fn0
+    return_call_indirect sig0, v26(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25)
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-32
+; block0:
+;   li s1,10
+;   sd s1,16(nominal_sp)
+;   li a0,15
+;   sd a0,8(nominal_sp)
+;   li a1,20
+;   li a2,25
+;   sd a2,0(nominal_sp)
+;   li a3,30
+;   li a4,35
+;   li a5,40
+;   li a6,45
+;   li a7,50
+;   li s2,55
+;   li s3,60
+;   li s4,65
+;   li s5,70
+;   li s6,75
+;   li s7,80
+;   li s8,85
+;   li s9,90
+;   li s10,95
+;   li s11,100
+;   li t3,105
+;   li t4,110
+;   li t0,115
+;   li t1,120
+;   li t2,125
+;   li s1,130
+;   li a0,135
+;   load_sym a2,%tail_callee_stack_args+0
+;   addi sp,sp,-48
+;   virtual_sp_offset_adj +48
+;   sd t0,0(sp)
+;   sd t1,8(sp)
+;   sd t2,16(sp)
+;   sd s1,24(sp)
+;   sd a0,32(sp)
+;   ld a0,8(nominal_sp)
+;   ld s1,16(nominal_sp)
+;   mv t0,a2
+;   ld a2,0(nominal_sp)
+;   return_call_ind t0 old_stack_arg_size:0 new_stack_arg_size:48 s1=s1 a0=a0 a1=a1 a2=a2 a3=a3 a4=a4 a5=a5 a6=a6 a7=a7 s2=s2 s3=s3 s4=s4 s5=s5 s6=s6 s7=s7 s8=s8 s9=s9 s10=s10 s11=s11 t3=t3 t4=t4
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x20
+; block1: ; offset 0x14
+;   addi s1, zero, 0xa
+;   sd s1, 0x10(sp)
+;   addi a0, zero, 0xf
+;   sd a0, 8(sp)
+;   addi a1, zero, 0x14
+;   addi a2, zero, 0x19
+;   sd a2, 0(sp)
+;   addi a3, zero, 0x1e
+;   addi a4, zero, 0x23
+;   addi a5, zero, 0x28
+;   addi a6, zero, 0x2d
+;   addi a7, zero, 0x32
+;   addi s2, zero, 0x37
+;   addi s3, zero, 0x3c
+;   addi s4, zero, 0x41
+;   addi s5, zero, 0x46
+;   addi s6, zero, 0x4b
+;   addi s7, zero, 0x50
+;   addi s8, zero, 0x55
+;   addi s9, zero, 0x5a
+;   addi s10, zero, 0x5f
+;   addi s11, zero, 0x64
+;   addi t3, zero, 0x69
+;   addi t4, zero, 0x6e
+;   addi t0, zero, 0x73
+;   addi t1, zero, 0x78
+;   addi t2, zero, 0x7d
+;   addi s1, zero, 0x82
+;   addi a0, zero, 0x87
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   addi sp, sp, -0x30
+;   sd t0, 0(sp)
+;   sd t1, 8(sp)
+;   sd t2, 0x10(sp)
+;   sd s1, 0x18(sp)
+;   sd a0, 0x20(sp)
+;   ld a0, 0x38(sp)
+;   ld s1, 0x40(sp)
+;   mv t0, a2
+;   ld a2, 0x30(sp)
+;   ld ra, 8(s0)
+;   ld t6, 0(s0)
+;   ld t5, 0x28(sp)
+;   sd t5, 8(s0)
+;   ld t5, 0x20(sp)
+;   sd t5, 0(s0)
+;   ld t5, 0x18(sp)
+;   sd t5, -8(s0)
+;   ld t5, 0x10(sp)
+;   sd t5, -0x10(s0)
+;   ld t5, 8(sp)
+;   sd t5, -0x18(s0)
+;   ld t5, 0(sp)
+;   sd t5, -0x20(s0)
+;   addi sp, s0, -0x20
+;   mv s0, t6
+;   jr t0
+
