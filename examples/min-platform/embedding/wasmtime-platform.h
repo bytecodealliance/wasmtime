@@ -217,6 +217,21 @@ extern int32_t wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
  */
 extern void wasmtime_memory_image_free(struct wasmtime_memory_image *image);
 
+/**
+ * Wasmtime requires a single pointer's space of TLS to be used at runtime,
+ * and this function returns the current value of the TLS variable.
+ *
+ * This value should default to `NULL`.
+ */
+extern uint8_t *wasmtime_tls_get(void);
+
+/**
+ * Sets the current TLS value for Wasmtime to the provided value.
+ *
+ * This value should be returned when later calling `wasmtime_tls_get`.
+ */
+extern void wasmtime_tls_set(uint8_t *ptr);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif // __cplusplus
