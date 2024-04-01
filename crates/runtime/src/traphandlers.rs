@@ -13,7 +13,6 @@ mod coredump;
 use crate::sys::traphandlers;
 use crate::{Instance, VMContext, VMRuntimeLimits};
 use anyhow::Error;
-use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
 use std::mem::MaybeUninit;
 use std::ptr;
@@ -114,16 +113,37 @@ pub unsafe fn raise_lib_trap(trap: wasmtime_environ::Trap) -> ! {
     raise_trap(TrapReason::Wasm(trap))
 }
 
-/// Carries a Rust panic across wasm code and resumes the panic on the other
-/// side.
+/// Invokes the closure `f` and returns the result.
+///
+/// If `f` panics and this crate is compiled with `panic=unwind` this will
+/// catch the panic and capture it to "throw" with `longjmp` to be caught by
+/// the nearest `setjmp`. The panic will then be resumed from where it is
+/// caught.
 ///
 /// # Safety
 ///
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
-/// stack. They will be skipped and not executed.
-pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
-    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Panic(payload)))
+/// stack. They will be skipped and not executed in the case that `f` panics.
+pub unsafe fn catch_unwind_and_longjmp<R>(f: impl FnOnce() -> R) -> R {
+    // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
+    // panics to rethrow.
+    #[cfg(panic = "unwind")]
+    {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+            Ok(ret) => ret,
+            Err(err) => tls::with(|info| info.unwrap().unwind_with(UnwindReason::Panic(err))),
+        }
+    }
+
+    // With `panic=abort` there's no use in using `std::panic::catch_unwind`
+    // since it won't actually catch anything. Note that
+    // `std::panic::catch_unwind` will technically optimize to this but having
+    // this branch avoids using the `std::panic` module entirely.
+    #[cfg(not(panic = "unwind"))]
+    {
+        f()
+    }
 }
 
 /// Stores trace message with backtrace.
@@ -259,6 +279,7 @@ where
             backtrace,
             coredumpstack,
         })),
+        #[cfg(panic = "unwind")]
         Err((UnwindReason::Panic(panic), _, _)) => std::panic::resume_unwind(panic),
     };
 
@@ -375,7 +396,8 @@ mod call_thread_state {
 pub use call_thread_state::*;
 
 enum UnwindReason {
-    Panic(Box<dyn Any + Send>),
+    #[cfg(panic = "unwind")]
+    Panic(Box<dyn std::any::Any + Send>),
     Trap(TrapReason),
 }
 
@@ -404,15 +426,19 @@ impl CallThreadState {
             // hypothetical backtrace to and it doesn't really make sense to try
             // in the first place since this is a Rust problem rather than a
             // Wasm problem.
-            UnwindReason::Panic(_)
+            #[cfg(panic = "unwind")]
+            UnwindReason::Panic(_) => (None, None),
             // And if we are just propagating an existing trap that already has
             // a backtrace attached to it, then there is no need to capture a
             // new backtrace either.
-            | UnwindReason::Trap(TrapReason::User {
+            UnwindReason::Trap(TrapReason::User {
                 needs_backtrace: false,
                 ..
             }) => (None, None),
-            UnwindReason::Trap(_) => (self.capture_backtrace(self.limits, None), self.capture_coredump(self.limits, None)),
+            UnwindReason::Trap(_) => (
+                self.capture_backtrace(self.limits, None),
+                self.capture_coredump(self.limits, None),
+            ),
         };
         unsafe {
             (*self.unwind.get())

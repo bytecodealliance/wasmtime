@@ -111,17 +111,14 @@ pub mod raw {
                 ) $( -> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
                     {
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let ret = crate::traphandlers::catch_unwind_and_longjmp(|| {
                             Instance::from_vmctx(vmctx, |instance| {
                                 {
                                     super::$name(instance, $($pname),*)
                                 }
                             })
-                        }));
-                        match result {
-                            Ok(ret) => LibcallResult::convert(ret),
-                            Err(panic) => crate::traphandlers::resume_panic(panic),
-                        }
+                        });
+                        LibcallResult::convert(ret)
                     }
                     $(
                         #[cfg(not($attr))]
