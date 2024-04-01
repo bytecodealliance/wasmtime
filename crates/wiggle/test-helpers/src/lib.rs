@@ -121,14 +121,11 @@ unsafe impl GuestMemory for HostMemory {
         let ptr = self.buffer.cell.get();
         unsafe { std::slice::from_raw_parts(ptr.cast(), (*ptr).len()) }
     }
-    fn has_outstanding_borrows(&self) -> bool {
-        self.bc.has_outstanding_borrows()
+    fn can_read(&self, r: Region) -> bool {
+        self.bc.can_read(r)
     }
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        self.bc.is_shared_borrowed(r)
-    }
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        self.bc.is_mut_borrowed(r)
+    fn can_write(&self, r: Region) -> bool {
+        self.bc.can_write(r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         self.bc.mut_borrow(r)
