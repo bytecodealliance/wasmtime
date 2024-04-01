@@ -63,16 +63,12 @@ unsafe impl GuestMemory for WasmtimeGuestMemory<'_> {
     // checking a flag before calling the more expensive borrow-checker methods.
 
     #[inline]
-    fn has_outstanding_borrows(&self) -> bool {
-        !self.shared && self.bc.has_outstanding_borrows()
+    fn can_read(&self, r: Region) -> bool {
+        self.shared || self.bc.can_read(r)
     }
     #[inline]
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        !self.shared && self.bc.is_shared_borrowed(r)
-    }
-    #[inline]
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        !self.shared && self.bc.is_mut_borrowed(r)
+    fn can_write(&self, r: Region) -> bool {
+        self.shared || self.bc.can_write(r)
     }
     #[inline]
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {

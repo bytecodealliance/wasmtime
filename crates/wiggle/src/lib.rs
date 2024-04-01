@@ -72,8 +72,7 @@ pub mod wasmtime_crate {
 /// into the memory. The safety of this mechanism depends on there being exactly
 /// one associated tracking of borrows for a given WebAssembly memory. There
 /// must be no other reads or writes of WebAssembly the memory by either Rust or
-/// WebAssembly code while there are any outstanding borrows, as given by
-/// `GuestMemory::has_outstanding_borrows()`.
+/// WebAssembly code while there are any outstanding borrows.
 ///
 /// # Using References
 ///
@@ -83,12 +82,9 @@ pub mod wasmtime_crate {
 /// into the memory region given by a `GuestMemory`.
 ///
 /// These smart pointers are dynamically borrow-checked by the borrow checker
-/// methods on this trait. While a `GuestSlice` or a `GuestStr` are live, the
-/// [`GuestMemory::has_outstanding_borrows()`] method will always return `true`.
-/// If you need to re-enter the guest or otherwise read or write to the contents
-/// of a WebAssembly memory, all `GuestSlice`s and `GuestStr`s for the memory
-/// must be dropped, at which point `GuestMemory::has_outstanding_borrows()`
-/// will return `false`.
+/// methods on this trait. While a `GuestSlice` or a `GuestStr` are live,
+/// WebAssembly cannot be reentered because the store's borrow is connected to
+/// the relevant `'a` lifetime on the guest pointer.
 pub unsafe trait GuestMemory: Send + Sync {
     /// Returns the base allocation of this guest memory, located in host
     /// memory.
@@ -115,36 +111,32 @@ pub unsafe trait GuestMemory: Send + Sync {
         GuestPtr::new(self, offset)
     }
 
-    /// Indicates whether any outstanding borrows are known to the
-    /// `GuestMemory`. This function must be `false` in order for it to be
-    /// safe to recursively call into a WebAssembly module, or to manipulate
-    /// the WebAssembly memory by any other means.
-    fn has_outstanding_borrows(&self) -> bool;
-    /// Check if a region of linear memory is exclusively borrowed. This is called during any
-    /// `GuestPtr::read` or `GuestPtr::write` operation to ensure that wiggle is not reading or
-    /// writing a region of memory which Rust believes it has exclusive access to.
-    fn is_mut_borrowed(&self, r: Region) -> bool;
-    /// Check if a region of linear memory has any shared borrows.
-    fn is_shared_borrowed(&self, r: Region) -> bool;
-    /// Exclusively borrow a region of linear memory. This is used when constructing a
-    /// `GuestSliceMut` or `GuestStrMut`. Those types will give Rust `&mut` access
-    /// to the region of linear memory, therefore, the `GuestMemory` impl must
-    /// guarantee that at most one `BorrowHandle` is issued to a given region,
-    /// `GuestMemory::has_outstanding_borrows` is true for the duration of the
-    /// borrow, and that `GuestMemory::is_mut_borrowed` of any overlapping region
-    /// is false for the duration of the borrow.
+    /// Check if a region of memory can be read.
+    ///
+    /// This will only return `true` if there are no active mutable borrows.
+    fn can_read(&self, r: Region) -> bool;
+
+    /// Check if a region of memory can be written.
+    ///
+    /// This will only return `true` if there are no active borrows.
+    fn can_write(&self, r: Region) -> bool;
+
+    /// Acquires a mutable borrow on a region of memory.
+    ///
+    /// Only succeeds if there are no active shared or mutable borrows and this
+    /// is not a `shared` WebAssembly memory.
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
-    /// Shared borrow a region of linear memory. This is used when constructing a
-    /// `GuestSlice` or `GuestStr`. Those types will give Rust `&` (shared reference) access
-    /// to the region of linear memory.
+
+    /// Acquires a shared borrow on a region of memory.
+    ///
+    /// Only succeeds if there are no active mutable borrows and this is not a
+    /// `shared` WebAssembly memory.
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
-    /// Unborrow a previously borrowed mutable region. As long as `GuestSliceMut` and
-    /// `GuestStrMut` are implemented correctly, a mut `BorrowHandle` should only be
-    /// unborrowed once.
+
+    /// Undoes a borrow by `mut_borrow`.
     fn mut_unborrow(&self, h: BorrowHandle);
-    /// Unborrow a previously borrowed shared region. As long as `GuestSlice` and
-    /// `GuestStr` are implemented correctly, a shared `BorrowHandle` should only be
-    /// unborrowed once.
+
+    /// Undoes a borrow by `shared_borrow`.
     fn shared_unborrow(&self, h: BorrowHandle);
 
     /// Check if the underlying memory is shared across multiple threads; e.g.,
@@ -206,21 +198,20 @@ fn validate_size_align<'a, T: GuestTypeTransparent<'a>>(
 /// consumed by `{mut, shared}_unborrow`. Only the `GuestMemory` impl should ever construct
 /// a `BorrowHandle` or inspect its contents.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct BorrowHandle(pub usize);
+pub struct BorrowHandle {
+    _priv: (),
+}
 
 // Forwarding trait implementations to the original type
 unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
     fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
-    fn has_outstanding_borrows(&self) -> bool {
-        T::has_outstanding_borrows(self)
+    fn can_read(&self, r: Region) -> bool {
+        T::can_read(self, r)
     }
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        T::is_mut_borrowed(self, r)
-    }
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        T::is_shared_borrowed(self, r)
+    fn can_write(&self, r: Region) -> bool {
+        T::can_write(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -240,14 +231,11 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
     fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
-    fn has_outstanding_borrows(&self) -> bool {
-        T::has_outstanding_borrows(self)
+    fn can_read(&self, r: Region) -> bool {
+        T::can_read(self, r)
     }
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        T::is_mut_borrowed(self, r)
-    }
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        T::is_shared_borrowed(self, r)
+    fn can_write(&self, r: Region) -> bool {
+        T::can_write(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -267,14 +255,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
-    fn has_outstanding_borrows(&self) -> bool {
-        T::has_outstanding_borrows(self)
+    fn can_read(&self, r: Region) -> bool {
+        T::can_read(self, r)
     }
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        T::is_mut_borrowed(self, r)
-    }
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        T::is_shared_borrowed(self, r)
+    fn can_write(&self, r: Region) -> bool {
+        T::can_write(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -294,14 +279,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
-    fn has_outstanding_borrows(&self) -> bool {
-        T::has_outstanding_borrows(self)
+    fn can_read(&self, r: Region) -> bool {
+        T::can_read(self, r)
     }
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        T::is_mut_borrowed(self, r)
-    }
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        T::is_shared_borrowed(self, r)
+    fn can_write(&self, r: Region) -> bool {
+        T::can_write(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -538,10 +520,11 @@ impl<'a, T> GuestPtr<'a, [T]> {
 
     /// Attempts to create a [`GuestSlice<'_, T>`] from this pointer, performing
     /// bounds checks and type validation. The `GuestSlice` is a smart pointer
-    /// that can be used as a `&[T]` via the `Deref` trait. The region of memory
-    /// backing the slice will be marked as shareably borrowed by the
-    /// [`GuestMemory`] until the `GuestSlice` is dropped. Multiple shareable
-    /// borrows of the same memory are permitted, but only one mutable borrow.
+    /// that can be used as a `&[T]` via the `Deref` trait.
+    ///
+    /// This method will flag the entire linear memory as marked with a shared
+    /// borrow. This means that any writes to memory are disallowed until
+    /// the returned `GuestSlice` is dropped.
     ///
     /// This function will return a `GuestSlice` into host memory if all checks
     /// succeed (valid utf-8, valid pointers, memory is not borrowed, etc.). If
@@ -564,9 +547,11 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// Attempts to create a [`GuestSliceMut<'_, T>`] from this pointer,
     /// performing bounds checks and type validation. The `GuestSliceMut` is a
     /// smart pointer that can be used as a `&[T]` or a `&mut [T]` via the
-    /// `Deref` and `DerefMut` traits. The region of memory backing the slice
-    /// will be marked as borrowed by the [`GuestMemory`] until the `GuestSlice`
-    /// is dropped.
+    /// `Deref` and `DerefMut` traits.
+    ///
+    /// This method will flag the entire linear memory as marked with a mutable
+    /// borrow. This means that all reads/writes to memory are disallowed until
+    /// the returned `GuestSliceMut` type is dropped.
     ///
     /// This function will return a `GuestSliceMut` into host memory if all
     /// checks succeed (valid utf-8, valid pointers, memory is not borrowed,
