@@ -13,13 +13,22 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let mut linker = Linker::new(&engine);
     add_to_linker_sync(&mut linker)?;
 
-    let (mut store, _td) = store(&engine, name, inherit_stdio)?;
     let component = Component::from_file(&engine, path)?;
-    let (command, _instance) = Command::instantiate(&mut store, &component, &linker)?;
-    command
-        .wasi_cli_run()
-        .call_run(&mut store)?
-        .map_err(|()| anyhow::anyhow!("run returned a failure"))
+
+    for blocking in [false, true] {
+        let (mut store, _td) = store(&engine, name, |builder| {
+            if inherit_stdio {
+                builder.inherit_stdio();
+            }
+            builder.allow_blocking_current_thread(blocking);
+        })?;
+        let (command, _instance) = Command::instantiate(&mut store, &component, &linker)?;
+        command
+            .wasi_cli_run()
+            .call_run(&mut store)?
+            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
+    }
+    Ok(())
 }
 
 foreach_preview1!(assert_test_exists);
@@ -313,4 +322,8 @@ fn preview2_pollable_traps() {
 #[test_log::test]
 fn preview2_adapter_badfd() {
     run(PREVIEW2_ADAPTER_BADFD_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_file_read_write() {
+    run(PREVIEW2_FILE_READ_WRITE_COMPONENT, false).unwrap()
 }

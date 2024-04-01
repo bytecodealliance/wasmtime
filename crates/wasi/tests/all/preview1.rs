@@ -14,7 +14,11 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     add_to_linker_async(&mut linker, |t| &mut t.wasi)?;
 
     let module = Module::from_file(&engine, path)?;
-    let (mut store, _td) = store(&engine, name, inherit_stdio)?;
+    let (mut store, _td) = store(&engine, name, |builder| {
+        if inherit_stdio {
+            builder.inherit_stdio();
+        }
+    })?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
     start.call_async(&mut store, ()).await?;
