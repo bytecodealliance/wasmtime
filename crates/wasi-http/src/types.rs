@@ -9,7 +9,6 @@ use crate::{
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
-use rustls::pki_types::{ServerName, TrustAnchor};
 use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
@@ -178,6 +177,8 @@ async fn handler(
 
         #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
         {
+            use rustls::pki_types::{ServerName, TrustAnchor};
+
             // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
             let mut root_cert_store = rustls::RootCertStore::empty();
             root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| TrustAnchor {
