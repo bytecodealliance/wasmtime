@@ -76,7 +76,7 @@ pub fn init_traps(
             Ok(0) => {
                 run_init();
                 let prev = INIT_STATE.swap(2, Relaxed);
-                assert_eq!(prev, 0);
+                assert_eq!(prev, 1);
             }
             Err(1) => {
                 panic!("concurrent initialization is not supported with `std` feature disabled")
