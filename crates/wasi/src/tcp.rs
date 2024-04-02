@@ -131,6 +131,33 @@ impl TcpSocket {
             Ok(())
         }
     }
+
+    pub fn start_connect(&mut self, remote_address: SocketAddr) -> SocketResult<()> {
+        match self.tcp_state {
+            TcpState::Default(..) => {}
+
+            TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
+                return Err(ErrorCode::ConcurrencyConflict.into())
+            }
+
+            _ => return Err(ErrorCode::InvalidState.into()),
+        };
+
+        network::util::validate_unicast(&remote_address)?;
+        network::util::validate_remote_address(&remote_address)?;
+        network::util::validate_address_family(&remote_address, &self.family)?;
+
+        let TcpState::Default(tokio_socket) =
+            std::mem::replace(&mut self.tcp_state, TcpState::Closed)
+        else {
+            unreachable!();
+        };
+
+        let future = tokio_socket.connect(remote_address);
+
+        self.tcp_state = TcpState::Connecting(Box::pin(future));
+        Ok(())
+    }
 }
 
 pub(crate) struct TcpReadStream {

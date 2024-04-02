@@ -68,37 +68,14 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table();
-        let socket = table.get(&this)?;
         let network = table.get(&network)?;
         let remote_address: SocketAddr = remote_address.into();
-
-        match socket.tcp_state {
-            TcpState::Default(..) => {}
-
-            TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
-                return Err(ErrorCode::ConcurrencyConflict.into())
-            }
-
-            _ => return Err(ErrorCode::InvalidState.into()),
-        };
-
-        util::validate_unicast(&remote_address)?;
-        util::validate_remote_address(&remote_address)?;
-        util::validate_address_family(&remote_address, &socket.family)?;
 
         // Ensure that we're allowed to connect to this address.
         network.check_socket_addr(&remote_address, SocketAddrUse::TcpConnect)?;
 
-        let socket = table.get_mut(&this)?;
-        let TcpState::Default(tokio_socket) =
-            std::mem::replace(&mut socket.tcp_state, TcpState::Closed)
-        else {
-            unreachable!();
-        };
-
-        let future = tokio_socket.connect(remote_address);
-
-        socket.tcp_state = TcpState::Connecting(Box::pin(future));
+        // Start connection
+        table.get_mut(&this)?.start_connect(remote_address)?;
 
         Ok(())
     }
