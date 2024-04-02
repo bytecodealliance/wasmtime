@@ -372,6 +372,157 @@ impl TcpSocket {
     pub fn address_family(&self) -> SocketAddressFamily {
         self.family
     }
+
+    pub fn set_listen_backlog_size(&mut self, value: u32) -> SocketResult<()> {
+        const MIN_BACKLOG: u32 = 1;
+        const MAX_BACKLOG: u32 = i32::MAX as u32; // OS'es will most likely limit it down even further.
+
+        if value == 0 {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
+
+        // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
+        let value = value.clamp(MIN_BACKLOG, MAX_BACKLOG);
+
+        match &self.tcp_state {
+            TcpState::Default(..) | TcpState::Bound(..) => {
+                // Socket not listening yet. Stash value for first invocation to `listen`.
+            }
+            TcpState::Listening { listener, .. } => {
+                // Try to update the backlog by calling `listen` again.
+                // Not all platforms support this. We'll only update our own value if the OS supports changing the backlog size after the fact.
+
+                rustix::net::listen(&listener, value.try_into().unwrap())
+                    .map_err(|_| ErrorCode::NotSupported)?;
+            }
+            _ => return Err(ErrorCode::InvalidState.into()),
+        }
+        self.listen_backlog_size = value;
+
+        Ok(())
+    }
+
+    pub fn keep_alive_enabled(&self) -> SocketResult<bool> {
+        let view = &*self.as_std_view()?;
+        Ok(sockopt::get_socket_keepalive(view)?)
+    }
+
+    pub fn set_keep_alive_enabled(&self, value: bool) -> SocketResult<()> {
+        let view = &*self.as_std_view()?;
+        Ok(sockopt::set_socket_keepalive(view, value)?)
+    }
+
+    pub fn keep_alive_idle_time(&self) -> SocketResult<std::time::Duration> {
+        let view = &*self.as_std_view()?;
+        Ok(sockopt::get_tcp_keepidle(view)?)
+    }
+
+    pub fn set_keep_alive_idle_time(&mut self, duration: std::time::Duration) -> SocketResult<()> {
+        {
+            let view = &*self.as_std_view()?;
+            network::util::set_tcp_keepidle(view, duration)?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            self.keep_alive_idle_time = Some(duration);
+        }
+
+        Ok(())
+    }
+
+    pub fn keep_alive_interval(&self) -> SocketResult<std::time::Duration> {
+        let view = &*self.as_std_view()?;
+        Ok(sockopt::get_tcp_keepintvl(view)?)
+    }
+
+    pub fn set_keep_alive_interval(&self, duration: std::time::Duration) -> SocketResult<()> {
+        let view = &*self.as_std_view()?;
+        Ok(network::util::set_tcp_keepintvl(view, duration)?)
+    }
+
+    pub fn keep_alive_count(&self) -> SocketResult<u32> {
+        let view = &*self.as_std_view()?;
+        Ok(sockopt::get_tcp_keepcnt(view)?)
+    }
+
+    pub fn set_keep_alive_count(&self, value: u32) -> SocketResult<()> {
+        // TODO(rylev): do we need to check and clamp the value?
+
+        let view = &*self.as_std_view()?;
+        Ok(network::util::set_tcp_keepcnt(view, value)?)
+    }
+
+    pub fn hop_limit(&self) -> SocketResult<u8> {
+        let view = &*self.as_std_view()?;
+
+        let ttl = match self.family {
+            SocketAddressFamily::Ipv4 => network::util::get_ip_ttl(view)?,
+            SocketAddressFamily::Ipv6 => network::util::get_ipv6_unicast_hops(view)?,
+        };
+
+        Ok(ttl)
+    }
+
+    pub fn set_hop_limit(&mut self, value: u8) -> SocketResult<()> {
+        {
+            let view = &*self.as_std_view()?;
+
+            match self.family {
+                SocketAddressFamily::Ipv4 => network::util::set_ip_ttl(view, value)?,
+                SocketAddressFamily::Ipv6 => network::util::set_ipv6_unicast_hops(view, value)?,
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            self.hop_limit = Some(value);
+        }
+
+        Ok(())
+    }
+
+    pub fn receive_buffer_size(&self) -> SocketResult<usize> {
+        let view = &*self.as_std_view()?;
+
+        Ok(network::util::get_socket_recv_buffer_size(view)?)
+    }
+
+    pub fn set_receive_buffer_size(&mut self, value: usize) -> SocketResult<()> {
+        {
+            let view = &*self.as_std_view()?;
+
+            network::util::set_socket_recv_buffer_size(view, value)?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            self.receive_buffer_size = Some(value);
+        }
+
+        Ok(())
+    }
+
+    pub fn send_buffer_size(&self) -> SocketResult<usize> {
+        let view = &*self.as_std_view()?;
+
+        Ok(network::util::get_socket_send_buffer_size(view)?)
+    }
+
+    pub fn set_send_buffer_size(&mut self, value: usize) -> SocketResult<()> {
+        {
+            let view = &*self.as_std_view()?;
+
+            network::util::set_socket_send_buffer_size(view, value)?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            self.send_buffer_size = Some(value);
+        }
+
+        Ok(())
+    }
 }
 
 pub(crate) struct TcpReadStream {
