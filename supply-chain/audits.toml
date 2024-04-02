@@ -3727,6 +3727,12 @@ user-id = 73222 # wasmtime-publish
 start = "2024-02-15"
 end = "2025-02-16"
 
+[[trusted.wasmtime-slab]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-03-20"
+end = "2025-04-02"
+
 [[trusted.wasmtime-wmemcheck]]
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish

@@ -136,6 +136,9 @@ audit-as-crates-io = true
 [policy.wasmtime-runtime]
 audit-as-crates-io = true
 
+[policy.wasmtime-slab]
+audit-as-crates-io = true
+
 [policy.wasmtime-types]
 audit-as-crates-io = true
 

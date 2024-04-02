@@ -133,6 +133,10 @@ audited_as = "18.0.2"
 version = "20.0.0"
 audited_as = "18.0.2"
 
+[[unpublished.wasmtime-slab]]
+version = "20.0.0"
+audited_as = "19.0.0"
+
 [[unpublished.wasmtime-types]]
 version = "20.0.0"
 audited_as = "18.0.2"
@@ -1023,6 +1027,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-runtime]]
 version = "18.0.2"
 when = "2024-02-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-slab]]
+version = "19.0.0"
+when = "2024-03-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
