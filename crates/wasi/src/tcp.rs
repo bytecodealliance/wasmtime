@@ -19,7 +19,6 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
-use tokio::net::TcpStream;
 
 /// Value taken from rust std library.
 const DEFAULT_BACKLOG: u32 = 128;
@@ -197,7 +196,7 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn finish_connect(&mut self) -> SocketResult<Arc<TcpStream>> {
+    pub fn finish_connect(&mut self) -> SocketResult<(InputStream, OutputStream)> {
         let previous_state = std::mem::replace(&mut self.tcp_state, TcpState::Closed);
         let result = match previous_state {
             TcpState::ConnectReady(result) => result,
@@ -221,8 +220,10 @@ impl TcpSocket {
             Ok(stream) => {
                 let stream = Arc::new(stream);
                 self.tcp_state = TcpState::Connected(stream.clone());
-
-                Ok(stream)
+                let input: InputStream =
+                    InputStream::Host(Box::new(TcpReadStream::new(stream.clone())));
+                let output: OutputStream = Box::new(TcpWriteStream::new(stream));
+                Ok((input, output))
             }
             Err(err) => {
                 self.tcp_state = TcpState::Closed;

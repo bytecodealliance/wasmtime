@@ -1,5 +1,4 @@
 use crate::network::SocketAddrUse;
-use crate::tcp::{TcpReadStream, TcpWriteStream};
 use crate::{
     bindings::{
         io::streams::{InputStream, OutputStream},
@@ -70,10 +69,7 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        let stream = socket.finish_connect()?;
-
-        let input: InputStream = InputStream::Host(Box::new(TcpReadStream::new(stream.clone())));
-        let output: OutputStream = Box::new(TcpWriteStream::new(stream));
+        let (input, output) = socket.finish_connect()?;
 
         let input_stream = self.table().push_child(input, &this)?;
         let output_stream = self.table().push_child(output, &this)?;
