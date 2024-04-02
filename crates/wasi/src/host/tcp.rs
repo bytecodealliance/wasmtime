@@ -1,7 +1,6 @@
 use crate::host::network::util;
 use crate::network::SocketAddrUse;
-use crate::runtime::with_ambient_tokio_runtime;
-use crate::tcp::{TcpReadStream, TcpSocket, TcpState, TcpWriteStream};
+use crate::tcp::{TcpReadStream, TcpState, TcpWriteStream};
 use crate::{
     bindings::{
         io::streams::{InputStream, OutputStream},
@@ -12,11 +11,8 @@ use crate::{
 };
 use crate::{Pollable, SocketResult, WasiView};
 use io_lifetimes::AsSocketlike;
-use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::task::Poll;
 use std::time::Duration;
 use wasmtime::component::Resource;
 
@@ -124,90 +120,7 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        let TcpState::Listening {
-            listener,
-            pending_accept,
-        } = &mut socket.tcp_state
-        else {
-            return Err(ErrorCode::InvalidState.into());
-        };
-
-        let result = match pending_accept.take() {
-            Some(result) => result,
-            None => {
-                let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
-                match with_ambient_tokio_runtime(|| listener.poll_accept(&mut cx))
-                    .map_ok(|(stream, _)| stream)
-                {
-                    Poll::Ready(result) => result,
-                    Poll::Pending => Err(Errno::WOULDBLOCK.into()),
-                }
-            }
-        };
-
-        let client = result.map_err(|err| match Errno::from_io_error(&err) {
-            // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
-            // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
-            // > or the service provider is still processing a callback function.
-            //
-            // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
-            // because in POSIX this error is only returned by a non-blocking
-            // `connect` and wasi-sockets has a different solution for that.
-            #[cfg(windows)]
-            Some(Errno::INPROGRESS) => Errno::INTR.into(),
-
-            // Normalize Linux' non-standard behavior.
-            //
-            // From https://man7.org/linux/man-pages/man2/accept.2.html:
-            // > Linux accept() passes already-pending network errors on the
-            // > new socket as an error code from accept(). This behavior
-            // > differs from other BSD socket implementations. (...)
-            #[cfg(target_os = "linux")]
-            Some(
-                Errno::CONNRESET
-                | Errno::NETRESET
-                | Errno::HOSTUNREACH
-                | Errno::HOSTDOWN
-                | Errno::NETDOWN
-                | Errno::NETUNREACH
-                | Errno::PROTO
-                | Errno::NOPROTOOPT
-                | Errno::NONET
-                | Errno::OPNOTSUPP,
-            ) => Errno::CONNABORTED.into(),
-
-            _ => err,
-        })?;
-
-        #[cfg(target_os = "macos")]
-        {
-            // Manually inherit socket options from listener. We only have to
-            // do this on platforms that don't already do this automatically
-            // and only if a specific value was explicitly set on the listener.
-
-            if let Some(size) = socket.receive_buffer_size {
-                _ = util::set_socket_recv_buffer_size(&client, size); // Ignore potential error.
-            }
-
-            if let Some(size) = socket.send_buffer_size {
-                _ = util::set_socket_send_buffer_size(&client, size); // Ignore potential error.
-            }
-
-            // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
-            if let (SocketAddressFamily::Ipv6, Some(ttl)) = (socket.family, socket.hop_limit) {
-                _ = util::set_ipv6_unicast_hops(&client, ttl); // Ignore potential error.
-            }
-
-            if let Some(value) = socket.keep_alive_idle_time {
-                _ = util::set_tcp_keepidle(&client, value); // Ignore potential error.
-            }
-        }
-
-        let client = Arc::new(client);
-
-        let input: InputStream = InputStream::Host(Box::new(TcpReadStream::new(client.clone())));
-        let output: OutputStream = Box::new(TcpWriteStream::new(client.clone()));
-        let tcp_socket = TcpSocket::from_state(TcpState::Connected(client), socket.family)?;
+        let (tcp_socket, input, output) = socket.accept()?;
 
         let tcp_socket = self.table().push(tcp_socket)?;
         let input_stream = self.table().push_child(input, &tcp_socket)?;
