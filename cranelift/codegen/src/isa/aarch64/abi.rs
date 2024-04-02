@@ -35,7 +35,8 @@ static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            StackAMode::FPOffset(off, ty) => AMode::FPOffset { off, ty },
+            // Argument area begins after saved frame pointer + return address.
+            StackAMode::ArgOffset(off, ty) => AMode::FPOffset { off: off + 16, ty },
             StackAMode::NominalSPOffset(off, ty) => AMode::NominalSPOffset { off, ty },
             StackAMode::SPOffset(off, ty) => AMode::SPOffset { off, ty },
         }
@@ -363,10 +364,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         Ok((next_stack, extra_arg))
-    }
-
-    fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        16 // frame pointer + return address.
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {

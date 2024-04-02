@@ -205,11 +205,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         Ok((next_stack, pos))
     }
 
-    fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        // lr fp.
-        16
-    }
-
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
         Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted())
     }
