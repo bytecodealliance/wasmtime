@@ -31,60 +31,14 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table();
-        let socket = table.get(&this)?;
         let network = table.get(&network)?;
         let local_address: SocketAddr = local_address.into();
 
-        let tokio_socket = match &socket.tcp_state {
-            TcpState::Default(socket) => socket,
-            TcpState::BindStarted(..) => return Err(ErrorCode::ConcurrencyConflict.into()),
-            _ => return Err(ErrorCode::InvalidState.into()),
-        };
+        // Ensure that we're allowed to connect to this address.
+        network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
 
-        util::validate_unicast(&local_address)?;
-        util::validate_address_family(&local_address, &socket.family)?;
-
-        {
-            // Ensure that we're allowed to connect to this address.
-            network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
-
-            // Automatically bypass the TIME_WAIT state when the user is trying
-            // to bind to a specific port:
-            let reuse_addr = local_address.port() > 0;
-
-            // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
-            // This ensures we're not accidentally affected by any socket option
-            // state left behind by a previous failed call to this method (start_bind).
-            util::set_tcp_reuseaddr(&tokio_socket, reuse_addr)?;
-
-            // Perform the OS bind call.
-            tokio_socket.bind(local_address).map_err(|error| {
-                match Errno::from_io_error(&error) {
-                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-                    //
-                    // The most common reasons for this error should have already
-                    // been handled by our own validation slightly higher up in this
-                    // function. This error mapping is here just in case there is
-                    // an edge case we didn't catch.
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
-
-                    // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-                    // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-                    #[cfg(windows)]
-                    Some(Errno::NOBUFS) => ErrorCode::AddressInUse,
-
-                    _ => ErrorCode::from(error),
-                }
-            })?;
-        }
-
-        let socket = table.get_mut(&this)?;
-
-        socket.tcp_state = match std::mem::replace(&mut socket.tcp_state, TcpState::Closed) {
-            TcpState::Default(socket) => TcpState::BindStarted(socket),
-            _ => unreachable!(),
-        };
+        // Bind to the address.
+        table.get_mut(&this)?.bind(local_address)?;
 
         Ok(())
     }

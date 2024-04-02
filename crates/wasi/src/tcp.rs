@@ -1,3 +1,5 @@
+use crate::bindings::sockets::tcp::ErrorCode;
+use crate::host::network;
 use crate::network::SocketAddressFamily;
 use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
 use crate::{HostInputStream, HostOutputStream, SocketResult, StreamError, Subscribe};
@@ -6,9 +8,11 @@ use cap_net_ext::AddressFamily;
 use futures::Future;
 use io_lifetimes::views::SocketlikeView;
 use io_lifetimes::AsSocketlike;
+use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
 use std::mem;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -75,6 +79,58 @@ pub struct TcpSocket {
     pub(crate) hop_limit: Option<u8>,
     #[cfg(target_os = "macos")]
     pub(crate) keep_alive_idle_time: Option<std::time::Duration>,
+}
+
+impl TcpSocket {
+    pub fn bind(&mut self, local_address: SocketAddr) -> SocketResult<()> {
+        let tokio_socket = match &self.tcp_state {
+            TcpState::Default(socket) => socket,
+            TcpState::BindStarted(..) => return Err(ErrorCode::ConcurrencyConflict.into()),
+            _ => return Err(ErrorCode::InvalidState.into()),
+        };
+
+        network::util::validate_unicast(&local_address)?;
+        network::util::validate_address_family(&local_address, &self.family)?;
+
+        {
+            // Automatically bypass the TIME_WAIT state when the user is trying
+            // to bind to a specific port:
+            let reuse_addr = local_address.port() > 0;
+
+            // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
+            // This ensures we're not accidentally affected by any socket option
+            // state left behind by a previous failed call to this method (start_bind).
+            network::util::set_tcp_reuseaddr(&tokio_socket, reuse_addr)?;
+
+            // Perform the OS bind call.
+            tokio_socket.bind(local_address).map_err(|error| {
+                match Errno::from_io_error(&error) {
+                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+                    //
+                    // The most common reasons for this error should have already
+                    // been handled by our own validation slightly higher up in this
+                    // function. This error mapping is here just in case there is
+                    // an edge case we didn't catch.
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
+
+                    // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+                    // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                    #[cfg(windows)]
+                    Some(Errno::NOBUFS) => ErrorCode::AddressInUse,
+
+                    _ => ErrorCode::from(error),
+                }
+            })?;
+
+            self.tcp_state = match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
+                TcpState::Default(socket) => TcpState::BindStarted(socket),
+                _ => unreachable!(),
+            };
+
+            Ok(())
+        }
+    }
 }
 
 pub(crate) struct TcpReadStream {
