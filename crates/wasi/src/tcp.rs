@@ -160,11 +160,11 @@ impl TcpSocket {
 }
 
 impl TcpSocket {
-    pub fn start_bind(&mut self, local_address: SocketAddr) -> SocketResult<()> {
+    pub fn start_bind(&mut self, local_address: SocketAddr) -> io::Result<()> {
         let tokio_socket = match &self.tcp_state {
             TcpState::Default(socket) => socket,
-            TcpState::BindStarted(..) => return Err(ErrorCode::ConcurrencyConflict.into()),
-            _ => return Err(ErrorCode::InvalidState.into()),
+            TcpState::BindStarted(..) => return Err(Errno::ALREADY.into()),
+            _ => return Err(Errno::ISCONN.into()),
         };
 
         network::util::validate_unicast(&local_address)?;
@@ -190,14 +190,17 @@ impl TcpSocket {
                     // been handled by our own validation slightly higher up in this
                     // function. This error mapping is here just in case there is
                     // an edge case we didn't catch.
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
+                    Some(Errno::AFNOSUPPORT) =>  io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "The specified address is not a valid address for the address family of the specified socket",
+                    ),
 
                     // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
                     // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
                     #[cfg(windows)]
-                    Some(Errno::NOBUFS) => ErrorCode::AddressInUse,
+                    Some(Errno::NOBUFS) => io::Error::new(io::ErrorKind::AddrInUse, "no more free local ports"),
 
-                    _ => ErrorCode::from(error),
+                    _ => error,
                 }
             })?;
 
