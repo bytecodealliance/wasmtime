@@ -1054,6 +1054,12 @@ when = "2024-02-07"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-slab]]
+version = "19.0.0"
+when = "2024-03-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-types]]
 version = "17.0.1"
 when = "2024-02-07"
