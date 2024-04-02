@@ -9,7 +9,6 @@ use crate::{
     network::SocketAddressFamily,
 };
 use crate::{Pollable, SocketResult, WasiView};
-use io_lifetimes::AsSocketlike;
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -300,21 +299,12 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let stream = match &socket.tcp_state {
-            TcpState::Connected(stream) => stream,
-            _ => return Err(ErrorCode::InvalidState.into()),
-        };
-
         let how = match shutdown_type {
             ShutdownType::Receive => std::net::Shutdown::Read,
             ShutdownType::Send => std::net::Shutdown::Write,
             ShutdownType::Both => std::net::Shutdown::Both,
         };
-
-        stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(how)?;
-        Ok(())
+        socket.shutdown(how)
     }
 
     fn drop(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), anyhow::Error> {

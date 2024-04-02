@@ -523,6 +523,18 @@ impl TcpSocket {
 
         Ok(())
     }
+
+    pub fn shutdown(&self, how: std::net::Shutdown) -> SocketResult<()> {
+        let stream = match &self.tcp_state {
+            TcpState::Connected(stream) => stream,
+            _ => return Err(ErrorCode::InvalidState.into()),
+        };
+
+        stream
+            .as_socketlike_view::<std::net::TcpStream>()
+            .shutdown(how)?;
+        Ok(())
+    }
 }
 
 pub(crate) struct TcpReadStream {
