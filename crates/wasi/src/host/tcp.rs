@@ -87,45 +87,15 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        let previous_state = std::mem::replace(&mut socket.tcp_state, TcpState::Closed);
-        let result = match previous_state {
-            TcpState::ConnectReady(result) => result,
-            TcpState::Connecting(mut future) => {
-                let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
-                match with_ambient_tokio_runtime(|| future.as_mut().poll(&mut cx)) {
-                    Poll::Ready(result) => result,
-                    Poll::Pending => {
-                        socket.tcp_state = TcpState::Connecting(future);
-                        return Err(ErrorCode::WouldBlock.into());
-                    }
-                }
-            }
-            previous_state => {
-                socket.tcp_state = previous_state;
-                return Err(ErrorCode::NotInProgress.into());
-            }
-        };
+        let stream = socket.finish_connect()?;
 
-        match result {
-            Ok(stream) => {
-                let stream = Arc::new(stream);
+        let input: InputStream = InputStream::Host(Box::new(TcpReadStream::new(stream.clone())));
+        let output: OutputStream = Box::new(TcpWriteStream::new(stream));
 
-                let input: InputStream =
-                    InputStream::Host(Box::new(TcpReadStream::new(stream.clone())));
-                let output: OutputStream = Box::new(TcpWriteStream::new(stream.clone()));
+        let input_stream = self.table().push_child(input, &this)?;
+        let output_stream = self.table().push_child(output, &this)?;
 
-                let input_stream = self.table().push_child(input, &this)?;
-                let output_stream = self.table().push_child(output, &this)?;
-
-                let socket = self.table().get_mut(&this)?;
-                socket.tcp_state = TcpState::Connected(stream);
-                Ok((input_stream, output_stream))
-            }
-            Err(err) => {
-                socket.tcp_state = TcpState::Closed;
-                Err(err.into())
-            }
-        }
+        Ok((input_stream, output_stream))
     }
 
     fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {

@@ -15,6 +15,8 @@ use std::mem;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Poll;
+use tokio::net::TcpStream;
 
 /// Value taken from rust std library.
 const DEFAULT_BACKLOG: u32 = 128;
@@ -157,6 +159,40 @@ impl TcpSocket {
 
         self.tcp_state = TcpState::Connecting(Box::pin(future));
         Ok(())
+    }
+
+    pub fn finish_connect(&mut self) -> SocketResult<Arc<TcpStream>> {
+        let previous_state = std::mem::replace(&mut self.tcp_state, TcpState::Closed);
+        let result = match previous_state {
+            TcpState::ConnectReady(result) => result,
+            TcpState::Connecting(mut future) => {
+                let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
+                match with_ambient_tokio_runtime(|| future.as_mut().poll(&mut cx)) {
+                    Poll::Ready(result) => result,
+                    Poll::Pending => {
+                        self.tcp_state = TcpState::Connecting(future);
+                        return Err(ErrorCode::WouldBlock.into());
+                    }
+                }
+            }
+            previous_state => {
+                self.tcp_state = previous_state;
+                return Err(ErrorCode::NotInProgress.into());
+            }
+        };
+
+        match result {
+            Ok(stream) => {
+                let stream = Arc::new(stream);
+                self.tcp_state = TcpState::Connected(stream.clone());
+
+                Ok(stream)
+            }
+            Err(err) => {
+                self.tcp_state = TcpState::Closed;
+                Err(err.into())
+            }
+        }
     }
 }
 
