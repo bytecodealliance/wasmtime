@@ -342,6 +342,36 @@ impl TcpSocket {
 
         Ok((tcp_socket, input, output))
     }
+
+    pub fn local_address(&self) -> SocketResult<SocketAddr> {
+        let view = match self.tcp_state {
+            TcpState::Default(..) => return Err(ErrorCode::InvalidState.into()),
+            TcpState::BindStarted(..) => return Err(ErrorCode::ConcurrencyConflict.into()),
+            _ => self.as_std_view()?,
+        };
+
+        Ok(view.local_addr()?)
+    }
+
+    pub fn remote_address(&self) -> SocketResult<SocketAddr> {
+        let view = match self.tcp_state {
+            TcpState::Connected(..) => self.as_std_view()?,
+            TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
+                return Err(ErrorCode::ConcurrencyConflict.into())
+            }
+            _ => return Err(ErrorCode::InvalidState.into()),
+        };
+
+        Ok(view.peer_addr()?)
+    }
+
+    pub fn is_listening(&self) -> bool {
+        matches!(self.tcp_state, TcpState::Listening { .. })
+    }
+
+    pub fn address_family(&self) -> SocketAddressFamily {
+        self.family
+    }
 }
 
 pub(crate) struct TcpReadStream {

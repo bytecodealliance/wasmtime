@@ -133,38 +133,21 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let view = match socket.tcp_state {
-            TcpState::Default(..) => return Err(ErrorCode::InvalidState.into()),
-            TcpState::BindStarted(..) => return Err(ErrorCode::ConcurrencyConflict.into()),
-            _ => socket.as_std_view()?,
-        };
-
-        Ok(view.local_addr()?.into())
+        socket.local_address().map(Into::into)
     }
 
     fn remote_address(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<IpSocketAddress> {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let view = match socket.tcp_state {
-            TcpState::Connected(..) => socket.as_std_view()?,
-            TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
-                return Err(ErrorCode::ConcurrencyConflict.into())
-            }
-            _ => return Err(ErrorCode::InvalidState.into()),
-        };
-
-        Ok(view.peer_addr()?.into())
+        socket.remote_address().map(Into::into)
     }
 
     fn is_listening(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, anyhow::Error> {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        match socket.tcp_state {
-            TcpState::Listening { .. } => Ok(true),
-            _ => Ok(false),
-        }
+        Ok(socket.is_listening())
     }
 
     fn address_family(
@@ -174,7 +157,7 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        match socket.family {
+        match socket.address_family() {
             SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
             SocketAddressFamily::Ipv6 => Ok(IpAddressFamily::Ipv6),
         }
