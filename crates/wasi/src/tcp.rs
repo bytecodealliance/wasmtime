@@ -60,6 +60,25 @@ pub(crate) enum TcpState {
     Closed,
 }
 
+impl std::fmt::Debug for TcpState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Default(_) => f.debug_tuple("Default").finish(),
+            Self::BindStarted(_) => f.debug_tuple("BindStarted").finish(),
+            Self::Bound(_) => f.debug_tuple("Bound").finish(),
+            Self::ListenStarted(_) => f.debug_tuple("ListenStarted").finish(),
+            Self::Listening { pending_accept, .. } => f
+                .debug_struct("Listening")
+                .field("pending_accept", pending_accept)
+                .finish(),
+            Self::Connecting(_) => f.debug_tuple("Connecting").finish(),
+            Self::ConnectReady(_) => f.debug_tuple("ConnectReady").finish(),
+            Self::Connected(_) => f.debug_tuple("Connected").finish(),
+            Self::Closed => write!(f, "Closed"),
+        }
+    }
+}
+
 /// A host TCP socket, plus associated bookkeeping.
 ///
 /// The inner state is wrapped in an Arc because the same underlying socket is
@@ -87,7 +106,7 @@ pub struct TcpSocket {
 }
 
 impl TcpSocket {
-    pub fn bind(&mut self, local_address: SocketAddr) -> SocketResult<()> {
+    pub fn start_bind(&mut self, local_address: SocketAddr) -> SocketResult<()> {
         let tokio_socket = match &self.tcp_state {
             TcpState::Default(socket) => socket,
             TcpState::BindStarted(..) => return Err(ErrorCode::ConcurrencyConflict.into()),
@@ -134,6 +153,20 @@ impl TcpSocket {
             };
 
             Ok(())
+        }
+    }
+
+    pub fn finish_bind(&mut self) -> SocketResult<()> {
+        match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
+            TcpState::BindStarted(socket) => {
+                self.tcp_state = TcpState::Bound(socket);
+                Ok(())
+            }
+            current_state => {
+                // Reset the state so that the outside world doesn't see this socket as closed
+                self.tcp_state = current_state;
+                Err(ErrorCode::NotInProgress.into())
+            }
         }
     }
 

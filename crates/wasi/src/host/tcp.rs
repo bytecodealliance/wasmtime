@@ -1,9 +1,9 @@
 use crate::network::SocketAddrUse;
-use crate::tcp::{TcpReadStream, TcpState, TcpWriteStream};
+use crate::tcp::{TcpReadStream, TcpWriteStream};
 use crate::{
     bindings::{
         io::streams::{InputStream, OutputStream},
-        sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
+        sockets::network::{IpAddressFamily, IpSocketAddress, Network},
         sockets::tcp::{self, ShutdownType},
     },
     network::SocketAddressFamily,
@@ -31,7 +31,7 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         network.check_socket_addr(&local_address, SocketAddrUse::TcpBind)?;
 
         // Bind to the address.
-        table.get_mut(&this)?.bind(local_address)?;
+        table.get_mut(&this)?.start_bind(local_address)?;
 
         Ok(())
     }
@@ -40,17 +40,7 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        match socket.tcp_state {
-            TcpState::BindStarted(..) => {}
-            _ => return Err(ErrorCode::NotInProgress.into()),
-        }
-
-        socket.tcp_state = match std::mem::replace(&mut socket.tcp_state, TcpState::Closed) {
-            TcpState::BindStarted(socket) => TcpState::Bound(socket),
-            _ => unreachable!(),
-        };
-
-        Ok(())
+        socket.finish_bind()
     }
 
     fn start_connect(
