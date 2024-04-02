@@ -805,7 +805,12 @@ impl Instance {
         // disconnected from the lifetime of `self`.
         let module = self.module().clone();
 
-        let empty = TableSegmentElements::Functions(Box::new([]));
+        // NB: fall back to an expressions-based list of elements which doesn't
+        // have static type information (as opposed to `Functions`) since we
+        // don't know just yet what type the table has. The type will be be
+        // inferred in the next step within `table_init_segment`.
+        let empty = TableSegmentElements::Expressions(Box::new([]));
+
         let elements = match module.passive_elements_map.get(&elem_index) {
             Some(index) if !self.dropped_elements.contains(elem_index) => {
                 &module.passive_elements[*index]
