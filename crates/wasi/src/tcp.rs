@@ -27,7 +27,7 @@ const DEFAULT_BACKLOG: u32 = 128;
 ///
 /// This represents the various states a socket can be in during the
 /// activities of binding, listening, accepting, and connecting.
-pub(crate) enum TcpState {
+enum TcpState {
     /// The initial state for a newly-created socket.
     Default(tokio::net::TcpSocket),
 
@@ -79,29 +79,84 @@ impl std::fmt::Debug for TcpState {
 }
 
 /// A host TCP socket, plus associated bookkeeping.
-///
-/// The inner state is wrapped in an Arc because the same underlying socket is
-/// used for implementing the stream types.
 pub struct TcpSocket {
     /// The current state in the bind/listen/accept/connect progression.
-    pub(crate) tcp_state: TcpState,
+    tcp_state: TcpState,
 
     /// The desired listen queue size.
-    pub(crate) listen_backlog_size: u32,
+    listen_backlog_size: u32,
 
-    pub(crate) family: SocketAddressFamily,
+    family: SocketAddressFamily,
 
     // The socket options below are not automatically inherited from the listener
     // on all platforms. So we keep track of which options have been explicitly
     // set and manually apply those values to newly accepted clients.
     #[cfg(target_os = "macos")]
-    pub(crate) receive_buffer_size: Option<usize>,
+    receive_buffer_size: Option<usize>,
     #[cfg(target_os = "macos")]
-    pub(crate) send_buffer_size: Option<usize>,
+    send_buffer_size: Option<usize>,
     #[cfg(target_os = "macos")]
-    pub(crate) hop_limit: Option<u8>,
+    hop_limit: Option<u8>,
     #[cfg(target_os = "macos")]
-    pub(crate) keep_alive_idle_time: Option<std::time::Duration>,
+    keep_alive_idle_time: Option<std::time::Duration>,
+}
+
+impl TcpSocket {
+    /// Create a new socket in the given family.
+    pub fn new(family: AddressFamily) -> io::Result<Self> {
+        with_ambient_tokio_runtime(|| {
+            let (socket, family) = match family {
+                AddressFamily::Ipv4 => {
+                    let socket = tokio::net::TcpSocket::new_v4()?;
+                    (socket, SocketAddressFamily::Ipv4)
+                }
+                AddressFamily::Ipv6 => {
+                    let socket = tokio::net::TcpSocket::new_v6()?;
+                    sockopt::set_ipv6_v6only(&socket, true)?;
+                    (socket, SocketAddressFamily::Ipv6)
+                }
+            };
+
+            Self::from_state(TcpState::Default(socket), family)
+        })
+    }
+
+    /// Create a `TcpSocket` from an existing socket.
+    fn from_state(state: TcpState, family: SocketAddressFamily) -> io::Result<Self> {
+        Ok(Self {
+            tcp_state: state,
+            listen_backlog_size: DEFAULT_BACKLOG,
+            family,
+            #[cfg(target_os = "macos")]
+            receive_buffer_size: None,
+            #[cfg(target_os = "macos")]
+            send_buffer_size: None,
+            #[cfg(target_os = "macos")]
+            hop_limit: None,
+            #[cfg(target_os = "macos")]
+            keep_alive_idle_time: None,
+        })
+    }
+
+    fn as_std_view(&self) -> SocketResult<SocketlikeView<'_, std::net::TcpStream>> {
+        use crate::bindings::sockets::network::ErrorCode;
+
+        match &self.tcp_state {
+            TcpState::Default(socket) | TcpState::Bound(socket) => {
+                Ok(socket.as_socketlike_view::<std::net::TcpStream>())
+            }
+            TcpState::Connected(stream) => Ok(stream.as_socketlike_view::<std::net::TcpStream>()),
+            TcpState::Listening { listener, .. } => {
+                Ok(listener.as_socketlike_view::<std::net::TcpStream>())
+            }
+
+            TcpState::BindStarted(..)
+            | TcpState::ListenStarted(..)
+            | TcpState::Connecting(..)
+            | TcpState::ConnectReady(..)
+            | TcpState::Closed => Err(ErrorCode::InvalidState.into()),
+        }
+    }
 }
 
 impl TcpSocket {
@@ -576,6 +631,39 @@ impl TcpSocket {
     }
 }
 
+#[async_trait::async_trait]
+impl Subscribe for TcpSocket {
+    async fn ready(&mut self) {
+        match &mut self.tcp_state {
+            TcpState::Default(..)
+            | TcpState::BindStarted(..)
+            | TcpState::Bound(..)
+            | TcpState::ListenStarted(..)
+            | TcpState::ConnectReady(..)
+            | TcpState::Closed
+            | TcpState::Connected(..) => {
+                // No async operation in progress.
+            }
+            TcpState::Connecting(future) => {
+                self.tcp_state = TcpState::ConnectReady(future.as_mut().await);
+            }
+            TcpState::Listening {
+                listener,
+                pending_accept,
+            } => match pending_accept {
+                Some(_) => {}
+                None => {
+                    let result = futures::future::poll_fn(|cx| {
+                        listener.poll_accept(cx).map_ok(|(stream, _)| stream)
+                    })
+                    .await;
+                    *pending_accept = Some(result);
+                }
+            },
+        }
+    }
+}
+
 pub(crate) struct TcpReadStream {
     stream: Arc<tokio::net::TcpStream>,
     closed: bool,
@@ -751,97 +839,6 @@ impl Subscribe for TcpWriteStream {
         }
         if let LastWrite::Done = self.last_write {
             self.stream.writable().await.unwrap();
-        }
-    }
-}
-
-impl TcpSocket {
-    /// Create a new socket in the given family.
-    pub fn new(family: AddressFamily) -> io::Result<Self> {
-        with_ambient_tokio_runtime(|| {
-            let (socket, family) = match family {
-                AddressFamily::Ipv4 => {
-                    let socket = tokio::net::TcpSocket::new_v4()?;
-                    (socket, SocketAddressFamily::Ipv4)
-                }
-                AddressFamily::Ipv6 => {
-                    let socket = tokio::net::TcpSocket::new_v6()?;
-                    sockopt::set_ipv6_v6only(&socket, true)?;
-                    (socket, SocketAddressFamily::Ipv6)
-                }
-            };
-
-            Self::from_state(TcpState::Default(socket), family)
-        })
-    }
-
-    /// Create a `TcpSocket` from an existing socket.
-    pub(crate) fn from_state(state: TcpState, family: SocketAddressFamily) -> io::Result<Self> {
-        Ok(Self {
-            tcp_state: state,
-            listen_backlog_size: DEFAULT_BACKLOG,
-            family,
-            #[cfg(target_os = "macos")]
-            receive_buffer_size: None,
-            #[cfg(target_os = "macos")]
-            send_buffer_size: None,
-            #[cfg(target_os = "macos")]
-            hop_limit: None,
-            #[cfg(target_os = "macos")]
-            keep_alive_idle_time: None,
-        })
-    }
-
-    pub(crate) fn as_std_view(&self) -> SocketResult<SocketlikeView<'_, std::net::TcpStream>> {
-        use crate::bindings::sockets::network::ErrorCode;
-
-        match &self.tcp_state {
-            TcpState::Default(socket) | TcpState::Bound(socket) => {
-                Ok(socket.as_socketlike_view::<std::net::TcpStream>())
-            }
-            TcpState::Connected(stream) => Ok(stream.as_socketlike_view::<std::net::TcpStream>()),
-            TcpState::Listening { listener, .. } => {
-                Ok(listener.as_socketlike_view::<std::net::TcpStream>())
-            }
-
-            TcpState::BindStarted(..)
-            | TcpState::ListenStarted(..)
-            | TcpState::Connecting(..)
-            | TcpState::ConnectReady(..)
-            | TcpState::Closed => Err(ErrorCode::InvalidState.into()),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl Subscribe for TcpSocket {
-    async fn ready(&mut self) {
-        match &mut self.tcp_state {
-            TcpState::Default(..)
-            | TcpState::BindStarted(..)
-            | TcpState::Bound(..)
-            | TcpState::ListenStarted(..)
-            | TcpState::ConnectReady(..)
-            | TcpState::Closed
-            | TcpState::Connected(..) => {
-                // No async operation in progress.
-            }
-            TcpState::Connecting(future) => {
-                self.tcp_state = TcpState::ConnectReady(future.as_mut().await);
-            }
-            TcpState::Listening {
-                listener,
-                pending_accept,
-            } => match pending_accept {
-                Some(_) => {}
-                None => {
-                    let result = futures::future::poll_fn(|cx| {
-                        listener.poll_accept(cx).map_ok(|(stream, _)| stream)
-                    })
-                    .await;
-                    *pending_accept = Some(result);
-                }
-            },
         }
     }
 }
