@@ -436,7 +436,7 @@ pub const TRUSTED_FLAGS: MemFlags = MemFlags::trusted();
 
 /// Flags used for WebAssembly loads / stores.
 /// Untrusted by default so we don't set `no_trap`.
-/// We also ensure that the endianess is the right one for WebAssembly.
+/// We also ensure that the endianness is the right one for WebAssembly.
 pub const UNTRUSTED_FLAGS: MemFlags = MemFlags::new().with_endianness(Endianness::Little);
 
 /// Generic MacroAssembler interface used by the code generation.
@@ -554,7 +554,7 @@ pub(crate) trait MacroAssembler {
     /// [Self::store], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
-    /// regards to the endianess depending on the target ISA. For this reason,
+    /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_store], should be explicitly used when emitting WebAssembly
     /// stores.
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize);
@@ -567,7 +567,7 @@ pub(crate) trait MacroAssembler {
     /// [Self::load], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
-    /// regards to the endianess depending on the target ISA. For this reason,
+    /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_load], should be explicitly used when emitting WebAssembly
     /// loads.
     fn wasm_load(
