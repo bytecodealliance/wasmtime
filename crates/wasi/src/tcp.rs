@@ -558,10 +558,15 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn shutdown(&self, how: std::net::Shutdown) -> SocketResult<()> {
+    pub fn shutdown(&self, how: std::net::Shutdown) -> io::Result<()> {
         let stream = match &self.tcp_state {
             TcpState::Connected(stream) => stream,
-            _ => return Err(ErrorCode::InvalidState.into()),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotConnected,
+                    "socket not connected",
+                ))
+            }
         };
 
         stream

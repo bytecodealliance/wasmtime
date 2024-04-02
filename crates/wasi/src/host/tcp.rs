@@ -290,7 +290,7 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
             ShutdownType::Send => std::net::Shutdown::Write,
             ShutdownType::Both => std::net::Shutdown::Both,
         };
-        socket.shutdown(how)
+        Ok(socket.shutdown(how)?)
     }
 
     fn drop(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), anyhow::Error> {
