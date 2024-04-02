@@ -194,6 +194,62 @@ impl TcpSocket {
             }
         }
     }
+
+    pub fn start_listen(&mut self) -> SocketResult<()> {
+        match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
+            TcpState::Bound(tokio_socket) => {
+                self.tcp_state = TcpState::ListenStarted(tokio_socket);
+                Ok(())
+            }
+            TcpState::ListenStarted(tokio_socket) => {
+                self.tcp_state = TcpState::ListenStarted(tokio_socket);
+                Err(ErrorCode::ConcurrencyConflict.into())
+            }
+            previous_state => {
+                self.tcp_state = previous_state;
+                Err(ErrorCode::InvalidState.into())
+            }
+        }
+    }
+
+    pub fn finish_listen(&mut self) -> SocketResult<()> {
+        let tokio_socket = match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
+            TcpState::ListenStarted(tokio_socket) => tokio_socket,
+            previous_state => {
+                self.tcp_state = previous_state;
+                return Err(ErrorCode::NotInProgress.into());
+            }
+        };
+
+        match with_ambient_tokio_runtime(|| tokio_socket.listen(self.listen_backlog_size)) {
+            Ok(listener) => {
+                self.tcp_state = TcpState::Listening {
+                    listener,
+                    pending_accept: None,
+                };
+                Ok(())
+            }
+            Err(err) => {
+                self.tcp_state = TcpState::Closed;
+
+                Err(match Errno::from_io_error(&err) {
+                    // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
+                    // According to the docs, `listen` can return EMFILE on Windows.
+                    // This is odd, because we're not trying to create a new socket
+                    // or file descriptor of any kind. So we rewrite it to less
+                    // surprising error code.
+                    //
+                    // At the time of writing, this behavior has never been experimentally
+                    // observed by any of the wasmtime authors, so we're relying fully
+                    // on Microsoft's documentation here.
+                    #[cfg(windows)]
+                    Some(Errno::MFILE) => Errno::NOBUFS.into(),
+
+                    _ => err.into(),
+                })
+            }
+        }
+    }
 }
 
 pub(crate) struct TcpReadStream {

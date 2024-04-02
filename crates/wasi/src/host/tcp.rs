@@ -103,62 +103,13 @@ impl<T: WasiView> crate::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        match std::mem::replace(&mut socket.tcp_state, TcpState::Closed) {
-            TcpState::Bound(tokio_socket) => {
-                socket.tcp_state = TcpState::ListenStarted(tokio_socket);
-                Ok(())
-            }
-            TcpState::ListenStarted(tokio_socket) => {
-                socket.tcp_state = TcpState::ListenStarted(tokio_socket);
-                Err(ErrorCode::ConcurrencyConflict.into())
-            }
-            previous_state => {
-                socket.tcp_state = previous_state;
-                Err(ErrorCode::InvalidState.into())
-            }
-        }
+        socket.start_listen()
     }
 
     fn finish_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-
-        let tokio_socket = match std::mem::replace(&mut socket.tcp_state, TcpState::Closed) {
-            TcpState::ListenStarted(tokio_socket) => tokio_socket,
-            previous_state => {
-                socket.tcp_state = previous_state;
-                return Err(ErrorCode::NotInProgress.into());
-            }
-        };
-
-        match with_ambient_tokio_runtime(|| tokio_socket.listen(socket.listen_backlog_size)) {
-            Ok(listener) => {
-                socket.tcp_state = TcpState::Listening {
-                    listener,
-                    pending_accept: None,
-                };
-                Ok(())
-            }
-            Err(err) => {
-                socket.tcp_state = TcpState::Closed;
-
-                Err(match Errno::from_io_error(&err) {
-                    // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
-                    // According to the docs, `listen` can return EMFILE on Windows.
-                    // This is odd, because we're not trying to create a new socket
-                    // or file descriptor of any kind. So we rewrite it to less
-                    // surprising error code.
-                    //
-                    // At the time of writing, this behavior has never been experimentally
-                    // observed by any of the wasmtime authors, so we're relying fully
-                    // on Microsoft's documentation here.
-                    #[cfg(windows)]
-                    Some(Errno::MFILE) => Errno::NOBUFS.into(),
-
-                    _ => err.into(),
-                })
-            }
-        }
+        socket.finish_listen()
     }
 
     fn accept(
