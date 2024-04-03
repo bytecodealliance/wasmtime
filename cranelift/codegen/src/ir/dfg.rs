@@ -133,9 +133,6 @@ pub struct DataFlowGraph {
     /// well as the external function references.
     pub signatures: PrimaryMap<SigRef, Signature>,
 
-    /// The pre-legalization signature for each entry in `signatures`, if any.
-    pub old_signatures: SecondaryMap<SigRef, Option<Signature>>,
-
     /// External function references. These are functions that can be called directly.
     pub ext_funcs: PrimaryMap<FuncRef, ExtFuncData>,
 
@@ -164,7 +161,6 @@ impl DataFlowGraph {
             values: PrimaryMap::new(),
             facts: SecondaryMap::new(),
             signatures: PrimaryMap::new(),
-            old_signatures: SecondaryMap::new(),
             ext_funcs: PrimaryMap::new(),
             values_labels: None,
             constants: ConstantPool::new(),
@@ -182,7 +178,6 @@ impl DataFlowGraph {
         self.value_lists.clear();
         self.values.clear();
         self.signatures.clear();
-        self.old_signatures.clear();
         self.ext_funcs.clear();
         self.values_labels = None;
         self.constants.clear();
@@ -461,7 +456,7 @@ impl DataFlowGraph {
             }
         }
 
-        // - `signatures`, `old_signatures`, and `ext_funcs` have no values.
+        // - `signatures` and `ext_funcs` have no values.
 
         if let Some(values_labels) = &mut self.values_labels {
             // Debug info is best-effort. If any is attached to value aliases,
