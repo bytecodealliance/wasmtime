@@ -530,25 +530,25 @@ impl DataFlowGraph {
     /// After calling this instruction, `dest_inst` will have had its results
     /// cleared, so it likely needs to be removed from the graph.
     ///
-    pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
+    pub fn replace_with_aliases(&mut self, dest_inst: Inst, original_inst: Inst) {
         debug_assert_ne!(
-            dest_inst, src_inst,
+            dest_inst, original_inst,
             "Replacing {} with itself would create a loop",
             dest_inst
         );
 
         let dest_results = self.results[dest_inst].as_slice(&self.value_lists);
-        let src_results = self.results[src_inst].as_slice(&self.value_lists);
+        let original_results = self.results[original_inst].as_slice(&self.value_lists);
 
         debug_assert_eq!(
             dest_results.len(),
-            src_results.len(),
+            original_results.len(),
             "Replacing {} with {} would produce a different number of results.",
             dest_inst,
-            src_inst
+            original_inst
         );
 
-        for (&dest, &original) in dest_results.iter().zip(src_results) {
+        for (&dest, &original) in dest_results.iter().zip(original_results) {
             let ty = self.value_type(original);
             debug_assert_eq!(
                 self.value_type(dest),
@@ -934,11 +934,9 @@ impl DataFlowGraph {
 
         let mut reuse = reuse.fuse();
         let result_tys: SmallVec<[_; 16]> = self.inst_result_types(inst, ctrl_typevar).collect();
-        let num_results = result_tys.len();
-        debug_assert!(u16::try_from(num_results).is_ok(), "Too many result values");
 
-        for (expected, ty) in result_tys.into_iter().enumerate() {
-            let num = expected as u16;
+        for (expected, &ty) in result_tys.iter().enumerate() {
+            let num = u16::try_from(expected).expect("Result value index should fit in u16");
             let value_data = ValueData::Inst { ty, num, inst };
             let v = if let Some(Some(v)) = reuse.next() {
                 debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
@@ -952,7 +950,7 @@ impl DataFlowGraph {
             debug_assert_eq!(expected, actual);
         }
 
-        num_results
+        result_tys.len()
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
