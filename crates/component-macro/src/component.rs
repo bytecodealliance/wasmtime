@@ -569,7 +569,7 @@ impl Expander for LowerExpander {
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
-                    dst: &mut std::mem::MaybeUninit<Self::Lower>,
+                    dst: &mut core::mem::MaybeUninit<Self::Lower>,
                 ) -> #internal::anyhow::Result<()> {
                     #extract_ty
                     #lowers
@@ -677,7 +677,7 @@ impl Expander for LowerExpander {
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
-                    dst: &mut std::mem::MaybeUninit<Self::Lower>,
+                    dst: &mut core::mem::MaybeUninit<Self::Lower>,
                 ) -> #internal::anyhow::Result<()> {
                     #extract_ty
                     match self {
@@ -1136,7 +1136,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             }
 
             pub fn all() -> Self {
-                use std::ops::Not;
+                use core::ops::Not;
                 Self::default().not()
             }
 
@@ -1149,21 +1149,21 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             }
         }
 
-        impl std::cmp::PartialEq for #name {
+        impl core::cmp::PartialEq for #name {
             fn eq(&self, rhs: &#name) -> bool {
                 #eq
             }
         }
 
-        impl std::cmp::Eq for #name { }
+        impl core::cmp::Eq for #name { }
 
-        impl std::fmt::Debug for #name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        impl core::fmt::Debug for #name {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 #internal::format_flags(&self.as_array(), &[#rust_names], f)
             }
         }
 
-        impl std::ops::BitOr for #name {
+        impl core::ops::BitOr for #name {
             type Output = #name;
 
             fn bitor(self, rhs: #name) -> #name {
@@ -1171,13 +1171,13 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             }
         }
 
-        impl std::ops::BitOrAssign for #name {
+        impl core::ops::BitOrAssign for #name {
             fn bitor_assign(&mut self, rhs: #name) {
                 #bitor_assign
             }
         }
 
-        impl std::ops::BitAnd for #name {
+        impl core::ops::BitAnd for #name {
             type Output = #name;
 
             fn bitand(self, rhs: #name) -> #name {
@@ -1185,13 +1185,13 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             }
         }
 
-        impl std::ops::BitAndAssign for #name {
+        impl core::ops::BitAndAssign for #name {
             fn bitand_assign(&mut self, rhs: #name) {
                 #bitand_assign
             }
         }
 
-        impl std::ops::BitXor for #name {
+        impl core::ops::BitXor for #name {
             type Output = #name;
 
             fn bitxor(self, rhs: #name) -> #name {
@@ -1199,13 +1199,13 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             }
         }
 
-        impl std::ops::BitXorAssign for #name {
+        impl core::ops::BitXorAssign for #name {
             fn bitxor_assign(&mut self, rhs: #name) {
                 #bitxor_assign
             }
         }
 
-        impl std::ops::Not for #name {
+        impl core::ops::Not for #name {
             type Output = #name;
 
             fn not(self) -> #name {
@@ -1220,7 +1220,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 &self,
                 cx: &mut #internal::LowerContext<'_, T>,
                 _ty: #internal::InterfaceType,
-                dst: &mut std::mem::MaybeUninit<Self::Lower>,
+                dst: &mut core::mem::MaybeUninit<Self::Lower>,
             ) -> #internal::anyhow::Result<()> {
                 #(
                     self.#field_names.lower(
@@ -1245,7 +1245,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                         #field_interface_type,
                         offset,
                     )?;
-                    offset += std::mem::size_of_val(&self.#field_names);
+                    offset += core::mem::size_of_val(&self.#field_names);
                 )*
                 Ok(())
             }

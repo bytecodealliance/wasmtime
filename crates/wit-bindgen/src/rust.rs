@@ -51,7 +51,7 @@ pub trait RustGenerator<'a> {
                     }
                     self.push_str("str");
                 }
-                TypeMode::Owned => self.push_str("String"),
+                TypeMode::Owned => self.push_str("wasmtime::component::__internal::String"),
             },
         }
     }
@@ -212,7 +212,7 @@ pub trait RustGenerator<'a> {
                 self.push_str("]");
             }
             TypeMode::Owned => {
-                self.push_str("Vec<");
+                self.push_str("wasmtime::component::__internal::Vec<");
                 self.print_ty(ty, next_mode);
                 self.push_str(">");
             }

@@ -1206,9 +1206,12 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("write!(f, \"{:?}\", self)\n");
                 self.push_str("}\n");
                 self.push_str("}\n");
-                self.push_str("impl std::error::Error for ");
-                self.push_str(&name);
-                self.push_str("{}\n");
+
+                if cfg!(feature = "std") {
+                    self.push_str("impl std::error::Error for ");
+                    self.push_str(&name);
+                    self.push_str("{}\n");
+                }
             }
             self.assert_type(id, &name);
         }
@@ -1368,12 +1371,14 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("}\n");
                 self.push_str("\n");
 
-                self.push_str("impl");
-                self.print_generics(lt);
-                self.push_str(" std::error::Error for ");
-                self.push_str(&name);
-                self.print_generics(lt);
-                self.push_str(" {}\n");
+                if cfg!(feature = "std") {
+                    self.push_str("impl");
+                    self.print_generics(lt);
+                    self.push_str(" std::error::Error for ");
+                    self.push_str(&name);
+                    self.print_generics(lt);
+                    self.push_str(" {}\n");
+                }
             }
 
             self.assert_type(id, &name);
@@ -1516,9 +1521,11 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("}\n");
             self.push_str("}\n");
             self.push_str("\n");
-            self.push_str("impl std::error::Error for ");
-            self.push_str(&name);
-            self.push_str("{}\n");
+            if cfg!(feature = "std") {
+                self.push_str("impl std::error::Error for ");
+                self.push_str(&name);
+                self.push_str("{}\n");
+            }
         } else {
             self.print_rust_enum_debug(
                 id,

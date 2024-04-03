@@ -200,4 +200,4 @@ threads = ["wasmtime-runtime?/threads", "wasmtime-cranelift?/threads", "std"]
 # TODO
 addr2line = ["dep:addr2line", "dep:gimli"]
 
-std = ['wasmtime-runtime/std', 'postcard/use-std']
+std = ['wasmtime-runtime/std', 'postcard/use-std', 'wasmtime-component-macro?/std']
