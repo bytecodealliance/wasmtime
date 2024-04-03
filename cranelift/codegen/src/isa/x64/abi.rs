@@ -1020,10 +1020,13 @@ impl From<StackAMode> for SyntheticAmode {
         // `expect()`s should never fail.
         match amode {
             StackAMode::ArgOffset(off, _ty) => {
-                let off = i32::try_from(off)
-                    .expect("Offset in FPOffset is greater than 2GB; should hit impl limit first");
+                let off =
+                    i32::try_from(off + 16) // frame pointer + return address
+                        .expect(
+                            "Offset in ArgOffset is greater than 2GB; should hit impl limit first",
+                        );
                 SyntheticAmode::Real(Amode::ImmReg {
-                    simm32: off + 16, // frame pointer + return address
+                    simm32: off,
                     base: regs::rbp(),
                     flags: MemFlags::trusted(),
                 })
