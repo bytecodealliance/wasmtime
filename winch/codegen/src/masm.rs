@@ -2,7 +2,8 @@ use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
-    ir::{Endianness, LibCall, MemFlags, UserExternalNameRef},
+    binemit::CodeOffset,
+    ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -769,7 +770,7 @@ pub(crate) trait MacroAssembler {
     fn push(&mut self, src: Reg, size: OperandSize) -> StackSlot;
 
     /// Finalize the assembly and return the result.
-    fn finalize(self) -> MachBufferFinalized<Final>;
+    fn finalize(self, base: Option<SourceLoc>) -> MachBufferFinalized<Final>;
 
     /// Zero a particular register.
     fn zero(&mut self, reg: Reg);
@@ -933,4 +934,14 @@ pub(crate) trait MacroAssembler {
             self.free_stack(bytes);
         }
     }
+
+    /// Mark the start of a source location returning the machine code offset
+    /// and the relative source code location.
+    fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc);
+
+    /// Mark the end of a source location.
+    fn end_source_loc(&mut self);
+
+    /// The current offset, in bytes from the beginning of the function.
+    fn current_code_offset(&self) -> CodeOffset;
 }

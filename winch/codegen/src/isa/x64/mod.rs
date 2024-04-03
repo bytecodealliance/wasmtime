@@ -136,10 +136,11 @@ impl TargetIsa for X64 {
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
+        let base = codegen.source_location.base;
 
         let names = codegen.env.take_name_map();
         Ok(CompiledFunction::new(
-            masm.finalize(),
+            masm.finalize(base),
             names,
             self.function_alignment(),
         ))
