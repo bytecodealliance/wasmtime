@@ -147,16 +147,9 @@ impl AMode {
     pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
         match self {
             &AMode::NominalSPOffset(offset, _) => offset + state.virtual_sp_offset,
-            _ => self.get_offset(),
-        }
-    }
-
-    fn get_offset(&self) -> i64 {
-        match self {
             &AMode::RegOffset(_, offset, ..) => offset,
             &AMode::SPOffset(offset, _) => offset,
             &AMode::FPOffset(offset, _) => offset,
-            &AMode::NominalSPOffset(offset, _) => offset,
             &AMode::Const(_) | &AMode::Label(_) => 0,
         }
     }
@@ -206,7 +199,8 @@ impl Display for AMode {
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            StackAMode::FPOffset(offset, ty) => AMode::FPOffset(offset, ty),
+            // Argument area begins after saved lr + fp.
+            StackAMode::ArgOffset(offset, ty) => AMode::FPOffset(offset + 16, ty),
             StackAMode::SPOffset(offset, ty) => AMode::SPOffset(offset, ty),
             StackAMode::NominalSPOffset(offset, ty) => AMode::NominalSPOffset(offset, ty),
         }

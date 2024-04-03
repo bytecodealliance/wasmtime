@@ -405,10 +405,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Ok((next_stack, extra_arg))
     }
 
-    fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        16 // frame pointer + return address.
-    }
-
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
         // For integer-typed values, we always load a full 64 bits (and we always spill a full 64
         // bits as well -- see `Inst::store()`).
@@ -1023,9 +1019,12 @@ impl From<StackAMode> for SyntheticAmode {
         // We enforce a 128 MB stack-frame size limit above, so these
         // `expect()`s should never fail.
         match amode {
-            StackAMode::FPOffset(off, _ty) => {
-                let off = i32::try_from(off)
-                    .expect("Offset in FPOffset is greater than 2GB; should hit impl limit first");
+            StackAMode::ArgOffset(off, _ty) => {
+                let off =
+                    i32::try_from(off + 16) // frame pointer + return address
+                        .expect(
+                            "Offset in ArgOffset is greater than 2GB; should hit impl limit first",
+                        );
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32: off,
                     base: regs::rbp(),

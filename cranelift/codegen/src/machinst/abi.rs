@@ -281,9 +281,9 @@ pub enum ArgsOrRets {
 /// appropriate addressing mode.
 #[derive(Clone, Copy, Debug)]
 pub enum StackAMode {
-    /// Offset from the frame pointer, possibly making use of a specific type
-    /// for a scaled indexing operation.
-    FPOffset(i64, ir::Type),
+    /// Offset into the current frame's argument area, possibly making use of a
+    /// specific type for a scaled indexing operation.
+    ArgOffset(i64, ir::Type),
     /// Offset from the nominal stack pointer, possibly making use of a specific
     /// type for a scaled indexing operation.
     NominalSPOffset(i64, ir::Type),
@@ -296,7 +296,7 @@ impl StackAMode {
     /// Offset by an addend.
     pub fn offset(self, addend: i64) -> Self {
         match self {
-            StackAMode::FPOffset(off, ty) => StackAMode::FPOffset(off + addend, ty),
+            StackAMode::ArgOffset(off, ty) => StackAMode::ArgOffset(off + addend, ty),
             StackAMode::NominalSPOffset(off, ty) => StackAMode::NominalSPOffset(off + addend, ty),
             StackAMode::SPOffset(off, ty) => StackAMode::SPOffset(off + addend, ty),
         }
@@ -304,7 +304,7 @@ impl StackAMode {
 
     pub fn get_type(&self) -> ir::Type {
         match self {
-            &StackAMode::FPOffset(_, ty) => ty,
+            &StackAMode::ArgOffset(_, ty) => ty,
             &StackAMode::NominalSPOffset(_, ty) => ty,
             &StackAMode::SPOffset(_, ty) => ty,
         }
@@ -416,10 +416,6 @@ pub trait ABIMachineSpec {
         add_ret_area_ptr: bool,
         args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)>;
-
-    /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
-    /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
-    fn fp_to_arg_offset(call_conv: isa::CallConv, flags: &settings::Flags) -> i64;
 
     /// Generate a load from the stack.
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I;
@@ -1520,22 +1516,17 @@ impl<M: ABIMachineSpec> Callee<M> {
                     extension,
                     ..
                 } => {
-                    // However, we have to respect the extention mode for stack
+                    // However, we have to respect the extension mode for stack
                     // slots, or else we grab the wrong bytes on big-endian.
                     let ext = M::get_ext_mode(sigs[self.sig].call_conv, extension);
-                    let ty = match (ext, ty_bits(ty) as u32) {
-                        (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
-                            if n < M::word_bits() =>
-                        {
+                    let ty =
+                        if ext != ArgumentExtension::None && M::word_bits() > ty_bits(ty) as u32 {
                             M::word_type()
-                        }
-                        _ => ty,
-                    };
+                        } else {
+                            ty
+                        };
                     insts.push(M::gen_load_stack(
-                        StackAMode::FPOffset(
-                            M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
-                            ty,
-                        ),
+                        StackAMode::ArgOffset(offset, ty),
                         *into_reg,
                         ty,
                     ));
@@ -1560,10 +1551,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                 } else {
                     // Buffer address is implicitly defined by the ABI.
                     insts.push(M::gen_get_stack_addr(
-                        StackAMode::FPOffset(
-                            M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
-                            I8,
-                        ),
+                        StackAMode::ArgOffset(offset, I8),
                         into_reg,
                         I8,
                     ));
@@ -1586,10 +1574,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                         // This was allocated in the `init` routine.
                         let addr_reg = self.arg_temp_reg[idx].unwrap();
                         insts.push(M::gen_load_stack(
-                            StackAMode::FPOffset(
-                                M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
-                                ty,
-                            ),
+                            StackAMode::ArgOffset(offset, ty),
                             addr_reg,
                             ty,
                         ));
@@ -2357,10 +2342,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             "tail calls require frame pointers to be enabled"
                         );
 
-                        StackAMode::FPOffset(
-                            offset + M::fp_to_arg_offset(self.caller_conv, &self.flags),
-                            ty,
-                        )
+                        StackAMode::ArgOffset(offset, ty)
                     } else {
                         StackAMode::SPOffset(offset, ty)
                     };
