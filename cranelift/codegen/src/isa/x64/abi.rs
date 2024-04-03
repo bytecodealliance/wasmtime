@@ -40,10 +40,10 @@ impl X64ABIMachineSpec {
 
             // TODO: It would be nice if we could store the imm 0, but we don't have insts for those
             // so store the stack pointer. Any register will do, since the stack is undefined at this point
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(0, I8),
-                regs::rsp(),
+            insts.push(Inst::store(
                 I32,
+                regs::rsp(),
+                Amode::imm_reg(0, regs::rsp()),
             ));
         }
 
