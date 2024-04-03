@@ -292,25 +292,6 @@ pub enum StackAMode {
     SPOffset(i64, ir::Type),
 }
 
-impl StackAMode {
-    /// Offset by an addend.
-    pub fn offset(self, addend: i64) -> Self {
-        match self {
-            StackAMode::ArgOffset(off, ty) => StackAMode::ArgOffset(off + addend, ty),
-            StackAMode::NominalSPOffset(off, ty) => StackAMode::NominalSPOffset(off + addend, ty),
-            StackAMode::SPOffset(off, ty) => StackAMode::SPOffset(off + addend, ty),
-        }
-    }
-
-    pub fn get_type(&self) -> ir::Type {
-        match self {
-            &StackAMode::ArgOffset(_, ty) => ty,
-            &StackAMode::NominalSPOffset(_, ty) => ty,
-            &StackAMode::SPOffset(_, ty) => ty,
-        }
-    }
-}
-
 /// Trait implemented by machine-specific backend to represent ISA flags.
 pub trait IsaFlags: Clone {
     /// Get a flag indicating whether forward-edge CFI is enabled.
@@ -1346,38 +1327,6 @@ fn generate_gv<M: ABIMachineSpec>(
     }
 }
 
-fn gen_load_stack_multi<M: ABIMachineSpec>(
-    from: StackAMode,
-    dst: ValueRegs<Writable<Reg>>,
-    ty: Type,
-) -> SmallInstVec<M::I> {
-    let mut ret = smallvec![];
-    let (_, tys) = M::I::rc_for_type(ty).unwrap();
-    let mut offset = 0;
-    // N.B.: registers are given in the `ValueRegs` in target endian order.
-    for (&dst, &ty) in dst.regs().iter().zip(tys.iter()) {
-        ret.push(M::gen_load_stack(from.offset(offset), dst, ty));
-        offset += ty.bytes() as i64;
-    }
-    ret
-}
-
-fn gen_store_stack_multi<M: ABIMachineSpec>(
-    from: StackAMode,
-    src: ValueRegs<Reg>,
-    ty: Type,
-) -> SmallInstVec<M::I> {
-    let mut ret = smallvec![];
-    let (_, tys) = M::I::rc_for_type(ty).unwrap();
-    let mut offset = 0;
-    // N.B.: registers are given in the `ValueRegs` in target endian order.
-    for (&src, &ty) in src.regs().iter().zip(tys.iter()) {
-        ret.push(M::gen_store_stack(from.offset(offset), src, ty));
-        offset += ty.bytes() as i64;
-    }
-    ret
-}
-
 /// If the signature needs to be legalized, then return the struct-return
 /// parameter that should be prepended to its returns. Otherwise, return `None`.
 fn missing_struct_return(sig: &ir::Signature) -> Option<ir::AbiParam> {
@@ -1758,32 +1707,6 @@ impl<M: ABIMachineSpec> Callee<M> {
         )
     }
 
-    /// Load from a spillslot.
-    pub fn load_spillslot(
-        &self,
-        slot: SpillSlot,
-        ty: Type,
-        into_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<M::I> {
-        let sp_off = self.get_spillslot_offset(slot);
-        trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-
-        gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
-    }
-
-    /// Store to a spillslot.
-    pub fn store_spillslot(
-        &self,
-        slot: SpillSlot,
-        ty: Type,
-        from_regs: ValueRegs<Reg>,
-    ) -> SmallInstVec<M::I> {
-        let sp_off = self.get_spillslot_offset(slot);
-        trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-
-        gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
-    }
-
     /// Get an `args` pseudo-inst, if any, that should appear at the
     /// very top of the function body prior to regalloc.
     pub fn take_args(&mut self) -> Option<M::I> {
@@ -2032,24 +1955,26 @@ impl<M: ABIMachineSpec> Callee<M> {
 
     /// Generate a spill.
     pub fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> M::I {
-        let ty = M::I::canonical_type_for_rc(Reg::from(from_reg).class());
-        self.store_spillslot(to_slot, ty, ValueRegs::one(Reg::from(from_reg)))
-            .into_iter()
-            .next()
-            .unwrap()
+        let ty = M::I::canonical_type_for_rc(from_reg.class());
+        debug_assert_eq!(<M>::I::rc_for_type(ty).unwrap().1, &[ty]);
+
+        let sp_off = self.get_spillslot_offset(to_slot);
+        trace!("gen_spill: {from_reg:?} into slot {to_slot:?} at offset {sp_off}");
+
+        let from = StackAMode::NominalSPOffset(sp_off, ty);
+        <M>::gen_store_stack(from, Reg::from(from_reg), ty)
     }
 
     /// Generate a reload (fill).
     pub fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> M::I {
         let ty = M::I::canonical_type_for_rc(to_reg.to_reg().class());
-        self.load_spillslot(
-            from_slot,
-            ty,
-            writable_value_regs(ValueRegs::one(Reg::from(to_reg.to_reg()))),
-        )
-        .into_iter()
-        .next()
-        .unwrap()
+        debug_assert_eq!(<M>::I::rc_for_type(ty).unwrap().1, &[ty]);
+
+        let sp_off = self.get_spillslot_offset(from_slot);
+        trace!("gen_reload: {to_reg:?} from slot {from_slot:?} at offset {sp_off}");
+
+        let from = StackAMode::NominalSPOffset(sp_off, ty);
+        <M>::gen_load_stack(from, to_reg.map(Reg::from), ty)
     }
 }
 
