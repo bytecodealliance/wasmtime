@@ -58,7 +58,8 @@ block0(v0: i64):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   trap_if stk_ovf##(sp ult a0)
+;   addi t6,a0,16
+;   trap_if stk_ovf##(sp ult t6)
 ; block0:
 ;   load_sym a2,%foo+0
 ;   callind a2
@@ -73,9 +74,10 @@ block0(v0: i64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   bgeu sp, a0, 8
+;   addi t6, a0, 0x10
+;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-; block1: ; offset 0x18
+; block1: ; offset 0x1c
 ;   auipc a2, 0
 ;   ld a2, 0xc(a2)
 ;   j 0xc
@@ -105,6 +107,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   ld t6,0(a0)
 ;   ld t6,4(t6)
+;   addi t6,t6,16
 ;   trap_if stk_ovf##(sp ult t6)
 ; block0:
 ;   load_sym a2,%foo+0
@@ -122,9 +125,10 @@ block0(v0: i64):
 ;   mv s0, sp
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
+;   addi t6, t6, 0x10
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-; block1: ; offset 0x20
+; block1: ; offset 0x24
 ;   auipc a2, 0
 ;   ld a2, 0xc(a2)
 ;   j 0xc
