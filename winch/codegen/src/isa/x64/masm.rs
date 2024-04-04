@@ -24,7 +24,8 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    ir::MemFlags,
+    binemit::CodeOffset,
+    ir::{MemFlags, RelSourceLoc, SourceLoc},
     isa::unwind::UnwindInst,
     isa::x64::{
         args::{ExtMode, CC},
@@ -750,12 +751,12 @@ impl Masm for MacroAssembler {
         self.asm.ret();
     }
 
-    fn finalize(mut self) -> MachBufferFinalized<Final> {
+    fn finalize(mut self, base: Option<SourceLoc>) -> MachBufferFinalized<Final> {
         if let Some(patch) = self.stack_max_use_add {
             patch.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
         }
 
-        self.asm.finalize()
+        self.asm.finalize(base)
     }
 
     fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {
@@ -1101,6 +1102,18 @@ impl Masm for MacroAssembler {
         let rest = &targets[0..default_index];
         let tmp1 = regs::scratch();
         self.asm.jmp_table(rest.into(), default, index, tmp1, tmp);
+    }
+
+    fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {
+        self.asm.buffer_mut().start_srcloc(loc)
+    }
+
+    fn end_source_loc(&mut self) {
+        self.asm.buffer_mut().end_srcloc();
+    }
+
+    fn current_code_offset(&self) -> CodeOffset {
+        self.asm.buffer().cur_offset()
     }
 }
 
