@@ -358,15 +358,17 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             // sd   fp,0(sp)     ;; store old fp.
             // mv   fp,sp        ;; set fp to sp.
             insts.extend(Self::gen_sp_reg_adjust(-16));
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(8, I64),
+            insts.push(Inst::gen_store(
+                AMode::SPOffset(8, I64),
                 link_reg(),
                 I64,
+                MemFlags::trusted(),
             ));
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(0, I64),
+            insts.push(Inst::gen_store(
+                AMode::SPOffset(0, I64),
                 fp_reg(),
                 I64,
+                MemFlags::trusted(),
             ));
 
             if flags.unwind_info() {
@@ -395,15 +397,17 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut insts = SmallVec::new();
 
         if frame_layout.setup_area_size > 0 {
-            insts.push(Self::gen_load_stack(
-                StackAMode::SPOffset(8, I64),
+            insts.push(Inst::gen_load(
                 writable_link_reg(),
+                AMode::SPOffset(8, I64),
                 I64,
+                MemFlags::trusted(),
             ));
-            insts.push(Self::gen_load_stack(
-                StackAMode::SPOffset(0, I64),
+            insts.push(Inst::gen_load(
                 writable_fp_reg(),
+                AMode::SPOffset(0, I64),
                 I64,
+                MemFlags::trusted(),
             ));
             insts.extend(Self::gen_sp_reg_adjust(16));
         }
@@ -483,10 +487,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         },
                     });
                 }
-                insts.push(Self::gen_store_stack(
-                    StackAMode::SPOffset(-(cur_offset as i64), ty),
+                insts.push(Inst::gen_store(
+                    AMode::SPOffset(-(cur_offset as i64), ty),
                     real_reg_to_reg(reg.to_reg()),
                     ty,
+                    MemFlags::trusted(),
                 ));
                 cur_offset += 8
             }
@@ -514,10 +519,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 RegClass::Float => F64,
                 RegClass::Vector => unimplemented!("Vector Clobber Restores"),
             };
-            insts.push(Self::gen_load_stack(
-                StackAMode::SPOffset(-cur_offset, ty),
+            insts.push(Inst::gen_load(
                 Writable::from_reg(real_reg_to_reg(reg.to_reg())),
+                AMode::SPOffset(-cur_offset, ty),
                 ty,
+                MemFlags::trusted(),
             ));
             cur_offset += 8
         }
@@ -1090,10 +1096,11 @@ impl Riscv64MachineDeps {
                 rs2: tmp.to_reg(),
             });
 
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(0, I8),
+            insts.push(Inst::gen_store(
+                AMode::SPOffset(0, I8),
                 zero_reg(),
                 I32,
+                MemFlags::trusted(),
             ));
         }
 

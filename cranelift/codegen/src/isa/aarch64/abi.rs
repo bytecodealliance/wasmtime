@@ -1190,10 +1190,11 @@ impl AArch64MachineDeps {
         for _ in 0..probe_count {
             insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
 
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(0, I8),
+            insts.push(Inst::gen_store(
+                AMode::SPOffset { off: 0, ty: I8 },
                 zero_reg(),
                 I32,
+                MemFlags::trusted(),
             ));
         }
 
