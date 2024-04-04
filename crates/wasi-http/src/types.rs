@@ -5,7 +5,7 @@ use crate::io::TokioIo;
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
-    dns_error, hyper_request_error,
+    dns_error, hyper_request_error, HttpResult,
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
@@ -63,7 +63,7 @@ pub trait WasiHttpView: Send {
     fn send_request(
         &mut self,
         request: OutgoingRequest,
-    ) -> wasmtime::Result<Resource<HostFutureIncomingResponse>>
+    ) -> HttpResult<Resource<HostFutureIncomingResponse>>
     where
         Self: Sized,
     {
@@ -121,7 +121,7 @@ pub fn default_send_request(
         first_byte_timeout,
         between_bytes_timeout,
     }: OutgoingRequest,
-) -> wasmtime::Result<Resource<HostFutureIncomingResponse>> {
+) -> HttpResult<Resource<HostFutureIncomingResponse>> {
     let handle = wasmtime_wasi::runtime::spawn(async move {
         let resp = handler(
             authority,
