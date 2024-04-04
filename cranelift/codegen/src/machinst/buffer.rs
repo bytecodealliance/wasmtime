@@ -1635,6 +1635,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Set the `SourceLoc` for code from this offset until the offset at the
     /// next call to `end_srcloc()`.
+    /// Returns the current [CodeOffset] and [RelSourceLoc].
     pub fn start_srcloc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {
         let cur = (self.cur_offset(), loc);
         self.cur_srcloc = Some(cur);
