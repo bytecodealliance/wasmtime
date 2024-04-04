@@ -1218,7 +1218,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
     /// value, if possible.
     pub fn get_constant(&self, ir_inst: Inst) -> Option<u64> {
-        self.inst_constants.get(&ir_inst).cloned()
+        self.inst_constants.get(&ir_inst).map(|&c| {
+            // The upper bits must be zero, enforced during legalization and by
+            // the CLIF verifier.
+            debug_assert_eq!(c, {
+                let input_size = self.output_ty(ir_inst, 0).bits() as u64;
+                let shift = 64 - input_size;
+                (c << shift) >> shift
+            });
+            c
+        })
     }
 
     /// Get the input as one of two options other than a direct register:
