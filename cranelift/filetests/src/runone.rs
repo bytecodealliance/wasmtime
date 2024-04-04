@@ -176,7 +176,7 @@ impl FileUpdate {
         assert!(location.line_number > self.last_update.get());
         self.last_update.set(location.line_number);
 
-        // Read the old test file and calculate thte new line number we're
+        // Read the old test file and calculate the new line number we're
         // preserving up to based on how many lines prior to this have been
         // removed or added.
         let old_test = std::fs::read_to_string(&self.path)?;
