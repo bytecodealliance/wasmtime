@@ -224,7 +224,7 @@ extern "C" {
 #endif
 
 /**
- * \brief Converts from the text format of WebAssembly to to the binary format.
+ * \brief Converts from the text format of WebAssembly to the binary format.
  *
  * \param wat this it the input pointer with the WebAssembly Text Format inside
  *        of it. This will be parsed and converted to the binary format.

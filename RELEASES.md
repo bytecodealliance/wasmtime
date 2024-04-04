@@ -758,7 +758,7 @@ Released 2023-09-20
   instead of at compile time.
   [#6807](https://github.com/bytecodealliance/wasmtime/pull/6807)
 
-* `Engine::detect_precompiled{,_file}` can be used to to determine whether some
+* `Engine::detect_precompiled{,_file}` can be used to determine whether some
   bytes or a file look like a precompiled module or a component.
   [#6832](https://github.com/bytecodealliance/wasmtime/pull/6832)
   [#6937](https://github.com/bytecodealliance/wasmtime/pull/6937)
