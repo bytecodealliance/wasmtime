@@ -155,7 +155,7 @@ pub struct RunCommand {
     /// with external profilers such as `perf`. The guest profiling strategy
     /// enables in-process sampling and will write the captured profile to
     /// `wasmtime-guest-profile.json` by default which can be viewed at
-    /// https://profiler.firefox.com/.
+    /// <https://profiler.firefox.com/>.
     ///
     /// The `guest` option can be additionally configured as:
     ///
@@ -322,7 +322,7 @@ pub struct CompileCommand {
     #[arg(long, value_name = "TARGET")]
     pub target: Option<String>,
 
-    /// The path of the output compiled module; defaults to <MODULE>.cwasm
+    /// The path of the output compiled module; defaults to `<MODULE>.cwasm`
     #[arg(short = 'o', long, value_name = "OUTPUT")]
     pub output: Option<PathBuf>,
 

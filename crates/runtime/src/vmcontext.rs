@@ -3,13 +3,13 @@
 
 mod vm_host_func_context;
 
-use crate::gc::VMExternRef;
+use crate::{GcStore, VMGcRef};
 use sptr::Strict;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::marker;
 use std::mem;
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
 pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
@@ -422,9 +422,8 @@ mod test_vmglobal_definition {
 
     #[test]
     #[cfg(feature = "gc")]
-    fn check_vmglobal_can_contain_externref() {
-        use crate::gc::VMExternRef;
-        assert!(size_of::<VMExternRef>() <= size_of::<VMGlobalDefinition>());
+    fn check_vmglobal_can_contain_gc_ref() {
+        assert!(size_of::<crate::VMGcRef>() <= size_of::<VMGlobalDefinition>());
     }
 }
 
@@ -534,22 +533,29 @@ impl VMGlobalDefinition {
         &mut *(self.storage.as_mut().as_mut_ptr().cast::<[u8; 16]>())
     }
 
-    /// Return a reference to the value as an externref.
-    pub unsafe fn as_externref(&self) -> &Option<VMExternRef> {
-        let ret = &*(self.storage.as_ref().as_ptr().cast::<Option<VMExternRef>>());
+    /// Return a reference to the global value as a borrowed GC reference.
+    pub unsafe fn as_gc_ref(&self) -> Option<&VMGcRef> {
+        let raw_ptr = self.storage.as_ref().as_ptr().cast::<Option<VMGcRef>>();
+        let ret = (*raw_ptr).as_ref();
         assert!(cfg!(feature = "gc") || ret.is_none());
         ret
     }
 
-    /// Return a mutable reference to the value as an externref.
-    pub unsafe fn as_externref_mut(&mut self) -> &mut Option<VMExternRef> {
-        let ret = &mut *(self
-            .storage
-            .as_mut()
-            .as_mut_ptr()
-            .cast::<Option<VMExternRef>>());
-        assert!(cfg!(feature = "gc") || ret.is_none());
-        ret
+    /// Initialize a global to the given GC reference.
+    pub unsafe fn init_gc_ref(&mut self, gc_ref: Option<VMGcRef>) {
+        assert!(cfg!(feature = "gc") || gc_ref.is_none());
+        let raw_ptr = self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>();
+        ptr::write(raw_ptr, gc_ref);
+    }
+
+    /// Write a GC reference into this global value.
+    pub unsafe fn write_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
+        assert!(cfg!(feature = "gc") || gc_ref.is_none());
+
+        let dest = &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>());
+        assert!(cfg!(feature = "gc") || dest.is_none());
+
+        gc_store.write_gc_ref(dest, gc_ref)
     }
 
     /// Return a reference to the value as a `VMFuncRef`.
@@ -1036,19 +1042,58 @@ pub union ValRaw {
 
     /// A WebAssembly `externref` value (or one of its subtypes).
     ///
-    /// The payload here is a pointer which is runtime-defined. This is one of
-    /// the main points of unsafety about the `ValRaw` type as the validity of
-    /// the pointer here is not easily verified and must be preserved by
-    /// carefully calling the correct functions throughout the runtime.
+    /// The payload here is a compressed pointer value which is
+    /// runtime-defined. This is one of the main points of unsafety about the
+    /// `ValRaw` type as the validity of the pointer here is not easily verified
+    /// and must be preserved by carefully calling the correct functions
+    /// throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    externref: *mut c_void,
+    externref: u32,
+
+    /// A WebAssembly `anyref` value (or one of its subtypes).
+    ///
+    /// The payload here is a compressed pointer value which is
+    /// runtime-defined. This is one of the main points of unsafety about the
+    /// `ValRaw` type as the validity of the pointer here is not easily verified
+    /// and must be preserved by carefully calling the correct functions
+    /// throughout the runtime.
+    ///
+    /// This value is always stored in a little-endian format.
+    anyref: u32,
 }
 
 // This type is just a bag-of-bits so it's up to the caller to figure out how
 // to safely deal with threading concerns and safely access interior bits.
 unsafe impl Send for ValRaw {}
 unsafe impl Sync for ValRaw {}
+
+impl std::fmt::Debug for ValRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct Hex<T>(T);
+        impl<T: std::fmt::LowerHex> std::fmt::Debug for Hex<T> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let bytes = std::mem::size_of::<T>();
+                let hex_digits_per_byte = 2;
+                let hex_digits = bytes * hex_digits_per_byte;
+                write!(f, "0x{:0width$x}", self.0, width = hex_digits)
+            }
+        }
+
+        unsafe {
+            f.debug_struct("ValRaw")
+                .field("i32", &Hex(self.i32))
+                .field("i64", &Hex(self.i64))
+                .field("f32", &Hex(self.f32))
+                .field("f64", &Hex(self.f64))
+                .field("v128", &Hex(self.v128))
+                .field("funcref", &self.funcref)
+                .field("externref", &Hex(self.externref))
+                .field("anyref", &Hex(self.anyref))
+                .finish()
+        }
+    }
+}
 
 impl ValRaw {
     /// Creates a WebAssembly `i32` value
@@ -1113,11 +1158,18 @@ impl ValRaw {
 
     /// Creates a WebAssembly `externref` value
     #[inline]
-    pub fn externref(i: *mut c_void) -> ValRaw {
-        assert!(cfg!(feature = "gc") || i.is_null());
+    pub fn externref(e: u32) -> ValRaw {
+        assert!(cfg!(feature = "gc") || e == 0);
         ValRaw {
-            externref: Strict::map_addr(i, |i| i.to_le()),
+            externref: e.to_le(),
         }
+    }
+
+    /// Creates a WebAssembly `anyref` value
+    #[inline]
+    pub fn anyref(r: u32) -> ValRaw {
+        assert!(cfg!(feature = "gc") || r == 0);
+        ValRaw { anyref: r.to_le() }
     }
 
     /// Gets the WebAssembly `i32` value
@@ -1170,10 +1222,18 @@ impl ValRaw {
 
     /// Gets the WebAssembly `externref` value
     #[inline]
-    pub fn get_externref(&self) -> *mut c_void {
-        let ptr = unsafe { Strict::map_addr(self.externref, |i| usize::from_le(i)) };
-        assert!(cfg!(feature = "gc") || ptr.is_null());
-        ptr
+    pub fn get_externref(&self) -> u32 {
+        let externref = u32::from_le(unsafe { self.externref });
+        assert!(cfg!(feature = "gc") || externref == 0);
+        externref
+    }
+
+    /// Gets the WebAssembly `anyref` value
+    #[inline]
+    pub fn get_anyref(&self) -> u32 {
+        let anyref = u32::from_le(unsafe { self.anyref });
+        assert!(cfg!(feature = "gc") || anyref == 0);
+        anyref
     }
 }
 

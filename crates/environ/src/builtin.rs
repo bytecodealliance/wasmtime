@@ -66,30 +66,36 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "wmemcheck")]
             update_mem_size(vmctx: vmctx, num_bytes: i32);
 
-            // Returns an index to drop a `VMExternRef`.
+            // Drop a non-stack GC reference (eg an overwritten table entry)
+            // once it will no longer be used again. (Note: `val` is not a
+            // `reference` because it needn't appear in any stack maps, as it
+            // must not be live after this call.)
             #[cfg(feature = "gc")]
-            drop_externref(vmctx: vmctx, val: pointer);
+            drop_gc_ref(vmctx: vmctx, val: pointer);
 
-            // Returns an index to do a GC and then insert a `VMExternRef` into the
-            // `VMExternRefActivationsTable`.
+            // Do a GC, treating the optional `root` as a GC root and returning
+            // the updated `root` (so that, in the case of moving collectors,
+            // callers have a valid version of `root` again).
             #[cfg(feature = "gc")]
-            activations_table_insert_with_gc(vmctx: vmctx, val: reference);
+            gc(vmctx: vmctx, root: reference) -> reference;
 
-            // Returns an index for Wasm's `global.get` instruction for `externref`s.
+            // Implementation of Wasm's `global.get` instruction for globals
+            // containing GC references.
             #[cfg(feature = "gc")]
-            externref_global_get(vmctx: vmctx, global: i32) -> reference;
+            gc_ref_global_get(vmctx: vmctx, global: i32) -> reference;
 
-            // Returns an index for Wasm's `global.get` instruction for `externref`s.
+            // Implementation of Wasm's `global.set` instruction for globals
+            // containing GC references.
             #[cfg(feature = "gc")]
-            externref_global_set(vmctx: vmctx, global: i32, val: reference);
+            gc_ref_global_set(vmctx: vmctx, global: i32, val: reference);
 
-            // Returns an index for Wasm's `table.grow` instruction for `externref`s.
+            // Returns an index for Wasm's `table.grow` instruction for GC references.
             #[cfg(feature = "gc")]
-            table_grow_externref(vmctx: vmctx, table: i32, delta: i32, init: reference) -> i32;
+            table_grow_gc_ref(vmctx: vmctx, table: i32, delta: i32, init: reference) -> i32;
 
-            // Returns an index for Wasm's `table.fill` instruction for `externref`s.
+            // Returns an index for Wasm's `table.fill` instruction for GC references.
             #[cfg(feature = "gc")]
-            table_fill_externref(vmctx: vmctx, table: i32, dst: i32, val: reference, len: i32);
+            table_fill_gc_ref(vmctx: vmctx, table: i32, dst: i32, val: reference, len: i32);
         }
     };
 }

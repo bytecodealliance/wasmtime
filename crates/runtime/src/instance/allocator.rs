@@ -3,7 +3,7 @@ use crate::instance::{Instance, InstanceHandle};
 use crate::memory::Memory;
 use crate::mpk::ProtectionKey;
 use crate::table::{Table, TableElementType};
-use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
+use crate::{CompiledModuleId, ModuleRuntimeInfo, Store, VMGcRef, I31};
 use anyhow::{anyhow, bail, Result};
 use std::{alloc, any::Any, mem, ptr, sync::Arc};
 use wasmtime_environ::{
@@ -11,6 +11,9 @@ use wasmtime_environ::{
     MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, TableSegment,
     Trap, VMOffsets, WasmValType, WASM_PAGE_SIZE,
 };
+
+#[cfg(feature = "gc")]
+use crate::{GcHeap, GcRuntime};
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
@@ -133,6 +136,25 @@ impl Default for TableAllocationIndex {
 
 impl TableAllocationIndex {
     /// Get the underlying index of this `TableAllocationIndex`.
+    pub fn index(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// The index of a table allocation within an `InstanceAllocator`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct GcHeapAllocationIndex(u32);
+
+impl Default for GcHeapAllocationIndex {
+    fn default() -> Self {
+        // A default `GcHeapAllocationIndex` that can be used with
+        // `InstanceAllocator`s that don't actually need indices.
+        GcHeapAllocationIndex(u32::MAX)
+    }
+}
+
+impl GcHeapAllocationIndex {
+    /// Get the underlying index of this `GcHeapAllocationIndex`.
     pub fn index(&self) -> usize {
         self.0 as usize
     }
@@ -265,6 +287,18 @@ pub unsafe trait InstanceAllocatorImpl {
     /// `allocate_fiber_stack`.
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
+
+    /// Allocate a GC heap for allocating Wasm GC objects within.
+    #[cfg(feature = "gc")]
+    fn allocate_gc_heap(
+        &self,
+        gc_runtime: &dyn GcRuntime,
+    ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)>;
+
+    /// Deallocate a GC heap that was previously allocated with
+    /// `allocate_gc_heap`.
+    #[cfg(feature = "gc")]
+    fn deallocate_gc_heap(&self, allocation_index: GcHeapAllocationIndex, gc_heap: Box<dyn GcHeap>);
 
     /// Purges all lingering resources related to `module` from within this
     /// allocator.
@@ -544,13 +578,29 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                         let init = (0..table.size()).map(|_| funcref);
                         table.init_func(0, init)?;
                     }
-                    TableElementType::Extern => {
-                        let externref = (*global).as_externref();
-                        let init = (0..table.size()).map(|_| externref.clone());
-                        table.init_extern(0, init)?;
+                    TableElementType::GcRef => {
+                        let gc_ref = (*global).as_gc_ref();
+                        let gc_ref = gc_ref.map(|r| r.unchecked_copy());
+                        let init = (0..table.size()).map(|_| {
+                            gc_ref
+                                .as_ref()
+                                .map(|r| (*instance.store()).gc_store().clone_gc_ref(r))
+                        });
+                        table.init_gc_refs(0, init)?;
                     }
                 }
             },
+
+            TableInitialValue::I31Ref(value) => {
+                let value = VMGcRef::from_i31(I31::wrapping_i32(*value));
+                let table = unsafe { &mut *instance.get_defined_table(table) };
+                let init = (0..table.size()).map(|_| {
+                    // NB: Okay to use `unchecked_copy` because `i31` doesn't
+                    // need GC barriers.
+                    Some(value.unchecked_copy())
+                });
+                table.init_gc_refs(0, init)?;
+            }
         }
     }
 

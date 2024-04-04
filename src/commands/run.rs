@@ -515,6 +515,8 @@ impl RunCommand {
                 Val::ExternRef(Some(_)) => println!("<externref>"),
                 Val::FuncRef(None) => println!("<null funcref>"),
                 Val::FuncRef(Some(_)) => println!("<funcref>"),
+                Val::AnyRef(None) => println!("<null anyref>"),
+                Val::AnyRef(Some(_)) => println!("<anyref>"),
             }
         }
 

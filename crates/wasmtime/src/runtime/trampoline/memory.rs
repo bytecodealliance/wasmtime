@@ -11,9 +11,10 @@ use wasmtime_environ::{
 };
 use wasmtime_runtime::mpk::ProtectionKey;
 use wasmtime_runtime::{
-    CompiledModuleId, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl,
-    Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator, RuntimeLinearMemory,
-    RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex, VMMemoryDefinition,
+    CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
+    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator,
+    RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex,
+    VMMemoryDefinition,
 };
 
 #[cfg(feature = "component-model")]
@@ -263,6 +264,23 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     }
 
     fn allow_all_pkeys(&self) {
+        unreachable!()
+    }
+
+    #[cfg(feature = "gc")]
+    fn allocate_gc_heap(
+        &self,
+        _gc_runtime: &dyn wasmtime_runtime::GcRuntime,
+    ) -> Result<(GcHeapAllocationIndex, Box<dyn wasmtime_runtime::GcHeap>)> {
+        unreachable!()
+    }
+
+    #[cfg(feature = "gc")]
+    fn deallocate_gc_heap(
+        &self,
+        _allocation_index: GcHeapAllocationIndex,
+        _gc_heap: Box<dyn wasmtime_runtime::GcHeap>,
+    ) {
         unreachable!()
     }
 }

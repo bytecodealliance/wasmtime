@@ -19,7 +19,9 @@ use crate::profiling_agent::{self, ProfilingAgent};
 #[cfg(feature = "runtime")]
 use crate::trampoline::MemoryCreatorProxy;
 #[cfg(feature = "runtime")]
-use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
+use wasmtime_runtime::{
+    GcRuntime, InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator,
+};
 
 #[cfg(feature = "async")]
 use crate::stack::{StackCreator, StackCreatorProxy};
@@ -1786,6 +1788,11 @@ impl Config {
     }
 
     #[cfg(feature = "runtime")]
+    pub(crate) fn build_gc_runtime(&self) -> Result<Arc<dyn GcRuntime>> {
+        Ok(Arc::new(wasmtime_runtime::default_gc_runtime()) as Arc<dyn GcRuntime>)
+    }
+
+    #[cfg(feature = "runtime")]
     pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
         Ok(match self.profiling_strategy {
             ProfilingStrategy::PerfMap => profiling_agent::new_perfmap()?,
@@ -2662,6 +2669,21 @@ impl PoolingAllocationConfig {
     /// information.
     pub fn are_memory_protection_keys_available() -> bool {
         mpk::is_supported()
+    }
+
+    /// The maximum number of concurrent GC heaps supported (default is `1000`).
+    ///
+    /// This value has a direct impact on the amount of memory allocated by the
+    /// pooling instance allocator.
+    ///
+    /// The pooling instance allocator allocates a GC heap pool, where each
+    /// entry in the pool contains the space needed for each GC heap used by a
+    /// store.
+    #[cfg(feature = "gc")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
+    pub fn total_gc_heaps(&mut self, count: u32) -> &mut Self {
+        self.config.limits.total_gc_heaps = count;
+        self
     }
 }
 

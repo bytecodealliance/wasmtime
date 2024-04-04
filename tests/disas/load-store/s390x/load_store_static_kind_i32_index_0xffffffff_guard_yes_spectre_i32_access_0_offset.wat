@@ -24,7 +24,7 @@
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
 ;;       lgr     %r3, %r4
-;;       lg      %r4, 0x50(%r2)
+;;       lg      %r4, 0x60(%r2)
 ;;       lgr     %r2, %r3
 ;;       llgfr   %r2, %r2
 ;;       strv    %r5, 0(%r2, %r4)
@@ -37,7 +37,7 @@
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
 ;;       lgr     %r5, %r4
-;;       lg      %r4, 0x50(%r2)
+;;       lg      %r4, 0x60(%r2)
 ;;       lgr     %r2, %r5
 ;;       llgfr   %r5, %r2
 ;;       lrv     %r2, 0(%r5, %r4)

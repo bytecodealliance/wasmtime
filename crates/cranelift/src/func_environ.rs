@@ -1,4 +1,4 @@
-use crate::BuiltinFunctionSignatures;
+use crate::{gc, BuiltinFunctionSignatures};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -13,7 +13,7 @@ use cranelift_frontend::Variable;
 use cranelift_wasm::{
     EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
     HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
-    TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    TypeIndex, WasmHeapType, WasmResult,
 };
 use std::mem;
 use wasmparser::Operator;
@@ -25,7 +25,7 @@ use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
 /// A struct with an `Option<ir::FuncRef>` member for every builtin
 /// function, to de-duplicate constructing/getting its function.
-struct BuiltinFunctions {
+pub(crate) struct BuiltinFunctions {
     types: BuiltinFunctionSignatures,
 
     builtins:
@@ -70,7 +70,7 @@ macro_rules! declare_function_signatures {
     )*) => {
         $(impl BuiltinFunctions {
             $( #[$attr] )*
-            fn $name(&mut self, func: &mut Function) -> ir::FuncRef {
+            pub(crate) fn $name(&mut self, func: &mut Function) -> ir::FuncRef {
                 self.load_builtin(func, BuiltinFunctionIndex::$name())
             }
         })*
@@ -101,7 +101,7 @@ pub struct FuncEnvironment<'module_environment> {
     pcc_vmctx_memtype: Option<ir::MemoryType>,
 
     /// Caches of signatures for builtin functions.
-    builtin_functions: BuiltinFunctions,
+    pub(crate) builtin_functions: BuiltinFunctions,
 
     /// Offsets to struct fields accessed by JIT code.
     pub(crate) offsets: VMOffsets<u8>,
@@ -179,11 +179,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn pointer_type(&self) -> ir::Type {
+    pub(crate) fn pointer_type(&self) -> ir::Type {
         self.isa.pointer_type()
     }
 
-    fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
+    pub(crate) fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
             if self.isa.flags().enable_pcc() {
@@ -209,7 +209,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
-    fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
+    pub(crate) fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
         pos.ins().global_value(pointer_type, vmctx)
@@ -247,30 +247,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             ),
             x => panic!("get_memory_atomic_wait unsupported type: {:?}", x),
         }
-    }
-
-    /// Generate code to increment or decrement the given `externref`'s
-    /// reference count.
-    ///
-    /// The new reference count is returned.
-    #[cfg(feature = "gc")]
-    fn mutate_externref_ref_count(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        externref: ir::Value,
-        delta: i64,
-    ) -> ir::Value {
-        debug_assert!(delta == -1 || delta == 1);
-        let pointer_type = self.pointer_type();
-        let offset = i32::try_from(self.offsets.vm_extern_data_ref_count()).unwrap();
-        let count = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), externref, offset);
-        let new_count = builder.ins().iadd_imm(count, delta);
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), new_count, externref, offset);
-        new_count
     }
 
     fn get_global_location(
@@ -793,7 +769,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         };
 
         let table = &self.module.table_plans[index].table;
-        let element_size = self.reference_type(table.wasm_ty.heap_type).bytes();
+        let element_size = if table.wasm_ty.is_gc_heap_type() {
+            // For GC-managed references, tables store `Option<VMGcRef>`s.
+            ir::types::I32.bytes()
+        } else {
+            self.reference_type(table.wasm_ty.heap_type).bytes()
+        };
 
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
@@ -1007,6 +988,32 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pointee_mt
         });
         (pointee, mt)
+    }
+
+    fn i31_ref_to_unshifted_value(&self, pos: &mut FuncCursor, i31ref: ir::Value) -> ir::Value {
+        let ref_ty = self.reference_type(WasmHeapType::I31);
+        debug_assert_eq!(pos.func.dfg.value_type(i31ref), ref_ty);
+
+        let is_null = pos.ins().is_null(i31ref);
+        pos.ins().trapnz(is_null, ir::TrapCode::NullI31Ref);
+
+        let val = pos.ins().bitcast(ref_ty.as_int(), MemFlags::new(), i31ref);
+
+        if cfg!(debug_assertions) {
+            let is_i31_ref = pos
+                .ins()
+                .band_imm(val, i64::from(crate::I31_REF_DISCRIMINANT));
+            pos.ins().trapz(
+                is_i31_ref,
+                ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
+            );
+        }
+
+        match ref_ty.bytes() {
+            8 => pos.ins().ireduce(ir::types::I32, val),
+            4 => val,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -1234,9 +1241,13 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             }
 
             // Engine-indexed types don't show up until runtime and it's a wasm
-            // validation error to perform a call through an `externref` table,
+            // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(_)) | WasmHeapType::Extern => {
+            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(_))
+            | WasmHeapType::Extern
+            | WasmHeapType::Any
+            | WasmHeapType::I31
+            | WasmHeapType::None => {
                 unreachable!()
             }
         }
@@ -1435,16 +1446,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 self.builtin_functions.table_grow_func_ref(&mut pos.func)
             }
 
-            #[cfg(feature = "gc")]
-            WasmHeapType::Extern => self.builtin_functions.table_grow_externref(&mut pos.func),
-
-            #[cfg(not(feature = "gc"))]
-            WasmHeapType::Extern => {
-                return Err(cranelift_wasm::wasm_unsupported!(
-                    "support for `externref` disabled at compile time because \
-                     the `gc` cargo feature was not enabled",
-                ))
-            }
+            ty @ WasmHeapType::Any
+            | ty @ WasmHeapType::I31
+            | ty @ WasmHeapType::None
+            | ty @ WasmHeapType::Extern => gc::gc_ref_table_grow_builtin(ty, self, &mut pos.func)?,
         };
 
         let vmctx = self.vmctx_val(&mut pos);
@@ -1464,140 +1469,45 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: ir::Value,
     ) -> WasmResult<ir::Value> {
         let plan = &self.module.table_plans[table_index];
+        self.ensure_table_exists(builder.func, table_index);
+        let table_data = self.tables[table_index].as_ref().unwrap();
         match plan.table.wasm_ty.heap_type {
+            // GC-managed types.
+            WasmHeapType::Any | WasmHeapType::Extern | WasmHeapType::None => {
+                let (src, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::gc_compiler(self).translate_read_gc_reference(
+                    self,
+                    builder,
+                    plan.table.wasm_ty,
+                    src,
+                    flags,
+                )
+            }
+
+            // `i31ref`s never need barriers, and therefore don't need to go
+            // through the GC compiler.
+            WasmHeapType::I31 => {
+                let (src, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::unbarriered_load_gc_ref(self, builder, WasmHeapType::I31, src, flags)
+            }
+
+            // Function types.
             WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
                 match plan.style {
                     TableStyle::CallerChecksSignature => {
                         Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index))
                     }
                 }
-            }
-            #[cfg(feature = "gc")]
-            WasmHeapType::Extern => {
-                // Our read barrier for `externref` tables is roughly equivalent
-                // to the following pseudocode:
-                //
-                // ```
-                // let elem = table[index]
-                // if elem is not null:
-                //     let (next, end) = VMExternRefActivationsTable bump region
-                //     if next != end:
-                //         elem.ref_count += 1
-                //         *next = elem
-                //         next += 1
-                //     else:
-                //         call activations_table_insert_with_gc(elem)
-                // return elem
-                // ```
-                //
-                // This ensures that all `externref`s coming out of tables and
-                // onto the stack are safely held alive by the
-                // `VMExternRefActivationsTable`.
-
-                let pointer_type = self.pointer_type();
-                let reference_type = self.reference_type(WasmHeapType::Extern);
-
-                builder.ensure_inserted_block();
-                let continue_block = builder.create_block();
-                let non_null_elem_block = builder.create_block();
-                let gc_block = builder.create_block();
-                let no_gc_block = builder.create_block();
-                let current_block = builder.current_block().unwrap();
-                builder.insert_block_after(non_null_elem_block, current_block);
-                builder.insert_block_after(no_gc_block, non_null_elem_block);
-                builder.insert_block_after(gc_block, no_gc_block);
-                builder.insert_block_after(continue_block, gc_block);
-
-                // Load the table element.
-                self.ensure_table_exists(builder.func, table_index);
-                let table_data = self.tables[table_index].as_ref().unwrap();
-                let (elem_addr, flags) = table_data.prepare_table_addr(
-                    builder,
-                    index,
-                    pointer_type,
-                    self.isa.flags().enable_table_access_spectre_mitigation(),
-                );
-                let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
-
-                let elem_is_null = builder.ins().is_null(elem);
-                builder
-                    .ins()
-                    .brif(elem_is_null, continue_block, &[], non_null_elem_block, &[]);
-
-                // Load the `VMExternRefActivationsTable::next` bump finger and
-                // the `VMExternRefActivationsTable::end` bump boundary.
-                builder.switch_to_block(non_null_elem_block);
-                let vmctx = self.vmctx(&mut builder.func);
-                let vmctx = builder.ins().global_value(pointer_type, vmctx);
-                let activations_table = builder.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    vmctx,
-                    i32::try_from(self.offsets.vmctx_externref_activations_table()).unwrap(),
-                );
-                let next = builder.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    activations_table,
-                    i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
-                );
-                let end = builder.ins().load(
-                    pointer_type,
-                    ir::MemFlags::trusted(),
-                    activations_table,
-                    i32::try_from(self.offsets.vm_extern_ref_activation_table_end()).unwrap(),
-                );
-
-                // If `next == end`, then we are at full capacity. Call a
-                // builtin to do a GC and insert this reference into the
-                // just-swept table for us.
-                let at_capacity = builder.ins().icmp(ir::condcodes::IntCC::Equal, next, end);
-                builder
-                    .ins()
-                    .brif(at_capacity, gc_block, &[], no_gc_block, &[]);
-                builder.switch_to_block(gc_block);
-                let insert = self
-                    .builtin_functions
-                    .activations_table_insert_with_gc(builder.func);
-                let vmctx = self.vmctx_val(&mut builder.cursor());
-                builder.ins().call(insert, &[vmctx, elem]);
-                builder.ins().jump(continue_block, &[]);
-
-                // If `next != end`, then:
-                //
-                // * increment this reference's ref count,
-                // * store the reference into the bump table at `*next`,
-                // * and finally increment the `next` bump finger.
-                builder.switch_to_block(no_gc_block);
-                self.mutate_externref_ref_count(builder, elem, 1);
-                builder.ins().store(ir::MemFlags::trusted(), elem, next, 0);
-
-                let new_next = builder
-                    .ins()
-                    .iadd_imm(next, i64::from(reference_type.bytes()));
-                builder.ins().store(
-                    ir::MemFlags::trusted(),
-                    new_next,
-                    activations_table,
-                    i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
-                );
-
-                builder.ins().jump(continue_block, &[]);
-                builder.switch_to_block(continue_block);
-
-                builder.seal_block(non_null_elem_block);
-                builder.seal_block(gc_block);
-                builder.seal_block(no_gc_block);
-                builder.seal_block(continue_block);
-
-                Ok(elem)
-            }
-            #[cfg(not(feature = "gc"))]
-            WasmHeapType::Extern => {
-                return Err(cranelift_wasm::wasm_unsupported!(
-                    "support for `externref` disabled at compile time because the \
-                 `gc` cargo feature was not enabled",
-                ))
             }
         }
     }
@@ -1614,10 +1524,41 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].as_ref().unwrap();
         match plan.table.wasm_ty.heap_type {
+            // GC-managed types.
+            WasmHeapType::Any | WasmHeapType::Extern | WasmHeapType::None => {
+                let (dst, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::gc_compiler(self).translate_write_gc_reference(
+                    self,
+                    builder,
+                    plan.table.wasm_ty,
+                    dst,
+                    value,
+                    flags,
+                )
+            }
+
+            // `i31ref`s never need GC barriers, and therefore don't need to go
+            // through the GC compiler.
+            WasmHeapType::I31 => {
+                let (addr, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::unbarriered_store_gc_ref(self, builder, WasmHeapType::I31, addr, value, flags)
+            }
+
+            // Function types.
             WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
                 match plan.style {
                     TableStyle::CallerChecksSignature => {
-                        let (table_entry_addr, flags) = table_data.prepare_table_addr(
+                        let (elem_addr, flags) = table_data.prepare_table_addr(
                             builder,
                             index,
                             pointer_type,
@@ -1631,148 +1572,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                             .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64));
                         builder
                             .ins()
-                            .store(flags, value_with_init_bit, table_entry_addr, 0);
+                            .store(flags, value_with_init_bit, elem_addr, 0);
                         Ok(())
                     }
                 }
-            }
-
-            #[cfg(feature = "gc")]
-            WasmHeapType::Extern => {
-                // Our write barrier for `externref`s being copied out of the
-                // stack and into a table is roughly equivalent to the following
-                // pseudocode:
-                //
-                // ```
-                // let current_elem = table[index]
-                // table[index] = value
-                // if value != null:
-                //     value.ref_count += 1
-                // if current_elem != null:
-                //     current_elem.ref_count -= 1
-                //     if current_elem.ref_count == 0:
-                //         call drop_externref(current_elem)
-                // ```
-                //
-                // This write barrier is responsible for ensuring that:
-                //
-                // 1. The value's ref count is incremented now that the
-                //    table is holding onto it. This is required for memory safety.
-                //
-                // 2. The old table element, if any, has its ref count
-                //    decremented, and that the wrapped data is dropped if the
-                //    ref count reaches zero. This is not required for memory
-                //    safety, but is required to avoid leaks. Furthermore, the
-                //    destructor might GC or touch this table, so we must only
-                //    drop the old table element *after* we've replaced it with
-                //    the new `value`!
-
-                builder.ensure_inserted_block();
-                let current_block = builder.current_block().unwrap();
-                let inc_ref_count_block = builder.create_block();
-                builder.insert_block_after(inc_ref_count_block, current_block);
-                let check_current_elem_block = builder.create_block();
-                builder.insert_block_after(check_current_elem_block, inc_ref_count_block);
-                let dec_ref_count_block = builder.create_block();
-                builder.insert_block_after(dec_ref_count_block, check_current_elem_block);
-                let drop_block = builder.create_block();
-                builder.insert_block_after(drop_block, dec_ref_count_block);
-                let continue_block = builder.create_block();
-                builder.insert_block_after(continue_block, drop_block);
-
-                // Grab the current element from the table if it's in-bounds,
-                // and store the new `value` into the table. This is the first
-                // thing we do, because we don't want to modify the ref count
-                // on `value` if this `table.set` is going to trap due to an
-                // out-of-bounds index.
-                //
-                // Note that we load the current element as a pointer, not a
-                // reference. This is so that if we call out-of-line to run its
-                // destructor, and its destructor triggers GC, this reference is
-                // not recorded in the stack map (which would lead to the GC
-                // saving a reference to a deallocated object, and then using it
-                // after its been freed).
-                let (table_entry_addr, flags) = table_data.prepare_table_addr(
-                    builder,
-                    index,
-                    pointer_type,
-                    self.isa.flags().enable_table_access_spectre_mitigation(),
-                );
-                let current_elem = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
-
-                // After the load, a store to the same address can't trap.
-                let flags = ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Table));
-                builder.ins().store(flags, value, table_entry_addr, 0);
-
-                // If value is not null, increment `value`'s ref count.
-                //
-                // This has to come *before* decrementing the current table
-                // element's ref count, because it might reach ref count == zero,
-                // causing us to deallocate the current table element. However,
-                // if `value` *is* the current table element (and therefore this
-                // whole `table.set` is a no-op), then we would incorrectly
-                // deallocate `value` and leave it in the table, leading to use
-                // after free.
-                let value_is_null = builder.ins().is_null(value);
-                builder.ins().brif(
-                    value_is_null,
-                    check_current_elem_block,
-                    &[],
-                    inc_ref_count_block,
-                    &[],
-                );
-                builder.switch_to_block(inc_ref_count_block);
-                self.mutate_externref_ref_count(builder, value, 1);
-                builder.ins().jump(check_current_elem_block, &[]);
-
-                // If the current element is non-null, decrement its reference
-                // count. And if its reference count has reached zero, then make
-                // an out-of-line call to deallocate it.
-                builder.switch_to_block(check_current_elem_block);
-                let current_elem_is_null =
-                    builder
-                        .ins()
-                        .icmp_imm(ir::condcodes::IntCC::Equal, current_elem, 0);
-                builder.ins().brif(
-                    current_elem_is_null,
-                    continue_block,
-                    &[],
-                    dec_ref_count_block,
-                    &[],
-                );
-
-                builder.switch_to_block(dec_ref_count_block);
-                let new_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
-                let cond = builder.ins().icmp_imm(IntCC::Equal, new_ref_count, 0);
-                builder
-                    .ins()
-                    .brif(cond, drop_block, &[], continue_block, &[]);
-
-                // Call the `drop_externref` builtin to (you guessed it) drop
-                // the `externref`.
-                builder.switch_to_block(drop_block);
-                let drop_externref = self.builtin_functions.drop_externref(builder.func);
-                let vmctx = self.vmctx_val(&mut builder.cursor());
-                builder.ins().call(drop_externref, &[vmctx, current_elem]);
-                builder.ins().jump(continue_block, &[]);
-
-                builder.switch_to_block(continue_block);
-
-                builder.seal_block(inc_ref_count_block);
-                builder.seal_block(check_current_elem_block);
-                builder.seal_block(dec_ref_count_block);
-                builder.seal_block(drop_block);
-                builder.seal_block(continue_block);
-
-                Ok(())
-            }
-
-            #[cfg(not(feature = "gc"))]
-            WasmHeapType::Extern => {
-                return Err(cranelift_wasm::wasm_unsupported!(
-                    "support for `externref` disabled at compile time because the \
-                     `gc` cargo feature was not enabled",
-                ))
             }
         }
     }
@@ -1789,15 +1592,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
                 self.builtin_functions.table_fill_func_ref(&mut pos.func)
             }
-            #[cfg(feature = "gc")]
-            WasmHeapType::Extern => self.builtin_functions.table_fill_externref(&mut pos.func),
-            #[cfg(not(feature = "gc"))]
-            WasmHeapType::Extern => {
-                return Err(cranelift_wasm::wasm_unsupported!(
-                    "support for `externref` disabled at compile time because the \
-                         `gc` cargo feature was not enabled",
-                ));
-            }
+            ty @ WasmHeapType::Extern
+            | ty @ WasmHeapType::Any
+            | ty @ WasmHeapType::I31
+            | ty @ WasmHeapType::None => gc::gc_ref_table_fill_builtin(ty, self, &mut pos.func)?,
         };
 
         let vmctx = self.vmctx_val(&mut pos);
@@ -1809,6 +1607,41 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
+    fn translate_ref_i31(&mut self, mut pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value> {
+        let shifted = pos.ins().ishl_imm(val, 1);
+        let tagged = pos
+            .ins()
+            .bor_imm(shifted, i64::from(crate::I31_REF_DISCRIMINANT));
+        let ref_ty = self.reference_type(WasmHeapType::I31);
+        let extended = if ref_ty.bytes() > 4 {
+            pos.ins().uextend(ref_ty.as_int(), tagged)
+        } else {
+            tagged
+        };
+        let i31ref = pos.ins().bitcast(ref_ty, MemFlags::new(), extended);
+        Ok(i31ref)
+    }
+
+    fn translate_i31_get_s(
+        &mut self,
+        mut pos: FuncCursor,
+        i31ref: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let val = self.i31_ref_to_unshifted_value(&mut pos, i31ref);
+        let shifted = pos.ins().sshr_imm(val, 1);
+        Ok(shifted)
+    }
+
+    fn translate_i31_get_u(
+        &mut self,
+        mut pos: FuncCursor,
+        i31ref: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let val = self.i31_ref_to_unshifted_value(&mut pos, i31ref);
+        let shifted = pos.ins().ushr_imm(val, 1);
+        Ok(shifted)
+    }
+
     fn translate_ref_null(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor,
@@ -1818,7 +1651,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
                 pos.ins().iconst(self.pointer_type(), 0)
             }
-            WasmHeapType::Extern => pos.ins().null(self.reference_type(ht)),
+            WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
+                pos.ins().null(self.reference_type(ht))
+            }
         })
     }
 
@@ -1854,87 +1689,51 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
-    #[cfg(feature = "gc")]
     fn translate_custom_global_get(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         index: cranelift_wasm::GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
+        let ty = self.module.globals[index].wasm_ty;
+        debug_assert!(
+            ty.is_vmgcref_type(),
+            "We only use GlobalVariable::Custom for VMGcRef types"
         );
 
-        let externref_global_get = self.builtin_functions.externref_global_get(&mut pos.func);
+        // TODO: use `GcCompiler::translate_read_gc_reference` for GC-reference
+        // globals instead of a libcall.
+        let libcall = gc::gc_ref_global_get_builtin(ty, self, &mut pos.func)?;
 
         let vmctx = self.vmctx_val(&mut pos);
 
         let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
-        let call_inst = pos
-            .ins()
-            .call(externref_global_get, &[vmctx, global_index_arg]);
+        let call_inst = pos.ins().call(libcall, &[vmctx, global_index_arg]);
 
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
-    #[cfg(not(feature = "gc"))]
-    fn translate_custom_global_get(
-        &mut self,
-        _pos: FuncCursor,
-        index: GlobalIndex,
-    ) -> WasmResult<ir::Value> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
-        );
-        Err(cranelift_wasm::wasm_unsupported!(
-            "support for `externref` disabled at compile time because the \
-             `gc` cargo feature was not enabled",
-        ))
-    }
-
-    #[cfg(feature = "gc")]
     fn translate_custom_global_set(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         index: cranelift_wasm::GlobalIndex,
         value: ir::Value,
     ) -> WasmResult<()> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
+        let ty = self.module.globals[index].wasm_ty;
+        debug_assert!(
+            ty.is_vmgcref_type(),
+            "We only use GlobalVariable::Custom for VMGcRef types"
         );
 
-        let externref_global_set = self.builtin_functions.externref_global_set(&mut pos.func);
+        // TODO: use `GcCompiler::translate_write_gc_reference` for GC-reference
+        // globals instead of a libcall.
+        let libcall = gc::gc_ref_global_set_builtin(ty, self, &mut pos.func)?;
 
         let vmctx = self.vmctx_val(&mut pos);
 
         let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
-        pos.ins()
-            .call(externref_global_set, &[vmctx, global_index_arg, value]);
+        pos.ins().call(libcall, &[vmctx, global_index_arg, value]);
 
         Ok(())
-    }
-
-    #[cfg(not(feature = "gc"))]
-    fn translate_custom_global_set(
-        &mut self,
-        _pos: FuncCursor,
-        index: GlobalIndex,
-        _value: ir::Value,
-    ) -> WasmResult<()> {
-        debug_assert_eq!(
-            self.module.globals[index].wasm_ty,
-            WasmValType::Ref(WasmRefType::EXTERNREF),
-            "We only use GlobalVariable::Custom for externref"
-        );
-        Err(cranelift_wasm::wasm_unsupported!(
-            "support for `externref` disabled at compile time because the \
-             `gc` cargo feature was not enabled",
-        ))
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
@@ -2182,33 +1981,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
         let ty = self.module.globals[index].wasm_ty;
-        match ty {
-            // Although `ExternRef`s live at the same memory location as any
-            // other type of global at the same index would, getting or setting
-            // them requires ref counting barriers. Therefore, we need to use
-            // `GlobalVariable::Custom`, as that is the only kind of
+
+        if ty.is_vmgcref_type() {
+            // Although reference-typed globals live at the same memory location as
+            // any other type of global at the same index would, getting or
+            // setting them requires ref counting barriers. Therefore, we need
+            // to use `GlobalVariable::Custom`, as that is the only kind of
             // `GlobalVariable` for which `cranelift-wasm` supports custom
             // access translation.
-            WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Extern,
-                ..
-            }) => return Ok(GlobalVariable::Custom),
-
-            // Funcrefs are represented as pointers which survive for the
-            // entire lifetime of the `Store` so there's no need for barriers.
-            // This means that they can fall through to memory as well.
-            WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc,
-                ..
-            }) => {}
-
-            // Value types all live in memory so let them fall through to a
-            // memory-based global.
-            WasmValType::I32
-            | WasmValType::I64
-            | WasmValType::F32
-            | WasmValType::F64
-            | WasmValType::V128 => {}
+            return Ok(GlobalVariable::Custom);
         }
 
         let (gv, offset) = self.get_global_location(func, index);

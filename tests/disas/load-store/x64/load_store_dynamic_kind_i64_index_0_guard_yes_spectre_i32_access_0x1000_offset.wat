@@ -21,8 +21,8 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    0x58(%rdi), %r11
-;;       movq    0x50(%rdi), %rax
+;;       movq    0x68(%rdi), %r11
+;;       movq    0x60(%rdi), %rax
 ;;       subq    $0x1004, %r11
 ;;       xorq    %rdi, %rdi
 ;;       leaq    0x1000(%rax, %rdx), %rsi
@@ -36,8 +36,8 @@
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    0x58(%rdi), %r11
-;;       movq    0x50(%rdi), %rax
+;;       movq    0x68(%rdi), %r11
+;;       movq    0x60(%rdi), %rax
 ;;       subq    $0x1004, %r11
 ;;       xorq    %rdi, %rdi
 ;;       leaq    0x1000(%rax, %rdx), %rsi

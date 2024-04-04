@@ -26,7 +26,7 @@
 ;;       llgfr   %r4, %r4
 ;;       clgfi   %r4, 0xfffffffc
 ;;       jgh     0x38
-;;       lg      %r2, 0x50(%r2)
+;;       lg      %r2, 0x60(%r2)
 ;;       strv    %r5, 0(%r4, %r2)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
@@ -40,7 +40,7 @@
 ;;       llgfr   %r4, %r4
 ;;       clgfi   %r4, 0xfffffffc
 ;;       jgh     0x74
-;;       lg      %r2, 0x50(%r2)
+;;       lg      %r2, 0x60(%r2)
 ;;       lrv     %r2, 0(%r4, %r2)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

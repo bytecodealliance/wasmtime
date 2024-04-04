@@ -25,7 +25,7 @@
 ;;       mov     w9, #-0x1004
 ;;       cmp     x8, x9
 ;;       b.hi    #0x2c
-;;   18: ldr     x10, [x0, #0x50]
+;;   18: ldr     x10, [x0, #0x60]
 ;;       add     x10, x10, #1, lsl #12
 ;;       str     w3, [x10, w2, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10
@@ -39,7 +39,7 @@
 ;;       mov     w9, #-0x1004
 ;;       cmp     x8, x9
 ;;       b.hi    #0x6c
-;;   58: ldr     x10, [x0, #0x50]
+;;   58: ldr     x10, [x0, #0x60]
 ;;       add     x9, x10, #1, lsl #12
 ;;       ldr     w0, [x9, w2, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10

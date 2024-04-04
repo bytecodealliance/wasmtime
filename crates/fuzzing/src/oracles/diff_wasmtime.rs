@@ -218,6 +218,10 @@ impl From<&DiffValue> for Val {
                 assert!(null);
                 Val::ExternRef(None)
             }
+            DiffValue::AnyRef { null } => {
+                assert!(null);
+                Val::AnyRef(None)
+            }
         }
     }
 }
@@ -232,6 +236,7 @@ impl Into<DiffValue> for Val {
             Val::V128(n) => DiffValue::V128(n.into()),
             Val::ExternRef(r) => DiffValue::ExternRef { null: r.is_none() },
             Val::FuncRef(r) => DiffValue::FuncRef { null: r.is_none() },
+            Val::AnyRef(r) => DiffValue::AnyRef { null: r.is_none() },
         }
     }
 }

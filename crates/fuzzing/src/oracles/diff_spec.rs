@@ -98,7 +98,9 @@ impl From<&DiffValue> for SpecValue {
             DiffValue::F32(n) => SpecValue::F32(n as i32),
             DiffValue::F64(n) => SpecValue::F64(n as i64),
             DiffValue::V128(n) => SpecValue::V128(n.to_le_bytes().to_vec()),
-            DiffValue::FuncRef { .. } | DiffValue::ExternRef { .. } => unimplemented!(),
+            DiffValue::FuncRef { .. } | DiffValue::ExternRef { .. } | DiffValue::AnyRef { .. } => {
+                unimplemented!()
+            }
         }
     }
 }
