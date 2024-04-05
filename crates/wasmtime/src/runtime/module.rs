@@ -294,7 +294,7 @@ impl Module {
     /// # fn main() -> anyhow::Result<()> {
     /// # let engine = Engine::default();
     /// let wasm = b"\0asm\x01\0\0\0";
-    /// let module = Module::from_binary(&engine, wasm, None)?;
+    /// let module = Module::from_binary(&engine, wasm)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -305,7 +305,7 @@ impl Module {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// # let engine = Engine::default();
-    /// assert!(Module::from_binary(&engine, b"(module)", None).is_err());
+    /// assert!(Module::from_binary(&engine, b"(module)").is_err());
     /// # Ok(())
     /// # }
     /// ```
