@@ -137,7 +137,6 @@ impl TryFrom<Address> for AMode {
             Offset { base, offset } => Ok(AMode::RegOffset {
                 rn: base.into(),
                 off: offset,
-                ty: types::I64,
             }),
         }
     }
