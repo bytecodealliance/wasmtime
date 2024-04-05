@@ -138,11 +138,10 @@ impl AMode {
 
     /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address, with `reg2` sign- or
     /// zero-extended as per `op`.
-    pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> AMode {
+    pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, op: ExtendOp) -> AMode {
         AMode::RegScaledExtended {
             rn: reg1,
             rm: reg2,
-            ty,
             extendop: op,
         }
     }
@@ -162,20 +161,13 @@ impl AMode {
                 rn: allocs.next(rn),
                 rm: allocs.next(rm),
             },
-            &AMode::RegScaled { rn, rm, ty } => AMode::RegScaled {
+            &AMode::RegScaled { rn, rm } => AMode::RegScaled {
                 rn: allocs.next(rn),
                 rm: allocs.next(rm),
-                ty,
             },
-            &AMode::RegScaledExtended {
-                rn,
-                rm,
-                ty,
-                extendop,
-            } => AMode::RegScaledExtended {
+            &AMode::RegScaledExtended { rn, rm, extendop } => AMode::RegScaledExtended {
                 rn: allocs.next(rn),
                 rm: allocs.next(rm),
-                ty,
                 extendop,
             },
             &AMode::RegExtended { rn, rm, extendop } => AMode::RegExtended {
@@ -183,10 +175,9 @@ impl AMode {
                 rm: allocs.next(rm),
                 extendop,
             },
-            &AMode::RegOffset { rn, off, ty } => AMode::RegOffset {
+            &AMode::RegOffset { rn, off } => AMode::RegOffset {
                 rn: allocs.next(rn),
                 off,
-                ty,
             },
             &AMode::SPPreIndexed { .. }
             | &AMode::SPPostIndexed { .. }
@@ -385,19 +376,20 @@ impl PrettyPrint for MemLabel {
     }
 }
 
-fn shift_for_type(ty: Type) -> usize {
-    match ty.bytes() {
+fn shift_for_type(size_bytes: u8) -> usize {
+    match size_bytes {
         1 => 0,
         2 => 1,
         4 => 2,
         8 => 3,
         16 => 4,
-        _ => panic!("unknown type: {}", ty),
+        _ => panic!("unknown type size: {size_bytes}"),
     }
 }
 
 impl PrettyPrint for AMode {
-    fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size_bytes: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+        debug_assert!(size_bytes != 0);
         match self {
             &AMode::Unscaled { rn, simm9 } => {
                 let reg = pretty_print_reg(rn, allocs);
@@ -410,7 +402,7 @@ impl PrettyPrint for AMode {
             }
             &AMode::UnsignedOffset { rn, uimm12 } => {
                 let reg = pretty_print_reg(rn, allocs);
-                if uimm12.value != 0 {
+                if uimm12.value() != 0 {
                     let uimm12 = uimm12.pretty_print(8, allocs);
                     format!("[{}, {}]", reg, uimm12)
                 } else {
@@ -422,19 +414,14 @@ impl PrettyPrint for AMode {
                 let r2 = pretty_print_reg(rm, allocs);
                 format!("[{}, {}]", r1, r2)
             }
-            &AMode::RegScaled { rn, rm, ty } => {
+            &AMode::RegScaled { rn, rm } => {
                 let r1 = pretty_print_reg(rn, allocs);
                 let r2 = pretty_print_reg(rm, allocs);
-                let shift = shift_for_type(ty);
+                let shift = shift_for_type(size_bytes);
                 format!("[{}, {}, LSL #{}]", r1, r2, shift)
             }
-            &AMode::RegScaledExtended {
-                rn,
-                rm,
-                ty,
-                extendop,
-            } => {
-                let shift = shift_for_type(ty);
+            &AMode::RegScaledExtended { rn, rm, extendop } => {
+                let shift = shift_for_type(size_bytes);
                 let size = match extendop {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,

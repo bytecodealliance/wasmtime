@@ -220,9 +220,9 @@ impl SImm9 {
 #[derive(Clone, Copy, Debug)]
 pub struct UImm12Scaled {
     /// The value.
-    pub value: u16,
+    value: u16,
     /// multiplied by the size of this type
-    pub scale_ty: Type,
+    scale_ty: Type,
 }
 
 impl UImm12Scaled {
@@ -256,11 +256,6 @@ impl UImm12Scaled {
     /// Value after scaling.
     pub fn value(&self) -> u32 {
         self.value as u32
-    }
-
-    /// The value type which is the scaling base.
-    pub fn scale_ty(&self) -> Type {
-        self.scale_ty
     }
 }
 
