@@ -20,7 +20,11 @@ use std::{error::Error, fmt, hash::Hash, str::FromStr};
 
 /// Generate the traits and types from the `wasi-nn` WIT specification.
 mod gen_ {
-    wasmtime::component::bindgen!("ml" in "spec/wit/wasi-nn.wit");
+    wasmtime::component::bindgen!({
+        world: "ml",
+        path: "spec/wit/wasi-nn.wit",
+        trappable_imports: true,
+    });
 }
 use gen_::wasi::nn as gen; // Shortcut to the module containing the types we need.
 

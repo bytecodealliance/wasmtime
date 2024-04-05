@@ -209,8 +209,8 @@ pub(crate) use self::store::ComponentStoreData;
 /// impl HelloWorldImports for MyState {
 ///     // Note the `Result` return value here where `Ok` is returned back to
 ///     // the component and `Err` will raise a trap.
-///     fn name(&mut self) -> wasmtime::Result<String> {
-///         Ok(self.name.clone())
+///     fn name(&mut self) -> String {
+///         self.name.clone()
 ///     }
 /// }
 ///
@@ -315,13 +315,13 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 /// // Note that the trait here is per-interface and within a submodule now.
 /// impl Host for MyState {
-///     fn gen_random_integer(&mut self) -> wasmtime::Result<u32> {
+///     fn gen_random_integer(&mut self) -> u32 {
 /// #       panic!();
 /// #       #[cfg(FALSE)]
-///         Ok(rand::thread_rng().gen())
+///         rand::thread_rng().gen()
 ///     }
 ///
-///     fn sha256(&mut self, bytes: Vec<u8>) -> wasmtime::Result<String> {
+///     fn sha256(&mut self, bytes: Vec<u8>) -> String {
 ///         // ...
 /// #       panic!()
 ///     }
@@ -432,6 +432,21 @@ pub(crate) use self::store::ComponentStoreData;
 ///         only_imports: ["foo", "bar"],
 ///     },
 ///
+///     // This option is used to indicate whether imports can trap.
+///     //
+///     // Imports that may trap have their return types wrapped in
+///     // `wasmtime::Result<T>` where the `Err` variant indicates that a
+///     // trap will be raised in the guest.
+///     //
+///     // By default imports cannot trap and the return value is the return
+///     // value from the WIT bindings itself. This value can be set to `true`
+///     // to indicate that any import can trap. This value can also be set to
+///     // an array-of-strings to indicate that only a set list of imports
+///     // can trap.
+///     trappable_imports: false,             // no imports can trap (default)
+///     // trappable_imports: true,           // all imports can trap
+///     // trappable_imports: ["foo", "bar"], // only these can trap
+///
 ///     // This can be used to translate WIT return values of the form
 ///     // `result<T, error-type>` into `Result<T, RustErrorType>` in Rust.
 ///     // Users must define `RustErrorType` and the `Host` trait for the
@@ -440,7 +455,8 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // into `wasmtime::Result<ErrorType>`. This conversion can either
 ///     // return the raw WIT error (`ErrorType` here) or a trap.
 ///     //
-///     // By default this option is not specified.
+///     // By default this option is not specified. This option only takes
+///     // effect when `trappable_imports` is set for some imports.
 ///     trappable_error_type: {
 ///         "wasi:io/streams/stream-error" => RustErrorType,
 ///     },
