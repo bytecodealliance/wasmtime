@@ -45,11 +45,13 @@ impl<'a> CodeBuilder<'a> {
                             Some(code.mmap().to_vec())
                         },
                         // Cache hit, deserialize the provided artifacts
-                        |(engine, _wasm, _, _), serialized_bytes| {
-                            let code = engine
-                                .0
-                                .load_code_bytes(&serialized_bytes, ObjectKind::Module)
-                                .ok()?;
+                        |(engine, wasm, _, _), serialized_bytes| {
+                            let kind = if wasmparser::Parser::is_component(&wasm) {
+                                ObjectKind::Component
+                            } else {
+                                ObjectKind::Module
+                            };
+                            let code = engine.0.load_code_bytes(&serialized_bytes, kind).ok()?;
                             Some((code, None))
                         },
                     )?;
