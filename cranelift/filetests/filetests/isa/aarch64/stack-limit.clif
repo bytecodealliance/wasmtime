@@ -55,7 +55,8 @@ block0(v0: i64):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   subs xzr, sp, x0, UXTX
+;   add x16, x0, #16
+;   subs xzr, sp, x16, UXTX
 ;   b.lo #trap=stk_ovf
 ; block0:
 ;   load_ext_name x2, TestCase(%foo)+0
@@ -67,11 +68,12 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   cmp sp, x0
-;   b.lo #0x2c
-; block1: ; offset 0x10
-;   ldr x2, #0x18
-;   b #0x20
+;   add x16, x0, #0x10
+;   cmp sp, x16
+;   b.lo #0x30
+; block1: ; offset 0x14
+;   ldr x2, #0x1c
+;   b #0x24
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x2
@@ -95,6 +97,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ;   ldr x16, [x0]
 ;   ldr x16, [x16, #4]
+;   add x16, x16, #16
 ;   subs xzr, sp, x16, UXTX
 ;   b.lo #trap=stk_ovf
 ; block0:
@@ -109,11 +112,12 @@ block0(v0: i64):
 ;   mov x29, sp
 ;   ldur x16, [x0]
 ;   ldur x16, [x16, #4]
+;   add x16, x16, #0x10
 ;   cmp sp, x16
-;   b.lo #0x34
-; block1: ; offset 0x18
-;   ldr x2, #0x20
-;   b #0x28
+;   b.lo #0x38
+; block1: ; offset 0x1c
+;   ldr x2, #0x24
+;   b #0x2c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x2
