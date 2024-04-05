@@ -15,13 +15,14 @@ use crate::trace;
 pub fn mem_finalize(
     sink: Option<&mut MachBuffer<Inst>>,
     mem: &AMode,
+    access_ty: Type,
     state: &EmitState,
 ) -> (SmallVec<[Inst; 4]>, AMode) {
     match mem {
-        &AMode::RegOffset { off, ty, .. }
-        | &AMode::SPOffset { off, ty }
-        | &AMode::FPOffset { off, ty }
-        | &AMode::NominalSPOffset { off, ty } => {
+        &AMode::RegOffset { off, .. }
+        | &AMode::SPOffset { off }
+        | &AMode::FPOffset { off }
+        | &AMode::NominalSPOffset { off } => {
             let basereg = match mem {
                 &AMode::RegOffset { rn, .. } => rn,
                 &AMode::SPOffset { .. } | &AMode::NominalSPOffset { .. } => stack_reg(),
@@ -45,7 +46,7 @@ pub fn mem_finalize(
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
                 let mem = AMode::Unscaled { rn: basereg, simm9 };
                 (smallvec![], mem)
-            } else if let Some(uimm12) = UImm12Scaled::maybe_from_i64(off, ty) {
+            } else if let Some(uimm12) = UImm12Scaled::maybe_from_i64(off, access_ty) {
                 let mem = AMode::UnsignedOffset {
                     rn: basereg,
                     uimm12,
@@ -979,7 +980,8 @@ impl MachInstEmit for Inst {
             | &Inst::FpuLoad128 { rd, ref mem, flags } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
+                let access_ty = self.mem_type().unwrap();
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, access_ty, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
@@ -991,17 +993,17 @@ impl MachInstEmit for Inst {
                 // This is the base opcode (top 10 bits) for the "unscaled
                 // immediate" form (Unscaled). Other addressing modes will OR in
                 // other values for bits 24/25 (bits 1/2 of this constant).
-                let (op, bits) = match self {
-                    &Inst::ULoad8 { .. } => (0b0011100001, 8),
-                    &Inst::SLoad8 { .. } => (0b0011100010, 8),
-                    &Inst::ULoad16 { .. } => (0b0111100001, 16),
-                    &Inst::SLoad16 { .. } => (0b0111100010, 16),
-                    &Inst::ULoad32 { .. } => (0b1011100001, 32),
-                    &Inst::SLoad32 { .. } => (0b1011100010, 32),
-                    &Inst::ULoad64 { .. } => (0b1111100001, 64),
-                    &Inst::FpuLoad32 { .. } => (0b1011110001, 32),
-                    &Inst::FpuLoad64 { .. } => (0b1111110001, 64),
-                    &Inst::FpuLoad128 { .. } => (0b0011110011, 128),
+                let op = match self {
+                    Inst::ULoad8 { .. } => 0b0011100001,
+                    Inst::SLoad8 { .. } => 0b0011100010,
+                    Inst::ULoad16 { .. } => 0b0111100001,
+                    Inst::SLoad16 { .. } => 0b0111100010,
+                    Inst::ULoad32 { .. } => 0b1011100001,
+                    Inst::SLoad32 { .. } => 0b1011100010,
+                    Inst::ULoad64 { .. } => 0b1111100001,
+                    Inst::FpuLoad32 { .. } => 0b1011110001,
+                    Inst::FpuLoad64 { .. } => 0b1111110001,
+                    Inst::FpuLoad128 { .. } => 0b0011110011,
                     _ => unreachable!(),
                 };
 
@@ -1017,9 +1019,6 @@ impl MachInstEmit for Inst {
                     }
                     &AMode::UnsignedOffset { rn, uimm12 } => {
                         let reg = allocs.next(rn);
-                        if uimm12.value() != 0 {
-                            assert_eq!(bits, ty_bits(uimm12.scale_ty()));
-                        }
                         sink.put4(enc_ldst_uimm12(op, uimm12, reg, rd));
                     }
                     &AMode::RegReg { rn, rm } => {
@@ -1029,11 +1028,9 @@ impl MachInstEmit for Inst {
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
-                    &AMode::RegScaled { rn, rm, ty }
-                    | &AMode::RegScaledExtended { rn, rm, ty, .. } => {
+                    &AMode::RegScaled { rn, rm } | &AMode::RegScaledExtended { rn, rm, .. } => {
                         let r1 = allocs.next(rn);
                         let r2 = allocs.next(rm);
-                        assert_eq!(bits, ty_bits(ty));
                         let extendop = match &mem {
                             &AMode::RegScaled { .. } => None,
                             &AMode::RegScaledExtended { extendop, .. } => Some(extendop),
@@ -1123,20 +1120,21 @@ impl MachInstEmit for Inst {
             | &Inst::FpuStore128 { rd, ref mem, flags } => {
                 let rd = allocs.next(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
+                let access_ty = self.mem_type().unwrap();
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, access_ty, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
                 }
 
-                let (op, bits) = match self {
-                    &Inst::Store8 { .. } => (0b0011100000, 8),
-                    &Inst::Store16 { .. } => (0b0111100000, 16),
-                    &Inst::Store32 { .. } => (0b1011100000, 32),
-                    &Inst::Store64 { .. } => (0b1111100000, 64),
-                    &Inst::FpuStore32 { .. } => (0b1011110000, 32),
-                    &Inst::FpuStore64 { .. } => (0b1111110000, 64),
-                    &Inst::FpuStore128 { .. } => (0b0011110010, 128),
+                let op = match self {
+                    Inst::Store8 { .. } => 0b0011100000,
+                    Inst::Store16 { .. } => 0b0111100000,
+                    Inst::Store32 { .. } => 0b1011100000,
+                    Inst::Store64 { .. } => 0b1111100000,
+                    Inst::FpuStore32 { .. } => 0b1011110000,
+                    Inst::FpuStore64 { .. } => 0b1111110000,
+                    Inst::FpuStore128 { .. } => 0b0011110010,
                     _ => unreachable!(),
                 };
 
@@ -1152,9 +1150,6 @@ impl MachInstEmit for Inst {
                     }
                     &AMode::UnsignedOffset { rn, uimm12 } => {
                         let reg = allocs.next(rn);
-                        if uimm12.value() != 0 {
-                            assert_eq!(bits, ty_bits(uimm12.scale_ty()));
-                        }
                         sink.put4(enc_ldst_uimm12(op, uimm12, reg, rd));
                     }
                     &AMode::RegReg { rn, rm } => {
@@ -1164,7 +1159,7 @@ impl MachInstEmit for Inst {
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
-                    &AMode::RegScaled { rn, rm, .. } | &AMode::RegScaledExtended { rn, rm, .. } => {
+                    &AMode::RegScaled { rn, rm } | &AMode::RegScaledExtended { rn, rm, .. } => {
                         let r1 = allocs.next(rn);
                         let r2 = allocs.next(rm);
                         let extendop = match &mem {
@@ -3341,7 +3336,6 @@ impl MachInstEmit for Inst {
                     mem: AMode::reg_plus_reg_scaled_extended(
                         rtmp1.to_reg(),
                         rtmp2.to_reg(),
-                        I32,
                         ExtendOp::UXTW,
                     ),
                     flags: MemFlags::trusted(),
@@ -3436,7 +3430,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, I8, state);
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
                 }
@@ -3874,7 +3868,6 @@ fn emit_return_call_common_sequence(
             rd: tmp2,
             mem: AMode::SPOffset {
                 off: i64::from(i * 8),
-                ty: types::I64,
             },
             flags: ir::MemFlags::trusted(),
         }
@@ -3886,7 +3879,6 @@ fn emit_return_call_common_sequence(
             rd: tmp2.to_reg(),
             mem: AMode::FPOffset {
                 off: fp_to_callee_sp + i64::from(i * 8),
-                ty: types::I64,
             },
             flags: ir::MemFlags::trusted(),
         }

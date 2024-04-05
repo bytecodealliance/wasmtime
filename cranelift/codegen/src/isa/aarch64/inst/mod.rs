@@ -367,6 +367,32 @@ impl Inst {
             }
         }
     }
+
+    /// What type does this load or store instruction access in memory? When
+    /// uimm12 encoding is used, the size of this type is the amount that
+    /// immediate offsets are scaled by.
+    pub fn mem_type(&self) -> Option<Type> {
+        match self {
+            Inst::ULoad8 { .. } => Some(I8),
+            Inst::SLoad8 { .. } => Some(I8),
+            Inst::ULoad16 { .. } => Some(I16),
+            Inst::SLoad16 { .. } => Some(I16),
+            Inst::ULoad32 { .. } => Some(I32),
+            Inst::SLoad32 { .. } => Some(I32),
+            Inst::ULoad64 { .. } => Some(I64),
+            Inst::FpuLoad32 { .. } => Some(F32),
+            Inst::FpuLoad64 { .. } => Some(F64),
+            Inst::FpuLoad128 { .. } => Some(I8X16),
+            Inst::Store8 { .. } => Some(I8),
+            Inst::Store16 { .. } => Some(I16),
+            Inst::Store32 { .. } => Some(I32),
+            Inst::Store64 { .. } => Some(I64),
+            Inst::FpuStore32 { .. } => Some(F32),
+            Inst::FpuStore64 { .. } => Some(F64),
+            Inst::FpuStore128 { .. } => Some(I8X16),
+            _ => None,
+        }
+    }
 }
 
 //=============================================================================
@@ -1211,8 +1237,8 @@ impl MachInst for Inst {
 //=============================================================================
 // Pretty-printing of instructions.
 
-fn mem_finalize_for_show(mem: &AMode, state: &EmitState) -> (String, AMode) {
-    let (mem_insts, mem) = mem_finalize(None, mem, state);
+fn mem_finalize_for_show(mem: &AMode, access_ty: Type, state: &EmitState) -> (String, String) {
+    let (mem_insts, mem) = mem_finalize(None, mem, access_ty, state);
     let mut mem_str = mem_insts
         .into_iter()
         .map(|inst| {
@@ -1224,6 +1250,7 @@ fn mem_finalize_for_show(mem: &AMode, state: &EmitState) -> (String, AMode) {
         mem_str += " ; ";
     }
 
+    let mem = mem.pretty_print(access_ty.bytes() as u8, &mut AllocationConsumer::new(&[]));
     (mem_str, mem)
 }
 
@@ -1411,8 +1438,8 @@ impl Inst {
 
                 let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
 
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
             }
@@ -1438,8 +1465,8 @@ impl Inst {
 
                 let rd = pretty_print_ireg(rd, size, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
 
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
             }
@@ -1822,45 +1849,45 @@ impl Inst {
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size32, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad128 { rd, ref mem, .. } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rd = "q".to_string() + &rd[1..];
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size32, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
                 let rd = pretty_print_vreg_scalar(rd, ScalarSize::Size64, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore128 { rd, ref mem, .. } => {
                 let rd = pretty_print_reg(rd, allocs);
                 let rd = "q".to_string() + &rd[1..];
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state);
-                let mem = mem.pretty_print_default();
+                let access_ty = self.mem_type().unwrap();
+                let (mem_str, mem) = mem_finalize_for_show(&mem, access_ty, state);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoadP64 {
@@ -2771,7 +2798,7 @@ impl Inst {
                 // of the existing legalization framework).
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(allocs);
-                let (mem_insts, mem) = mem_finalize(None, &mem, state);
+                let (mem_insts, mem) = mem_finalize(None, &mem, I8, state);
                 let mut ret = String::new();
                 for inst in mem_insts.into_iter() {
                     ret.push_str(
