@@ -52,7 +52,8 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   clgrtle %r15, %r2
+;   la %r1, 160(%r2)
+;   clgrtle %r15, %r1
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
 ;   virtual_sp_offset_adjust 160
@@ -64,11 +65,12 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   clgrtle %r15, %r2 ; trap: stk_ovf
+;   la %r1, 0xa0(%r2)
+;   clgrtle %r15, %r1 ; trap: stk_ovf
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block1: ; offset 0xe
-;   bras %r1, 0x1a
+; block1: ; offset 0x12
+;   bras %r1, 0x1e
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -92,6 +94,7 @@ block0(v0: i64):
 ; VCode:
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 4(%r1)
+;   la %r1, 160(%r1)
 ;   clgrtle %r15, %r1
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
@@ -106,11 +109,12 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 4(%r1)
+;   la %r1, 0xa0(%r1)
 ;   clgrtle %r15, %r1 ; trap: stk_ovf
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block1: ; offset 0x1a
-;   bras %r1, 0x26
+; block1: ; offset 0x1e
+;   bras %r1, 0x2a
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00

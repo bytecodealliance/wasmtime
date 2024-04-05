@@ -1164,7 +1164,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         };
 
         // Return FrameLayout structure.
-        debug_assert!(outgoing_args_size == 0);
         FrameLayout {
             stack_args_size,
             setup_area_size,

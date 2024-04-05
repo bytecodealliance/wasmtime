@@ -1883,9 +1883,25 @@ impl<M: ABIMachineSpec> Callee<M> {
             &frame_layout,
         ));
 
+        // The stack limit check needs to cover all the stack adjustments we
+        // might make, up to the next stack limit check in any function we
+        // call. Since this happens after frame setup, the current function's
+        // setup area needs to be accounted for in the caller's stack limit
+        // check, but we need to account for any setup area that our callees
+        // might need. Note that s390x may also use the outgoing args area for
+        // backtrace support even in leaf functions, so that should be accounted
+        // for unconditionally.
+        let total_stacksize = frame_layout.clobber_size
+            + frame_layout.fixed_frame_storage_size
+            + frame_layout.outgoing_args_size
+            + if self.is_leaf {
+                0
+            } else {
+                frame_layout.setup_area_size
+            };
+
         // Leaf functions with zero stack don't need a stack check if one's
         // specified, otherwise always insert the stack check.
-        let total_stacksize = frame_layout.fixed_frame_storage_size;
         if total_stacksize > 0 || !self.is_leaf {
             if let Some((reg, stack_limit_load)) = &self.stack_limit {
                 insts.extend(stack_limit_load.clone());
