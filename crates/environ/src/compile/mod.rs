@@ -378,6 +378,7 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
         dwarf_package_bytes: Option<&[u8]>,
+        tunables: &Tunables,
     ) -> Result<()>;
 
     /// Creates a new System V Common Information Entry for the ISA.

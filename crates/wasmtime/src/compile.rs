@@ -719,7 +719,13 @@ impl FunctionIndices {
                     })
                     .collect();
                 if !funcs.is_empty() {
-                    compiler.append_dwarf(&mut obj, translation, &funcs, dwarf_package_bytes)?;
+                    compiler.append_dwarf(
+                        &mut obj,
+                        translation,
+                        &funcs,
+                        dwarf_package_bytes,
+                        tunables,
+                    )?;
                 }
             }
         }

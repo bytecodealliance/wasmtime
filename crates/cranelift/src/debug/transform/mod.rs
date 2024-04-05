@@ -4,18 +4,15 @@ use self::unit::clone_unit;
 use crate::debug::gc::build_dependencies;
 use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctionsMetadata;
-use anyhow::Error;
+use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
     write, DebugAddr, DebugLine, DebugStr, Dwarf, DwarfPackage, LittleEndian, LocationLists,
-    RangeLists, Unit, UnitSectionOffset,
+    RangeLists, Section, Unit, UnitSectionOffset,
 };
-use object::{File, Object, ObjectSection, ObjectSymbol};
-use std::borrow::Cow;
-use std::{collections::HashMap, collections::HashSet, fmt::Debug, result::Result};
+use std::{collections::HashSet, fmt::Debug, result::Result};
 use thiserror::Error;
-use typed_arena::Arena;
-use wasmtime_environ::DebugInfoData;
+use wasmtime_environ::{DebugInfoData, ModuleTranslation, Tunables};
 
 pub use address_transform::AddressTransform;
 
@@ -30,8 +27,6 @@ mod unit;
 mod utils;
 
 pub(crate) trait Reader: gimli::Reader<Offset = usize> + Send + Sync {}
-
-type RelocationMap = HashMap<usize, object::Relocation>;
 
 impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where
     Endian: gimli::Endianity + Send + Sync
@@ -54,132 +49,76 @@ where
     reachable: &'a HashSet<UnitSectionOffset>,
 }
 
-fn add_relocations(
-    relocations: &mut RelocationMap,
-    file: &object::File,
-    section: &object::Section,
-) {
-    for (offset64, mut relocation) in section.relocations() {
-        let offset = offset64 as usize;
-        if offset as u64 != offset64 {
-            continue;
-        }
-        match relocation.kind() {
-            object::RelocationKind::Absolute => {
-                match relocation.target() {
-                    object::RelocationTarget::Symbol(symbol_idx) => {
-                        match file.symbol_by_index(symbol_idx) {
-                            Ok(symbol) => {
-                                let addend =
-                                    symbol.address().wrapping_add(relocation.addend() as u64);
-                                relocation.set_addend(addend as i64);
-                            }
-                            Err(_) => {
-                                eprintln!(
-                                    "Relocation with invalid symbol for section {} at offset 0x{:08x}",
-                                    section.name().unwrap(),
-                                    offset
-                                );
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                if relocations.insert(offset, relocation).is_some() {
-                    eprintln!(
-                        "Multiple relocations for section {} at offset 0x{:08x}",
-                        section.name().unwrap(),
-                        offset
-                    );
-                }
-            }
-            _ => {
-                eprintln!(
-                    "Unsupported relocation for section {} at offset 0x{:08x}",
-                    section.name().unwrap(),
-                    offset
-                );
-            }
-        }
-    }
-}
-
-fn load_file_section<'input, 'arena, Endian: gimli::Endianity>(
-    id: gimli::SectionId,
-    file: &object::File<'input>,
-    endian: Endian,
-    is_dwo: bool,
-    arena_data: &'arena Arena<Cow<'input, [u8]>>,
-) -> anyhow::Result<gimli::EndianSlice<'input, Endian>>
-where
-    'arena: 'input,
-{
-    let mut relocations = RelocationMap::default();
-    let name = if is_dwo {
-        id.dwo_name()
-    } else if file.format() == object::BinaryFormat::Xcoff {
-        id.xcoff_name()
-    } else {
-        Some(id.name())
-    };
-
-    let data = match name.and_then(|name| file.section_by_name(&name)) {
-        Some(ref section) => {
-            // DWO sections never have relocations, so don't bother.
-            if !is_dwo {
-                add_relocations(&mut relocations, file, section);
-            }
-            section.uncompressed_data()?
-        }
-        // Use a non-zero capacity so that `ReaderOffsetId`s are unique.
-        None => Cow::Owned(Vec::with_capacity(1)),
-    };
-    let data_ref = arena_data.alloc(data);
-    let reader = gimli::EndianSlice::new(data_ref, endian);
-    let section = reader;
-    Ok(section)
-}
-
 fn load_dwp<'data>(
-    file: &File<'data>,
-    arena_data: &'data Arena<Cow<'data, [u8]>>,
-    buffer: &'data [u8],
+    translation: ModuleTranslation<'data>,
+    buffer: &'data Vec<u8>,
 ) -> anyhow::Result<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
-    // Read the file contents into a Vec<u8>
-    // let file_contents = std::fs::read(file_path)?;
-
-    // Create a gimli::EndianSlice from the file contents
-
     let endian_slice = gimli::EndianSlice::new(buffer, LittleEndian);
 
-    let mut load_section = |id: gimli::SectionId| -> anyhow::Result<_> {
-        load_file_section(id, &file, gimli::LittleEndian, true, arena_data)
-    };
+    let dwarf_package = DwarfPackage::load(
+        |id| -> anyhow::Result<_> {
+            let slice = match id {
+                gimli::SectionId::DebugAbbrev => {
+                    translation.debuginfo.dwarf.debug_abbrev.reader().slice()
+                }
+                gimli::SectionId::DebugInfo => {
+                    translation.debuginfo.dwarf.debug_info.reader().slice()
+                }
+                gimli::SectionId::DebugLine => {
+                    translation.debuginfo.dwarf.debug_line.reader().slice()
+                }
+                gimli::SectionId::DebugStr => {
+                    translation.debuginfo.dwarf.debug_str.reader().slice()
+                }
+                gimli::SectionId::DebugStrOffsets => translation
+                    .debuginfo
+                    .dwarf
+                    .debug_str_offsets
+                    .reader()
+                    .slice(),
+                gimli::SectionId::DebugLoc => translation.debuginfo.debug_loc.reader().slice(),
+                gimli::SectionId::DebugLocLists => {
+                    translation.debuginfo.debug_loclists.reader().slice()
+                }
+                gimli::SectionId::DebugRngLists => {
+                    translation.debuginfo.debug_rnglists.reader().slice()
+                }
+                gimli::SectionId::DebugTypes => {
+                    translation.debuginfo.dwarf.debug_types.reader().slice()
+                }
+                gimli::SectionId::DebugCuIndex => {
+                    translation.debuginfo.debug_cu_index.reader().slice()
+                }
+                gimli::SectionId::DebugTuIndex => {
+                    translation.debuginfo.debug_tu_index.reader().slice()
+                }
+                _ => &buffer,
+            };
 
-    // Load the DwarfPackage from the EndianSlice
-    let dwarf_package = DwarfPackage::load(&mut load_section, endian_slice)?;
+            Ok(gimli::EndianSlice::new(slice, gimli::LittleEndian))
+        },
+        endian_slice,
+    )?;
 
     Ok(dwarf_package)
-
-    // let empty = Module::empty_file_section(&arena_relocations);
-    // gimli::DwarfPackage::load(&mut load_section, empty)
 }
 
 /// Attempts to load a DWARF package using the passed bytes.
 fn read_dwarf_package_from_bytes<'data>(
     dwp_bytes: &'data [u8],
-    buffer: &'data mut Vec<u8>,
-    arena_data: &'data Arena<Cow<'data, [u8]>>,
+    buffer: &'data Vec<u8>,
+    tunables: &Tunables,
 ) -> Option<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
-    let object_file = match object::File::parse(dwp_bytes) {
-        Ok(file) => file,
-        Err(err) => {
-            eprintln!("Failed to parse file {}", err);
-            return None;
-        }
-    };
+    let mut validator = wasmparser::Validator::new();
+    let parser = wasmparser::Parser::new(0);
+    let mut types = Default::default();
+    let translation =
+        wasmtime_environ::ModuleEnvironment::new(tunables, &mut validator, &mut types)
+            .translate(parser, dwp_bytes)
+            .context("failed to parse WebAssembly DWARF package")
+            .unwrap();
 
-    match load_dwp(&object_file, &arena_data, buffer) {
+    match load_dwp(translation, buffer) {
         Ok(package) => Some(package),
         Err(err) => {
             eprintln!("Failed to load Dwarf package {}", err);
@@ -194,15 +133,16 @@ pub fn transform_dwarf<'data>(
     funcs: &CompiledFunctionsMetadata,
     memory_offset: &ModuleMemoryOffset,
     dwarf_package_bytes: Option<&[u8]>,
+    tunables: &Tunables,
 ) -> Result<write::Dwarf, Error> {
     let addr_tr = AddressTransform::new(funcs, &di.wasm_file);
 
-    let arena_data = Arena::new();
-    let mut buffer = Vec::new();
+    let buffer = Vec::new();
+
     let dwarf_package = dwarf_package_bytes
         .map(
             |bytes| -> Option<DwarfPackage<gimli::EndianSlice<'_, gimli::LittleEndian>>> {
-                read_dwarf_package_from_bytes(bytes, &mut buffer, &arena_data)
+                read_dwarf_package_from_bytes(bytes, &buffer, tunables)
             },
         )
         .flatten();

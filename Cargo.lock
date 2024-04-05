@@ -1926,7 +1926,6 @@ dependencies = [
  "hashbrown 0.14.0",
  "indexmap 2.0.0",
  "memchr",
- "wasmparser 0.201.0",
 ]
 
 [[package]]
