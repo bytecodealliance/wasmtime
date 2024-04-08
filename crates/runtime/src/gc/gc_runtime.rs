@@ -311,19 +311,22 @@ enum RawGcRoot {
 
 impl GcRootsList {
     /// Add a GC root that is inside a Wasm stack frame to this list.
-    //
-    // TODO: we shouldn't need to differentiate between on-stack GC roots and
-    // others, and both should just be `*mut VMGcRef`, but because Cranelift
-    // doesn't support `r32` on 64-bit platforms yet, we have to use `r64` for
-    // roots on the Wasm stack instead.
     #[inline]
-    pub fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u64>) {
+    pub unsafe fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u64>) {
+        log::trace!(
+            "Adding Wasm stack root: {:#p}",
+            VMGcRef::from_r64(*ptr_to_root.as_ref()).unwrap().unwrap()
+        );
         self.0.push(RawGcRoot::Stack(ptr_to_root));
     }
 
     /// Add a GC root to this list.
     #[inline]
-    pub fn add_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>) {
+    pub unsafe fn add_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>) {
+        log::trace!(
+            "Adding non-stack root: {:#p}",
+            ptr_to_root.as_ref().unchecked_copy()
+        );
         self.0.push(RawGcRoot::NonStack(ptr_to_root))
     }
 
