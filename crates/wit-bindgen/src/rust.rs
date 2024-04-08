@@ -120,7 +120,7 @@ pub trait RustGenerator<'a> {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
                     TypeDefKind::Type(Type::String) => true,
-                    TypeDefKind::Type(_) => false,
+                    TypeDefKind::Type(_) | TypeDefKind::ErrorContext => false,
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
@@ -166,16 +166,17 @@ pub trait RustGenerator<'a> {
                 panic!("unsupported anonymous type reference: enum")
             }
             TypeDefKind::Future(ty) => {
-                self.push_str("Future<");
+                self.push_str("wasmtime::component::FutureReader<");
                 self.print_optional_ty(ty.as_ref(), mode);
                 self.push_str(">");
             }
-            TypeDefKind::Stream(stream) => {
-                self.push_str("Stream<");
-                self.print_optional_ty(stream.element.as_ref(), mode);
-                self.push_str(",");
-                self.print_optional_ty(stream.end.as_ref(), mode);
+            TypeDefKind::Stream(ty) => {
+                self.push_str("wasmtime::component::StreamReader<");
+                self.print_ty(ty, mode);
                 self.push_str(">");
+            }
+            TypeDefKind::ErrorContext => {
+                self.push_str("wasmtime::component::ErrorContext");
             }
 
             TypeDefKind::Handle(handle) => {

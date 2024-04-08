@@ -104,8 +104,10 @@ macro_rules! foreach_builtin_component_function {
             resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u32;
             resource_enter_call(vmctx: vmctx);
             resource_exit_call(vmctx: vmctx);
-
             trap(vmctx: vmctx, code: u8);
+            future_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u32;
+            stream_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u32;
+            error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u32;
         }
     };
 }

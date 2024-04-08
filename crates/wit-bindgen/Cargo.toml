@@ -20,3 +20,4 @@ indexmap = { workspace = true }
 
 [features]
 std = []
+component-model-async = ['std']

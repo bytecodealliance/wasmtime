@@ -628,7 +628,8 @@ mod component {
             + PartialEq
             + Debug
             + Send
-            + Sync,
+            + Sync
+            + 'static,
     {
         // Benchmark the "typed" version.
         c.bench_function(&format!("component - host-to-wasm - typed - {name}"), |b| {

@@ -75,7 +75,7 @@ mod generated {
         },
         trappable_error_type: {
             "wasi:keyvalue/store/error" => crate::Error,
-        },
+        }
     });
 }
 

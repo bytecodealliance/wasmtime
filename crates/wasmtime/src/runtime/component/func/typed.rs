@@ -154,7 +154,14 @@ where
     /// Panics if this is called on a function in an asynchronous store. This
     /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
-    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
+    pub fn call<T: Send>(
+        &self,
+        store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Return>
+    where
+        Return: Send + Sync + 'static,
+    {
         assert!(
             !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config"
@@ -170,28 +177,95 @@ where
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    pub async fn call_async<T>(
+    pub async fn call_async<T: Send>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Return>
+    where
+        Params: Send + Sync,
+        Return: Send + Sync + 'static,
+    {
+        let store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_async` when async support is not enabled on the config"
+        );
+        #[cfg(feature = "component-model-async")]
+        {
+            // TODO: do we need to return the store here due to the possible
+            // invalidation of the reference we were passed?
+            crate::component::concurrent::on_fiber(store, self.func, move |store| {
+                self.call_impl(store, params)
+            })
+            .await?
+            .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let mut store = store;
+            store
+                .on_fiber(|store| self.call_impl(store, params))
+                .await?
+        }
+    }
+
+    fn call_impl<T: Send>(
         &self,
         mut store: impl AsContextMut<Data = T>,
         params: Params,
     ) -> Result<Return>
     where
-        T: Send,
-        Params: Send + Sync,
-        Return: Send + Sync,
+        Return: Send + Sync + 'static,
     {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_async` when async support is not enabled on the config"
-        );
-        store
-            .on_fiber(|store| self.call_impl(store, params))
-            .await?
-    }
+        let store = store.as_context_mut();
 
-    fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let store = &mut store.as_context_mut();
+        if store.0[self.func.0].options.async_() {
+            #[cfg(feature = "component-model-async")]
+            {
+                return Ok(if Params::flatten_count() <= MAX_FLAT_PARAMS {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_stack_result,
+                        )
+                    } else {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_heap_result_guest,
+                        )
+                    }
+                } else {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_heap_args_guest,
+                            Self::lift_stack_result,
+                        )
+                    } else {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_heap_args_guest,
+                            Self::lift_heap_result_guest,
+                        )
+                    }
+                }?
+                .0);
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                bail!(
+                    "must enable the `component-model-async` feature to call async-lifted exports"
+                )
+            }
+        }
+
         // Note that this is in theory simpler than it might read at this time.
         // Here we're doing a runtime dispatch on the `flatten_count` for the
         // params/results to see whether they're inbounds. This creates 4 cases
@@ -266,8 +340,6 @@ where
         ty: InterfaceType,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
-        assert!(Params::flatten_count() > MAX_FLAT_PARAMS);
-
         // Memory must exist via validation if the arguments are stored on the
         // heap, so we can create a `MemoryMut` at this point. Afterwards
         // `realloc` is used to allocate space for all the arguments and then
@@ -302,7 +374,6 @@ where
         ty: InterfaceType,
         dst: &Return::Lower,
     ) -> Result<Return> {
-        assert!(Return::flatten_count() <= MAX_FLAT_RESULTS);
         Return::lift(cx, ty, dst)
     }
 
@@ -326,6 +397,30 @@ where
             .and_then(|b| b.get(..Return::SIZE32))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
         Return::load(cx, ty, bytes)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn lower_heap_args_guest<T>(
+        cx: &mut LowerContext<'_, T>,
+        params: &Params,
+        ty: InterfaceType,
+        dst: &mut MaybeUninit<ValRaw>,
+    ) -> Result<()> {
+        let ptr =
+            crate::component::func::validate_inbounds::<Params>(cx.as_slice_mut(), &unsafe {
+                dst.assume_init()
+            })?;
+        params.store(cx, ty, ptr)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn lift_heap_result_guest(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        dst: &ValRaw,
+    ) -> Result<Return> {
+        _ = (cx, ty, dst);
+        todo!()
     }
 
     /// See [`Func::post_return`]
@@ -1526,7 +1621,7 @@ pub struct WasmList<T> {
 }
 
 impl<T: Lift> WasmList<T> {
-    fn new(
+    pub(crate) fn new(
         ptr: usize,
         len: usize,
         cx: &mut LiftContext<'_>,
@@ -2484,6 +2579,9 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Enum(_) => "enum",
         InterfaceType::Own(_) => "owned resource",
         InterfaceType::Borrow(_) => "borrowed resource",
+        InterfaceType::Future(_) => "future",
+        InterfaceType::Stream(_) => "stream",
+        InterfaceType::ErrorContext(_) => "error-context",
     }
 }
 
