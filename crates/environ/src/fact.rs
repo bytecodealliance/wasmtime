@@ -21,7 +21,7 @@
 use crate::component::dfg::CoreDef;
 use crate::component::{
     Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, FlatType, InterfaceType,
-    StringEncoding, Transcode, TypeFuncIndex,
+    RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
 use crate::prelude::*;
@@ -64,6 +64,11 @@ pub struct Module<'a> {
     imported_resource_transfer_borrow: Option<FuncIndex>,
     imported_resource_enter_call: Option<FuncIndex>,
     imported_resource_exit_call: Option<FuncIndex>,
+    imported_async_enter_call: Option<FuncIndex>,
+    imported_async_exit_call: Option<FuncIndex>,
+    imported_future_transfer: Option<FuncIndex>,
+    imported_stream_transfer: Option<FuncIndex>,
+    imported_error_context_transfer: Option<FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
@@ -73,6 +78,11 @@ pub struct Module<'a> {
     funcs: PrimaryMap<FunctionId, Function>,
     helper_funcs: HashMap<Helper, FunctionId>,
     helper_worklist: Vec<(FunctionId, Helper)>,
+
+    globals_by_type: [Vec<u32>; 4],
+    globals: Vec<ValType>,
+
+    exports: Vec<(u32, String)>,
 }
 
 struct AdapterData {
@@ -95,6 +105,7 @@ struct AdapterData {
 /// These options are typically unique per-adapter and generally aren't needed
 /// when translating recursive types within an adapter.
 struct AdapterOptions {
+    instance: RuntimeComponentInstanceIndex,
     /// The ascribed type of this adapter.
     ty: TypeFuncIndex,
     /// The global that represents the instance flags for where this adapter
@@ -122,6 +133,8 @@ struct Options {
     /// An optionally-specified function to be used to allocate space for
     /// types such as strings as they go into a module.
     realloc: Option<FuncIndex>,
+    callback: Option<FuncIndex>,
+    async_: bool,
 }
 
 enum Context {
@@ -187,6 +200,14 @@ impl<'a> Module<'a> {
             imported_resource_transfer_borrow: None,
             imported_resource_enter_call: None,
             imported_resource_exit_call: None,
+            imported_async_enter_call: None,
+            imported_async_exit_call: None,
+            imported_future_transfer: None,
+            imported_stream_transfer: None,
+            imported_error_context_transfer: None,
+            globals_by_type: Default::default(),
+            globals: Default::default(),
+            exports: Vec::new(),
         }
     }
 
@@ -240,6 +261,28 @@ impl<'a> Module<'a> {
         }
     }
 
+    fn allocate(&mut self, counts: &mut [usize; 4], ty: ValType) -> u32 {
+        let which = match ty {
+            ValType::I32 => 0,
+            ValType::I64 => 1,
+            ValType::F32 => 2,
+            ValType::F64 => 3,
+            _ => unreachable!(),
+        };
+
+        let index = counts[which];
+        counts[which] += 1;
+
+        if let Some(offset) = self.globals_by_type[which].get(index) {
+            *offset
+        } else {
+            let offset = u32::try_from(self.globals.len()).unwrap();
+            self.globals_by_type[which].push(offset);
+            self.globals.push(ty);
+            offset
+        }
+    }
+
     fn import_options(&mut self, ty: TypeFuncIndex, options: &AdapterOptionsDfg) -> AdapterOptions {
         let AdapterOptionsDfg {
             instance,
@@ -248,7 +291,10 @@ impl<'a> Module<'a> {
             memory64,
             realloc,
             post_return: _, // handled above
+            callback,
+            async_,
         } = options;
+
         let flags = self.import_global(
             "flags",
             &format!("instance{}", instance.as_u32()),
@@ -287,8 +333,26 @@ impl<'a> Module<'a> {
                 func.clone(),
             )
         });
+        let callback = callback.as_ref().map(|func| {
+            let ptr = if *memory64 {
+                ValType::I64
+            } else {
+                ValType::I32
+            };
+            let ty = self.core_types.function(
+                &[ptr, ValType::I32, ValType::I32, ValType::I32],
+                &[ValType::I32],
+            );
+            self.import_func(
+                "callback",
+                &format!("f{}", self.imported_funcs.len()),
+                ty,
+                func.clone(),
+            )
+        });
 
         AdapterOptions {
+            instance: *instance,
             ty,
             flags,
             post_return: None,
@@ -297,6 +361,8 @@ impl<'a> Module<'a> {
                 memory64: *memory64,
                 memory,
                 realloc,
+                callback,
+                async_: *async_,
             },
         }
     }
@@ -397,6 +463,78 @@ impl<'a> Module<'a> {
         idx
     }
 
+    fn import_async_enter_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "enter-call",
+            &[
+                ValType::FUNCREF,
+                ValType::FUNCREF,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+            ],
+            &[],
+            Import::AsyncEnterCall,
+            |me| &mut me.imported_async_enter_call,
+        )
+    }
+
+    fn import_async_exit_call(&mut self, callback: Option<FuncIndex>) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "exit-call",
+            &[
+                ValType::I32,
+                ValType::FUNCREF,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+            ],
+            &[ValType::I32],
+            Import::AsyncExitCall(
+                callback
+                    .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
+            ),
+            |me| &mut me.imported_async_exit_call,
+        )
+    }
+
+    fn import_future_transfer(&mut self) -> FuncIndex {
+        self.import_simple(
+            "future",
+            "transfer",
+            &[ValType::I32; 3],
+            &[ValType::I32],
+            Import::FutureTransfer,
+            |me| &mut me.imported_future_transfer,
+        )
+    }
+
+    fn import_stream_transfer(&mut self) -> FuncIndex {
+        self.import_simple(
+            "stream",
+            "transfer",
+            &[ValType::I32; 3],
+            &[ValType::I32],
+            Import::StreamTransfer,
+            |me| &mut me.imported_stream_transfer,
+        )
+    }
+
+    fn import_error_context_transfer(&mut self) -> FuncIndex {
+        self.import_simple(
+            "error-context",
+            "transfer",
+            &[ValType::I32; 3],
+            &[ValType::I32],
+            Import::ErrorContextTransfer,
+            |me| &mut me.imported_error_context_transfer,
+        )
+    }
+
     fn import_resource_transfer_own(&mut self) -> FuncIndex {
         self.import_simple(
             "resource",
@@ -472,6 +610,11 @@ impl<'a> Module<'a> {
                 exports.export(name, ExportKind::Func, idx.as_u32());
             }
         }
+        for (idx, name) in &self.exports {
+            exports.export(name, ExportKind::Func, *idx);
+        }
+
+        let imported_global_count = u32::try_from(self.imported_globals.len()).unwrap();
 
         // With all functions numbered the fragments of the body of each
         // function can be assigned into one final adapter function.
@@ -504,6 +647,15 @@ impl<'a> Module<'a> {
                     Body::Call(id) => {
                         Instruction::Call(id_to_index[*id].as_u32()).encode(&mut body);
                     }
+                    Body::RefFunc(id) => {
+                        Instruction::RefFunc(id_to_index[*id].as_u32()).encode(&mut body);
+                    }
+                    Body::GlobalGet(offset) => {
+                        Instruction::GlobalGet(offset + imported_global_count).encode(&mut body);
+                    }
+                    Body::GlobalSet(offset) => {
+                        Instruction::GlobalSet(offset + imported_global_count).encode(&mut body);
+                    }
                 }
             }
             code.raw(&body);
@@ -512,10 +664,29 @@ impl<'a> Module<'a> {
 
         let traps = traps.finish();
 
+        let mut globals = GlobalSection::new();
+        for ty in &self.globals {
+            globals.global(
+                GlobalType {
+                    val_type: *ty,
+                    mutable: true,
+                    shared: false,
+                },
+                &match ty {
+                    ValType::I32 => ConstExpr::i32_const(0),
+                    ValType::I64 => ConstExpr::i64_const(0),
+                    ValType::F32 => ConstExpr::f32_const(0_f32),
+                    ValType::F64 => ConstExpr::f64_const(0_f64),
+                    _ => unreachable!(),
+                },
+            );
+        }
+
         let mut result = wasm_encoder::Module::new();
         result.section(&self.core_types.section);
         result.section(&self.core_imports);
         result.section(&funcs);
+        result.section(&globals);
         result.section(&exports);
         result.section(&code);
         if self.debug {
@@ -561,6 +732,21 @@ pub enum Import {
     /// Tears down a previous entry and handles checking borrow-related
     /// metadata.
     ResourceExitCall,
+    /// An intrinsic used by FACT-generated modules to begin a call to an
+    /// async-lowered import function.
+    AsyncEnterCall,
+    /// An intrinsic used by FACT-generated modules to complete a call to an
+    /// async-lowered import function.
+    AsyncExitCall(Option<CoreDef>),
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of a `future`.
+    FutureTransfer,
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of a `stream`.
+    StreamTransfer,
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of an `error-context`.
+    ErrorContextTransfer,
 }
 
 impl Options {
@@ -659,6 +845,9 @@ struct Function {
 enum Body {
     Raw(Vec<u8>, Vec<(usize, traps::Trap)>),
     Call(FunctionId),
+    RefFunc(FunctionId),
+    GlobalGet(u32),
+    GlobalSet(u32),
 }
 
 impl Function {

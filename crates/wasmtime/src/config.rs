@@ -1053,6 +1053,17 @@ impl Config {
         self
     }
 
+    /// Configures whether components support the async ABI [proposal] for
+    /// lifting and lowering functions, as well as `stream`, `future`, and
+    /// `error-context` types.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    #[cfg(feature = "component-model-async")]
+    pub fn wasm_component_model_async(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::COMPONENT_MODEL_ASYNC, enable);
+        self
+    }
+
     /// Configures which compilation strategy will be used for wasm modules.
     ///
     /// This method can be used to configure which compiler is used for wasm
