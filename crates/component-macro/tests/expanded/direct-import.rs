@@ -18,7 +18,7 @@ impl<T> Clone for FooPre<T> {
         }
     }
 }
-impl<_T> FooPre<_T> {
+impl<_T: 'static> FooPre<_T> {
     /// Creates a new copy of `FooPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -162,7 +162,10 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Foo> {
+        ) -> wasmtime::Result<Foo>
+        where
+            _T: 'static,
+        {
             let pre = linker.instantiate_pre(component)?;
             FooPre::new(pre)?.instantiate(store)
         }
