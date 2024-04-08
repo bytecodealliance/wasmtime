@@ -8,15 +8,23 @@ use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, 
 use wasmtime::{AsContextMut, Config, Engine};
 
 pub trait TypedFuncExt<P, R> {
-    fn call_and_post_return(&self, store: impl AsContextMut, params: P) -> Result<R>;
+    fn call_and_post_return<T: Send>(
+        &self,
+        store: impl AsContextMut<Data = T>,
+        params: P,
+    ) -> Result<R>;
 }
 
 impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
 where
     P: ComponentNamedList + Lower,
-    R: ComponentNamedList + Lift,
+    R: ComponentNamedList + Lift + Send + Sync + 'static,
 {
-    fn call_and_post_return(&self, mut store: impl AsContextMut, params: P) -> Result<R> {
+    fn call_and_post_return<T: Send>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        params: P,
+    ) -> Result<R> {
         let result = self.call(&mut store, params)?;
         self.post_return(&mut store)?;
         Ok(result)
@@ -24,18 +32,18 @@ where
 }
 
 pub trait FuncExt {
-    fn call_and_post_return(
+    fn call_and_post_return<T: Send>(
         &self,
-        store: impl AsContextMut,
+        store: impl AsContextMut<Data = T>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()>;
 }
 
 impl FuncExt for Func {
-    fn call_and_post_return(
+    fn call_and_post_return<T: Send>(
         &self,
-        mut store: impl AsContextMut,
+        mut store: impl AsContextMut<Data = T>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {

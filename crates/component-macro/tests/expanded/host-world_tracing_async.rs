@@ -18,7 +18,7 @@ impl<T> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T> Host_Pre<_T> {
+impl<_T: Send + 'static> Host_Pre<_T> {
     /// Creates a new copy of `Host_Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -46,10 +46,7 @@ impl<_T> Host_Pre<_T> {
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Host_>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Host_> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -168,7 +165,7 @@ const _: () = {
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Host_>
         where
-            _T: Send,
+            _T: Send + 'static,
         {
             let pre = linker.instantiate_pre(component)?;
             Host_Pre::new(pre)?.instantiate_async(store).await

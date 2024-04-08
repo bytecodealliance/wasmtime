@@ -1,0 +1,86 @@
+package local:local;
+
+interface baz {
+  foo: func(s: string) -> string;
+}
+
+world round-trip {
+  import baz;
+  export baz;
+}
+
+interface ready {
+  set-ready: func(ready: bool);
+  when-ready: func();
+}
+
+interface continue {
+  set-continue: func(continue: bool);
+  get-continue: func() -> bool;
+}
+
+interface run {
+  run: func();
+}
+
+interface backpressure {
+  set-backpressure: func(enabled: bool);
+}
+
+interface transmit {
+  variant control {
+    read-stream(string),
+    read-future(string),
+    write-stream(string),
+    write-future(string),
+  }
+  
+  exchange: func(control: stream<control>,
+                 caller-stream: stream<string>,
+                 caller-future1: future<string>,
+                 caller-future2: future<string>) -> tuple<stream<string>, future<string>, future<string>>;
+}
+
+world yield-caller {
+  import continue;
+  import ready;
+  import run;
+  export run;
+}
+
+world yield-callee {
+  import continue;
+  export run;
+}
+
+world yield-host {
+  import continue;
+  import ready;
+  export run;
+}
+
+world poll {
+  import ready;
+  export run;
+}
+
+world backpressure-caller {
+  import backpressure;
+  import run;
+  export run;
+}
+
+world backpressure-callee {
+  export backpressure;
+  export run;
+}
+
+world transmit-caller {
+  import transmit;
+  export run;
+}
+
+world transmit-callee {
+  export transmit;
+}
+

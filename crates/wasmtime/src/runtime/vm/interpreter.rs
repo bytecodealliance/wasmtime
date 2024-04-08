@@ -326,7 +326,7 @@ impl InterpreterRef<'_> {
             use wasmtime_environ::component::ComponentBuiltinFunctionIndex;
 
             if id == const { HostCall::ComponentLowerImport.index() } {
-                call!(@host VMLoweringCallee(ptr, ptr, u32, ptr, ptr, ptr, u8, ptr, size) -> bool);
+                call!(@host VMLoweringCallee(ptr, ptr, u32, u32, ptr, ptr, ptr, u8, u8, ptr, size) -> bool);
             }
 
             macro_rules! component {
