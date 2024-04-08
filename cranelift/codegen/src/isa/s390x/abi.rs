@@ -192,9 +192,9 @@ impl Into<MemArg> for StackAMode {
     fn into(self) -> MemArg {
         match self {
             // Argument area always begins at the initial SP.
-            StackAMode::ArgOffset(off, _ty) => MemArg::InitialSPOffset { off },
-            StackAMode::NominalSPOffset(off, _ty) => MemArg::NominalSPOffset { off },
-            StackAMode::SPOffset(off, _ty) => {
+            StackAMode::IncomingArg(off) => MemArg::InitialSPOffset { off },
+            StackAMode::Slot(off) => MemArg::NominalSPOffset { off },
+            StackAMode::OutgoingArg(off) => {
                 MemArg::reg_plus_off(stack_reg(), off, MemFlags::trusted())
             }
         }
@@ -495,7 +495,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {
         let mem = mem.into();
         Inst::LoadAddr { rd: into_reg, mem }
     }

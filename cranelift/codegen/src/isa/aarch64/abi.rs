@@ -36,9 +36,9 @@ impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
             // Argument area begins after saved frame pointer + return address.
-            StackAMode::ArgOffset(off, _ty) => AMode::FPOffset { off: off + 16 },
-            StackAMode::NominalSPOffset(off, _ty) => AMode::NominalSPOffset { off },
-            StackAMode::SPOffset(off, _ty) => AMode::SPOffset { off },
+            StackAMode::IncomingArg(off) => AMode::FPOffset { off: off + 16 },
+            StackAMode::Slot(off) => AMode::NominalSPOffset { off },
+            StackAMode::OutgoingArg(off) => AMode::SPOffset { off },
         }
     }
 }
@@ -457,7 +457,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {
         // FIXME: Do something different for dynamic types?
         let mem = mem.into();
         Inst::LoadAddr { rd: into_reg, mem }

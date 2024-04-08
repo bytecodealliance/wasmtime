@@ -281,15 +281,12 @@ pub enum ArgsOrRets {
 /// appropriate addressing mode.
 #[derive(Clone, Copy, Debug)]
 pub enum StackAMode {
-    /// Offset into the current frame's argument area, possibly making use of a
-    /// specific type for a scaled indexing operation.
-    ArgOffset(i64, ir::Type),
-    /// Offset from the nominal stack pointer, possibly making use of a specific
-    /// type for a scaled indexing operation.
-    NominalSPOffset(i64, ir::Type),
-    /// Offset from the real stack pointer, possibly making use of a specific
-    /// type for a scaled indexing operation.
-    SPOffset(i64, ir::Type),
+    /// Offset into the current frame's argument area.
+    IncomingArg(i64),
+    /// Offset within the stack slots in the current frame.
+    Slot(i64),
+    /// Offset into the callee frame's argument area.
+    OutgoingArg(i64),
 }
 
 /// Trait implemented by machine-specific backend to represent ISA flags.
@@ -447,7 +444,7 @@ pub trait ABIMachineSpec {
 
     /// Generate an instruction to compute an address of a stack slot (FP- or
     /// SP-based offset).
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I;
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I;
 
     /// Get a fixed register to use to compute a stack limit. This is needed for
     /// certain sequences generated after the register allocator has already
@@ -1475,7 +1472,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                             ty
                         };
                     insts.push(M::gen_load_stack(
-                        StackAMode::ArgOffset(offset, ty),
+                        StackAMode::IncomingArg(offset),
                         *into_reg,
                         ty,
                     ));
@@ -1500,9 +1497,8 @@ impl<M: ABIMachineSpec> Callee<M> {
                 } else {
                     // Buffer address is implicitly defined by the ABI.
                     insts.push(M::gen_get_stack_addr(
-                        StackAMode::ArgOffset(offset, I8),
+                        StackAMode::IncomingArg(offset),
                         into_reg,
-                        I8,
                     ));
                 }
             }
@@ -1523,7 +1519,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                         // This was allocated in the `init` routine.
                         let addr_reg = self.arg_temp_reg[idx].unwrap();
                         insts.push(M::gen_load_stack(
-                            StackAMode::ArgOffset(offset, ty),
+                            StackAMode::IncomingArg(offset),
                             addr_reg,
                             ty,
                         ));
@@ -1694,17 +1690,13 @@ impl<M: ABIMachineSpec> Callee<M> {
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
         let stack_off = self.sized_stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
-        M::gen_get_stack_addr(StackAMode::NominalSPOffset(sp_off, I8), into_reg, I8)
+        M::gen_get_stack_addr(StackAMode::Slot(sp_off), into_reg)
     }
 
     /// Produce an instruction that computes a dynamic stackslot address.
     pub fn dynamic_stackslot_addr(&self, slot: DynamicStackSlot, into_reg: Writable<Reg>) -> M::I {
         let stack_off = self.dynamic_stackslots[slot] as i64;
-        M::gen_get_stack_addr(
-            StackAMode::NominalSPOffset(stack_off, I64X2XN),
-            into_reg,
-            I64X2XN,
-        )
+        M::gen_get_stack_addr(StackAMode::Slot(stack_off), into_reg)
     }
 
     /// Get an `args` pseudo-inst, if any, that should appear at the
@@ -1977,7 +1969,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         let sp_off = self.get_spillslot_offset(to_slot);
         trace!("gen_spill: {from_reg:?} into slot {to_slot:?} at offset {sp_off}");
 
-        let from = StackAMode::NominalSPOffset(sp_off, ty);
+        let from = StackAMode::Slot(sp_off);
         <M>::gen_store_stack(from, Reg::from(from_reg), ty)
     }
 
@@ -1989,7 +1981,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         let sp_off = self.get_spillslot_offset(from_slot);
         trace!("gen_reload: {to_reg:?} from slot {from_slot:?} at offset {sp_off}");
 
-        let from = StackAMode::NominalSPOffset(sp_off, ty);
+        let from = StackAMode::Slot(sp_off);
         <M>::gen_load_stack(from, to_reg.map(Reg::from), ty)
     }
 }
@@ -2242,9 +2234,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 let src_ptr = from_regs.only_reg().unwrap();
                 let dst_ptr = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
                 ctx.emit(M::gen_get_stack_addr(
-                    StackAMode::SPOffset(offset, I8),
+                    StackAMode::OutgoingArg(offset),
                     dst_ptr,
-                    I8,
                 ));
                 // Emit a memcpy from `src_ptr` to `dst_ptr` of `size` bytes.
                 // N.B.: because we process StructArg params *first*, this is
@@ -2283,9 +2274,9 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             "tail calls require frame pointers to be enabled"
                         );
 
-                        StackAMode::ArgOffset(offset, ty)
+                        StackAMode::IncomingArg(offset)
                     } else {
-                        StackAMode::SPOffset(offset, ty)
+                        StackAMode::OutgoingArg(offset)
                     };
                     ctx.emit(M::gen_store_stack(amode, vreg, ty))
                 }
@@ -2391,9 +2382,9 @@ impl<M: ABIMachineSpec> CallSite<M> {
             } => {
                 assert_eq!(from_regs.len(), 1);
                 let vreg = from_regs.regs()[0];
-                let amode = StackAMode::SPOffset(offset, ty);
+                let amode = StackAMode::OutgoingArg(offset);
                 let tmp = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
-                ctx.emit(M::gen_get_stack_addr(amode, tmp, ty));
+                ctx.emit(M::gen_get_stack_addr(amode, tmp));
                 let tmp = tmp.to_reg();
                 ctx.emit(M::gen_store_base_offset(tmp, 0, vreg, ty));
                 let loc = match pointer {
@@ -2504,7 +2495,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                 sig_data.sized_stack_arg_space()
                             };
                             insts.push(M::gen_load_stack(
-                                StackAMode::SPOffset(offset + ret_area_base, ty),
+                                StackAMode::OutgoingArg(offset + ret_area_base),
                                 *into_reg,
                                 ty,
                             ));
@@ -2541,9 +2532,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
             let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space();
             ctx.emit(M::gen_get_stack_addr(
-                StackAMode::SPOffset(ret_area_base, I8),
+                StackAMode::OutgoingArg(ret_area_base),
                 rd,
-                I8,
             ));
             let moves = self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg()));
             self.emit_arg_moves(ctx, moves);

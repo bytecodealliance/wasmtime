@@ -478,7 +478,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         ]
     }
 
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Self::I {
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I {
         let mem: SyntheticAmode = mem.into();
         Inst::lea(mem, into_reg)
     }
@@ -1018,27 +1018,26 @@ impl From<StackAMode> for SyntheticAmode {
         // We enforce a 128 MB stack-frame size limit above, so these
         // `expect()`s should never fail.
         match amode {
-            StackAMode::ArgOffset(off, _ty) => {
-                let off =
-                    i32::try_from(off + 16) // frame pointer + return address
-                        .expect(
-                            "Offset in ArgOffset is greater than 2GB; should hit impl limit first",
-                        );
+            StackAMode::IncomingArg(off) => {
+                let off = i32::try_from(off + 16) // frame pointer + return address
+                    .expect(
+                        "Offset in IncomingArg is greater than 2GB; should hit impl limit first",
+                    );
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32: off,
                     base: regs::rbp(),
                     flags: MemFlags::trusted(),
                 })
             }
-            StackAMode::NominalSPOffset(off, _ty) => {
-                let off = i32::try_from(off).expect(
-                    "Offset in NominalSPOffset is greater than 2GB; should hit impl limit first",
-                );
+            StackAMode::Slot(off) => {
+                let off = i32::try_from(off)
+                    .expect("Offset in Slot is greater than 2GB; should hit impl limit first");
                 SyntheticAmode::nominal_sp_offset(off)
             }
-            StackAMode::SPOffset(off, _ty) => {
-                let off = i32::try_from(off)
-                    .expect("Offset in SPOffset is greater than 2GB; should hit impl limit first");
+            StackAMode::OutgoingArg(off) => {
+                let off = i32::try_from(off).expect(
+                    "Offset in OutgoingArg is greater than 2GB; should hit impl limit first",
+                );
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32: off,
                     base: regs::rsp(),
