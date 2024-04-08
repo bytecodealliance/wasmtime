@@ -654,8 +654,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         // Adjust the stack pointer downward for clobbers and the function fixed
-        // frame (spillslots and storage slots).
-        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
+        // frame (spillslots, storage slots, and argument area).
+        let stack_size = frame_layout.fixed_frame_storage_size
+            + frame_layout.clobber_size
+            + frame_layout.outgoing_args_size;
         if stack_size > 0 {
             insts.push(Inst::alu_rmi_r(
                 OperandSize::Size64,
@@ -664,9 +666,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 Writable::from_reg(regs::rsp()),
             ));
         }
+
+        // Adjust the nominal sp to account for the outgoing argument area.
+        let sp_adj = frame_layout.outgoing_args_size as i32;
+        if sp_adj > 0 {
+            insts.push(Self::gen_nominal_sp_adj(sp_adj));
+        }
+
         // Store each clobbered register in order at offsets from RSP,
         // placing them above the fixed frame slots.
-        let mut cur_offset = frame_layout.fixed_frame_storage_size;
+        let mut cur_offset =
+            frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
         for reg in &frame_layout.clobbered_callee_saves {
             let r_reg = reg.to_reg();
             let off = cur_offset;
@@ -710,12 +720,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
 
-        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
-
         // Restore regs by loading from offsets of RSP. RSP will be
         // returned to nominal-RSP at this point, so we can use the
         // same offsets that we used when saving clobbers above.
-        let mut cur_offset = frame_layout.fixed_frame_storage_size;
+        let mut cur_offset =
+            frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
         for reg in &frame_layout.clobbered_callee_saves {
             let rreg = reg.to_reg();
             match rreg.class() {
@@ -739,6 +748,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 RegClass::Vector => unreachable!(),
             }
         }
+
+        let stack_size = frame_layout.fixed_frame_storage_size
+            + frame_layout.clobber_size
+            + frame_layout.outgoing_args_size;
+
         // Adjust RSP back upward.
         if stack_size > 0 {
             insts.push(Inst::alu_rmi_r(

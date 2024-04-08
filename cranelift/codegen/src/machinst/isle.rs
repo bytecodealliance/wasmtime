@@ -838,21 +838,13 @@ macro_rules! isle_prelude_method_helpers {
             mut caller: $abicaller,
             args: ValueSlice,
         ) -> InstOutput {
-            let off = self.lower_ctx.sigs()[abi].sized_stack_arg_space()
-                + self.lower_ctx.sigs()[abi].sized_stack_ret_space();
-            self.lower_ctx
-                .abi_mut()
-                .accumulate_outgoing_args_size(off as u32);
-
-            caller.emit_stack_pre_adjust(self.lower_ctx);
-
             self.gen_call_common_args(&mut caller, args);
 
             // Handle retvals prior to emitting call, so the
             // constraints are on the call instruction; but buffer the
             // instructions till after the call.
             let mut outputs = InstOutput::new();
-            let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
+            let mut retval_insts = crate::machinst::abi::SmallInstVec::new();
             // We take the *last* `num_rets` returns of the sig:
             // this skips a StructReturn, if any, that is present.
             let sigdata_num_rets = self.lower_ctx.sigs().num_rets(abi);
@@ -876,8 +868,6 @@ macro_rules! isle_prelude_method_helpers {
             for inst in retval_insts {
                 self.lower_ctx.emit(inst);
             }
-
-            caller.emit_stack_post_adjust(self.lower_ctx);
 
             outputs
         }
