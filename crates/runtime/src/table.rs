@@ -467,16 +467,16 @@ impl Table {
             TableElement::FuncRef(f) => {
                 self.funcrefs_mut()[start..end].fill(TaggedFuncRef::from(f));
             }
-            TableElement::GcRef(e) => {
+            TableElement::GcRef(r) => {
                 // Clone the init GC reference into each table slot.
                 for slot in &mut self.gc_refs_mut()[start..end] {
-                    gc_store.write_gc_ref(slot, e.as_ref());
+                    gc_store.write_gc_ref(slot, r.as_ref());
                 }
 
                 // Drop the init GC reference, since we aren't holding onto this
                 // reference anymore, only the clones in the table.
-                if let Some(e) = e {
-                    gc_store.drop_gc_ref(e);
+                if let Some(r) = r {
+                    gc_store.drop_gc_ref(r);
                 }
             }
             TableElement::UninitFunc => {

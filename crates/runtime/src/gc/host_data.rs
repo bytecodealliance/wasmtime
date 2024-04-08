@@ -39,11 +39,14 @@ impl ExternRefHostDataTable {
     /// Allocate a new `externref` host data value.
     pub fn alloc(&mut self, value: Box<dyn Any + Send + Sync>) -> ExternRefHostDataId {
         let id = self.slab.alloc(value);
-        ExternRefHostDataId(id)
+        let id = ExternRefHostDataId(id);
+        log::trace!("allocated new externref host data: {id:?}");
+        id
     }
 
     /// Deallocate an `externref` host data value.
     pub fn dealloc(&mut self, id: ExternRefHostDataId) -> Box<dyn Any + Send + Sync> {
+        log::trace!("deallocated externref host data: {id:?}");
         self.slab.dealloc(id.0)
     }
 

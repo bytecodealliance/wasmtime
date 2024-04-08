@@ -213,7 +213,9 @@ impl Global {
             if let Some(gc_ref) = unsafe { (*store[self.0].definition).as_gc_ref() } {
                 let gc_ref = NonNull::from(gc_ref);
                 let gc_ref = SendSyncPtr::new(gc_ref);
-                gc_roots_list.add_root(gc_ref);
+                unsafe {
+                    gc_roots_list.add_root(gc_ref);
+                }
             }
         }
     }

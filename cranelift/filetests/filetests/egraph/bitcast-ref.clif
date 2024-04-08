@@ -1,0 +1,71 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %bitcast_from_r64(i64 vmctx, r64) -> i32 fast {
+    sig0 = (i32) fast
+    fn0 = colocated %foo sig0
+
+block0(v0: i64, v1: r64):
+    v2 = bitcast.i64 v1
+    v3 = ireduce.i32 v2
+
+    call fn0(v3)
+
+    ;; We MUST NOT dedupe the bitcast *from* the reference type, as that would
+    ;; make `v1` no longer live across the `call`, which would mean that it
+    ;; would not show up in the `call`'s safepoint's stack map, which could
+    ;; result in the collector reclaiming an object too early, which is basically
+    ;; a use-after-free bug.
+    v4 = bitcast.i64 v1
+    v5 = ireduce.i32 v4
+
+    return v5
+}
+
+; function %bitcast_from_r64(i64 vmctx, r64) -> i32 fast {
+;     sig0 = (i32) fast
+;     fn0 = colocated %foo sig0
+;
+; block0(v0: i64, v1: r64):
+;     v2 = bitcast.i64 v1
+;     v3 = ireduce.i32 v2
+;     call fn0(v3)
+;     v4 = bitcast.i64 v1
+;     v5 = ireduce.i32 v4
+;     return v5
+; }
+
+function %bitcast_to_r64(i64 vmctx, i32) -> r64 fast {
+    sig0 = (r64) fast
+    fn0 = colocated %foo sig0
+
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = bitcast.r64 v2
+
+    call fn0(v3)
+
+    ;; On the other hand, it is technically fine to dedupe bitcasts *to*
+    ;; reference types. Doing so extends the live range of the GC reference --
+    ;; potentially adding it to more stack maps than it otherwise would have
+    ;; been in, which means it might unnecessarily survive a GC it otherwise
+    ;; wouldn't have -- but that is okay. Shrinking live ranges of GC
+    ;; references, and removing them from stack maps they otherwise would have
+    ;; been in, is the problematic transformation.
+    v4 = uextend.i64 v1
+    v5 = bitcast.r64 v4
+
+    return v5
+}
+
+; function %bitcast_to_r64(i64 vmctx, i32) -> r64 fast {
+;     sig0 = (r64) fast
+;     fn0 = colocated %foo sig0
+;
+; block0(v0: i64, v1: i32):
+;     v2 = uextend.i64 v1
+;     v3 = bitcast.r64 v2
+;     call fn0(v3)
+;     return v3
+; }
