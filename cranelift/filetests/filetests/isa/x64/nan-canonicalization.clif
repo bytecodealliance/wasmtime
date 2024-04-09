@@ -1,0 +1,131 @@
+test compile precise-output
+set enable_nan_canonicalization=true 
+target x86_64
+
+function %f0(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addps   %xmm0, %xmm1, %xmm0
+;   movdqa  %xmm0, %xmm1
+;   movl    $2143289344, %esi
+;   movd    %esi, %xmm5
+;   shufps  $0, %xmm5, const(0), %xmm5
+;   cmpps   $3, %xmm0, %xmm1, %xmm0
+;   andps   %xmm5, %xmm0, %xmm5
+;   andnps  %xmm0, %xmm1, %xmm0
+;   orps    %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addps %xmm1, %xmm0
+;   movdqa %xmm0, %xmm1
+;   movl $0x7fc00000, %esi
+;   movd %esi, %xmm5
+;   shufps $0, 0x14(%rip), %xmm5
+;   cmpunordps %xmm1, %xmm0
+;   andps %xmm0, %xmm5
+;   andnps %xmm1, %xmm0
+;   orps %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   sarb $0, (%rdi)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %f1(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addsd   %xmm0, %xmm1, %xmm0
+;   movdqa  %xmm0, %xmm7
+;   movabsq $9221120237041090560, %r11
+;   movq    %r11, %xmm5
+;   cmppd   $3, %xmm0, %xmm7, %xmm0
+;   andpd   %xmm5, %xmm0, %xmm5
+;   andnpd  %xmm0, %xmm7, %xmm0
+;   orpd    %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addsd %xmm1, %xmm0
+;   movdqa %xmm0, %xmm7
+;   movabsq $0x7ff8000000000000, %r11
+;   movq %r11, %xmm5
+;   cmpunordpd %xmm7, %xmm0
+;   andpd %xmm0, %xmm5
+;   andnpd %xmm7, %xmm0
+;   orpd %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f1(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addss   %xmm0, %xmm1, %xmm0
+;   movdqa  %xmm0, %xmm7
+;   movl    $2143289344, %r11d
+;   movd    %r11d, %xmm5
+;   cmpps   $3, %xmm0, %xmm7, %xmm0
+;   andps   %xmm5, %xmm0, %xmm5
+;   andnps  %xmm0, %xmm7, %xmm0
+;   orps    %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addss %xmm1, %xmm0
+;   movdqa %xmm0, %xmm7
+;   movl $0x7fc00000, %r11d
+;   movd %r11d, %xmm5
+;   cmpunordps %xmm7, %xmm0
+;   andps %xmm0, %xmm5
+;   andnps %xmm7, %xmm0
+;   orps %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

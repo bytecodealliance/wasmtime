@@ -1,0 +1,140 @@
+test compile precise-output
+set enable_nan_canonicalization=true 
+target x86_64 sse41
+
+function %f0(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addps   %xmm0, %xmm1, %xmm0
+;   movl    $2143289344, %r10d
+;   movd    %r10d, %xmm7
+;   shufps  $0, %xmm7, const(0), %xmm7
+;   movdqa  %xmm0, %xmm1
+;   cmpps   $3, %xmm1, %xmm0, %xmm1
+;   movdqa  %xmm0, %xmm2
+;   movdqa  %xmm1, %xmm0
+;   movdqa  %xmm2, %xmm1
+;   pblendvb %xmm1, %xmm7, %xmm1
+;   movdqa  %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addps %xmm1, %xmm0
+;   movl $0x7fc00000, %r10d
+;   movd %r10d, %xmm7
+;   shufps $0, 0x26(%rip), %xmm7
+;   movdqa %xmm0, %xmm1
+;   cmpunordps %xmm0, %xmm1
+;   movdqa %xmm0, %xmm2
+;   movdqa %xmm1, %xmm0
+;   movdqa %xmm2, %xmm1
+;   pblendvb %xmm0, %xmm7, %xmm1
+;   movdqa %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   sarb $0, (%rdi)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %f1(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addsd   %xmm0, %xmm1, %xmm0
+;   movabsq $9221120237041090560, %r9
+;   movq    %r9, %xmm1
+;   movdqa  %xmm0, %xmm7
+;   cmppd   $3, %xmm7, %xmm0, %xmm7
+;   movdqa  %xmm0, %xmm5
+;   movdqa  %xmm7, %xmm0
+;   pblendvb %xmm5, %xmm1, %xmm5
+;   movdqa  %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addsd %xmm1, %xmm0
+;   movabsq $0x7ff8000000000000, %r9
+;   movq %r9, %xmm1
+;   movdqa %xmm0, %xmm7
+;   cmpunordpd %xmm0, %xmm7
+;   movdqa %xmm0, %xmm5
+;   movdqa %xmm7, %xmm0
+;   pblendvb %xmm0, %xmm1, %xmm5
+;   movdqa %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f1(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addss   %xmm0, %xmm1, %xmm0
+;   movl    $2143289344, %r9d
+;   movd    %r9d, %xmm1
+;   movdqa  %xmm0, %xmm7
+;   cmpps   $3, %xmm7, %xmm0, %xmm7
+;   movdqa  %xmm0, %xmm5
+;   movdqa  %xmm7, %xmm0
+;   pblendvb %xmm5, %xmm1, %xmm5
+;   movdqa  %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addss %xmm1, %xmm0
+;   movl $0x7fc00000, %r9d
+;   movd %r9d, %xmm1
+;   movdqa %xmm0, %xmm7
+;   cmpunordps %xmm0, %xmm7
+;   movdqa %xmm0, %xmm5
+;   movdqa %xmm7, %xmm0
+;   pblendvb %xmm0, %xmm1, %xmm5
+;   movdqa %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

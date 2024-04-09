@@ -1,0 +1,66 @@
+test compile precise-output
+set enable_nan_canonicalization=true 
+target riscv64
+
+function %f1(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+; block0:
+;   fadd.d fa4,fa0,fa1,rne
+;   lui a2,4095
+;   slli a4,a2,39
+;   fmv.d.x fa0,a4
+;   feq.d a1,fa4,fa4
+;   feq.d a3,fa4,fa4
+;   and a5,a1,a3
+;   select fa0,fa0,fa4##condition=(a5 eq zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fadd.d fa4, fa0, fa1, rne
+;   lui a2, 0xfff
+;   slli a4, a2, 0x27
+;   fmv.d.x fa0, a4
+;   feq.d a1, fa4, fa4
+;   feq.d a3, fa4, fa4
+;   and a5, a1, a3
+;   beqz a5, 8
+;   fmv.d fa0, fa4
+;   ret
+
+function %f1(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+; block0:
+;   fadd.s fa3,fa0,fa1,rne
+;   lui a2,523264
+;   fmv.w.x fa4,a2
+;   feq.s a0,fa3,fa3
+;   feq.s a2,fa3,fa3
+;   and a4,a0,a2
+;   select fa0,fa4,fa3##condition=(a4 eq zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fadd.s fa3, fa0, fa1, rne
+;   lui a2, 0x7fc00
+;   fmv.w.x fa4, a2
+;   feq.s a0, fa3, fa3
+;   feq.s a2, fa3, fa3
+;   and a4, a0, a2
+;   bnez a4, 0xc
+;   fmv.d fa0, fa4
+;   j 8
+;   fmv.d fa0, fa3
+;   ret
+

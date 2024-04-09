@@ -31,6 +31,7 @@ use crate::{timing, CompileError};
 use alloc::string::String;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
+use target_lexicon::Architecture;
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;
@@ -282,7 +283,15 @@ impl Context {
 
     /// Perform NaN canonicalizing rewrites on the function.
     pub fn canonicalize_nans(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_nan_canonicalization(&mut self.func);
+        // Currently only RiscV64 is the only arch that may not have vector support.
+        let has_vector_support = match isa.triple().architecture {
+            Architecture::Riscv64(_) => match isa.isa_flags().iter().find(|f| f.name == "has_v") {
+                Some(value) => value.as_bool().unwrap_or(false),
+                None => false,
+            },
+            _ => true,
+        };
+        do_nan_canonicalization(&mut self.func, has_vector_support);
         self.verify_if(isa)
     }
 
