@@ -292,29 +292,26 @@ block0(v0:i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $48, %rsp
-;   movq    %rbx, 0(%rsp)
-;   movq    %r12, 8(%rsp)
-;   movq    %r13, 16(%rsp)
-;   movq    %r14, 24(%rsp)
-;   movq    %r15, 32(%rsp)
-; block0:
-;   subq    %rsp, $16, %rsp
+;   subq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust 16
+;   movq    %rbx, 16(%rsp)
+;   movq    %r12, 24(%rsp)
+;   movq    %r13, 32(%rsp)
+;   movq    %r14, 40(%rsp)
+;   movq    %r15, 48(%rsp)
+; block0:
 ;   lea     0(%rsp), %rdi
 ;   load_ext_name %g+0, %r15
 ;   call    *%r15
 ;   movq    4(%rsp), %rax
-;   movq    0(%rsp), %rdi
-;   addq    %rsp, $16, %rsp
-;   virtual_sp_offset_adjust -16
-;   andl    %eax, %edi, %eax
-;   movq    0(%rsp), %rbx
-;   movq    8(%rsp), %r12
-;   movq    16(%rsp), %r13
-;   movq    24(%rsp), %r14
-;   movq    32(%rsp), %r15
-;   addq    %rsp, $48, %rsp
+;   movq    0(%rsp), %r11
+;   andl    %eax, %r11d, %eax
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -323,27 +320,25 @@ block0(v0:i64):
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   subq $0x30, %rsp
-;   movq %rbx, (%rsp)
-;   movq %r12, 8(%rsp)
-;   movq %r13, 0x10(%rsp)
-;   movq %r14, 0x18(%rsp)
-;   movq %r15, 0x20(%rsp)
-; block1: ; offset 0x20
-;   subq $0x10, %rsp
+;   subq $0x40, %rsp
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
+; block1: ; offset 0x21
 ;   leaq (%rsp), %rdi
 ;   movabsq $0, %r15 ; reloc_external Abs8 %g 0
 ;   callq *%r15
 ;   movq 4(%rsp), %rax
-;   movq (%rsp), %rdi
-;   addq $0x10, %rsp
-;   andl %edi, %eax
-;   movq (%rsp), %rbx
-;   movq 8(%rsp), %r12
-;   movq 0x10(%rsp), %r13
-;   movq 0x18(%rsp), %r14
-;   movq 0x20(%rsp), %r15
-;   addq $0x30, %rsp
+;   movq (%rsp), %r11
+;   andl %r11d, %eax
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
