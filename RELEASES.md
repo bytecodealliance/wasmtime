@@ -24,6 +24,15 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 19.0.1
+
+Released 2024-04-02.
+
+* Fix a panic using tables with the wrong type.
+  [#8284](https://github.com/bytecodealliance/wasmtime/pull/8284)
+
+--------------------------------------------------------------------------------
+
 ## 19.0.0
 
 Released 2024-03-20
@@ -101,8 +110,8 @@ Released 2024-03-20
   specification.
   [#7661](https://github.com/bytecodealliance/wasmtime/pull/7661)
 
-* Support for `externref` has been moved behind a new `gc` Cargo feature. This
-  will also gate support for wasm gc in the future.
+* Support for `externref` and similar features has been moved behind a new `gc`
+  Cargo feature. This will also gate support for Wasm GC in the future.
   [#7975](https://github.com/bytecodealliance/wasmtime/pull/7975)
 
 * Require the `WASMTIME_WASI_CONFIG_PREOPEN_SOCKET_ALLOW` environment variable
