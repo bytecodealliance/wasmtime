@@ -4,6 +4,7 @@ use crate::{
     EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables,
     TypeConvert, WasmHeapType, WasmValType,
 };
+use anyhow::anyhow;
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -534,7 +535,18 @@ impl<'a, 'data> Translator<'a, 'data> {
                     self.validator,
                     self.types.module_types_builder(),
                 )
-                .translate(parser, &component[range.start..range.end])?;
+                .translate(
+                    parser,
+                    component.get(range.start..range.end).ok_or_else(|| {
+                        anyhow!(
+                            "section range {}..{} is out of bounds (bound = {})",
+                            range.start,
+                            range.end,
+                            component.len()
+                        )
+                        .context("wasm component contains an invalid module section")
+                    })?,
+                )?;
                 let static_idx = self.static_modules.push(translation);
                 self.result
                     .initializers
