@@ -107,6 +107,33 @@ mod with_key_and_resources {
     }
 }
 
+mod trappable_errors_with_versioned_and_unversioned_packages {
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo@0.1.0;
+
+            interface a {
+                variant error {
+                    other(string),
+                }
+
+                f: func() -> result<_, error>;
+            }
+
+            world foo {
+                import a;
+            }
+        ",
+        path: "tests/codegen/unversioned-foo.wit",
+        trappable_error_type: {
+            "foo:foo/a@0.1.0/error" => MyX,
+        },
+    });
+
+    #[allow(dead_code)]
+    type MyX = u64;
+}
+
 mod trappable_errors {
     wasmtime::component::bindgen!({
         inline: "
