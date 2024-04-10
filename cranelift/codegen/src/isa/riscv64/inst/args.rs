@@ -200,7 +200,7 @@ impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
             // Argument area begins after saved lr + fp.
-            StackAMode::IncomingArg(offset) => AMode::FPOffset(offset + 16),
+            StackAMode::IncomingArg(offset, _) => AMode::FPOffset(offset + 16),
             StackAMode::OutgoingArg(offset) => AMode::SPOffset(offset),
             StackAMode::Slot(offset) => AMode::NominalSPOffset(offset),
         }

@@ -11,8 +11,8 @@ block0(v0: i64, v1: i128, v2: i128, v3: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    16(%rbp), %rax
-;   movq    24(%rbp), %rdx
+;   movq    rbp(stack args max - 16), %rax
+;   movq    rbp(stack args max - 8), %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

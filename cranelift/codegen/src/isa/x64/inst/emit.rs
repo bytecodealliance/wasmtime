@@ -1628,7 +1628,7 @@ pub(crate) fn emit(
             callee,
             info: call_info,
         } => {
-            emit_return_call_common_sequence(allocs, sink, info, state, &call_info.uses);
+            emit_return_call_common_sequence(allocs, sink, info, state, &call_info);
 
             // Finally, jump to the callee!
             //
@@ -1649,7 +1649,7 @@ pub(crate) fn emit(
         } => {
             let callee = callee.with_allocs(allocs);
 
-            emit_return_call_common_sequence(allocs, sink, info, state, &call_info.uses);
+            emit_return_call_common_sequence(allocs, sink, info, state, &call_info);
 
             Inst::JmpUnknown { target: callee }.emit(&[], sink, info, state);
             sink.add_call_site(ir::Opcode::ReturnCallIndirect);
@@ -1698,138 +1698,6 @@ pub(crate) fn emit(
                 let callee_pop_size = i64::from(call_info.callee_pop_size);
                 state.adjust_virtual_sp_offset(-callee_pop_size);
             }
-        }
-
-        Inst::GrowArgumentArea { amount, tmp } => {
-            debug_assert!(*amount > 0);
-            debug_assert_eq!(*amount % 8, 0);
-
-            assert!(
-                info.flags.preserve_frame_pointers(),
-                "frame pointers must be enabled for GrowArgumentArea"
-            );
-
-            let tmp = allocs.next(tmp.to_reg().to_reg());
-            let tmp = Gpr::new(tmp).unwrap();
-            let tmp_w = WritableGpr::from_reg(tmp);
-
-            // As we're increasing the number of stack arguments, we need to move the frame down in
-            // memory, by decrementing SP by `amount` and looping from lower addresses to higher
-            // ones, copying down.
-
-            // Decrement SP and FP by `amount`
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rsp()),
-            )
-            .emit(&[], sink, info, state);
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rbp()),
-            )
-            .emit(&[], sink, info, state);
-
-            // The total size that we're going to copy, including the return address and frame
-            // pointer that are pushed on the stack already.
-            let size = i32::try_from(
-                state.frame_layout().setup_area_size
-                    + state.frame_layout().clobber_size
-                    + state.frame_layout().fixed_frame_storage_size,
-            )
-            .unwrap();
-
-            debug_assert_eq!(size % 8, 0);
-
-            // Copy the `i`th word in the stack from `SP + amount + i * 8` to `SP + i * 8`. Do this
-            // from lower to higher addresses to avoid clobbering words we haven't copied yet.
-            for sp_word_offset in 0..(size / 8) {
-                let sp_byte_offset = sp_word_offset * 8;
-                Inst::Mov64MR {
-                    src: SyntheticAmode::nominal_sp_offset(
-                        sp_byte_offset + i32::try_from(*amount).unwrap(),
-                    ),
-                    dst: tmp_w,
-                }
-                .emit(&[], sink, info, state);
-
-                Inst::MovRM {
-                    size: OperandSize::Size64,
-                    src: tmp,
-                    dst: SyntheticAmode::nominal_sp_offset(sp_byte_offset),
-                }
-                .emit(&[], sink, info, state);
-            }
-        }
-
-        Inst::ShrinkArgumentArea { amount, tmp } => {
-            debug_assert!(*amount > 0);
-            debug_assert_eq!(*amount % 8, 0);
-
-            assert!(
-                info.flags.preserve_frame_pointers(),
-                "frame pointers must be enabled for ShrinkArgumentArea"
-            );
-
-            let tmp = allocs.next(tmp.to_reg().to_reg());
-            let tmp = Gpr::new(tmp).unwrap();
-            let tmp_w = WritableGpr::from_reg(tmp);
-
-            // As we're decreasing the number of stack arguments, we need to move the frame up in
-            // memory, looping from higher addresses to lower ones copying up, and finally
-            // incrementing `SP` by `amount`.
-
-            // The total size that we're going to copy, including the return address and frame
-            // pointer that are pushed on the stack alreadcy.
-            let size = i32::try_from(
-                state.frame_layout().setup_area_size
-                    + state.frame_layout().clobber_size
-                    + state.frame_layout().fixed_frame_storage_size,
-            )
-            .unwrap();
-
-            debug_assert_eq!(size % 8, 0);
-
-            // Copy the `i`th word in the stack from `SP + i * 8` to `SP + amount + i * 8`. Do this
-            // from higher to lower addresses to avoid clobbering words we haven't copied yet.
-            for sp_word_offset in (0..(size / 8)).rev() {
-                let sp_byte_offset = sp_word_offset * 8;
-                Inst::Mov64MR {
-                    src: SyntheticAmode::nominal_sp_offset(sp_byte_offset),
-                    dst: tmp_w,
-                }
-                .emit(&[], sink, info, state);
-
-                Inst::MovRM {
-                    size: OperandSize::Size64,
-                    src: tmp,
-                    dst: SyntheticAmode::nominal_sp_offset(
-                        sp_byte_offset + i32::try_from(*amount).unwrap(),
-                    ),
-                }
-                .emit(&[], sink, info, state);
-            }
-
-            // Increment SP by `amount`
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rsp()),
-            )
-            .emit(&[], sink, info, state);
-
-            // Increment FP by `amount`
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rbp()),
-            )
-            .emit(&[], sink, info, state);
         }
 
         Inst::Args { .. } => {}
@@ -4362,7 +4230,7 @@ fn emit_return_call_common_sequence(
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
-    uses: &CallArgList,
+    call_info: &ReturnCallInfo,
 ) {
     assert!(
         info.flags.preserve_frame_pointers(),
@@ -4370,7 +4238,7 @@ fn emit_return_call_common_sequence(
                  but the current implementation relies on them being present"
     );
 
-    for u in uses {
+    for u in call_info.uses.iter() {
         let _ = allocs.next(u.vreg);
     }
 
@@ -4387,5 +4255,30 @@ fn emit_return_call_common_sequence(
         state.frame_layout(),
     ) {
         inst.emit(&[], sink, info, state);
+    }
+
+    let incoming_args_diff = state.frame_layout().tail_args_size - call_info.new_stack_arg_size;
+    if incoming_args_diff > 0 {
+        // Move the saved return address up by `incoming_args_diff`
+        Inst::mov64_m_r(
+            Amode::imm_reg(0, regs::rsp()),
+            Writable::from_reg(regs::r11()),
+        )
+        .emit(&[], sink, info, state);
+        Inst::mov_r_m(
+            OperandSize::Size64,
+            regs::r11(),
+            Amode::imm_reg(i32::try_from(incoming_args_diff).unwrap(), regs::rsp()),
+        )
+        .emit(&[], sink, info, state);
+
+        // Increment the stack pointer to shrink the argument area for the new call.
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Add,
+            RegMemImm::imm(incoming_args_diff),
+            Writable::from_reg(regs::rsp()),
+        )
+        .emit(&[], sink, info, state);
     }
 }

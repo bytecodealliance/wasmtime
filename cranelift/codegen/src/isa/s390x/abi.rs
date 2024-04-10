@@ -192,7 +192,7 @@ impl Into<MemArg> for StackAMode {
     fn into(self) -> MemArg {
         match self {
             // Argument area always begins at the initial SP.
-            StackAMode::IncomingArg(off) => MemArg::InitialSPOffset { off },
+            StackAMode::IncomingArg(off, _) => MemArg::InitialSPOffset { off },
             StackAMode::Slot(off) => MemArg::NominalSPOffset { off },
             StackAMode::OutgoingArg(off) => {
                 MemArg::reg_plus_off(stack_reg(), off, MemFlags::trusted())
@@ -560,9 +560,9 @@ impl ABIMachineSpec for S390xMachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        if call_conv == isa::CallConv::Tail && frame_layout.stack_args_size > 0 {
+        if call_conv == isa::CallConv::Tail && frame_layout.incoming_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.stack_args_size.try_into().unwrap(),
+                frame_layout.incoming_args_size.try_into().unwrap(),
             ));
         }
         insts
@@ -810,7 +810,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         _sig: &Signature,
         regs: &[Writable<RealReg>],
         _is_leaf: bool,
-        stack_args_size: u32,
+        incoming_args_size: u32,
+        tail_args_size: u32,
         fixed_frame_storage_size: u32,
         mut outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -866,7 +867,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Return FrameLayout structure.
         FrameLayout {
-            stack_args_size,
+            incoming_args_size,
+            tail_args_size,
             setup_area_size: 0,
             clobber_size,
             fixed_frame_storage_size,

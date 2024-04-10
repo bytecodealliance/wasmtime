@@ -200,10 +200,10 @@ block0(
 ;   movq    %rsi, %rdx
 ;   movq    %rdi, %rsi
 ;   movq    %rax, %rdi
-;   movq    16(%rbp), %r10
-;   movq    24(%rbp), %r11
-;   movss   32(%rbp), %xmm11
-;   movsd   40(%rbp), %xmm13
+;   movq    rbp(stack args max - 32), %r10
+;   movq    rbp(stack args max - 24), %r11
+;   movss   rbp(stack args max - 16), %xmm11
+;   movsd   rbp(stack args max - 8), %xmm13
 ;   movq    %r8, 32(%rsp)
 ;   movq    %r9, 40(%rsp)
 ;   movsd   %xmm0, 48(%rsp)

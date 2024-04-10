@@ -541,23 +541,6 @@
        (ReturnCallUnknown (callee RegMem)
                           (info BoxReturnCallInfo))
 
-       ;; GrowArgumentArea does a memmove of everything in the frame except for
-       ;; the argument area, to make room for more arguments. That includes all
-       ;; the stack slots, the callee-saved registers, and the saved FP and
-       ;; return address. To keep the stack pointers in sync with that change,
-       ;; it also subtracts the given amount from both the FP and SP registers.
-       (GrowArgumentArea (amount u32)
-                         (tmp WritableGpr))
-
-       ;; ShrinkArgumentArea does a memmove of everything in the frame except
-       ;; for the argument area, to trim space for fewer arguments. That
-       ;; includes all the stack slots, the callee-saved registers, and the
-       ;; saved FP and return address. To keep the stack pointers in sync with
-       ;; that change, it also adds the given amount to both the FP and SP
-       ;; registers.
-       (ShrinkArgumentArea (amount u32)
-                           (tmp WritableGpr))
-
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
         (args VecArgPair))

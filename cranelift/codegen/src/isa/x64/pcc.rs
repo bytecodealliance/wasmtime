@@ -808,8 +808,6 @@ pub(crate) fn check(
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
         | Inst::Ret { .. }
-        | Inst::GrowArgumentArea { .. }
-        | Inst::ShrinkArgumentArea { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::TrapIf { .. }
@@ -926,9 +924,9 @@ fn check_mem<'a>(
 ) -> PccResult<Option<Fact>> {
     match amode {
         SyntheticAmode::Real(amode) if !amode.get_flags().checked() => return Ok(None),
-        SyntheticAmode::NominalSPOffset { .. } | SyntheticAmode::ConstantOffset(_) => {
-            return Ok(None)
-        }
+        SyntheticAmode::IncomingArg { .. }
+        | SyntheticAmode::NominalSPOffset { .. }
+        | SyntheticAmode::ConstantOffset(_) => return Ok(None),
         _ => {}
     }
 
@@ -997,6 +995,7 @@ fn compute_addr(
             Some(sum)
         }
         SyntheticAmode::Real(Amode::RipRelative { .. })
+        | SyntheticAmode::IncomingArg { .. }
         | SyntheticAmode::ConstantOffset(_)
         | SyntheticAmode::NominalSPOffset { .. } => None,
     }

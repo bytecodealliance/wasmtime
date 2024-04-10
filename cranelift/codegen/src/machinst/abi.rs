@@ -285,7 +285,7 @@ pub enum ArgsOrRets {
 #[derive(Clone, Copy, Debug)]
 pub enum StackAMode {
     /// Offset into the current frame's argument area.
-    IncomingArg(i64),
+    IncomingArg(i64, u32),
     /// Offset within the stack slots in the current frame.
     Slot(i64),
     /// Offset into the callee frame's argument area.
@@ -524,7 +524,8 @@ pub trait ABIMachineSpec {
         sig: &Signature,
         regs: &[Writable<RealReg>],
         is_leaf: bool,
-        stack_args_size: u32,
+        incoming_args_size: u32,
+        tail_args_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout;
@@ -1015,7 +1016,13 @@ pub struct FrameLayout {
     /// need to access it.  Depending on the ABI, we may need to set up a
     /// frame pointer to do so; we also may need to pop this area from the
     /// stack upon return.
-    pub stack_args_size: u32,
+    pub incoming_args_size: u32,
+
+    /// The size of the incoming argument area, taking into account any
+    /// potential increase in size required for tail calls present in the
+    /// function. In the case that no tail calls are present, this value
+    /// will be the same as [`Self::incoming_args_size`].
+    pub tail_args_size: u32,
 
     /// Size of the "setup area", typically holding the return address
     /// and/or the saved frame pointer.  This may be written either during
@@ -1064,6 +1071,10 @@ pub struct Callee<M: ABIMachineSpec> {
     stackslots_size: u32,
     /// Stack size to be reserved for outgoing arguments.
     outgoing_args_size: u32,
+    /// Initially the number of bytes originating in the callers frame where stack arguments will
+    /// live. After lowering this number may be larger than the size expected by the function being
+    /// compiled, as tail calls potentially require more space for stack arguments.
+    tail_args_size: u32,
     /// Register-argument defs, to be provided to the `args`
     /// pseudo-inst, and pregs to constrain them to.
     reg_args: Vec<ArgPair>,
@@ -1219,6 +1230,8 @@ impl<M: ABIMachineSpec> Callee<M> {
             None
         };
 
+        let tail_args_size = sigs[sig].sized_stack_arg_space;
+
         Ok(Self {
             ir_sig: ensure_struct_return_ptr_is_returned(&f.signature),
             sig,
@@ -1227,6 +1240,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             sized_stackslots,
             stackslots_size,
             outgoing_args_size: 0,
+            tail_args_size,
             reg_args: vec![],
             clobbered: vec![],
             spillslots: None,
@@ -1451,6 +1465,15 @@ impl<M: ABIMachineSpec> Callee<M> {
         }
     }
 
+    /// Accumulate the incoming argument area size requirements for a tail call,
+    /// as it could be larger than the incoming arguments of the function
+    /// currently being compiled.
+    pub fn accumulate_tail_args_size(&mut self, size: u32) {
+        if size > self.tail_args_size {
+            self.tail_args_size = size;
+        }
+    }
+
     pub fn is_forward_edge_cfi_enabled(&self) -> bool {
         self.isa_flags.is_forward_edge_cfi_enabled()
     }
@@ -1514,7 +1537,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                             ty
                         };
                     insts.push(M::gen_load_stack(
-                        StackAMode::IncomingArg(offset),
+                        StackAMode::IncomingArg(offset, sigs[self.sig].sized_stack_arg_space),
                         *into_reg,
                         ty,
                     ));
@@ -1539,7 +1562,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                 } else {
                     // Buffer address is implicitly defined by the ABI.
                     insts.push(M::gen_get_stack_addr(
-                        StackAMode::IncomingArg(offset),
+                        StackAMode::IncomingArg(offset, sigs[self.sig].sized_stack_arg_space),
                         into_reg,
                     ));
                 }
@@ -1561,7 +1584,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                         // This was allocated in the `init` routine.
                         let addr_reg = self.arg_temp_reg[idx].unwrap();
                         insts.push(M::gen_load_stack(
-                            StackAMode::IncomingArg(offset),
+                            StackAMode::IncomingArg(offset, sigs[self.sig].sized_stack_arg_space),
                             addr_reg,
                             ty,
                         ));
@@ -1819,6 +1842,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             &self.clobbered,
             self.is_leaf,
             self.stack_args_size(sigs),
+            self.tail_args_size,
             total_stacksize,
             self.outgoing_args_size,
         ));
@@ -1848,7 +1872,8 @@ impl<M: ABIMachineSpec> Callee<M> {
         // might need. Note that s390x may also use the outgoing args area for
         // backtrace support even in leaf functions, so that should be accounted
         // for unconditionally.
-        let total_stacksize = frame_layout.clobber_size
+        let total_stacksize = (frame_layout.tail_args_size - frame_layout.incoming_args_size)
+            + frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.outgoing_args_size
             + if self.is_leaf {
@@ -2291,7 +2316,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             "tail calls require frame pointers to be enabled"
                         );
 
-                        StackAMode::IncomingArg(offset)
+                        StackAMode::IncomingArg(offset, ctx.sigs()[self.sig].sized_stack_arg_space)
                     } else {
                         StackAMode::OutgoingArg(offset)
                     };
