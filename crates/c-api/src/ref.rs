@@ -1,6 +1,6 @@
-use crate::abort;
+use crate::{abort, StoreRef};
 use std::os::raw::c_void;
-use wasmtime::{Ref, Val};
+use wasmtime::{AnyRef, ExternRef, Func, ManuallyRooted, Ref, Val};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
 /// the C API. Because we do not have a uniform representation for `funcref`s
@@ -14,25 +14,88 @@ use wasmtime::{Ref, Val};
 /// Note: this is not `#[repr(C)]` because it is an opaque type in the header,
 /// and only ever referenced as `*mut wasm_ref_t`. This also lets us use a
 /// regular, non-`repr(C)` `enum` to define `WasmRefInner`.
-#[derive(Clone)]
 pub struct wasm_ref_t {
-    pub(crate) r: Ref,
+    pub(crate) store: StoreRef,
+    pub(crate) r: ManuallyRootedRef,
+}
+
+pub(crate) enum ManuallyRootedRef {
+    Any(Option<ManuallyRooted<AnyRef>>),
+    Extern(Option<ManuallyRooted<ExternRef>>),
+    Func(Func),
+}
+
+impl Clone for wasm_ref_t {
+    fn clone(&self) -> wasm_ref_t {
+        let ctx = unsafe { self.store.context_mut() };
+        let r = match &self.r {
+            ManuallyRootedRef::Any(a) => ManuallyRootedRef::Any(a.as_ref().map(|a| a.clone(ctx))),
+            ManuallyRootedRef::Extern(e) => {
+                ManuallyRootedRef::Extern(e.as_ref().map(|e| e.clone(ctx)))
+            }
+            ManuallyRootedRef::Func(f) => ManuallyRootedRef::Func(f.clone()),
+        };
+        wasm_ref_t {
+            store: self.store.clone(),
+            r,
+        }
+    }
+}
+
+impl Drop for wasm_ref_t {
+    fn drop(&mut self) {
+        let ctx = unsafe { self.store.context_mut() };
+        match &mut self.r {
+            ManuallyRootedRef::Any(a) => {
+                a.take().map(|a| a.unroot(ctx));
+            }
+            ManuallyRootedRef::Extern(e) => {
+                e.take().map(|e| e.unroot(ctx));
+            }
+            ManuallyRootedRef::Func(_) => {}
+        }
+    }
 }
 
 wasmtime_c_api_macros::declare_own!(wasm_ref_t);
 
 impl wasm_ref_t {
-    pub(crate) fn new(r: Ref) -> Option<Box<wasm_ref_t>> {
-        if r.is_null() {
-            None
-        } else {
-            Some(Box::new(wasm_ref_t { r }))
+    pub(crate) unsafe fn new(store: StoreRef, r: Ref) -> Option<Box<wasm_ref_t>> {
+        match r {
+            Ref::Any(None) | Ref::Extern(None) | Ref::Func(None) => None,
+            Ref::Any(Some(a)) => {
+                let r = ManuallyRootedRef::Any(Some(
+                    a.to_manually_rooted(unsafe { store.context_mut() }).ok()?,
+                ));
+                Some(Box::new(wasm_ref_t { store, r }))
+            }
+            Ref::Extern(Some(e)) => {
+                let r = ManuallyRootedRef::Extern(Some(
+                    e.to_manually_rooted(unsafe { store.context_mut() }).ok()?,
+                ));
+                Some(Box::new(wasm_ref_t { store, r }))
+            }
+            Ref::Func(Some(f)) => Some(Box::new(wasm_ref_t {
+                store,
+                r: ManuallyRootedRef::Func(f),
+            })),
         }
     }
 }
 
-pub(crate) fn ref_to_val(r: &wasm_ref_t) -> Val {
-    Val::from(r.r.clone())
+impl wasm_ref_t {
+    pub(crate) unsafe fn to_ref(&self) -> Ref {
+        let ctx = self.store.context_mut();
+        match &self.r {
+            ManuallyRootedRef::Any(a) => Ref::Any(a.as_ref().map(|a| a.to_rooted(ctx))),
+            ManuallyRootedRef::Extern(e) => Ref::Extern(e.as_ref().map(|e| e.to_rooted(ctx))),
+            ManuallyRootedRef::Func(f) => Ref::Func(Some(f.clone())),
+        }
+    }
+}
+
+pub(crate) unsafe fn ref_to_val(r: &wasm_ref_t) -> Val {
+    r.to_ref().into()
 }
 
 #[no_mangle]
@@ -41,9 +104,46 @@ pub extern "C" fn wasm_ref_copy(r: Option<&wasm_ref_t>) -> Option<Box<wasm_ref_t
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_ref_same(_a: Option<&wasm_ref_t>, _b: Option<&wasm_ref_t>) -> bool {
-    // We need a store to determine whether these are the same reference or not.
-    abort("wasm_ref_same")
+pub unsafe extern "C" fn wasm_ref_same(a: Option<&wasm_ref_t>, b: Option<&wasm_ref_t>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+
+        // Can't compare functions for equality.
+        (
+            Some(wasm_ref_t {
+                store: _,
+                r: ManuallyRootedRef::Func(_),
+            }),
+            Some(wasm_ref_t {
+                store: _,
+                r: ManuallyRootedRef::Func(_),
+            }),
+        ) => false,
+
+        (
+            Some(wasm_ref_t {
+                store,
+                r: ManuallyRootedRef::Any(Some(a)),
+            }),
+            Some(wasm_ref_t {
+                store: _,
+                r: ManuallyRootedRef::Any(Some(b)),
+            }),
+        ) => ManuallyRooted::ref_eq(store.context(), a, b).unwrap_or_default(),
+
+        (
+            Some(wasm_ref_t {
+                store,
+                r: ManuallyRootedRef::Extern(Some(a)),
+            }),
+            Some(wasm_ref_t {
+                store: _,
+                r: ManuallyRootedRef::Extern(Some(b)),
+            }),
+        ) => ManuallyRooted::ref_eq(store.context(), a, b).unwrap_or_default(),
+
+        _ => false,
+    }
 }
 
 #[no_mangle]

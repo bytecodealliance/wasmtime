@@ -1,7 +1,8 @@
 use crate::wasm_trap_t;
 use crate::{
     wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext, CStoreContextMut,
+    wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, WasmtimeStoreContext,
+    WasmtimeStoreContextMut,
 };
 use anyhow::{Error, Result};
 use std::any::Any;
@@ -59,11 +60,11 @@ unsafe fn create_function(
     let func = Func::new(
         store.store.context_mut(),
         ty,
-        move |_caller, params, results| {
+        move |mut caller, params, results| {
             let params: wasm_val_vec_t = params
                 .iter()
                 .cloned()
-                .map(|p| wasm_val_t::from_val(p))
+                .map(|p| wasm_val_t::from_val(&mut caller.as_context_mut(), p))
                 .collect::<Vec<_>>()
                 .into();
             let mut out_results: wasm_val_vec_t = vec![wasm_val_t::default(); results.len()].into();
@@ -72,7 +73,7 @@ unsafe fn create_function(
                 return Err(trap.error);
             }
 
-            let out_results = out_results.as_slice();
+            let out_results = out_results.as_slice_mut();
             for i in 0..results.len() {
                 results[i] = out_results[i].val();
             }
@@ -150,7 +151,10 @@ pub unsafe extern "C" fn wasm_func_call(
     match result {
         Ok(Ok(())) => {
             for (slot, val) in results.iter_mut().zip(wt_results.iter().cloned()) {
-                crate::initialize(slot, wasm_val_t::from_val(val));
+                crate::initialize(
+                    slot,
+                    wasm_val_t::from_val(&mut func.ext.store.context_mut(), val),
+                );
             }
             ptr::null_mut()
         }
@@ -200,7 +204,7 @@ pub extern "C" fn wasm_func_as_extern_const(f: &wasm_func_t) -> &wasm_extern_t {
 
 #[repr(C)]
 pub struct wasmtime_caller_t<'a> {
-    pub(crate) caller: Caller<'a, crate::StoreData>,
+    pub(crate) caller: Caller<'a, crate::WasmtimeStoreData>,
 }
 
 pub type wasmtime_func_callback_t = extern "C" fn(
@@ -221,7 +225,7 @@ pub type wasmtime_func_unchecked_callback_t = extern "C" fn(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_new(
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     ty: &wasm_functype_t,
     callback: wasmtime_func_callback_t,
     data: *mut c_void,
@@ -238,7 +242,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
     callback: wasmtime_func_callback_t,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
-) -> impl Fn(Caller<'_, crate::StoreData>, &[Val], &mut [Val]) -> Result<()> {
+) -> impl Fn(Caller<'_, crate::WasmtimeStoreData>, &[Val], &mut [Val]) -> Result<()> {
     let foreign = crate::ForeignData { data, finalizer };
     move |mut caller, params, results| {
         let _ = &foreign; // move entire foreign into this closure
@@ -291,7 +295,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_new_unchecked(
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     ty: &wasm_functype_t,
     callback: wasmtime_func_unchecked_callback_t,
     data: *mut c_void,
@@ -307,7 +311,7 @@ pub(crate) unsafe fn c_unchecked_callback_to_rust_fn(
     callback: wasmtime_func_unchecked_callback_t,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
-) -> impl Fn(Caller<'_, crate::StoreData>, &mut [ValRaw]) -> Result<()> {
+) -> impl Fn(Caller<'_, crate::WasmtimeStoreData>, &mut [ValRaw]) -> Result<()> {
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, values| {
         let _ = &foreign; // move entire foreign into this closure
@@ -321,7 +325,7 @@ pub(crate) unsafe fn c_unchecked_callback_to_rust_fn(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_call(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     func: &Func,
     args: *const wasmtime_val_t,
     nargs: usize,
@@ -367,7 +371,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_call_unchecked(
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     func: &Func,
     args_and_results: *mut ValRaw,
     args_and_results_len: usize,
@@ -390,7 +394,7 @@ fn store_err(err: Error, trap_ret: &mut *mut wasm_trap_t) -> Option<Box<wasmtime
 
 #[no_mangle]
 pub extern "C" fn wasmtime_func_type(
-    store: CStoreContext<'_>,
+    store: WasmtimeStoreContext<'_>,
     func: &Func,
 ) -> Box<wasm_functype_t> {
     Box::new(wasm_functype_t::new(func.ty(store)))
@@ -399,7 +403,7 @@ pub extern "C" fn wasmtime_func_type(
 #[no_mangle]
 pub extern "C" fn wasmtime_caller_context<'a>(
     caller: &'a mut wasmtime_caller_t,
-) -> CStoreContextMut<'a> {
+) -> WasmtimeStoreContextMut<'a> {
     caller.caller.as_context_mut()
 }
 
@@ -424,7 +428,7 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_from_raw(
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     raw: *mut c_void,
     func: &mut Func,
 ) {
@@ -433,7 +437,7 @@ pub unsafe extern "C" fn wasmtime_func_from_raw(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_to_raw(
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     func: &Func,
 ) -> *mut c_void {
     func.to_raw(store)

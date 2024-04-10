@@ -1,11 +1,11 @@
 use crate::r#ref::ref_to_val;
 use crate::{
-    from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t, CStoreContextMut,
-    WASM_I32,
+    from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t, StoreRef,
+    WasmStoreData, WasmtimeStoreContextMut, WASM_I32,
 };
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ptr;
-use wasmtime::{AsContextMut, Func, HeapType, Ref, Val, ValType};
+use wasmtime::{AsContext, AsContextMut, Func, HeapType, Ref, Val, ValType};
 
 #[repr(C)]
 pub struct wasm_val_t {
@@ -52,7 +52,7 @@ impl Clone for wasm_val_t {
                 _ => {}
             }
         }
-        return ret;
+        ret
     }
 }
 
@@ -66,7 +66,7 @@ impl Default for wasm_val_t {
 }
 
 impl wasm_val_t {
-    pub fn from_val(val: Val) -> wasm_val_t {
+    pub unsafe fn from_val(store: impl AsContext<Data = WasmStoreData>, val: Val) -> wasm_val_t {
         match val {
             Val::I32(i) => wasm_val_t {
                 kind: from_valtype(&ValType::I32),
@@ -84,18 +84,28 @@ impl wasm_val_t {
                 kind: from_valtype(&ValType::F64),
                 of: wasm_val_union { u64: f },
             },
-            Val::ExternRef(_) => crate::abort("externref"),
+            Val::AnyRef(a) => wasm_val_t {
+                kind: from_valtype(&ValType::ANYREF),
+                of: wasm_val_union {
+                    ref_: wasm_ref_t::new(StoreRef::from_context(store), Ref::Any(a))
+                        .map_or(ptr::null_mut(), Box::into_raw),
+                },
+            },
+            Val::ExternRef(e) => wasm_val_t {
+                kind: from_valtype(&ValType::EXTERNREF),
+                of: wasm_val_union {
+                    ref_: wasm_ref_t::new(StoreRef::from_context(store), Ref::Extern(e))
+                        .map_or(ptr::null_mut(), Box::into_raw),
+                },
+            },
             Val::FuncRef(f) => wasm_val_t {
                 kind: from_valtype(&ValType::FUNCREF),
                 of: wasm_val_union {
-                    ref_: f.map_or(ptr::null_mut(), |f| {
-                        Box::into_raw(Box::new(wasm_ref_t {
-                            r: Ref::Func(Some(f)),
-                        }))
-                    }),
+                    ref_: wasm_ref_t::new(StoreRef::from_context(store), Ref::Func(f))
+                        .map_or(ptr::null_mut(), Box::into_raw),
                 },
             },
-            _ => unimplemented!("wasm_val_t::from_val {:?}", val),
+            Val::V128(_) => crate::abort("wasm_val_t from v128"),
         }
     }
 
@@ -237,7 +247,7 @@ impl Drop for wasmtime_val_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_val_delete(
-    cx: CStoreContextMut<'_>,
+    cx: WasmtimeStoreContextMut<'_>,
     val: &mut ManuallyDrop<wasmtime_val_t>,
 ) {
     // TODO: needed for when we re-add externref support.
@@ -248,7 +258,7 @@ pub unsafe extern "C" fn wasmtime_val_delete(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_val_copy(
-    mut cx: CStoreContextMut<'_>,
+    mut cx: WasmtimeStoreContextMut<'_>,
     dst: &mut MaybeUninit<wasmtime_val_t>,
     src: &wasmtime_val_t,
 ) {

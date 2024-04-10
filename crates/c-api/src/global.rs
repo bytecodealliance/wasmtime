@@ -1,6 +1,6 @@
 use crate::{
     handle_result, wasm_extern_t, wasm_globaltype_t, wasm_store_t, wasm_val_t, wasmtime_error_t,
-    wasmtime_val_t, CStoreContext, CStoreContextMut,
+    wasmtime_val_t, WasmtimeStoreContext, WasmtimeStoreContextMut,
 };
 use std::mem::MaybeUninit;
 use wasmtime::{Extern, Global};
@@ -65,10 +65,9 @@ pub unsafe extern "C" fn wasm_global_type(g: &wasm_global_t) -> Box<wasm_globalt
 #[no_mangle]
 pub unsafe extern "C" fn wasm_global_get(g: &mut wasm_global_t, out: &mut MaybeUninit<wasm_val_t>) {
     let global = g.global();
-    crate::initialize(
-        out,
-        wasm_val_t::from_val(global.get(g.ext.store.context_mut())),
-    );
+    let mut ctx = g.ext.store.context_mut();
+    let val = global.get(&mut ctx);
+    crate::initialize(out, wasm_val_t::from_val(&mut ctx, val));
 }
 
 #[no_mangle]
@@ -79,7 +78,7 @@ pub unsafe extern "C" fn wasm_global_set(g: &mut wasm_global_t, val: &wasm_val_t
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_global_new(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     gt: &wasm_globaltype_t,
     val: &wasmtime_val_t,
     ret: &mut Global,
@@ -93,7 +92,7 @@ pub unsafe extern "C" fn wasmtime_global_new(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_global_type(
-    store: CStoreContext<'_>,
+    store: WasmtimeStoreContext<'_>,
     global: &Global,
 ) -> Box<wasm_globaltype_t> {
     Box::new(wasm_globaltype_t::new(global.ty(store)))
@@ -101,7 +100,7 @@ pub extern "C" fn wasmtime_global_type(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_global_get(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     global: &Global,
     val: &mut MaybeUninit<wasmtime_val_t>,
 ) {
@@ -111,7 +110,7 @@ pub extern "C" fn wasmtime_global_get(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_global_set(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     global: &Global,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {

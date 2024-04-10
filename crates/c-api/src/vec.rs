@@ -54,6 +54,16 @@ macro_rules! declare_vecs {
                 }
             }
 
+            pub fn as_slice_mut(&mut self) -> &mut [$elem_ty] {
+                // Same as above: no null pointer.
+                if self.size == 0 {
+                    &mut []
+                } else {
+                    assert!(!self.data.is_null());
+                    unsafe { slice::from_raw_parts_mut(self.data, self.size) }
+                }
+            }
+
             pub fn as_uninit_slice(&mut self) -> &mut [MaybeUninit<$elem_ty>] {
                 // Note that we're careful to not create a slice with a null
                 // pointer as the data pointer, since that isn't defined

@@ -7,6 +7,11 @@ use wasmtime::{
     UpdateDeadline, Val,
 };
 
+pub type WasmStoreData = Option<StoreRef>;
+pub type WasmStore = Store<WasmStoreData>;
+pub type WasmStoreContext<'a> = StoreContext<'a, WasmStoreData>;
+pub type WasmStoreContextMut<'a> = StoreContextMut<'a, WasmStoreData>;
+
 /// This representation of a `Store` is used to implement the `wasm.h` API.
 ///
 /// This is stored alongside `Func` and such for `wasm.h` so each object is
@@ -19,16 +24,24 @@ use wasmtime::{
 /// least Wasmtime's implementation).
 #[derive(Clone)]
 pub struct StoreRef {
-    store: Arc<UnsafeCell<Store<()>>>,
+    store: Arc<UnsafeCell<WasmStore>>,
 }
 
 impl StoreRef {
-    pub unsafe fn context(&self) -> StoreContext<'_, ()> {
+    pub unsafe fn context(&self) -> WasmStoreContext<'_> {
         (*self.store.get()).as_context()
     }
 
-    pub unsafe fn context_mut(&mut self) -> StoreContextMut<'_, ()> {
+    pub unsafe fn context_mut(&self) -> WasmStoreContextMut<'_> {
         (*self.store.get()).as_context_mut()
+    }
+
+    pub fn from_context(ctx: impl AsContext<Data = WasmStoreData>) -> Self {
+        ctx.as_context()
+            .data()
+            .as_ref()
+            .expect("a WasmStore's inner value is always Some")
+            .clone()
     }
 }
 
@@ -43,12 +56,15 @@ wasmtime_c_api_macros::declare_own!(wasm_store_t);
 #[no_mangle]
 pub extern "C" fn wasm_store_new(engine: &wasm_engine_t) -> Box<wasm_store_t> {
     let engine = &engine.engine;
-    let store = Store::new(engine, ());
-    Box::new(wasm_store_t {
-        store: StoreRef {
-            store: Arc::new(UnsafeCell::new(store)),
-        },
-    })
+    let store = Store::new(engine, None);
+    let store = StoreRef {
+        store: Arc::new(UnsafeCell::new(store)),
+    };
+    let store2 = store.clone();
+    unsafe {
+        *(*store.store.get()).data_mut() = Some(store2);
+    }
+    Box::new(wasm_store_t { store })
 }
 
 /// Representation of a `Store` for `wasmtime.h` This notably tries to move more
@@ -60,16 +76,17 @@ pub extern "C" fn wasm_store_new(engine: &wasm_engine_t) -> Box<wasm_store_t> {
 /// foreign data and configuring WASI as well.
 #[repr(C)]
 pub struct wasmtime_store_t {
-    pub(crate) store: Store<StoreData>,
+    pub(crate) store: Store<WasmtimeStoreData>,
 }
 
 wasmtime_c_api_macros::declare_own!(wasmtime_store_t);
 
-pub type CStoreContext<'a> = StoreContext<'a, StoreData>;
-pub type CStoreContextMut<'a> = StoreContextMut<'a, StoreData>;
+pub type WasmtimeStoreContext<'a> = StoreContext<'a, WasmtimeStoreData>;
+pub type WasmtimeStoreContextMut<'a> = StoreContextMut<'a, WasmtimeStoreData>;
 
-pub struct StoreData {
+pub struct WasmtimeStoreData {
     foreign: crate::ForeignData,
+
     #[cfg(feature = "wasi")]
     pub(crate) wasi: Option<wasi_common::WasiCtx>,
 
@@ -94,7 +111,7 @@ pub extern "C" fn wasmtime_store_new(
     Box::new(wasmtime_store_t {
         store: Store::new(
             &engine.engine,
-            StoreData {
+            WasmtimeStoreData {
                 foreign: ForeignData { data, finalizer },
                 #[cfg(feature = "wasi")]
                 wasi: None,
@@ -114,7 +131,7 @@ pub const WASMTIME_UPDATE_DEADLINE_YIELD: wasmtime_update_deadline_kind_t = 1;
 pub extern "C" fn wasmtime_store_epoch_deadline_callback(
     store: &mut wasmtime_store_t,
     func: extern "C" fn(
-        CStoreContextMut<'_>,
+        WasmtimeStoreContextMut<'_>,
         *mut c_void,
         *mut u64,
         *mut wasmtime_update_deadline_kind_t,
@@ -148,7 +165,9 @@ pub extern "C" fn wasmtime_store_epoch_deadline_callback(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_store_context(store: &mut wasmtime_store_t) -> CStoreContextMut<'_> {
+pub extern "C" fn wasmtime_store_context(
+    store: &mut wasmtime_store_t,
+) -> WasmtimeStoreContextMut<'_> {
     store.store.as_context_mut()
 }
 
@@ -182,19 +201,22 @@ pub extern "C" fn wasmtime_store_limiter(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_context_get_data(store: CStoreContext<'_>) -> *mut c_void {
+pub extern "C" fn wasmtime_context_get_data(store: WasmtimeStoreContext<'_>) -> *mut c_void {
     store.data().foreign.data
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_context_set_data(mut store: CStoreContextMut<'_>, data: *mut c_void) {
+pub extern "C" fn wasmtime_context_set_data(
+    mut store: WasmtimeStoreContextMut<'_>,
+    data: *mut c_void,
+) {
     store.data_mut().foreign.data = data;
 }
 
 #[cfg(feature = "wasi")]
 #[no_mangle]
 pub extern "C" fn wasmtime_context_set_wasi(
-    mut context: CStoreContextMut<'_>,
+    mut context: WasmtimeStoreContextMut<'_>,
     wasi: Box<crate::wasi_config_t>,
 ) -> Option<Box<wasmtime_error_t>> {
     crate::handle_result(wasi.into_wasi_ctx(), |wasi| {
@@ -203,13 +225,13 @@ pub extern "C" fn wasmtime_context_set_wasi(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_context_gc(mut context: CStoreContextMut<'_>) {
+pub extern "C" fn wasmtime_context_gc(mut context: WasmtimeStoreContextMut<'_>) {
     context.gc();
 }
 
 #[no_mangle]
 pub extern "C" fn wasmtime_context_set_fuel(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     fuel: u64,
 ) -> Option<Box<wasmtime_error_t>> {
     crate::handle_result(store.set_fuel(fuel), |()| {})
@@ -217,7 +239,7 @@ pub extern "C" fn wasmtime_context_set_fuel(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_context_get_fuel(
-    store: CStoreContext<'_>,
+    store: WasmtimeStoreContext<'_>,
     fuel: &mut u64,
 ) -> Option<Box<wasmtime_error_t>> {
     crate::handle_result(store.get_fuel(), |amt| {
@@ -227,7 +249,7 @@ pub extern "C" fn wasmtime_context_get_fuel(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_context_set_epoch_deadline(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     ticks_beyond_current: u64,
 ) {
     store.set_epoch_deadline(ticks_beyond_current);
