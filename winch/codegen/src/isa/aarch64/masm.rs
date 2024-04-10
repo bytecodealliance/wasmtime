@@ -1,7 +1,7 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv, HeapData, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv},
     isa::reg::Reg,
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
@@ -109,24 +109,6 @@ impl Masm for MacroAssembler {
             .unwrap_or((regs::fp(), local.offset));
 
         Address::offset(reg, offset as i64)
-    }
-
-    fn table_elem_address(
-        &mut self,
-        _index: Reg,
-        _base: Reg,
-        _table_data: &TableData,
-        _context: &mut CodeGenContext,
-    ) -> Self::Address {
-        todo!()
-    }
-
-    fn table_size(&mut self, _table_data: &TableData, _context: &mut CodeGenContext) {
-        todo!()
-    }
-
-    fn memory_size(&mut self, _heap_data: &HeapData, _context: &mut CodeGenContext) {
-        todo!()
     }
 
     fn address_from_sp(&self, _offset: SPOffset) -> Self::Address {

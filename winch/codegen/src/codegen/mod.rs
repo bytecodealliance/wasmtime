@@ -2,8 +2,10 @@ use crate::{
     abi::{vmctx, ABIOperand, ABISig, RetArea, ABI},
     codegen::BlockSig,
     isa::reg::Reg,
-    masm::{ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
-    stack::TypedReg,
+    masm::{
+        ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode,
+    },
+    stack::{TypedReg, Val},
 };
 use anyhow::Result;
 use smallvec::SmallVec;
@@ -12,7 +14,7 @@ use wasmparser::{
 };
 use wasmtime_environ::{
     GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_MASK,
+    FUNCREF_MASK, WASM_PAGE_SIZE,
 };
 
 use cranelift_codegen::{
@@ -475,9 +477,7 @@ where
         let index = self.context.pop_to_reg(self.masm, None);
         let base = self.context.any_gpr(self.masm);
 
-        let elem_addr =
-            self.masm
-                .table_elem_address(index.into(), base, &table_data, &mut self.context);
+        let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data);
         self.masm.load_ptr(elem_addr, elem_value);
         // Free the register used as base, once we have loaded the element
         // address into the element value register.
@@ -744,6 +744,132 @@ where
             self.context.free_reg(addr);
         }
         self.context.free_reg(src);
+    }
+
+    /// Loads the address of the table element at a given index. Returns the
+    /// address of the table element using the provided register as base.
+    pub fn emit_compute_table_elem_addr(
+        &mut self,
+        index: Reg,
+        base: Reg,
+        table_data: &TableData,
+    ) -> M::Address {
+        let scratch = <M::ABI as ABI>::scratch_reg();
+        let bound = self.context.any_gpr(self.masm);
+        let tmp = self.context.any_gpr(self.masm);
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+
+        if let Some(offset) = table_data.import_from {
+            // If the table data declares a particular offset base,
+            // load the address into a register to further use it as
+            // the table address.
+            self.masm.load_ptr(self.masm.address_at_vmctx(offset), base);
+        } else {
+            // Else, simply move the vmctx register into the addr register as
+            // the base to calculate the table address.
+            self.masm.mov(vmctx!(M).into(), base, ptr_size);
+        };
+
+        // OOB check.
+        let bound_addr = self
+            .masm
+            .address_at_reg(base, table_data.current_elems_offset);
+        let bound_size = table_data.current_elements_size;
+        self.masm.load(bound_addr, bound, bound_size.into());
+        self.masm.cmp(bound.into(), index, bound_size);
+        self.masm
+            .trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
+
+        // Move the index into the scratch register to calcualte the table
+        // element address.
+        // Moving the value of the index register to the scratch register
+        // also avoids overwriting the context of the index register.
+        self.masm.mov(index.into(), scratch, bound_size);
+        self.masm.mul(
+            scratch,
+            scratch,
+            RegImm::i32(table_data.element_size.bytes() as i32),
+            table_data.element_size,
+        );
+        self.masm
+            .load_ptr(self.masm.address_at_reg(base, table_data.offset), base);
+        // Copy the value of the table base into a temporary register
+        // so that we can use it later in case of a misspeculation.
+        self.masm.mov(base.into(), tmp, ptr_size);
+        // Calculate the address of the table element.
+        self.masm.add(base, base, scratch.into(), ptr_size);
+        if self.env.table_access_spectre_mitigation() {
+            // Perform a bounds check and override the value of the
+            // table element address in case the index is out of bounds.
+            self.masm.cmp(bound.into(), index, OperandSize::S32);
+            self.masm.cmov(tmp, base, IntCmpKind::GeU, ptr_size);
+        }
+        self.context.free_reg(bound);
+        self.context.free_reg(tmp);
+        self.masm.address_at_reg(base, 0)
+    }
+
+    /// Retrieves the size of the table, pushing the result to the value stack.
+    pub fn emit_compute_table_size(&mut self, table_data: &TableData) {
+        let scratch = <M::ABI as ABI>::scratch_reg();
+        let size = self.context.any_gpr(self.masm);
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+
+        if let Some(offset) = table_data.import_from {
+            self.masm
+                .load_ptr(self.masm.address_at_vmctx(offset), scratch);
+        } else {
+            self.masm.mov(vmctx!(M).into(), scratch, ptr_size);
+        };
+
+        let size_addr = self
+            .masm
+            .address_at_reg(scratch, table_data.current_elems_offset);
+        self.masm
+            .load(size_addr, size, table_data.current_elements_size.into());
+
+        self.context.stack.push(TypedReg::i32(size).into());
+    }
+
+    /// Retrieves the size of the memory, pushing the result to the value stack.
+    pub fn emit_compute_memory_size(&mut self, heap_data: &HeapData) {
+        let size_reg = self.context.any_gpr(self.masm);
+        let scratch = <M::ABI as ABI>::scratch_reg();
+
+        let base = if let Some(offset) = heap_data.import_from {
+            self.masm
+                .load_ptr(self.masm.address_at_vmctx(offset), scratch);
+            scratch
+        } else {
+            vmctx!(M)
+        };
+
+        let size_addr = self
+            .masm
+            .address_at_reg(base, heap_data.current_length_offset);
+        self.masm.load_ptr(size_addr, size_reg);
+        // Prepare the stack to emit a shift to get the size in pages rather
+        // than in bytes.
+        self.context
+            .stack
+            .push(TypedReg::new(heap_data.ty, size_reg).into());
+
+        // Since the page size is a power-of-two, verify that 2^16, equals the
+        // defined constant. This is mostly a safeguard in case the constant
+        // value ever changes.
+        let pow = 16;
+        debug_assert_eq!(2u32.pow(pow), WASM_PAGE_SIZE);
+
+        // Ensure that the constant is correctly typed according to the heap
+        // type to reduce register pressure when emitting the shift operation.
+        match heap_data.ty {
+            WasmValType::I32 => self.context.stack.push(Val::i32(pow as i32)),
+            WasmValType::I64 => self.context.stack.push(Val::i64(pow as i64)),
+            _ => unreachable!(),
+        }
+
+        self.masm
+            .shift(&mut self.context, ShiftKind::ShrU, heap_data.ty.into());
     }
 }
 
