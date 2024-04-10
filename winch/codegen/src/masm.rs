@@ -1,5 +1,5 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
+use crate::codegen::{CodeGenContext, FuncEnv};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
     binemit::CodeOffset,
@@ -502,22 +502,6 @@ pub(crate) trait MacroAssembler {
 
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
-
-    /// Loads the address of the table element at a given index. Returns the
-    /// address of the table element using the provided register as base.
-    fn table_elem_address(
-        &mut self,
-        index: Reg,
-        base: Reg,
-        table_data: &TableData,
-        context: &mut CodeGenContext,
-    ) -> Self::Address;
-
-    /// Retrieves the size of the table, pushing the result to the value stack.
-    fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
-
-    /// Retrieves the size of the memory, pushing the result to the value stack.
-    fn memory_size(&mut self, heap_data: &HeapData, context: &mut CodeGenContext);
 
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
