@@ -20,6 +20,7 @@ pub mod bindings {
         ",
         tracing: true,
         async: false,
+        trappable_imports: true,
         with: {
             // Upstream package dependencies
             "wasi:io": wasmtime_wasi::bindings::io,

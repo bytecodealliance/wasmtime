@@ -104,6 +104,9 @@ pub struct Opts {
     /// Whether or not to generate code for only the interfaces of this wit file or not.
     pub only_interfaces: bool,
 
+    /// Configuration of which imports are allowed to generate a trap.
+    pub trappable_imports: TrappableImports,
+
     /// Remapping of interface names to rust module names.
     /// TODO: is there a better type to use for the value of this map?
     pub with: HashMap<String, String>,
@@ -150,6 +153,27 @@ impl AsyncConfig {
             AsyncConfig::All | AsyncConfig::AllExceptImports(_) | AsyncConfig::OnlyImports(_) => {
                 true
             }
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum TrappableImports {
+    /// No imports are allowed to trap.
+    #[default]
+    None,
+    /// All imports may trap.
+    All,
+    /// Only the specified set of functions may trap.
+    Only(HashSet<String>),
+}
+
+impl TrappableImports {
+    fn can_trap(&self, f: &Function) -> bool {
+        match self {
+            TrappableImports::None => false,
+            TrappableImports::All => true,
+            TrappableImports::Only(set) => set.contains(&f.name),
         }
     }
 }
@@ -1853,7 +1877,13 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
+        if !self.gen.opts.trappable_imports.can_trap(&func) {
+            if func.results.iter_types().len() == 1 {
+                uwrite!(self.src, "Ok((r,))\n");
+            } else {
+                uwrite!(self.src, "Ok(r)\n");
+            }
+        } else if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
             let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
             let err_name = err.name.as_ref().unwrap();
             let owner = match err.owner {
@@ -1905,7 +1935,11 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(")");
         self.push_str(" -> ");
 
-        if let Some((r, _id, error_typename)) = self.special_case_trappable_error(&func.results) {
+        if !self.gen.opts.trappable_imports.can_trap(func) {
+            self.print_result_ty(&func.results, TypeMode::Owned);
+        } else if let Some((r, _id, error_typename)) =
+            self.special_case_trappable_error(&func.results)
+        {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propogate their errors
