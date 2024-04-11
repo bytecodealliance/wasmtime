@@ -2,7 +2,7 @@
 
 ## 19.0.2
 
-Released 2024-04-10.
+Released 2024-04-11.
 
 * Fix a panic when compiling invalid components.
   [#8322](https://github.com/bytecodealliance/wasmtime/issues/8322)
