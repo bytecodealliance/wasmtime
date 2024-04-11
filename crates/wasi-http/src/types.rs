@@ -323,12 +323,14 @@ impl TryInto<http::Method> for types::Method {
     }
 }
 
+/// The concrete type behind a `wasi:http/types/incoming-request` resource.
 pub struct HostIncomingRequest {
     pub(crate) parts: http::request::Parts,
     pub body: Option<HostIncomingBody>,
 }
 
 impl HostIncomingRequest {
+    /// Create a new `HostIncomingRequest`.
     pub fn new(
         view: &mut dyn WasiHttpView,
         mut parts: http::request::Parts,
@@ -339,33 +341,13 @@ impl HostIncomingRequest {
     }
 }
 
+/// The concrete type behind a `was:http/types/response-outparam` resource.
 pub struct HostResponseOutparam {
     pub result:
         tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>>,
 }
 
-pub struct HostOutgoingRequest {
-    pub method: Method,
-    pub scheme: Option<Scheme>,
-    pub path_with_query: Option<String>,
-    pub authority: Option<String>,
-    pub headers: FieldMap,
-    pub body: Option<HyperOutgoingBody>,
-}
-
-#[derive(Default)]
-pub struct HostRequestOptions {
-    pub connect_timeout: Option<std::time::Duration>,
-    pub first_byte_timeout: Option<std::time::Duration>,
-    pub between_bytes_timeout: Option<std::time::Duration>,
-}
-
-pub struct HostIncomingResponse {
-    pub status: u16,
-    pub headers: FieldMap,
-    pub body: Option<HostIncomingBody>,
-}
-
+/// The concrete type behind a `wasi:http/types/outgoing-response` resource.
 pub struct HostOutgoingResponse {
     pub status: http::StatusCode,
     pub headers: FieldMap,
@@ -393,6 +375,30 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
             ),
         }
     }
+}
+
+/// The concrete type behind a `wasi:http/types/outgoing-request` resource.
+pub struct HostOutgoingRequest {
+    pub method: Method,
+    pub scheme: Option<Scheme>,
+    pub path_with_query: Option<String>,
+    pub authority: Option<String>,
+    pub headers: FieldMap,
+    pub body: Option<HyperOutgoingBody>,
+}
+
+#[derive(Default)]
+pub struct HostRequestOptions {
+    pub connect_timeout: Option<std::time::Duration>,
+    pub first_byte_timeout: Option<std::time::Duration>,
+    pub between_bytes_timeout: Option<std::time::Duration>,
+}
+
+/// The concrete type behind a `wasi:http/types/incoming-response` resource.
+pub struct HostIncomingResponse {
+    pub status: u16,
+    pub headers: FieldMap,
+    pub body: Option<HostIncomingBody>,
 }
 
 pub type FieldMap = hyper::HeaderMap;
