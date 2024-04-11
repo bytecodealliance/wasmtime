@@ -5,7 +5,7 @@ use crate::io::TokioIo;
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
-    dns_error, hyper_request_error, HttpResult,
+    dns_error, hyper_request_error,
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
@@ -17,21 +17,26 @@ use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, Subscribe};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
-pub struct WasiHttpCtx;
-
-pub struct OutgoingRequest {
-    pub use_tls: bool,
-    pub authority: String,
-    pub request: hyper::Request<HyperOutgoingBody>,
-    pub connect_timeout: Duration,
-    pub first_byte_timeout: Duration,
-    pub between_bytes_timeout: Duration,
+pub struct WasiHttpCtx {
+    _priv: (),
 }
 
+impl WasiHttpCtx {
+    /// Create a new context.
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
+}
+
+/// A trait which provides internal WASI HTTP state.
 pub trait WasiHttpView: Send {
+    /// Returns a mutable reference to the WASI HTTP context.
     fn ctx(&mut self) -> &mut WasiHttpCtx;
+
+    /// Returns a mutable reference to the WASI HTTP resource table.
     fn table(&mut self) -> &mut ResourceTable;
 
+    /// Create a new incoming request resource.
     fn new_incoming_request(
         &mut self,
         req: hyper::Request<HyperIncomingBody>,
@@ -49,6 +54,7 @@ pub trait WasiHttpView: Send {
         Ok(self.table().push(incoming_req)?)
     }
 
+    /// Create a new outgoing response resource.
     fn new_response_outparam(
         &mut self,
         result: tokio::sync::oneshot::Sender<
@@ -59,14 +65,16 @@ pub trait WasiHttpView: Send {
         Ok(id)
     }
 
+    /// Send an outgoing request.
     fn send_request(
         &mut self,
-        request: OutgoingRequest,
-    ) -> HttpResult<Resource<HostFutureIncomingResponse>>
+        request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> crate::HttpResult<HostFutureIncomingResponse>
     where
         Self: Sized,
     {
-        default_send_request(self, request)
+        Ok(default_send_request(request, config))
     }
 
     fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
@@ -110,44 +118,43 @@ pub(crate) fn remove_forbidden_headers(
     }
 }
 
+/// Configuration for an outgoing request.
+pub struct OutgoingRequestConfig {
+    /// Whether to use TLS for the request.
+    pub use_tls: bool,
+    /// The timeout for connecting.
+    pub connect_timeout: Duration,
+    /// The timeout until the first byte.
+    pub first_byte_timeout: Duration,
+    /// The timeout between chunks of a streaming body
+    pub between_bytes_timeout: Duration,
+}
+
+/// The default implementation of how an outgoing request is sent.
+///
+/// This implementation is used by the `wasi:http/outgoing-handler` interface
+/// default implementation.
 pub fn default_send_request(
-    view: &mut dyn WasiHttpView,
-    OutgoingRequest {
-        use_tls,
-        authority,
-        request,
-        connect_timeout,
-        first_byte_timeout,
-        between_bytes_timeout,
-    }: OutgoingRequest,
-) -> HttpResult<Resource<HostFutureIncomingResponse>> {
-    let handle = wasmtime_wasi::runtime::spawn(async move {
-        let resp = handler(
-            authority,
-            use_tls,
-            connect_timeout,
-            first_byte_timeout,
-            request,
-            between_bytes_timeout,
-        )
-        .await;
-        Ok(resp)
-    });
-
-    let fut = view.table().push(HostFutureIncomingResponse::new(handle))?;
-
-    Ok(fut)
+    request: hyper::Request<HyperOutgoingBody>,
+    config: OutgoingRequestConfig,
+) -> HostFutureIncomingResponse {
+    let handle = wasmtime_wasi::runtime::spawn(async move { Ok(handler(request, config).await) });
+    HostFutureIncomingResponse::pending(handle)
 }
 
 async fn handler(
-    authority: String,
-    use_tls: bool,
-    connect_timeout: Duration,
-    first_byte_timeout: Duration,
-    mut request: http::Request<HyperOutgoingBody>,
-    between_bytes_timeout: Duration,
-) -> Result<IncomingResponseInternal, types::ErrorCode> {
-    let tcp_stream = timeout(connect_timeout, TcpStream::connect(authority.clone()))
+    mut request: hyper::Request<HyperOutgoingBody>,
+    OutgoingRequestConfig {
+        use_tls,
+        connect_timeout,
+        first_byte_timeout,
+        between_bytes_timeout,
+    }: OutgoingRequestConfig,
+) -> Result<IncomingResponse, types::ErrorCode> {
+    let Some(authority) = request.uri().authority().map(ToString::to_string) else {
+        return Err(types::ErrorCode::HttpRequestUriInvalid);
+    };
+    let tcp_stream = timeout(connect_timeout, TcpStream::connect(&authority))
         .await
         .map_err(|_| types::ErrorCode::ConnectionTimeout)?
         .map_err(|e| match e.kind() {
@@ -264,9 +271,9 @@ async fn handler(
         .map_err(hyper_request_error)?
         .map(|body| body.map_err(hyper_request_error).boxed());
 
-    Ok(IncomingResponseInternal {
+    Ok(IncomingResponse {
         resp,
-        worker,
+        worker: Some(worker),
         between_bytes_timeout,
     })
 }
@@ -316,12 +323,14 @@ impl TryInto<http::Method> for types::Method {
     }
 }
 
+/// The concrete type behind a `wasi:http/types/incoming-request` resource.
 pub struct HostIncomingRequest {
     pub(crate) parts: http::request::Parts,
     pub body: Option<HostIncomingBody>,
 }
 
 impl HostIncomingRequest {
+    /// Create a new `HostIncomingRequest`.
     pub fn new(
         view: &mut dyn WasiHttpView,
         mut parts: http::request::Parts,
@@ -332,33 +341,13 @@ impl HostIncomingRequest {
     }
 }
 
+/// The concrete type behind a `was:http/types/response-outparam` resource.
 pub struct HostResponseOutparam {
     pub result:
         tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>>,
 }
 
-pub struct HostOutgoingRequest {
-    pub method: Method,
-    pub scheme: Option<Scheme>,
-    pub path_with_query: Option<String>,
-    pub authority: Option<String>,
-    pub headers: FieldMap,
-    pub body: Option<HyperOutgoingBody>,
-}
-
-#[derive(Default)]
-pub struct HostRequestOptions {
-    pub connect_timeout: Option<std::time::Duration>,
-    pub first_byte_timeout: Option<std::time::Duration>,
-    pub between_bytes_timeout: Option<std::time::Duration>,
-}
-
-pub struct HostIncomingResponse {
-    pub status: u16,
-    pub headers: FieldMap,
-    pub body: Option<HostIncomingBody>,
-}
-
+/// The concrete type behind a `wasi:http/types/outgoing-response` resource.
 pub struct HostOutgoingResponse {
     pub status: http::StatusCode,
     pub headers: FieldMap,
@@ -388,8 +377,32 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
     }
 }
 
-pub type FieldMap = hyper::HeaderMap;
+/// The concrete type behind a `wasi:http/types/outgoing-request` resource.
+pub struct HostOutgoingRequest {
+    pub method: Method,
+    pub scheme: Option<Scheme>,
+    pub authority: Option<String>,
+    pub path_with_query: Option<String>,
+    pub headers: FieldMap,
+    pub body: Option<HyperOutgoingBody>,
+}
 
+/// The concrete type behind a `wasi:http/types/request-options` resource.
+#[derive(Default)]
+pub struct HostRequestOptions {
+    pub connect_timeout: Option<std::time::Duration>,
+    pub first_byte_timeout: Option<std::time::Duration>,
+    pub between_bytes_timeout: Option<std::time::Duration>,
+}
+
+/// The concrete type behind a `wasi:http/types/incoming-response` resource.
+pub struct HostIncomingResponse {
+    pub status: u16,
+    pub headers: FieldMap,
+    pub body: Option<HostIncomingBody>,
+}
+
+/// The concrete type behind a `wasi:http/types/fields` resource.
 pub enum HostFields {
     Ref {
         parent: u32,
@@ -405,33 +418,53 @@ pub enum HostFields {
     },
 }
 
-pub struct IncomingResponseInternal {
+/// An owned version of `HostFields`
+pub type FieldMap = hyper::HeaderMap;
+
+/// A handle to a future incoming response.
+pub type FutureIncomingResponseHandle =
+    AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponse, types::ErrorCode>>>;
+
+/// A response that is in the process of being received.
+pub struct IncomingResponse {
+    /// The response itself.
     pub resp: hyper::Response<HyperIncomingBody>,
-    pub worker: AbortOnDropJoinHandle<()>,
+    /// Optional worker task that continues to process the response.
+    pub worker: Option<AbortOnDropJoinHandle<()>>,
+    /// The timeout between chunks of the response.
     pub between_bytes_timeout: std::time::Duration,
 }
 
-type FutureIncomingResponseHandle =
-    AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>>>;
-
+/// The concrete type behind a `wasi:http/types/future-incoming-response` resource.
 pub enum HostFutureIncomingResponse {
+    /// A pending response
     Pending(FutureIncomingResponseHandle),
-    Ready(anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>>),
+    /// The response is ready.
+    ///
+    /// An outer error will trap while the inner error gets returned to the guest.
+    Ready(anyhow::Result<Result<IncomingResponse, types::ErrorCode>>),
+    /// The response has been consumed.
     Consumed,
 }
 
 impl HostFutureIncomingResponse {
-    pub fn new(handle: FutureIncomingResponseHandle) -> Self {
+    /// Create a new `HostFutureIncomingResponse` that is pending on the provided task handle.
+    pub fn pending(handle: FutureIncomingResponseHandle) -> Self {
         Self::Pending(handle)
     }
 
+    /// Create a new `HostFutureIncomingResponse` that is ready.
+    pub fn ready(result: anyhow::Result<Result<IncomingResponse, types::ErrorCode>>) -> Self {
+        Self::Ready(result)
+    }
+
+    /// Returns `true` if the response is ready.
     pub fn is_ready(&self) -> bool {
         matches!(self, Self::Ready(_))
     }
 
-    pub fn unwrap_ready(
-        self,
-    ) -> anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>> {
+    /// Unwrap the response, panicking if it is not ready.
+    pub fn unwrap_ready(self) -> anyhow::Result<Result<IncomingResponse, types::ErrorCode>> {
         match self {
             Self::Ready(res) => res,
             Self::Pending(_) | Self::Consumed => {

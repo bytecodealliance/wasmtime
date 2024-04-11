@@ -697,7 +697,7 @@ impl RunCommand {
                     }
                 }
 
-                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx {}));
+                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
             }
         }
 
