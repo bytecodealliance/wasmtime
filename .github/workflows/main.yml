@@ -134,12 +134,6 @@ jobs:
     if: needs.determine.outputs.audit && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-    - name: Dump needs context
-      env:
-        CONTEXT: ${{ toJson(needs) }}
-      run: |
-        echo -e "\033[33;1;4mDump context\033[0m"
-        echo -e "$CONTEXT\n"
     - run: |
         echo 'failed to run "cargo vet", see previous `Cargo vet` step'
         echo 'exiting with a nonzero status now to alert PR authors'
@@ -878,12 +872,6 @@ jobs:
       - build-wasmtime-target-wasm32
     if: always()
     steps:
-    - name: Dump needs context
-      env:
-        CONTEXT: ${{ toJson(needs) }}
-      run: |
-        echo -e "\033[33;1;4mDump context\033[0m"
-        echo -e "$CONTEXT\n"
     - name: Successful test and build
       if: ${{ !(contains(needs.*.result, 'failure')) }}
       run: exit 0
