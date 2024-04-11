@@ -118,7 +118,7 @@ jobs:
     - uses: ./.github/actions/install-cargo-vet
     - id: vet
       run: cargo vet --locked
-      continue-on-error: ${{ github.event_name != 'pull_request' }}
+      continue-on-error: ${{ github.event_name == 'pull_request' }}
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
