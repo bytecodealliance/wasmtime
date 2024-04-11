@@ -273,7 +273,7 @@ async fn handler(
 
     Ok(IncomingResponse {
         resp,
-        worker,
+        worker: Some(worker),
         between_bytes_timeout,
     })
 }
@@ -429,8 +429,8 @@ pub type FutureIncomingResponseHandle =
 pub struct IncomingResponse {
     /// The response itself.
     pub resp: hyper::Response<HyperIncomingBody>,
-    /// The worker task that is processing the response.
-    pub worker: AbortOnDropJoinHandle<()>,
+    /// Optional worker task that continues to process the response.
+    pub worker: Option<AbortOnDropJoinHandle<()>>,
     /// The timeout between chunks of the response.
     pub between_bytes_timeout: std::time::Duration,
 }

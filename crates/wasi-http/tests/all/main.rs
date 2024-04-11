@@ -279,7 +279,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponse {
                         resp,
-                        worker: wasmtime_wasi::runtime::spawn(future::ready(())),
+                        worker: None,
                         between_bytes_timeout,
                     })
                 });
