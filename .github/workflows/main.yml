@@ -134,8 +134,14 @@ jobs:
     if: needs.determine.outputs.audit && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     outputs:
-      failed: ${{ steps.vet.outcome == 'failure' }}
+      failed: ${{ needs.cargo_vet.outcome == 'failure' }}
     steps:
+    - name: Dump needs context
+      env:
+        CONTEXT: ${{ toJson(needs) }}
+      run: |
+        echo -e "\033[33;1;4mDump context\033[0m"
+        echo -e "$CONTEXT\n"
     - run: |
         echo 'failed to run "cargo vet", see previous `Cargo vet` step'
         echo 'exiting with a nonzero status now to alert PR authors'
