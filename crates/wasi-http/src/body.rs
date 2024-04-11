@@ -82,7 +82,7 @@ pub struct HostIncomingBody {
     /// An optional worker task to keep alive while this body is being read.
     /// This ensures that if the parent of this body is dropped before the body
     /// then the backing data behind this worker is kept alive.
-    worker: Option<Arc<AbortOnDropJoinHandle<()>>>,
+    worker: Option<AbortOnDropJoinHandle<()>>,
 }
 
 enum IncomingBodyState {
@@ -117,9 +117,9 @@ impl HostIncomingBody {
         }
     }
 
-    pub fn retain_worker(&mut self, worker: &Arc<AbortOnDropJoinHandle<()>>) {
+    pub fn retain_worker(&mut self, worker: AbortOnDropJoinHandle<()>) {
         assert!(self.worker.is_none());
-        self.worker = Some(worker.clone());
+        self.worker = Some(worker);
     }
 
     pub fn take_stream(&mut self) -> Option<HostIncomingBodyStream> {

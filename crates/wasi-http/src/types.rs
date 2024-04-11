@@ -10,7 +10,6 @@ use crate::{
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
 use std::any::Any;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -267,7 +266,7 @@ async fn handler(
 
     Ok(IncomingResponseInternal {
         resp,
-        worker: Arc::new(worker),
+        worker,
         between_bytes_timeout,
     })
 }
@@ -358,7 +357,6 @@ pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,
     pub body: Option<HostIncomingBody>,
-    pub worker: Arc<AbortOnDropJoinHandle<()>>,
 }
 
 pub struct HostOutgoingResponse {
@@ -409,7 +407,7 @@ pub enum HostFields {
 
 pub struct IncomingResponseInternal {
     pub resp: hyper::Response<HyperIncomingBody>,
-    pub worker: Arc<AbortOnDropJoinHandle<()>>,
+    pub worker: AbortOnDropJoinHandle<()>,
     pub between_bytes_timeout: std::time::Duration,
 }
 
