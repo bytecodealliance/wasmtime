@@ -108,19 +108,40 @@ jobs:
     needs: determine
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.vet.outcome == 'failure' }}
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
     - uses: ./.github/actions/install-cargo-vet
-    - run: cargo vet --locked
+    - id: vet
+      run: cargo vet --locked
+      continue-on-error: github.event_name != 'pull_request'
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
       if: failure() && github.event_name != 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
+
+  cargo_vet_failure_for_prs:
+    name: Cargo vet failed on a Pull Request
+    needs:
+    - determine
+    - cargo_vet
+    if: needs.determine.outputs.audit && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.vet.outcome == 'failure' }}
+    steps:
+    - run: |
+        echo 'failed to run "cargo vet", see previous `Cargo vet` step'
+        echo 'exiting with a nonzero status now to alert PR authors'
+        echo 'note, though, that this PR can still enter the merge queue'
+        exit 1
+      if: needs.cargo_vet.failure
 
   # This job is a dependency of many of the jobs below. This calculates what's
   # actually being run for this workflow. For example:
