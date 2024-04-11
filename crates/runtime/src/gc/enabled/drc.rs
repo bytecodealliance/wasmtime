@@ -160,6 +160,12 @@ impl DrcHeap {
 
         let drc_ref = drc_ref(gc_ref);
         let header = self.index_mut(&drc_ref);
+        debug_assert_ne!(
+            *header.ref_count.get_mut(),
+            0,
+            "{:#p} is supposedly live; should have nonzero ref count",
+            *gc_ref
+        );
         *header.ref_count.get_mut() += 1;
         log::trace!(
             "increment {:#p} ref count -> {}",
@@ -179,6 +185,12 @@ impl DrcHeap {
 
         let drc_ref = drc_ref(gc_ref);
         let header = self.index_mut(drc_ref);
+        debug_assert_ne!(
+            *header.ref_count.get_mut(),
+            0,
+            "{:#p} is supposedly live; should have nonzero ref count",
+            *gc_ref
+        );
         *header.ref_count.get_mut() -= 1;
         log::trace!(
             "decrement {:#p} ref count -> {}",
@@ -261,6 +273,13 @@ impl DrcHeap {
                 continue;
             }
 
+            debug_assert_ne!(
+                *self.index_mut(drc_ref(&gc_ref)).ref_count.get_mut(),
+                0,
+                "{gc_ref:#p} is on the Wasm stack and therefore should be held \
+                 by the activations table; should have nonzero ref count",
+            );
+
             log::trace!("Found GC reference on the stack: {:#p}", gc_ref);
             let is_new = self
                 .activations_table
@@ -272,25 +291,75 @@ impl DrcHeap {
         }
     }
 
-    /// Sweep the bump allocation table after we've discovered our precise stack
-    /// roots.
-    fn sweep(&mut self, host_data_table: &mut ExternRefHostDataTable) {
-        // Sweep our bump chunk.
+    fn iter_bump_chunk(&mut self) -> impl Iterator<Item = VMGcRef> + '_ {
         let num_filled = self.activations_table.num_filled_in_bump_chunk();
+        self.activations_table
+            .alloc
+            .chunk
+            .iter_mut()
+            .take(num_filled)
+            .map(|slot| {
+                let r64 = *slot.get_mut();
+                VMGcRef::from_r64(r64)
+                    .expect("valid r64")
+                    .expect("non-null")
+            })
+    }
+
+    #[inline(never)]
+    #[cold]
+    fn log_gc_ref_set(prefix: &str, items: impl Iterator<Item = VMGcRef>) {
+        assert!(log::log_enabled!(log::Level::Trace));
+        let mut set = "{".to_string();
+        let mut any = false;
+        for gc_ref in items {
+            any = true;
+            set += &format!("\n  {gc_ref:#p},");
+        }
+        if any {
+            set.push('\n');
+        }
+        set.push('}');
+        log::trace!("{prefix}: {set}");
+    }
+
+    fn drain_bump_chunk(&mut self, mut f: impl FnMut(&mut Self, VMGcRef)) {
+        let num_filled = self.activations_table.num_filled_in_bump_chunk();
+
+        // Temporarily take the allocation out of `self` to avoid conflicting
+        // borrows.
         let mut alloc = mem::take(&mut self.activations_table.alloc);
         for slot in alloc.chunk.iter_mut().take(num_filled) {
             let r64 = mem::take(slot.get_mut());
             let gc_ref = VMGcRef::from_r64(r64)
                 .expect("valid r64")
                 .expect("non-null");
-            self.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
-
+            f(self, gc_ref);
             *slot.get_mut() = 0;
         }
+
         debug_assert!(
-            alloc.chunk.iter().all(|slot| unsafe { *slot.get() == 0 }),
-            "after sweeping the bump chunk, all slots should be empty"
+            alloc.chunk.iter_mut().all(|slot| *slot.get_mut() == 0),
+            "after sweeping the bump chunk, all slots should be empty",
         );
+
+        debug_assert!(self.activations_table.alloc.chunk.is_empty());
+        self.activations_table.alloc = alloc;
+    }
+
+    /// Sweep the bump allocation table after we've discovered our precise stack
+    /// roots.
+    fn sweep(&mut self, host_data_table: &mut ExternRefHostDataTable) {
+        if log::log_enabled!(log::Level::Trace) {
+            Self::log_gc_ref_set("bump chunk before sweeping", self.iter_bump_chunk());
+        }
+
+        // Sweep our bump chunk.
+        log::trace!("Begin sweeping bump chunk");
+        self.drain_bump_chunk(|heap, gc_ref| {
+            heap.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
+        });
+        log::trace!("Done sweeping bump chunk");
 
         if self.activations_table.alloc.chunk.is_empty() {
             // If this is the first collection, then the bump chunk is empty
@@ -300,6 +369,16 @@ impl DrcHeap {
         } else {
             // Reset our `next` finger to the start of the bump allocation chunk.
             self.activations_table.alloc.reset();
+        }
+
+        if log::log_enabled!(log::Level::Trace) {
+            Self::log_gc_ref_set(
+                "hash set before sweeping",
+                self.activations_table
+                    .over_approximated_stack_roots
+                    .iter()
+                    .map(|r| r.unchecked_copy()),
+            );
         }
 
         // The current `precise_stack_roots` becomes our new over-appoximated
@@ -315,14 +394,26 @@ impl DrcHeap {
         // Note that this may run arbitrary code as we run gc_ref
         // destructors. Because of our `&mut` borrow above on this table,
         // though, we're guaranteed that nothing will touch this table.
+        log::trace!("Begin sweeping hash set");
         let mut precise_stack_roots = mem::take(&mut self.activations_table.precise_stack_roots);
         for gc_ref in precise_stack_roots.drain() {
             self.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
         }
+        log::trace!("Done sweeping hash set");
 
         // Make sure to replace the `precise_stack_roots` so that we reuse any
         // allocated capacity.
         self.activations_table.precise_stack_roots = precise_stack_roots;
+
+        if log::log_enabled!(log::Level::Trace) {
+            Self::log_gc_ref_set(
+                "hash set after sweeping",
+                self.activations_table
+                    .over_approximated_stack_roots
+                    .iter()
+                    .map(|r| r.unchecked_copy()),
+            );
+        }
     }
 }
 

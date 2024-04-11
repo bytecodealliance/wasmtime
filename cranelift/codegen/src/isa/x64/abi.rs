@@ -943,7 +943,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let setup_area_size = 16; // RBP, return address
 
         // Return FrameLayout structure.
-        debug_assert!(outgoing_args_size == 0);
         FrameLayout {
             stack_args_size,
             setup_area_size,

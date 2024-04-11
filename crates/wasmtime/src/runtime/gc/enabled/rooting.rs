@@ -370,12 +370,21 @@ struct LifoRoot {
 
 impl RootSet {
     pub(crate) fn trace_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace user LIFO roots");
         for root in &mut self.lifo_roots {
-            gc_roots_list.add_root((&mut root.gc_ref).into());
+            unsafe {
+                gc_roots_list.add_root((&mut root.gc_ref).into());
+            }
         }
+        log::trace!("End trace user LIFO roots");
+
+        log::trace!("Begin trace user manual roots");
         for (_id, root) in self.manually_rooted.iter_mut() {
-            gc_roots_list.add_root(root.into());
+            unsafe {
+                gc_roots_list.add_root(root.into());
+            }
         }
+        log::trace!("End trace user manual roots");
     }
 
     /// Enter a LIFO rooting scope.

@@ -1,6 +1,6 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -968,9 +968,13 @@ fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<
         .flat_map(|l| l)
         .collect::<HashSet<_>>();
 
+    let mut found_interface = false;
+
     // Look for an interface whose assigned prefix starts `wit_path`. Not
     // exactly the most efficient thing ever but is sufficient for now.
     for (id, interface) in resolve.interfaces.iter() {
+        found_interface = true;
+
         let iface_name = match &interface.name {
             Some(name) => name,
             None => continue,
@@ -988,15 +992,20 @@ fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<
             Some(rest) => rest,
             None => continue,
         };
-        let wit_path = wit_path
-            .strip_prefix('/')
-            .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
 
-        return interface
-            .types
-            .get(wit_path)
-            .copied()
-            .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"));
+        let wit_path = match wit_path.strip_prefix('/') {
+            Some(rest) => rest,
+            None => continue,
+        };
+
+        match interface.types.get(wit_path).copied() {
+            Some(type_id) => return Ok(type_id),
+            None => continue,
+        }
+    }
+
+    if found_interface {
+        bail!("no types found to match `{wit_path}` in interface");
     }
 
     bail!("no package/interface found to match `{wit_path}`")

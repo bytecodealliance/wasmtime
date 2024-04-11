@@ -380,6 +380,7 @@ unsafe fn drop_gc_ref(instance: &mut Instance, gc_ref: *mut u8) {
     let gc_ref = VMGcRef::from_r64(u64::try_from(gc_ref as usize).unwrap())
         .expect("valid r64")
         .expect("non-null VMGcRef");
+    log::trace!("libcalls::drop_gc_ref({gc_ref:?})");
     (*instance.store()).gc_store().drop_gc_ref(gc_ref);
 }
 
