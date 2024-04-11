@@ -1,5 +1,23 @@
 --------------------------------------------------------------------------------
 
+## 18.0.4
+
+Released 2024-04-11
+
+### Fixed
+
+* Fix `bindgen!` with `trappable_error_type` using unversioned/versioned
+  packages.
+  [#8305](https://github.com/bytecodealliance/wasmtime/pull/8305)
+
+* cranelift: Include clobbers and outgoing args in stack limit.
+  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+
+* Fix a panic when compiling invalid components.
+  [#8322](https://github.com/bytecodealliance/wasmtime/issues/8322)
+
+--------------------------------------------------------------------------------
+
 ## 18.0.3
 
 Released 2024-03-12
