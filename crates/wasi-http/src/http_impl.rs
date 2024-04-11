@@ -94,7 +94,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .body(body)
             .map_err(|err| internal_error(err.to_string()))?;
 
-        self.send_request(
+        let future = self.send_request(
             request,
             OutgoingRequestConfig {
                 use_tls,
@@ -102,6 +102,8 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 first_byte_timeout,
                 between_bytes_timeout,
             },
-        )
+        )?;
+
+        Ok(self.table().push(future)?)
     }
 }

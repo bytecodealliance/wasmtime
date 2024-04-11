@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::HashMap, iter, net::Ipv4Addr, str, sync::Arc};
 use tokio::task;
 use wasmtime::{
-    component::{Component, Linker, Resource, ResourceTable},
+    component::{Component, Linker, ResourceTable},
     Config, Engine, Store,
 };
 use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
@@ -23,11 +23,7 @@ use wasmtime_wasi_http::{
 mod http_server;
 
 type RequestSender = Arc<
-    dyn Fn(
-            &mut Ctx,
-            hyper::Request<HyperOutgoingBody>,
-            OutgoingRequestConfig,
-        ) -> HttpResult<Resource<HostFutureIncomingResponse>>
+    dyn Fn(hyper::Request<HyperOutgoingBody>, OutgoingRequestConfig) -> HostFutureIncomingResponse
         + Send
         + Sync,
 >;
@@ -64,7 +60,7 @@ impl WasiHttpView for Ctx {
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
+    ) -> HttpResult<HostFutureIncomingResponse> {
         if let Some(rejected_authority) = &self.rejected_authority {
             let authority = request.uri().authority().map(ToString::to_string).unwrap();
             let (auth, _port) = authority.split_once(':').unwrap();
@@ -73,9 +69,9 @@ impl WasiHttpView for Ctx {
             }
         }
         if let Some(send_request) = self.send_request.clone() {
-            send_request(self, request, config)
+            Ok(send_request(request, config))
         } else {
-            types::default_send_request(self, request, config)
+            Ok(types::default_send_request(request, config))
         }
     }
 
@@ -275,8 +271,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
 
     let send_request = if override_send_request {
         Some(Arc::new(
-            move |view: &mut Ctx,
-                  request: hyper::Request<HyperOutgoingBody>,
+            move |request: hyper::Request<HyperOutgoingBody>,
                   OutgoingRequestConfig {
                       between_bytes_timeout,
                       ..
@@ -288,7 +283,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                         between_bytes_timeout,
                     })
                 });
-                Ok(WasiHttpView::table(view).push(HostFutureIncomingResponse::Ready(response))?)
+                HostFutureIncomingResponse::ready(response)
             },
         ) as RequestSender)
     } else {

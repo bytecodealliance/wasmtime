@@ -5,7 +5,7 @@ use crate::io::TokioIo;
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
-    dns_error, hyper_request_error, HttpResult,
+    dns_error, hyper_request_error,
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
@@ -70,11 +70,11 @@ pub trait WasiHttpView: Send {
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> HttpResult<Resource<HostFutureIncomingResponse>>
+    ) -> crate::HttpResult<HostFutureIncomingResponse>
     where
         Self: Sized,
     {
-        default_send_request(self, request, config)
+        Ok(default_send_request(request, config))
     }
 
     fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
@@ -135,18 +135,11 @@ pub struct OutgoingRequestConfig {
 /// This implementation is used by the `wasi:http/outgoing-handler` interface
 /// default implementation.
 pub fn default_send_request(
-    view: &mut dyn WasiHttpView,
     request: hyper::Request<HyperOutgoingBody>,
     config: OutgoingRequestConfig,
-) -> HttpResult<Resource<HostFutureIncomingResponse>> {
-    let handle = wasmtime_wasi::runtime::spawn(async move {
-        let resp = handler(request, config).await;
-        Ok(resp)
-    });
-
-    let fut = view.table().push(HostFutureIncomingResponse::new(handle))?;
-
-    Ok(fut)
+) -> HostFutureIncomingResponse {
+    let handle = wasmtime_wasi::runtime::spawn(async move { Ok(handler(request, config).await) });
+    HostFutureIncomingResponse::pending(handle)
 }
 
 async fn handler(
@@ -444,14 +437,19 @@ pub struct IncomingResponse {
 
 /// The concrete type behind a `wasi:http/types/future-incoming-response` resource.
 pub enum HostFutureIncomingResponse {
+    /// A pending response
     Pending(FutureIncomingResponseHandle),
+    /// The response is ready.
+    ///
+    /// An outer error will trap while the inner error gets returned to the guest.
     Ready(anyhow::Result<Result<IncomingResponse, types::ErrorCode>>),
+    /// The response has been consumed.
     Consumed,
 }
 
 impl HostFutureIncomingResponse {
     /// Create a new `HostFutureIncomingResponse` that is pending on the provided task handle.
-    pub fn new(handle: FutureIncomingResponseHandle) -> Self {
+    pub fn pending(handle: FutureIncomingResponseHandle) -> Self {
         Self::Pending(handle)
     }
 
