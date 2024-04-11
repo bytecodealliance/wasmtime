@@ -17,7 +17,16 @@ use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, Subscribe};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
-pub struct WasiHttpCtx;
+pub struct WasiHttpCtx {
+    _priv: (),
+}
+
+impl WasiHttpCtx {
+    /// Create a new context.
+    pub fn new() -> Self {
+        Self { _priv: () }
+    }
+}
 
 pub struct OutgoingRequest {
     pub use_tls: bool,

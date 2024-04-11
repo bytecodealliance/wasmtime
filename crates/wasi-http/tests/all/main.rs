@@ -90,7 +90,7 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     let ctx = Ctx {
         table: ResourceTable::new(),
         wasi: builder.build(),
-        http: WasiHttpCtx {},
+        http: WasiHttpCtx::new(),
         stderr,
         stdout,
         send_request: None,
@@ -147,7 +147,7 @@ async fn run_wasi_http(
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     let wasi = builder.build();
-    let http = WasiHttpCtx;
+    let http = WasiHttpCtx::new();
     let ctx = Ctx {
         table,
         wasi,
