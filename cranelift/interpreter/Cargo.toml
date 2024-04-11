@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-interpreter"
-version = "0.105.3"
+version = "0.105.4"
 authors = ["The Cranelift Project Developers"]
 description = "Interpret Cranelift IR"
 repository = "https://github.com/bytecodealliance/wasmtime"
