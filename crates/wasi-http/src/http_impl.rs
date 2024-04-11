@@ -4,7 +4,7 @@ use crate::{
         types::{self, Scheme},
     },
     http_request_error, internal_error,
-    types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequest},
+    types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
     WasiHttpView,
 };
 use bytes::Bytes;
@@ -94,13 +94,15 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .body(body)
             .map_err(|err| internal_error(err.to_string()))?;
 
-        self.send_request(OutgoingRequest {
-            use_tls,
-            authority,
+        self.send_request(
             request,
-            connect_timeout,
-            first_byte_timeout,
-            between_bytes_timeout,
-        })
+            OutgoingRequestConfig {
+                use_tls,
+                authority,
+                connect_timeout,
+                first_byte_timeout,
+                between_bytes_timeout,
+            },
+        )
     }
 }

@@ -28,15 +28,6 @@ impl WasiHttpCtx {
     }
 }
 
-pub struct OutgoingRequest {
-    pub use_tls: bool,
-    pub authority: String,
-    pub request: hyper::Request<HyperOutgoingBody>,
-    pub connect_timeout: Duration,
-    pub first_byte_timeout: Duration,
-    pub between_bytes_timeout: Duration,
-}
-
 pub trait WasiHttpView: Send {
     fn ctx(&mut self) -> &mut WasiHttpCtx;
     fn table(&mut self) -> &mut ResourceTable;
@@ -70,12 +61,13 @@ pub trait WasiHttpView: Send {
 
     fn send_request(
         &mut self,
-        request: OutgoingRequest,
+        request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
     ) -> HttpResult<Resource<HostFutureIncomingResponse>>
     where
         Self: Sized,
     {
-        default_send_request(self, request)
+        default_send_request(self, request, config)
     }
 
     fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
@@ -119,27 +111,31 @@ pub(crate) fn remove_forbidden_headers(
     }
 }
 
+/// Configuration for an outgoing request.
+pub struct OutgoingRequestConfig {
+    /// Whether to use TLS for the request.
+    pub use_tls: bool,
+    /// The authority to connect to.
+    pub authority: String,
+    /// The timeout for connecting.
+    pub connect_timeout: Duration,
+    /// The timeout until the first byte.
+    pub first_byte_timeout: Duration,
+    /// The timeout between chunks of a streaming body
+    pub between_bytes_timeout: Duration,
+}
+
+/// The default implementation of how an outgoing request is sent.
+///
+/// This implementation is used by the `wasi:http/outgoing-handler` interface
+/// default implementation.
 pub fn default_send_request(
     view: &mut dyn WasiHttpView,
-    OutgoingRequest {
-        use_tls,
-        authority,
-        request,
-        connect_timeout,
-        first_byte_timeout,
-        between_bytes_timeout,
-    }: OutgoingRequest,
+    request: hyper::Request<HyperOutgoingBody>,
+    config: OutgoingRequestConfig,
 ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
     let handle = wasmtime_wasi::runtime::spawn(async move {
-        let resp = handler(
-            authority,
-            use_tls,
-            connect_timeout,
-            first_byte_timeout,
-            request,
-            between_bytes_timeout,
-        )
-        .await;
+        let resp = handler(request, config).await;
         Ok(resp)
     });
 
@@ -149,12 +145,14 @@ pub fn default_send_request(
 }
 
 async fn handler(
-    authority: String,
-    use_tls: bool,
-    connect_timeout: Duration,
-    first_byte_timeout: Duration,
-    mut request: http::Request<HyperOutgoingBody>,
-    between_bytes_timeout: Duration,
+    mut request: hyper::Request<HyperOutgoingBody>,
+    OutgoingRequestConfig {
+        use_tls,
+        authority,
+        connect_timeout,
+        first_byte_timeout,
+        between_bytes_timeout,
+    }: OutgoingRequestConfig,
 ) -> Result<IncomingResponseInternal, types::ErrorCode> {
     let tcp_stream = timeout(connect_timeout, TcpStream::connect(authority.clone()))
         .await

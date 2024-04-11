@@ -14,16 +14,20 @@ use wasmtime::{
 use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
-    body::HyperIncomingBody,
+    body::{HyperIncomingBody, HyperOutgoingBody},
     io::TokioIo,
-    types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequest},
+    types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequestConfig},
     HttpResult, WasiHttpCtx, WasiHttpView,
 };
 
 mod http_server;
 
 type RequestSender = Arc<
-    dyn Fn(&mut Ctx, OutgoingRequest) -> HttpResult<Resource<HostFutureIncomingResponse>>
+    dyn Fn(
+            &mut Ctx,
+            hyper::Request<HyperOutgoingBody>,
+            OutgoingRequestConfig,
+        ) -> HttpResult<Resource<HostFutureIncomingResponse>>
         + Send
         + Sync,
 >;
@@ -58,18 +62,19 @@ impl WasiHttpView for Ctx {
 
     fn send_request(
         &mut self,
-        request: OutgoingRequest,
+        request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
     ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
         if let Some(rejected_authority) = &self.rejected_authority {
-            let (auth, _port) = request.authority.split_once(':').unwrap();
+            let (auth, _port) = config.authority.split_once(':').unwrap();
             if auth == rejected_authority {
                 return Err(ErrorCode::HttpRequestDenied.into());
             }
         }
         if let Some(send_request) = self.send_request.clone() {
-            send_request(self, request)
+            send_request(self, request, config)
         } else {
-            types::default_send_request(self, request)
+            types::default_send_request(self, request, config)
         }
     }
 
@@ -270,8 +275,8 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
     let send_request = if override_send_request {
         Some(Arc::new(
             move |view: &mut Ctx,
-                  OutgoingRequest {
-                      request,
+                  request: hyper::Request<HyperOutgoingBody>,
+                  OutgoingRequestConfig {
                       between_bytes_timeout,
                       ..
                   }| {
