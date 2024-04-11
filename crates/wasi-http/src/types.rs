@@ -381,8 +381,8 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
 pub struct HostOutgoingRequest {
     pub method: Method,
     pub scheme: Option<Scheme>,
-    pub path_with_query: Option<String>,
     pub authority: Option<String>,
+    pub path_with_query: Option<String>,
     pub headers: FieldMap,
     pub body: Option<HyperOutgoingBody>,
 }
@@ -401,8 +401,7 @@ pub struct HostIncomingResponse {
     pub body: Option<HostIncomingBody>,
 }
 
-pub type FieldMap = hyper::HeaderMap;
-
+/// The concrete type behind a `wasi:http/types/fields` resource.
 pub enum HostFields {
     Ref {
         parent: u32,
@@ -417,6 +416,9 @@ pub enum HostFields {
         fields: FieldMap,
     },
 }
+
+/// An owned version of `HostFields`
+pub type FieldMap = hyper::HeaderMap;
 
 pub struct IncomingResponseInternal {
     pub resp: hyper::Response<HyperIncomingBody>,
