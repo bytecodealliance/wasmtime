@@ -84,7 +84,6 @@ impl wasm_val_t {
                 kind: from_valtype(&ValType::F64),
                 of: wasm_val_union { u64: f },
             },
-            Val::ExternRef(_) => crate::abort("externref"),
             Val::FuncRef(f) => wasm_val_t {
                 kind: from_valtype(&ValType::FUNCREF),
                 of: wasm_val_union {
@@ -95,7 +94,9 @@ impl wasm_val_t {
                     }),
                 },
             },
-            _ => unimplemented!("wasm_val_t::from_val {:?}", val),
+            Val::AnyRef(_) => crate::abort("creating a wasm_val_t from an anyref"),
+            Val::ExternRef(_) => crate::abort("creating a wasm_val_t from an externref"),
+            Val::V128(_) => crate::abort("creating a wasm_val_t from a v128"),
         }
     }
 
@@ -105,22 +106,16 @@ impl wasm_val_t {
             ValType::I64 => Val::from(unsafe { self.of.i64 }),
             ValType::F32 => Val::from(unsafe { self.of.f32 }),
             ValType::F64 => Val::from(unsafe { self.of.f64 }),
-            ValType::Ref(r) => match (r.is_nullable(), r.heap_type()) {
-                (true, HeapType::Extern) => unsafe {
+            ValType::Ref(r) => match r.heap_type() {
+                HeapType::Func => unsafe {
                     if self.of.ref_.is_null() {
-                        Val::ExternRef(None)
-                    } else {
-                        ref_to_val(&*self.of.ref_)
-                    }
-                },
-                (true, HeapType::Func) => unsafe {
-                    if self.of.ref_.is_null() {
+                        assert!(r.is_nullable());
                         Val::FuncRef(None)
                     } else {
                         ref_to_val(&*self.of.ref_)
                     }
                 },
-                _ => unimplemented!("wasm_val_t: non-funcref and non-externref reference types"),
+                _ => unreachable!("wasm_val_t cannot contain non-function reference values"),
             },
             ValType::V128 => unimplemented!("wasm_val_t: v128"),
         }
