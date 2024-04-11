@@ -477,13 +477,14 @@ pub trait ABIMachineSpec {
 
     /// When setting up for a call, ensure that `space` bytes are available in the outgoing
     /// argument area on the stack. The specified amount of space is the minimum required for both
-    /// arguments to that function, and any values returned through
-    /// the stack. There are two reasonable implementations which each target can choose between:
-    /// 1. At least this much space is reserved during the prologue and `StackAMode::OutgoingArg` refers
-    ///    to the bottom of the reserved area, so this method does nothing.
-    /// 2. `StackAMode::OutgoingArg` refers to the top of this area, so this method needs to adjust the stack
-    ///    pointer to trim any unused portion of the bottom of the stack frame immediately before the call.
-    /// `gen_restore_argument_area` needs to undo any stack pointer changes made here.
+    /// arguments to that function, and any values returned through the stack. There are two
+    /// reasonable implementations which each target can choose between:
+    /// 1. At least this much space is reserved during the prologue and `StackAMode::OutgoingArg`
+    ///    refers to the bottom of the reserved area, so this method does nothing.
+    /// 2. `StackAMode::OutgoingArg` refers to the top of this area, so this method needs to adjust
+    ///    the stack pointer to trim any unused portion of the bottom of the stack frame
+    ///    immediately before the call. `gen_restore_argument_area` needs to undo any stack pointer
+    ///    changes made here.
     fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
         smallvec![]
     }
