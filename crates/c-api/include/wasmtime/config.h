@@ -165,6 +165,21 @@ WASMTIME_CONFIG_PROP(void, wasm_tail_call, bool)
 WASMTIME_CONFIG_PROP(void, wasm_reference_types, bool)
 
 /**
+ * \brief Configures whether the WebAssembly typed function reference types
+ * proposal is enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_function_references, bool)
+
+/**
+ * \brief Configures whether the WebAssembly GC proposal is enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_gc, bool)
+
+/**
  * \brief Configures whether the WebAssembly SIMD proposal is
  * enabled.
  *
