@@ -11,6 +11,9 @@ Released 2024-04-11.
   packages.
   [#8305](https://github.com/bytecodealliance/wasmtime/pull/8305)
 
+* cranelift: Include clobbers and outgoing args in stack limit.
+  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+
 --------------------------------------------------------------------------------
 
 ## 19.0.1
