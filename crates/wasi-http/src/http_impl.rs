@@ -98,7 +98,6 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             request,
             OutgoingRequestConfig {
                 use_tls,
-                authority,
                 connect_timeout,
                 first_byte_timeout,
                 between_bytes_timeout,

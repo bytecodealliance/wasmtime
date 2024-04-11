@@ -66,7 +66,8 @@ impl WasiHttpView for Ctx {
         config: OutgoingRequestConfig,
     ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
         if let Some(rejected_authority) = &self.rejected_authority {
-            let (auth, _port) = config.authority.split_once(':').unwrap();
+            let authority = request.uri().authority().map(ToString::to_string).unwrap();
+            let (auth, _port) = authority.split_once(':').unwrap();
             if auth == rejected_authority {
                 return Err(ErrorCode::HttpRequestDenied.into());
             }

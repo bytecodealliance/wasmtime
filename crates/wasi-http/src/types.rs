@@ -115,8 +115,6 @@ pub(crate) fn remove_forbidden_headers(
 pub struct OutgoingRequestConfig {
     /// Whether to use TLS for the request.
     pub use_tls: bool,
-    /// The authority to connect to.
-    pub authority: String,
     /// The timeout for connecting.
     pub connect_timeout: Duration,
     /// The timeout until the first byte.
@@ -148,13 +146,15 @@ async fn handler(
     mut request: hyper::Request<HyperOutgoingBody>,
     OutgoingRequestConfig {
         use_tls,
-        authority,
         connect_timeout,
         first_byte_timeout,
         between_bytes_timeout,
     }: OutgoingRequestConfig,
 ) -> Result<IncomingResponseInternal, types::ErrorCode> {
-    let tcp_stream = timeout(connect_timeout, TcpStream::connect(authority.clone()))
+    let Some(authority) = request.uri().authority().map(ToString::to_string) else {
+        return Err(types::ErrorCode::HttpRequestUriInvalid);
+    };
+    let tcp_stream = timeout(connect_timeout, TcpStream::connect(&authority))
         .await
         .map_err(|_| types::ErrorCode::ConnectionTimeout)?
         .map_err(|e| match e.kind() {
