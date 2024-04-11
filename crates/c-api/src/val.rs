@@ -1,7 +1,7 @@
 use crate::r#ref::ref_to_val;
 use crate::{
-    from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t, CStoreContextMut,
-    WASM_I32,
+    from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t,
+    WasmtimeStoreContextMut, WASM_I32,
 };
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ptr;
@@ -237,7 +237,7 @@ impl Drop for wasmtime_val_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_val_delete(
-    cx: CStoreContextMut<'_>,
+    cx: WasmtimeStoreContextMut<'_>,
     val: &mut ManuallyDrop<wasmtime_val_t>,
 ) {
     // TODO: needed for when we re-add externref support.
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn wasmtime_val_delete(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_val_copy(
-    mut cx: CStoreContextMut<'_>,
+    mut cx: WasmtimeStoreContextMut<'_>,
     dst: &mut MaybeUninit<wasmtime_val_t>,
     src: &wasmtime_val_t,
 ) {
