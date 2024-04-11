@@ -13,6 +13,9 @@ Released 2024-04-11
 * cranelift: Include clobbers and outgoing args in stack limit.
   [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
 
+* Fix a panic when compiling invalid components.
+  [#8322](https://github.com/bytecodealliance/wasmtime/issues/8322)
+
 --------------------------------------------------------------------------------
 
 ## 18.0.3
