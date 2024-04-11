@@ -838,6 +838,12 @@ macro_rules! isle_prelude_method_helpers {
             mut caller: $abicaller,
             args: ValueSlice,
         ) -> InstOutput {
+            let off = self.lower_ctx.sigs()[abi].sized_stack_arg_space()
+                + self.lower_ctx.sigs()[abi].sized_stack_ret_space();
+            self.lower_ctx
+                .abi_mut()
+                .accumulate_outgoing_args_size(off as u32);
+
             caller.emit_stack_pre_adjust(self.lower_ctx);
 
             self.gen_call_common_args(&mut caller, args);
