@@ -278,7 +278,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                 let response = handle(request.into_parts().0).map(|resp| {
                     Ok(IncomingResponseInternal {
                         resp,
-                        worker: Arc::new(wasmtime_wasi::runtime::spawn(future::ready(()))),
+                        worker: wasmtime_wasi::runtime::spawn(future::ready(())),
                         between_bytes_timeout,
                     })
                 });
