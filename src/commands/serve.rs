@@ -149,7 +149,7 @@ impl ServeCommand {
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
             ctx: builder.build(),
-            http: WasiHttpCtx,
+            http: WasiHttpCtx::new(),
 
             limits: StoreLimits::default(),
 
