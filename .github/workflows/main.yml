@@ -109,7 +109,7 @@ jobs:
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     outputs:
-      failed: ${{ steps.vet.outcome == 'failure' }}
+      outcome: ${{ steps.vet.outcome }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -145,7 +145,7 @@ jobs:
         echo 'exiting with a nonzero status now to alert PR authors'
         echo 'note, though, that this PR can still enter the merge queue'
         exit 1
-      if: needs.cargo_vet.outputs.failed
+      if: needs.cargo_vet.outputs.outcome == 'failed'
 
   # This job is a dependency of many of the jobs below. This calculates what's
   # actually being run for this workflow. For example:
