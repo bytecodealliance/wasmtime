@@ -45,7 +45,10 @@
 //! for the latter before knowing how SP might be adjusted around
 //! callsites, we implement a "nominal SP" tracking feature by which a
 //! fixup (distance between actual SP and a "nominal" SP) is known at
-//! each instruction.
+//! each instruction. When the prologue is finished, SP is expected
+//! to point at the bottom of the outgoing argument area, and will
+//! only move again directly around function calls. This allows the
+//! use of fixed offsets from SP for the rest of the function body.
 //!
 //! Note that if we ever support dynamic stack-space allocation (for
 //! `alloca`), we will need a way to reference spill slots and stack
@@ -76,7 +79,7 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | clobbered callee-saves    |
-//! unwind-frame base     ---->  | (pushed by prologue)      |
+//! unwind-frame base -------->  | (pushed by prologue)      |
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | spill slots               |
@@ -85,11 +88,11 @@
 //!                              | stack slots               |
 //!                              | (accessed via nominal SP) |
 //! nominal SP --------------->  | (alloc'd by prologue)     |
-//! (SP at end of prologue)      +---------------------------+
+//!                              +---------------------------+
 //!                              | [alignment as needed]     |
 //!                              |          ...              |
 //!                              | args for call             |
-//! SP before making a call -->  | (pushed at callsite)      |
+//! SP ----------------------->  | (pushed at callsite)      |
 //!                              +---------------------------+
 //!
 //!   (low address)
@@ -471,6 +474,45 @@ pub trait ABIMachineSpec {
 
     /// Generate a meta-instruction that adjusts the nominal SP offset.
     fn gen_nominal_sp_adj(amount: i32) -> Self::I;
+
+    /// When setting up for a call, ensure that `space` bytes are available in the outgoing
+    /// argument area on the stack. The specified amount of space is the minimum required for both
+    /// arguments to that function, and any values returned through the stack. There are two
+    /// reasonable implementations which each target can choose between:
+    /// 1. At least this much space is reserved during the prologue and `StackAMode::OutgoingArg`
+    ///    refers to the bottom of the reserved area, so this method does nothing.
+    /// 2. `StackAMode::OutgoingArg` refers to the top of this area, so this method needs to adjust
+    ///    the stack pointer to trim any unused portion of the bottom of the stack frame
+    ///    immediately before the call. `gen_restore_argument_area` needs to undo any stack pointer
+    ///    changes made here.
+    fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
+        smallvec![]
+    }
+
+    /// When returning from a call, perform any cleanup necessary to restore the stack pointer to
+    /// just after the argument area. This ensures that we always have
+    /// [`FrameLayout::outgoing_args_size`] bytes available in the argument area.
+    ///
+    /// * `ret_space` - The space left consumed in the outgoing argument area for values returned
+    ///   by the callee.
+    /// * `arg_space` - The argument space explicitly cleaned up by the callee when it returns. A
+    ///   value of `0` indicates that the callee did not cleanup the argument area at all, while
+    ///   any other value indicates that the callee has moved the stack pointer to account for
+    ///   those arguments when it returns (as is the case for the tail calling convention).
+    fn gen_restore_argument_area(_ret_space: u32, arg_space: u32) -> SmallInstVec<Self::I> {
+        if arg_space > 0 {
+            let amount = i32::try_from(arg_space).unwrap();
+
+            // Recover the argument space by decrementing sp
+            let mut insts = Self::gen_sp_reg_adjust(-amount);
+
+            // Emit a nominal sp adjustment to ensure offsets are computed correctly
+            insts.push(Self::gen_nominal_sp_adj(amount));
+            insts
+        } else {
+            smallvec![]
+        }
+    }
 
     /// Compute a FrameLayout structure containing a sorted list of all clobbered
     /// registers that are callee-saved according to the ABI, as well as the sizes
@@ -2191,31 +2233,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
         frame_size
     }
 
-    /// Emit code to pre-adjust the stack, prior to argument copies and call.
-    pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
-        let sig = &ctx.sigs()[self.sig];
-        let stack_space = sig.sized_stack_arg_space + sig.sized_stack_ret_space;
-        let stack_space = i32::try_from(stack_space).unwrap();
-        adjust_stack_and_nominal_sp::<M>(ctx, -stack_space);
-    }
-
-    /// Emit code to post-adjust the stack, after call return and return-value copies.
-    pub fn emit_stack_post_adjust(&self, ctx: &mut Lower<M::I>) {
-        let sig = &ctx.sigs()[self.sig];
-
-        let stack_space = if sig.call_conv() == isa::CallConv::Tail {
-            // The "tail" calling convention has callees clean up stack
-            // arguments, not callers. Callers still clean up any stack return
-            // space, however.
-            sig.sized_stack_ret_space
-        } else {
-            sig.sized_stack_arg_space + sig.sized_stack_ret_space
-        };
-        let stack_space = i32::try_from(stack_space).unwrap();
-
-        adjust_stack_and_nominal_sp::<M>(ctx, stack_space);
-    }
-
     /// Emit a copy of a large argument into its associated stack buffer, if
     /// any.  We must be careful to perform all these copies (as necessary)
     /// before setting up the argument registers, since we may have to invoke
@@ -2484,16 +2501,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
                             let sig_data = &ctx.sigs()[self.sig];
-                            let ret_area_base = if sig_data.call_conv() == isa::CallConv::Tail {
-                                // The callee already popped the stack argument
-                                // space for us, so the return area is on top of
-                                // the stack.
-                                0
-                            } else {
-                                // The return area is just below the stack
-                                // argument area on the stack.
-                                sig_data.sized_stack_arg_space()
-                            };
+                            // The outgoing argument area must always be restored after a call,
+                            // ensuring that the return values will be in a consistent place after
+                            // any call.
+                            let ret_area_base = sig_data.sized_stack_arg_space();
                             insts.push(M::gen_load_stack(
                                 StackAMode::OutgoingArg(offset + ret_area_base),
                                 *into_reg,
@@ -2552,6 +2563,20 @@ impl<M: ABIMachineSpec> CallSite<M> {
             0
         };
 
+        let call_conv = sig.call_conv;
+        let ret_space = sig.sized_stack_ret_space;
+        let arg_space = sig.sized_stack_arg_space;
+
+        ctx.abi_mut()
+            .accumulate_outgoing_args_size(ret_space + arg_space);
+
+        // Any adjustment to SP to account for required outgoing arguments/stack return values must
+        // be done around the call, to ensure that SP is always in a consistent state for all other
+        // writes.
+        for inst in M::gen_reserve_argument_area(ret_space + arg_space) {
+            ctx.emit(inst);
+        }
+
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
         for inst in M::gen_call(
             &self.dest,
@@ -2560,12 +2585,26 @@ impl<M: ABIMachineSpec> CallSite<M> {
             self.clobbers,
             self.opcode,
             tmp,
-            ctx.sigs()[self.sig].call_conv,
+            call_conv,
             self.caller_conv,
             callee_pop_size,
         )
         .into_iter()
         {
+            ctx.emit(inst);
+        }
+
+        // Compute the space that's reclaimed by the callee when it returns. In the case of the
+        // Tail calling convention, the callee will cleanup the arguments used in the outgoing
+        // argument area, which we will need to adjust back down to restore SP to where it was
+        // before the call.
+        let arg_space = if call_conv == isa::CallConv::Tail {
+            arg_space
+        } else {
+            0
+        };
+
+        for inst in M::gen_restore_argument_area(ret_space, arg_space) {
             ctx.emit(inst);
         }
     }

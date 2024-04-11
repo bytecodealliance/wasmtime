@@ -456,7 +456,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut insts = SmallVec::new();
         // Adjust the stack pointer downward for clobbers and the function fixed
         // frame (spillslots and storage slots).
-        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
+        let stack_size = frame_layout.fixed_frame_storage_size
+            + frame_layout.clobber_size
+            + frame_layout.outgoing_args_size;
         if flags.unwind_info() && frame_layout.setup_area_size > 0 {
             // The *unwind* frame (but not the actual frame) starts at the
             // clobbers, just below the saved FP/LR pair.
@@ -497,6 +499,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }
 
             insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
+
+            // Adjust the nominal sp to account for the outgoing argument area.
+            let sp_adj = frame_layout.outgoing_args_size as i32;
+            if sp_adj > 0 {
+                insts.push(Self::gen_nominal_sp_adj(sp_adj));
+            }
         }
         insts
     }
@@ -507,7 +515,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
+        let stack_size = frame_layout.fixed_frame_storage_size
+            + frame_layout.clobber_size
+            + frame_layout.outgoing_args_size;
         if stack_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
         }

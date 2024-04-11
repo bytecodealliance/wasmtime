@@ -11,7 +11,7 @@ block0(v0: i8):
     return
 }
 
-; check: pushq   %rbp
+; check:  pushq   %rbp
 ; nextln: movq    %rsp, %rbp
 ; nextln: block0:
 ; nextln: movzbq  %dil, %rdi
@@ -30,9 +30,9 @@ block0(v0: i8):
 
 ; check: pushq   %rbp
 ; nextln: movq    %rsp, %rbp
-; nextln: block0:
 ; nextln: subq    %rsp, $$32, %rsp
 ; nextln: virtual_sp_offset_adjust 32
+; nextln: block0:
 ; nextln: movzbq  %cl, %rcx
-; nextln: load_ext_name userextname0+0, %r9
-; nextln: call    *%r9
+; nextln: load_ext_name userextname0+0, %rdx
+; nextln: call    *%rdx

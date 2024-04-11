@@ -863,10 +863,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         // Allocate the fixed frame below the clobbers if necessary.
-        if frame_layout.fixed_frame_storage_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                -(frame_layout.fixed_frame_storage_size as i32),
-            ));
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
+        if stack_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
+        }
+
+        // Adjust the nominal sp to account for the outgoing argument area.
+        let sp_adj = frame_layout.outgoing_args_size as i32;
+        if sp_adj > 0 {
+            insts.push(Self::gen_nominal_sp_adj(sp_adj));
         }
 
         insts
@@ -890,10 +895,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         // Free the fixed frame if necessary.
-        if frame_layout.fixed_frame_storage_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.fixed_frame_storage_size as i32,
-            ));
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
+        if stack_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
         }
 
         let load_vec_reg = |rd| Inst::FpuLoad64 {

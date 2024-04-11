@@ -241,27 +241,21 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
-;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
-;   subq    %rsp, $16, %rsp
-;   movq    %rdi, 0(%rsp)
-;   unwind SaveReg { clobber_offset: 0, reg: p7i }
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+;   subq    %rsp, $48, %rsp
+;   virtual_sp_offset_adjust 48
 ; block0:
 ;   uninit  %xmm3
 ;   xorpd   %xmm3, %xmm3, %xmm3
 ;   cvtsi2sd %xmm3, %rcx, %xmm3
-;   subq    %rsp, $48, %rsp
-;   virtual_sp_offset_adjust 48
 ;   movq    %rcx, 32(%rsp)
 ;   movq    %rcx, 40(%rsp)
 ;   movq    %rcx, %rdx
-;   load_ext_name %g+0, %rdi
+;   load_ext_name %g+0, %r11
 ;   movq    %rdx, %rcx
 ;   movdqa  %xmm3, %xmm2
-;   call    *%rdi
+;   call    *%r11
 ;   addq    %rsp, $48, %rsp
-;   virtual_sp_offset_adjust -48
-;   movq    0(%rsp), %rdi
-;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -270,22 +264,18 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %rdi, (%rsp)
-; block1: ; offset 0xc
+;   subq $0x30, %rsp
+; block1: ; offset 0x8
 ;   xorpd %xmm3, %xmm3
 ;   cvtsi2sdq %rcx, %xmm3
-;   subq $0x30, %rsp
 ;   movq %rcx, 0x20(%rsp)
 ;   movq %rcx, 0x28(%rsp)
 ;   movq %rcx, %rdx
-;   movabsq $0, %rdi ; reloc_external Abs8 %g 0
+;   movabsq $0, %r11 ; reloc_external Abs8 %g 0
 ;   movq %rdx, %rcx
 ;   movdqa %xmm3, %xmm2
-;   callq *%rdi
+;   callq *%r11
 ;   addq $0x30, %rsp
-;   movq (%rsp), %rdi
-;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

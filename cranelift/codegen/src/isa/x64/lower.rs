@@ -175,8 +175,6 @@ fn emit_vm_call(
     let mut abi =
         X64CallSite::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone());
 
-    abi.emit_stack_pre_adjust(ctx);
-
     assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
 
     for (i, input) in inputs.iter().enumerate() {
@@ -188,11 +186,12 @@ fn emit_vm_call(
     for (i, output) in outputs.iter().enumerate() {
         retval_insts.extend(abi.gen_retval(ctx, i, ValueRegs::one(*output)).into_iter());
     }
+
     abi.emit_call(ctx);
+
     for inst in retval_insts {
         ctx.emit(inst);
     }
-    abi.emit_stack_post_adjust(ctx);
 
     Ok(())
 }
