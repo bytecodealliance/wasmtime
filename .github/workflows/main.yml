@@ -103,6 +103,13 @@ jobs:
         GH_TOKEN: ${{ github.token }}
 
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
+  #
+  # Note that this step, on PRs only, is allowed to fail. This is then followed
+  # up with the `cargo_vet_failure_for_prs` step below. The intention is to
+  # avoid causing this check to fail PRs while still enabling it to fail the
+  # merge queue checks. That way PRs can enter the merge queue when this step is
+  # failing if `main` has picked up `cargo vet` entries in the meantime for the
+  # failures.
   cargo_vet:
     name: Cargo vet
     needs: determine
@@ -131,15 +138,22 @@ jobs:
     needs:
     - determine
     - cargo_vet
-    if: needs.determine.outputs.audit && github.event_name == 'pull_request'
+    if: |
+      needs.determine.outputs.audit
+      && github.event_name == 'pull_request'
+      && needs.cargo_vet.outputs.outcome == 'failed'
     runs-on: ubuntu-latest
     steps:
+    # NB: this message ideally would link back to the previous step, but I'm not
+    # sure how to easily do that.
     - run: |
         echo 'failed to run "cargo vet", see previous `Cargo vet` step'
         echo 'exiting with a nonzero status now to alert PR authors'
         echo 'note, though, that this PR can still enter the merge queue'
+        echo ''
+        echo 'See https://docs.wasmtime.dev/contributing-coding-guidelines.html#cargo-vet-for-contributors'
+        echo 'for more information about the vetting process for Wasmtime'
         exit 1
-      if: needs.cargo_vet.outputs.outcome == 'failed'
 
   # This job is a dependency of many of the jobs below. This calculates what's
   # actually being run for this workflow. For example:
