@@ -133,3 +133,46 @@ fn detect_precompiled() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn truncated_component_binaries_dont_panic() -> Result<()> {
+    let engine = super::engine();
+
+    let binary = wat::parse_str(
+        r#"
+        (component
+            (import "a" (core module $m0
+                (import "" "" (func))
+            ))
+
+            (core module $m1
+                (func (export ""))
+            )
+            (core instance $i1 (instantiate (module $m1)))
+            (func $f (canon lift (core func $i1 "f")))
+
+            (component $c1
+                (import "f" (func))
+                (core module $m2
+                    (func (export "g"))
+                )
+                (core instance $i2 (instantiate $m2))
+                (func (export "g")
+                    (canon lift (core func $i2 "g"))
+                )
+            )
+            (instance $i3 (instantiate $c1 (with "f" (func $f))))
+            (func (export "g") (alias export $i3 "g"))
+        )
+        "#,
+    )?;
+
+    // Check that if we feed each truncation of the component binary into
+    // `Component::new` we don't get any panics.
+    for i in 1..binary.len() - 1 {
+        let _ = Component::from_binary(&engine, &binary[0..i]);
+    }
+
+    Ok(())
+}
