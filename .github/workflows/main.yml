@@ -133,8 +133,6 @@ jobs:
     - cargo_vet
     if: needs.determine.outputs.audit && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    outputs:
-      failed: ${{ needs.cargo_vet.outcome == 'failure' }}
     steps:
     - name: Dump needs context
       env:
@@ -147,7 +145,7 @@ jobs:
         echo 'exiting with a nonzero status now to alert PR authors'
         echo 'note, though, that this PR can still enter the merge queue'
         exit 1
-      if: needs.cargo_vet.failure
+      if: needs.cargo_vet.outputs.failed
 
   # This job is a dependency of many of the jobs below. This calculates what's
   # actually being run for this workflow. For example:
