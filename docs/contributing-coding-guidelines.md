@@ -86,12 +86,9 @@ set of dependencies in Wasmtime:
 
 Dependency additions or updates require action on behalf of project maintainers
 so we ask that you don't run `cargo vet` yourself or update the `supply-chain`
-folder yourself. Instead a maintainer will review your PR and push a commit to
-your PR which performs the vets as necessary. Note that reviewers will be
-verifying that you haven't yourself made changes and that the changes they
-approve to be merged match what they've done. It's still ok to rebase your PR if
-needed, but we ask that if a maintainer has pushed a `cargo vet` entry update
-that you leave it as a separate commit.
+folder yourself. Instead a maintainer will review your PR and perform the `cargo
+vet` entries themselves. Reviewers will typically make a separate pull request
+to add `cargo vet` entries and once that lands yours will be added to the queue.
 
 ### `cargo vet` for Maintainers
 
@@ -110,20 +107,22 @@ though to add vet entries this is done through one of a few methods:
   more-or-less is the same as the previous categories.
 
 * For contributors who should not add vet entries themselves maintainers should
-  review the PR and then when the PR is ready to be approved the maintainer
-  should push a commit to the contributor's PR directly. Maintainers should
-  check out the PR locally, apply `cargo vet` entries as needed, and then push
-  to the contributor's PR directly.
+  review the PR and add vet entries either in a separate PR or as part of the
+  contributor's PR itself. As a separate PR you'll check out the branch, run
+  `cargo vet`, then rebase away the contributor's commits and push your `cargo
+  vet` commit alone to merge. For pushing directly to the contributor's own PR
+  be sure to read the notes below.
 
-Note for the last case it's important to ensure that after you push to the PR
-any future updates pushed by the contributor either contain or don't overwrite
-your vet entries. Also verify that if the PR branch is rebased or force-pushed,
-the details of your previously pushed vetting remain the same: e.g., versions
-were not bumped and descriptive reasons remain the same. If pushing a vetting
-commit to a contributor's PR and also asking for more changes, request that the
-contributor make the requested fixes in an additional commit rather than
-force-pushing a rewritten history, so your existing vetting commit remains
-untouched. These guidelines make it easier to verify no tampering has occurred
+Note for the last case it's important to ensure that if you push directly to a
+contributor's PR any future updates pushed by the contributor either contain or
+don't overwrite your vet entries. Also verify that if the PR branch is rebased
+or force-pushed, the details of your previously pushed vetting remain the same:
+e.g., versions were not bumped and descriptive reasons remain the same. If
+pushing a vetting commit to a contributor's PR and also asking for more changes,
+request that the contributor make the requested fixes in an additional commit
+rather than force-pushing a rewritten history, so your existing vetting commit
+remains untouched. These guidelines make it easier to verify no tampering has
+occurred.
 
 ### Policy for adding `cargo vet` entries
 
