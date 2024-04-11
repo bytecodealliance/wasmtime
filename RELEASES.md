@@ -1,3 +1,15 @@
+
+--------------------------------------------------------------------------------
+
+## 17.0.3
+
+Released 2024-04-11
+
+### Fixed
+
+* cranelift: Include clobbers and outgoing args in stack limit.
+  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+
 --------------------------------------------------------------------------------
 
 ## 17.0.2
