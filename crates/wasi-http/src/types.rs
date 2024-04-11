@@ -28,10 +28,15 @@ impl WasiHttpCtx {
     }
 }
 
+/// A trait which provides internal WASI HTTP state.
 pub trait WasiHttpView: Send {
+    /// Returns a mutable reference to the WASI HTTP context.
     fn ctx(&mut self) -> &mut WasiHttpCtx;
+
+    /// Returns a mutable reference to the WASI HTTP resource table.
     fn table(&mut self) -> &mut ResourceTable;
 
+    /// Create a new incoming request resource.
     fn new_incoming_request(
         &mut self,
         req: hyper::Request<HyperIncomingBody>,
@@ -49,6 +54,7 @@ pub trait WasiHttpView: Send {
         Ok(self.table().push(incoming_req)?)
     }
 
+    /// Create a new outgoing response resource.
     fn new_response_outparam(
         &mut self,
         result: tokio::sync::oneshot::Sender<
@@ -59,6 +65,7 @@ pub trait WasiHttpView: Send {
         Ok(id)
     }
 
+    /// Send an outgoing request.
     fn send_request(
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
@@ -387,6 +394,7 @@ pub struct HostOutgoingRequest {
     pub body: Option<HyperOutgoingBody>,
 }
 
+/// The concrete type behind a `wasi:http/types/request-options` resource.
 #[derive(Default)]
 pub struct HostRequestOptions {
     pub connect_timeout: Option<std::time::Duration>,
@@ -442,9 +450,14 @@ pub enum HostFutureIncomingResponse {
 }
 
 impl HostFutureIncomingResponse {
-    /// Create a new `HostFutureIncomingResponse`.
+    /// Create a new `HostFutureIncomingResponse` that is pending on the provided task handle.
     pub fn new(handle: FutureIncomingResponseHandle) -> Self {
         Self::Pending(handle)
+    }
+
+    /// Create a new `HostFutureIncomingResponse` that is ready.
+    pub fn ready(result: anyhow::Result<Result<IncomingResponse, types::ErrorCode>>) -> Self {
+        Self::Ready(result)
     }
 
     /// Returns `true` if the response is ready.
