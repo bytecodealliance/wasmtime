@@ -16,7 +16,7 @@ use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
     body::{HyperIncomingBody, HyperOutgoingBody},
     io::TokioIo,
-    types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequestConfig},
+    types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
     HttpResult, WasiHttpCtx, WasiHttpView,
 };
 
@@ -282,7 +282,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                       ..
                   }| {
                 let response = handle(request.into_parts().0).map(|resp| {
-                    Ok(IncomingResponseInternal {
+                    Ok(IncomingResponse {
                         resp,
                         worker: wasmtime_wasi::runtime::spawn(future::ready(())),
                         between_bytes_timeout,

@@ -150,7 +150,7 @@ async fn handler(
         first_byte_timeout,
         between_bytes_timeout,
     }: OutgoingRequestConfig,
-) -> Result<IncomingResponseInternal, types::ErrorCode> {
+) -> Result<IncomingResponse, types::ErrorCode> {
     let Some(authority) = request.uri().authority().map(ToString::to_string) else {
         return Err(types::ErrorCode::HttpRequestUriInvalid);
     };
@@ -271,7 +271,7 @@ async fn handler(
         .map_err(hyper_request_error)?
         .map(|body| body.map_err(hyper_request_error).boxed());
 
-    Ok(IncomingResponseInternal {
+    Ok(IncomingResponse {
         resp,
         worker,
         between_bytes_timeout,
@@ -420,33 +420,40 @@ pub enum HostFields {
 /// An owned version of `HostFields`
 pub type FieldMap = hyper::HeaderMap;
 
-pub struct IncomingResponseInternal {
+/// A handle to a future incoming response.
+pub type FutureIncomingResponseHandle =
+    AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponse, types::ErrorCode>>>;
+
+/// A response that is in the process of being received.
+pub struct IncomingResponse {
+    /// The response itself.
     pub resp: hyper::Response<HyperIncomingBody>,
+    /// The worker task that is processing the response.
     pub worker: AbortOnDropJoinHandle<()>,
+    /// The timeout between chunks of the response.
     pub between_bytes_timeout: std::time::Duration,
 }
 
-type FutureIncomingResponseHandle =
-    AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>>>;
-
+/// The concrete type behind a `wasi:http/types/future-incoming-response` resource.
 pub enum HostFutureIncomingResponse {
     Pending(FutureIncomingResponseHandle),
-    Ready(anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>>),
+    Ready(anyhow::Result<Result<IncomingResponse, types::ErrorCode>>),
     Consumed,
 }
 
 impl HostFutureIncomingResponse {
+    /// Create a new `HostFutureIncomingResponse`.
     pub fn new(handle: FutureIncomingResponseHandle) -> Self {
         Self::Pending(handle)
     }
 
+    /// Returns `true` if the response is ready.
     pub fn is_ready(&self) -> bool {
         matches!(self, Self::Ready(_))
     }
 
-    pub fn unwrap_ready(
-        self,
-    ) -> anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>> {
+    /// Unwrap the response, panicking if it is not ready.
+    pub fn unwrap_ready(self) -> anyhow::Result<Result<IncomingResponse, types::ErrorCode>> {
         match self {
             Self::Ready(res) => res,
             Self::Pending(_) | Self::Consumed => {
