@@ -1,7 +1,3 @@
-use crate::bindings::http::types::ErrorCode;
-pub use crate::error::{HttpError, HttpResult};
-pub use crate::types::{WasiHttpCtx, WasiHttpView};
-
 pub mod body;
 mod error;
 pub mod http_impl;
@@ -10,6 +6,7 @@ pub mod proxy;
 pub mod types;
 pub mod types_impl;
 
+/// Raw bindings to the `wasi:http` package.
 pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
@@ -47,60 +44,7 @@ pub mod bindings {
     pub use wasi::http;
 }
 
-pub(crate) fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
-    ErrorCode::DnsError(bindings::http::types::DnsErrorPayload {
-        rcode: Some(rcode),
-        info_code: Some(info_code),
-    })
-}
-
-pub(crate) fn internal_error(msg: String) -> ErrorCode {
-    ErrorCode::InternalError(Some(msg))
-}
-
-/// Translate a [`http::Error`] to a wasi-http `ErrorCode` in the context of a request.
-pub fn http_request_error(err: http::Error) -> ErrorCode {
-    if err.is::<http::uri::InvalidUri>() {
-        return ErrorCode::HttpRequestUriInvalid;
-    }
-
-    tracing::warn!("http request error: {err:?}");
-
-    ErrorCode::HttpProtocolError
-}
-
-/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
-pub fn hyper_request_error(err: hyper::Error) -> ErrorCode {
-    use std::error::Error;
-
-    // If there's a source, we might be able to extract a wasi-http error from it.
-    if let Some(cause) = err.source() {
-        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
-            return err.clone();
-        }
-    }
-
-    tracing::warn!("hyper request error: {err:?}");
-
-    ErrorCode::HttpProtocolError
-}
-
-/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a response.
-pub fn hyper_response_error(err: hyper::Error) -> ErrorCode {
-    use std::error::Error;
-
-    if err.is_timeout() {
-        return ErrorCode::HttpResponseTimeout;
-    }
-
-    // If there's a source, we might be able to extract a wasi-http error from it.
-    if let Some(cause) = err.source() {
-        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
-            return err.clone();
-        }
-    }
-
-    tracing::warn!("hyper response error: {err:?}");
-
-    ErrorCode::HttpProtocolError
-}
+pub use crate::error::{
+    http_request_error, hyper_request_error, hyper_response_error, HttpError, HttpResult,
+};
+pub use crate::types::{WasiHttpCtx, WasiHttpView};

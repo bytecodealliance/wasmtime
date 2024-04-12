@@ -5,7 +5,8 @@ use crate::io::TokioIo;
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
-    dns_error, hyper_request_error,
+    error::dns_error,
+    hyper_request_error,
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;

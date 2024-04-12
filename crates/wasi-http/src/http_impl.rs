@@ -3,7 +3,8 @@ use crate::{
         outgoing_handler,
         types::{self, Scheme},
     },
-    http_request_error, internal_error,
+    error::internal_error,
+    http_request_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
     WasiHttpView,
 };
