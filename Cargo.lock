@@ -3485,10 +3485,11 @@ dependencies = [
  "futures",
  "log",
  "once_cell",
+ "tokio",
  "tracing",
- "wasi-common",
  "wasmtime",
  "wasmtime-c-api-macros",
+ "wasmtime-wasi",
  "wat",
 ]
 
