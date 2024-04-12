@@ -3,7 +3,7 @@ use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::Store;
 use wasmtime_wasi::bindings::Command;
 use wasmtime_wasi::{
     add_to_linker_async,
@@ -30,9 +30,9 @@ use test_programs_artifacts::*;
 foreach_api!(assert_test_exists);
 
 async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, Command)> {
-    let mut config = Config::new();
-    config.async_support(true).wasm_component_model(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|config| {
+        config.async_support(true);
+    });
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
 
@@ -133,10 +133,9 @@ wasmtime::component::bindgen!({
 async fn api_reactor() -> Result<()> {
     let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new().env("GOOD_DOG", "gussie").build();
-
-    let mut config = Config::new();
-    config.async_support(true).wasm_component_model(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|config| {
+        config.async_support(true);
+    });
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
 

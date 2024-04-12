@@ -7,9 +7,9 @@ use wasmtime_wasi::preview1::add_to_linker_async;
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
-    let mut config = Config::new();
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|config| {
+        config.async_support(true);
+    });
     let mut linker = Linker::<Ctx>::new(&engine);
     add_to_linker_async(&mut linker, |t| &mut t.wasi)?;
 

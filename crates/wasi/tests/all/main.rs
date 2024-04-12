@@ -2,7 +2,7 @@ use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
-    Config, Engine, Store,
+    Engine, Store,
 };
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{

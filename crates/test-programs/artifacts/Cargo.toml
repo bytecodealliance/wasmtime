@@ -9,6 +9,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 [lints]
 workspace = true
 
+[dependencies]
+wasmtime = { workspace = true, features = ['incremental-cache', 'cranelift'] }
+
 [build-dependencies]
 heck = { workspace = true }
 wit-component = { workspace = true }

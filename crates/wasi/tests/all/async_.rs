@@ -7,9 +7,9 @@ use wasmtime_wasi::bindings::Command;
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
-    let mut config = Config::new();
-    config.async_support(true).wasm_component_model(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|config| {
+        config.async_support(true);
+    });
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
 

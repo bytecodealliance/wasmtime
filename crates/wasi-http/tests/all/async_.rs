@@ -5,11 +5,10 @@ use wasmtime_wasi::bindings::Command;
 foreach_http!(assert_test_exists);
 
 async fn run(path: &str, server: &Server) -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-    config.wasm_component_model(true);
-    config.async_support(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+        config.async_support(true);
+    });
     let component = Component::from_file(&engine, path)?;
     let mut store = store(&engine, server);
     let mut linker = Linker::new(&engine);
