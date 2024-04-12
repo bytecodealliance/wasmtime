@@ -869,6 +869,7 @@ pub trait TypeConvert {
             wasmparser::HeapType::None => WasmHeapType::None,
 
             wasmparser::HeapType::Exn
+            | wasmparser::HeapType::NoExn
             | wasmparser::HeapType::NoExtern
             | wasmparser::HeapType::Eq
             | wasmparser::HeapType::Struct

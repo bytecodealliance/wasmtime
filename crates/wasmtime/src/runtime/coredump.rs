@@ -124,6 +124,7 @@ impl WasmCoreDump {
                     maximum: ty.maximum(),
                     memory64: ty.is_64(),
                     shared: ty.is_shared(),
+                    page_size_log2: None,
                 });
 
                 // Attach the memory data, balancing number of data segments and
@@ -210,7 +211,14 @@ impl WasmCoreDump {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Any)
                     }
                 };
-                globals.global(wasm_encoder::GlobalType { val_type, mutable }, &init);
+                globals.global(
+                    wasm_encoder::GlobalType {
+                        val_type,
+                        mutable,
+                        shared: false,
+                    },
+                    &init,
+                );
             }
             core_dump.section(&globals);
         }
