@@ -377,12 +377,6 @@ impl Subscribe for HostFutureTrailers {
     }
 }
 
-pub enum FinishMessage {
-    Finished,
-    Trailers(hyper::HeaderMap),
-    Abort,
-}
-
 #[derive(Clone)]
 struct WrittenState {
     expected: u64,
@@ -536,6 +530,13 @@ impl HostOutgoingBody {
 
         let _ = sender.send(FinishMessage::Abort);
     }
+}
+
+/// Message sent to end the `[HostOutgoingBody]` stream.
+enum FinishMessage {
+    Finished,
+    Trailers(hyper::HeaderMap),
+    Abort,
 }
 
 /// Whether the body is a request or response body.
