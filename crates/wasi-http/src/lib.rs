@@ -1,10 +1,11 @@
-pub mod body;
 mod error;
 mod http_impl;
+mod types_impl;
+
+pub mod body;
 pub mod io;
 pub mod proxy;
 pub mod types;
-pub mod types_impl;
 
 /// Raw bindings to the `wasi:http` package.
 pub mod bindings {

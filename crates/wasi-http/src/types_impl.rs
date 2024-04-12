@@ -1,3 +1,5 @@
+//! Implementation for the `wasi:http/types` interface.
+
 use crate::{
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
