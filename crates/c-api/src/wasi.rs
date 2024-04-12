@@ -2,13 +2,12 @@
 
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
-use cap_std::ambient_authority;
 use std::ffi::CStr;
 use std::fs::File;
 use std::os::raw::{c_char, c_int};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::slice;
-use wasmtime_wasi::{WasiCtxBuilder, WasiP1Ctx};
+use wasmtime_wasi::{preview1::WasiP1Ctx, WasiCtxBuilder};
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
     CStr::from_ptr(path).to_str().map(Path::new).ok()
@@ -34,7 +33,7 @@ pub struct wasi_config_t {
     stdin: WasiConfigReadPipe,
     stdout: WasiConfigWritePipe,
     stderr: WasiConfigWritePipe,
-    preopen_dirs: Vec<(cap_std::fs::Dir, String)>,
+    preopen_dirs: Vec<(PathBuf, String)>,
     inherit_args: bool,
     inherit_env: bool,
 }
@@ -130,13 +129,13 @@ impl wasi_config_t {
                 builder.stderr(stderr_stream);
             }
         };
-        for (dir, path) in self.preopen_dirs {
+        for (host_path, guest_path) in self.preopen_dirs {
             builder.preopened_dir(
-                dir,
+                host_path,
+                guest_path,
                 wasmtime_wasi::DirPerms::all(),
                 wasmtime_wasi::FilePerms::all(),
-                path,
-            );
+            )?;
         }
         Ok(builder.build_p1())
     }
@@ -271,19 +270,18 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     guest_path: *const c_char,
 ) -> bool {
     let guest_path = match cstr_to_str(guest_path) {
-        Some(p) => p.to_owned(),
+        Some(p) => p,
         None => return false,
     };
 
-    let dir = match cstr_to_path(path) {
-        Some(p) => match cap_std::fs::Dir::open_ambient_dir(p, ambient_authority()) {
-            Ok(d) => d,
-            Err(_) => return false,
-        },
+    let host_path = match cstr_to_path(path) {
+        Some(p) => p,
         None => return false,
     };
 
-    (*config).preopen_dirs.push((dir, guest_path));
+    (*config)
+        .preopen_dirs
+        .push((host_path.to_owned(), guest_path.to_owned()));
 
     true
 }

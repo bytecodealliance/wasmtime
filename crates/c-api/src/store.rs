@@ -83,7 +83,7 @@ wasmtime_c_api_macros::declare_own!(wasmtime_store_t);
 pub struct WasmtimeStoreData {
     foreign: crate::ForeignData,
     #[cfg(feature = "wasi")]
-    pub(crate) wasi: Option<wasmtime_wasi::WasiP1Ctx>,
+    pub(crate) wasi: Option<wasmtime_wasi::preview1::WasiP1Ctx>,
 
     /// Temporary storage for usage during a wasm->host call to store values
     /// in a slice we pass to the C API.
