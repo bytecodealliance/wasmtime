@@ -411,7 +411,7 @@ impl WrittenState {
 /// The concrete type behind a `wasi:http/types/outgoing-body` resource.
 pub struct HostOutgoingBody {
     /// The output stream that the body is written to.
-    pub body_output_stream: Option<Box<dyn HostOutputStream>>,
+    body_output_stream: Option<Box<dyn HostOutputStream>>,
     context: StreamContext,
     written: Option<WrittenState>,
     finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
@@ -486,6 +486,11 @@ impl HostOutgoingBody {
             },
             body_impl,
         )
+    }
+
+    /// Take the output stream, if it's available.
+    pub fn take_output_stream(&mut self) -> Option<Box<dyn HostOutputStream>> {
+        self.body_output_stream.take()
     }
 
     /// Finish the body, optionally with trailers.

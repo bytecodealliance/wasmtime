@@ -872,7 +872,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         id: Resource<HostOutgoingBody>,
     ) -> wasmtime::Result<Result<Resource<OutputStream>, ()>> {
         let body = self.table().get_mut(&id)?;
-        if let Some(stream) = body.body_output_stream.take() {
+        if let Some(stream) = body.take_output_stream() {
             let id = self.table().push_child(stream, &id)?;
             Ok(Ok(id))
         } else {
