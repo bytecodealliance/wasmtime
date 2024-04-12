@@ -2755,6 +2755,7 @@ version = "0.0.0"
 dependencies = [
  "cargo_metadata",
  "heck",
+ "wasmtime",
  "wit-component 0.203.0",
 ]
 

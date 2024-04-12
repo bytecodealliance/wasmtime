@@ -7,9 +7,7 @@ use wasmtime_wasi::bindings::sync::Command;
 fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
-    let mut config = Config::new();
-    config.wasm_component_model(true);
-    let engine = Engine::new(&config)?;
+    let engine = test_programs_artifacts::engine(|_| {});
     let mut linker = Linker::new(&engine);
     add_to_linker_sync(&mut linker)?;
 
