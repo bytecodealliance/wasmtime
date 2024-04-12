@@ -8,14 +8,13 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::{ptr, str};
 
-use wasmtime::{
-    AsContextMut, Caller, Func, Instance, Result, StackCreator, StackMemory, Trap, Val,
-};
+use wasmtime::{AsContextMut, Func, Instance, Result, StackCreator, StackMemory, Trap, Val};
 
 use crate::{
     bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
     wasmtime_caller_t, wasmtime_error_t, wasmtime_instance_pre_t, wasmtime_linker_t,
-    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, CStoreContextMut, WASMTIME_I32,
+    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, WasmtimeCaller, WasmtimeStoreContextMut,
+    WASMTIME_I32,
 };
 
 #[no_mangle]
@@ -30,7 +29,7 @@ pub extern "C" fn wasmtime_config_async_stack_size_set(c: &mut wasm_config_t, si
 
 #[no_mangle]
 pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     delta: u64,
 ) {
     store.epoch_deadline_async_yield_and_update(delta);
@@ -38,7 +37,7 @@ pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_context_fuel_async_yield_interval(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     interval: Option<NonZeroU64>,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
@@ -103,7 +102,7 @@ pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(*mut c_void
 async fn invoke_c_async_callback<'a>(
     cb: wasmtime_func_async_callback_t,
     data: CallbackDataPtr,
-    mut caller: Caller<'a, crate::StoreData>,
+    mut caller: WasmtimeCaller<'a>,
     params: &'a [Val],
     results: &'a mut [Val],
 ) -> Result<()> {
@@ -172,7 +171,7 @@ unsafe fn c_async_callback_to_rust_fn(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> impl for<'a> Fn(
-    Caller<'a, crate::StoreData>,
+    WasmtimeCaller<'a>,
     &'a [Val],
     &'a mut [Val],
 ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
@@ -219,7 +218,7 @@ fn handle_call_error(
 }
 
 async fn do_func_call_async(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     func: &Func,
     args: impl ExactSizeIterator<Item = Val>,
     results: &mut [MaybeUninit<wasmtime_val_t>],
@@ -245,7 +244,7 @@ async fn do_func_call_async(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
-    mut store: CStoreContextMut<'a>,
+    mut store: WasmtimeStoreContextMut<'a>,
     func: &'a Func,
     args: *const wasmtime_val_t,
     nargs: usize,
@@ -295,7 +294,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_async_func(
 
 async fn do_linker_instantiate_async(
     linker: &wasmtime_linker_t,
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     module: &wasmtime_module_t,
     instance_ptr: &mut Instance,
     trap_ret: &mut *mut wasm_trap_t,
@@ -311,7 +310,7 @@ async fn do_linker_instantiate_async(
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
     linker: &'a wasmtime_linker_t,
-    store: CStoreContextMut<'a>,
+    store: WasmtimeStoreContextMut<'a>,
     module: &'a wasmtime_module_t,
     instance_ptr: &'a mut Instance,
     trap_ret: &'a mut *mut wasm_trap_t,
@@ -330,7 +329,7 @@ pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
 
 async fn do_instance_pre_instantiate_async(
     instance_pre: &wasmtime_instance_pre_t,
-    store: CStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     instance_ptr: &mut Instance,
     trap_ret: &mut *mut wasm_trap_t,
     err_ret: &mut *mut wasmtime_error_t,
@@ -345,7 +344,7 @@ async fn do_instance_pre_instantiate_async(
 #[no_mangle]
 pub extern "C" fn wasmtime_instance_pre_instantiate_async<'a>(
     instance_pre: &'a wasmtime_instance_pre_t,
-    store: CStoreContextMut<'a>,
+    store: WasmtimeStoreContextMut<'a>,
     instance_ptr: &'a mut Instance,
     trap_ret: &'a mut *mut wasm_trap_t,
     err_ret: &'a mut *mut wasmtime_error_t,
