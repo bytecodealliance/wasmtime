@@ -1,3 +1,5 @@
+//! Implementation of the `wasi:http/outgoing-handler` interface.
+
 use crate::{
     bindings::http::{
         outgoing_handler,

@@ -1,6 +1,6 @@
 pub mod body;
 mod error;
-pub mod http_impl;
+mod http_impl;
 pub mod io;
 pub mod proxy;
 pub mod types;
