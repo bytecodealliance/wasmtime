@@ -12,6 +12,10 @@ Unreleased.
   the wasi-cli APIs. `-S common` is still accepted for now, and will be deprecated
   in the future.
 
+* C API bindings now depend on `wasmtime-wasi` instead of `wasi-common`, and the
+  `wasi_config_preopen_socket` function is no longer available as a result.
+  [#8066](https://github.com/bytecodealliance/wasmtime/pull/8066)
+
 --------------------------------------------------------------------------------
 
 ## 19.0.0

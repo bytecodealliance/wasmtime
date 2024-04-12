@@ -71,7 +71,7 @@ pub type CStoreContextMut<'a> = StoreContextMut<'a, StoreData>;
 pub struct StoreData {
     foreign: crate::ForeignData,
     #[cfg(feature = "wasi")]
-    pub(crate) wasi: Option<wasi_common::WasiCtx>,
+    pub(crate) wasi: Option<wasmtime_wasi::preview1::WasiP1Ctx>,
 
     /// Temporary storage for usage during a wasm->host call to store values
     /// in a slice we pass to the C API.

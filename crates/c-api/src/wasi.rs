@@ -2,18 +2,12 @@
 
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
-use cap_std::ambient_authority;
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::fs::File;
 use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 use std::slice;
-use wasi_common::{
-    pipe::ReadPipe,
-    sync::{Dir, TcpListener, WasiCtxBuilder},
-    WasiCtx,
-};
+use wasmtime_wasi::{preview1::WasiP1Ctx, WasiCtxBuilder};
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
     CStr::from_ptr(path).to_str().map(Path::new).ok()
@@ -39,8 +33,7 @@ pub struct wasi_config_t {
     stdin: WasiConfigReadPipe,
     stdout: WasiConfigWritePipe,
     stderr: WasiConfigWritePipe,
-    preopen_dirs: Vec<(Dir, PathBuf)>,
-    preopen_sockets: HashMap<u32, TcpListener>,
+    preopen_dirs: Vec<(PathBuf, String)>,
     inherit_args: bool,
     inherit_env: bool,
 }
@@ -67,20 +60,20 @@ pub enum WasiConfigWritePipe {
 wasmtime_c_api_macros::declare_own!(wasi_config_t);
 
 impl wasi_config_t {
-    pub fn into_wasi_ctx(self) -> Result<WasiCtx> {
+    pub fn into_wasi_ctx(self) -> Result<WasiP1Ctx> {
         let mut builder = WasiCtxBuilder::new();
         if self.inherit_args {
-            builder.inherit_args()?;
+            builder.inherit_args();
         } else if !self.args.is_empty() {
             let args = self
                 .args
                 .into_iter()
                 .map(|bytes| Ok(String::from_utf8(bytes)?))
                 .collect::<Result<Vec<String>>>()?;
-            builder.args(&args)?;
+            builder.args(&args);
         }
         if self.inherit_env {
-            builder.inherit_env()?;
+            builder.inherit_env();
         } else if !self.env.is_empty() {
             let env = self
                 .env
@@ -91,7 +84,7 @@ impl wasi_config_t {
                     Ok((k, v))
                 })
                 .collect::<Result<Vec<(String, String)>>>()?;
-            builder.envs(&env)?;
+            builder.envs(&env);
         }
         match self.stdin {
             WasiConfigReadPipe::None => {}
@@ -99,13 +92,15 @@ impl wasi_config_t {
                 builder.inherit_stdin();
             }
             WasiConfigReadPipe::File(file) => {
-                let file = cap_std::fs::File::from_std(file);
-                let file = wasi_common::sync::file::File::from_cap_std(file);
-                builder.stdin(Box::new(file));
+                let file = tokio::fs::File::from_std(file);
+                let stdin_stream = wasmtime_wasi::AsyncStdinStream::new(
+                    wasmtime_wasi::pipe::AsyncReadStream::new(file),
+                );
+                builder.stdin(stdin_stream);
             }
             WasiConfigReadPipe::Bytes(binary) => {
-                let binary = ReadPipe::from(binary);
-                builder.stdin(Box::new(binary));
+                let binary = wasmtime_wasi::pipe::MemoryInputPipe::new(binary);
+                builder.stdin(binary);
             }
         };
         match self.stdout {
@@ -114,9 +109,7 @@ impl wasi_config_t {
                 builder.inherit_stdout();
             }
             WasiConfigWritePipe::File(file) => {
-                let file = cap_std::fs::File::from_std(file);
-                let file = wasi_common::sync::file::File::from_cap_std(file);
-                builder.stdout(Box::new(file));
+                builder.stdout(wasmtime_wasi::OutputFile::new(file));
             }
         };
         match self.stderr {
@@ -125,18 +118,18 @@ impl wasi_config_t {
                 builder.inherit_stderr();
             }
             WasiConfigWritePipe::File(file) => {
-                let file = cap_std::fs::File::from_std(file);
-                let file = wasi_common::sync::file::File::from_cap_std(file);
-                builder.stderr(Box::new(file));
+                builder.stderr(wasmtime_wasi::OutputFile::new(file));
             }
         };
-        for (dir, path) in self.preopen_dirs {
-            builder.preopened_dir(dir, path)?;
+        for (host_path, guest_path) in self.preopen_dirs {
+            builder.preopened_dir(
+                host_path,
+                guest_path,
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
+            )?;
         }
-        for (fd_num, listener) in self.preopen_sockets {
-            builder.preopened_socket(fd_num, listener)?;
-        }
-        Ok(builder.build())
+        Ok(builder.build_p1())
     }
 }
 
@@ -268,59 +261,19 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     path: *const c_char,
     guest_path: *const c_char,
 ) -> bool {
-    let guest_path = match cstr_to_path(guest_path) {
+    let guest_path = match cstr_to_str(guest_path) {
         Some(p) => p,
         None => return false,
     };
 
-    let dir = match cstr_to_path(path) {
-        Some(p) => match Dir::open_ambient_dir(p, ambient_authority()) {
-            Ok(d) => d,
-            Err(_) => return false,
-        },
+    let host_path = match cstr_to_path(path) {
+        Some(p) => p,
         None => return false,
     };
-
-    (*config).preopen_dirs.push((dir, guest_path.to_owned()));
-
-    true
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasi_config_preopen_socket(
-    config: &mut wasi_config_t,
-    fd_num: u32,
-    host_port: *const c_char,
-) -> bool {
-    const VAR: &str = "WASMTIME_WASI_CONFIG_PREOPEN_SOCKET_ALLOW";
-    if std::env::var(VAR).is_err() {
-        panic!(
-            "wasmtime c-api: wasi_config_preopen_socket will be deprecated in the \
-            wasmtime 20.0.0 release. set {VAR} to enable temporarily"
-        );
-    }
-
-    let address = match cstr_to_str(host_port) {
-        Some(s) => s,
-        None => return false,
-    };
-    let listener = match std::net::TcpListener::bind(address) {
-        Ok(listener) => listener,
-        Err(_) => return false,
-    };
-
-    if let Err(_) = listener.set_nonblocking(true) {
-        return false;
-    }
-
-    // Caller cannot call in more than once with the same FD number so return an error.
-    if (*config).preopen_sockets.contains_key(&fd_num) {
-        return false;
-    }
 
     (*config)
-        .preopen_sockets
-        .insert(fd_num, TcpListener::from_std(listener));
+        .preopen_dirs
+        .push((host_path.to_owned(), guest_path.to_owned()));
 
     true
 }

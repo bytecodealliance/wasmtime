@@ -212,8 +212,8 @@ pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
-    stderr, stdin, stdout, AsyncStdinStream, AsyncStdoutStream, IsATTY, Stderr, Stdin, StdinStream,
-    Stdout, StdoutStream,
+    stderr, stdin, stdout, AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin,
+    StdinStream, Stdout, StdoutStream,
 };
 pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
