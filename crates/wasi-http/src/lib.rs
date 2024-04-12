@@ -1,16 +1,52 @@
-use crate::bindings::http::types::ErrorCode;
-pub use crate::error::{HttpError, HttpResult};
-pub use crate::types::{WasiHttpCtx, WasiHttpView};
+//! Wasmtime's WASI HTTP Implementation
+//!
+//! This crate's implementation is primarily built on top of [`hyper`].
+//!
+//! # WASI HTTP Interfaces
+//!
+//! This crate contains implementations of the following interfaces:
+//!
+//! * `wasi:http/incoming-handler`
+//! * `wasi:http/outgoing-handler`
+//! * `wasi:http/types`
+//!
+//! The crate also contains an implementation of the [`wasi:http/proxy`] world.
+//!
+//! [`wasi:http/proxy`]: crate::proxy
+
+//! All traits are implemented in terms of a [`WasiHttpView`] trait which provides
+//! basic access to [`WasiHttpCtx`], configuration for WASI HTTP, and a [`wasmtime_wasi::ResourceTable`],
+//! the state for all host-defined component model resources.
+
+//! # Examples
+//!
+//! Usage of this crate is done through a few steps to get everything hooked up:
+//!
+//! 1. First implement [`WasiHttpView`] for your type which is the `T` in
+//!    [`wasmtime::Store<T>`].
+//! 2. Add WASI HTTP interfaces to a [`wasmtime::component::Linker<T>`]. This is either
+//!    done through functions like [`proxy::add_to_linker`] (which bundles all interfaces
+//!    in the `wasi:http/proxy` world together) or through individual interfaces like the
+//!    [`bindings::http::outgoing_handler::add_to_linker`] function.
+//! 3. Use the previous [`wasmtime::component::Linker<T>::instantiate`] to instantiate
+//!    a [`wasmtime::component::Component`] within a [`wasmtime::Store<T>`]. If you're
+//!    targeting the `wasi:http/proxy` world, you can instantiate the component with
+//!    [`proxy::Proxy::instantiate_async`] or [`proxy::sync::Proxy::instantiate`] functions.
+
+#![deny(missing_docs)]
+
+mod error;
+mod http_impl;
+mod types_impl;
 
 pub mod body;
-mod error;
-pub mod http_impl;
 pub mod io;
 pub mod proxy;
 pub mod types;
-pub mod types_impl;
 
+/// Raw bindings to the `wasi:http` package.
 pub mod bindings {
+    #![allow(missing_docs)]
     wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
@@ -47,60 +83,8 @@ pub mod bindings {
     pub use wasi::http;
 }
 
-pub(crate) fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
-    ErrorCode::DnsError(bindings::http::types::DnsErrorPayload {
-        rcode: Some(rcode),
-        info_code: Some(info_code),
-    })
-}
-
-pub(crate) fn internal_error(msg: String) -> ErrorCode {
-    ErrorCode::InternalError(Some(msg))
-}
-
-/// Translate a [`http::Error`] to a wasi-http `ErrorCode` in the context of a request.
-pub fn http_request_error(err: http::Error) -> ErrorCode {
-    if err.is::<http::uri::InvalidUri>() {
-        return ErrorCode::HttpRequestUriInvalid;
-    }
-
-    tracing::warn!("http request error: {err:?}");
-
-    ErrorCode::HttpProtocolError
-}
-
-/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
-pub fn hyper_request_error(err: hyper::Error) -> ErrorCode {
-    use std::error::Error;
-
-    // If there's a source, we might be able to extract a wasi-http error from it.
-    if let Some(cause) = err.source() {
-        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
-            return err.clone();
-        }
-    }
-
-    tracing::warn!("hyper request error: {err:?}");
-
-    ErrorCode::HttpProtocolError
-}
-
-/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a response.
-pub fn hyper_response_error(err: hyper::Error) -> ErrorCode {
-    use std::error::Error;
-
-    if err.is_timeout() {
-        return ErrorCode::HttpResponseTimeout;
-    }
-
-    // If there's a source, we might be able to extract a wasi-http error from it.
-    if let Some(cause) = err.source() {
-        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
-            return err.clone();
-        }
-    }
-
-    tracing::warn!("hyper response error: {err:?}");
-
-    ErrorCode::HttpProtocolError
-}
+pub use crate::error::{
+    http_request_error, hyper_request_error, hyper_response_error, HttpError, HttpResult,
+};
+#[doc(inline)]
+pub use crate::types::{WasiHttpCtx, WasiHttpView};
