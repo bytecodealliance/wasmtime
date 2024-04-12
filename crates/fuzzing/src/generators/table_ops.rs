@@ -94,6 +94,7 @@ impl TableOps {
                 wasm_encoder::GlobalType {
                     val_type: wasm_encoder::ValType::EXTERNREF,
                     mutable: true,
+                    shared: false,
                 },
                 &ConstExpr::ref_null(wasm_encoder::HeapType::Extern),
             );
