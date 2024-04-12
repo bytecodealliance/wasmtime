@@ -54,7 +54,7 @@ features = [
 ]
 
 [dev-dependencies]
-wasi-common = { workspace = true, features = ['tokio'] }
+wasi-common = { path = '.', features = ['tokio'] }
 tempfile = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
