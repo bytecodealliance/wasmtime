@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt;
 use wasmtime_wasi::ResourceTableError;
 
+/// A [`Result`] type where the error type defaults to [`HttpError`].
 pub type HttpResult<T, E = HttpError> = Result<T, E>;
 
 /// A `wasi:http`-specific error type used to represent either a trap or an
@@ -15,14 +16,17 @@ pub struct HttpError {
 }
 
 impl HttpError {
+    /// Create a new `HttpError` that represents a trap.
     pub fn trap(err: impl Into<anyhow::Error>) -> HttpError {
         HttpError { err: err.into() }
     }
 
+    /// Downcast this error to an [`ErrorCode`].
     pub fn downcast(self) -> anyhow::Result<ErrorCode> {
         self.err.downcast()
     }
 
+    /// Downcast this error to a reference to an [`ErrorCode`]
     pub fn downcast_ref(&self) -> Option<&ErrorCode> {
         self.err.downcast_ref()
     }
