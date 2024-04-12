@@ -1,3 +1,38 @@
+//! Wasmtime's WASI HTTP Implementation
+//!
+//! This crate's implementation is primarily built on top of [`hyper`].
+//!
+//! # WASI HTTP Interfaces
+//!
+//! This crate contains implementations of the following interfaces:
+//!
+//! * `wasi:http/incoming-handler`
+//! * `wasi:http/outgoing-handler`
+//! * `wasi:http/types`
+//!
+//! The crate also contains an implementation of the [`wasi:http/proxy`] world.
+//!
+//! [`wasi:http/proxy`]: crate::proxy
+
+//! All traits are implemented in terms of a [`WasiHttpView`] trait which provides
+//! basic access to [`WasiHttpCtx`], configuration for WASI HTTP, and a [`wasmtime_wasi::ResourceTable`],
+//! the state for all host-defined component model resources.
+
+//! # Examples
+//!
+//! Usage of this crate is done through a few steps to get everything hooked up:
+//!
+//! 1. First implement [`WasiHttpView`] for your type which is the `T` in
+//!    [`wasmtime::Store<T>`].
+//! 2. Add WASI HTTP interfaces to a [`wasmtime::component::Linker<T>`]. This is either
+//!    done through functions like [`proxy::add_to_linker`] (which bundles all interfaces
+//!    in the `wasi:http/proxy` world together) or through individual interfaces like the
+//!    [`bindings::http::outgoing_handler::add_to_linker`] function.
+//! 3. Use the previous [`wasmtime::component::Linker<T>::instantiate`] to instantiate
+//!    a [`wasmtime::component::Component`] within a [`wasmtime::Store<T>`]. If you're
+//!    targeting the `wasi:http/proxy` world, you can instantiate the component with
+//!    [`proxy::Proxy::instantiate_async`] or [`proxy::sync::Proxy::instantiate`] functions.
+
 mod error;
 mod http_impl;
 mod types_impl;
