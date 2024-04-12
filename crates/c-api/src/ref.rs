@@ -23,7 +23,7 @@ wasmtime_c_api_macros::declare_own!(wasm_ref_t);
 
 impl wasm_ref_t {
     pub(crate) fn new(r: Ref) -> Option<Box<wasm_ref_t>> {
-        if r.is_null() {
+        if r.is_null() || !r.is_func() {
             None
         } else {
             Some(Box::new(wasm_ref_t { r }))
