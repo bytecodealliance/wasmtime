@@ -122,7 +122,7 @@ pub(crate) enum Definition {
 /// size of the table/memory.
 #[derive(Clone)]
 pub(crate) enum DefinitionType {
-    Func(wasmtime_runtime::VMSharedTypeIndex),
+    Func(wasmtime_environ::VMSharedTypeIndex),
     Global(wasmtime_environ::Global),
     // Note that tables and memories store not only the original type
     // information but additionally the current size of the table/memory, as

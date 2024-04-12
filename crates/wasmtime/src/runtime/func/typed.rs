@@ -10,9 +10,8 @@ use std::mem::{self, MaybeUninit};
 use std::num::NonZeroUsize;
 use std::os::raw::c_void;
 use std::ptr::{self, NonNull};
-use wasmtime_runtime::{
-    VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedTypeIndex,
-};
+use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_runtime::{VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext};
 
 /// A statically typed WebAssembly function.
 ///

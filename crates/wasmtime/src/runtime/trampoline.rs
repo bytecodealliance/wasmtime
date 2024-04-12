@@ -17,10 +17,10 @@ use crate::{MemoryType, TableType};
 use anyhow::Result;
 use std::any::Any;
 use std::sync::Arc;
-use wasmtime_environ::{MemoryIndex, Module, TableIndex};
+use wasmtime_environ::{MemoryIndex, Module, TableIndex, VMSharedTypeIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
-    StorePtr, VMFunctionImport, VMSharedTypeIndex,
+    StorePtr, VMFunctionImport,
 };
 
 fn create_handle(

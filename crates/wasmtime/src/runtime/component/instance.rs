@@ -13,7 +13,7 @@ use std::sync::Arc;
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
-use wasmtime_runtime::{VMFuncRef, VMSharedTypeIndex};
+use wasmtime_runtime::VMFuncRef;
 
 /// An instantiated component.
 ///
@@ -500,7 +500,7 @@ impl<'a> Instantiator<'a> {
         // can't fall through to the case below
         if let wasmtime_runtime::Export::Function(f) = &export {
             let expected = match expected.unwrap_func() {
-                EngineOrModuleTypeIndex::Engine(e) => Some(VMSharedTypeIndex::new(e)),
+                EngineOrModuleTypeIndex::Engine(e) => Some(e),
                 EngineOrModuleTypeIndex::Module(m) => module.signatures().shared_type(m),
             };
             let actual = unsafe { f.func_ref.as_ref().type_index };

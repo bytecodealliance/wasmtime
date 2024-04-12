@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleInternedTypeIndex, VMOffsets,
+    VMSharedTypeIndex,
 };
 
 mod arch;
@@ -67,8 +68,7 @@ pub use crate::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMInvokeArgument, VMMemoryDefinition,
     VMMemoryImport, VMNativeCallFunction, VMNativeCallHostFuncContext, VMOpaqueContext,
-    VMRuntimeLimits, VMSharedTypeIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
-    ValRaw,
+    VMRuntimeLimits, VMTableDefinition, VMTableImport, VMWasmCallFunction, ValRaw,
 };
 pub use send_sync_ptr::SendSyncPtr;
 

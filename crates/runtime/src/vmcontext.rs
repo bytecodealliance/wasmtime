@@ -13,6 +13,7 @@ use std::ptr::{self, NonNull};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
 pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
+use wasmtime_environ::VMSharedTypeIndex;
 use wasmtime_environ::{BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC};
 
 /// A function pointer that exposes the array calling convention.
@@ -569,12 +570,6 @@ impl VMGlobalDefinition {
     }
 }
 
-/// An index into the shared type registry, usable for checking signatures
-/// at indirect calls.
-#[repr(C)]
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
-pub struct VMSharedTypeIndex(u32);
-
 #[cfg(test)]
 mod test_vmshared_type_index {
     use super::VMSharedTypeIndex;
@@ -589,32 +584,6 @@ mod test_vmshared_type_index {
             size_of::<VMSharedTypeIndex>(),
             usize::from(offsets.size_of_vmshared_type_index())
         );
-    }
-}
-
-impl VMSharedTypeIndex {
-    /// Create a new `VMSharedTypeIndex`.
-    #[inline]
-    pub fn new(value: u32) -> Self {
-        assert_ne!(
-            value,
-            u32::MAX,
-            "u32::MAX is reserved for the default value"
-        );
-        Self(value)
-    }
-
-    /// Returns the underlying bits of the index.
-    #[inline]
-    pub fn bits(&self) -> u32 {
-        self.0
-    }
-}
-
-impl Default for VMSharedTypeIndex {
-    #[inline]
-    fn default() -> Self {
-        Self(u32::MAX)
     }
 }
 

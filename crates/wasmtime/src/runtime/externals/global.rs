@@ -229,7 +229,7 @@ impl Global {
             .wasm_ty
             .canonicalize(&mut |module_index| {
                 wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
-                    instance.engine_type_index(module_index).bits()
+                    instance.engine_type_index(module_index)
                 })
             });
 

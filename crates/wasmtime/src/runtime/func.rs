@@ -13,9 +13,10 @@ use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
+use wasmtime_environ::VMSharedTypeIndex;
 use wasmtime_runtime::{
     ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
-    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedTypeIndex,
+    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext,
 };
 
 /// A reference to the abstract `nofunc` heap value.

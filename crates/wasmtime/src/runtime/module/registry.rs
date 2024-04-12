@@ -11,7 +11,8 @@ use std::{
     ptr::NonNull,
     sync::{Arc, RwLock},
 };
-use wasmtime_runtime::{VMSharedTypeIndex, VMWasmCallFunction};
+use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_runtime::VMWasmCallFunction;
 
 /// Used for registering modules with a store.
 ///

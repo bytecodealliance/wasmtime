@@ -12,7 +12,7 @@ use crate::vmcontext::{
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, GcStore, Imports, ModuleRuntimeInfo,
-    SendSyncPtr, Store, VMFunctionBody, VMGcRef, VMSharedTypeIndex, WasmFault, I31,
+    SendSyncPtr, Store, VMFunctionBody, VMGcRef, WasmFault, I31,
 };
 use anyhow::Error;
 use anyhow::Result;
@@ -29,8 +29,8 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableElementExpression,
-    TableIndex, TableInitialValue, TableSegmentElements, Trap, VMOffsets, WasmRefType, WasmValType,
-    VMCONTEXT_MAGIC,
+    TableIndex, TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex,
+    WasmRefType, WasmValType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
