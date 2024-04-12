@@ -6,6 +6,7 @@
 use crate::WasiHttpView;
 
 mod bindings {
+    #![allow(missing_docs)]
     wasmtime::component::bindgen!({
         world: "wasi:http/proxy",
         tracing: true,
@@ -111,6 +112,7 @@ pub mod sync {
     use crate::WasiHttpView;
 
     mod bindings {
+        #![allow(missing_docs)]
         wasmtime::component::bindgen!({
             world: "wasi:http/proxy",
             tracing: true,

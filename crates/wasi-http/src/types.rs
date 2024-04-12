@@ -78,6 +78,7 @@ pub trait WasiHttpView: Send {
         Ok(default_send_request(request, config))
     }
 
+    /// Whether a given header should be considered forbidden and not allowed.
     fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
         false
     }
@@ -327,6 +328,7 @@ impl TryInto<http::Method> for types::Method {
 /// The concrete type behind a `wasi:http/types/incoming-request` resource.
 pub struct HostIncomingRequest {
     pub(crate) parts: http::request::Parts,
+    /// The body of the incoming request.
     pub body: Option<HostIncomingBody>,
 }
 
@@ -344,14 +346,18 @@ impl HostIncomingRequest {
 
 /// The concrete type behind a `wasi:http/types/response-outparam` resource.
 pub struct HostResponseOutparam {
+    /// The sender for sending a response.
     pub result:
         tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>>,
 }
 
 /// The concrete type behind a `wasi:http/types/outgoing-response` resource.
 pub struct HostOutgoingResponse {
+    /// The status of the response.
     pub status: http::StatusCode,
+    /// The headers of the response.
     pub headers: FieldMap,
+    /// The body of the response.
     pub body: Option<HyperOutgoingBody>,
 }
 
@@ -380,41 +386,58 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
 
 /// The concrete type behind a `wasi:http/types/outgoing-request` resource.
 pub struct HostOutgoingRequest {
+    /// The method of the request.
     pub method: Method,
+    /// The scheme of the request.
     pub scheme: Option<Scheme>,
+    /// The authority of the request.
     pub authority: Option<String>,
+    /// The path and query of the request.
     pub path_with_query: Option<String>,
+    /// The request headers.
     pub headers: FieldMap,
+    /// The request body.
     pub body: Option<HyperOutgoingBody>,
 }
 
 /// The concrete type behind a `wasi:http/types/request-options` resource.
 #[derive(Default)]
 pub struct HostRequestOptions {
+    /// How long to wait for a connection to be established.
     pub connect_timeout: Option<std::time::Duration>,
+    /// How long to wait for the first byte of the response body.
     pub first_byte_timeout: Option<std::time::Duration>,
+    /// How long to wait between frames of the response body.
     pub between_bytes_timeout: Option<std::time::Duration>,
 }
 
 /// The concrete type behind a `wasi:http/types/incoming-response` resource.
 pub struct HostIncomingResponse {
+    /// The response status
     pub status: u16,
+    /// The response headers
     pub headers: FieldMap,
+    /// The response body
     pub body: Option<HostIncomingBody>,
 }
 
 /// The concrete type behind a `wasi:http/types/fields` resource.
 pub enum HostFields {
+    /// A reference to the fields of a parent entry.
     Ref {
+        /// The parent resource rep.
         parent: u32,
 
+        /// The function to get the fields from the parent.
         // NOTE: there's not failure in the result here because we assume that HostFields will
         // always be registered as a child of the entry with the `parent` id. This ensures that the
         // entry will always exist while this `HostFields::Ref` entry exists in the table, thus we
         // don't need to account for failure when fetching the fields ref from the parent.
         get_fields: for<'a> fn(elem: &'a mut (dyn Any + 'static)) -> &'a mut FieldMap,
     },
+    /// An owned version of the fields.
     Owned {
+        /// The fields themselves.
         fields: FieldMap,
     },
 }

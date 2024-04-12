@@ -65,6 +65,7 @@ impl HostIncomingBody {
         })
     }
 
+    /// Convert this body into a `HostFutureTrailers` resource.
     pub fn into_future_trailers(self) -> HostFutureTrailers {
         HostFutureTrailers::Waiting(self)
     }
@@ -409,6 +410,7 @@ impl WrittenState {
 
 /// The concrete type behind a `wasi:http/types/outgoing-body` resource.
 pub struct HostOutgoingBody {
+    /// The output stream that the body is written to.
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
     context: StreamContext,
     written: Option<WrittenState>,
@@ -542,7 +544,9 @@ enum FinishMessage {
 /// Whether the body is a request or response body.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StreamContext {
+    /// The body is a request body.
     Request,
+    /// The body is a response body.
     Response,
 }
 

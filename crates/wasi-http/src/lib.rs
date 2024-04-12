@@ -33,6 +33,8 @@
 //!    targeting the `wasi:http/proxy` world, you can instantiate the component with
 //!    [`proxy::Proxy::instantiate_async`] or [`proxy::sync::Proxy::instantiate`] functions.
 
+#![deny(missing_docs)]
+
 mod error;
 mod http_impl;
 mod types_impl;
@@ -44,6 +46,7 @@ pub mod types;
 
 /// Raw bindings to the `wasi:http` package.
 pub mod bindings {
+    #![allow(missing_docs)]
     wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
