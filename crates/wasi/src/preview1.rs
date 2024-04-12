@@ -277,32 +277,6 @@ impl BlockingMode {
             }
         }
     }
-
-    fn block_write(
-        &self,
-        file: &super::filesystem::File,
-        bytes: GuestPtr<'_, [u8]>,
-        append: bool,
-        mut pos: u64,
-    ) -> Result<usize> {
-        let buf = bytes.as_cow()?;
-        let mut buf = buf.deref();
-
-        let mut total: usize = 0;
-        while !buf.is_empty() {
-            let nwritten = if append {
-                file.file.append(buf)
-            } else {
-                file.file.write_at(buf, pos)
-            };
-            let nwritten = nwritten.or_else(|e| Err(StreamError::LastOperationFailed(e.into())))?;
-            pos = pos.checked_add(nwritten as u64).expect("add overflow");
-            (_, buf) = buf.split_at(nwritten);
-            total = total.checked_add(nwritten).expect("add overflow");
-        }
-
-        Ok(total)
-    }
 }
 
 #[derive(Debug)]
@@ -1580,8 +1554,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         match desc {
             Descriptor::File(File {
                 fd,
-                blocking_mode: _,
                 position,
+                // NB: the nonblocking flag is intentionally ignored here and
+                // blocking reads/writes are always performed.
+                blocking_mode: _,
                 ..
             }) => {
                 let fd = fd.borrowed();
@@ -1592,23 +1568,33 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let Some(iov) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
-                let is_shared_memory = iov.is_shared_memory();
-                let bytes_read = if is_shared_memory {
-                    let mut buf = vec![0; iov.len() as usize];
-                    let bytes_read = file
-                        .file
-                        .read_at(&mut buf[..], pos)
-                        .or_else(|e| Err(StreamError::LastOperationFailed(e.into())))?;
-                    iov.copy_from_slice(&buf[0..bytes_read])?;
-                    bytes_read
-                } else {
-                    let mut buf = iov.as_slice_mut()?.expect("get none");
-                    let buf = buf.deref_mut();
-                    let bytes_read = file
-                        .file
-                        .read_at(buf, pos)
-                        .or_else(|e| Err(StreamError::LastOperationFailed(e.into())))?;
-                    bytes_read
+                let bytes_read = match (file.as_blocking_file(), iov.as_slice_mut()?) {
+                    // Try to read directly into wasm memory where possible
+                    // when the current thread can block and additionally wasm
+                    // memory isn't shared.
+                    (Some(file), Some(mut buf)) => file
+                        .read_at(&mut buf, pos)
+                        .map_err(|e| StreamError::LastOperationFailed(e.into()))?,
+                    // ... otherwise fall back to performing the read on a
+                    // blocking thread and which copies the data back into wasm
+                    // memory.
+                    (_, buf) => {
+                        drop(buf);
+                        let mut buf = vec![0; iov.len() as usize];
+                        let buf = file
+                            .spawn_blocking(move |file| -> Result<_, types::Error> {
+                                let bytes_read = file
+                                    .read_at(&mut buf, pos)
+                                    .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
+                                buf.truncate(bytes_read);
+                                Ok(buf)
+                            })
+                            .await?;
+                        iov.get_range(0..u32::try_from(buf.len())?)
+                            .unwrap()
+                            .copy_from_slice(&buf)?;
+                        buf.len()
+                    }
                 };
 
                 let pos = pos
@@ -1700,12 +1686,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         match desc {
             Descriptor::File(File {
                 fd,
-                blocking_mode,
                 append,
                 position,
+                // NB: files always use blocking writes regardless of what
+                // they're configured to use since OSes don't have nonblocking
+                // reads/writes anyway. This behavior originated in the first
+                // implementation of WASIp1 where flags were propagated to the
+                // OS and the OS ignored the nonblocking flag for files
+                // generally.
+                blocking_mode: _,
             }) => {
                 let fd = fd.borrowed();
-                let blocking_mode = *blocking_mode;
                 let position = position.clone();
                 let pos = position.load(Ordering::Relaxed);
                 let append = *append;
@@ -1714,7 +1705,29 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0);
                 };
-                let nwritten = blocking_mode.block_write(f, buf, append, pos)?;
+
+                let write = move |f: &cap_std::fs::File, buf: &[u8]| {
+                    if append {
+                        f.append(&buf)
+                    } else {
+                        f.write_at(&buf, pos)
+                    }
+                };
+
+                let nwritten = match f.as_blocking_file() {
+                    // If we can block then skip the copy out of wasm memory and
+                    // write directly to `f`.
+                    Some(f) => write(f, &buf.as_cow()?),
+                    // ... otherwise copy out of wasm memory and use
+                    // `spawn_blocking` to do this write in a thread that can
+                    // block.
+                    None => {
+                        let buf = buf.to_vec()?;
+                        f.spawn_blocking(move |f| write(f, &buf)).await
+                    }
+                };
+
+                let nwritten = nwritten.map_err(|e| StreamError::LastOperationFailed(e.into()))?;
                 if append {
                     let len = self.stat(fd).await?;
                     position.store(len.size, Ordering::Relaxed);
