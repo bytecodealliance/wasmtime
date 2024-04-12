@@ -56,7 +56,7 @@ pub extern "C" fn wasmtime_error_message(error: &wasmtime_error_t, message: &mut
 #[no_mangle]
 pub extern "C" fn wasmtime_error_exit_status(raw: &wasmtime_error_t, status: &mut i32) -> bool {
     #[cfg(feature = "wasi")]
-    if let Some(exit) = raw.error.downcast_ref::<wasi_common::I32Exit>() {
+    if let Some(exit) = raw.error.downcast_ref::<wasmtime_wasi::I32Exit>() {
         *status = exit.0;
         return true;
     }
