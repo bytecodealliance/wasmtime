@@ -109,11 +109,7 @@ impl wasi_config_t {
                 builder.inherit_stdout();
             }
             WasiConfigWritePipe::File(file) => {
-                let file = tokio::fs::File::from_std(file);
-                let stdout_stream = wasmtime_wasi::AsyncStdoutStream::new(
-                    wasmtime_wasi::pipe::AsyncWriteStream::new(1024 * 1024, file),
-                );
-                builder.stdout(stdout_stream);
+                builder.stdout(wasmtime_wasi::OutputFile::new(file));
             }
         };
         match self.stderr {
@@ -122,11 +118,7 @@ impl wasi_config_t {
                 builder.inherit_stderr();
             }
             WasiConfigWritePipe::File(file) => {
-                let file = tokio::fs::File::from_std(file);
-                let stderr_stream = wasmtime_wasi::AsyncStdoutStream::new(
-                    wasmtime_wasi::pipe::AsyncWriteStream::new(1024 * 1024, file),
-                );
-                builder.stderr(stderr_stream);
+                builder.stderr(wasmtime_wasi::OutputFile::new(file));
             }
         };
         for (host_path, guest_path) in self.preopen_dirs {
