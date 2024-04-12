@@ -482,6 +482,38 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Perform all tests of the c-api
+  test_capi:
+    needs: determine
+    name: Test C-API ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    if: needs.determine.outputs.test-capi
+
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-14, windows-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    # Build and test the C API with example C programs along with the example
+    # Rust programs. Note that this only executes if the `determine` step told
+    # us to test the capi which is off-by-default for PRs.
+    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
+    - run: cmake --build examples/build --config Debug
+    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
+      env:
+        RUST_BACKTRACE: 1
+      if: matrix.os == 'windows-latest'
+    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
+      env:
+        RUST_BACKTRACE: 1
+      if: matrix.os != 'windows-latest'
+
   # Perform all tests (debug mode) for `wasmtime`.
   #
   # Note that the full matrix for what may run here is defined within
@@ -566,22 +598,6 @@ jobs:
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.gcc != ''
-
-    # Build and test the C API with example C programs along with the example
-    # Rust programs. Note that this only executes if the `determine` step told
-    # us to test the capi which is off-by-default for PRs.
-    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
-      if: matrix.target == '' && needs.determine.outputs.test-capi
-    - run: cmake --build examples/build --config Debug
-      if: matrix.target == '' && needs.determine.outputs.test-capi
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
-      env:
-        RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os == 'windows-latest' && needs.determine.outputs.test-capi
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
-      env:
-        RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os != 'windows-latest' && needs.determine.outputs.test-capi
 
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
@@ -868,6 +884,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - test
+      - test_capi
       - build
       - rustfmt
       - clangformat
