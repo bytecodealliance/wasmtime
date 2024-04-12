@@ -476,26 +476,6 @@ pub enum TableElementExpression {
     Null,
 }
 
-/// Different types that can appear in a module.
-///
-/// Note that each of these variants are intended to index further into a
-/// separate table.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-#[allow(missing_docs)]
-pub enum ModuleType {
-    Function(ModuleInternedTypeIndex),
-}
-
-impl ModuleType {
-    /// Asserts this is a `ModuleType::Function`, returning the underlying
-    /// `SignatureIndex`.
-    pub fn unwrap_function(&self) -> ModuleInternedTypeIndex {
-        match self {
-            ModuleType::Function(f) => *f,
-        }
-    }
-}
-
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -528,7 +508,7 @@ pub struct Module {
     pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
-    pub types: PrimaryMap<TypeIndex, ModuleType>,
+    pub types: PrimaryMap<TypeIndex, ModuleInternedTypeIndex>,
 
     /// Number of imported or aliased functions in the module.
     pub num_imported_funcs: usize,

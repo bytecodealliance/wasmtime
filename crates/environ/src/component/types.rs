@@ -1,7 +1,7 @@
 use crate::component::{Export, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
-    CompiledModuleInfo, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
-    WasmHeapType, WasmValType,
+    CompiledModuleInfo, EntityType, Module, ModuleTypes, ModuleTypesBuilder, PrimaryMap,
+    TypeConvert, WasmHeapType, WasmValType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::Index;
 use wasmparser::names::KebabString;
-use wasmparser::types;
+use wasmparser::{types, Validator};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_types::ModuleInternedTypeIndex;
 
@@ -255,13 +255,13 @@ pub struct ComponentTypes {
     results: PrimaryMap<TypeResultIndex, TypeResult>,
     resource_tables: PrimaryMap<TypeResourceTableIndex, TypeResourceTable>,
 
-    module_types: ModuleTypes,
+    module_types: Option<ModuleTypes>,
 }
 
 impl ComponentTypes {
     /// Returns the core wasm module types known within this component.
     pub fn module_types(&self) -> &ModuleTypes {
-        &self.module_types
+        self.module_types.as_ref().unwrap()
     }
 
     /// Returns the canonical ABI information about the specified type.
@@ -341,7 +341,7 @@ where
 {
     type Output = <ModuleTypes as Index<T>>::Output;
     fn index(&self, idx: T) -> &Self::Output {
-        self.module_types.index(idx)
+        self.module_types.as_ref().unwrap().index(idx)
     }
 }
 
@@ -359,7 +359,6 @@ where
 ///
 /// This contains tables to intern any component types found as well as
 /// managing building up core wasm [`ModuleTypes`] as well.
-#[derive(Default)]
 pub struct ComponentTypesBuilder {
     functions: HashMap<TypeFunc, TypeFuncIndex>,
     lists: HashMap<TypeList, TypeListIndex>,
@@ -398,6 +397,26 @@ macro_rules! intern_and_fill_flat_types {
 }
 
 impl ComponentTypesBuilder {
+    /// Construct a new `ComponentTypesBuilder` for use with the given validator.
+    pub fn new(validator: &Validator) -> Self {
+        Self {
+            module_types: ModuleTypesBuilder::new(validator),
+
+            functions: HashMap::default(),
+            lists: HashMap::default(),
+            records: HashMap::default(),
+            variants: HashMap::default(),
+            tuples: HashMap::default(),
+            enums: HashMap::default(),
+            flags: HashMap::default(),
+            options: HashMap::default(),
+            results: HashMap::default(),
+            component_types: ComponentTypes::default(),
+            type_info: TypeInformationCache::default(),
+            resources: ResourcesBuilder::default(),
+        }
+    }
+
     fn export_type_def(
         &mut self,
         static_modules: &PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
@@ -457,7 +476,7 @@ impl ComponentTypesBuilder {
         }
         let ty = self.component_types.components.push(component_ty);
 
-        self.component_types.module_types = self.module_types.finish();
+        self.component_types.module_types = Some(self.module_types.finish());
         (self.component_types, ty)
     }
 
@@ -517,6 +536,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::ComponentFuncTypeId,
     ) -> Result<TypeFuncIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
         let params = ty
             .params
@@ -542,6 +562,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: types::ComponentEntityType,
     ) -> Result<TypeDef> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         Ok(match ty {
             types::ComponentEntityType::Module(id) => {
                 TypeDef::Module(self.convert_module(types, id)?)
@@ -574,6 +595,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::ComponentAnyTypeId,
     ) -> Result<TypeDef> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         Ok(match id {
             types::ComponentAnyTypeId::Defined(id) => {
                 TypeDef::Interface(self.defined_type(types, id)?)
@@ -598,6 +620,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::ComponentTypeId,
     ) -> Result<TypeComponentIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
@@ -620,6 +643,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::ComponentInstanceTypeId,
     ) -> Result<TypeComponentInstanceIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
@@ -636,6 +660,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::ComponentCoreModuleTypeId,
     ) -> Result<TypeModuleIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
@@ -657,16 +682,14 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::EntityType,
     ) -> Result<EntityType> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         Ok(match ty {
-            types::EntityType::Func(idx) => {
-                let ty = types[*idx].unwrap_func();
-                let ty = self.convert_func_type(ty);
-                EntityType::Function(
-                    self.module_types_builder_mut()
-                        .wasm_func_type(*idx, ty)
-                        .into(),
-                )
-            }
+            types::EntityType::Func(id) => EntityType::Function({
+                let module = Module::default();
+                self.module_types_builder_mut()
+                    .intern_type(&module, types, *id)?
+                    .into()
+            }),
             types::EntityType::Table(ty) => EntityType::Table(self.convert_table_type(ty)),
             types::EntityType::Memory(ty) => EntityType::Memory(ty.clone().into()),
             types::EntityType::Global(ty) => EntityType::Global(self.convert_global_type(ty)),
@@ -679,6 +702,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::ComponentDefinedTypeId,
     ) -> Result<InterfaceType> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let ret = match &types[id] {
             types::ComponentDefinedType::Primitive(ty) => ty.into(),
             types::ComponentDefinedType::Record(e) => {
@@ -718,6 +742,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::ComponentValType,
     ) -> Result<InterfaceType> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         match ty {
             types::ComponentValType::Primitive(p) => Ok(p.into()),
             types::ComponentValType::Type(id) => self.defined_type(types, *id),
@@ -729,6 +754,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::RecordType,
     ) -> Result<TypeRecordIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let fields = ty
             .fields
             .iter()
@@ -752,6 +778,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::VariantType,
     ) -> Result<TypeVariantIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let cases = ty
             .cases
             .iter()
@@ -783,6 +810,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::TupleType,
     ) -> Result<TypeTupleIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let types = ty
             .types
             .iter()
@@ -822,6 +850,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::ComponentValType,
     ) -> Result<TypeOptionIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let ty = self.valtype(types, ty)?;
         let (info, abi) = VariantInfo::new([None, Some(self.component_types.canonical_abi(&ty))]);
         Ok(self.add_option_type(TypeOption { ty, abi, info }))
@@ -833,6 +862,7 @@ impl ComponentTypesBuilder {
         ok: &Option<types::ComponentValType>,
         err: &Option<types::ComponentValType>,
     ) -> Result<TypeResultIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let ok = match ok {
             Some(ty) => Some(self.valtype(types, ty)?),
             None => None,
@@ -853,6 +883,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::ComponentValType,
     ) -> Result<TypeListIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
         let element = self.valtype(types, ty)?;
         Ok(self.add_list_type(TypeList { element }))
     }

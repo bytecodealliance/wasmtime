@@ -23,7 +23,8 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     let wast = Path::new(wast);
 
     let memory64 = feature_found(wast, "memory64");
-    let multi_memory = feature_found(wast, "multi-memory");
+    let multi_memory =
+        feature_found(wast, "multi-memory") || feature_found(wast, "component-model");
     let threads = feature_found(wast, "threads");
     let gc = feature_found(wast, "gc");
     let function_references = gc || feature_found(wast, "function-references");

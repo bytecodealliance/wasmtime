@@ -319,11 +319,11 @@ impl<'a> Instantiator<'a> {
         // below, but the funcrefs can all be configured here.
         for (idx, sig) in env_component.trampolines.iter() {
             let ptrs = self.component.trampoline_ptrs(idx);
-            let signature = self
-                .component
-                .signatures()
-                .shared_type(*sig)
-                .expect("found unregistered signature");
+            let signature = match self.component.signatures().shared_type(*sig) {
+                Some(s) => s,
+                None => panic!("found unregistered signature: {sig:?}"),
+            };
+
             self.data.state.set_trampoline(
                 idx,
                 ptrs.wasm_call,
@@ -468,8 +468,8 @@ impl<'a> Instantiator<'a> {
             // made, so double-check this property of wasmtime in debug mode.
 
             if cfg!(debug_assertions) {
-                let (_, _, expected) = imports.next().unwrap();
-                self.assert_type_matches(store, module, arg, expected);
+                let (imp_module, imp_name, expected) = imports.next().unwrap();
+                self.assert_type_matches(store, module, arg, imp_module, imp_name, expected);
             }
 
             // The unsafety here should be ok since the `export` is loaded
@@ -490,6 +490,8 @@ impl<'a> Instantiator<'a> {
         store: &mut StoreOpaque,
         module: &Module,
         arg: &CoreDef,
+        imp_module: &str,
+        imp_name: &str,
         expected: EntityType,
     ) {
         let export = self.data.lookup_def(store, arg);
@@ -502,9 +504,18 @@ impl<'a> Instantiator<'a> {
             let expected = match expected.unwrap_func() {
                 EngineOrModuleTypeIndex::Engine(e) => Some(e),
                 EngineOrModuleTypeIndex::Module(m) => module.signatures().shared_type(m),
+                EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
             };
             let actual = unsafe { f.func_ref.as_ref().type_index };
-            assert_eq!(expected, Some(actual));
+            assert_eq!(
+                expected,
+                Some(actual),
+                "type mismatch for import {imp_module:?} {imp_name:?}!!!\n\n\
+                 expected {:#?}\n\n\
+                 found {:#?}",
+                expected.and_then(|e| store.engine().signatures().borrow(e)),
+                store.engine().signatures().borrow(actual)
+            );
             return;
         }
 
