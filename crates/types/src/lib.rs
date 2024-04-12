@@ -34,7 +34,7 @@ pub trait TypeTrace {
     /// indices.
     fn canonicalize<F>(&mut self, module_to_engine: &mut F)
     where
-        F: FnMut(ModuleInternedTypeIndex) -> u32,
+        F: FnMut(ModuleInternedTypeIndex) -> VMSharedTypeIndex,
     {
         self.trace_mut::<_, ()>(&mut |idx| match idx {
             EngineOrModuleTypeIndex::Engine(_) => Ok(()),
@@ -190,11 +190,11 @@ impl fmt::Display for WasmRefType {
 /// concern itself with recursion-group-local indices.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EngineOrModuleTypeIndex {
-    /// An index within a global namespace across all modules that can interact
-    /// with each other (in practice this is a `VMSharedTypeIndex` at the per
-    /// `wasmtime::Engine` level).
-    Engine(u32),
-    /// An index within the current Wasm module.
+    /// An index within an engine, canonicalized among all modules that can
+    /// interact with each other.
+    Engine(VMSharedTypeIndex),
+    /// An index within the current Wasm module, canonicalized within just this
+    /// current module.
     Module(ModuleInternedTypeIndex),
 }
 
@@ -207,7 +207,7 @@ impl From<ModuleInternedTypeIndex> for EngineOrModuleTypeIndex {
 impl fmt::Display for EngineOrModuleTypeIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Engine(i) => write!(f, "(engine {i})"),
+            Self::Engine(i) => write!(f, "(engine {})", i.bits()),
             Self::Module(i) => write!(f, "(module {})", i.as_u32()),
         }
     }
@@ -220,7 +220,7 @@ impl EngineOrModuleTypeIndex {
     }
 
     /// Get the underlying engine-level type index, if any.
-    pub fn as_engine_type_index(self) -> Option<u32> {
+    pub fn as_engine_type_index(self) -> Option<VMSharedTypeIndex> {
         match self {
             Self::Engine(e) => Some(e),
             Self::Module(_) => None,
@@ -228,7 +228,7 @@ impl EngineOrModuleTypeIndex {
     }
 
     /// Get the underlying engine-level type index, or panic.
-    pub fn unwrap_engine_type_index(self) -> u32 {
+    pub fn unwrap_engine_type_index(self) -> VMSharedTypeIndex {
         self.as_engine_type_index()
             .expect("`unwrap_engine_type_index` on module type index")
     }
@@ -468,14 +468,54 @@ entity_impl!(MemoryIndex);
 pub struct TypeIndex(u32);
 entity_impl!(TypeIndex);
 
-/// Index type of a deduplicated type (imported or defined) inside a WebAssembly
-/// module.
+/// A canonicalized type index for a type within a single WebAssembly module.
 ///
-/// Note that this is deduplicated only at the level of a WebAssembly module,
-/// not at the level of a whole store or engine.
+/// Note that this is deduplicated only at the level of a single WebAssembly
+/// module, not at the level of a whole store or engine. This means that these
+/// indices are only unique within the context of a single Wasm module, and
+/// therefore are not suitable for runtime type checks (which, in general, may
+/// involve entities defined in different modules).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ModuleInternedTypeIndex(u32);
 entity_impl!(ModuleInternedTypeIndex);
+
+/// A canonicalized type index into an engine's shared type registry.
+///
+/// This is canonicalized/deduped at the level of a whole engine, across all the
+/// modules loaded into that engine, not just at the level of a single
+/// particular module. This means that `VMSharedTypeIndex` is usable for
+/// e.g. checking that function signatures match during an indirect call
+/// (potentially to a function defined in a different module) at runtime.
+#[repr(transparent)] // Used directly by JIT code.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct VMSharedTypeIndex(u32);
+entity_impl!(VMSharedTypeIndex);
+
+impl VMSharedTypeIndex {
+    /// Create a new `VMSharedTypeIndex`.
+    #[inline]
+    pub fn new(value: u32) -> Self {
+        assert_ne!(
+            value,
+            u32::MAX,
+            "u32::MAX is reserved for the default value"
+        );
+        Self(value)
+    }
+
+    /// Returns the underlying bits of the index.
+    #[inline]
+    pub fn bits(&self) -> u32 {
+        self.0
+    }
+}
+
+impl Default for VMSharedTypeIndex {
+    #[inline]
+    fn default() -> Self {
+        Self(u32::MAX)
+    }
+}
 
 /// Index type of a passive data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]

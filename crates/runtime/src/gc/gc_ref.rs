@@ -1,7 +1,7 @@
-use crate::{GcHeap, GcStore, VMSharedTypeIndex, I31};
+use crate::{GcHeap, GcStore, I31};
 use anyhow::{Context, Result};
 use std::num::NonZeroU32;
-use wasmtime_environ::VMGcKind;
+use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
 /// The common header for all objects allocated in a GC heap.
 ///

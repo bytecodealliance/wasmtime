@@ -2,9 +2,8 @@ use crate::{linker::DefinitionType, Engine, FuncType};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
-    WasmFuncType, WasmHeapType, WasmRefType, WasmValType,
+    VMSharedTypeIndex, WasmFuncType, WasmHeapType, WasmRefType, WasmValType,
 };
-use wasmtime_runtime::VMSharedTypeIndex;
 
 pub struct MatchCx<'a> {
     engine: &'a Engine,
@@ -60,10 +59,9 @@ impl MatchCx<'_> {
                 _ => bail!("expected memory, but found {}", actual.desc()),
             },
             EntityType::Function(expected) => match actual {
-                DefinitionType::Func(actual) => self.type_reference(
-                    VMSharedTypeIndex::new(expected.unwrap_engine_type_index()),
-                    *actual,
-                ),
+                DefinitionType::Func(actual) => {
+                    self.type_reference(expected.unwrap_engine_type_index(), *actual)
+                }
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
             EntityType::Tag(_) => unimplemented!(),

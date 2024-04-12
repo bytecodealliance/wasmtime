@@ -2,9 +2,8 @@ use anyhow::{bail, Result};
 use std::fmt::{self, Display};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
-    WasmFuncType, WasmHeapType, WasmRefType, WasmValType,
+    VMSharedTypeIndex, WasmFuncType, WasmHeapType, WasmRefType, WasmValType,
 };
-use wasmtime_runtime::VMSharedTypeIndex;
 
 use crate::{type_registry::RegisteredType, Engine};
 
@@ -656,7 +655,7 @@ impl HeapType {
             HeapType::I31 => WasmHeapType::I31,
             HeapType::None => WasmHeapType::None,
             HeapType::Concrete(f) => {
-                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(f.type_index().bits()))
+                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(f.type_index()))
             }
         }
     }
@@ -670,8 +669,7 @@ impl HeapType {
             WasmHeapType::I31 => HeapType::I31,
             WasmHeapType::None => HeapType::None,
             WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(idx)) => {
-                let idx = VMSharedTypeIndex::new(*idx);
-                HeapType::Concrete(FuncType::from_shared_type_index(engine, idx))
+                HeapType::Concrete(FuncType::from_shared_type_index(engine, *idx))
             }
             WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonical heap type")
@@ -766,7 +764,7 @@ impl ExternType {
         match ty {
             EntityType::Function(idx) => match idx {
                 EngineOrModuleTypeIndex::Engine(e) => {
-                    FuncType::from_shared_type_index(engine, VMSharedTypeIndex::new(*e)).into()
+                    FuncType::from_shared_type_index(engine, *e).into()
                 }
                 EngineOrModuleTypeIndex::Module(m) => {
                     FuncType::from_wasm_func_type(engine, types[*m].clone()).into()

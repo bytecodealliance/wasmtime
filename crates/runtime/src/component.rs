@@ -8,7 +8,7 @@
 
 use crate::{
     SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMNativeCallFunction, VMOpaqueContext, VMSharedTypeIndex, VMWasmCallFunction, ValRaw,
+    VMNativeCallFunction, VMOpaqueContext, VMWasmCallFunction, ValRaw,
 };
 use anyhow::Result;
 use memoffset::offset_of;
@@ -21,7 +21,7 @@ use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{HostPtr, PrimaryMap};
+use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 

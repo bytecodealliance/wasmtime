@@ -17,11 +17,11 @@ use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
-    ObjectKind, VMOffsets,
+    ObjectKind, VMOffsets, VMSharedTypeIndex,
 };
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
-    VMNativeCallFunction, VMSharedTypeIndex, VMWasmCallFunction,
+    VMNativeCallFunction, VMWasmCallFunction,
 };
 
 mod registry;
