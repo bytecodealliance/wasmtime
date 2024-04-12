@@ -501,7 +501,7 @@ impl HostOutgoingBody {
             let written = w.written();
             if written != w.expected {
                 let _ = sender.send(FinishMessage::Abort);
-                return Err(self.context.as_body_error(written));
+                return Err(self.context.as_body_size_error(written));
             }
         }
 
@@ -547,8 +547,8 @@ pub enum StreamContext {
 }
 
 impl StreamContext {
-    /// Construct an http request or response body size error.
-    pub fn as_body_error(&self, size: u64) -> types::ErrorCode {
+    /// Construct the correct [`types::ErrorCode`] body size error.
+    pub fn as_body_size_error(&self, size: u64) -> types::ErrorCode {
         match self {
             StreamContext::Request => types::ErrorCode::HttpRequestBodySize(Some(size)),
             StreamContext::Response => types::ErrorCode::HttpResponseBodySize(Some(size)),
@@ -596,7 +596,7 @@ impl HostOutputStream for BodyWriteStream {
                         let total = written.written();
                         return Err(StreamError::LastOperationFailed(anyhow!(self
                             .context
-                            .as_body_error(total))));
+                            .as_body_size_error(total))));
                     }
                 }
 
