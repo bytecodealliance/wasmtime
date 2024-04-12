@@ -342,7 +342,7 @@ impl HostIncomingRequest {
     }
 }
 
-/// The concrete type behind a `was:http/types/response-outparam` resource.
+/// The concrete type behind a `wasi:http/types/response-outparam` resource.
 pub struct HostResponseOutparam {
     pub result:
         tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>>,
