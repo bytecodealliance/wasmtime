@@ -85,9 +85,6 @@ pub fn dummy_value(val_ty: ValType) -> Result<Val> {
 
 /// Construct a sequence of dummy values for the given types.
 #[cfg(fuzzing)]
-pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Vec<Val> {
-    val_tys
-        .into_iter()
-        .filter_map(|ty| dummy_value(ty).ok())
-        .collect()
+pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Result<Vec<Val>> {
+    val_tys.into_iter().map(|ty| dummy_value(ty)).collect()
 }
