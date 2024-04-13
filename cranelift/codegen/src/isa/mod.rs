@@ -52,6 +52,7 @@ use crate::ir::{self, Function, Type};
 use crate::isa::unwind::{systemv::RegisterMappingError, UnwindInfoKind};
 use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder};
 use crate::settings;
+use crate::settings::Configurable;
 use crate::settings::SetResult;
 use crate::CodegenResult;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
@@ -172,6 +173,22 @@ impl<T> IsaBuilder<T> {
             setup,
             constructor,
         }
+    }
+
+    /// Creates a new [Builder] from a [TargetIsa], copying all flags in the
+    /// process.
+    pub fn from_target_isa(target_isa: &dyn TargetIsa) -> Builder {
+        // We should always be able to find the builder for the TargetISA, since presumably we
+        // also generated the previous TargetISA at some point
+        let triple = target_isa.triple().clone();
+        let mut builder = self::lookup(triple).expect("Could not find triple for target ISA");
+
+        // Copy ISA Flags
+        for flag in target_isa.isa_flags() {
+            builder.set(&flag.name, &flag.value_string()).unwrap();
+        }
+
+        builder
     }
 
     /// Gets the triple for the builder.
