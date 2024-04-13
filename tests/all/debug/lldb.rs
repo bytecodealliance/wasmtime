@@ -248,6 +248,16 @@ check: exited with status
     Ok(())
 }
 
+/* C program used for this test, dwarf_fission.c, compiled with `emcc dwarf_fission.c -o dwarf_fission.wasm -gsplit-dwarf -gdwarf-5 -gpubnames -sWASM_BIGINT`:
+#include <stdio.h>
+
+int main()
+{
+    int i = 1;
+    i++;
+    return i - 2;
+}
+ */
 #[test]
 #[ignore]
 #[cfg(all(
