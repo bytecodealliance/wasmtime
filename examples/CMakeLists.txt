@@ -43,7 +43,9 @@ endfunction()
 enable_testing()
 
 # Add all examples
+create_target(anyref anyref.c)
 create_target(async async.cpp)
+create_target(externref externref.c)
 create_target(fib-debug fib-debug/main.c)
 create_target(fuel fuel.c)
 create_target(gcd gcd.c)
@@ -58,11 +60,13 @@ create_target(threads threads.c)
 create_target(wasi wasi/main.c)
 
 # Add rust tests
+create_rust_test(anyref)
 create_rust_wasm(fib-debug wasm32-unknown-unknown)
 create_rust_wasm(tokio wasm32-wasi)
 create_rust_wasm(wasi wasm32-wasi)
 create_rust_wasm(component wasm32-unknown-unknown)
 create_rust_test(epochs)
+create_rust_test(externref)
 create_rust_test(fib-debug)
 create_rust_test(fuel)
 create_rust_test(gcd)
