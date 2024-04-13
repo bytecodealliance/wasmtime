@@ -371,24 +371,8 @@ impl TypeTrace for WasmFuncType {
 impl WasmFuncType {
     #[inline]
     pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
-        let non_i31_gc_ref_params_count = params
-            .iter()
-            .filter(|p| match **p {
-                WasmValType::Ref(rt) => {
-                    rt.heap_type != WasmHeapType::I31 && rt.heap_type != WasmHeapType::Func
-                }
-                _ => false,
-            })
-            .count();
-        let non_i31_gc_ref_returns_count = returns
-            .iter()
-            .filter(|r| match **r {
-                WasmValType::Ref(rt) => {
-                    rt.heap_type != WasmHeapType::I31 && rt.heap_type != WasmHeapType::Func
-                }
-                _ => false,
-            })
-            .count();
+        let non_i31_gc_ref_params_count = params.iter().filter(|p| p.is_gc_heap_type()).count();
+        let non_i31_gc_ref_returns_count = returns.iter().filter(|r| r.is_gc_heap_type()).count();
         WasmFuncType {
             params,
             non_i31_gc_ref_params_count,
