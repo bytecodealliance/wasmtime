@@ -1,59 +1,42 @@
-use crate::linker::DefinitionType;
-use crate::{type_registry::TypeCollection, Engine};
-use crate::{FuncType, Module};
+use crate::{linker::DefinitionType, Engine, FuncType};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleInternedTypeIndex, ModuleTypes, Table, WasmFuncType,
-    WasmHeapType, WasmRefType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
+    VMSharedTypeIndex, WasmFuncType, WasmHeapType, WasmRefType, WasmValType,
 };
-use wasmtime_runtime::VMSharedTypeIndex;
 
 pub struct MatchCx<'a> {
-    signatures: &'a TypeCollection,
-    types: &'a ModuleTypes,
     engine: &'a Engine,
 }
 
 impl MatchCx<'_> {
     /// Construct a new matching context for the given module.
-    pub fn new(module: &Module) -> MatchCx<'_> {
-        MatchCx {
-            signatures: module.signatures(),
-            types: module.types(),
-            engine: module.engine(),
-        }
+    pub fn new(engine: &Engine) -> MatchCx<'_> {
+        MatchCx { engine }
     }
 
-    fn type_reference(
-        &self,
-        expected: ModuleInternedTypeIndex,
-        actual: VMSharedTypeIndex,
-    ) -> Result<()> {
-        let matches = match self.signatures.shared_type(expected) {
-            // If our expected signature isn't registered, then there's no way
-            // that `actual` can match it.
-            None => false,
-            Some(expected) => {
-                // Avoid matching on structure for subtyping checks when we have
-                // precisely the same type.
-                expected == actual || {
-                    let expected = FuncType::from_shared_type_index(self.engine, expected);
-                    let actual = FuncType::from_shared_type_index(self.engine, actual);
-                    actual.matches(&expected)
-                }
-            }
+    fn type_reference(&self, expected: VMSharedTypeIndex, actual: VMSharedTypeIndex) -> Result<()> {
+        // Avoid matching on structure for subtyping checks when we have
+        // precisely the same type.
+        let matches = expected == actual || {
+            let expected = FuncType::from_shared_type_index(self.engine, expected);
+            let actual = FuncType::from_shared_type_index(self.engine, actual);
+            actual.matches(&expected)
         };
         if matches {
             return Ok(());
         }
         let msg = "function types incompatible";
-        let expected = &self.types[expected];
+        let expected = match self.engine.signatures().borrow(expected) {
+            Some(ty) => ty,
+            None => panic!("{expected:?} is not registered"),
+        };
         let actual = match self.engine.signatures().borrow(actual) {
             Some(ty) => ty,
             None => panic!("{actual:?} is not registered"),
         };
 
-        Err(func_ty_mismatch(msg, expected, &actual))
+        Err(func_ty_mismatch(msg, &expected, &actual))
     }
 
     /// Validates that the `expected` type matches the type of `actual`
@@ -76,7 +59,9 @@ impl MatchCx<'_> {
                 _ => bail!("expected memory, but found {}", actual.desc()),
             },
             EntityType::Function(expected) => match actual {
-                DefinitionType::Func(actual) => self.type_reference(*expected, *actual),
+                DefinitionType::Func(actual) => {
+                    self.type_reference(expected.unwrap_engine_type_index(), *actual)
+                }
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
             EntityType::Tag(_) => unimplemented!(),
@@ -106,13 +91,13 @@ pub fn entity_ty(
         },
         EntityType::Function(expected) => match actual {
             EntityType::Function(actual) => {
-                let expected = &expected_types[*expected];
-                let actual = &actual_types[*actual];
+                let expected = &expected_types[expected.unwrap_module_type_index()];
+                let actual = &actual_types[actual.unwrap_module_type_index()];
                 if expected == actual {
                     Ok(())
                 } else {
                     Err(func_ty_mismatch(
-                        "function types incompaible",
+                        "function types incompatible",
                         expected,
                         actual,
                     ))
@@ -210,10 +195,9 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
 fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Result<()> {
     use WasmHeapType as H;
     let result = match (actual, expected) {
-        (H::Concrete(actual), H::Concrete(expected)) => {
-            // TODO(dhil): we need either canonicalised types or a context here.
-            actual == expected
-        }
+        // TODO: Wasm GC introduces subtyping between function types, so it will
+        // no longer suffice to check whether canonicalized type IDs are equal.
+        (H::Concrete(actual), H::Concrete(expected)) => actual == expected,
 
         (H::NoFunc, H::NoFunc) => true,
         (_, H::NoFunc) => false,
@@ -226,15 +210,22 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
 
         (H::Extern, H::Extern) => true,
         (_, H::Extern) => false,
+
+        (H::Any | H::I31 | H::None, H::Any) => true,
+        (_, H::Any) => false,
+
+        (H::I31 | H::None, H::I31) => true,
+        (_, H::I31) => false,
+
+        (H::None, H::None) => true,
+        (_, H::None) => false,
     };
     if result {
         Ok(())
     } else {
         bail!(
-            "{} types incompatible: expected {0} of type `{}`, found {0} of type `{}`",
-            desc,
-            expected,
-            actual,
+            "{desc} types incompatible: expected {desc} of type `{expected}`, \
+             found {desc} of type `{actual}`",
         )
     }
 }
@@ -244,16 +235,36 @@ fn match_ref(expected: WasmRefType, actual: WasmRefType, desc: &str) -> Result<(
         return match_heap(expected.heap_type, actual.heap_type, desc);
     }
     bail!(
-        "{} types incompatible: expected {0} of type `{}`, found {0} of type `{}`",
-        desc,
-        expected,
-        actual,
+        "{desc} types incompatible: expected {desc} of type `{expected}`, \
+         found {desc} of type `{actual}`",
     )
 }
 
 // Checks whether actual is a subtype of expected, i.e. `actual <: expected`
 // (note the parameters are given the other way around in code).
 fn match_ty(expected: WasmValType, actual: WasmValType, desc: &str) -> Result<()> {
+    // Assert that both our types are engine-level canonicalized. We can't
+    // compare types otherwise.
+    if cfg!(debug_assertions) {
+        expected
+            .trace(&mut |idx| match idx {
+                EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+                EngineOrModuleTypeIndex::Module(mod_idx) => {
+                    Err(format!("found module-level index: {mod_idx:?}"))
+                }
+            })
+            .expect("expected type should be engine-level canonicalized");
+
+        actual
+            .trace(&mut |idx| match idx {
+                EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+                EngineOrModuleTypeIndex::Module(mod_idx) => {
+                    Err(format!("found module-level index: {mod_idx:?}"))
+                }
+            })
+            .expect("actual type should be engine-level canonicalized");
+    }
+
     match (actual, expected) {
         (WasmValType::Ref(actual), WasmValType::Ref(expected)) => match_ref(expected, actual, desc),
         (actual, expected) => equal_ty(expected, actual, desc),
@@ -261,14 +272,34 @@ fn match_ty(expected: WasmValType, actual: WasmValType, desc: &str) -> Result<()
 }
 
 fn equal_ty(expected: WasmValType, actual: WasmValType, desc: &str) -> Result<()> {
+    // Assert that both our types are engine-level canonicalized. We can't
+    // compare types otherwise.
+    if cfg!(debug_assertions) {
+        expected
+            .trace(&mut |idx| match idx {
+                EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+                EngineOrModuleTypeIndex::Module(mod_idx) => {
+                    Err(format!("found module-level index: {mod_idx:?}"))
+                }
+            })
+            .expect("expected type should be engine-level canonicalized");
+
+        actual
+            .trace(&mut |idx| match idx {
+                EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+                EngineOrModuleTypeIndex::Module(mod_idx) => {
+                    Err(format!("found module-level index: {mod_idx:?}"))
+                }
+            })
+            .expect("actual type should be engine-level canonicalized");
+    }
+
     if expected == actual {
         return Ok(());
     }
     bail!(
-        "{} types incompatible: expected {0} of type `{}`, found {0} of type `{}`",
-        desc,
-        expected,
-        actual,
+        "{desc} types incompatible: expected {desc} of type `{expected}`, \
+         found {desc} of type `{actual}`",
     )
 }
 
@@ -282,11 +313,11 @@ fn match_bool(
     if expected == actual {
         return Ok(());
     }
+    let expected = if expected { if_true } else { if_false };
+    let actual = if actual { if_true } else { if_false };
     bail!(
-        "{} types incompatible: expected {} {0}, found {} {0}",
-        desc,
-        if expected { if_true } else { if_false },
-        if actual { if_true } else { if_false },
+        "{desc} types incompatible: expected {expected} {desc}, \
+         found {actual} {desc}",
     )
 }
 

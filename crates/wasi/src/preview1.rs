@@ -83,6 +83,7 @@ use std::ops::{Deref, DerefMut};
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use system_interface::fs::FileIoExt;
 use wasmtime::component::Resource;
 use wiggle::tracing::instrument;
 use wiggle::{GuestError, GuestPtr, GuestStrCow, GuestType};
@@ -1550,37 +1551,58 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<types::Size, types::Error> {
         let t = self.transact()?;
         let desc = t.get_descriptor(fd)?;
-        let (buf, read) = match desc {
+        match desc {
             Descriptor::File(File {
                 fd,
-                blocking_mode,
                 position,
+                // NB: the nonblocking flag is intentionally ignored here and
+                // blocking reads/writes are always performed.
+                blocking_mode: _,
                 ..
             }) => {
                 let fd = fd.borrowed();
-                let blocking_mode = *blocking_mode;
                 let position = position.clone();
                 drop(t);
-                let Some(buf) = first_non_empty_iovec(iovs)? else {
+                let pos = position.load(Ordering::Relaxed);
+                let file = self.table().get(&fd)?.file()?;
+                let Some(iov) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
+                let bytes_read = match (file.as_blocking_file(), iov.as_slice_mut()?) {
+                    // Try to read directly into wasm memory where possible
+                    // when the current thread can block and additionally wasm
+                    // memory isn't shared.
+                    (Some(file), Some(mut buf)) => file
+                        .read_at(&mut buf, pos)
+                        .map_err(|e| StreamError::LastOperationFailed(e.into()))?,
+                    // ... otherwise fall back to performing the read on a
+                    // blocking thread and which copies the data back into wasm
+                    // memory.
+                    (_, buf) => {
+                        drop(buf);
+                        let mut buf = vec![0; iov.len() as usize];
+                        let buf = file
+                            .spawn_blocking(move |file| -> Result<_, types::Error> {
+                                let bytes_read = file
+                                    .read_at(&mut buf, pos)
+                                    .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
+                                buf.truncate(bytes_read);
+                                Ok(buf)
+                            })
+                            .await?;
+                        iov.get_range(0..u32::try_from(buf.len())?)
+                            .unwrap()
+                            .copy_from_slice(&buf)?;
+                        buf.len()
+                    }
+                };
 
-                let pos = position.load(Ordering::Relaxed);
-                let stream = self.read_via_stream(fd.borrowed(), pos).map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `read-via-stream`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
-                let read = blocking_mode
-                    .read(self, stream.borrowed(), buf.len().try_into()?)
-                    .await;
-                streams::HostInputStream::drop(self, stream).map_err(|e| types::Error::trap(e))?;
-                let read = read?;
-                let n = read.len().try_into()?;
-                let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
+                let pos = pos
+                    .checked_add(bytes_read.try_into()?)
+                    .ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
 
-                (buf, read)
+                Ok(bytes_read.try_into()?)
             }
             Descriptor::Stdin { stream, .. } => {
                 let stream = stream.borrowed();
@@ -1591,17 +1613,16 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let read = BlockingMode::Blocking
                     .read(self, stream, buf.len().try_into()?)
                     .await?;
-                (buf, read)
+                if read.len() > buf.len().try_into()? {
+                    return Err(types::Errno::Range.into());
+                }
+                let buf = buf.get_range(0..u32::try_from(read.len())?).unwrap();
+                buf.copy_from_slice(&read)?;
+                let n = read.len().try_into()?;
+                Ok(n)
             }
             _ => return Err(types::Errno::Badf.into()),
-        };
-        if read.len() > buf.len().try_into()? {
-            return Err(types::Errno::Range.into());
         }
-        let buf = buf.get_range(0..u32::try_from(read.len())?).unwrap();
-        buf.copy_from_slice(&read)?;
-        let n = read.len().try_into()?;
-        Ok(n)
     }
 
     /// Read from a file descriptor, without using and updating the file descriptor's offset.
@@ -1665,47 +1686,58 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         match desc {
             Descriptor::File(File {
                 fd,
-                blocking_mode,
                 append,
                 position,
+                // NB: files always use blocking writes regardless of what
+                // they're configured to use since OSes don't have nonblocking
+                // reads/writes anyway. This behavior originated in the first
+                // implementation of WASIp1 where flags were propagated to the
+                // OS and the OS ignored the nonblocking flag for files
+                // generally.
+                blocking_mode: _,
             }) => {
                 let fd = fd.borrowed();
-                let fd2 = fd.borrowed();
-                let blocking_mode = *blocking_mode;
                 let position = position.clone();
+                let pos = position.load(Ordering::Relaxed);
                 let append = *append;
                 drop(t);
+                let f = self.table().get(&fd)?.file()?;
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0);
                 };
-                let (stream, pos) = if append {
-                    let stream = self.append_via_stream(fd).map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `append-via-stream`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
-                    (stream, 0)
-                } else {
-                    let pos = position.load(Ordering::Relaxed);
-                    let stream = self.write_via_stream(fd, pos).map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `write-via-stream`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
-                    (stream, pos)
+
+                let write = move |f: &cap_std::fs::File, buf: &[u8]| {
+                    if append {
+                        f.append(&buf)
+                    } else {
+                        f.write_at(&buf, pos)
+                    }
                 };
-                let n = blocking_mode.write(self, stream.borrowed(), buf).await;
-                streams::HostOutputStream::drop(self, stream).map_err(|e| types::Error::trap(e))?;
-                let n = n?;
+
+                let nwritten = match f.as_blocking_file() {
+                    // If we can block then skip the copy out of wasm memory and
+                    // write directly to `f`.
+                    Some(f) => write(f, &buf.as_cow()?),
+                    // ... otherwise copy out of wasm memory and use
+                    // `spawn_blocking` to do this write in a thread that can
+                    // block.
+                    None => {
+                        let buf = buf.to_vec()?;
+                        f.spawn_blocking(move |f| write(f, &buf)).await
+                    }
+                };
+
+                let nwritten = nwritten.map_err(|e| StreamError::LastOperationFailed(e.into()))?;
                 if append {
-                    let len = self.stat(fd2).await?;
+                    let len = self.stat(fd).await?;
                     position.store(len.size, Ordering::Relaxed);
                 } else {
-                    let pos = pos.checked_add(n as u64).ok_or(types::Errno::Overflow)?;
+                    let pos = pos
+                        .checked_add(nwritten as u64)
+                        .ok_or(types::Errno::Overflow)?;
                     position.store(pos, Ordering::Relaxed);
                 }
-                let n = n.try_into()?;
-                Ok(n)
+                Ok(nwritten.try_into()?)
             }
             Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
                 let stream = stream.borrowed();

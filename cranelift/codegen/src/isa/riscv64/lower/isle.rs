@@ -113,7 +113,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            // TODO: this should be Opcode::ReturnCallIndirect, once riscv64 has
+            // been ported to the new tail call strategy.
+            Opcode::CallIndirect,
             caller_conv,
             self.backend.flags().clone(),
         );
@@ -175,7 +177,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
-                from: AMode::FPOffset(8, I64),
+                from: AMode::FPOffset(8),
             });
             tmp.to_reg()
         } else {
@@ -383,24 +385,24 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
-        AMode::RegOffset(base, offset, ty)
+    fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64) -> AMode {
+        AMode::RegOffset(base, offset)
     }
 
-    fn gen_sp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
-        AMode::SPOffset(offset, ty)
+    fn gen_sp_offset_amode(&mut self, offset: i64) -> AMode {
+        AMode::SPOffset(offset)
     }
 
-    fn gen_fp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
-        AMode::FPOffset(offset, ty)
+    fn gen_fp_offset_amode(&mut self, offset: i64) -> AMode {
+        AMode::FPOffset(offset)
     }
 
-    fn gen_stack_slot_amode(&mut self, ss: StackSlot, offset: i64, ty: Type) -> AMode {
+    fn gen_stack_slot_amode(&mut self, ss: StackSlot, offset: i64) -> AMode {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
         let stack_off = self.lower_ctx.abi().sized_stackslot_offsets()[ss] as i64;
         let sp_off: i64 = stack_off + offset;
-        AMode::NominalSPOffset(sp_off, ty)
+        AMode::NominalSPOffset(sp_off)
     }
 
     fn gen_const_amode(&mut self, c: VCodeConstant) -> AMode {

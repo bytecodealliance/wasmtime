@@ -385,7 +385,7 @@ impl<'a> AliasAnalysis<'a> {
             while let Some(inst) = pos.next_inst() {
                 if let Some(replaced_result) = self.process_inst(pos.func, &mut state, inst) {
                     let result = pos.func.dfg.inst_results(inst)[0];
-                    pos.func.dfg.detach_results(inst);
+                    pos.func.dfg.clear_results(inst);
                     pos.func.dfg.change_to_alias(result, replaced_result);
                     pos.remove_inst_and_step_back();
                 }

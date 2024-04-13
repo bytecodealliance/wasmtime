@@ -4,6 +4,7 @@ use crate::{
     EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables,
     TypeConvert, WasmHeapType, WasmValType,
 };
+use anyhow::anyhow;
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -527,19 +528,35 @@ impl<'a, 'data> Translator<'a, 'data> {
             // Note that this is just initial type translation of the core wasm
             // module and actual function compilation is deferred until this
             // entire process has completed.
-            Payload::ModuleSection { parser, range } => {
-                self.validator.module_section(&range)?;
+            Payload::ModuleSection {
+                parser,
+                unchecked_range,
+            } => {
+                self.validator.module_section(&unchecked_range)?;
                 let translation = ModuleEnvironment::new(
                     self.tunables,
                     self.validator,
                     self.types.module_types_builder(),
                 )
-                .translate(parser, &component[range.start..range.end])?;
+                .translate(
+                    parser,
+                    component
+                        .get(unchecked_range.start..unchecked_range.end)
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "section range {}..{} is out of bounds (bound = {})",
+                                unchecked_range.start,
+                                unchecked_range.end,
+                                component.len()
+                            )
+                            .context("wasm component contains an invalid module section")
+                        })?,
+                )?;
                 let static_idx = self.static_modules.push(translation);
                 self.result
                     .initializers
                     .push(LocalInitializer::ModuleStatic(static_idx));
-                return Ok(Action::Skip(range.end - range.start));
+                return Ok(Action::Skip(unchecked_range.end - unchecked_range.start));
             }
 
             // When a sub-component is found then the current translation state
@@ -550,8 +567,11 @@ impl<'a, 'data> Translator<'a, 'data> {
             // starts empty since it will only get populated if translation of
             // the nested component ends up aliasing some outer module or
             // component.
-            Payload::ComponentSection { parser, range } => {
-                self.validator.component_section(&range)?;
+            Payload::ComponentSection {
+                parser,
+                unchecked_range,
+            } => {
+                self.validator.component_section(&unchecked_range)?;
                 self.lexical_scopes.push(LexicalScope {
                     parser: mem::replace(&mut self.parser, parser),
                     translation: mem::take(&mut self.result),

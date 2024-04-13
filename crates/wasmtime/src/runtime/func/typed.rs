@@ -1,17 +1,17 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AsContext, AsContextMut, Engine, ExternRef, Func, FuncType, HeapType, ManuallyRooted, NoFunc,
-    RefType, RootSet, Rooted, StoreContextMut, ValRaw, ValType,
+    AsContext, AsContextMut, Engine, Func, FuncType, HeapType, NoFunc, RefType, StoreContextMut,
+    ValRaw, ValType,
 };
 use anyhow::{bail, Context, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
+use std::num::NonZeroUsize;
 use std::os::raw::c_void;
 use std::ptr::{self, NonNull};
-use wasmtime_runtime::{
-    VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedTypeIndex,
-};
+use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_runtime::{VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext};
 
 /// A statically typed WebAssembly function.
 ///
@@ -100,6 +100,9 @@ where
             !store.0.async_support(),
             "must use `call_async` with async stores"
         );
+        if Self::need_gc_before_call_raw(store.0, &params) {
+            store.0.gc();
+        }
         let func = self.func.vm_func_ref(store.0);
         unsafe { Self::call_raw(&mut store, &self.ty, func, params) }
     }
@@ -136,6 +139,9 @@ where
             store.0.async_support(),
             "must use `call` with non-async stores"
         );
+        if Self::need_gc_before_call_raw(store.0, &params) {
+            store.0.gc_async().await;
+        }
         store
             .on_fiber(|store| {
                 let func = self.func.vm_func_ref(store.0);
@@ -144,6 +150,31 @@ where
             .await?
     }
 
+    #[inline]
+    pub(crate) fn need_gc_before_call_raw(_store: &StoreOpaque, _params: &Params) -> bool {
+        #[cfg(feature = "gc")]
+        {
+            // See the comment in `Func::call_impl_check_args`.
+            let num_gc_refs = _params.non_i31_gc_refs_count();
+            if let Some(num_gc_refs) = NonZeroUsize::new(num_gc_refs) {
+                return _store
+                    .unwrap_gc_store()
+                    .gc_heap
+                    .need_gc_before_entering_wasm(num_gc_refs);
+            }
+        }
+
+        false
+    }
+
+    /// Do a raw call of a typed function.
+    ///
+    /// # Safety
+    ///
+    /// `func` must be of the given type.
+    ///
+    /// If `Self::need_gc_before_call_raw`, then the caller must have done a GC
+    /// just before calling this method.
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
         ty: &FuncType,
@@ -154,19 +185,6 @@ where
         // debug mode.
         if cfg!(debug_assertions) {
             Self::debug_typecheck(store.0, func.as_ref().type_index);
-        }
-
-        #[cfg(feature = "gc")]
-        {
-            // See the comment in `Func::call_impl`'s `write_params` function.
-            if params.externrefs_count()
-                > store
-                    .0
-                    .externref_activations_table()
-                    .bump_capacity_remaining()
-            {
-                store.gc();
-            }
         }
 
         // Validate that all runtime values flowing into this store indeed
@@ -314,7 +332,7 @@ pub unsafe trait WasmTy: Send {
 
     // Is this an externref?
     #[doc(hidden)]
-    fn is_externref(&self) -> bool;
+    fn is_non_i31_gc_ref(&self) -> bool;
 
     // Construct a `Self::Abi` from the given `ValRaw`.
     #[doc(hidden)]
@@ -377,7 +395,7 @@ macro_rules! integers {
                 unreachable!()
             }
             #[inline]
-            fn is_externref(&self) -> bool {
+            fn is_non_i31_gc_ref(&self) -> bool {
                 false
             }
             #[inline]
@@ -425,7 +443,7 @@ macro_rules! floats {
                 unreachable!()
             }
             #[inline]
-            fn is_externref(&self) -> bool {
+            fn is_non_i31_gc_ref(&self) -> bool {
                 false
             }
             #[inline]
@@ -454,230 +472,6 @@ floats! {
     f64/u64/get_f64 => F64
 }
 
-#[cfg(feature = "gc")]
-unsafe impl WasmTy for Rooted<ExternRef> {
-    type Abi = NonNull<u8>;
-
-    #[inline]
-    fn valtype() -> ValType {
-        ValType::Ref(RefType::new(false, HeapType::Extern))
-    }
-
-    #[inline]
-    fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
-        self.comes_from_same_store(store)
-    }
-
-    #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
-        unreachable!()
-    }
-
-    #[inline]
-    fn is_externref(&self) -> bool {
-        true
-    }
-
-    #[inline]
-    unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
-        let p = (*raw).get_externref().cast::<u8>();
-        debug_assert!(!p.is_null());
-        NonNull::new_unchecked(p)
-    }
-
-    #[inline]
-    unsafe fn abi_into_raw(abi: NonNull<u8>, raw: *mut ValRaw) {
-        *raw = ValRaw::externref(abi.cast::<c_void>().as_ptr());
-    }
-
-    #[inline]
-    fn into_abi(self, store: &mut AutoAssertNoGc<'_>) -> Result<Self::Abi> {
-        let inner = self.try_to_vm_extern_ref(store)?;
-        let abi = inner.as_raw();
-        unsafe {
-            store.insert_vmexternref_without_gc(inner);
-
-            debug_assert!(!abi.is_null());
-            Ok(NonNull::new_unchecked(abi))
-        }
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &mut AutoAssertNoGc<'_>) -> Self {
-        let inner = wasmtime_runtime::VMExternRef::clone_from_raw(abi.as_ptr()).unwrap();
-        ExternRef::from_vm_extern_ref(store, inner)
-    }
-}
-
-#[cfg(feature = "gc")]
-unsafe impl WasmTy for Option<Rooted<ExternRef>> {
-    type Abi = *mut u8;
-
-    #[inline]
-    fn valtype() -> ValType {
-        ValType::EXTERNREF
-    }
-
-    #[inline]
-    fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
-        self.map_or(true, |x| x.comes_from_same_store(store))
-    }
-
-    #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
-        unreachable!()
-    }
-
-    #[inline]
-    fn is_externref(&self) -> bool {
-        true
-    }
-
-    #[inline]
-    unsafe fn abi_from_raw(raw: *mut ValRaw) -> *mut u8 {
-        (*raw).get_externref() as *mut u8
-    }
-
-    #[inline]
-    unsafe fn abi_into_raw(abi: *mut u8, raw: *mut ValRaw) {
-        *raw = ValRaw::externref(abi.cast());
-    }
-
-    #[inline]
-    fn into_abi(self, store: &mut AutoAssertNoGc<'_>) -> Result<Self::Abi> {
-        Ok(if let Some(x) = self {
-            <Rooted<ExternRef> as WasmTy>::into_abi(x, store)?.as_ptr()
-        } else {
-            ptr::null_mut()
-        })
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &mut AutoAssertNoGc<'_>) -> Self {
-        let inner = wasmtime_runtime::VMExternRef::clone_from_raw(abi)?;
-        Some(ExternRef::from_vm_extern_ref(store, inner))
-    }
-}
-
-#[cfg(feature = "gc")]
-unsafe impl WasmTy for ManuallyRooted<ExternRef> {
-    type Abi = NonNull<u8>;
-
-    #[inline]
-    fn valtype() -> ValType {
-        ValType::Ref(RefType::new(false, HeapType::Extern))
-    }
-
-    #[inline]
-    fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
-        self.comes_from_same_store(store)
-    }
-
-    #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
-        unreachable!()
-    }
-
-    #[inline]
-    fn is_externref(&self) -> bool {
-        true
-    }
-
-    #[inline]
-    unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
-        let p = (*raw).get_externref().cast::<u8>();
-        debug_assert!(!p.is_null());
-        NonNull::new_unchecked(p)
-    }
-
-    #[inline]
-    unsafe fn abi_into_raw(abi: NonNull<u8>, raw: *mut ValRaw) {
-        *raw = ValRaw::externref(abi.cast::<c_void>().as_ptr());
-    }
-
-    #[inline]
-    fn into_abi(self, store: &mut AutoAssertNoGc<'_>) -> Result<Self::Abi> {
-        let inner = self.try_to_vm_extern_ref(store)?;
-        let abi = inner.as_raw();
-        unsafe {
-            store.insert_vmexternref_without_gc(inner);
-            self._unroot(&mut *store);
-
-            debug_assert!(!abi.is_null());
-            Ok(NonNull::new_unchecked(abi))
-        }
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &mut AutoAssertNoGc<'_>) -> Self {
-        let inner = wasmtime_runtime::VMExternRef::clone_from_raw(abi.as_ptr()).unwrap();
-        RootSet::with_lifo_scope(store, |store| {
-            let rooted = ExternRef::from_vm_extern_ref(store, inner);
-            rooted
-                ._to_manually_rooted(store)
-                .expect("rooted is in scope")
-        })
-    }
-}
-
-#[cfg(feature = "gc")]
-unsafe impl WasmTy for Option<ManuallyRooted<ExternRef>> {
-    type Abi = *mut u8;
-
-    #[inline]
-    fn valtype() -> ValType {
-        ValType::EXTERNREF
-    }
-
-    #[inline]
-    fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
-        self.as_ref()
-            .map_or(true, |x| x.comes_from_same_store(store))
-    }
-
-    #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
-        unreachable!()
-    }
-
-    #[inline]
-    fn is_externref(&self) -> bool {
-        true
-    }
-
-    #[inline]
-    unsafe fn abi_from_raw(raw: *mut ValRaw) -> *mut u8 {
-        (*raw).get_externref() as *mut u8
-    }
-
-    #[inline]
-    unsafe fn abi_into_raw(abi: *mut u8, raw: *mut ValRaw) {
-        *raw = ValRaw::externref(abi.cast());
-    }
-
-    #[inline]
-    fn into_abi(self, store: &mut AutoAssertNoGc<'_>) -> Result<Self::Abi> {
-        Ok(if let Some(x) = self {
-            <ManuallyRooted<ExternRef> as WasmTy>::into_abi(x, store)?.as_ptr()
-        } else {
-            ptr::null_mut()
-        })
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &mut AutoAssertNoGc<'_>) -> Self {
-        let inner = wasmtime_runtime::VMExternRef::clone_from_raw(abi)?;
-        RootSet::with_lifo_scope(store, |store| {
-            let rooted = ExternRef::from_vm_extern_ref(store, inner);
-            Some(
-                rooted
-                    ._to_manually_rooted(store)
-                    .expect("rooted is in scope"),
-            )
-        })
-    }
-}
-
 unsafe impl WasmTy for NoFunc {
     type Abi = NoFunc;
 
@@ -697,7 +491,7 @@ unsafe impl WasmTy for NoFunc {
     }
 
     #[inline]
-    fn is_externref(&self) -> bool {
+    fn is_non_i31_gc_ref(&self) -> bool {
         match self._inner {}
     }
 
@@ -751,7 +545,7 @@ unsafe impl WasmTy for Option<NoFunc> {
     }
 
     #[inline]
-    fn is_externref(&self) -> bool {
+    fn is_non_i31_gc_ref(&self) -> bool {
         false
     }
 
@@ -801,7 +595,7 @@ unsafe impl WasmTy for Func {
     }
 
     #[inline]
-    fn is_externref(&self) -> bool {
+    fn is_non_i31_gc_ref(&self) -> bool {
         false
     }
 
@@ -862,7 +656,7 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
-    fn is_externref(&self) -> bool {
+    fn is_non_i31_gc_ref(&self) -> bool {
         false
     }
 
@@ -908,7 +702,7 @@ pub unsafe trait WasmParams: Send {
     ) -> Result<()>;
 
     #[doc(hidden)]
-    fn externrefs_count(&self) -> usize;
+    fn non_i31_gc_refs_count(&self) -> usize;
 
     #[doc(hidden)]
     fn into_abi(self, store: &mut AutoAssertNoGc<'_>, func_ty: &FuncType) -> Result<Self::Abi>;
@@ -939,8 +733,8 @@ where
     }
 
     #[inline]
-    fn externrefs_count(&self) -> usize {
-        T::is_externref(self) as usize
+    fn non_i31_gc_refs_count(&self) -> usize {
+        T::is_non_i31_gc_ref(self) as usize
     }
 
     #[inline]
@@ -991,10 +785,10 @@ macro_rules! impl_wasm_params {
             }
 
             #[inline]
-            fn externrefs_count(&self) -> usize {
+            fn non_i31_gc_refs_count(&self) -> usize {
                 let ($(ref $t,)*) = self;
                 0 $(
-                    + $t.is_externref() as usize
+                    + $t.is_non_i31_gc_ref() as usize
                 )*
             }
 

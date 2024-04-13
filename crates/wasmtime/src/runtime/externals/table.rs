@@ -1,7 +1,11 @@
+use std::ptr::NonNull;
+
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_table_export;
-use crate::{AsContext, AsContextMut, ExternRef, Func, Ref, TableType};
+use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
 use anyhow::{anyhow, bail, Context, Result};
+use runtime::{GcRootsList, SendSyncPtr};
+use wasmtime_environ::TypeTrace;
 use wasmtime_runtime::{self as runtime};
 
 /// A WebAssembly `table`, or an array of values.
@@ -106,8 +110,8 @@ impl Table {
         let init = init.into_table_element(store, ty.element())?;
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
-            (*table.wasmtime_table(store, std::iter::empty())).fill(0, init, ty.minimum())?;
-
+            let wasmtime_table = table.wasmtime_table(store, std::iter::empty());
+            (*wasmtime_table).fill(store.gc_store_mut()?, 0, init, ty.minimum())?;
             Ok(table)
         }
     }
@@ -119,7 +123,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn ty(&self, store: impl AsContext) -> TableType {
-        let store = store.as_context();
+        self._ty(store.as_context().0)
+    }
+
+    fn _ty(&self, store: &StoreOpaque) -> TableType {
         let ty = &store[self.0].table.table;
         TableType::from_wasmtime_table(store.engine(), ty)
     }
@@ -149,7 +156,7 @@ impl Table {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         let table = self.wasmtime_table(&mut store, std::iter::once(index));
         unsafe {
-            match (*table).get(index)? {
+            match (*table).get(store.unwrap_gc_store_mut(), index)? {
                 runtime::TableElement::FuncRef(f) => {
                     let func = Func::from_vm_func_ref(&mut store, f);
                     Some(func.into())
@@ -159,12 +166,33 @@ impl Table {
                     unreachable!("lazy init above should have converted UninitFunc")
                 }
 
-                runtime::TableElement::ExternRef(None) => Some(Ref::Extern(None)),
+                runtime::TableElement::GcRef(None) => {
+                    match self._ty(&store).element().heap_type().top(store.engine()) {
+                        HeapType::Any => Some(Ref::Any(None)),
+                        HeapType::Extern => Some(Ref::Extern(None)),
+                        HeapType::Func => {
+                            unreachable!("never have TableElement::GcRef for func tables")
+                        }
+                        ty => unreachable!("not a top type: {ty:?}"),
+                    }
+                }
 
                 #[cfg_attr(not(feature = "gc"), allow(unreachable_code, unused_variables))]
-                runtime::TableElement::ExternRef(Some(x)) => {
-                    let x = ExternRef::from_vm_extern_ref(&mut store, x);
-                    Some(x.into())
+                runtime::TableElement::GcRef(Some(x)) => {
+                    match self._ty(&store).element().heap_type().top(store.engine()) {
+                        HeapType::Any => {
+                            let x = AnyRef::from_cloned_gc_ref(&mut store, x);
+                            Some(x.into())
+                        }
+                        HeapType::Extern => {
+                            let x = ExternRef::from_cloned_gc_ref(&mut store, x);
+                            Some(x.into())
+                        }
+                        HeapType::Func => {
+                            unreachable!("never have TableElement::GcRef for func tables")
+                        }
+                        ty => unreachable!("not a top type: {ty:?}"),
+                    }
                 }
             }
         }
@@ -308,7 +336,14 @@ impl Table {
         let src_range = src_index..(src_index.checked_add(len).unwrap_or(u32::MAX));
         let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
-            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)?;
+            runtime::Table::copy(
+                store.gc_store_mut()?,
+                dst_table,
+                src_table,
+                dst_index,
+                src_index,
+                len,
+            )?;
         }
         Ok(())
     }
@@ -336,16 +371,44 @@ impl Table {
 
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
-            (*table).fill(dst, val, len)?;
+            (*table).fill(store.gc_store_mut()?, dst, val, len)?;
         }
 
         Ok(())
     }
 
+    pub(crate) fn trace_roots(&self, store: &mut StoreOpaque, gc_roots_list: &mut GcRootsList) {
+        if !self._ty(store).element().is_gc_heap_type() {
+            return;
+        }
+
+        let table = self.wasmtime_table(store, std::iter::empty());
+        for gc_ref in unsafe { (*table).gc_refs_mut() } {
+            if let Some(gc_ref) = gc_ref {
+                let gc_ref = NonNull::from(gc_ref);
+                let gc_ref = SendSyncPtr::new(gc_ref);
+                unsafe {
+                    gc_roots_list.add_root(gc_ref);
+                }
+            }
+        }
+    }
+
     pub(crate) unsafe fn from_wasmtime_table(
-        wasmtime_export: wasmtime_runtime::ExportTable,
+        mut wasmtime_export: wasmtime_runtime::ExportTable,
         store: &mut StoreOpaque,
     ) -> Table {
+        // Ensure that the table's type is engine-level canonicalized.
+        wasmtime_export
+            .table
+            .table
+            .wasm_ty
+            .canonicalize(&mut |module_index| {
+                wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
+                    instance.engine_type_index(module_index)
+                })
+            });
+
         Table(store.store_data_mut().insert(wasmtime_export))
     }
 
@@ -399,7 +462,7 @@ mod tests {
         // That said, they really point to the same table.
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_none());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_none());
-        let e = ExternRef::new(&mut store, 42);
+        let e = ExternRef::new(&mut store, 42)?;
         t1.set(&mut store, 0, e.into())?;
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_some());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_some());

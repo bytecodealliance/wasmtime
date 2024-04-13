@@ -2280,19 +2280,19 @@
     (writable_reg_to_reg sum)))
 
 ;; Generates a AMode that points to a register plus an offset.
-(decl gen_reg_offset_amode (Reg i64 Type) AMode)
+(decl gen_reg_offset_amode (Reg i64) AMode)
 (extern constructor gen_reg_offset_amode gen_reg_offset_amode)
 
 ;; Generates a AMode that an offset from the stack pointer.
-(decl gen_sp_offset_amode (i64 Type) AMode)
+(decl gen_sp_offset_amode (i64) AMode)
 (extern constructor gen_sp_offset_amode gen_sp_offset_amode)
 
 ;; Generates a AMode that an offset from the frame pointer.
-(decl gen_fp_offset_amode (i64 Type) AMode)
+(decl gen_fp_offset_amode (i64) AMode)
 (extern constructor gen_fp_offset_amode gen_fp_offset_amode)
 
 ;; Generates an AMode that points to a stack slot + offset.
-(decl gen_stack_slot_amode (StackSlot i64 Type) AMode)
+(decl gen_stack_slot_amode (StackSlot i64) AMode)
 (extern constructor gen_stack_slot_amode gen_stack_slot_amode)
 
 ;; Generates a AMode that points to a constant in the constant pool.
@@ -2302,41 +2302,41 @@
 
 
 ;; Tries to match a Value + Offset into an AMode
-(decl amode (Value i32 Type) AMode)
-(rule 0 (amode addr offset ty) (amode_inner addr offset ty))
+(decl amode (Value i32) AMode)
+(rule 0 (amode addr offset) (amode_inner addr offset))
 
 ;; If we are adding a constant offset with an iadd we can instead make that
 ;; offset part of the amode offset.
 ;;
 ;; We can't recurse into `amode` again since that could cause stack overflows.
 ;; See: https://github.com/bytecodealliance/wasmtime/pull/6968
-(rule 1 (amode (iadd addr (iconst (simm32 y))) offset ty)
+(rule 1 (amode (iadd addr (iconst (simm32 y))) offset)
   (if-let new_offset (s32_add_fallible y offset))
-  (amode_inner addr new_offset ty))
-(rule 2 (amode (iadd (iconst (simm32 x)) addr) offset ty)
+  (amode_inner addr new_offset))
+(rule 2 (amode (iadd (iconst (simm32 x)) addr) offset)
   (if-let new_offset (s32_add_fallible x offset))
-  (amode_inner addr new_offset ty))
+  (amode_inner addr new_offset))
 
 
 ;; These are the normal rules for generating an AMode.
-(decl amode_inner (Value i32 Type) AMode)
+(decl amode_inner (Value i32) AMode)
 
 ;; In the simplest case we just lower into a Reg+Offset
-(rule 0 (amode_inner r @ (value_type (ty_addr64 _)) offset ty)
-  (gen_reg_offset_amode r offset ty))
+(rule 0 (amode_inner r @ (value_type (ty_addr64 _)) offset)
+  (gen_reg_offset_amode r offset))
 
 ;; If the value is a `get_frame_pointer`, we can just use the offset from that.
-(rule 1 (amode_inner (get_frame_pointer) offset ty)
-  (gen_fp_offset_amode offset ty))
+(rule 1 (amode_inner (get_frame_pointer) offset)
+  (gen_fp_offset_amode offset))
 
 ;; If the value is a `get_stack_pointer`, we can just use the offset from that.
-(rule 1 (amode_inner (get_stack_pointer) offset ty)
-  (gen_sp_offset_amode offset ty))
+(rule 1 (amode_inner (get_stack_pointer) offset)
+  (gen_sp_offset_amode offset))
 
 ;; Similarly if the value is a `stack_addr` we can also turn that into an sp offset.
-(rule 1 (amode_inner (stack_addr ss ss_offset) amode_offset ty)
+(rule 1 (amode_inner (stack_addr ss ss_offset) amode_offset)
   (if-let combined_offset (s32_add_fallible ss_offset amode_offset))
-  (gen_stack_slot_amode ss combined_offset ty))
+  (gen_stack_slot_amode ss combined_offset))
 
 
 

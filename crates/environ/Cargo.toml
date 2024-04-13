@@ -15,15 +15,15 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-bincode = "1.2.1"
+bincode = { workspace = true }
 cpp_demangle = { version = "0.4.3", optional = true }
 cranelift-entity = { workspace = true }
 wasmtime-types = { workspace = true }
 wasmparser = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
-serde = "1.0.188"
-serde_derive = "1.0.188"
+serde = { workspace = true }
+serde_derive = { workspace = true }
 log = { workspace = true }
 gimli = { workspace = true }
 object = { workspace = true }

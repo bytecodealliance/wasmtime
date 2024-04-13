@@ -131,7 +131,7 @@ impl<'a> TrampolineCompiler<'a> {
 
         // More handling is necessary here if this changes
         assert!(matches!(
-            NativeRet::classify(pointer_type, wasm_func_ty),
+            NativeRet::classify(self.isa, wasm_func_ty),
             NativeRet::Bare
         ));
 

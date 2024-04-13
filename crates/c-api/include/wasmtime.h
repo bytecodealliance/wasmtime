@@ -205,11 +205,11 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "20.0.0"
+#define WASMTIME_VERSION "21.0.0"
 /**
  * \brief Wasmtime major version number.
  */
-#define WASMTIME_VERSION_MAJOR 20
+#define WASMTIME_VERSION_MAJOR 21
 /**
  * \brief Wasmtime minor version number.
  */
@@ -224,7 +224,7 @@ extern "C" {
 #endif
 
 /**
- * \brief Converts from the text format of WebAssembly to to the binary format.
+ * \brief Converts from the text format of WebAssembly to the binary format.
  *
  * \param wat this it the input pointer with the WebAssembly Text Format inside
  *        of it. This will be parsed and converted to the binary format.

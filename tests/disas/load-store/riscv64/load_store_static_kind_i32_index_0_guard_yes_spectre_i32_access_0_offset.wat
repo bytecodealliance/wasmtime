@@ -29,7 +29,7 @@
 ;;       addi    a5, a1, -1
 ;;       slli    a5, a5, 2
 ;;       sltu    a5, a5, a4
-;;       ld      a0, 0x50(a0)
+;;       ld      a0, 0x60(a0)
 ;;       add     a4, a0, a4
 ;;       neg     a1, a5
 ;;       not     a5, a1
@@ -51,7 +51,7 @@
 ;;       addi    a3, a1, -1
 ;;       slli    a5, a3, 2
 ;;       sltu    a3, a5, a4
-;;       ld      a5, 0x50(a0)
+;;       ld      a5, 0x60(a0)
 ;;       add     a4, a5, a4
 ;;       neg     a1, a3
 ;;       not     a3, a1

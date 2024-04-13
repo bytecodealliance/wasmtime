@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::path::Path;
 use tempfile::TempDir;
 use wasi_common::pipe::WritePipe;
-use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime::{Linker, Module, Store};
 
 pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
     let prefix = format!("wasi_common_{}_", exe_name);

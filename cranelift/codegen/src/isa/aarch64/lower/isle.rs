@@ -131,7 +131,9 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            // TODO: this should be Opcode::ReturnCallIndirect, once aarch64 has
+            // been ported to the new tail call strategy.
+            Opcode::CallIndirect,
             caller_conv,
             self.backend.flags().clone(),
         );

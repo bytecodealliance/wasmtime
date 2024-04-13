@@ -621,7 +621,7 @@ pub fn wast_test(fuzz_config: generators::Config, test: generators::WastTest) {
 pub fn table_ops(
     mut fuzz_config: generators::Config,
     ops: generators::table_ops::TableOps,
-) -> usize {
+) -> Result<usize> {
     let expected_drops = Arc::new(AtomicUsize::new(ops.num_params as usize));
     let num_dropped = Arc::new(AtomicUsize::new(0));
 
@@ -635,7 +635,7 @@ pub fn table_ops(
         log_wasm(&wasm);
         let module = match compile_module(store.engine(), &wasm, KnownValid::No, &fuzz_config) {
             Some(m) => m,
-            None => return 0,
+            None => return Ok(0),
         };
 
         let mut linker = Linker::new(store.engine());
@@ -644,9 +644,6 @@ pub fn table_ops(
         // test case.
         const MAX_GCS: usize = 5;
 
-        // NB: use `Func::new` so that this can still compile on the old x86
-        // backend, where `IntoFunc` isn't implemented for multi-value
-        // returns.
         let func_ty = FuncType::new(
             store.engine(),
             vec![],
@@ -662,11 +659,11 @@ pub fn table_ops(
                     caller.gc();
                 }
 
-                let a = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()));
-                let b = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()));
-                let c = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()));
+                let a = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let b = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let c = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
 
-                log::info!("table_ops: make_refs() -> ({:?}, {:?}, {:?})", a, b, c);
+                log::info!("table_ops: gc() -> ({:?}, {:?}, {:?})", a, b, c);
 
                 expected_drops.fetch_add(3, SeqCst);
                 results[0] = Some(a).into();
@@ -708,9 +705,6 @@ pub fn table_ops(
             })
             .unwrap();
 
-        // NB: use `Func::new` so that this can still compile on the old
-        // x86 backend, where `IntoFunc` isn't implemented for
-        // multi-value returns.
         let func_ty = FuncType::new(
             store.engine(),
             vec![],
@@ -721,13 +715,18 @@ pub fn table_ops(
             let expected_drops = expected_drops.clone();
             move |mut caller, _params, results| {
                 log::info!("table_ops: make_refs");
+
+                let a = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let b = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let c = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
                 expected_drops.fetch_add(3, SeqCst);
-                results[0] =
-                    Some(ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))).into();
-                results[1] =
-                    Some(ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))).into();
-                results[2] =
-                    Some(ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))).into();
+
+                log::info!("table_ops: make_refs() -> ({:?}, {:?}, {:?})", a, b, c);
+
+                results[0] = Some(a).into();
+                results[1] = Some(b).into();
+                results[2] = Some(c).into();
+
                 Ok(())
             }
         });
@@ -740,12 +739,12 @@ pub fn table_ops(
             let mut scope = RootScope::new(&mut store);
             let args: Vec<_> = (0..ops.num_params)
                 .map(|_| {
-                    Val::ExternRef(Some(ExternRef::new(
+                    Ok(Val::ExternRef(Some(ExternRef::new(
                         &mut scope,
                         CountDrops(num_dropped.clone()),
-                    )))
+                    )?)))
                 })
-                .collect();
+                .collect::<Result<_>>()?;
 
             // The generated function should always return a trap. The only two
             // valid traps are table-out-of-bounds which happens through `table.get`
@@ -768,7 +767,7 @@ pub fn table_ops(
     }
 
     assert_eq!(num_dropped.load(SeqCst), expected_drops.load(SeqCst));
-    return num_gcs.load(SeqCst);
+    return Ok(num_gcs.load(SeqCst));
 
     struct CountDrops(Arc<AtomicUsize>);
 
@@ -802,7 +801,7 @@ fn table_ops_eventually_gcs() {
         let u = Unstructured::new(&buf);
 
         if let Ok((config, test)) = Arbitrary::arbitrary_take_rest(u) {
-            if table_ops(config, test) > 0 {
+            if table_ops(config, test).unwrap() > 0 {
                 return;
             }
         }

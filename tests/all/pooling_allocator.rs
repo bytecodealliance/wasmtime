@@ -657,11 +657,11 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 "
     } else {
         "\
-instance allocation for this module requires 240 bytes which exceeds the \
+instance allocation for this module requires 256 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 66.67% - 160 bytes - instance state management
- * 6.67% - 16 bytes - jit store state
+ * 62.50% - 160 bytes - instance state management
+ * 6.25% - 16 bytes - jit store state
 "
     };
     match Module::new(&engine, "(module)") {
@@ -685,11 +685,11 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 "
     } else {
         "\
-instance allocation for this module requires 1840 bytes which exceeds the \
+instance allocation for this module requires 1856 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 8.70% - 160 bytes - instance state management
- * 86.96% - 1600 bytes - defined globals
+ * 8.62% - 160 bytes - instance state management
+ * 86.21% - 1600 bytes - defined globals
 "
     };
     match Module::new(&engine, &lots_of_globals) {

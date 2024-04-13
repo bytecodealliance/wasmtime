@@ -127,6 +127,8 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     ptr_type: WasmValType,
     /// Whether or not to enable Spectre mitigation on heap bounds checks.
     heap_access_spectre_mitigation: bool,
+    /// Whether or not to enable Spectre mitigation on table element accesses.
+    table_access_spectre_mitigation: bool,
     name_map: PrimaryMap<UserExternalNameRef, UserExternalName>,
     name_intern: HashMap<UserExternalName, UserExternalNameRef>,
 }
@@ -158,6 +160,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             resolved_globals: HashMap::new(),
             ptr_type,
             heap_access_spectre_mitigation: isa.flags().enable_heap_access_spectre_mitigation(),
+            table_access_spectre_mitigation: isa.flags().enable_table_access_spectre_mitigation(),
             builtins,
             name_map: Default::default(),
             name_intern: Default::default(),
@@ -312,6 +315,12 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     /// Returns true if Spectre mitigations are enabled for heap bounds check.
     pub fn heap_access_spectre_mitigation(&self) -> bool {
         self.heap_access_spectre_mitigation
+    }
+
+    /// Returns true if Spectre mitigations are enabled for table element
+    /// accesses.
+    pub fn table_access_spectre_mitigation(&self) -> bool {
+        self.table_access_spectre_mitigation
     }
 
     pub(crate) fn callee_sig<'b, A>(&'b mut self, callee: &'b Callee) -> &'b ABISig

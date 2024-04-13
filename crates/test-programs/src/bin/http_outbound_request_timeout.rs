@@ -22,11 +22,12 @@ fn main() {
     .context("/get");
 
     assert!(res.is_err());
+    let err = res.unwrap_err();
     assert!(
         matches!(
-            res.unwrap_err().downcast_ref::<ErrorCode>(),
-            Some(ErrorCode::ConnectionTimeout)
+            err.downcast_ref::<ErrorCode>(),
+            Some(ErrorCode::ConnectionTimeout | ErrorCode::ConnectionRefused)
         ),
-        "expected connection timeout"
+        "expected connection timeout: {err:?}"
     );
 }

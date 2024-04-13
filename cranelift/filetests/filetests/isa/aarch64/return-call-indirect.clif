@@ -1,0 +1,316 @@
+test compile precise-output
+
+target aarch64
+
+;;;; Test passing `i64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i64(i64) -> i64 tail {
+block0(v0: i64):
+    v1 = iadd_imm.i64 v0, 10
+    return v1
+}
+
+; VCode:
+; block0:
+;   add x2, x2, #10
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x2, x2, #0xa
+;   ret
+
+function %call_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name x3, TestCase(%callee_i64)+0
+;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x3, #0x10
+;   b #0x18
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ldp x16, x30, [x29]
+;   add sp, x29, #0x10
+;   mov x29, x16
+;   br x3
+
+;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %colocated_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = colocated %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name x3, TestCase(%callee_i64)+0
+;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x3, #0x10
+;   b #0x18
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ldp x16, x30, [x29]
+;   add sp, x29, #0x10
+;   mov x29, x16
+;   br x3
+
+;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_f64(f64) -> f64 tail {
+block0(v0: f64):
+    v1 = f64const 0x10.0
+    v2 = fadd.f64 v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fmov d3, #16
+;   fadd d0, d0, d3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov d3, #16.00000000
+;   fadd d0, d0, d3
+;   ret
+
+function %call_f64(f64) -> f64 tail {
+    sig0 = (f64) -> f64 tail
+    fn0 = %callee_f64(f64) -> f64 tail
+
+block0(v0: f64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name x2, TestCase(%callee_f64)+0
+;   return_call_ind x2 old_stack_arg_size:0 new_stack_arg_size:0 v0=v0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x2, #0x10
+;   b #0x18
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ldp x16, x30, [x29]
+;   add sp, x29, #0x10
+;   mov x29, x16
+;   br x2
+
+;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %callee_i8(i8) -> i8 tail {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   uxtb w2, w2
+;   subs wzr, w2, #0
+;   cset x2, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w2, w2
+;   cmp w2, #0
+;   cset x2, eq
+;   ret
+
+function %call_i8(i8) -> i8 tail {
+    sig0 = (i8) -> i8 tail
+    fn0 = %callee_i8(i8) -> i8 tail
+
+block0(v0: i8):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name x3, TestCase(%callee_i8)+0
+;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x3, #0x10
+;   b #0x18
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ldp x16, x30, [x29]
+;   add sp, x29, #0x10
+;   mov x29, x16
+;   br x3
+
+;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %tail_caller_stack_args() -> i64 tail {
+    fn0 = %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    v26 = func_addr.i64 fn0
+    return_call_indirect sig0, v26(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25)
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   movz x2, #10
+;   movz x3, #15
+;   movz x4, #20
+;   movz x5, #25
+;   movz x6, #30
+;   movz x7, #35
+;   movz x8, #40
+;   movz x9, #45
+;   movz x10, #50
+;   str x10, [sp]
+;   movz x11, #55
+;   movz x12, #60
+;   movz x13, #65
+;   movz x14, #70
+;   movz x15, #75
+;   movz x19, #80
+;   movz x20, #85
+;   movz x21, #90
+;   movz x22, #95
+;   movz x23, #100
+;   movz x24, #105
+;   movz x25, #110
+;   movz x26, #115
+;   movz x27, #120
+;   movz x28, #125
+;   movz x0, #130
+;   movz x1, #135
+;   load_ext_name x10, TestCase(%tail_callee_stack_args)+0
+;   sub sp, sp, #16
+;   virtual_sp_offset_adjust 16
+;   str x0, [sp]
+;   str x1, [sp, #8]
+;   mov x0, x10
+;   ldr x10, [sp, #16]
+;   return_call_ind x0 old_stack_arg_size:0 new_stack_arg_size:16 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7 x8=x8 x9=x9 x10=x10 x11=x11 x12=x12 x13=x13 x14=x14 x15=x15 x19=x19 x20=x20 x21=x21 x22=x22 x23=x23 x24=x24 x25=x25 x26=x26 x27=x27 x28=x28
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x2, #0xa
+;   mov x3, #0xf
+;   mov x4, #0x14
+;   mov x5, #0x19
+;   mov x6, #0x1e
+;   mov x7, #0x23
+;   mov x8, #0x28
+;   mov x9, #0x2d
+;   mov x10, #0x32
+;   stur x10, [sp]
+;   mov x11, #0x37
+;   mov x12, #0x3c
+;   mov x13, #0x41
+;   mov x14, #0x46
+;   mov x15, #0x4b
+;   mov x19, #0x50
+;   mov x20, #0x55
+;   mov x21, #0x5a
+;   mov x22, #0x5f
+;   mov x23, #0x64
+;   mov x24, #0x69
+;   mov x25, #0x6e
+;   mov x26, #0x73
+;   mov x27, #0x78
+;   mov x28, #0x7d
+;   mov x0, #0x82
+;   mov x1, #0x87
+;   ldr x10, #0x80
+;   b #0x88
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   sub sp, sp, #0x10
+;   stur x0, [sp]
+;   stur x1, [sp, #8]
+;   mov x0, x10
+;   ldur x10, [sp, #0x10]
+;   ldp x16, x30, [x29]
+;   ldur x17, [sp, #8]
+;   stur x17, [x29, #8]
+;   ldur x17, [sp]
+;   stur x17, [x29]
+;   mov sp, x29
+;   mov x29, x16
+;   br x0
+

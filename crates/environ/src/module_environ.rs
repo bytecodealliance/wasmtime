@@ -263,7 +263,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let sig_index = self.result.module.types[index].unwrap_function();
                             self.result.module.num_imported_funcs += 1;
                             self.result.debuginfo.wasm_file.imported_func_count += 1;
-                            EntityType::Function(sig_index)
+                            EntityType::Function(wasmtime_types::EngineOrModuleTypeIndex::Module(
+                                sig_index,
+                            ))
                         }
                         TypeRef::Memory(ty) => {
                             self.result.module.num_imported_memories += 1;
@@ -315,23 +317,36 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         },
                         wasmparser::TableInit::Expr(cexpr) => {
                             let mut init_expr_reader = cexpr.get_binary_reader();
-                            match init_expr_reader.read_operator()? {
-                                Operator::RefNull { hty: _ } => TableInitialValue::Null {
-                                    precomputed: Vec::new(),
-                                },
-                                Operator::RefFunc { function_index } => {
+                            match (
+                                init_expr_reader.read_operator()?,
+                                init_expr_reader.read_operator()?,
+                            ) {
+                                (Operator::RefNull { hty: _ }, Operator::End) => {
+                                    TableInitialValue::Null {
+                                        precomputed: Vec::new(),
+                                    }
+                                }
+                                (Operator::RefFunc { function_index }, Operator::End) => {
                                     let index = FuncIndex::from_u32(function_index);
                                     self.flag_func_escaped(index);
                                     TableInitialValue::FuncRef(index)
                                 }
-                                Operator::GlobalGet { global_index } => {
+                                (Operator::GlobalGet { global_index }, Operator::End) => {
                                     let index = GlobalIndex::from_u32(global_index);
                                     TableInitialValue::GlobalGet(index)
                                 }
-                                s => {
+                                (Operator::I32Const { value }, Operator::RefI31) => {
+                                    // TODO: this is a bit of a hack to get
+                                    // `(ref.i31 (i32.const ...))` to work. We
+                                    // should also support things like `(ref.i31
+                                    // (global.get ...))` but that requires
+                                    // deeper changes to `TableInitialValue` and
+                                    // is left for follow up work.
+                                    TableInitialValue::I31Ref(value)
+                                }
+                                (s, t) => {
                                     bail!(WasmError::Unsupported(format!(
-                                        "unsupported init expr in table section: {:?}",
-                                        s
+                                        "unsupported init expr in table section: {s:?}; {t:?}",
                                     )));
                                 }
                             }
@@ -375,27 +390,45 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 for entry in globals {
                     let wasmparser::Global { ty, init_expr } = entry?;
                     let mut init_expr_reader = init_expr.get_binary_reader();
-                    let initializer = match init_expr_reader.read_operator()? {
-                        Operator::I32Const { value } => GlobalInit::I32Const(value),
-                        Operator::I64Const { value } => GlobalInit::I64Const(value),
-                        Operator::F32Const { value } => GlobalInit::F32Const(value.bits()),
-                        Operator::F64Const { value } => GlobalInit::F64Const(value.bits()),
-                        Operator::V128Const { value } => {
+                    let initializer = match (
+                        init_expr_reader.read_operator()?,
+                        init_expr_reader.read_operator()?,
+                    ) {
+                        (Operator::I32Const { value }, Operator::End) => {
+                            GlobalInit::I32Const(value)
+                        }
+                        (Operator::I64Const { value }, Operator::End) => {
+                            GlobalInit::I64Const(value)
+                        }
+                        (Operator::F32Const { value }, Operator::End) => {
+                            GlobalInit::F32Const(value.bits())
+                        }
+                        (Operator::F64Const { value }, Operator::End) => {
+                            GlobalInit::F64Const(value.bits())
+                        }
+                        (Operator::V128Const { value }, Operator::End) => {
                             GlobalInit::V128Const(u128::from_le_bytes(*value.bytes()))
                         }
-                        Operator::RefNull { hty: _ } => GlobalInit::RefNullConst,
-                        Operator::RefFunc { function_index } => {
+                        (Operator::RefNull { hty: _ }, Operator::End) => GlobalInit::RefNullConst,
+                        (Operator::RefFunc { function_index }, Operator::End) => {
                             let index = FuncIndex::from_u32(function_index);
                             self.flag_func_escaped(index);
                             GlobalInit::RefFunc(index)
                         }
-                        Operator::GlobalGet { global_index } => {
+                        (Operator::GlobalGet { global_index }, Operator::End) => {
                             GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
                         }
-                        s => {
+                        (Operator::I32Const { value }, Operator::RefI31) => {
+                            // TODO: This is a bit of a hack to allow `(ref.i31
+                            // (i32.const ...))`. We should also support
+                            // `(ref.i31 (global.get ...))` but that requires
+                            // deeper changes to `GlobalInit` and is left for
+                            // follow up PRs.
+                            GlobalInit::RefI31Const(value)
+                        }
+                        (s, t) => {
                             bail!(WasmError::Unsupported(format!(
-                                "unsupported init expr in global section: {:?}",
-                                s
+                                "unsupported init expr in global section: {s:?}; {t:?}",
                             )));
                         }
                     };
@@ -787,7 +820,11 @@ and for re-adding support for interface types you can see this issue:
 
     fn push_type(&mut self, ty: EntityType) -> EntityIndex {
         match ty {
-            EntityType::Function(ty) => EntityIndex::Function(self.result.module.push_function(ty)),
+            EntityType::Function(ty) => EntityIndex::Function(
+                self.result
+                    .module
+                    .push_function(ty.unwrap_module_type_index()),
+            ),
             EntityType::Table(ty) => {
                 let plan = TablePlan::for_table(ty, &self.tunables);
                 EntityIndex::Table(self.result.module.table_plans.push(plan))
@@ -1211,7 +1248,10 @@ impl ModuleTranslation<'_> {
                 // initializer won't trap so we could continue processing
                 // segments, but that's left as a future optimization if
                 // necessary.
-                WasmHeapType::Extern => break,
+                WasmHeapType::Extern
+                | WasmHeapType::Any
+                | WasmHeapType::I31
+                | WasmHeapType::None => break,
             }
 
             // Function indices can be optimized here, but fully general
@@ -1231,7 +1271,9 @@ impl ModuleTranslation<'_> {
                     // Technically this won't trap so it's possible to process
                     // further initializers, but that's left as a future
                     // optimization.
-                    TableInitialValue::FuncRef(_) | TableInitialValue::GlobalGet(_) => break,
+                    TableInitialValue::FuncRef(_)
+                    | TableInitialValue::GlobalGet(_)
+                    | TableInitialValue::I31Ref(_) => break,
                 };
 
             // At this point we're committing to pre-initializing the table

@@ -10,7 +10,7 @@ use indexmap::IndexMap;
 use std::marker;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::*;
+use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 use wasmtime_runtime::VMFuncRef;
@@ -164,6 +164,7 @@ impl InstanceData {
             CoreDef::InstanceFlags(idx) => {
                 wasmtime_runtime::Export::Global(wasmtime_runtime::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
+                    vmctx: std::ptr::null_mut(),
                     global: Global {
                         wasm_ty: WasmValType::I32,
                         mutability: true,
@@ -498,15 +499,18 @@ impl<'a> Instantiator<'a> {
         // there's no guarantee that there exists a trampoline for `f` so this
         // can't fall through to the case below
         if let wasmtime_runtime::Export::Function(f) = &export {
-            let expected = expected.unwrap_func();
+            let expected = match expected.unwrap_func() {
+                EngineOrModuleTypeIndex::Engine(e) => Some(e),
+                EngineOrModuleTypeIndex::Module(m) => module.signatures().shared_type(m),
+            };
             let actual = unsafe { f.func_ref.as_ref().type_index };
-            assert_eq!(module.signatures().shared_type(expected), Some(actual));
+            assert_eq!(expected, Some(actual));
             return;
         }
 
         let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
         let ty = DefinitionType::from(store, &val);
-        crate::types::matching::MatchCx::new(module)
+        crate::types::matching::MatchCx::new(module.engine())
             .definition(&expected, &ty)
             .expect("unexpected typecheck failure");
     }

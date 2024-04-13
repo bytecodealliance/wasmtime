@@ -1,10 +1,13 @@
+//! Implementation of the `wasi:http/outgoing-handler` interface.
+
 use crate::{
     bindings::http::{
         outgoing_handler,
         types::{self, Scheme},
     },
-    http_request_error, internal_error,
-    types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequest},
+    error::internal_error,
+    http_request_error,
+    types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
     WasiHttpView,
 };
 use bytes::Bytes;
@@ -17,7 +20,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
         options: Option<Resource<types::RequestOptions>>,
-    ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, types::ErrorCode>> {
+    ) -> crate::HttpResult<Resource<HostFutureIncomingResponse>> {
         let opts = options.and_then(|opts| self.table().get(&opts).ok());
 
         let connect_timeout = opts
@@ -47,7 +50,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             types::Method::Patch => Method::PATCH,
             types::Method::Other(m) => match hyper::Method::from_bytes(m.as_bytes()) {
                 Ok(method) => method,
-                Err(_) => return Ok(Err(types::ErrorCode::HttpRequestMethodInvalid)),
+                Err(_) => return Err(types::ErrorCode::HttpRequestMethodInvalid.into()),
             },
         });
 
@@ -56,7 +59,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             Scheme::Https => (true, http::uri::Scheme::HTTPS, 443),
 
             // We can only support http/https
-            Scheme::Other(_) => return Ok(Err(types::ErrorCode::HttpProtocolError)),
+            Scheme::Other(_) => return Err(types::ErrorCode::HttpProtocolError.into()),
         };
 
         let authority = if let Some(authority) = req.authority {
@@ -94,23 +97,16 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .body(body)
             .map_err(|err| internal_error(err.to_string()))?;
 
-        let result = self.send_request(OutgoingRequest {
-            use_tls,
-            authority,
+        let future = self.send_request(
             request,
-            connect_timeout,
-            first_byte_timeout,
-            between_bytes_timeout,
-        });
-
-        // attempt to downcast the error to a ErrorCode
-        // so that the guest may handle it
-        match result {
-            Ok(response) => Ok(Ok(response)),
-            Err(err) => match err.downcast::<types::ErrorCode>() {
-                Ok(err) => Ok(Err(err)),
-                Err(err) => Err(err),
+            OutgoingRequestConfig {
+                use_tls,
+                connect_timeout,
+                first_byte_timeout,
+                between_bytes_timeout,
             },
-        }
+        )?;
+
+        Ok(self.table().push(future)?)
     }
 }

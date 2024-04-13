@@ -129,18 +129,17 @@ mod trampolines {
                     //
                     // Additionally assume that every function below returns a
                     // `Result` where errors turn into traps.
-                    let result = std::panic::catch_unwind(|| {
+                    let result = crate::traphandlers::catch_unwind_and_longjmp(|| {
                         shims!(@invoke $name() $($pname)*)
                     });
                     match result {
-                        Ok(Ok(ret)) => shims!(@convert_ret ret $($pname: $param)*),
-                        Ok(Err(err)) => crate::traphandlers::raise_trap(
+                        Ok(ret) => shims!(@convert_ret ret $($pname: $param)*),
+                        Err(err) => crate::traphandlers::raise_trap(
                             crate::traphandlers::TrapReason::User {
                                 error: err,
                                 needs_backtrace: true,
                             },
                         ),
-                        Err(panic) => crate::traphandlers::resume_panic(panic),
                     }
                 }
             )*

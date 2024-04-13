@@ -4,10 +4,9 @@
 
 #![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
 
-use crate::gc::VMExternRef;
 use crate::vmcontext::{VMFuncRef, VMTableDefinition};
-use crate::{SendSyncPtr, Store};
-use anyhow::{bail, format_err, Error, Result};
+use crate::{GcStore, SendSyncPtr, Store, VMGcRef};
+use anyhow::{bail, ensure, format_err, Error, Result};
 use sptr::Strict;
 use std::ops::Range;
 use std::ptr::{self, NonNull};
@@ -17,14 +16,14 @@ use wasmtime_environ::{
 
 /// An element going into or coming out of a table.
 ///
-/// Table elements are stored as pointers and are default-initialized with `ptr::null_mut`.
-#[derive(Clone)]
+/// Table elements are stored as pointers and are default-initialized with
+/// `ptr::null_mut`.
 pub enum TableElement {
     /// A `funcref`.
     FuncRef(*mut VMFuncRef),
 
-    /// An `exrernref`.
-    ExternRef(Option<VMExternRef>),
+    /// A GC reference.
+    GcRef(Option<VMGcRef>),
 
     /// An uninitialized funcref value. This should never be exposed
     /// beyond the `wasmtime` crate boundary; the upper-level code
@@ -36,23 +35,23 @@ pub enum TableElement {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TableElementType {
     Func,
-    Extern,
+    GcRef,
 }
 
 impl TableElementType {
     fn matches(&self, val: &TableElement) -> bool {
         match (val, self) {
             (TableElement::FuncRef(_), TableElementType::Func) => true,
-            (TableElement::ExternRef(_), TableElementType::Extern) => true,
+            (TableElement::GcRef(_), TableElementType::GcRef) => true,
             _ => false,
         }
     }
 }
 
-// The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this
-// just relies on thread-safety of `VMExternRef` itself.
-unsafe impl Send for TableElement where VMExternRef: Send {}
-unsafe impl Sync for TableElement where VMExternRef: Sync {}
+// The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this just relies
+// on thread-safety of `VMGcRef` itself.
+unsafe impl Send for TableElement where VMGcRef: Send {}
+unsafe impl Sync for TableElement where VMGcRef: Sync {}
 
 impl TableElement {
     /// Consumes a table element into a pointer/reference, as it
@@ -66,11 +65,11 @@ impl TableElement {
     /// # Safety
     ///
     /// The same warnings as for `into_table_values()` apply.
-    pub(crate) unsafe fn into_ref_asserting_initialized(self) -> *mut u8 {
+    pub(crate) unsafe fn into_func_ref_asserting_initialized(self) -> *mut VMFuncRef {
         match self {
-            Self::FuncRef(e) => e.cast(),
+            Self::FuncRef(e) => e,
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
-            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
+            Self::GcRef(_) => panic!("GC reference is not a function reference"),
         }
     }
 
@@ -90,15 +89,15 @@ impl From<*mut VMFuncRef> for TableElement {
     }
 }
 
-impl From<Option<VMExternRef>> for TableElement {
-    fn from(x: Option<VMExternRef>) -> TableElement {
-        TableElement::ExternRef(x)
+impl From<Option<VMGcRef>> for TableElement {
+    fn from(x: Option<VMGcRef>) -> TableElement {
+        TableElement::GcRef(x)
     }
 }
 
-impl From<VMExternRef> for TableElement {
-    fn from(x: VMExternRef) -> TableElement {
-        TableElement::ExternRef(Some(x))
+impl From<VMGcRef> for TableElement {
+    fn from(x: VMGcRef) -> TableElement {
+        TableElement::GcRef(Some(x))
     }
 }
 
@@ -129,40 +128,132 @@ impl TaggedFuncRef {
     }
 }
 
+pub type FuncTableElem = Option<SendSyncPtr<VMFuncRef>>;
+
+pub enum StaticTable {
+    Func(StaticFuncTable),
+    GcRef(StaticGcRefTable),
+}
+
+impl From<StaticFuncTable> for StaticTable {
+    fn from(value: StaticFuncTable) -> Self {
+        Self::Func(value)
+    }
+}
+
+impl From<StaticGcRefTable> for StaticTable {
+    fn from(value: StaticGcRefTable) -> Self {
+        Self::GcRef(value)
+    }
+}
+
+pub struct StaticFuncTable {
+    /// Where data for this table is stored. The length of this list is the
+    /// maximum size of the table.
+    data: SendSyncPtr<[FuncTableElem]>,
+    /// The current size of the table.
+    size: u32,
+}
+
+pub struct StaticGcRefTable {
+    /// Where data for this table is stored. The length of this list is the
+    /// maximum size of the table.
+    data: SendSyncPtr<[Option<VMGcRef>]>,
+    /// The current size of the table.
+    size: u32,
+}
+
+pub enum DynamicTable {
+    Func(DynamicFuncTable),
+    GcRef(DynamicGcRefTable),
+}
+
+impl From<DynamicFuncTable> for DynamicTable {
+    fn from(value: DynamicFuncTable) -> Self {
+        Self::Func(value)
+    }
+}
+
+impl From<DynamicGcRefTable> for DynamicTable {
+    fn from(value: DynamicGcRefTable) -> Self {
+        Self::GcRef(value)
+    }
+}
+
+pub struct DynamicFuncTable {
+    /// Dynamically managed storage space for this table. The length of this
+    /// vector is the current size of the table.
+    elements: Vec<FuncTableElem>,
+    /// Maximum size that `elements` can grow to.
+    maximum: Option<u32>,
+}
+
+pub struct DynamicGcRefTable {
+    /// Dynamically managed storage space for this table. The length of this
+    /// vector is the current size of the table.
+    elements: Vec<Option<VMGcRef>>,
+    /// Maximum size that `elements` can grow to.
+    maximum: Option<u32>,
+}
+
 /// Represents an instance's table.
 pub enum Table {
     /// A "static" table where storage space is managed externally, currently
     /// used with the pooling allocator.
-    Static {
-        /// Where data for this table is stored. The length of this list is the
-        /// maximum size of the table.
-        data: SendSyncPtr<[TableValue]>,
-        /// The current size of the table.
-        size: u32,
-        /// The type of this table.
-        ty: TableElementType,
-    },
+    Static(StaticTable),
     /// A "dynamic" table where table storage space is dynamically allocated via
     /// `malloc` (aka Rust's `Vec`).
-    Dynamic {
-        /// Dynamically managed storage space for this table. The length of this
-        /// vector is the current size of the table.
-        elements: Vec<TableValue>,
-        /// The type of this table.
-        ty: TableElementType,
-        /// Maximum size that `elements` can grow to.
-        maximum: Option<u32>,
-    },
+    Dynamic(DynamicTable),
 }
 
-pub type TableValue = Option<SendSyncPtr<u8>>;
+impl From<StaticTable> for Table {
+    fn from(value: StaticTable) -> Self {
+        Self::Static(value)
+    }
+}
+
+impl From<StaticFuncTable> for Table {
+    fn from(value: StaticFuncTable) -> Self {
+        let t: StaticTable = value.into();
+        t.into()
+    }
+}
+
+impl From<StaticGcRefTable> for Table {
+    fn from(value: StaticGcRefTable) -> Self {
+        let t: StaticTable = value.into();
+        t.into()
+    }
+}
+
+impl From<DynamicTable> for Table {
+    fn from(value: DynamicTable) -> Self {
+        Self::Dynamic(value)
+    }
+}
+
+impl From<DynamicFuncTable> for Table {
+    fn from(value: DynamicFuncTable) -> Self {
+        let t: DynamicTable = value.into();
+        t.into()
+    }
+}
+
+impl From<DynamicGcRefTable> for Table {
+    fn from(value: DynamicGcRefTable) -> Self {
+        let t: DynamicTable = value.into();
+        t.into()
+    }
+}
 
 fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
     match ty.heap_type {
         WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
             TableElementType::Func
         }
-        WasmHeapType::Extern => TableElementType::Extern,
+        WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
+            TableElementType::GcRef
+        }
     }
 }
 
@@ -170,43 +261,76 @@ impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
     pub fn new_dynamic(plan: &TablePlan, store: &mut dyn Store) -> Result<Self> {
         Self::limit_new(plan, store)?;
-        let elements = vec![None; plan.table.minimum as usize];
-        let ty = wasm_to_table_type(plan.table.wasm_ty);
-        let maximum = plan.table.maximum;
-
-        Ok(Table::Dynamic {
-            elements,
-            ty,
-            maximum,
-        })
+        match wasm_to_table_type(plan.table.wasm_ty) {
+            TableElementType::Func => Ok(Self::from(DynamicFuncTable {
+                elements: vec![None; usize::try_from(plan.table.minimum).unwrap()],
+                maximum: plan.table.maximum,
+            })),
+            TableElementType::GcRef => Ok(Self::from(DynamicGcRefTable {
+                elements: (0..usize::try_from(plan.table.minimum).unwrap())
+                    .map(|_| None)
+                    .collect(),
+                maximum: plan.table.maximum,
+            })),
+        }
     }
 
     /// Create a new static (immovable) table instance for the specified table plan.
-    pub fn new_static(
+    pub unsafe fn new_static(
         plan: &TablePlan,
-        data: SendSyncPtr<[TableValue]>,
+        data: SendSyncPtr<[u8]>,
         store: &mut dyn Store,
     ) -> Result<Self> {
         Self::limit_new(plan, store)?;
-        let size = plan.table.minimum;
-        let ty = wasm_to_table_type(plan.table.wasm_ty);
-        if data.len() < (plan.table.minimum as usize) {
-            bail!(
-                "initial table size of {} exceeds the pooling allocator's \
-                 configured maximum table size of {} elements",
-                plan.table.minimum,
-                data.len(),
-            );
-        }
-        let data = match plan.table.maximum {
-            Some(max) if (max as usize) < data.len() => {
-                let ptr = data.as_non_null();
-                SendSyncPtr::new(NonNull::slice_from_raw_parts(ptr.cast(), max as usize))
-            }
-            _ => data,
-        };
 
-        Ok(Table::Static { data, size, ty })
+        let size = plan.table.minimum;
+        let max = plan
+            .table
+            .maximum
+            .map_or(usize::MAX, |x| usize::try_from(x).unwrap());
+
+        match wasm_to_table_type(plan.table.wasm_ty) {
+            TableElementType::Func => {
+                let len = {
+                    let data = data.as_non_null().as_ref();
+                    let (before, data, after) = data.align_to::<FuncTableElem>();
+                    assert!(before.is_empty());
+                    assert!(after.is_empty());
+                    data.len()
+                };
+                ensure!(
+                    usize::try_from(plan.table.minimum).unwrap() <= len,
+                    "initial table size of {} exceeds the pooling allocator's \
+                     configured maximum table size of {len} elements",
+                    plan.table.minimum,
+                );
+                let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
+                    data.as_non_null().cast::<FuncTableElem>(),
+                    std::cmp::min(len, max),
+                ));
+                Ok(Self::from(StaticFuncTable { data, size }))
+            }
+            TableElementType::GcRef => {
+                let len = {
+                    let data = data.as_non_null().as_ref();
+                    let (before, data, after) = data.align_to::<Option<VMGcRef>>();
+                    assert!(before.is_empty());
+                    assert!(after.is_empty());
+                    data.len()
+                };
+                ensure!(
+                    usize::try_from(plan.table.minimum).unwrap() <= len,
+                    "initial table size of {} exceeds the pooling allocator's \
+                     configured maximum table size of {len} elements",
+                    plan.table.minimum,
+                );
+                let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
+                    data.as_non_null().cast::<Option<VMGcRef>>(),
+                    std::cmp::min(len, max),
+                ));
+                Ok(Self::from(StaticGcRefTable { data, size }))
+            }
+        }
     }
 
     fn limit_new(plan: &TablePlan, store: &mut dyn Store) -> Result<()> {
@@ -222,26 +346,32 @@ impl Table {
     /// Returns the type of the elements in this table.
     pub fn element_type(&self) -> TableElementType {
         match self {
-            Table::Static { ty, .. } => *ty,
-            Table::Dynamic { ty, .. } => *ty,
+            Table::Static(StaticTable::Func(_)) | Table::Dynamic(DynamicTable::Func(_)) => {
+                TableElementType::Func
+            }
+            Table::Static(StaticTable::GcRef(_)) | Table::Dynamic(DynamicTable::GcRef(_)) => {
+                TableElementType::GcRef
+            }
         }
     }
 
     /// Returns whether or not the underlying storage of the table is "static".
     #[cfg(feature = "pooling-allocator")]
     pub(crate) fn is_static(&self) -> bool {
-        if let Table::Static { .. } = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Table::Static(_))
     }
 
     /// Returns the number of allocated elements.
     pub fn size(&self) -> u32 {
         match self {
-            Table::Static { size, .. } => *size,
-            Table::Dynamic { elements, .. } => elements.len().try_into().unwrap(),
+            Table::Static(StaticTable::Func(StaticFuncTable { size, .. })) => *size,
+            Table::Static(StaticTable::GcRef(StaticGcRefTable { size, .. })) => *size,
+            Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
+                elements.len().try_into().unwrap()
+            }
+            Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
+                elements.len().try_into().unwrap()
+            }
         }
     }
 
@@ -253,8 +383,14 @@ impl Table {
     /// when it is being constrained by an instance allocator.
     pub fn maximum(&self) -> Option<u32> {
         match self {
-            Table::Static { data, .. } => Some(data.len() as u32),
-            Table::Dynamic { maximum, .. } => maximum.clone(),
+            Table::Static(StaticTable::Func(StaticFuncTable { data, .. })) => {
+                Some(u32::try_from(data.len()).unwrap())
+            }
+            Table::Static(StaticTable::GcRef(StaticGcRefTable { data, .. })) => {
+                Some(u32::try_from(data.len()).unwrap())
+            }
+            Table::Dynamic(DynamicTable::Func(DynamicFuncTable { maximum, .. })) => *maximum,
+            Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { maximum, .. })) => *maximum,
         }
     }
 
@@ -285,15 +421,15 @@ impl Table {
     /// Fill `table[dst..]` with values from `items`
     ///
     /// Returns a trap error on out-of-bounds accesses.
-    pub fn init_extern(
+    pub fn init_gc_refs(
         &mut self,
         dst: u32,
-        items: impl ExactSizeIterator<Item = Option<VMExternRef>>,
+        items: impl ExactSizeIterator<Item = Option<VMGcRef>>,
     ) -> Result<(), Trap> {
         let dst = usize::try_from(dst).map_err(|_| Trap::TableOutOfBounds)?;
 
         let elements = self
-            .externrefs_mut()
+            .gc_refs_mut()
             .get_mut(dst..)
             .and_then(|s| s.get_mut(..items.len()))
             .ok_or(Trap::TableOutOfBounds)?;
@@ -311,7 +447,13 @@ impl Table {
     /// # Panics
     ///
     /// Panics if `val` does not have a type that matches this table.
-    pub fn fill(&mut self, dst: u32, val: TableElement, len: u32) -> Result<(), Trap> {
+    pub fn fill(
+        &mut self,
+        gc_store: &mut GcStore,
+        dst: u32,
+        val: TableElement,
+        len: u32,
+    ) -> Result<(), Trap> {
         let start = dst as usize;
         let end = start
             .checked_add(len as usize)
@@ -325,8 +467,17 @@ impl Table {
             TableElement::FuncRef(f) => {
                 self.funcrefs_mut()[start..end].fill(TaggedFuncRef::from(f));
             }
-            TableElement::ExternRef(e) => {
-                self.externrefs_mut()[start..end].fill(e);
+            TableElement::GcRef(r) => {
+                // Clone the init GC reference into each table slot.
+                for slot in &mut self.gc_refs_mut()[start..end] {
+                    gc_store.write_gc_ref(slot, r.as_ref());
+                }
+
+                // Drop the init GC reference, since we aren't holding onto this
+                // reference anymore, only the clones in the table.
+                if let Some(r) = r {
+                    gc_store.drop_gc_ref(r);
+                }
             }
             TableElement::UninitFunc => {
                 self.funcrefs_mut()[start..end].fill(TaggedFuncRef::UNINIT);
@@ -396,7 +547,7 @@ impl Table {
 
         // First resize the storage and then fill with the init value
         match self {
-            Table::Static { size, data, .. } => {
+            Table::Static(StaticTable::Func(StaticFuncTable { data, size })) => {
                 unsafe {
                     debug_assert!(data.as_ref()[*size as usize..new_size as usize]
                         .iter()
@@ -404,19 +555,31 @@ impl Table {
                 }
                 *size = new_size;
             }
-            Table::Dynamic { elements, .. } => {
-                // This call to `resize` could move the base address of
-                // `elements`. If this table's limits declare it to be
-                // fixed-size, then during AOT compilation we may have promised
-                // Cranelift that the table base address won't change, so it
-                // is allowed to optimize loading the base address. However, in
-                // that case the above checks that delta is non-zero and the new
-                // size doesn't exceed the maximum mean we can't get here.
-                elements.resize(new_size as usize, None);
+            Table::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => {
+                unsafe {
+                    debug_assert!(data.as_ref()[*size as usize..new_size as usize]
+                        .iter()
+                        .all(|x| x.is_none()));
+                }
+                *size = new_size;
+            }
+
+            // These calls to `resize` could move the base address of
+            // `elements`. If this table's limits declare it to be fixed-size,
+            // then during AOT compilation we may have promised Cranelift that
+            // the table base address won't change, so it is allowed to optimize
+            // loading the base address. However, in that case the above checks
+            // that delta is non-zero and the new size doesn't exceed the
+            // maximum mean we can't get here.
+            Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
+                elements.resize(usize::try_from(new_size).unwrap(), None);
+            }
+            Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
+                elements.resize_with(usize::try_from(new_size).unwrap(), || None);
             }
         }
 
-        self.fill(old_size, init_value, delta)
+        self.fill(store.gc_store(), old_size, init_value, delta)
             .expect("table should not be out of bounds");
 
         Ok(Some(old_size))
@@ -425,7 +588,7 @@ impl Table {
     /// Get reference to the specified element.
     ///
     /// Returns `None` if the index is out of bounds.
-    pub fn get(&self, index: u32) -> Option<TableElement> {
+    pub fn get(&self, gc_store: &mut GcStore, index: u32) -> Option<TableElement> {
         let index = usize::try_from(index).ok()?;
         match self.element_type() {
             TableElementType::Func => self
@@ -433,11 +596,10 @@ impl Table {
                 .get(index)
                 .copied()
                 .map(|e| e.into_table_element()),
-            TableElementType::Extern => self
-                .externrefs()
-                .get(index)
-                .cloned()
-                .map(TableElement::ExternRef),
+            TableElementType::GcRef => self.gc_refs().get(index).map(|r| {
+                let r = r.as_ref().map(|r| gc_store.clone_gc_ref(r));
+                TableElement::GcRef(r)
+            }),
         }
     }
 
@@ -460,8 +622,8 @@ impl Table {
             TableElement::UninitFunc => {
                 *self.funcrefs_mut().get_mut(index).ok_or(())? = TaggedFuncRef::UNINIT;
             }
-            TableElement::ExternRef(e) => {
-                *self.externrefs_mut().get_mut(index).ok_or(())? = e;
+            TableElement::GcRef(e) => {
+                *self.gc_refs_mut().get_mut(index).ok_or(())? = e;
             }
         }
         Ok(())
@@ -474,6 +636,7 @@ impl Table {
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables.
     pub unsafe fn copy(
+        gc_store: &mut GcStore,
         dst_table: *mut Self,
         src_table: *mut Self,
         dst_index: u32,
@@ -502,9 +665,9 @@ impl Table {
 
         // Check if the tables are the same as we cannot mutably borrow and also borrow the same `RefCell`
         if ptr::eq(dst_table, src_table) {
-            (*dst_table).copy_elements_within(dst_range, src_range);
+            (*dst_table).copy_elements_within(gc_store, dst_range, src_range);
         } else {
-            Self::copy_elements(&mut *dst_table, &*src_table, dst_range, src_range);
+            Self::copy_elements(gc_store, &mut *dst_table, &*src_table, dst_range, src_range);
         }
 
         Ok(())
@@ -513,14 +676,28 @@ impl Table {
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
     pub fn vmtable(&mut self) -> VMTableDefinition {
         match self {
-            Table::Static { data, size, .. } => VMTableDefinition {
+            Table::Static(StaticTable::Func(StaticFuncTable { data, size })) => VMTableDefinition {
                 base: data.as_ptr().cast(),
                 current_elements: *size,
             },
-            Table::Dynamic { elements, .. } => VMTableDefinition {
-                base: elements.as_mut_ptr().cast(),
-                current_elements: elements.len().try_into().unwrap(),
-            },
+            Table::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => {
+                VMTableDefinition {
+                    base: data.as_ptr().cast(),
+                    current_elements: *size,
+                }
+            }
+            Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
+                VMTableDefinition {
+                    base: elements.as_mut_ptr().cast(),
+                    current_elements: elements.len().try_into().unwrap(),
+                }
+            }
+            Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
+                VMTableDefinition {
+                    base: elements.as_mut_ptr().cast(),
+                    current_elements: elements.len().try_into().unwrap(),
+                }
+            }
         }
     }
 
@@ -528,61 +705,62 @@ impl Table {
         self.element_type().matches(val)
     }
 
-    fn raw_elements(&self) -> &[TableValue] {
-        match self {
-            Table::Static { data, size, .. } => unsafe { &data.as_ref()[..*size as usize] },
-            Table::Dynamic { elements, .. } => &elements[..],
-        }
-    }
-
-    fn raw_elements_mut(&mut self) -> &mut [TableValue] {
-        match self {
-            Table::Static { data, size, .. } => unsafe { &mut data.as_mut()[..*size as usize] },
-            Table::Dynamic { elements, .. } => &mut elements[..],
-        }
-    }
-
     fn funcrefs(&self) -> &[TaggedFuncRef] {
         assert_eq!(self.element_type(), TableElementType::Func);
-        unsafe {
-            let (a, b, c) = self.raw_elements().align_to();
-            assert!(a.is_empty());
-            assert!(c.is_empty());
-            b
+        match self {
+            Self::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => unsafe {
+                std::slice::from_raw_parts(elements.as_ptr().cast(), elements.len())
+            },
+            Self::Static(StaticTable::Func(StaticFuncTable { data, size })) => unsafe {
+                std::slice::from_raw_parts(data.as_ptr().cast(), usize::try_from(*size).unwrap())
+            },
+            _ => unreachable!(),
         }
     }
 
     fn funcrefs_mut(&mut self) -> &mut [TaggedFuncRef] {
         assert_eq!(self.element_type(), TableElementType::Func);
-        unsafe {
-            let (a, b, c) = self.raw_elements_mut().align_to_mut();
-            assert!(a.is_empty());
-            assert!(c.is_empty());
-            b
+        match self {
+            Self::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => unsafe {
+                std::slice::from_raw_parts_mut(elements.as_mut_ptr().cast(), elements.len())
+            },
+            Self::Static(StaticTable::Func(StaticFuncTable { data, size })) => unsafe {
+                std::slice::from_raw_parts_mut(
+                    data.as_ptr().cast(),
+                    usize::try_from(*size).unwrap(),
+                )
+            },
+            _ => unreachable!(),
         }
     }
 
-    fn externrefs(&self) -> &[Option<VMExternRef>] {
-        assert_eq!(self.element_type(), TableElementType::Extern);
-        unsafe {
-            let (a, b, c) = self.raw_elements().align_to();
-            assert!(a.is_empty());
-            assert!(c.is_empty());
-            b
+    fn gc_refs(&self) -> &[Option<VMGcRef>] {
+        assert_eq!(self.element_type(), TableElementType::GcRef);
+        match self {
+            Self::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => elements,
+            Self::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => unsafe {
+                &data.as_non_null().as_ref()[..usize::try_from(*size).unwrap()]
+            },
+            _ => unreachable!(),
         }
     }
 
-    fn externrefs_mut(&mut self) -> &mut [Option<VMExternRef>] {
-        assert_eq!(self.element_type(), TableElementType::Extern);
-        unsafe {
-            let (a, b, c) = self.raw_elements_mut().align_to_mut();
-            assert!(a.is_empty());
-            assert!(c.is_empty());
-            b
+    /// Get this table's GC references as a slice.
+    ///
+    /// Panics if this is not a table of GC references.
+    pub fn gc_refs_mut(&mut self) -> &mut [Option<VMGcRef>] {
+        assert_eq!(self.element_type(), TableElementType::GcRef);
+        match self {
+            Self::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => elements,
+            Self::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => unsafe {
+                &mut data.as_non_null().as_mut()[..usize::try_from(*size).unwrap()]
+            },
+            _ => unreachable!(),
         }
     }
 
     fn copy_elements(
+        gc_store: &mut GcStore,
         dst_table: &mut Self,
         src_table: &Self,
         dst_range: Range<usize>,
@@ -599,49 +777,63 @@ impl Table {
                 dst_table.funcrefs_mut()[dst_range]
                     .copy_from_slice(&src_table.funcrefs()[src_range]);
             }
-            TableElementType::Extern => {
-                dst_table.externrefs_mut()[dst_range]
-                    .clone_from_slice(&src_table.externrefs()[src_range]);
+            TableElementType::GcRef => {
+                assert_eq!(
+                    dst_range.end - dst_range.start,
+                    src_range.end - src_range.start
+                );
+                assert!(dst_range.end <= dst_table.gc_refs().len());
+                assert!(src_range.end <= src_table.gc_refs().len());
+                for (dst, src) in dst_range.zip(src_range) {
+                    gc_store.write_gc_ref(
+                        &mut dst_table.gc_refs_mut()[dst],
+                        src_table.gc_refs()[src].as_ref(),
+                    );
+                }
             }
         }
     }
 
-    fn copy_elements_within(&mut self, dst_range: Range<usize>, src_range: Range<usize>) {
+    fn copy_elements_within(
+        &mut self,
+        gc_store: &mut GcStore,
+        dst_range: Range<usize>,
+        src_range: Range<usize>,
+    ) {
+        assert_eq!(
+            dst_range.end - dst_range.start,
+            src_range.end - src_range.start
+        );
+
+        // This is a no-op.
+        if src_range.start == dst_range.start {
+            return;
+        }
+
         let ty = self.element_type();
         match ty {
             TableElementType::Func => {
                 // `funcref` are `Copy`, so just do a memmove
                 self.funcrefs_mut().copy_within(src_range, dst_range.start);
             }
-            TableElementType::Extern => {
+            TableElementType::GcRef => {
                 // We need to clone each `externref` while handling overlapping
                 // ranges
-                let elements = self.externrefs_mut();
-                if dst_range.start <= src_range.start {
-                    for (s, d) in src_range.zip(dst_range) {
-                        elements[d] = elements[s].clone();
+                let elements = self.gc_refs_mut();
+                if dst_range.start < src_range.start {
+                    for (d, s) in dst_range.zip(src_range) {
+                        let (ds, ss) = elements.split_at_mut(s);
+                        let dst = &mut ds[d];
+                        let src = ss[0].as_ref();
+                        gc_store.write_gc_ref(dst, src);
                     }
                 } else {
                     for (s, d) in src_range.rev().zip(dst_range.rev()) {
-                        elements[d] = elements[s].clone();
+                        let (ss, ds) = elements.split_at_mut(d);
+                        let dst = &mut ds[0];
+                        let src = ss[s].as_ref();
+                        gc_store.write_gc_ref(dst, src);
                     }
-                }
-            }
-        }
-    }
-}
-
-impl Drop for Table {
-    fn drop(&mut self) {
-        match self.element_type() {
-            // `funcref` tables don't need drops.
-            TableElementType::Func => {}
-
-            // `externref` tables are null'd out to ensure that no strong
-            // references are preserved.
-            TableElementType::Extern => {
-                for e in self.externrefs_mut() {
-                    let _ = e.take();
                 }
             }
         }
@@ -651,10 +843,9 @@ impl Drop for Table {
 // The default table representation is an empty funcref table that cannot grow.
 impl Default for Table {
     fn default() -> Self {
-        Table::Static {
+        Self::from(StaticFuncTable {
             data: SendSyncPtr::new(NonNull::from(&mut [])),
             size: 0,
-            ty: TableElementType::Func,
-        }
+        })
     }
 }

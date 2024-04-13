@@ -10,7 +10,7 @@ use std::mem;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TypeTrace,
 };
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
@@ -257,6 +257,9 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
         store.bump_resource_counts(module)?;
+
+        // Allocate the GC heap, if necessary.
+        let _ = store.gc_store_mut()?;
 
         let compiled_module = module.compiled_module();
 
@@ -972,8 +975,12 @@ fn typecheck<I>(
     if expected != imports.len() {
         bail!("expected {} imports, found {}", expected, imports.len());
     }
-    let cx = matching::MatchCx::new(module);
-    for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {
+    let cx = matching::MatchCx::new(module.engine());
+    for ((name, field, mut expected_ty), actual) in env_module.imports().zip(imports) {
+        expected_ty.canonicalize(&mut |module_index| {
+            module.signatures().shared_type(module_index).unwrap()
+        });
+
         check(&cx, &expected_ty, actual)
             .with_context(|| format!("incompatible import type for `{name}::{field}`"))?;
     }

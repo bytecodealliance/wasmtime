@@ -38,6 +38,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/function-references", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/gc", strategy)?;
             // The testsuite of Winch is a subset of the official
             // WebAssembly test suite, until parity is reached. This
             // check is in place to prevent Cranelift from duplicating
@@ -59,6 +60,7 @@ fn main() -> anyhow::Result<()> {
                     "tests/spec_testsuite/proposals/function-references",
                     strategy,
                 )?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/gc", strategy)?;
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/multi-memory",
@@ -255,21 +257,53 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         return true;
     }
 
-    if testsuite == "function_references" {
-        // The following tests fail due to function references not yet
-        // being exposed in the public API.
-        if testname == "ref_null" || testname == "local_init" {
-            return true;
-        }
-        // This test fails due to incomplete support for the various
-        // table/elem syntactic sugar in wasm-tools/wast.
-        if testname == "br_table" {
-            return true;
-        }
-        // This test fails due to the current implementation of type
-        // canonicalisation being broken as a result of
-        // #[derive(hash)] on WasmHeapType.
-        if testname == "type_equivalence" {
+    if testsuite == "gc" {
+        if [
+            "array_copy",
+            "array_fill",
+            "array_init_data",
+            "array_init_elem",
+            "array",
+            "binary_gc",
+            "binary",
+            "br_on_cast_fail",
+            "br_on_cast",
+            "br_on_non_null",
+            "br_on_null",
+            "br_table",
+            "call_ref",
+            "data",
+            "elem",
+            "extern",
+            "func",
+            "global",
+            "if",
+            "linking",
+            "local_get",
+            "local_init",
+            "ref_as_non_null",
+            "ref_cast",
+            "ref_eq",
+            "ref_is_null",
+            "ref_null",
+            "ref_test",
+            "ref",
+            "return_call_indirect",
+            "return_call_ref",
+            "return_call",
+            "select",
+            "struct",
+            "table_sub",
+            "table",
+            "type_canon",
+            "type_equivalence",
+            "type_rec",
+            "type_subtyping",
+            "unreached_invalid",
+            "unreached_valid",
+        ]
+        .contains(&testname)
+        {
             return true;
         }
     }

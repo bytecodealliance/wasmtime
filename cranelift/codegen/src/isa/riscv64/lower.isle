@@ -1979,41 +1979,41 @@
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))
-  (gen_load (amode addr offset $I8) (LoadOP.Lbu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lbu) flags))
 
 ;;;;;  Rules for `sload8`;;;;;;;;;
 (rule (lower (sload8 flags addr offset))
-  (gen_load (amode addr offset $I8) (LoadOP.Lb) flags))
+  (gen_load (amode addr offset) (LoadOP.Lb) flags))
 
 ;;;;;  Rules for `uload16`;;;;;;;;;
 (rule (lower (uload16 flags addr offset))
-  (gen_load (amode addr offset $I16) (LoadOP.Lhu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lhu) flags))
 
 ;;;;;  Rules for `iload16`;;;;;;;;;
 (rule (lower (sload16 flags addr offset))
-  (gen_load (amode addr offset $I16) (LoadOP.Lh) flags))
+  (gen_load (amode addr offset) (LoadOP.Lh) flags))
 
 ;;;;;  Rules for `uload32`;;;;;;;;;
 (rule (lower (uload32 flags addr offset))
-  (gen_load (amode addr offset $I32) (LoadOP.Lwu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lwu) flags))
 
 ;;;;;  Rules for `sload32`;;;;;;;;;
 (rule (lower (sload32 flags addr offset))
-  (gen_load (amode addr offset $I32) (LoadOP.Lw) flags))
+  (gen_load (amode addr offset) (LoadOP.Lw) flags))
 
 ;;;;;  Rules for `load`;;;;;;;;;
 (rule (lower (has_type ty (load flags addr offset)))
-  (gen_load (amode addr offset ty) (load_op ty) flags))
+  (gen_load (amode addr offset) (load_op ty) flags))
 
 (rule 1 (lower (has_type $I128 (load flags addr offset)))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((lo XReg (gen_load (amode addr offset $I64) (LoadOP.Ld) flags))
-        (hi XReg (gen_load (amode addr offset_plus_8 $I64) (LoadOP.Ld) flags)))
+  (let ((lo XReg (gen_load (amode addr offset) (LoadOP.Ld) flags))
+        (hi XReg (gen_load (amode addr offset_plus_8) (LoadOP.Ld) flags)))
     (value_regs lo hi)))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (load flags addr offset)))
   (let ((eew VecElementWidth (element_width_from_type ty))
-        (amode AMode (amode addr offset ty)))
+        (amode AMode (amode addr offset)))
     (vec_load eew (VecAMode.UnitStride amode) flags (unmasked) ty)))
 
 ;;;;;  Rules for Load + Extend Combos ;;;;;;;;;
@@ -2039,52 +2039,52 @@
 
 ;;;;;  Rules for `uload8x8`;;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (uload8x8 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `uload16x4`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (uload16x4 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `uload32x2`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (uload32x2 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload8x8`;;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (sload8x8 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload16x4`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (sload16x4 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload32x2`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (sload32x2 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule (lower (istore8 flags src addr offset))
-  (gen_store (amode addr offset $I8) (StoreOP.Sb) flags src))
+  (gen_store (amode addr offset) (StoreOP.Sb) flags src))
 
 ;;;;;  Rules for `istore16`;;;;;;;;;
 (rule (lower (istore16 flags src addr offset))
-  (gen_store (amode addr offset $I16) (StoreOP.Sh) flags src))
+  (gen_store (amode addr offset) (StoreOP.Sh) flags src))
 
 ;;;;;  Rules for `istore32`;;;;;;;;;
 (rule (lower (istore32 flags src addr offset))
-  (gen_store (amode addr offset $I32) (StoreOP.Sw) flags src))
+  (gen_store (amode addr offset) (StoreOP.Sw) flags src))
 
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule (lower (store flags src @ (value_type ty) addr offset))
-  (gen_store (amode addr offset ty) (store_op ty) flags src))
+  (gen_store (amode addr offset) (store_op ty) flags src))
 
 (rule 1 (lower (store flags src @ (value_type $I128) addr offset))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((_ InstOutput (gen_store (amode addr offset $I64) (StoreOP.Sd) flags (value_regs_get src 0))))
-    (gen_store (amode addr offset_plus_8 $I64) (StoreOP.Sd) flags (value_regs_get src 1))))
+  (let ((_ InstOutput (gen_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
+    (gen_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
 
 (rule 2 (lower (store flags src @ (value_type (ty_vec_fits_in_register ty)) addr offset))
   (let ((eew VecElementWidth (element_width_from_type ty))
-        (amode AMode (amode addr offset ty)))
+        (amode AMode (amode addr offset)))
     (vec_store eew (VecAMode.UnitStride amode) src flags (unmasked) ty)))
 
 

@@ -9,13 +9,14 @@ use anyhow::{bail, Context as _, Error, Result};
 use std::ffi::c_void;
 use std::future::Future;
 use std::mem;
-use std::panic::{self, AssertUnwindSafe};
+use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
+use wasmtime_environ::VMSharedTypeIndex;
 use wasmtime_runtime::{
     ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
-    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedTypeIndex,
+    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext,
 };
 
 /// A reference to the abstract `nofunc` heap value.
@@ -454,7 +455,7 @@ impl Func {
         let ty_clone = ty.clone();
         unsafe {
             Func::new_unchecked(store, ty, move |caller, values| {
-                Func::invoke(caller, &ty_clone, values, &func)
+                Func::invoke_host_func_for_wasm(caller, &ty_clone, values, &func)
             })
         }
     }
@@ -637,6 +638,10 @@ impl Func {
     /// | `NoFunc`                          | `(ref nofunc)`                        |
     /// | `Option<ExternRef>`               | `externref` aka `(ref null extern)`   |
     /// | `ExternRef`                       | `(ref extern)`                        |
+    /// | `Option<AnyRef>`                  | `anyref` aka `(ref null any)`         |
+    /// | `AnyRef`                          | `(ref any)`                           |
+    /// | `Option<I31>`                     | `i31ref` aka `(ref null i31)`         |
+    /// | `I31`                             | `(ref i31)`                           |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
@@ -972,7 +977,12 @@ impl Func {
             !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config",
         );
-        self.call_impl(&mut store.as_context_mut(), params, results)
+        let mut store = store.as_context_mut();
+        let need_gc = self.call_impl_check_args(&mut store, params, results)?;
+        if need_gc {
+            store.0.gc();
+        }
+        unsafe { self.call_impl_do_call(&mut store, params, results) }
     }
 
     /// Invokes this function in an "unchecked" fashion, reading parameters and
@@ -1118,23 +1128,32 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config",
         );
+        let need_gc = self.call_impl_check_args(&mut store, params, results)?;
+        if need_gc {
+            store.0.gc_async().await;
+        }
         let result = store
-            .on_fiber(|store| self.call_impl(store, params, results))
+            .on_fiber(|store| unsafe { self.call_impl_do_call(store, params, results) })
             .await??;
         Ok(result)
     }
 
-    fn call_impl<T>(
+    /// Perform dynamic checks that the arguments given to us match
+    /// the signature of this function and are appropriate to pass to this
+    /// function.
+    ///
+    /// This involves checking to make sure we have the right number and types
+    /// of arguments as well as making sure everything is from the same `Store`.
+    ///
+    /// This must be called just before `call_impl_do_call`.
+    ///
+    /// Returns whether we need to GC before calling `call_impl_do_call`.
+    fn call_impl_check_args<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<()> {
-        // We need to perform a dynamic check that the arguments given to us
-        // match the signature of this function and are appropriate to pass to
-        // this function. This involves checking to make sure we have the right
-        // number and types of arguments as well as making sure everything is
-        // from the same `Store`.
+    ) -> Result<bool> {
         let (ty, opaque) = self.ty_ref(store.0);
         if ty.params().len() != params.len() {
             bail!(
@@ -1158,31 +1177,46 @@ impl Func {
             }
         }
 
-        let values_vec_size = params.len().max(ty.results().len());
-
         #[cfg(feature = "gc")]
         {
-            // Whenever we pass `externref`s from host code to Wasm code, they
-            // go into the `VMExternRefActivationsTable`. But the table might be
-            // at capacity already, so check for that. If it is at capacity
-            // (unlikely) then do a GC to free up space. This is necessary
-            // because otherwise we would either keep filling up the bump chunk
-            // and making it larger and larger or we would always take the slow
-            // path when inserting references into the table.
-            if ty.as_wasm_func_type().externref_params_count()
-                > store
-                    .0
-                    .externref_activations_table()
-                    .bump_capacity_remaining()
-            {
-                store.gc();
+            // Check whether we need to GC before calling into Wasm.
+            //
+            // For example, with the DRC collector, whenever we pass GC refs
+            // from host code to Wasm code, they go into the
+            // `VMGcRefActivationsTable`. But the table might be at capacity
+            // already. If it is at capacity (unlikely) then we need to do a GC
+            // to free up space.
+            let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_params_count();
+            if let Some(num_gc_refs) = NonZeroUsize::new(num_gc_refs) {
+                return Ok(opaque
+                    .gc_store()?
+                    .gc_heap
+                    .need_gc_before_entering_wasm(num_gc_refs));
             }
         }
 
+        Ok(false)
+    }
+
+    /// Do the actual call into Wasm.
+    ///
+    /// # Safety
+    ///
+    /// You must have type checked the arguments by calling
+    /// `call_impl_check_args` immediately before calling this function. It is
+    /// only safe to call this function if that one did not return an error.
+    unsafe fn call_impl_do_call<T>(
+        &self,
+        store: &mut StoreContextMut<'_, T>,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
         // Store the argument values into `values_vec`.
+        let (ty, _) = self.ty_ref(store.0);
+        let values_vec_size = params.len().max(ty.results().len());
         let mut values_vec = store.0.take_wasm_val_raw_storage();
         debug_assert!(values_vec.is_empty());
-        values_vec.resize_with(values_vec_size, || ValRaw::i32(0));
+        values_vec.resize_with(values_vec_size, || ValRaw::v128(0));
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
             unsafe {
                 *slot = arg.to_raw(&mut *store)?;
@@ -1285,7 +1319,7 @@ impl Func {
         store.store_data().contains(self.0)
     }
 
-    fn invoke<T>(
+    fn invoke_host_func_for_wasm<T>(
         mut caller: Caller<'_, T>,
         ty: &FuncType,
         values_vec: &mut [ValRaw],
@@ -1314,15 +1348,19 @@ impl Func {
 
         #[cfg(feature = "gc")]
         {
-            // See the comment in `Func::call_impl`'s `write_params` function.
-            if ty.as_wasm_func_type().externref_returns_count()
-                > caller
-                    .store
+            // See the comment in `Func::call_impl_check_args`.
+            let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_returns_count();
+            if let Some(num_gc_refs) = NonZeroUsize::new(num_gc_refs) {
+                if caller
+                    .as_context()
                     .0
-                    .externref_activations_table()
-                    .bump_capacity_remaining()
-            {
-                caller.store.gc();
+                    .gc_store()?
+                    .gc_heap
+                    .need_gc_before_entering_wasm(num_gc_refs)
+                {
+                    assert!(!caller.as_context().0.async_support());
+                    caller.as_context_mut().gc();
+                }
             }
         }
 
@@ -1383,6 +1421,10 @@ impl Func {
     /// | `f64`                                 | `f64`                                 |
     /// | `externref` aka `(ref null extern)`   | `Option<ExternRef>`                   |
     /// | `(ref extern)`                        | `ExternRef`                           |
+    /// | `anyref` aka `(ref null any)`         | `Option<AnyRef>`                      |
+    /// | `(ref any)`                           | `AnyRef`                              |
+    /// | `i31ref` aka `(ref null i31)`         | `Option<I31>`                         |
+    /// | `(ref i31)`                           | `I31`                                 |
     /// | `funcref` aka `(ref null func)`       | `Option<Func>`                        |
     /// | `(ref func)`                          | `Func`                                |
     /// | `(ref null <func type index>)`        | `Option<Func>`                        |
@@ -1985,7 +2027,7 @@ impl<T> Caller<'_, T> {
             // Safe to recreate a mutable borrow of the store because `ret`
             // cannot be borrowing from the store.
             let store = StoreContextMut::<T>::from_raw(instance.store());
-            store.0.gc_roots_mut().exit_lifo_scope(gc_lifo_scope);
+            store.0.exit_gc_lifo_scope(gc_lifo_scope);
 
             ret
         })
@@ -2052,13 +2094,25 @@ impl<T> Caller<'_, T> {
         self.store.engine()
     }
 
-    /// Perform garbage collection of `ExternRef`s.
+    /// Perform garbage collection.
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
     #[cfg(feature = "gc")]
     #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn gc(&mut self) {
         self.store.gc()
+    }
+
+    /// Perform garbage collection asynchronously.
+    ///
+    /// Same as [`Store::gc_async`](crate::Store::gc_async).
+    #[cfg(all(feature = "async", feature = "gc"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
+    pub async fn gc_async(&mut self)
+    where
+        T: Send,
+    {
+        self.store.gc_async().await;
     }
 
     /// Returns the remaining fuel in the store.
@@ -2156,20 +2210,13 @@ macro_rules! impl_into_func {
                     $( $args: WasmTy, )*
                     R: WasmRet,
                 {
-                    enum CallResult<U> {
-                        Ok(U),
-                        Trap(anyhow::Error),
-                        Panic(Box<dyn std::any::Any + Send>),
-                    }
-
-                    // Note that this `result` is intentionally scoped into a
-                    // separate block. Handling traps and panics will involve
+                    // Note that this function is intentionally scoped into a
+                    // separate closure. Handling traps and panics will involve
                     // longjmp-ing from this function which means we won't run
                     // destructors. As a result anything requiring a destructor
-                    // should be part of this block, and the long-jmp-ing
-                    // happens after the block in handling `CallResult`.
-                    let caller_vmctx = VMContext::from_opaque(caller_vmctx);
-                    let result = Caller::with(caller_vmctx, |mut caller| {
+                    // should be part of this closure, and the long-jmp-ing
+                    // happens after the closure in handling the result.
+                    let run = move |mut caller: Caller<'_, T>| {
                         let vmctx = VMNativeCallHostFuncContext::from_opaque(vmctx);
                         let state = (*vmctx).host_state();
 
@@ -2180,59 +2227,45 @@ macro_rules! impl_into_func {
                         let state = &*(state as *const _ as *const HostFuncState<F>);
                         let func = &state.func;
 
-                        let ret = {
-                            panic::catch_unwind(AssertUnwindSafe(|| {
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
-                                    return R::fallible_from_error(trap);
-                                }
+                        let ret = 'ret: {
+                            if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
+                                break 'ret R::fallible_from_error(trap);
+                            }
 
-                                let mut store = AutoAssertNoGc::new(caller.store.0);
-                                $(let $args = $args::from_abi($args, &mut store);)*
-                                let _ = &mut store;
-                                drop(store);
+                            let mut store = AutoAssertNoGc::new(caller.store.0);
+                            $(let $args = $args::from_abi($args, &mut store);)*
+                            let _ = &mut store;
+                            drop(store);
 
-                                let r = func(
-                                    caller.sub_caller(),
-                                    $( $args, )*
-                                );
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
-                                    return R::fallible_from_error(trap);
-                                }
-                                r.into_fallible()
-                            }))
+                            let r = func(
+                                caller.sub_caller(),
+                                $( $args, )*
+                            );
+                            if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
+                                break 'ret R::fallible_from_error(trap);
+                            }
+                            r.into_fallible()
                         };
 
-                        // Note that we need to be careful when dealing with traps
-                        // here. Traps are implemented with longjmp/setjmp meaning
-                        // that it's not unwinding and consequently no Rust
-                        // destructors are run. We need to be careful to ensure that
-                        // nothing on the stack needs a destructor when we exit
-                        // abnormally from this `match`, e.g. on `Err`, on
-                        // cross-store-issues, or if `Ok(Err)` is raised.
-                        match ret {
-                            Err(panic) => CallResult::Panic(panic),
-                            Ok(ret) => {
-                                // Because the wrapped function is not `unsafe`, we
-                                // can't assume it returned a value that is
-                                // compatible with this store.
-                                if !ret.compatible_with_store(caller.store.0) {
-                                    CallResult::Trap(anyhow::anyhow!("host function attempted to return cross-`Store` value to Wasm"))
-                                } else {
-                                    let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
-                                    match ret.into_abi_for_ret(&mut store, retptr) {
-                                        Ok(val) => CallResult::Ok(val),
-                                        Err(trap) => CallResult::Trap(trap.into()),
-                                    }
-                                }
-
-                            }
+                        if !ret.compatible_with_store(caller.store.0) {
+                            bail!("host function attempted to return cross-`Store` value to Wasm")
+                        } else {
+                            let mut store = AutoAssertNoGc::new(&mut **caller.store.0);
+                            let ret = ret.into_abi_for_ret(&mut store, retptr)?;
+                            Ok(ret)
                         }
+                    };
+
+                    // With nothing else on the stack move `run` into this
+                    // closure and then run it as part of `Caller::with`.
+                    let result = wasmtime_runtime::catch_unwind_and_longjmp(move || {
+                        let caller_vmctx = VMContext::from_opaque(caller_vmctx);
+                        Caller::with(caller_vmctx, run)
                     });
 
                     match result {
-                        CallResult::Ok(val) => val,
-                        CallResult::Trap(err) => crate::trap::raise(err),
-                        CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
+                        Ok(val) => val,
+                        Err(err) => crate::trap::raise(err),
                     }
                 }
 
@@ -2353,7 +2386,7 @@ impl HostFunc {
         let ty_clone = ty.clone();
         unsafe {
             HostFunc::new_unchecked(engine, ty, move |caller, values| {
-                Func::invoke(caller, &ty_clone, values, &func)
+                Func::invoke_host_func_for_wasm(caller, &ty_clone, values, &func)
             })
         }
     }

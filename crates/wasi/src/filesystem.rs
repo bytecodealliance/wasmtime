@@ -125,16 +125,28 @@ impl File {
         }
     }
 
+    /// Returns `Some` when the current thread is allowed to block in filesystem
+    /// operations, and otherwise returns `None` to indicate that
+    /// `spawn_blocking` must be used.
+    pub(crate) fn as_blocking_file(&self) -> Option<&cap_std::fs::File> {
+        if self.allow_blocking_current_thread {
+            Some(&self.file)
+        } else {
+            None
+        }
+    }
+
     fn _spawn_blocking<F, R>(&self, body: F) -> SpawnBlocking<R>
     where
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        if self.allow_blocking_current_thread {
-            SpawnBlocking::Done(body(&self.file))
-        } else {
-            let f = self.file.clone();
-            SpawnBlocking::Spawned(spawn_blocking(move || body(&f)))
+        match self.as_blocking_file() {
+            Some(file) => SpawnBlocking::Done(body(file)),
+            None => {
+                let f = self.file.clone();
+                SpawnBlocking::Spawned(spawn_blocking(move || body(&f)))
+            }
         }
     }
 }

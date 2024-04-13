@@ -426,6 +426,9 @@ pub enum TableInitialValue {
     /// At instantiation time this global is loaded and the funcref value is
     /// used to initialize the table.
     GlobalGet(GlobalIndex),
+
+    /// Initialize the table element to an `i31ref` of the given value.
+    I31Ref(i32),
 }
 
 /// A WebAssembly table initializer segment.
@@ -722,7 +725,9 @@ impl Module {
             EntityIndex::Global(i) => EntityType::Global(self.globals[i]),
             EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
             EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
-            EntityIndex::Function(i) => EntityType::Function(self.functions[i].signature),
+            EntityIndex::Function(i) => {
+                EntityType::Function(EngineOrModuleTypeIndex::Module(self.functions[i].signature))
+            }
         }
     }
 

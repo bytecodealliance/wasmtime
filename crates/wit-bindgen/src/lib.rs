@@ -1,6 +1,6 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -104,6 +104,9 @@ pub struct Opts {
     /// Whether or not to generate code for only the interfaces of this wit file or not.
     pub only_interfaces: bool,
 
+    /// Configuration of which imports are allowed to generate a trap.
+    pub trappable_imports: TrappableImports,
+
     /// Remapping of interface names to rust module names.
     /// TODO: is there a better type to use for the value of this map?
     pub with: HashMap<String, String>,
@@ -150,6 +153,27 @@ impl AsyncConfig {
             AsyncConfig::All | AsyncConfig::AllExceptImports(_) | AsyncConfig::OnlyImports(_) => {
                 true
             }
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum TrappableImports {
+    /// No imports are allowed to trap.
+    #[default]
+    None,
+    /// All imports may trap.
+    All,
+    /// Only the specified set of functions may trap.
+    Only(HashSet<String>),
+}
+
+impl TrappableImports {
+    fn can_trap(&self, f: &Function) -> bool {
+        match self {
+            TrappableImports::None => false,
+            TrappableImports::All => true,
+            TrappableImports::Only(set) => set.contains(&f.name),
         }
     }
 }
@@ -968,9 +992,13 @@ fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<
         .flat_map(|l| l)
         .collect::<HashSet<_>>();
 
+    let mut found_interface = false;
+
     // Look for an interface whose assigned prefix starts `wit_path`. Not
     // exactly the most efficient thing ever but is sufficient for now.
     for (id, interface) in resolve.interfaces.iter() {
+        found_interface = true;
+
         let iface_name = match &interface.name {
             Some(name) => name,
             None => continue,
@@ -988,15 +1016,20 @@ fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<
             Some(rest) => rest,
             None => continue,
         };
-        let wit_path = wit_path
-            .strip_prefix('/')
-            .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
 
-        return interface
-            .types
-            .get(wit_path)
-            .copied()
-            .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"));
+        let wit_path = match wit_path.strip_prefix('/') {
+            Some(rest) => rest,
+            None => continue,
+        };
+
+        match interface.types.get(wit_path).copied() {
+            Some(type_id) => return Ok(type_id),
+            None => continue,
+        }
+    }
+
+    if found_interface {
+        bail!("no types found to match `{wit_path}` in interface");
     }
 
     bail!("no package/interface found to match `{wit_path}`")
@@ -1844,7 +1877,13 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
+        if !self.gen.opts.trappable_imports.can_trap(&func) {
+            if func.results.iter_types().len() == 1 {
+                uwrite!(self.src, "Ok((r,))\n");
+            } else {
+                uwrite!(self.src, "Ok(r)\n");
+            }
+        } else if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
             let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
             let err_name = err.name.as_ref().unwrap();
             let owner = match err.owner {
@@ -1896,7 +1935,11 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(")");
         self.push_str(" -> ");
 
-        if let Some((r, _id, error_typename)) = self.special_case_trappable_error(&func.results) {
+        if !self.gen.opts.trappable_imports.can_trap(func) {
+            self.print_result_ty(&func.results, TypeMode::Owned);
+        } else if let Some((r, _id, error_typename)) =
+            self.special_case_trappable_error(&func.results)
+        {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propogate their errors

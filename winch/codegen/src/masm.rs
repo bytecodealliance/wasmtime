@@ -1,8 +1,9 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{CodeGenContext, FuncEnv, HeapData, TableData};
+use crate::codegen::{CodeGenContext, FuncEnv};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
-    ir::{Endianness, LibCall, MemFlags, UserExternalNameRef},
+    binemit::CodeOffset,
+    ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -436,7 +437,7 @@ pub const TRUSTED_FLAGS: MemFlags = MemFlags::trusted();
 
 /// Flags used for WebAssembly loads / stores.
 /// Untrusted by default so we don't set `no_trap`.
-/// We also ensure that the endianess is the right one for WebAssembly.
+/// We also ensure that the endianness is the right one for WebAssembly.
 pub const UNTRUSTED_FLAGS: MemFlags = MemFlags::new().with_endianness(Endianness::Little);
 
 /// Generic MacroAssembler interface used by the code generation.
@@ -502,22 +503,6 @@ pub(crate) trait MacroAssembler {
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
 
-    /// Loads the address of the table element at a given index. Returns the
-    /// address of the table element using the provided register as base.
-    fn table_elem_address(
-        &mut self,
-        index: Reg,
-        base: Reg,
-        table_data: &TableData,
-        context: &mut CodeGenContext,
-    ) -> Self::Address;
-
-    /// Retrieves the size of the table, pushing the result to the value stack.
-    fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
-
-    /// Retrieves the size of the memory, pushing the result to the value stack.
-    fn memory_size(&mut self, heap_data: &HeapData, context: &mut CodeGenContext);
-
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
     /// offset)].
@@ -554,7 +539,7 @@ pub(crate) trait MacroAssembler {
     /// [Self::store], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
-    /// regards to the endianess depending on the target ISA. For this reason,
+    /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_store], should be explicitly used when emitting WebAssembly
     /// stores.
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize);
@@ -567,7 +552,7 @@ pub(crate) trait MacroAssembler {
     /// [Self::load], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
-    /// regards to the endianess depending on the target ISA. For this reason,
+    /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_load], should be explicitly used when emitting WebAssembly
     /// loads.
     fn wasm_load(
@@ -769,7 +754,7 @@ pub(crate) trait MacroAssembler {
     fn push(&mut self, src: Reg, size: OperandSize) -> StackSlot;
 
     /// Finalize the assembly and return the result.
-    fn finalize(self) -> MachBufferFinalized<Final>;
+    fn finalize(self, base: Option<SourceLoc>) -> MachBufferFinalized<Final>;
 
     /// Zero a particular register.
     fn zero(&mut self, reg: Reg);
@@ -933,4 +918,14 @@ pub(crate) trait MacroAssembler {
             self.free_stack(bytes);
         }
     }
+
+    /// Mark the start of a source location returning the machine code offset
+    /// and the relative source code location.
+    fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc);
+
+    /// Mark the end of a source location.
+    fn end_source_loc(&mut self);
+
+    /// The current offset, in bytes from the beginning of the function.
+    fn current_code_offset(&self) -> CodeOffset;
 }

@@ -14,6 +14,7 @@ pub mod sync {
                 "wasi:io/streams/stream-error" => StreamError,
                 "wasi:filesystem/types/error-code" => FsError,
             },
+            trappable_imports: true,
             with: {
                 // These interfaces come from the outer module, as it's
                 // sync/async agnostic.
@@ -118,6 +119,7 @@ mod async_io {
         path: "wit",
         world: "wasi:cli/command",
         tracing: true,
+        trappable_imports: true,
         async: {
             // Only these functions are `async` and everything else is sync
             // meaning that it basically doesn't need to block. These functions

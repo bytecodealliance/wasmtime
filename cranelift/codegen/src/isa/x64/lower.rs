@@ -4,7 +4,7 @@
 pub(super) mod isle;
 
 use crate::ir::pcc::{FactContext, PccResult};
-use crate::ir::{types, ExternalName, Inst as IRInst, LibCall, Opcode, Type};
+use crate::ir::{types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -61,11 +61,10 @@ fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
 
     if let Some(c) = input.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
-        let from_bits = ty_bits(ty);
-        let (size, c) = if from_bits < 64 {
-            (OperandSize::Size32, c & ((1u64 << from_bits) - 1))
+        let size = if ty_bits(ty) < 64 {
+            OperandSize::Size32
         } else {
-            (OperandSize::Size64, c)
+            OperandSize::Size64
         };
         assert!(is_int_or_ref_ty(ty)); // Only used for addresses.
         let cst_copy = ctx.alloc_tmp(ty);
@@ -124,16 +123,18 @@ fn is_mergeable_load(
     // Just testing the opcode is enough, because the width will always match if
     // the type does (and the type should match if the CLIF is properly
     // constructed).
-    if insn_data.opcode() == Opcode::Load {
-        let offset = insn_data
-            .load_store_offset()
-            .expect("load should have offset");
+    if let &InstructionData::Load {
+        opcode: Opcode::Load,
+        offset,
+        ..
+    } = insn_data
+    {
         Some((
             InsnInput {
                 insn: src_insn,
                 input: 0,
             },
-            offset,
+            offset.into(),
         ))
     } else {
         None
@@ -174,8 +175,6 @@ fn emit_vm_call(
     let mut abi =
         X64CallSite::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone());
 
-    abi.emit_stack_pre_adjust(ctx);
-
     assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
 
     for (i, input) in inputs.iter().enumerate() {
@@ -187,11 +186,12 @@ fn emit_vm_call(
     for (i, output) in outputs.iter().enumerate() {
         retval_insts.extend(abi.gen_retval(ctx, i, ValueRegs::one(*output)).into_iter());
     }
+
     abi.emit_call(ctx);
+
     for inst in retval_insts {
         ctx.emit(inst);
     }
-    abi.emit_stack_post_adjust(ctx);
 
     Ok(())
 }
@@ -261,35 +261,21 @@ fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode 
                 shift_amt,
             )
         } else {
-            for i in 0..=1 {
+            for input in 0..=1 {
                 // Try to pierce through uextend.
-                if let Some(uextend) = matches_input(
-                    ctx,
-                    InsnInput {
-                        insn: add,
-                        input: i,
-                    },
-                    Opcode::Uextend,
-                ) {
-                    if let Some(cst) = ctx.get_input_as_source_or_const(uextend, 0).constant {
-                        // Zero the upper bits.
-                        let input_size = ctx.input_ty(uextend, 0).bits() as u64;
-                        let shift: u64 = 64 - input_size;
-                        let uext_cst: u64 = (cst << shift) >> shift;
-
-                        let final_offset = (offset as i64).wrapping_add(uext_cst as i64);
-                        if let Ok(final_offset) = i32::try_from(final_offset) {
-                            let base = put_input_in_reg(ctx, add_inputs[1 - i]);
-                            return Amode::imm_reg(final_offset, base).with_flags(flags);
-                        }
-                    }
-                }
+                let (inst, inst_input) = if let Some(uextend) =
+                    matches_input(ctx, InsnInput { insn: add, input }, Opcode::Uextend)
+                {
+                    (uextend, 0)
+                } else {
+                    (add, input)
+                };
 
                 // If it's a constant, add it directly!
-                if let Some(cst) = ctx.get_input_as_source_or_const(add, i).constant {
+                if let Some(cst) = ctx.get_input_as_source_or_const(inst, inst_input).constant {
                     let final_offset = (offset as i64).wrapping_add(cst as i64);
                     if let Ok(final_offset) = i32::try_from(final_offset) {
-                        let base = put_input_in_reg(ctx, add_inputs[1 - i]);
+                        let base = put_input_in_reg(ctx, add_inputs[1 - input]);
                         return Amode::imm_reg(final_offset, base).with_flags(flags);
                     }
                 }

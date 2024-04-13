@@ -132,8 +132,9 @@ impl ServeCommand {
 
     fn new_store(&self, engine: &Engine, req_id: u64) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
+        self.run.configure_wasip2(&mut builder)?;
 
-        builder.envs(&[("REQUEST_ID", req_id.to_string())]);
+        builder.env("REQUEST_ID", req_id.to_string());
 
         builder.stdout(LogStream {
             prefix: format!("stdout [{req_id}] :: "),
@@ -148,7 +149,7 @@ impl ServeCommand {
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
             ctx: builder.build(),
-            http: WasiHttpCtx,
+            http: WasiHttpCtx::new(),
 
             limits: StoreLimits::default(),
 

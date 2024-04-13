@@ -22,7 +22,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       xorq    %r11, %r11
-;;       movq    0x50(%rdi), %rsi
+;;       movq    0x60(%rdi), %rsi
 ;;       leaq    0x1000(%rsi, %rdx), %r10
 ;;       cmpq    0xe(%rip), %rdx
 ;;       cmovaq  %r11, %r10
@@ -36,7 +36,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       xorq    %r11, %r11
-;;       movq    0x50(%rdi), %rsi
+;;       movq    0x60(%rdi), %rsi
 ;;       leaq    0x1000(%rsi, %rdx), %r10
 ;;       cmpq    0xe(%rip), %rdx
 ;;       cmovaq  %r11, %r10

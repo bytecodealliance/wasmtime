@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Token};
-use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError};
+use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError, TrappableImports};
 use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
 
 pub struct Config {
@@ -107,6 +107,7 @@ impl Parse for Config {
                         opts.async_ = val;
                     }
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
+                    Opt::TrappableImports(val) => opts.trappable_imports = val,
                     Opt::Ownership(val) => opts.ownership = val,
                     Opt::Interfaces(s) => {
                         if inline.is_some() {
@@ -201,6 +202,7 @@ mod kw {
     syn::custom_keyword!(with);
     syn::custom_keyword!(except_imports);
     syn::custom_keyword!(only_imports);
+    syn::custom_keyword!(trappable_imports);
 }
 
 enum Opt {
@@ -213,6 +215,7 @@ enum Opt {
     Ownership(Ownership),
     Interfaces(syn::LitStr),
     With(HashMap<String, String>),
+    TrappableImports(TrappableImports),
 }
 
 impl Parse for Opt {
@@ -330,6 +333,22 @@ impl Parse for Opt {
             let fields: Punctuated<(String, String), Token![,]> =
                 contents.parse_terminated(with_field_parse, Token![,])?;
             Ok(Opt::With(HashMap::from_iter(fields)))
+        } else if l.peek(kw::trappable_imports) {
+            input.parse::<kw::trappable_imports>()?;
+            input.parse::<Token![:]>()?;
+            let config = if input.peek(syn::LitBool) {
+                match input.parse::<syn::LitBool>()?.value {
+                    true => TrappableImports::All,
+                    false => TrappableImports::None,
+                }
+            } else {
+                let contents;
+                syn::bracketed!(contents in input);
+                let fields: Punctuated<syn::LitStr, Token![,]> =
+                    contents.parse_terminated(Parse::parse, Token![,])?;
+                TrappableImports::Only(fields.iter().map(|s| s.value()).collect())
+            };
+            Ok(Opt::TrappableImports(config))
         } else {
             Err(l.error())
         }

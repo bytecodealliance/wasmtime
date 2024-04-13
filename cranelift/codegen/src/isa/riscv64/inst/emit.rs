@@ -1951,7 +1951,7 @@ impl Inst {
                         rd,
                         op: LoadOP::Ld,
                         flags: MemFlags::trusted(),
-                        from: AMode::RegOffset(rd.to_reg(), 0, I64),
+                        from: AMode::RegOffset(rd.to_reg(), 0),
                     }
                     .emit_uncompressed(sink, emit_info, state, start_off);
                 } else {
@@ -2083,7 +2083,7 @@ impl Inst {
                     rd: rd,
                     op: LoadOP::from_type(ty),
                     flags: MemFlags::new(),
-                    from: AMode::RegOffset(p, 0, ty),
+                    from: AMode::RegOffset(p, 0),
                 }
                 .emit(&[], sink, emit_info, state);
                 Inst::Fence {
@@ -2099,7 +2099,7 @@ impl Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 Inst::Store {
-                    to: AMode::RegOffset(p, 0, ty),
+                    to: AMode::RegOffset(p, 0),
                     op: StoreOP::from_type(ty),
                     flags: MemFlags::new(),
                     src,
@@ -2599,7 +2599,7 @@ impl Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 Inst::Store {
-                    to: AMode::RegOffset(spilltmp_reg2(), 0, I8),
+                    to: AMode::RegOffset(spilltmp_reg2(), 0),
                     op: StoreOP::Sb,
                     flags: MemFlags::new(),
                     src: zero_reg(),
@@ -3404,12 +3404,12 @@ fn emit_return_call_common_sequence(
 
     Inst::gen_load(
         writable_link_reg(),
-        AMode::FPOffset(8, I64),
+        AMode::FPOffset(8),
         I64,
         MemFlags::trusted(),
     )
     .emit(&[], sink, emit_info, state);
-    Inst::gen_load(tmp1, AMode::FPOffset(0, I64), I64, MemFlags::trusted()).emit(
+    Inst::gen_load(tmp1, AMode::FPOffset(0), I64, MemFlags::trusted()).emit(
         &[],
         sink,
         emit_info,
@@ -3422,7 +3422,7 @@ fn emit_return_call_common_sequence(
         // space.
         Inst::gen_load(
             tmp2,
-            AMode::SPOffset(i64::from(i * 8), types::I64),
+            AMode::SPOffset(i64::from(i * 8)),
             types::I64,
             ir::MemFlags::trusted(),
         )
@@ -3431,7 +3431,7 @@ fn emit_return_call_common_sequence(
         // Store it to its final destination on the stack, overwriting our
         // current frame.
         Inst::gen_store(
-            AMode::FPOffset(fp_to_callee_sp + i64::from(i * 8), types::I64),
+            AMode::FPOffset(fp_to_callee_sp + i64::from(i * 8)),
             tmp2.to_reg(),
             types::I64,
             ir::MemFlags::trusted(),

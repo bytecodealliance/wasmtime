@@ -2,7 +2,7 @@ use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
-    Config, Engine, Store,
+    Engine, Store,
 };
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{
@@ -30,18 +30,18 @@ fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
     Ok(tempdir)
 }
 
-fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>, TempDir)> {
+fn store(
+    engine: &Engine,
+    name: &str,
+    configure: impl FnOnce(&mut WasiCtxBuilder),
+) -> Result<(Store<Ctx>, TempDir)> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
     let workspace = prepare_workspace(name)?;
 
     // Create our wasi context.
     let mut builder = WasiCtxBuilder::new();
-    if inherit_stdio {
-        builder.inherit_stdio();
-    } else {
-        builder.stdout(stdout.clone()).stderr(stderr.clone());
-    }
+    builder.stdout(stdout.clone()).stderr(stderr.clone());
 
     builder
         .args(&[name, "."])
@@ -53,6 +53,7 @@ fn store(engine: &Engine, name: &str, inherit_stdio: bool) -> Result<(Store<Ctx>
         builder.env(var, val);
     }
 
+    configure(&mut builder);
     let ctx = Ctx {
         wasi: builder.build_p1(),
         stderr,

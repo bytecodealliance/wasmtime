@@ -131,14 +131,14 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+88
 ;;     sig0 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     sig1 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast
 ;;     fn0 = colocated u1:9 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @0048                               v12 = load.i64 notrap aligned readonly v0+72
+;; @0048                               v12 = load.i64 notrap aligned readonly v0+88
 ;;                                     v66 = iconst.i64 8
 ;; @0048                               v14 = iadd v12, v66  ; v66 = 8
 ;; @0048                               v17 = load.i64 table_oob aligned table v14
@@ -185,14 +185,14 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+88
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 fast
 ;;     sig1 = (i64 vmctx, i32 uext, i32 uext) -> i64 system_v
 ;;     fn0 = colocated u1:9 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @0075                               v12 = load.i64 notrap aligned readonly v0+72
+;; @0075                               v12 = load.i64 notrap aligned readonly v0+88
 ;;                                     v66 = iconst.i64 8
 ;; @0075                               v14 = iadd v12, v66  ; v66 = 8
 ;; @0075                               v17 = load.i64 table_oob aligned table v14
@@ -243,11 +243,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @009e                               v9 = load.i64 notrap aligned table v0+96
+;; @009e                               v9 = load.i64 notrap aligned table v0+112
 ;; @00a0                               v10 = load.i64 null_reference aligned readonly v9+16
 ;; @00a0                               v11 = load.i64 notrap aligned readonly v9+32
 ;; @00a0                               v12 = call_indirect sig0, v10(v11, v0, v2, v3, v4, v5)
-;; @00af                               v15 = load.i64 notrap aligned table v0+112
+;; @00af                               v15 = load.i64 notrap aligned table v0+128
 ;; @00b1                               v16 = load.i64 null_reference aligned readonly v15+16
 ;; @00b1                               v17 = load.i64 notrap aligned readonly v15+32
 ;; @00b1                               v18 = call_indirect sig0, v16(v17, v0, v2, v3, v4, v5)

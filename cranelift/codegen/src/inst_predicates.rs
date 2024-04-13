@@ -44,6 +44,17 @@ pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
     trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
 }
 
+/// Is the given instruction a bitcast to or from a reference type (e.g. `r64`)?
+pub fn is_bitcast_from_ref(func: &Function, inst: Inst) -> bool {
+    let op = func.dfg.insts[inst].opcode();
+    if op != ir::Opcode::Bitcast {
+        return false;
+    }
+
+    let arg = func.dfg.inst_args(inst)[0];
+    func.dfg.value_type(arg).is_ref()
+}
+
 /// Does the given instruction behave as a "pure" node with respect to
 /// aegraph semantics?
 ///
@@ -58,6 +69,7 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
         } => flags.readonly() && flags.notrap(),
         _ => false,
     };
+
     // Multi-value results do not play nicely with much of the egraph
     // infrastructure. They are in practice used only for multi-return
     // calls and some other odd instructions (e.g. uadd_overflow) which,
@@ -70,7 +82,11 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 
     let op = func.dfg.insts[inst].opcode();
 
-    has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
+    has_one_result
+        && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
+        // Cannot optimize ref-y bitcasts, as that can interact badly with
+        // safepoints and stack maps.
+        && !is_bitcast_from_ref(func, inst)
 }
 
 /// Can the given instruction be merged into another copy of itself?
@@ -90,6 +106,9 @@ pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
         && !op.can_store()
         // Can only have idempotent side-effects.
         && (!has_side_effect(func, inst) || op.side_effects_idempotent())
+        // Cannot optimize ref-y bitcasts, as that can interact badly with
+        // safepoints and stack maps.
+        && !is_bitcast_from_ref(func, inst)
 }
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,

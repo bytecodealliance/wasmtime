@@ -20,9 +20,8 @@ use std::{
 };
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap, TypeTrace,
-    WasmFuncType,
+    VMSharedTypeIndex, WasmFuncType,
 };
-use wasmtime_runtime::VMSharedTypeIndex;
 use wasmtime_slab::{Id as SlabId, Slab};
 
 // ### Notes on the Lifetime Management of Types
@@ -421,7 +420,6 @@ impl TypeRegistryInner {
         let result = ty.trace::<_, ()>(&mut |index| match index {
             EngineOrModuleTypeIndex::Module(_) => Err(()),
             EngineOrModuleTypeIndex::Engine(id) => {
-                let id = VMSharedTypeIndex::new(id);
                 let id = shared_type_index_to_slab_id(id);
                 assert!(
                     self.entries.contains(id),
@@ -447,15 +445,7 @@ impl TypeRegistryInner {
         module_to_shared: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         ty: &mut WasmFuncType,
     ) {
-        ty.trace_mut::<_, ()>(&mut |index| match index {
-            EngineOrModuleTypeIndex::Engine(_) => unreachable!("already canonicalized?"),
-            EngineOrModuleTypeIndex::Module(module_index) => {
-                *index = EngineOrModuleTypeIndex::Engine(module_to_shared[*module_index].bits());
-                Ok(())
-            }
-        })
-        .unwrap();
-
+        ty.canonicalize(&mut |module_index| module_to_shared[module_index]);
         debug_assert!(self.is_canonicalized(ty))
     }
 
@@ -477,7 +467,6 @@ impl TypeRegistryInner {
         // still alive.
         ty.trace::<_, ()>(&mut |idx| match idx {
             EngineOrModuleTypeIndex::Engine(id) => {
-                let id = VMSharedTypeIndex::new(id);
                 let i = shared_type_index_to_slab_id(id);
                 let e = &self.entries[i];
                 e.incref("new type references existing type in TypeRegistryInner::register_new");
@@ -572,7 +561,6 @@ impl TypeRegistryInner {
                 .ty
                 .trace::<_, ()>(&mut |child_index| match child_index {
                     EngineOrModuleTypeIndex::Engine(child_index) => {
-                        let child_index = VMSharedTypeIndex::new(child_index);
                         let child_slab_id = shared_type_index_to_slab_id(child_index);
                         let child_entry = &self.entries[child_slab_id];
                         if child_entry.decref(

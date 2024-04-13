@@ -631,7 +631,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Lb,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I8),
+            from: AMode::RegOffset(a1(), 100),
         },
         "lb a0,100(a1)",
         0x6458503,
@@ -641,7 +641,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Lh,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I16),
+            from: AMode::RegOffset(a1(), 100),
         },
         "lh a0,100(a1)",
         0x6459503,
@@ -652,7 +652,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Lw,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I32),
+            from: AMode::RegOffset(a1(), 100),
         },
         "lw a0,100(a1)",
         0x645a503,
@@ -663,7 +663,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             op: LoadOP::Ld,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I64),
+            from: AMode::RegOffset(a1(), 100),
         },
         "ld a0,100(a1)",
         0x645b503,
@@ -673,7 +673,7 @@ fn test_riscv64_binemit() {
             rd: Writable::from_reg(fa0()),
             op: LoadOP::Flw,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I64),
+            from: AMode::RegOffset(a1(), 100),
         },
         "flw fa0,100(a1)",
         0x645a507,
@@ -684,14 +684,14 @@ fn test_riscv64_binemit() {
             rd: Writable::from_reg(fa0()),
             op: LoadOP::Fld,
             flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, I64),
+            from: AMode::RegOffset(a1(), 100),
         },
         "fld fa0,100(a1)",
         0x645b507,
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I8),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sb,
             flags: MemFlags::new(),
             src: a0(),
@@ -701,7 +701,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I16),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sh,
             flags: MemFlags::new(),
             src: a0(),
@@ -711,7 +711,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I32),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sw,
             flags: MemFlags::new(),
             src: a0(),
@@ -721,7 +721,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I64),
+            to: AMode::SPOffset(100),
             op: StoreOP::Sd,
             flags: MemFlags::new(),
             src: a0(),
@@ -731,7 +731,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I64),
+            to: AMode::SPOffset(100),
             op: StoreOP::Fsw,
             flags: MemFlags::new(),
             src: fa0(),
@@ -741,7 +741,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::Store {
-            to: AMode::SPOffset(100, I64),
+            to: AMode::SPOffset(100),
             op: StoreOP::Fsd,
             flags: MemFlags::new(),
             src: fa0(),

@@ -28,6 +28,24 @@ pub trait TypeTrace {
     fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
     where
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>;
+
+    /// Canonicalize `self` by rewriting all type references inside `self` from
+    /// module-level interned type indices to engine-level interned type
+    /// indices.
+    fn canonicalize<F>(&mut self, module_to_engine: &mut F)
+    where
+        F: FnMut(ModuleInternedTypeIndex) -> VMSharedTypeIndex,
+    {
+        self.trace_mut::<_, ()>(&mut |idx| match idx {
+            EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+            EngineOrModuleTypeIndex::Module(module_index) => {
+                let engine_index = module_to_engine(*module_index);
+                *idx = EngineOrModuleTypeIndex::Engine(engine_index);
+                Ok(())
+            }
+        })
+        .unwrap()
+    }
 }
 
 /// WebAssembly value type -- equivalent of `wasmparser::ValType`.
@@ -90,6 +108,26 @@ impl TypeTrace for WasmValType {
     }
 }
 
+impl WasmValType {
+    pub fn is_vmgcref_type(&self) -> bool {
+        self.is_gc_heap_type()
+            || matches!(
+                self,
+                WasmValType::Ref(WasmRefType {
+                    heap_type: WasmHeapType::I31,
+                    nullable: _,
+                })
+            )
+    }
+
+    pub fn is_gc_heap_type(&self) -> bool {
+        match self {
+            WasmValType::Ref(r) => r.is_gc_heap_type(),
+            _ => false,
+        }
+    }
+}
+
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WasmRefType {
@@ -122,6 +160,12 @@ impl WasmRefType {
         nullable: true,
         heap_type: WasmHeapType::Func,
     };
+
+    /// Is this a GC type that is allocated within the GC heap? (As opposed to
+    /// `i31ref` which is a GC type that is not allocated on the GC heap.)
+    pub fn is_gc_heap_type(&self) -> bool {
+        self.heap_type.is_gc_heap_type()
+    }
 }
 
 impl fmt::Display for WasmRefType {
@@ -146,20 +190,66 @@ impl fmt::Display for WasmRefType {
 /// concern itself with recursion-group-local indices.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EngineOrModuleTypeIndex {
-    /// An index within a global namespace across all modules that can interact
-    /// with each other (in practice this is a `VMSharedTypeIndex` at the per
-    /// `wasmtime::Engine` level).
-    Engine(u32),
-    /// An index within the current Wasm module.
+    /// An index within an engine, canonicalized among all modules that can
+    /// interact with each other.
+    Engine(VMSharedTypeIndex),
+    /// An index within the current Wasm module, canonicalized within just this
+    /// current module.
     Module(ModuleInternedTypeIndex),
+}
+
+impl From<ModuleInternedTypeIndex> for EngineOrModuleTypeIndex {
+    fn from(i: ModuleInternedTypeIndex) -> Self {
+        Self::Module(i)
+    }
 }
 
 impl fmt::Display for EngineOrModuleTypeIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Engine(i) => write!(f, "(engine {i})"),
+            Self::Engine(i) => write!(f, "(engine {})", i.bits()),
             Self::Module(i) => write!(f, "(module {})", i.as_u32()),
         }
+    }
+}
+
+impl EngineOrModuleTypeIndex {
+    /// Is this an engine-level type index?
+    pub fn is_engine_type_index(self) -> bool {
+        matches!(self, Self::Engine(_))
+    }
+
+    /// Get the underlying engine-level type index, if any.
+    pub fn as_engine_type_index(self) -> Option<VMSharedTypeIndex> {
+        match self {
+            Self::Engine(e) => Some(e),
+            Self::Module(_) => None,
+        }
+    }
+
+    /// Get the underlying engine-level type index, or panic.
+    pub fn unwrap_engine_type_index(self) -> VMSharedTypeIndex {
+        self.as_engine_type_index()
+            .expect("`unwrap_engine_type_index` on module type index")
+    }
+
+    /// Is this an module-level type index?
+    pub fn is_module_type_index(self) -> bool {
+        matches!(self, Self::Module(_))
+    }
+
+    /// Get the underlying module-level type index, if any.
+    pub fn as_module_type_index(self) -> Option<ModuleInternedTypeIndex> {
+        match self {
+            Self::Module(e) => Some(e),
+            Self::Engine(_) => None,
+        }
+    }
+
+    /// Get the underlying module-level type index, or panic.
+    pub fn unwrap_module_type_index(self) -> ModuleInternedTypeIndex {
+        self.as_module_type_index()
+            .expect("`unwrap_module_type_index` on engine type index")
     }
 }
 
@@ -170,6 +260,9 @@ pub enum WasmHeapType {
     Func,
     Concrete(EngineOrModuleTypeIndex),
     NoFunc,
+    Any,
+    I31,
+    None,
 }
 
 impl fmt::Display for WasmHeapType {
@@ -179,6 +272,9 @@ impl fmt::Display for WasmHeapType {
             Self::Func => write!(f, "func"),
             Self::Concrete(i) => write!(f, "{i}"),
             Self::NoFunc => write!(f, "nofunc"),
+            Self::Any => write!(f, "any"),
+            Self::I31 => write!(f, "i31"),
+            Self::None => write!(f, "none"),
         }
     }
 }
@@ -190,7 +286,7 @@ impl TypeTrace for WasmHeapType {
     {
         match *self {
             Self::Concrete(i) => func(i),
-            Self::Func | Self::NoFunc | Self::Extern => Ok(()),
+            _ => Ok(()),
         }
     }
 
@@ -200,7 +296,37 @@ impl TypeTrace for WasmHeapType {
     {
         match self {
             Self::Concrete(i) => func(i),
-            Self::Func | Self::NoFunc | Self::Extern => Ok(()),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl WasmHeapType {
+    /// Is this a GC type that is allocated within the GC heap? (As opposed to
+    /// `i31ref` which is a GC type that is not allocated on the GC heap.)
+    pub fn is_gc_heap_type(&self) -> bool {
+        // All `t <: (ref null any)` and `t <: (ref null extern)` that are
+        // not `(ref null? i31)` are GC-managed references.
+        match self {
+            // These types are managed by the GC.
+            Self::Extern | Self::Any => true,
+
+            // TODO: Once we support concrete struct and array types, we will
+            // need to look at the payload to determine whether the type is
+            // GC-managed or not.
+            Self::Concrete(_) => false,
+
+            // These are compatible with GC references, but don't actually point
+            // to GC objects.
+            Self::I31 => false,
+
+            // These are a subtype of GC-managed types, but are uninhabited, so
+            // can never actually point to a GC object. Again, we could return
+            // `true` here but there is no need.
+            Self::None => false,
+
+            // These types are not managed by the GC.
+            Self::Func | Self::NoFunc => false,
         }
     }
 }
@@ -209,9 +335,9 @@ impl TypeTrace for WasmHeapType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
     params: Box<[WasmValType]>,
-    externref_params_count: usize,
+    non_i31_gc_ref_params_count: usize,
     returns: Box<[WasmValType]>,
-    externref_returns_count: usize,
+    non_i31_gc_ref_returns_count: usize,
 }
 
 impl TypeTrace for WasmFuncType {
@@ -245,25 +371,13 @@ impl TypeTrace for WasmFuncType {
 impl WasmFuncType {
     #[inline]
     pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
-        let externref_params_count = params
-            .iter()
-            .filter(|p| match **p {
-                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
-                _ => false,
-            })
-            .count();
-        let externref_returns_count = returns
-            .iter()
-            .filter(|r| match **r {
-                WasmValType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
-                _ => false,
-            })
-            .count();
+        let non_i31_gc_ref_params_count = params.iter().filter(|p| p.is_gc_heap_type()).count();
+        let non_i31_gc_ref_returns_count = returns.iter().filter(|r| r.is_gc_heap_type()).count();
         WasmFuncType {
             params,
-            externref_params_count,
+            non_i31_gc_ref_params_count,
             returns,
-            externref_returns_count,
+            non_i31_gc_ref_returns_count,
         }
     }
 
@@ -275,8 +389,8 @@ impl WasmFuncType {
 
     /// How many `externref`s are in this function's params?
     #[inline]
-    pub fn externref_params_count(&self) -> usize {
-        self.externref_params_count
+    pub fn non_i31_gc_ref_params_count(&self) -> usize {
+        self.non_i31_gc_ref_params_count
     }
 
     /// Returns params types.
@@ -287,8 +401,8 @@ impl WasmFuncType {
 
     /// How many `externref`s are in this function's returns?
     #[inline]
-    pub fn externref_returns_count(&self) -> usize {
-        self.externref_returns_count
+    pub fn non_i31_gc_ref_returns_count(&self) -> usize {
+        self.non_i31_gc_ref_returns_count
     }
 }
 
@@ -342,14 +456,54 @@ entity_impl!(MemoryIndex);
 pub struct TypeIndex(u32);
 entity_impl!(TypeIndex);
 
-/// Index type of a deduplicated type (imported or defined) inside a WebAssembly
-/// module.
+/// A canonicalized type index for a type within a single WebAssembly module.
 ///
-/// Note that this is deduplicated only at the level of a WebAssembly module,
-/// not at the level of a whole store or engine.
+/// Note that this is deduplicated only at the level of a single WebAssembly
+/// module, not at the level of a whole store or engine. This means that these
+/// indices are only unique within the context of a single Wasm module, and
+/// therefore are not suitable for runtime type checks (which, in general, may
+/// involve entities defined in different modules).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ModuleInternedTypeIndex(u32);
 entity_impl!(ModuleInternedTypeIndex);
+
+/// A canonicalized type index into an engine's shared type registry.
+///
+/// This is canonicalized/deduped at the level of a whole engine, across all the
+/// modules loaded into that engine, not just at the level of a single
+/// particular module. This means that `VMSharedTypeIndex` is usable for
+/// e.g. checking that function signatures match during an indirect call
+/// (potentially to a function defined in a different module) at runtime.
+#[repr(transparent)] // Used directly by JIT code.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct VMSharedTypeIndex(u32);
+entity_impl!(VMSharedTypeIndex);
+
+impl VMSharedTypeIndex {
+    /// Create a new `VMSharedTypeIndex`.
+    #[inline]
+    pub fn new(value: u32) -> Self {
+        assert_ne!(
+            value,
+            u32::MAX,
+            "u32::MAX is reserved for the default value"
+        );
+        Self(value)
+    }
+
+    /// Returns the underlying bits of the index.
+    #[inline]
+    pub fn bits(&self) -> u32 {
+        self.0
+    }
+}
+
+impl Default for VMSharedTypeIndex {
+    #[inline]
+    fn default() -> Self {
+        Self(u32::MAX)
+    }
+}
 
 /// Index type of a passive data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
@@ -426,7 +580,33 @@ pub enum EntityType {
     Table(Table),
     /// A function type where the index points to the type section and records a
     /// function signature.
-    Function(ModuleInternedTypeIndex),
+    Function(EngineOrModuleTypeIndex),
+}
+
+impl TypeTrace for EntityType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            Self::Global(g) => g.trace(func),
+            Self::Table(t) => t.trace(func),
+            Self::Function(idx) => func(*idx),
+            Self::Memory(_) | Self::Tag(_) => Ok(()),
+        }
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            Self::Global(g) => g.trace_mut(func),
+            Self::Table(t) => t.trace_mut(func),
+            Self::Function(idx) => func(idx),
+            Self::Memory(_) | Self::Tag(_) => Ok(()),
+        }
+    }
 }
 
 impl EntityType {
@@ -463,7 +643,7 @@ impl EntityType {
     }
 
     /// Assert that this entity is a function
-    pub fn unwrap_func(&self) -> ModuleInternedTypeIndex {
+    pub fn unwrap_func(&self) -> EngineOrModuleTypeIndex {
         match self {
             EntityType::Function(g) => *g,
             _ => panic!("not a func"),
@@ -486,6 +666,30 @@ pub struct Global {
     pub mutability: bool,
 }
 
+impl TypeTrace for Global {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        let Global {
+            wasm_ty,
+            mutability: _,
+        } = self;
+        wasm_ty.trace(func)
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        let Global {
+            wasm_ty,
+            mutability: _,
+        } = self;
+        wasm_ty.trace_mut(func)
+    }
+}
+
 /// Globals are initialized via the `const` operators or by referring to another import.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum GlobalInit {
@@ -501,6 +705,8 @@ pub enum GlobalInit {
     V128Const(u128),
     /// A `global.get` of another global.
     GetGlobal(GlobalIndex),
+    /// A `(ref.i31 (global.get N))` initializer.
+    RefI31Const(i32),
     /// A `ref.null`.
     RefNullConst,
     /// A `ref.func <index>`.
@@ -516,6 +722,32 @@ pub struct Table {
     pub minimum: u32,
     /// The maximum number of elements in the table.
     pub maximum: Option<u32>,
+}
+
+impl TypeTrace for Table {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        let Table {
+            wasm_ty,
+            minimum: _,
+            maximum: _,
+        } = self;
+        wasm_ty.trace(func)
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        let Table {
+            wasm_ty,
+            minimum: _,
+            maximum: _,
+        } = self;
+        wasm_ty.trace_mut(func)
+    }
 }
 
 /// WebAssembly linear memory.
@@ -620,15 +852,16 @@ pub trait TypeConvert {
             wasmparser::HeapType::Func => WasmHeapType::Func,
             wasmparser::HeapType::NoFunc => WasmHeapType::NoFunc,
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
+            wasmparser::HeapType::Any => WasmHeapType::Any,
+            wasmparser::HeapType::I31 => WasmHeapType::I31,
+            wasmparser::HeapType::None => WasmHeapType::None,
 
-            wasmparser::HeapType::Any
-            | wasmparser::HeapType::Exn
-            | wasmparser::HeapType::None
+            wasmparser::HeapType::Exn
+            | wasmparser::HeapType::NoExn
             | wasmparser::HeapType::NoExtern
             | wasmparser::HeapType::Eq
             | wasmparser::HeapType::Struct
-            | wasmparser::HeapType::Array
-            | wasmparser::HeapType::I31 => {
+            | wasmparser::HeapType::Array => {
                 unimplemented!("unsupported heap type {ty:?}");
             }
         }

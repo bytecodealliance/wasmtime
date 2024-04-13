@@ -159,6 +159,7 @@ impl Stacks {
             maximum: Some(1),
             memory64: false,
             shared: false,
+            page_size_log2: None,
         });
         section(&mut module, mems);
 
@@ -168,6 +169,7 @@ impl Stacks {
             wasm_encoder::GlobalType {
                 val_type: wasm_encoder::ValType::I32,
                 mutable: true,
+                shared: false,
             },
             &wasm_encoder::ConstExpr::i32_const(0),
         );
@@ -176,6 +178,7 @@ impl Stacks {
             wasm_encoder::GlobalType {
                 val_type: wasm_encoder::ValType::I32,
                 mutable: true,
+                shared: false,
             },
             &wasm_encoder::ConstExpr::i32_const(0),
         );

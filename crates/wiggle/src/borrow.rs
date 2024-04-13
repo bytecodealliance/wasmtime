@@ -1,259 +1,113 @@
 use crate::{BorrowHandle, GuestError, Region};
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 
+/// A simple borrow checker to implement the API guarantees of Wiggle.
+///
+/// This is not a generalized borrow checker and is coarse-grained where it
+/// doesn't actually take any regions into account. Instead it only tracks
+/// whether there are temporally any shared/mutable borrows. This is
+/// more-or-less a poor-man's `RefCell<T>`.
+///
+/// Note that this uses `&AtomicU32` because this is passed around as
+/// `&BorrowChecker` in all `GuestPtr` structures. This needs to be mutated
+/// which might look like it needs `Cell<u32>`, but `&Cell<u32>` isn't `Sync`
+/// and we want futures with `&BorrowChecker` to be `Sync`, so this is an atomic
+/// instead. Only one of these is created per-invocation though and it's not
+/// actually shared across threads, so mutations here are not done with
+/// compare-and-swap but instead just loads/stores.
 pub struct BorrowChecker {
-    /// Unfortunately, since the terminology of std::cell and the problem domain of borrow checking
-    /// overlap, the method calls on this member will be confusing.
-    ///
-    /// Also, unfortunately, for now this uses a `Mutex`. The reason for that is
-    /// that this is shared as `&BorrowChecker` in a bunch of `GuestPtr` values.
-    /// Through this sharing we still want each `GuestPtr` to be `Send` and the
-    /// "naive" way to make `&T` `Send` with interior mutability is to use a
-    /// `Mutex`. Fixing this will likely require rethinking `GuestPtr` one way
-    /// or another. That needs to happen for other reasons as well (for example
-    /// to allow for wasm calls to happen while `GuestPtr` values are active),
-    /// so it's hoped that in a later rethinking of `GuestPtr` we can revisit
-    /// this and remove this `Mutex`.
-    bc: Mutex<InnerBorrowChecker>,
+    // 0        => no borrows
+    // >0       => shared borrows
+    // u32::MAX => mutable borrow
+    state: AtomicU32,
 }
 
 impl BorrowChecker {
-    /// A `BorrowChecker` manages run-time validation of borrows from a
-    /// `GuestMemory`. It keeps track of regions of guest memory which are
-    /// possible to alias with Rust references (via the `GuestSlice` and
-    /// `GuestStr` structs, which implement `std::ops::Deref` and
-    /// `std::ops::DerefMut`. It also enforces that `GuestPtr::read`
-    /// does not access memory with an outstanding mutable borrow, and
-    /// `GuestPtr::write` does not access memory with an outstanding
-    /// shared or mutable borrow.
     pub fn new() -> Self {
         BorrowChecker {
-            bc: Mutex::new(InnerBorrowChecker::new()),
+            state: AtomicU32::new(0),
         }
-    }
-    /// Indicates whether any outstanding shared or mutable borrows are known
-    /// to the `BorrowChecker`. This function must be `false` in order for it
-    /// to be safe to recursively call into a WebAssembly module, or to
-    /// manipulate the WebAssembly memory by any other means.
-    pub fn has_outstanding_borrows(&self) -> bool {
-        self.bc.lock().unwrap().has_outstanding_borrows()
     }
     pub fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.lock().unwrap().shared_borrow(r)
+        match self.state.load(Relaxed) {
+            n if n >= u32::MAX - 1 => Err(GuestError::PtrBorrowed(r)),
+            n => {
+                self.state.store(n + 1, Relaxed);
+                Ok(BorrowHandle { _priv: () })
+            }
+        }
     }
     pub fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.lock().unwrap().mut_borrow(r)
-    }
-    pub fn shared_unborrow(&self, h: BorrowHandle) {
-        self.bc.lock().unwrap().shared_unborrow(h)
-    }
-    pub fn mut_unborrow(&self, h: BorrowHandle) {
-        self.bc.lock().unwrap().mut_unborrow(h)
-    }
-    pub fn is_shared_borrowed(&self, r: Region) -> bool {
-        self.bc.lock().unwrap().is_shared_borrowed(r)
-    }
-    pub fn is_mut_borrowed(&self, r: Region) -> bool {
-        self.bc.lock().unwrap().is_mut_borrowed(r)
-    }
-}
-
-#[derive(Debug)]
-/// This is a pretty naive way to account for borrows. This datastructure
-/// could be made a lot more efficient with some effort.
-struct InnerBorrowChecker {
-    /// Maps from handle to region borrowed. A HashMap is probably not ideal
-    /// for this but it works. It would be more efficient if we could
-    /// check `is_borrowed` without an O(n) iteration, by organizing borrows
-    /// by an ordering of Region.
-    shared_borrows: HashMap<BorrowHandle, Region>,
-    mut_borrows: HashMap<BorrowHandle, Region>,
-    /// Handle to give out for the next borrow. This is the bare minimum of
-    /// bookkeeping of free handles, and in a pathological case we could run
-    /// out, hence [`GuestError::BorrowCheckerOutOfHandles`]
-    next_handle: BorrowHandle,
-}
-
-impl InnerBorrowChecker {
-    fn new() -> Self {
-        InnerBorrowChecker {
-            shared_borrows: HashMap::new(),
-            mut_borrows: HashMap::new(),
-            next_handle: BorrowHandle(0),
+        match self.state.load(Relaxed) {
+            0 => {
+                self.state.store(u32::MAX, Relaxed);
+                Ok(BorrowHandle { _priv: () })
+            }
+            _ => Err(GuestError::PtrBorrowed(r)),
         }
     }
-
-    fn has_outstanding_borrows(&self) -> bool {
-        !(self.shared_borrows.is_empty() && self.mut_borrows.is_empty())
+    pub fn shared_unborrow(&self, _: BorrowHandle) {
+        let prev = self.state.load(Relaxed);
+        debug_assert!(prev > 0);
+        self.state.store(prev - 1, Relaxed);
     }
-
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        self.shared_borrows.values().any(|b| b.overlaps(r))
+    pub fn mut_unborrow(&self, _: BorrowHandle) {
+        let prev = self.state.load(Relaxed);
+        debug_assert!(prev == u32::MAX);
+        self.state.store(0, Relaxed);
     }
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        self.mut_borrows.values().any(|b| b.overlaps(r))
+    pub fn can_read(&self, _: Region) -> bool {
+        self.state.load(Relaxed) != u32::MAX
     }
-
-    fn new_handle(&mut self) -> Result<BorrowHandle, GuestError> {
-        // Reset handles to 0 if all handles have been returned.
-        if self.shared_borrows.is_empty() && self.mut_borrows.is_empty() {
-            self.next_handle = BorrowHandle(0);
-        }
-        let h = self.next_handle;
-        // Get the next handle. Since we don't recycle handles until all of
-        // them have been returned, there is a pathological case where a user
-        // may make a Very Large (usize::MAX) number of valid borrows and
-        // unborrows while always keeping at least one borrow outstanding, and
-        // we will run out of borrow handles.
-        self.next_handle = BorrowHandle(
-            h.0.checked_add(1)
-                .ok_or_else(|| GuestError::BorrowCheckerOutOfHandles)?,
-        );
-        Ok(h)
-    }
-
-    fn shared_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
-        if self.is_mut_borrowed(r) {
-            return Err(GuestError::PtrBorrowed(r));
-        }
-        let h = self.new_handle()?;
-        self.shared_borrows.insert(h, r);
-        Ok(h)
-    }
-
-    fn mut_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
-        if self.is_shared_borrowed(r) || self.is_mut_borrowed(r) {
-            return Err(GuestError::PtrBorrowed(r));
-        }
-        let h = self.new_handle()?;
-        self.mut_borrows.insert(h, r);
-        Ok(h)
-    }
-
-    fn shared_unborrow(&mut self, h: BorrowHandle) {
-        let removed = self.shared_borrows.remove(&h);
-        debug_assert!(removed.is_some(), "double-freed shared borrow");
-    }
-
-    fn mut_unborrow(&mut self, h: BorrowHandle) {
-        let removed = self.mut_borrows.remove(&h);
-        debug_assert!(removed.is_some(), "double-freed mut borrow");
+    pub fn can_write(&self, _: Region) -> bool {
+        self.state.load(Relaxed) == 0
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn nonoverlapping() {
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(0, 10);
-        let r2 = Region::new(10, 10);
-        assert!(!r1.overlaps(r2));
-        bs.mut_borrow(r1).expect("can borrow r1");
-        bs.mut_borrow(r2).expect("can borrow r2");
-
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(10, 10);
-        let r2 = Region::new(0, 10);
-        assert!(!r1.overlaps(r2));
-        bs.mut_borrow(r1).expect("can borrow r1");
-        bs.mut_borrow(r2).expect("can borrow r2");
-    }
 
     #[test]
-    fn overlapping() {
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(0, 10);
-        let r2 = Region::new(9, 10);
-        assert!(r1.overlaps(r2));
-        bs.shared_borrow(r1).expect("can borrow r1");
-        assert!(bs.mut_borrow(r2).is_err(), "cant mut borrow r2");
-        bs.shared_borrow(r2).expect("can shared borrow r2");
+    fn smoke() {
+        let b = BorrowChecker::new();
+        let mut next = 0;
+        let mut region = || {
+            let a = next;
+            next += 1;
+            Region::new(a, a + 1)
+        };
 
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(0, 10);
-        let r2 = Region::new(2, 5);
-        assert!(r1.overlaps(r2));
-        bs.shared_borrow(r1).expect("can borrow r1");
-        assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
-        bs.shared_borrow(r2).expect("can shared borrow r2");
+        // can read/write initially
+        assert!(b.can_read(region()));
+        assert!(b.can_write(region()));
 
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(9, 10);
-        let r2 = Region::new(0, 10);
-        assert!(r1.overlaps(r2));
-        bs.shared_borrow(r1).expect("can borrow r1");
-        assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
-        bs.shared_borrow(r2).expect("can shared borrow r2");
+        // can shared borrow multiple times which will prevent mutable borrows
+        let h1 = b.shared_borrow(region()).unwrap();
+        let h2 = b.shared_borrow(region()).unwrap();
+        assert!(b.mut_borrow(region()).is_err());
 
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(2, 5);
-        let r2 = Region::new(0, 10);
-        assert!(r1.overlaps(r2));
-        bs.shared_borrow(r1).expect("can borrow r1");
-        assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
-        bs.shared_borrow(r2).expect("can shared borrow r2");
+        // can read, but can't write, while there are shared borrows
+        assert!(b.can_read(region()));
+        assert!(!b.can_write(region()));
 
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(2, 5);
-        let r2 = Region::new(10, 5);
-        let r3 = Region::new(15, 5);
-        let r4 = Region::new(0, 10);
-        assert!(r1.overlaps(r4));
-        bs.shared_borrow(r1).expect("can borrow r1");
-        bs.shared_borrow(r2).expect("can borrow r2");
-        bs.shared_borrow(r3).expect("can borrow r3");
-        assert!(bs.mut_borrow(r4).is_err(), "cant mut borrow r4");
-        bs.shared_borrow(r4).expect("can shared borrow r4");
-    }
+        // releasing shared borrows enables reading/writing again
+        b.shared_unborrow(h1);
+        b.shared_unborrow(h2);
+        assert!(b.can_read(region()));
+        assert!(b.can_write(region()));
 
-    #[test]
-    fn unborrowing() {
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(0, 10);
-        let r2 = Region::new(10, 10);
-        assert!(!r1.overlaps(r2));
-        assert_eq!(bs.has_outstanding_borrows(), false, "start with no borrows");
-        let h1 = bs.mut_borrow(r1).expect("can borrow r1");
-        assert_eq!(bs.has_outstanding_borrows(), true, "h1 is outstanding");
-        let h2 = bs.mut_borrow(r2).expect("can borrow r2");
+        // mutable borrow disallows shared borrows
+        let h1 = b.mut_borrow(region()).unwrap();
+        assert!(b.shared_borrow(region()).is_err());
 
-        assert!(bs.mut_borrow(r2).is_err(), "can't borrow r2 twice");
-        bs.mut_unborrow(h2);
-        assert_eq!(
-            bs.has_outstanding_borrows(),
-            true,
-            "h1 is still outstanding"
-        );
-        bs.mut_unborrow(h1);
-        assert_eq!(bs.has_outstanding_borrows(), false, "no remaining borrows");
+        // active mutable borrows disallows reads/writes
+        assert!(!b.can_read(region()));
+        assert!(!b.can_write(region()));
 
-        let _h3 = bs
-            .mut_borrow(r2)
-            .expect("can borrow r2 again now that its been unborrowed");
-
-        // Lets try again with shared:
-
-        let mut bs = InnerBorrowChecker::new();
-        let r1 = Region::new(0, 10);
-        let r2 = Region::new(10, 10);
-        assert!(!r1.overlaps(r2));
-        assert_eq!(bs.has_outstanding_borrows(), false, "start with no borrows");
-        let h1 = bs.shared_borrow(r1).expect("can borrow r1");
-        assert_eq!(bs.has_outstanding_borrows(), true, "h1 is outstanding");
-        let h2 = bs.shared_borrow(r2).expect("can borrow r2");
-        let h3 = bs.shared_borrow(r2).expect("can shared borrow r2 twice");
-
-        bs.shared_unborrow(h2);
-        assert_eq!(
-            bs.has_outstanding_borrows(),
-            true,
-            "h1, h3 still outstanding"
-        );
-        bs.shared_unborrow(h1);
-        bs.shared_unborrow(h3);
-        assert_eq!(bs.has_outstanding_borrows(), false, "no remaining borrows");
+        // releasing the mutable borrows allows raeding/writing again
+        b.mut_unborrow(h1);
+        assert!(b.can_read(region()));
+        assert!(b.can_write(region()));
     }
 }

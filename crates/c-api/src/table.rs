@@ -1,6 +1,6 @@
 use crate::{
     handle_result, wasm_extern_t, wasm_ref_t, wasm_store_t, wasm_tabletype_t, wasmtime_error_t,
-    wasmtime_val_t, CStoreContext, CStoreContextMut,
+    wasmtime_val_t, WasmtimeStoreContext, WasmtimeStoreContextMut,
 };
 use anyhow::anyhow;
 use std::mem::MaybeUninit;
@@ -36,6 +36,7 @@ fn option_wasm_ref_t_to_ref(r: Option<&wasm_ref_t>, table_ty: &TableType) -> Ref
     match (r.map(|r| r.r.clone()), table_ty.element().heap_type()) {
         (None, HeapType::NoFunc | HeapType::Func | HeapType::Concrete(_)) => Ref::Func(None),
         (None, HeapType::Extern) => Ref::Extern(None),
+        (None, HeapType::Any | HeapType::I31 | HeapType::None) => Ref::Any(None),
         (Some(r), _) => r,
     }
 }
@@ -115,7 +116,7 @@ pub extern "C" fn wasm_table_as_extern_const(t: &wasm_table_t) -> &wasm_extern_t
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_new(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     tt: &wasm_tabletype_t,
     init: &wasmtime_val_t,
     out: &mut Table,
@@ -131,7 +132,7 @@ pub unsafe extern "C" fn wasmtime_table_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_type(
-    store: CStoreContext<'_>,
+    store: WasmtimeStoreContext<'_>,
     table: &Table,
 ) -> Box<wasm_tabletype_t> {
     Box::new(wasm_tabletype_t::new(table.ty(store)))
@@ -139,7 +140,7 @@ pub unsafe extern "C" fn wasmtime_table_type(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_table_get(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     table: &Table,
     index: u32,
     ret: &mut MaybeUninit<wasmtime_val_t>,
@@ -155,7 +156,7 @@ pub extern "C" fn wasmtime_table_get(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_set(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     table: &Table,
     index: u32,
     val: &wasmtime_val_t,
@@ -170,13 +171,13 @@ pub unsafe extern "C" fn wasmtime_table_set(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_table_size(store: CStoreContext<'_>, table: &Table) -> u32 {
+pub extern "C" fn wasmtime_table_size(store: WasmtimeStoreContext<'_>, table: &Table) -> u32 {
     table.size(store)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_grow(
-    mut store: CStoreContextMut<'_>,
+    mut store: WasmtimeStoreContextMut<'_>,
     table: &Table,
     delta: u32,
     val: &wasmtime_val_t,

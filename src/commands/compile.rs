@@ -43,7 +43,7 @@ pub struct CompileCommand {
     #[arg(long, value_name = "TARGET")]
     pub target: Option<String>,
 
-    /// The path of the output compiled module; defaults to <MODULE>.cwasm
+    /// The path of the output compiled module; defaults to `<MODULE>.cwasm`
     #[arg(short = 'o', long, value_name = "OUTPUT")]
     pub output: Option<PathBuf>,
 

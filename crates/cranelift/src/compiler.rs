@@ -1,7 +1,7 @@
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{array_call_signature, native_call_signature, DEBUG_ASSERT_TRAP_CODE};
-use crate::{builder::LinkOptions, value_type, wasm_call_signature, BuiltinFunctionSignatures};
+use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
 use crate::{CompiledFunction, ModuleTextBuilder};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
@@ -339,7 +339,7 @@ impl wasmtime_environ::Compiler for Compiler {
             vmctx,
         );
 
-        let ret = NativeRet::classify(pointer_type, wasm_func_ty);
+        let ret = NativeRet::classify(isa, wasm_func_ty);
         let wasm_args = ret.native_args(&args);
 
         // Then call into Wasm.
@@ -370,7 +370,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let callee_vmctx = args[0];
         let caller_vmctx = args[1];
 
-        let ret = NativeRet::classify(pointer_type, wasm_func_ty);
+        let ret = NativeRet::classify(isa, wasm_func_ty);
 
         // We are exiting Wasm, so save our PC and FP.
         //
@@ -423,15 +423,14 @@ impl wasmtime_environ::Compiler for Compiler {
         // use for the native call then load the results from the return pointer
         // to pass through as native return values in the wasm abi.
         let mut results = builder.func.dfg.inst_results(call).to_vec();
-        if let NativeRet::Retptr { offsets, .. } = ret {
-            let slot = *args.last().unwrap();
-            assert_eq!(offsets.len(), wasm_func_ty.returns().len() - 1);
-            for (ty, offset) in wasm_func_ty.returns()[1..].iter().zip(offsets) {
-                let ty = crate::value_type(isa, *ty);
+        if let NativeRet::Retptr { slots, .. } = ret {
+            let base = *args.last().unwrap();
+            assert_eq!(slots.len(), wasm_func_ty.returns().len() - 1);
+            for (offset, ty) in slots {
                 results.push(
                     builder
                         .ins()
-                        .load(ty, MemFlags::trusted(), slot, offset as i32),
+                        .load(ty, ir::MemFlags::trusted(), base, offset),
                 );
             }
         }
@@ -797,7 +796,7 @@ impl Compiler {
         let (mut builder, block0) = compiler.builder(func);
         let args = builder.func.dfg.block_params(block0).to_vec();
 
-        let ret = NativeRet::classify(pointer_type, ty);
+        let ret = NativeRet::classify(isa, ty);
         let wasm_args = &ret.native_args(&args)[2..];
 
         let (values_vec_ptr, values_vec_len) =
@@ -960,6 +959,7 @@ impl Compiler {
         values_vec_ptr: Value,
         values_vec_capacity: Value,
     ) {
+        debug_assert_eq!(types.len(), values.len());
         debug_assert_enough_capacity_for_length(builder, types.len(), values_vec_capacity);
 
         // Note that loads and stores are unconditionally done in the
@@ -967,14 +967,19 @@ impl Compiler {
         // despite this load/store being unrelated to execution in wasm itself.
         // For more details on this see the `ValRaw` type in the
         // `wasmtime-runtime` crate.
-        let mut mflags = MemFlags::trusted();
-        mflags.set_endianness(ir::Endianness::Little);
+        let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
 
         let value_size = mem::size_of::<u128>();
-        for (i, val) in values.iter().copied().enumerate() {
-            builder
-                .ins()
-                .store(mflags, val, values_vec_ptr, (i * value_size) as i32);
+        for (i, (val, ty)) in values.iter().copied().zip(types).enumerate() {
+            crate::unbarriered_store_type_at_offset(
+                &*self.isa,
+                &mut builder.cursor(),
+                *ty,
+                flags,
+                values_vec_ptr,
+                i32::try_from(i * value_size).unwrap(),
+                val,
+            );
         }
     }
 
@@ -999,18 +1004,18 @@ impl Compiler {
 
         // Note that this is little-endian like `store_values_to_array` above,
         // see notes there for more information.
-        let mut mflags = MemFlags::trusted();
-        mflags.set_endianness(ir::Endianness::Little);
+        let flags = MemFlags::trusted().with_endianness(ir::Endianness::Little);
 
         let mut results = Vec::new();
-        for (i, r) in types.iter().enumerate() {
-            let load = builder.ins().load(
-                value_type(isa, *r),
-                mflags,
+        for (i, ty) in types.iter().enumerate() {
+            results.push(crate::unbarriered_load_type_at_offset(
+                isa,
+                &mut builder.cursor(),
+                *ty,
+                flags,
                 values_vec_ptr,
-                (i * value_size) as i32,
-            );
-            results.push(load);
+                i32::try_from(i * value_size).unwrap(),
+            ));
         }
         results
     }
@@ -1297,12 +1302,15 @@ fn save_last_wasm_exit_fp_and_pc(
 
 enum NativeRet {
     Bare,
-    Retptr { offsets: Vec<u32>, size: u32 },
+    Retptr {
+        slots: Vec<(i32, ir::Type)>,
+        size: u32,
+    },
 }
 
 impl NativeRet {
-    fn classify(pointer_type: ir::Type, ty: &WasmFuncType) -> NativeRet {
-        fn align_to(val: u32, align: u32) -> u32 {
+    fn classify(isa: &dyn TargetIsa, ty: &WasmFuncType) -> NativeRet {
+        fn align_to(val: i32, align: i32) -> i32 {
             (val + (align - 1)) & !(align - 1)
         }
 
@@ -1313,20 +1321,17 @@ impl NativeRet {
                 let mut offsets = Vec::new();
                 let mut max_align = 1;
                 for ty in other[1..].iter() {
-                    let size = match ty {
-                        WasmValType::I32 | WasmValType::F32 => 4,
-                        WasmValType::I64 | WasmValType::F64 => 8,
-                        WasmValType::Ref(_) => pointer_type.bytes(),
-                        WasmValType::V128 => 16,
-                    };
+                    let ty = crate::value_type(isa, *ty);
+                    let size = ty.bytes();
+                    let size = i32::try_from(size).unwrap();
                     offset = align_to(offset, size);
-                    offsets.push(offset);
+                    offsets.push((offset, ty));
                     offset += size;
                     max_align = max_align.max(size);
                 }
                 NativeRet::Retptr {
-                    offsets,
-                    size: align_to(offset, max_align),
+                    slots: offsets,
+                    size: u32::try_from(align_to(offset, max_align)).unwrap(),
                 }
             }
         }
@@ -1349,14 +1354,13 @@ impl NativeRet {
             NativeRet::Bare => {
                 builder.ins().return_(&results);
             }
-            NativeRet::Retptr { offsets, .. } => {
+            NativeRet::Retptr { slots, .. } => {
                 let ptr = *builder.func.dfg.block_params(block0).last().unwrap();
                 let (first, rest) = results.split_first().unwrap();
-                assert_eq!(rest.len(), offsets.len());
-                for (arg, offset) in rest.iter().zip(offsets) {
-                    builder
-                        .ins()
-                        .store(MemFlags::trusted(), *arg, ptr, *offset as i32);
+                assert_eq!(rest.len(), slots.len());
+                for (arg, (offset, ty)) in rest.iter().zip(slots) {
+                    assert_eq!(builder.func.dfg.value_type(*arg), *ty);
+                    builder.ins().store(MemFlags::trusted(), *arg, ptr, *offset);
                 }
                 builder.ins().return_(&[*first]);
             }

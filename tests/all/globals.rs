@@ -102,3 +102,251 @@ fn v128() -> anyhow::Result<()> {
     assert_eq!(g.get(&mut store).v128(), Some(V128::from(1)));
     Ok(())
 }
+
+#[test]
+fn i31ref_global_new() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for mutability in [Mutability::Const, Mutability::Var] {
+        for val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+            None,
+        ] {
+            Global::new(
+                &mut store,
+                GlobalType::new(ValType::I31REF, mutability),
+                val.into(),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn i31ref_global_get() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for mutability in [Mutability::Const, Mutability::Var] {
+        for val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+            None,
+        ] {
+            let val = Val::from(val);
+            let global = Global::new(
+                &mut store,
+                GlobalType::new(ValType::I31REF, mutability),
+                val.clone(),
+            )?;
+
+            let got = global.get(&mut store);
+
+            let val = val
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let got = got
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+
+            assert_eq!(val, got);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn i31ref_global_set() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for init in [
+        Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+        None,
+    ] {
+        for new_val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(36).unwrap())),
+            None,
+        ] {
+            let global = Global::new(
+                &mut store,
+                GlobalType::new(ValType::I31REF, Mutability::Var),
+                init.into(),
+            )?;
+
+            let new_val = Val::from(new_val);
+            global.set(&mut store, new_val.clone())?;
+            let got = global.get(&mut store);
+
+            let new_val = new_val
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let got = got
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+
+            assert_eq!(new_val, got);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn i31ref_global_ty() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for mutability in [Mutability::Const, Mutability::Var] {
+        for val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+            None,
+        ] {
+            let expected_ty = GlobalType::new(ValType::I31REF, mutability);
+            let global = Global::new(&mut store, expected_ty.clone(), val.into())?;
+            let actual_ty = global.ty(&store);
+            assert_eq!(expected_ty.mutability(), actual_ty.mutability());
+            assert!(ValType::eq(expected_ty.content(), actual_ty.content()));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn i31ref_as_anyref_global_new() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for mutability in [Mutability::Const, Mutability::Var] {
+        for val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+            None,
+        ] {
+            Global::new(
+                &mut store,
+                GlobalType::new(ValType::ANYREF, mutability),
+                val.into(),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn i31ref_as_anyref_global_get() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for mutability in [Mutability::Const, Mutability::Var] {
+        for val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+            None,
+        ] {
+            let val = Val::from(val);
+            let global = Global::new(
+                &mut store,
+                GlobalType::new(ValType::ANYREF, mutability),
+                val.clone(),
+            )?;
+
+            let got = global.get(&mut store);
+
+            let val = val
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let got = got
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+
+            assert_eq!(val, got);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn i31ref_as_anyref_global_set() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for init in [
+        Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+        None,
+    ] {
+        for new_val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(36).unwrap())),
+            None,
+        ] {
+            let global = Global::new(
+                &mut store,
+                GlobalType::new(ValType::ANYREF, Mutability::Var),
+                init.into(),
+            )?;
+
+            let new_val = Val::from(new_val);
+            global.set(&mut store, new_val.clone())?;
+            let got = global.get(&mut store);
+
+            let new_val = new_val
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let got = got
+                .anyref()
+                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+
+            assert_eq!(new_val, got);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn i31ref_as_anyref_global_ty() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    for mutability in [Mutability::Const, Mutability::Var] {
+        for val in [
+            Some(AnyRef::from_i31(&mut store, I31::new_u32(42).unwrap())),
+            None,
+        ] {
+            let expected_ty = GlobalType::new(ValType::ANYREF, mutability);
+            let global = Global::new(&mut store, expected_ty.clone(), val.into())?;
+            let actual_ty = global.ty(&store);
+            assert_eq!(expected_ty.mutability(), actual_ty.mutability());
+            assert!(ValType::eq(expected_ty.content(), actual_ty.content()));
+        }
+    }
+    Ok(())
+}

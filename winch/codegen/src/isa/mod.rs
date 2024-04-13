@@ -181,7 +181,7 @@ pub trait TargetIsa: Send + Sync {
         }
     }
 
-    /// Get the endianess of the underlying target triple.
+    /// Get the endianness of the underlying target triple.
     fn endianness(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
     }

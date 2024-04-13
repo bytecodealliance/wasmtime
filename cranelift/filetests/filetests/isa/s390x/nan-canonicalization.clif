@@ -1,0 +1,112 @@
+test compile precise-output
+set enable_nan_canonicalization=true 
+target s390x
+
+function %f0(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+; block0:
+;   vfasb %v17, %v24, %v25
+;   bras %r1, 8 ; data.f32 NaN ; vlef %v18, 0(%r1), 0
+;   vrepf %v18, %v18, 0
+;   vfchesb %v7, %v17, %v17
+;   vfchesb %v19, %v17, %v17
+;   vno %v19, %v7, %v19
+;   vsel %v24, %v18, %v17, %v19
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vfasb %v17, %v24, %v25
+;   bras %r1, 0xe
+;   su %f12, 0
+;   vlef %v18, 0(%r1), 0
+;   vrepf %v18, %v18, 0
+;   vfchesb %v7, %v17, %v17
+;   vfchesb %v19, %v17, %v17
+;   vno %v19, %v7, %v19
+;   vsel %v24, %v18, %v17, %v19
+;   br %r14
+
+function %f1(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+; block0:
+;   wfadb %v21, %f0, %f2
+;   bras %r1, 12 ; data.f64 NaN ; vleg %v22, 0(%r1), 0
+;   vgbm %v20, 0
+;   vpdi %v22, %v22, %v20, 0
+;   vgbm %v20, 0
+;   vpdi %v23, %v21, %v20, 0
+;   vfchedb %v19, %v23, %v23
+;   vfchedb %v21, %v23, %v23
+;   vno %v24, %v19, %v21
+;   vsel %v21, %v22, %v23, %v24
+;   vrepg %v0, %v21, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   wfadb %v21, %f0, %f2
+;   bras %r1, 0x12
+;   su %f15, 0(%r8)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   vleg %v22, 0(%r1), 0
+;   vzero %v20
+;   vpdi %v22, %v22, %v20, 0
+;   vzero %v20
+;   vpdi %v23, %v21, %v20, 0
+;   vfchedb %v19, %v23, %v23
+;   vfchedb %v21, %v23, %v23
+;   vno %v24, %v19, %v21
+;   vsel %v21, %v22, %v23, %v24
+;   vrepg %v0, %v21, 0
+;   br %r14
+
+function %f1(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+	v2 = fadd v0, v1
+	return v2
+}
+
+; VCode:
+; block0:
+;   wfasb %v21, %f0, %f2
+;   bras %r1, 8 ; data.f32 NaN ; vlef %v22, 0(%r1), 0
+;   vgbm %v20, 61440
+;   vn %v22, %v22, %v20
+;   vgbm %v20, 61440
+;   vn %v23, %v21, %v20
+;   vfchesb %v19, %v23, %v23
+;   vfchesb %v21, %v23, %v23
+;   vno %v24, %v19, %v21
+;   vsel %v21, %v22, %v23, %v24
+;   vrepf %v0, %v21, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   wfasb %v21, %f0, %f2
+;   bras %r1, 0xe
+;   su %f12, 0
+;   vlef %v22, 0(%r1), 0
+;   vgbm %v20, 0xf000
+;   vn %v22, %v22, %v20
+;   vgbm %v20, 0xf000
+;   vn %v23, %v21, %v20
+;   vfchesb %v19, %v23, %v23
+;   vfchesb %v21, %v23, %v23
+;   vno %v24, %v19, %v21
+;   vsel %v21, %v22, %v23, %v24
+;   vrepf %v0, %v21, 0
+;   br %r14
+

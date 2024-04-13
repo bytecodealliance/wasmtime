@@ -1,15 +1,11 @@
 name: 'Install Rust toolchain'
-description: 'Install a rust toolchain and cache the crates index'
+description: 'Install a rust toolchain'
 
 inputs:
   toolchain:
     description: 'Default toolchan to install'
     required: false
     default: 'default'
-  lockfiles:
-    description: 'Path glob for Cargo.lock files to use as cache keys'
-    required: false
-    default: '**/Cargo.lock'
 
 runs:
   using: composite
@@ -55,12 +51,6 @@ runs:
         EOF
         fi
 
-        # Use a more efficient method for fetching the crates.io-index than
-        # the (currently) default git-based index.
-        cat >> "$GITHUB_ENV" <<EOF
-        CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
-        EOF
-
     - name: Require semicolons in WIT
       shell: bash
       run: echo WIT_REQUIRE_SEMICOLONS=1 >> "$GITHUB_ENV"
@@ -68,44 +58,3 @@ runs:
     - name: Install the WASI target
       shell: bash
       run: rustup target add wasm32-wasi wasm32-unknown-unknown
-
-    - name: Choose registry cache key
-      shell: bash
-      # Update the registry index cache at most once per day. actions/cache
-      # won't write changes back to the cache if the cache key already exists,
-      # so this means every job may have to re-download the index entries which
-      # are new since the last time the cache key changed. Changing the cache
-      # key relatively frequently keeps the amount of duplicated work down. But
-      # changing it too frequently means we might hit the 10GB quota too
-      # quickly, which would cause GitHub to evict other caches we still want.
-      run: echo CARGO_REGISTRY_CACHE_KEY=$(date +%Y%m%d) >> $GITHUB_ENV
-
-    - name: Cache Cargo registry index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry/index/
-        key: cargo-registry-${{ env.CARGO_REGISTRY_CACHE_KEY }}
-        # Any older registry-index cache is still valid. It's a git clone, so
-        # cargo only has to pull down the changes since the index was cached.
-        restore-keys: cargo-registry-
-
-    - name: Cache crate sources for dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-        key: cargo-crates-${{ inputs.lockfiles }}-${{ hashFiles(inputs.lockfiles) }}
-        # If Cargo.lock has changed, we probably will need to get the source
-        # code for some crates we don't already have. But any crates we have
-        # source cached for are still valid. The only problem is nothing
-        # removes old crate sources from the cache, so using `restore-keys`
-        # this way may use more of our GitHub cache quota than we'd like.
-        #
-        # Also, scope this cache by which Cargo.lock we're building from.
-        # Otherwise, whichever job writes the cache first will get its
-        # dependencies cached, and that cache will be used as the basis for the
-        # next job, even though odds are pretty good the cache is useless.
-        restore-keys: cargo-crates-${{ inputs.lockfiles }}-
-
-# TODO: on cache miss, after cargo has updated the registry index, run `git gc`

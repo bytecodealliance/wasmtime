@@ -105,7 +105,7 @@ unsafe impl WasmTy for V128 {
     }
 
     #[inline]
-    fn is_externref(&self) -> bool {
+    fn is_non_i31_gc_ref(&self) -> bool {
         false
     }
 

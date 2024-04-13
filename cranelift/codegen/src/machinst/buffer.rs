@@ -1635,8 +1635,11 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Set the `SourceLoc` for code from this offset until the offset at the
     /// next call to `end_srcloc()`.
-    pub fn start_srcloc(&mut self, loc: RelSourceLoc) {
-        self.cur_srcloc = Some((self.cur_offset(), loc));
+    /// Returns the current [CodeOffset] and [RelSourceLoc].
+    pub fn start_srcloc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {
+        let cur = (self.cur_offset(), loc);
+        self.cur_srcloc = Some(cur);
+        cur
     }
 
     /// Mark the end of the `SourceLoc` segment started at the last
@@ -1672,7 +1675,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 (start_offset, end_offset)
             }
         };
-        trace!("Adding stack map for offsets {start:#x}..{end:#x}");
+        trace!("Adding stack map for offsets {start:#x}..{end:#x}: {stack_map:?}");
         self.stack_maps.push(MachStackMap {
             offset: start,
             offset_end: end,

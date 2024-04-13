@@ -1,11 +1,14 @@
 use crate::{
     store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
     trampoline::generate_global_export,
-    AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref, Val, ValType,
+    AnyRef, AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref,
+    RootedGcRefImpl, Val, ValType,
 };
 use anyhow::{bail, Context, Result};
-use std::mem;
 use std::ptr;
+use std::ptr::NonNull;
+use wasmtime_environ::TypeTrace;
+use wasmtime_runtime::{GcRootsList, SendSyncPtr};
 
 /// A WebAssembly `global` value which can be read and written to.
 ///
@@ -113,19 +116,30 @@ impl Global {
                 ValType::F64 => Val::F64(*definition.as_u64()),
                 ValType::V128 => Val::V128((*definition.as_u128()).into()),
                 ValType::Ref(ref_ty) => {
-                    let reference = match ref_ty.heap_type() {
+                    let reference: Ref = match ref_ty.heap_type() {
                         HeapType::Func | HeapType::Concrete(_) => {
-                            Ref::Func(Func::_from_raw(&mut store, definition.as_func_ref().cast()))
+                            Func::_from_raw(&mut store, definition.as_func_ref().cast()).into()
                         }
 
                         HeapType::NoFunc => Ref::Func(None),
 
                         HeapType::Extern => Ref::Extern(
                             definition
-                                .as_externref()
-                                .clone()
-                                .map(|inner| ExternRef::from_vm_extern_ref(&mut store, inner)),
+                                .as_gc_ref()
+                                .map(|r| {
+                                    let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                                    ExternRef::from_cloned_gc_ref(&mut store, r)
+                                })
+                                .into(),
                         ),
+
+                        HeapType::Any | HeapType::I31 | HeapType::None => definition
+                            .as_gc_ref()
+                            .map(|r| {
+                                let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                                AnyRef::from_cloned_gc_ref(&mut store, r)
+                            })
+                            .into(),
                     };
                     debug_assert!(
                         ref_ty.is_nullable() || !reference.is_null(),
@@ -172,22 +186,53 @@ impl Global {
                 Val::ExternRef(e) => {
                     let new = match e {
                         None => None,
-                        Some(e) => Some(e.try_to_vm_extern_ref(&mut store)?),
+                        Some(e) => Some(e.try_gc_ref(&mut store)?.unchecked_copy()),
                     };
-                    // Take care to invoke the `Drop` implementation of the
-                    // existing `VMExternRef` so that it doesn't leak.
-                    let old = mem::replace(definition.as_externref_mut(), new);
-                    drop(old);
+                    let new = new.as_ref();
+                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
+                }
+                Val::AnyRef(a) => {
+                    let new = match a {
+                        None => None,
+                        Some(a) => Some(a.try_gc_ref(&mut store)?.unchecked_copy()),
+                    };
+                    let new = new.as_ref();
+                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
                 }
             }
         }
         Ok(())
     }
 
+    pub(crate) fn trace_root(&self, store: &mut StoreOpaque, gc_roots_list: &mut GcRootsList) {
+        if let Some(ref_ty) = self._ty(store).content().as_ref() {
+            if !ref_ty.is_gc_heap_type() {
+                return;
+            }
+
+            if let Some(gc_ref) = unsafe { (*store[self.0].definition).as_gc_ref() } {
+                let gc_ref = NonNull::from(gc_ref);
+                let gc_ref = SendSyncPtr::new(gc_ref);
+                unsafe {
+                    gc_roots_list.add_root(gc_ref);
+                }
+            }
+        }
+    }
+
     pub(crate) unsafe fn from_wasmtime_global(
-        wasmtime_export: wasmtime_runtime::ExportGlobal,
+        mut wasmtime_export: wasmtime_runtime::ExportGlobal,
         store: &mut StoreOpaque,
     ) -> Global {
+        wasmtime_export
+            .global
+            .wasm_ty
+            .canonicalize(&mut |module_index| {
+                wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
+                    instance.engine_type_index(module_index)
+                })
+            });
+
         Global(store.store_data_mut().insert(wasmtime_export))
     }
 

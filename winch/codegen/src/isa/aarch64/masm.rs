@@ -1,7 +1,7 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv, HeapData, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, FuncEnv},
     isa::reg::Reg,
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
@@ -9,7 +9,11 @@ use crate::{
         StackSlot, TrapCode, TruncKind,
     },
 };
-use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
+use cranelift_codegen::{
+    binemit::CodeOffset,
+    ir::{RelSourceLoc, SourceLoc},
+    settings, Final, MachBufferFinalized, MachLabel,
+};
 use wasmtime_environ::PtrSize;
 
 /// Aarch64 MacroAssembler.
@@ -107,24 +111,6 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn table_elem_address(
-        &mut self,
-        _index: Reg,
-        _base: Reg,
-        _table_data: &TableData,
-        _context: &mut CodeGenContext,
-    ) -> Self::Address {
-        todo!()
-    }
-
-    fn table_size(&mut self, _table_data: &TableData, _context: &mut CodeGenContext) {
-        todo!()
-    }
-
-    fn memory_size(&mut self, _heap_data: &HeapData, _context: &mut CodeGenContext) {
-        todo!()
-    }
-
     fn address_from_sp(&self, _offset: SPOffset) -> Self::Address {
         todo!()
     }
@@ -201,8 +187,8 @@ impl Masm for MacroAssembler {
         SPOffset::from_u32(self.sp_offset)
     }
 
-    fn finalize(self) -> MachBufferFinalized<Final> {
-        self.asm.finalize()
+    fn finalize(self, base: Option<SourceLoc>) -> MachBufferFinalized<Final> {
+        self.asm.finalize(base)
     }
 
     fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
@@ -529,6 +515,18 @@ impl Masm for MacroAssembler {
 
     fn trapif(&mut self, _cc: IntCmpKind, _code: TrapCode) {
         todo!()
+    }
+
+    fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {
+        self.asm.buffer_mut().start_srcloc(loc)
+    }
+
+    fn end_source_loc(&mut self) {
+        self.asm.buffer_mut().end_srcloc();
+    }
+
+    fn current_code_offset(&self) -> CodeOffset {
+        self.asm.buffer().cur_offset()
     }
 }
 

@@ -80,12 +80,12 @@ newtype_of_reg!(VReg, WritableVReg, |reg| reg.class() == RegClass::Vector);
 pub enum AMode {
     /// Arbitrary offset from a register. Converted to generation of large
     /// offsets with multiple instructions as necessary during code emission.
-    RegOffset(Reg, i64, Type),
+    RegOffset(Reg, i64),
     /// Offset from the stack pointer.
-    SPOffset(i64, Type),
+    SPOffset(i64),
 
     /// Offset from the frame pointer.
-    FPOffset(i64, Type),
+    FPOffset(i64),
 
     /// Offset from the "nominal stack pointer", which is where the real SP is
     /// just after stack and spill slots are allocated in the function prologue.
@@ -99,7 +99,7 @@ pub enum AMode {
     /// SP" is where the actual SP is after the function prologue and before
     /// clobber pushes. See the diagram in the documentation for
     /// [crate::isa::riscv64::abi](the ABI module) for more details.
-    NominalSPOffset(i64, Type),
+    NominalSPOffset(i64),
 
     /// A reference to a constant which is placed outside of the function's
     /// body, typically at the end.
@@ -112,7 +112,7 @@ pub enum AMode {
 impl AMode {
     pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
-            AMode::RegOffset(reg, offset, ty) => AMode::RegOffset(allocs.next(reg), offset, ty),
+            AMode::RegOffset(reg, offset) => AMode::RegOffset(allocs.next(reg), offset),
             AMode::SPOffset(..)
             | AMode::FPOffset(..)
             | AMode::NominalSPOffset(..)
@@ -146,17 +146,10 @@ impl AMode {
 
     pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
         match self {
-            &AMode::NominalSPOffset(offset, _) => offset + state.virtual_sp_offset,
-            _ => self.get_offset(),
-        }
-    }
-
-    fn get_offset(&self) -> i64 {
-        match self {
-            &AMode::RegOffset(_, offset, ..) => offset,
-            &AMode::SPOffset(offset, _) => offset,
-            &AMode::FPOffset(offset, _) => offset,
-            &AMode::NominalSPOffset(offset, _) => offset,
+            &AMode::NominalSPOffset(offset) => offset + state.virtual_sp_offset,
+            &AMode::RegOffset(_, offset) => offset,
+            &AMode::SPOffset(offset) => offset,
+            &AMode::FPOffset(offset) => offset,
             &AMode::Const(_) | &AMode::Label(_) => 0,
         }
     }
@@ -206,9 +199,10 @@ impl Display for AMode {
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            StackAMode::FPOffset(offset, ty) => AMode::FPOffset(offset, ty),
-            StackAMode::SPOffset(offset, ty) => AMode::SPOffset(offset, ty),
-            StackAMode::NominalSPOffset(offset, ty) => AMode::NominalSPOffset(offset, ty),
+            // Argument area begins after saved lr + fp.
+            StackAMode::IncomingArg(offset) => AMode::FPOffset(offset + 16),
+            StackAMode::OutgoingArg(offset) => AMode::SPOffset(offset),
+            StackAMode::Slot(offset) => AMode::NominalSPOffset(offset),
         }
     }
 }

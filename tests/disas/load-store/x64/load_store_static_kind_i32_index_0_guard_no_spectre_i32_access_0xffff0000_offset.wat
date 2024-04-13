@@ -24,7 +24,7 @@
 ;;       movl    %edx, %r9d
 ;;       cmpq    $0xfffc, %r9
 ;;       ja      0x26
-;;   14: addq    0x50(%rdi), %r9
+;;   14: addq    0x60(%rdi), %r9
 ;;       movl    $0xffff0000, %esi
 ;;       movl    %ecx, (%r9, %rsi)
 ;;       movq    %rbp, %rsp
@@ -38,7 +38,7 @@
 ;;       movl    %edx, %r9d
 ;;       cmpq    $0xfffc, %r9
 ;;       ja      0x56
-;;   44: addq    0x50(%rdi), %r9
+;;   44: addq    0x60(%rdi), %r9
 ;;       movl    $0xffff0000, %esi
 ;;       movl    (%r9, %rsi), %eax
 ;;       movq    %rbp, %rsp

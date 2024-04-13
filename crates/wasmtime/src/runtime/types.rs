@@ -1,10 +1,9 @@
 use anyhow::{bail, Result};
 use std::fmt::{self, Display};
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType,
-    WasmHeapType, WasmRefType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
+    VMSharedTypeIndex, WasmFuncType, WasmHeapType, WasmRefType, WasmValType,
 };
-use wasmtime_runtime::VMSharedTypeIndex;
 
 use crate::{type_registry::RegisteredType, Engine};
 
@@ -91,6 +90,15 @@ impl ValType {
     /// The `nullfuncref` type, aka `(ref null nofunc)`.
     pub const NULLFUNCREF: Self = ValType::Ref(RefType::NULLFUNCREF);
 
+    /// The `anyref` type, aka `(ref null any)`.
+    pub const ANYREF: Self = ValType::Ref(RefType::ANYREF);
+
+    /// The `i31ref` type, aka `(ref null i31)`.
+    pub const I31REF: Self = ValType::Ref(RefType::I31REF);
+
+    /// The `nullref` type, aka `(ref null none)`.
+    pub const NULLREF: Self = ValType::Ref(RefType::NULLREF);
+
     /// Returns true if `ValType` matches any of the numeric types. (e.g. `I32`,
     /// `I64`, `F32`, `F64`).
     #[inline]
@@ -157,6 +165,18 @@ impl ValType {
             ValType::Ref(RefType {
                 is_nullable: true,
                 heap_type: HeapType::Extern
+            })
+        )
+    }
+
+    /// Is this the `anyref` (aka `(ref null any)`) type?
+    #[inline]
+    pub fn is_anyref(&self) -> bool {
+        matches!(
+            self,
+            ValType::Ref(RefType {
+                is_nullable: true,
+                heap_type: HeapType::Any
             })
         )
     }
@@ -310,6 +330,24 @@ impl RefType {
         heap_type: HeapType::NoFunc,
     };
 
+    /// The `anyref` type, aka `(ref null any)`.
+    pub const ANYREF: Self = RefType {
+        is_nullable: true,
+        heap_type: HeapType::Any,
+    };
+
+    /// The `i31ref` type, aka `(ref null i31)`.
+    pub const I31REF: Self = RefType {
+        is_nullable: true,
+        heap_type: HeapType::I31,
+    };
+
+    /// The `nullref` type, aka `(ref null none)`.
+    pub const NULLREF: Self = RefType {
+        is_nullable: true,
+        heap_type: HeapType::None,
+    };
+
     /// Construct a new reference type.
     pub fn new(is_nullable: bool, heap_type: HeapType) -> RefType {
         RefType {
@@ -383,6 +421,10 @@ impl RefType {
             heap_type: HeapType::from_wasm_type(engine, &ty.heap_type),
         }
     }
+
+    pub(crate) fn is_gc_heap_type(&self) -> bool {
+        self.heap_type().is_gc_heap_type()
+    }
 }
 
 /// The heap types that can Wasm can have references to.
@@ -417,6 +459,22 @@ pub enum HeapType {
     /// This is the bottom type for the function references type hierarchy, and
     /// therefore `nofunc` is a subtype of all function reference types.
     NoFunc,
+
+    /// The abstract `any` heap type represents all internal Wasm data.
+    ///
+    /// This is the top type of the internal type hierarchy, and is therefore a
+    /// supertype of all internal types (such as `i31`, `struct`s, and
+    /// `array`s).
+    Any,
+
+    /// The `i31` heap type represents unboxed 31-bit integers.
+    I31,
+
+    /// The abstract `none` heap type represents the null internal reference.
+    ///
+    /// This is the bottom type for the internal type hierarchy, and therefore
+    /// `none` is a subtype of internal types.
+    None,
 }
 
 impl Display for HeapType {
@@ -425,6 +483,9 @@ impl Display for HeapType {
             HeapType::Extern => write!(f, "extern"),
             HeapType::Func => write!(f, "func"),
             HeapType::NoFunc => write!(f, "nofunc"),
+            HeapType::Any => write!(f, "any"),
+            HeapType::I31 => write!(f, "i31"),
+            HeapType::None => write!(f, "none"),
             HeapType::Concrete(ty) => write!(f, "(concrete {:?})", ty.type_index()),
         }
     }
@@ -451,6 +512,21 @@ impl HeapType {
     /// Is this the abstract `nofunc` heap type?
     pub fn is_no_func(&self) -> bool {
         matches!(self, HeapType::NoFunc)
+    }
+
+    /// Is this the abstract `any` heap type?
+    pub fn is_any(&self) -> bool {
+        matches!(self, HeapType::Any)
+    }
+
+    /// Is this the abstract `i31` heap type?
+    pub fn is_i31(&self) -> bool {
+        matches!(self, HeapType::I31)
+    }
+
+    /// Is this the abstract `none` heap type?
+    pub fn is_none(&self) -> bool {
+        matches!(self, HeapType::None)
     }
 
     /// Is this an abstract type?
@@ -496,6 +572,7 @@ impl HeapType {
         match self {
             HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => HeapType::Func,
             HeapType::Extern => HeapType::Extern,
+            HeapType::Any | HeapType::I31 | HeapType::None => HeapType::Any,
         }
     }
 
@@ -521,6 +598,15 @@ impl HeapType {
 
             (HeapType::Func, HeapType::Func) => true,
             (HeapType::Func, _) => false,
+
+            (HeapType::None, HeapType::None | HeapType::I31 | HeapType::Any) => true,
+            (HeapType::None, _) => false,
+
+            (HeapType::I31, HeapType::I31 | HeapType::Any) => true,
+            (HeapType::I31, _) => false,
+
+            (HeapType::Any, HeapType::Any) => true,
+            (HeapType::Any, _) => false,
         }
     }
 
@@ -550,7 +636,12 @@ impl HeapType {
 
     pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
         match self {
-            HeapType::Extern | HeapType::Func | HeapType::NoFunc => true,
+            HeapType::Extern
+            | HeapType::Func
+            | HeapType::NoFunc
+            | HeapType::Any
+            | HeapType::I31
+            | HeapType::None => true,
             HeapType::Concrete(ty) => ty.comes_from_same_engine(engine),
         }
     }
@@ -560,8 +651,11 @@ impl HeapType {
             HeapType::Extern => WasmHeapType::Extern,
             HeapType::Func => WasmHeapType::Func,
             HeapType::NoFunc => WasmHeapType::NoFunc,
+            HeapType::Any => WasmHeapType::Any,
+            HeapType::I31 => WasmHeapType::I31,
+            HeapType::None => WasmHeapType::None,
             HeapType::Concrete(f) => {
-                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(f.type_index().bits()))
+                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(f.type_index()))
             }
         }
     }
@@ -571,13 +665,42 @@ impl HeapType {
             WasmHeapType::Extern => HeapType::Extern,
             WasmHeapType::Func => HeapType::Func,
             WasmHeapType::NoFunc => HeapType::NoFunc,
+            WasmHeapType::Any => HeapType::Any,
+            WasmHeapType::I31 => HeapType::I31,
+            WasmHeapType::None => HeapType::None,
             WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(idx)) => {
-                let idx = VMSharedTypeIndex::new(*idx);
-                HeapType::Concrete(FuncType::from_shared_type_index(engine, idx))
+                HeapType::Concrete(FuncType::from_shared_type_index(engine, *idx))
             }
             WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonical heap type")
             }
+        }
+    }
+
+    pub(crate) fn is_gc_heap_type(&self) -> bool {
+        // All `t <: (ref null any)` and `t <: (ref null extern)` that are
+        // not `(ref null? i31)` are GC-managed references.
+        match self {
+            // These types are managed by the GC.
+            HeapType::Extern | HeapType::Any => true,
+
+            // TODO: Once we support concrete struct and array types, we will
+            // need to inspect the payload to determine whether this is a
+            // GC-managed type or not.
+            Self::Concrete(_) => false,
+
+            // These are compatible with GC references, but don't actually point
+            // to GC objecs. It would generally be safe to return `true` here,
+            // but there is no need to.
+            HeapType::I31 => false,
+
+            // These are a subtype of GC-managed types, but are uninhabited, so
+            // can never actually point to a GC object. Again, we could return
+            // `true` here but there is no need.
+            HeapType::None => false,
+
+            // These types are not managed by the GC.
+            HeapType::Func | HeapType::NoFunc => false,
         }
     }
 }
@@ -639,9 +762,14 @@ impl ExternType {
         ty: &EntityType,
     ) -> ExternType {
         match ty {
-            EntityType::Function(idx) => {
-                FuncType::from_wasm_func_type(engine, types[*idx].clone()).into()
-            }
+            EntityType::Function(idx) => match idx {
+                EngineOrModuleTypeIndex::Engine(e) => {
+                    FuncType::from_shared_type_index(engine, *e).into()
+                }
+                EngineOrModuleTypeIndex::Module(m) => {
+                    FuncType::from_wasm_func_type(engine, types[*m].clone()).into()
+                }
+            },
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(engine, ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(engine, ty).into(),
@@ -960,6 +1088,18 @@ impl TableType {
     /// `element` and have the `limits` applied to its length.
     pub fn new(element: RefType, min: u32, max: Option<u32>) -> TableType {
         let wasm_ty = element.to_wasm_type();
+
+        if cfg!(debug_assertions) {
+            wasm_ty
+                .trace(&mut |idx| match idx {
+                    EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+                    EngineOrModuleTypeIndex::Module(module_idx) => Err(format!(
+                        "found module-level canonicalized type index: {module_idx:?}"
+                    )),
+                })
+                .expect("element type should be engine-level canonicalized");
+        }
+
         TableType {
             element,
             ty: Table {

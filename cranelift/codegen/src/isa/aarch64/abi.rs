@@ -35,9 +35,10 @@ static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            StackAMode::FPOffset(off, ty) => AMode::FPOffset { off, ty },
-            StackAMode::NominalSPOffset(off, ty) => AMode::NominalSPOffset { off, ty },
-            StackAMode::SPOffset(off, ty) => AMode::SPOffset { off, ty },
+            // Argument area begins after saved frame pointer + return address.
+            StackAMode::IncomingArg(off) => AMode::FPOffset { off: off + 16 },
+            StackAMode::Slot(off) => AMode::NominalSPOffset { off },
+            StackAMode::OutgoingArg(off) => AMode::SPOffset { off },
         }
     }
 }
@@ -365,10 +366,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Ok((next_stack, extra_arg))
     }
 
-    fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        16 // frame pointer + return address.
-    }
-
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
         Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted())
     }
@@ -460,7 +457,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {
         // FIXME: Do something different for dynamic types?
         let mem = mem.into();
         Inst::LoadAddr { rd: into_reg, mem }
@@ -474,7 +471,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mem = AMode::RegOffset {
             rn: base,
             off: offset as i64,
-            ty,
         };
         Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
     }
@@ -483,7 +479,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mem = AMode::RegOffset {
             rn: base,
             off: offset as i64,
-            ty,
         };
         Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
     }
@@ -868,10 +863,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         // Allocate the fixed frame below the clobbers if necessary.
-        if frame_layout.fixed_frame_storage_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                -(frame_layout.fixed_frame_storage_size as i32),
-            ));
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
+        if stack_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
+        }
+
+        // Adjust the nominal sp to account for the outgoing argument area.
+        let sp_adj = frame_layout.outgoing_args_size as i32;
+        if sp_adj > 0 {
+            insts.push(Self::gen_nominal_sp_adj(sp_adj));
         }
 
         insts
@@ -895,10 +895,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         // Free the fixed frame if necessary.
-        if frame_layout.fixed_frame_storage_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.fixed_frame_storage_size as i32,
-            ));
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
+        if stack_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
         }
 
         let load_vec_reg = |rd| Inst::FpuLoad64 {
@@ -1169,7 +1168,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         };
 
         // Return FrameLayout structure.
-        debug_assert!(outgoing_args_size == 0);
         FrameLayout {
             stack_args_size,
             setup_area_size,
@@ -1193,10 +1191,11 @@ impl AArch64MachineDeps {
         for _ in 0..probe_count {
             insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
 
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(0, I8),
+            insts.push(Inst::gen_store(
+                AMode::SPOffset { off: 0 },
                 zero_reg(),
                 I32,
+                MemFlags::trusted(),
             ));
         }
 

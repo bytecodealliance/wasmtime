@@ -3,15 +3,16 @@
 //! This crate provides an implementation of the `wasmtime_environ::Compiler`
 //! and `wasmtime_environ::CompilerBuilder` traits.
 
-use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Signature};
 use cranelift_codegen::{
     binemit,
-    ir::{self, ExternalName},
+    cursor::FuncCursor,
+    ir::{self, AbiParam, ArgumentPurpose, ExternalName, InstBuilder, Signature},
     isa::{CallConv, TargetIsa},
     settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmValType};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmHeapType, WasmValType};
+
 use target_lexicon::Architecture;
 use wasmtime_environ::{
     BuiltinFunctionIndex, FlagValue, RelocationTarget, Trap, TrapInformation, Tunables,
@@ -29,6 +30,7 @@ mod builder;
 mod compiler;
 mod debug;
 mod func_environ;
+mod gc;
 
 type CompiledFunctionsMetadata<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunctionMetadata>;
 
@@ -49,6 +51,70 @@ fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
     ));
     sig.params.push(ir::AbiParam::new(pointer_type));
     return sig;
+}
+
+/// Emit code for the following unbarriered memory write of the given type:
+///
+/// ```ignore
+/// *(base + offset) = value
+/// ```
+///
+/// This is intended to be used with things like `ValRaw` and the array calling
+/// convention.
+fn unbarriered_store_type_at_offset(
+    isa: &dyn TargetIsa,
+    pos: &mut FuncCursor,
+    ty: WasmValType,
+    flags: ir::MemFlags,
+    base: ir::Value,
+    offset: i32,
+    value: ir::Value,
+) {
+    let ir_ty = value_type(isa, ty);
+    if ir_ty.is_ref() {
+        let value = pos
+            .ins()
+            .bitcast(ir_ty.as_int(), ir::MemFlags::new(), value);
+        let truncated = match isa.pointer_bytes() {
+            4 => value,
+            8 => pos.ins().ireduce(ir::types::I32, value),
+            _ => unreachable!(),
+        };
+        pos.ins().store(flags, truncated, base, offset);
+    } else {
+        pos.ins().store(flags, value, base, offset);
+    }
+}
+
+/// Emit code to do the following unbarriered memory read of the given type and
+/// with the given flags:
+///
+/// ```ignore
+/// result = *(base + offset)
+/// ```
+///
+/// This is intended to be used with things like `ValRaw` and the array calling
+/// convention.
+fn unbarriered_load_type_at_offset(
+    isa: &dyn TargetIsa,
+    pos: &mut FuncCursor,
+    ty: WasmValType,
+    flags: ir::MemFlags,
+    base: ir::Value,
+    offset: i32,
+) -> ir::Value {
+    let ir_ty = value_type(isa, ty);
+    if ir_ty.is_ref() {
+        let gc_ref = pos.ins().load(ir::types::I32, flags, base, offset);
+        let extended = match isa.pointer_bytes() {
+            4 => gc_ref,
+            8 => pos.ins().uextend(ir::types::I64, gc_ref),
+            _ => unreachable!(),
+        };
+        pos.ins().bitcast(ir_ty, ir::MemFlags::new(), extended)
+    } else {
+        pos.ins().load(ir_ty, flags, base, offset)
+    }
 }
 
 /// Returns the corresponding cranelift type for the provided wasm type.
@@ -193,16 +259,16 @@ fn wasm_call_signature(
 }
 
 /// Returns the reference type to use for the provided wasm type.
-fn reference_type(wasm_ht: cranelift_wasm::WasmHeapType, pointer_type: ir::Type) -> ir::Type {
+fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht {
-        cranelift_wasm::WasmHeapType::Func
-        | cranelift_wasm::WasmHeapType::Concrete(_)
-        | cranelift_wasm::WasmHeapType::NoFunc => pointer_type,
-        cranelift_wasm::WasmHeapType::Extern => match pointer_type {
-            ir::types::I32 => ir::types::R32,
-            ir::types::I64 => ir::types::R64,
-            _ => panic!("unsupported pointer type"),
-        },
+        WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => pointer_type,
+        WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
+            match pointer_type {
+                ir::types::I32 => ir::types::R32,
+                ir::types::I64 => ir::types::R64,
+                _ => panic!("unsupported pointer type"),
+            }
+        }
     }
 }
 
@@ -280,6 +346,7 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
             ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
             ir::TrapCode::NullReference => Trap::NullReference,
+            ir::TrapCode::NullI31Ref => Trap::NullI31Ref,
 
             // These do not get converted to wasmtime traps, since they
             // shouldn't ever be hit in theory. Instead of catching and handling
@@ -429,3 +496,10 @@ impl BuiltinFunctionSignatures {
         unreachable!();
     }
 }
+
+/// If this bit is set on a GC reference, then the GC reference is actually an
+/// unboxed `i31`.
+///
+/// Must be kept in sync with
+/// `wasmtime_runtime::gc::VMGcRef::I31_REF_DISCRIMINANT`.
+const I31_REF_DISCRIMINANT: u32 = 1;

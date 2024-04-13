@@ -3,7 +3,7 @@
 use super::{address::Address, regs};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::{
-    ir::MemFlags,
+    ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
@@ -46,12 +46,12 @@ impl Assembler {
 
 impl Assembler {
     /// Return the emitted code.
-    pub fn finalize(mut self) -> MachBufferFinalized<Final> {
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
         let constants = Default::default();
         let stencil = self
             .buffer
             .finish(&constants, self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(Default::default())
+        stencil.apply_base_srcloc(loc.unwrap_or_default())
     }
 
     fn emit(&mut self, inst: Inst) {
@@ -243,5 +243,10 @@ impl Assembler {
     /// machine buffer.
     pub fn buffer_mut(&mut self) -> &mut MachBuffer<Inst> {
         &mut self.buffer
+    }
+
+    /// Get a reference to the underlying machine buffer.
+    pub fn buffer(&self) -> &MachBuffer<Inst> {
+        &self.buffer
     }
 }

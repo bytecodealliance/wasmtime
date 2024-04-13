@@ -157,6 +157,62 @@ impl StdoutStream for pipe::ClosedOutputStream {
     }
 }
 
+/// This implementation will yield output streams that block on writes, and
+/// output directly to a file. If truly async output is required, [`AsyncStdoutStream`]
+/// should be used instead.
+pub struct OutputFile {
+    file: Arc<std::fs::File>,
+}
+
+impl OutputFile {
+    pub fn new(file: std::fs::File) -> Self {
+        Self {
+            file: Arc::new(file),
+        }
+    }
+}
+
+impl StdoutStream for OutputFile {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(OutputFileStream {
+            file: Arc::clone(&self.file),
+        })
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+struct OutputFileStream {
+    file: Arc<std::fs::File>,
+}
+
+#[async_trait::async_trait]
+impl Subscribe for OutputFileStream {
+    async fn ready(&mut self) {}
+}
+
+impl HostOutputStream for OutputFileStream {
+    fn write(&mut self, bytes: Bytes) -> StreamResult<()> {
+        use std::io::Write;
+        self.file
+            .write_all(&bytes)
+            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+    }
+
+    fn flush(&mut self) -> StreamResult<()> {
+        use std::io::Write;
+        self.file
+            .flush()
+            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+    }
+
+    fn check_write(&mut self) -> StreamResult<usize> {
+        Ok(1024 * 1024)
+    }
+}
+
 /// This implementation will yield output streams that block on writes, as they
 /// inherit the implementation directly from the rust std library. A different
 /// implementation of [`StdoutStream`] will be necessary if truly async output

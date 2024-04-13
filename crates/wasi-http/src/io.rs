@@ -1,14 +1,19 @@
+//! I/O utility for bridging between `tokio::io` and `hyper::rt`.
+
 use hyper::rt::{Read, ReadBufCursor, Write};
 use std::io::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+/// A type that wraps any type implementing [`tokio::io::AsyncRead`] and [`tokio::io::AsyncWrite`]
+/// and itself implements [`hyper::rt::Read`] and [`hyper::rt::Write`].
 pub struct TokioIo<T> {
     inner: T,
 }
 
 impl<T> TokioIo<T> {
+    /// Create a new `TokioIo` wrapping the given inner type.
     pub fn new(inner: T) -> TokioIo<T> {
         TokioIo { inner }
     }

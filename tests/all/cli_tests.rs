@@ -1260,10 +1260,14 @@ fn mpk_without_pooling() -> Result<()> {
 
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
-    use anyhow::Result;
-    use std::io::{Read, Write};
-    use std::process::Stdio;
+    use anyhow::{bail, Context, Result};
+    use http_body_util::BodyExt;
+    use hyper::header::HeaderValue;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::SocketAddr;
+    use std::process::{Child, Command, Stdio};
     use test_programs_artifacts::*;
+    use tokio::net::TcpStream;
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
@@ -1601,6 +1605,174 @@ mod test_programs {
     fn cli_sleep() -> Result<()> {
         run_wasmtime(&["run", CLI_SLEEP])?;
         run_wasmtime(&["run", CLI_SLEEP_COMPONENT])?;
+        Ok(())
+    }
+
+    /// Helper structure to manage an invocation of `wasmtime serve`
+    struct WasmtimeServe {
+        child: Option<Child>,
+        addr: SocketAddr,
+    }
+
+    impl WasmtimeServe {
+        /// Creates a new server which will serve the wasm component pointed to
+        /// by `wasm`.
+        ///
+        /// A `configure` callback is provided to specify how `wasmtime serve`
+        /// will be invoked and configure arguments such as headers.
+        fn new(wasm: &str, configure: impl FnOnce(&mut Command)) -> Result<WasmtimeServe> {
+            // Spawn `wasmtime serve` on port 0 which will randomly assign it a
+            // port.
+            let mut cmd = super::get_wasmtime_command()?;
+            cmd.stdin(Stdio::null());
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
+            cmd.arg("serve").arg("--addr=127.0.0.1:0").arg(wasm);
+            configure(&mut cmd);
+            let mut child = cmd.spawn()?;
+
+            // Read the first line of stderr which will say which address it's
+            // listening on.
+            //
+            // NB: this intentionally discards any extra buffered data in the
+            // `BufReader` once the newline is found. The server shouldn't print
+            // anything interesting other than the address so once we get a line
+            // all remaining output is left to be captured by future requests
+            // send to the server.
+            let mut line = String::new();
+            BufReader::new(child.stderr.as_mut().unwrap()).read_line(&mut line)?;
+            let addr_start = line.find("127.0.0.1").unwrap();
+            let addr = &line[addr_start..];
+            let addr_end = addr.find("/").unwrap();
+            let addr = &addr[..addr_end];
+            Ok(WasmtimeServe {
+                child: Some(child),
+                addr: addr.parse().unwrap(),
+            })
+        }
+
+        /// Completes this server gracefully by printing the output on failure.
+        fn finish(mut self) -> Result<()> {
+            let mut child = self.child.take().unwrap();
+
+            // If the child process has already exited then collect the output
+            // and test if it succeeded. Otherwise it's still running so kill it
+            // and then reap it. Assume that if it's still running then the test
+            // has otherwise passed so no need to print the output.
+            if child.try_wait()?.is_some() {
+                let output = child.wait_with_output()?;
+                if output.status.success() {
+                    return Ok(());
+                }
+                bail!("child failed {output:?}");
+            } else {
+                child.kill()?;
+                child.wait_with_output()?;
+            }
+            Ok(())
+        }
+
+        /// Send a request to this server and wait for the response.
+        async fn send_request(&self, req: http::Request<String>) -> Result<http::Response<String>> {
+            let tcp = TcpStream::connect(&self.addr)
+                .await
+                .context("failed to connect")?;
+            let tcp = wasmtime_wasi_http::io::TokioIo::new(tcp);
+            let (mut send, conn) = hyper::client::conn::http1::handshake(tcp)
+                .await
+                .context("failed http handshake")?;
+
+            let conn_task = tokio::task::spawn(conn);
+
+            let response = send
+                .send_request(req)
+                .await
+                .context("error sending request")?;
+            drop(send);
+            let (parts, body) = response.into_parts();
+
+            let body = body.collect().await.context("failed to read body")?;
+            assert!(body.trailers().is_none());
+            let body = std::str::from_utf8(&body.to_bytes())?.to_string();
+
+            conn_task.await??;
+
+            Ok(http::Response::from_parts(parts, body))
+        }
+    }
+
+    // Don't leave child processes running by accident so kill the child process
+    // if our server goes away.
+    impl Drop for WasmtimeServe {
+        fn drop(&mut self) {
+            let mut child = match self.child.take() {
+                Some(child) => child,
+                None => return,
+            };
+            if child.kill().is_err() {
+                return;
+            }
+            let output = match child.wait_with_output() {
+                Ok(output) => output,
+                Err(_) => return,
+            };
+
+            println!("server status: {}", output.status);
+            if !output.stdout.is_empty() {
+                println!(
+                    "server stdout:\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                );
+            }
+            if !output.stderr.is_empty() {
+                println!(
+                    "server stderr:\n{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cli_serve_echo_env() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("--env=FOO=bar");
+            cmd.arg("--env=BAR");
+            cmd.arg("-Scli");
+            cmd.env_remove("BAR");
+        })?;
+
+        let foo_env = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(foo_env.status().is_success());
+        assert!(foo_env.body().is_empty());
+        let headers = foo_env.headers();
+        assert_eq!(headers.get("env"), Some(&HeaderValue::from_static("bar")));
+
+        let bar_env = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "BAR")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(bar_env.status().is_success());
+        assert!(bar_env.body().is_empty());
+        let headers = bar_env.headers();
+        assert_eq!(headers.get("env"), None);
+
+        server.finish()?;
         Ok(())
     }
 }

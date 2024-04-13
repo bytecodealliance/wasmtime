@@ -11,6 +11,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
+#[cfg(feature = "runtime")]
+use wasmtime_runtime::GcRuntime;
 
 mod serialization;
 
@@ -48,6 +50,8 @@ struct EngineInner {
     compiler: Box<dyn wasmtime_environ::Compiler>,
     #[cfg(feature = "runtime")]
     allocator: Box<dyn wasmtime_runtime::InstanceAllocator + Send + Sync>,
+    #[cfg(feature = "runtime")]
+    gc_runtime: Arc<dyn GcRuntime>,
     #[cfg(feature = "runtime")]
     profiler: Box<dyn crate::profiling_agent::ProfilingAgent>,
     #[cfg(feature = "runtime")]
@@ -104,6 +108,8 @@ impl Engine {
                 compiler,
                 #[cfg(feature = "runtime")]
                 allocator: config.build_allocator(&tunables)?,
+                #[cfg(feature = "runtime")]
+                gc_runtime: config.build_gc_runtime()?,
                 #[cfg(feature = "runtime")]
                 profiler: config.build_profiler()?,
                 #[cfg(feature = "runtime")]
@@ -590,6 +596,10 @@ impl Engine {
 
     pub(crate) fn allocator(&self) -> &dyn wasmtime_runtime::InstanceAllocator {
         self.inner.allocator.as_ref()
+    }
+
+    pub(crate) fn gc_runtime(&self) -> &Arc<dyn GcRuntime> {
+        &self.inner.gc_runtime
     }
 
     pub(crate) fn profiler(&self) -> &dyn crate::profiling_agent::ProfilingAgent {

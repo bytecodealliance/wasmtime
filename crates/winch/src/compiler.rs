@@ -7,9 +7,9 @@ use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompileError, DefinedFuncIndex, FilePos, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget, TrapEncodingBuilder,
-    VMOffsets, WasmFunctionInfo,
+    AddressMapSection, BuiltinFunctionIndex, CompileError, DefinedFuncIndex, FunctionBodyData,
+    FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget,
+    TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
 };
 use winch_codegen::{BuiltinFunctions, TargetIsa};
 
@@ -27,14 +27,20 @@ pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
     trampolines: Box<dyn wasmtime_environ::Compiler>,
     contexts: Mutex<Vec<CompilationContext>>,
+    tunables: Tunables,
 }
 
 impl Compiler {
-    pub fn new(isa: Box<dyn TargetIsa>, trampolines: Box<dyn wasmtime_environ::Compiler>) -> Self {
+    pub fn new(
+        isa: Box<dyn TargetIsa>,
+        trampolines: Box<dyn wasmtime_environ::Compiler>,
+        tunables: Tunables,
+    ) -> Self {
         Self {
             isa,
             trampolines,
             contexts: Mutex::new(Vec::new()),
+            tunables,
         }
     }
 
@@ -90,12 +96,6 @@ impl wasmtime_environ::Compiler for Compiler {
         let sig = translation.module.functions[index].signature;
         let ty = &types[sig];
         let FunctionBodyData { body, validator } = data;
-        let start_srcloc = FilePos::new(
-            body.get_binary_reader()
-                .original_position()
-                .try_into()
-                .unwrap(),
-        );
         let mut context = self.get_context(translation);
         let mut validator = validator.into_validator(mem::take(&mut context.allocations));
         let func = self
@@ -112,13 +112,20 @@ impl wasmtime_environ::Compiler for Compiler {
         self.save_context(context, validator.into_allocations());
         let mut func = func?;
 
+        let reader = body.get_binary_reader();
+        func.set_address_map(
+            reader.original_position() as u32,
+            reader.bytes_remaining() as u32,
+            self.tunables.generate_address_map,
+        );
+
         if self.isa.flags().unwind_info() {
             self.emit_unwind_info(&mut func)?;
         }
 
         Ok((
             WasmFunctionInfo {
-                start_srcloc,
+                start_srcloc: func.metadata().address_map.start_srcloc,
                 stack_maps: Box::new([]),
             },
             Box::new(func),
@@ -162,12 +169,16 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
         let mut traps = TrapEncodingBuilder::default();
+        let mut addrs = AddressMapSection::default();
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
             let func = func.downcast_ref::<CompiledFunction>().unwrap();
 
             let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+            if self.tunables.generate_address_map {
+                addrs.push(range.clone(), &func.address_map().instructions);
+            }
             traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
 
             let info = FunctionLoc {
@@ -177,6 +188,9 @@ impl wasmtime_environ::Compiler for Compiler {
             ret.push((sym, info));
         }
         builder.finish();
+        if self.tunables.generate_address_map {
+            addrs.append_to(obj);
+        }
         traps.append_to(obj);
         Ok(ret)
     }

@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
 
-## 20.0.0
+## 21.0.0
 
 Unreleased.
 
@@ -8,9 +8,143 @@ Unreleased.
 
 ### Changed
 
+--------------------------------------------------------------------------------
+
+## 20.0.0
+
+Unreleased.
+
+### Added
+
+* Support for shared WebAssembly memories has been added to the C API.
+  [#7940](https://github.com/bytecodealliance/wasmtime/issues/7940)
+
+* A `Component::component_type` method has been added to reflect on the imports
+  and exports of a component.
+  [#8078](https://github.com/bytecodealliance/wasmtime/issues/8078)
+
+* The `with` key in `bindgen!` now supports remapping entire packages and
+  namespaces.
+  [#8083](https://github.com/bytecodealliance/wasmtime/issues/8083)
+
+* Winch now supports the component model by using Cranelift to generate
+  trampolines.
+  [#8082](https://github.com/bytecodealliance/wasmtime/issues/8082)
+  [#8109](https://github.com/bytecodealliance/wasmtime/issues/8109)
+
+* The WASI-NN backend now supports ONNX.
+  [#7691](https://github.com/bytecodealliance/wasmtime/issues/7691)
+
+* The `wasmtime` CLI now has an `-S inherit-env` flag for inheriting the entire
+  process environment.
+  [#8168](https://github.com/bytecodealliance/wasmtime/issues/8168)
+
+* Winch now supports the WebAssembly memory64 proposal.
+  [#8194](https://github.com/bytecodealliance/wasmtime/issues/8194)
+
+* Embedders can now opt-in to allowing wasmtime-wasi to block the current thread
+  with file operations, for example.
+  [#8190](https://github.com/bytecodealliance/wasmtime/issues/8190)
+
+* A `wasmtime::CodeBuilder` type has been added to refine the configuration of
+  compiling a `Module` or a `Component`.
+  [#8181](https://github.com/bytecodealliance/wasmtime/issues/8181)
+
+* The `wasmtime serve` subcommand now enables configuring preopened directories
+  and environment variables.
+  [#8279](https://github.com/bytecodealliance/wasmtime/issues/8279)
+
+### Changed
+
+* Support for WebAssembly GC is in the process of being implemented which has
+  required refactoring and reimplementing the existing gc support for
+  `externref`. Many APIs in this area has changed, see linked PRs for more
+  details. Note that the `wasm_*` parts of the C API no longer support
+  `externref`.
+  [#8011](https://github.com/bytecodealliance/wasmtime/issues/8011)
+  [#8196](https://github.com/bytecodealliance/wasmtime/issues/8196)
+
+* The `wasmtime::component::Val` type no longer stores type information and
+  instead must be interpreted in the context of a type.
+  [#8062](https://github.com/bytecodealliance/wasmtime/issues/8062)
+
+* The arguments required for `ResourceAny::try_from_resource` have been
+  simplified by refactoring the internal representation.
+  [#8061](https://github.com/bytecodealliance/wasmtime/issues/8061)
+
+* The arguments required for `wasmtime::component::Linker::func_new` have been
+  simplified by refactoring the internal representation.
+  [#8070](https://github.com/bytecodealliance/wasmtime/issues/8070)
+
+* The pooling allocator is now enabled by default with `wasmtime serve`.
+  [#8073](https://github.com/bytecodealliance/wasmtime/issues/8073)
+
+* The error message for missing imports in has been improved with components.
+  [#7645](https://github.com/bytecodealliance/wasmtime/issues/7645)
+
+* Wasmtime's MSRV is now 1.75.0.
+  [#8205](https://github.com/bytecodealliance/wasmtime/issues/8205)
+
+* Wasmtime's translation of table-related instructions has improved codegen in
+  some common cases, especially with `call_indirect`.
+  [#8063](https://github.com/bytecodealliance/wasmtime/issues/8063)
+  [#8125](https://github.com/bytecodealliance/wasmtime/issues/8125)
+  [#8124](https://github.com/bytecodealliance/wasmtime/issues/8124)
+  [#8134](https://github.com/bytecodealliance/wasmtime/issues/8134)
+  [#8137](https://github.com/bytecodealliance/wasmtime/issues/8137)
+  [#8162](https://github.com/bytecodealliance/wasmtime/issues/8162)
+  [#8159](https://github.com/bytecodealliance/wasmtime/issues/8159)
+  [#8172](https://github.com/bytecodealliance/wasmtime/issues/8172)
+  [#8171](https://github.com/bytecodealliance/wasmtime/issues/8171)
+  [#8139](https://github.com/bytecodealliance/wasmtime/issues/8139)
+  [#8206](https://github.com/bytecodealliance/wasmtime/issues/8206)
+
+* Book-based documentation has been reordered and refactored.
+  [#8130](https://github.com/bytecodealliance/wasmtime/issues/8130)
+
 * The `-S common` flag is renamed to `-S cli`, to better reflect that it provides
   the wasi-cli APIs. `-S common` is still accepted for now, and will be deprecated
   in the future.
+  [#8166](https://github.com/bytecodealliance/wasmtime/issues/8166)
+
+* The tail-call calling convention now supports callee-saved registers to
+  improve performance and allow enabling this WebAssembly proposal by default in
+  the future.
+  [#8246](https://github.com/bytecodealliance/wasmtime/issues/8246)
+
+* The `wasmtime-wasi` crate has been refactored to restructure some items and
+  documentation has been added for most items.
+  [#8228](https://github.com/bytecodealliance/wasmtime/issues/8228)
+
+* Support for the WebAssembly `threads` proposal is now gated by an
+  on-by-default Cargo feature named `threads`.
+  [#8260](https://github.com/bytecodealliance/wasmtime/issues/8260)
+
+* Borrow-checking in `wiggle` has been optimized to not be as fine-grained any
+  more. This is a breaking change if users are relying on the ability to safely
+  mutably borrow disjoint regions of memory.
+  [#8277](https://github.com/bytecodealliance/wasmtime/issues/8277)
+
+### Fixed
+
+* Connection timeouts with `wasi-http` have been fixed.
+  [#8085](https://github.com/bytecodealliance/wasmtime/issues/8085)
+
+* Generating bindings with `bindgen!` now works correctly when some WIT types
+  are not used.
+  [#8065](https://github.com/bytecodealliance/wasmtime/issues/8065)
+
+* Errors in `wasi-http` are no longer accidentally returned as traps.
+  [#8272](https://github.com/bytecodealliance/wasmtime/issues/8272)
+
+--------------------------------------------------------------------------------
+
+## 19.0.1
+
+Released 2024-04-02.
+
+* Fix a panic using tables with the wrong type.
+  [#8284](https://github.com/bytecodealliance/wasmtime/pull/8284)
 
 --------------------------------------------------------------------------------
 
@@ -91,8 +225,8 @@ Released 2024-03-20
   specification.
   [#7661](https://github.com/bytecodealliance/wasmtime/pull/7661)
 
-* Support for `externref` has been moved behind a new `gc` Cargo feature. This
-  will also gate support for wasm gc in the future.
+* Support for `externref` and similar features has been moved behind a new `gc`
+  Cargo feature. This will also gate support for Wasm GC in the future.
   [#7975](https://github.com/bytecodealliance/wasmtime/pull/7975)
 
 * Require the `WASMTIME_WASI_CONFIG_PREOPEN_SOCKET_ALLOW` environment variable
@@ -758,7 +892,7 @@ Released 2023-09-20
   instead of at compile time.
   [#6807](https://github.com/bytecodealliance/wasmtime/pull/6807)
 
-* `Engine::detect_precompiled{,_file}` can be used to to determine whether some
+* `Engine::detect_precompiled{,_file}` can be used to determine whether some
   bytes or a file look like a precompiled module or a component.
   [#6832](https://github.com/bytecodealliance/wasmtime/pull/6832)
   [#6937](https://github.com/bytecodealliance/wasmtime/pull/6937)

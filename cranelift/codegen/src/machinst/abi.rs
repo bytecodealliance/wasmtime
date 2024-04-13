@@ -45,7 +45,10 @@
 //! for the latter before knowing how SP might be adjusted around
 //! callsites, we implement a "nominal SP" tracking feature by which a
 //! fixup (distance between actual SP and a "nominal" SP) is known at
-//! each instruction.
+//! each instruction. When the prologue is finished, SP is expected
+//! to point at the bottom of the outgoing argument area, and will
+//! only move again directly around function calls. This allows the
+//! use of fixed offsets from SP for the rest of the function body.
 //!
 //! Note that if we ever support dynamic stack-space allocation (for
 //! `alloca`), we will need a way to reference spill slots and stack
@@ -76,7 +79,7 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | clobbered callee-saves    |
-//! unwind-frame base     ---->  | (pushed by prologue)      |
+//! unwind-frame base -------->  | (pushed by prologue)      |
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | spill slots               |
@@ -85,11 +88,11 @@
 //!                              | stack slots               |
 //!                              | (accessed via nominal SP) |
 //! nominal SP --------------->  | (alloc'd by prologue)     |
-//! (SP at end of prologue)      +---------------------------+
+//!                              +---------------------------+
 //!                              | [alignment as needed]     |
 //!                              |          ...              |
 //!                              | args for call             |
-//! SP before making a call -->  | (pushed at callsite)      |
+//! SP ----------------------->  | (pushed at callsite)      |
 //!                              +---------------------------+
 //!
 //!   (low address)
@@ -281,34 +284,12 @@ pub enum ArgsOrRets {
 /// appropriate addressing mode.
 #[derive(Clone, Copy, Debug)]
 pub enum StackAMode {
-    /// Offset from the frame pointer, possibly making use of a specific type
-    /// for a scaled indexing operation.
-    FPOffset(i64, ir::Type),
-    /// Offset from the nominal stack pointer, possibly making use of a specific
-    /// type for a scaled indexing operation.
-    NominalSPOffset(i64, ir::Type),
-    /// Offset from the real stack pointer, possibly making use of a specific
-    /// type for a scaled indexing operation.
-    SPOffset(i64, ir::Type),
-}
-
-impl StackAMode {
-    /// Offset by an addend.
-    pub fn offset(self, addend: i64) -> Self {
-        match self {
-            StackAMode::FPOffset(off, ty) => StackAMode::FPOffset(off + addend, ty),
-            StackAMode::NominalSPOffset(off, ty) => StackAMode::NominalSPOffset(off + addend, ty),
-            StackAMode::SPOffset(off, ty) => StackAMode::SPOffset(off + addend, ty),
-        }
-    }
-
-    pub fn get_type(&self) -> ir::Type {
-        match self {
-            &StackAMode::FPOffset(_, ty) => ty,
-            &StackAMode::NominalSPOffset(_, ty) => ty,
-            &StackAMode::SPOffset(_, ty) => ty,
-        }
-    }
+    /// Offset into the current frame's argument area.
+    IncomingArg(i64),
+    /// Offset within the stack slots in the current frame.
+    Slot(i64),
+    /// Offset into the callee frame's argument area.
+    OutgoingArg(i64),
 }
 
 /// Trait implemented by machine-specific backend to represent ISA flags.
@@ -417,10 +398,6 @@ pub trait ABIMachineSpec {
         args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)>;
 
-    /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
-    /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
-    fn fp_to_arg_offset(call_conv: isa::CallConv, flags: &settings::Flags) -> i64;
-
     /// Generate a load from the stack.
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I;
 
@@ -470,7 +447,7 @@ pub trait ABIMachineSpec {
 
     /// Generate an instruction to compute an address of a stack slot (FP- or
     /// SP-based offset).
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I;
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I;
 
     /// Get a fixed register to use to compute a stack limit. This is needed for
     /// certain sequences generated after the register allocator has already
@@ -497,6 +474,45 @@ pub trait ABIMachineSpec {
 
     /// Generate a meta-instruction that adjusts the nominal SP offset.
     fn gen_nominal_sp_adj(amount: i32) -> Self::I;
+
+    /// When setting up for a call, ensure that `space` bytes are available in the outgoing
+    /// argument area on the stack. The specified amount of space is the minimum required for both
+    /// arguments to that function, and any values returned through the stack. There are two
+    /// reasonable implementations which each target can choose between:
+    /// 1. At least this much space is reserved during the prologue and `StackAMode::OutgoingArg`
+    ///    refers to the bottom of the reserved area, so this method does nothing.
+    /// 2. `StackAMode::OutgoingArg` refers to the top of this area, so this method needs to adjust
+    ///    the stack pointer to trim any unused portion of the bottom of the stack frame
+    ///    immediately before the call. `gen_restore_argument_area` needs to undo any stack pointer
+    ///    changes made here.
+    fn gen_reserve_argument_area(_space: u32) -> SmallInstVec<Self::I> {
+        smallvec![]
+    }
+
+    /// When returning from a call, perform any cleanup necessary to restore the stack pointer to
+    /// just after the argument area. This ensures that we always have
+    /// [`FrameLayout::outgoing_args_size`] bytes available in the argument area.
+    ///
+    /// * `ret_space` - The space left consumed in the outgoing argument area for values returned
+    ///   by the callee.
+    /// * `arg_space` - The argument space explicitly cleaned up by the callee when it returns. A
+    ///   value of `0` indicates that the callee did not cleanup the argument area at all, while
+    ///   any other value indicates that the callee has moved the stack pointer to account for
+    ///   those arguments when it returns (as is the case for the tail calling convention).
+    fn gen_restore_argument_area(_ret_space: u32, arg_space: u32) -> SmallInstVec<Self::I> {
+        if arg_space > 0 {
+            let amount = i32::try_from(arg_space).unwrap();
+
+            // Recover the argument space by decrementing sp
+            let mut insts = Self::gen_sp_reg_adjust(-amount);
+
+            // Emit a nominal sp adjustment to ensure offsets are computed correctly
+            insts.push(Self::gen_nominal_sp_adj(amount));
+            insts
+        } else {
+            smallvec![]
+        }
+    }
 
     /// Compute a FrameLayout structure containing a sorted list of all clobbered
     /// registers that are callee-saved according to the ABI, as well as the sizes
@@ -1350,38 +1366,6 @@ fn generate_gv<M: ABIMachineSpec>(
     }
 }
 
-fn gen_load_stack_multi<M: ABIMachineSpec>(
-    from: StackAMode,
-    dst: ValueRegs<Writable<Reg>>,
-    ty: Type,
-) -> SmallInstVec<M::I> {
-    let mut ret = smallvec![];
-    let (_, tys) = M::I::rc_for_type(ty).unwrap();
-    let mut offset = 0;
-    // N.B.: registers are given in the `ValueRegs` in target endian order.
-    for (&dst, &ty) in dst.regs().iter().zip(tys.iter()) {
-        ret.push(M::gen_load_stack(from.offset(offset), dst, ty));
-        offset += ty.bytes() as i64;
-    }
-    ret
-}
-
-fn gen_store_stack_multi<M: ABIMachineSpec>(
-    from: StackAMode,
-    src: ValueRegs<Reg>,
-    ty: Type,
-) -> SmallInstVec<M::I> {
-    let mut ret = smallvec![];
-    let (_, tys) = M::I::rc_for_type(ty).unwrap();
-    let mut offset = 0;
-    // N.B.: registers are given in the `ValueRegs` in target endian order.
-    for (&src, &ty) in src.regs().iter().zip(tys.iter()) {
-        ret.push(M::gen_store_stack(from.offset(offset), src, ty));
-        offset += ty.bytes() as i64;
-    }
-    ret
-}
-
 /// If the signature needs to be legalized, then return the struct-return
 /// parameter that should be prepended to its returns. Otherwise, return `None`.
 fn missing_struct_return(sig: &ir::Signature) -> Option<ir::AbiParam> {
@@ -1520,22 +1504,17 @@ impl<M: ABIMachineSpec> Callee<M> {
                     extension,
                     ..
                 } => {
-                    // However, we have to respect the extention mode for stack
+                    // However, we have to respect the extension mode for stack
                     // slots, or else we grab the wrong bytes on big-endian.
                     let ext = M::get_ext_mode(sigs[self.sig].call_conv, extension);
-                    let ty = match (ext, ty_bits(ty) as u32) {
-                        (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
-                            if n < M::word_bits() =>
-                        {
+                    let ty =
+                        if ext != ArgumentExtension::None && M::word_bits() > ty_bits(ty) as u32 {
                             M::word_type()
-                        }
-                        _ => ty,
-                    };
+                        } else {
+                            ty
+                        };
                     insts.push(M::gen_load_stack(
-                        StackAMode::FPOffset(
-                            M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
-                            ty,
-                        ),
+                        StackAMode::IncomingArg(offset),
                         *into_reg,
                         ty,
                     ));
@@ -1560,12 +1539,8 @@ impl<M: ABIMachineSpec> Callee<M> {
                 } else {
                     // Buffer address is implicitly defined by the ABI.
                     insts.push(M::gen_get_stack_addr(
-                        StackAMode::FPOffset(
-                            M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
-                            I8,
-                        ),
+                        StackAMode::IncomingArg(offset),
                         into_reg,
-                        I8,
                     ));
                 }
             }
@@ -1586,10 +1561,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                         // This was allocated in the `init` routine.
                         let addr_reg = self.arg_temp_reg[idx].unwrap();
                         insts.push(M::gen_load_stack(
-                            StackAMode::FPOffset(
-                                M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
-                                ty,
-                            ),
+                            StackAMode::IncomingArg(offset),
                             addr_reg,
                             ty,
                         ));
@@ -1760,43 +1732,13 @@ impl<M: ABIMachineSpec> Callee<M> {
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
         let stack_off = self.sized_stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
-        M::gen_get_stack_addr(StackAMode::NominalSPOffset(sp_off, I8), into_reg, I8)
+        M::gen_get_stack_addr(StackAMode::Slot(sp_off), into_reg)
     }
 
     /// Produce an instruction that computes a dynamic stackslot address.
     pub fn dynamic_stackslot_addr(&self, slot: DynamicStackSlot, into_reg: Writable<Reg>) -> M::I {
         let stack_off = self.dynamic_stackslots[slot] as i64;
-        M::gen_get_stack_addr(
-            StackAMode::NominalSPOffset(stack_off, I64X2XN),
-            into_reg,
-            I64X2XN,
-        )
-    }
-
-    /// Load from a spillslot.
-    pub fn load_spillslot(
-        &self,
-        slot: SpillSlot,
-        ty: Type,
-        into_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<M::I> {
-        let sp_off = self.get_spillslot_offset(slot);
-        trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-
-        gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
-    }
-
-    /// Store to a spillslot.
-    pub fn store_spillslot(
-        &self,
-        slot: SpillSlot,
-        ty: Type,
-        from_regs: ValueRegs<Reg>,
-    ) -> SmallInstVec<M::I> {
-        let sp_off = self.get_spillslot_offset(slot);
-        trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-
-        gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
+        M::gen_get_stack_addr(StackAMode::Slot(stack_off), into_reg)
     }
 
     /// Get an `args` pseudo-inst, if any, that should appear at the
@@ -1898,9 +1840,25 @@ impl<M: ABIMachineSpec> Callee<M> {
             &frame_layout,
         ));
 
+        // The stack limit check needs to cover all the stack adjustments we
+        // might make, up to the next stack limit check in any function we
+        // call. Since this happens after frame setup, the current function's
+        // setup area needs to be accounted for in the caller's stack limit
+        // check, but we need to account for any setup area that our callees
+        // might need. Note that s390x may also use the outgoing args area for
+        // backtrace support even in leaf functions, so that should be accounted
+        // for unconditionally.
+        let total_stacksize = frame_layout.clobber_size
+            + frame_layout.fixed_frame_storage_size
+            + frame_layout.outgoing_args_size
+            + if self.is_leaf {
+                0
+            } else {
+                frame_layout.setup_area_size
+            };
+
         // Leaf functions with zero stack don't need a stack check if one's
         // specified, otherwise always insert the stack check.
-        let total_stacksize = frame_layout.fixed_frame_storage_size;
         if total_stacksize > 0 || !self.is_leaf {
             if let Some((reg, stack_limit_load)) = &self.stack_limit {
                 insts.extend(stack_limit_load.clone());
@@ -2047,24 +2005,26 @@ impl<M: ABIMachineSpec> Callee<M> {
 
     /// Generate a spill.
     pub fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> M::I {
-        let ty = M::I::canonical_type_for_rc(Reg::from(from_reg).class());
-        self.store_spillslot(to_slot, ty, ValueRegs::one(Reg::from(from_reg)))
-            .into_iter()
-            .next()
-            .unwrap()
+        let ty = M::I::canonical_type_for_rc(from_reg.class());
+        debug_assert_eq!(<M>::I::rc_for_type(ty).unwrap().1, &[ty]);
+
+        let sp_off = self.get_spillslot_offset(to_slot);
+        trace!("gen_spill: {from_reg:?} into slot {to_slot:?} at offset {sp_off}");
+
+        let from = StackAMode::Slot(sp_off);
+        <M>::gen_store_stack(from, Reg::from(from_reg), ty)
     }
 
     /// Generate a reload (fill).
     pub fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> M::I {
         let ty = M::I::canonical_type_for_rc(to_reg.to_reg().class());
-        self.load_spillslot(
-            from_slot,
-            ty,
-            writable_value_regs(ValueRegs::one(Reg::from(to_reg.to_reg()))),
-        )
-        .into_iter()
-        .next()
-        .unwrap()
+        debug_assert_eq!(<M>::I::rc_for_type(ty).unwrap().1, &[ty]);
+
+        let sp_off = self.get_spillslot_offset(from_slot);
+        trace!("gen_reload: {to_reg:?} from slot {from_slot:?} at offset {sp_off}");
+
+        let from = StackAMode::Slot(sp_off);
+        <M>::gen_load_stack(from, to_reg.map(Reg::from), ty)
     }
 }
 
@@ -2273,31 +2233,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
         frame_size
     }
 
-    /// Emit code to pre-adjust the stack, prior to argument copies and call.
-    pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
-        let sig = &ctx.sigs()[self.sig];
-        let stack_space = sig.sized_stack_arg_space + sig.sized_stack_ret_space;
-        let stack_space = i32::try_from(stack_space).unwrap();
-        adjust_stack_and_nominal_sp::<M>(ctx, -stack_space);
-    }
-
-    /// Emit code to post-adjust the stack, after call return and return-value copies.
-    pub fn emit_stack_post_adjust(&self, ctx: &mut Lower<M::I>) {
-        let sig = &ctx.sigs()[self.sig];
-
-        let stack_space = if sig.call_conv() == isa::CallConv::Tail {
-            // The "tail" calling convention has callees clean up stack
-            // arguments, not callers. Callers still clean up any stack return
-            // space, however.
-            sig.sized_stack_ret_space
-        } else {
-            sig.sized_stack_arg_space + sig.sized_stack_ret_space
-        };
-        let stack_space = i32::try_from(stack_space).unwrap();
-
-        adjust_stack_and_nominal_sp::<M>(ctx, stack_space);
-    }
-
     /// Emit a copy of a large argument into its associated stack buffer, if
     /// any.  We must be careful to perform all these copies (as necessary)
     /// before setting up the argument registers, since we may have to invoke
@@ -2316,9 +2251,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 let src_ptr = from_regs.only_reg().unwrap();
                 let dst_ptr = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
                 ctx.emit(M::gen_get_stack_addr(
-                    StackAMode::SPOffset(offset, I8),
+                    StackAMode::OutgoingArg(offset),
                     dst_ptr,
-                    I8,
                 ));
                 // Emit a memcpy from `src_ptr` to `dst_ptr` of `size` bytes.
                 // N.B.: because we process StructArg params *first*, this is
@@ -2357,12 +2291,9 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             "tail calls require frame pointers to be enabled"
                         );
 
-                        StackAMode::FPOffset(
-                            offset + M::fp_to_arg_offset(self.caller_conv, &self.flags),
-                            ty,
-                        )
+                        StackAMode::IncomingArg(offset)
                     } else {
-                        StackAMode::SPOffset(offset, ty)
+                        StackAMode::OutgoingArg(offset)
                     };
                     ctx.emit(M::gen_store_stack(amode, vreg, ty))
                 }
@@ -2468,9 +2399,9 @@ impl<M: ABIMachineSpec> CallSite<M> {
             } => {
                 assert_eq!(from_regs.len(), 1);
                 let vreg = from_regs.regs()[0];
-                let amode = StackAMode::SPOffset(offset, ty);
+                let amode = StackAMode::OutgoingArg(offset);
                 let tmp = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
-                ctx.emit(M::gen_get_stack_addr(amode, tmp, ty));
+                ctx.emit(M::gen_get_stack_addr(amode, tmp));
                 let tmp = tmp.to_reg();
                 ctx.emit(M::gen_store_base_offset(tmp, 0, vreg, ty));
                 let loc = match pointer {
@@ -2570,18 +2501,12 @@ impl<M: ABIMachineSpec> CallSite<M> {
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
                             let sig_data = &ctx.sigs()[self.sig];
-                            let ret_area_base = if sig_data.call_conv() == isa::CallConv::Tail {
-                                // The callee already popped the stack argument
-                                // space for us, so the return area is on top of
-                                // the stack.
-                                0
-                            } else {
-                                // The return area is just below the stack
-                                // argument area on the stack.
-                                sig_data.sized_stack_arg_space()
-                            };
+                            // The outgoing argument area must always be restored after a call,
+                            // ensuring that the return values will be in a consistent place after
+                            // any call.
+                            let ret_area_base = sig_data.sized_stack_arg_space();
                             insts.push(M::gen_load_stack(
-                                StackAMode::SPOffset(offset + ret_area_base, ty),
+                                StackAMode::OutgoingArg(offset + ret_area_base),
                                 *into_reg,
                                 ty,
                             ));
@@ -2618,9 +2543,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
             let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space();
             ctx.emit(M::gen_get_stack_addr(
-                StackAMode::SPOffset(ret_area_base, I8),
+                StackAMode::OutgoingArg(ret_area_base),
                 rd,
-                I8,
             ));
             let moves = self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg()));
             self.emit_arg_moves(ctx, moves);
@@ -2639,6 +2563,20 @@ impl<M: ABIMachineSpec> CallSite<M> {
             0
         };
 
+        let call_conv = sig.call_conv;
+        let ret_space = sig.sized_stack_ret_space;
+        let arg_space = sig.sized_stack_arg_space;
+
+        ctx.abi_mut()
+            .accumulate_outgoing_args_size(ret_space + arg_space);
+
+        // Any adjustment to SP to account for required outgoing arguments/stack return values must
+        // be done around the call, to ensure that SP is always in a consistent state for all other
+        // writes.
+        for inst in M::gen_reserve_argument_area(ret_space + arg_space) {
+            ctx.emit(inst);
+        }
+
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
         for inst in M::gen_call(
             &self.dest,
@@ -2647,12 +2585,26 @@ impl<M: ABIMachineSpec> CallSite<M> {
             self.clobbers,
             self.opcode,
             tmp,
-            ctx.sigs()[self.sig].call_conv,
+            call_conv,
             self.caller_conv,
             callee_pop_size,
         )
         .into_iter()
         {
+            ctx.emit(inst);
+        }
+
+        // Compute the space that's reclaimed by the callee when it returns. In the case of the
+        // Tail calling convention, the callee will cleanup the arguments used in the outgoing
+        // argument area, which we will need to adjust back down to restore SP to where it was
+        // before the call.
+        let arg_space = if call_conv == isa::CallConv::Tail {
+            arg_space
+        } else {
+            0
+        };
+
+        for inst in M::gen_restore_argument_area(ret_space, arg_space) {
             ctx.emit(inst);
         }
     }

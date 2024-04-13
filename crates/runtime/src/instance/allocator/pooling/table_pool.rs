@@ -138,12 +138,16 @@ impl TablePool {
 
             let ptr = NonNull::new(std::ptr::slice_from_raw_parts_mut(
                 base.cast(),
-                self.table_elements,
+                self.table_elements * mem::size_of::<*mut u8>(),
             ))
             .unwrap();
-            Table::new_static(table_plan, SendSyncPtr::new(ptr), unsafe {
-                &mut *request.store.get().unwrap()
-            })
+            unsafe {
+                Table::new_static(
+                    table_plan,
+                    SendSyncPtr::new(ptr),
+                    &mut *request.store.get().unwrap(),
+                )
+            }
         })() {
             Ok(table) => Ok((allocation_index, table)),
             Err(e) => {

@@ -212,29 +212,34 @@ impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
 }
 
 pub(crate) mod util {
+    use std::io;
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::time::Duration;
 
-    use crate::bindings::sockets::network::ErrorCode;
     use crate::network::SocketAddressFamily;
-    use crate::SocketResult;
     use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
     use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;
     use rustix::net::sockopt;
 
-    pub fn validate_unicast(addr: &SocketAddr) -> SocketResult<()> {
+    pub fn validate_unicast(addr: &SocketAddr) -> io::Result<()> {
         match to_canonical(&addr.ip()) {
             IpAddr::V4(ipv4) => {
                 if ipv4.is_multicast() || ipv4.is_broadcast() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Both IPv4 broadcast and multicast addresses are not supported",
+                    ))
                 } else {
                     Ok(())
                 }
             }
             IpAddr::V6(ipv6) => {
                 if ipv6.is_multicast() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "IPv6 multicast addresses are not supported",
+                    ))
                 } else {
                     Ok(())
                 }
@@ -242,13 +247,19 @@ pub(crate) mod util {
         }
     }
 
-    pub fn validate_remote_address(addr: &SocketAddr) -> SocketResult<()> {
+    pub fn validate_remote_address(addr: &SocketAddr) -> io::Result<()> {
         if to_canonical(&addr.ip()).is_unspecified() {
-            return Err(ErrorCode::InvalidArgument.into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Remote address may not be `0.0.0.0` or `::`",
+            ));
         }
 
         if addr.port() == 0 {
-            return Err(ErrorCode::InvalidArgument.into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Remote port may not be 0",
+            ));
         }
 
         Ok(())
@@ -257,7 +268,7 @@ pub(crate) mod util {
     pub fn validate_address_family(
         addr: &SocketAddr,
         socket_family: &SocketAddressFamily,
-    ) -> SocketResult<()> {
+    ) -> io::Result<()> {
         match (socket_family, addr.ip()) {
             (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
             (SocketAddressFamily::Ipv6, IpAddr::V6(ipv6)) => {
@@ -266,14 +277,23 @@ pub(crate) mod util {
                     // since 2006, OS handling of them is inconsistent and our own
                     // validations don't take them into account either.
                     // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "IPv4-compatible IPv6 addresses are not supported",
+                    ))
                 } else if ipv6.to_ipv4_mapped().is_some() {
-                    Err(ErrorCode::InvalidArgument.into())
+                    Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "IPv4-mapped IPv6 address passed to an IPv6-only socket",
+                    ))
                 } else {
                     Ok(())
                 }
             }
-            _ => Err(ErrorCode::InvalidArgument.into()),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Address family mismatch",
+            )),
         }
     }
 
@@ -301,7 +321,7 @@ pub(crate) mod util {
      * Syscalls wrappers with (opinionated) portability fixes.
      */
 
-    pub fn udp_socket(family: AddressFamily, blocking: Blocking) -> std::io::Result<OwnedFd> {
+    pub fn udp_socket(family: AddressFamily, blocking: Blocking) -> io::Result<OwnedFd> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
         // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,

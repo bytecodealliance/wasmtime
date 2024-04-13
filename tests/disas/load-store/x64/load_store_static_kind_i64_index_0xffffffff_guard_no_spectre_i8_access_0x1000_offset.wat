@@ -23,7 +23,7 @@
 ;;       movq    %rsp, %rbp
 ;;       cmpq    0x1d(%rip), %rdx
 ;;       ja      0x22
-;;   11: movq    0x50(%rdi), %r10
+;;   11: movq    0x60(%rdi), %r10
 ;;       movb    %cl, 0x1000(%r10, %rdx)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
@@ -37,7 +37,7 @@
 ;;       movq    %rsp, %rbp
 ;;       cmpq    0x1d(%rip), %rdx
 ;;       ja      0x53
-;;   41: movq    0x50(%rdi), %r10
+;;   41: movq    0x60(%rdi), %r10
 ;;       movzbq  0x1000(%r10, %rdx), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp

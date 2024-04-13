@@ -661,7 +661,11 @@ impl ComponentTypesBuilder {
             types::EntityType::Func(idx) => {
                 let ty = types[*idx].unwrap_func();
                 let ty = self.convert_func_type(ty);
-                EntityType::Function(self.module_types_builder_mut().wasm_func_type(*idx, ty))
+                EntityType::Function(
+                    self.module_types_builder_mut()
+                        .wasm_func_type(*idx, ty)
+                        .into(),
+                )
             }
             types::EntityType::Table(ty) => EntityType::Table(self.convert_table_type(ty)),
             types::EntityType::Memory(ty) => EntityType::Memory(ty.clone().into()),

@@ -133,9 +133,6 @@ pub struct DataFlowGraph {
     /// well as the external function references.
     pub signatures: PrimaryMap<SigRef, Signature>,
 
-    /// The pre-legalization signature for each entry in `signatures`, if any.
-    pub old_signatures: SecondaryMap<SigRef, Option<Signature>>,
-
     /// External function references. These are functions that can be called directly.
     pub ext_funcs: PrimaryMap<FuncRef, ExtFuncData>,
 
@@ -164,7 +161,6 @@ impl DataFlowGraph {
             values: PrimaryMap::new(),
             facts: SecondaryMap::new(),
             signatures: PrimaryMap::new(),
-            old_signatures: SecondaryMap::new(),
             ext_funcs: PrimaryMap::new(),
             values_labels: None,
             constants: ConstantPool::new(),
@@ -182,7 +178,6 @@ impl DataFlowGraph {
         self.value_lists.clear();
         self.values.clear();
         self.signatures.clear();
-        self.old_signatures.clear();
         self.ext_funcs.clear();
         self.values_labels = None;
         self.constants.clear();
@@ -461,7 +456,7 @@ impl DataFlowGraph {
             }
         }
 
-        // - `signatures`, `old_signatures`, and `ext_funcs` have no values.
+        // - `signatures` and `ext_funcs` have no values.
 
         if let Some(values_labels) = &mut self.values_labels {
             // Debug info is best-effort. If any is attached to value aliases,
@@ -530,33 +525,32 @@ impl DataFlowGraph {
     /// After calling this instruction, `dest_inst` will have had its results
     /// cleared, so it likely needs to be removed from the graph.
     ///
-    pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
+    pub fn replace_with_aliases(&mut self, dest_inst: Inst, original_inst: Inst) {
         debug_assert_ne!(
-            dest_inst, src_inst,
+            dest_inst, original_inst,
             "Replacing {} with itself would create a loop",
             dest_inst
         );
+
+        let dest_results = self.results[dest_inst].as_slice(&self.value_lists);
+        let original_results = self.results[original_inst].as_slice(&self.value_lists);
+
         debug_assert_eq!(
-            self.results[dest_inst].len(&self.value_lists),
-            self.results[src_inst].len(&self.value_lists),
+            dest_results.len(),
+            original_results.len(),
             "Replacing {} with {} would produce a different number of results.",
             dest_inst,
-            src_inst
+            original_inst
         );
 
-        for (&dest, &src) in self.results[dest_inst]
-            .as_slice(&self.value_lists)
-            .iter()
-            .zip(self.results[src_inst].as_slice(&self.value_lists))
-        {
-            let original = src;
+        for (&dest, &original) in dest_results.iter().zip(original_results) {
             let ty = self.value_type(original);
             debug_assert_eq!(
                 self.value_type(dest),
                 ty,
                 "Aliasing {} to {} would change its type {} to {}",
                 dest,
-                src,
+                original,
                 self.value_type(dest),
                 ty
             );
@@ -931,35 +925,32 @@ impl DataFlowGraph {
     where
         I: Iterator<Item = Option<Value>>,
     {
-        self.results[inst].clear(&mut self.value_lists);
+        self.clear_results(inst);
 
         let mut reuse = reuse.fuse();
         let result_tys: SmallVec<[_; 16]> = self.inst_result_types(inst, ctrl_typevar).collect();
-        let num_results = result_tys.len();
 
-        for ty in result_tys {
-            if let Some(Some(v)) = reuse.next() {
+        for (expected, &ty) in result_tys.iter().enumerate() {
+            let num = u16::try_from(expected).expect("Result value index should fit in u16");
+            let value_data = ValueData::Inst { ty, num, inst };
+            let v = if let Some(Some(v)) = reuse.next() {
                 debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
-                self.attach_result(inst, v);
+                debug_assert!(!self.value_is_attached(v));
+                self.values[v] = value_data.into();
+                v
             } else {
-                self.append_result(inst, ty);
-            }
+                self.make_value(value_data)
+            };
+            let actual = self.results[inst].push(v, &mut self.value_lists);
+            debug_assert_eq!(expected, actual);
         }
 
-        num_results
+        result_tys.len()
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
     pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder {
         ReplaceBuilder::new(self, inst)
-    }
-
-    /// Detach the list of result values from `inst` and return it.
-    ///
-    /// This leaves `inst` without any result values. New result values can be created by calling
-    /// `make_inst_results` or by using a `replace(inst)` builder.
-    pub fn detach_results(&mut self, inst: Inst) -> ValueList {
-        self.results[inst].take()
     }
 
     /// Clear the list of result values from `inst`.
@@ -968,25 +959,6 @@ impl DataFlowGraph {
     /// `make_inst_results` or by using a `replace(inst)` builder.
     pub fn clear_results(&mut self, inst: Inst) {
         self.results[inst].clear(&mut self.value_lists)
-    }
-
-    /// Attach an existing value to the result value list for `inst`.
-    ///
-    /// The `res` value is appended to the end of the result list.
-    ///
-    /// This is a very low-level operation. Usually, instruction results with the correct types are
-    /// created automatically. The `res` value must not be attached to anything else.
-    pub fn attach_result(&mut self, inst: Inst, res: Value) {
-        debug_assert!(!self.value_is_attached(res));
-        let num = self.results[inst].push(res, &mut self.value_lists);
-        debug_assert!(num <= u16::MAX as usize, "Too many result values");
-        let ty = self.value_type(res);
-        self.values[res] = ValueData::Inst {
-            ty,
-            num: num as u16,
-            inst,
-        }
-        .into();
     }
 
     /// Replace an instruction result with a new value of type `new_type`.
@@ -1021,18 +993,6 @@ impl DataFlowGraph {
             self.display_inst(inst)
         );
         new_value
-    }
-
-    /// Append a new instruction result value to `inst`.
-    pub fn append_result(&mut self, inst: Inst, ty: Type) -> Value {
-        let res = self.values.next_key();
-        let num = self.results[inst].push(res, &mut self.value_lists);
-        debug_assert!(num <= u16::MAX as usize, "Too many result values");
-        self.make_value(ValueData::Inst {
-            ty,
-            inst,
-            num: num as u16,
-        })
     }
 
     /// Clone an instruction, attaching new result `Value`s and
@@ -1783,8 +1743,7 @@ mod tests {
         };
 
         // Remove `c` from the result list.
-        pos.func.dfg.clear_results(iadd);
-        pos.func.dfg.attach_result(iadd, s);
+        pos.func.stencil.dfg.results[iadd].remove(1, &mut pos.func.stencil.dfg.value_lists);
 
         // Replace `uadd_overflow` with a normal `iadd` and an `icmp`.
         pos.func.dfg.replace(iadd).iadd(v1, arg0);

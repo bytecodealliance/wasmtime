@@ -20,7 +20,8 @@ wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int"], optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
-libc = { version = "0.2.112", default-features = false }
+wasmtime-slab = { workspace = true }
+libc = { workspace = true }
 log = { workspace = true }
 memoffset = "0.9.0"
 indexmap = { workspace = true }

@@ -54,10 +54,9 @@
 //! }
 //! ```
 
-use crate::gc::VMExternRef;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::VMFuncRef;
-use crate::{Instance, TrapReason};
+use crate::{Instance, TrapReason, VMGcRef};
 #[cfg(feature = "wmemcheck")]
 use anyhow::bail;
 use anyhow::Result;
@@ -111,17 +110,14 @@ pub mod raw {
                 ) $( -> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
                     {
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let ret = crate::traphandlers::catch_unwind_and_longjmp(|| {
                             Instance::from_vmctx(vmctx, |instance| {
                                 {
                                     super::$name(instance, $($pname),*)
                                 }
                             })
-                        }));
-                        match result {
-                            Ok(ret) => LibcallResult::convert(ret),
-                            Err(panic) => crate::traphandlers::resume_panic(panic),
-                        }
+                        });
+                        LibcallResult::convert(ret)
                     }
                     $(
                         #[cfg(not($attr))]
@@ -212,15 +208,18 @@ unsafe fn table_grow(
     instance: &mut Instance,
     table_index: u32,
     delta: u32,
-    // NB: we don't know whether this is a pointer to a `VMFuncRef`
-    // or is a `VMExternRef` until we look at the table type.
+    // NB: we don't know whether this is a pointer to a `VMFuncRef` or is an
+    // `r64` that represents a `VMGcRef` until we look at the table type.
     init_value: *mut u8,
 ) -> Result<u32> {
     let table_index = TableIndex::from_u32(table_index);
 
     let element = match instance.table_element_type(table_index) {
         TableElementType::Func => (init_value as *mut VMFuncRef).into(),
-        TableElementType::Extern => VMExternRef::clone_from_raw(init_value).into(),
+        TableElementType::GcRef => VMGcRef::from_r64(u64::try_from(init_value as usize).unwrap())
+            .unwrap()
+            .map(|r| (*instance.store()).gc_store().clone_gc_ref(&r))
+            .into(),
     };
 
     Ok(match instance.table_grow(table_index, delta, element)? {
@@ -232,15 +231,15 @@ unsafe fn table_grow(
 use table_grow as table_grow_func_ref;
 
 #[cfg(feature = "gc")]
-use table_grow as table_grow_externref;
+use table_grow as table_grow_gc_ref;
 
 // Implementation of `table.fill`.
 unsafe fn table_fill(
     instance: &mut Instance,
     table_index: u32,
     dst: u32,
-    // NB: we don't know whether this is a `VMExternRef` or a pointer to a
-    // `VMFuncRef` until we look at the table's element type.
+    // NB: we don't know whether this is an `r64` that represents a `VMGcRef` or
+    // a pointer to a `VMFuncRef` until we look at the table's element type.
     val: *mut u8,
     len: u32,
 ) -> Result<(), Trap> {
@@ -248,13 +247,15 @@ unsafe fn table_fill(
     let table = &mut *instance.get_table(table_index);
     match table.element_type() {
         TableElementType::Func => {
-            let val = val as *mut VMFuncRef;
-            table.fill(dst, val.into(), len)
+            let val = val.cast::<VMFuncRef>();
+            table.fill((*instance.store()).gc_store(), dst, val.into(), len)
         }
 
-        TableElementType::Extern => {
-            let val = VMExternRef::clone_from_raw(val);
-            table.fill(dst, val.into(), len)
+        TableElementType::GcRef => {
+            let gc_store = (*instance.store()).gc_store();
+            let gc_ref = VMGcRef::from_r64(u64::try_from(val as usize).unwrap()).unwrap();
+            let gc_ref = gc_ref.map(|r| gc_store.clone_gc_ref(&r));
+            table.fill(gc_store, dst, gc_ref.into(), len)
         }
     }
 }
@@ -262,7 +263,7 @@ unsafe fn table_fill(
 use table_fill as table_fill_func_ref;
 
 #[cfg(feature = "gc")]
-use table_fill as table_fill_externref;
+use table_fill as table_fill_gc_ref;
 
 // Implementation of `table.copy`.
 unsafe fn table_copy(
@@ -279,7 +280,8 @@ unsafe fn table_copy(
     // Lazy-initialize the whole range in the source table first.
     let src_range = src..(src.checked_add(len).unwrap_or(u32::MAX));
     let src_table = instance.get_table_with_lazy_init(src_table_index, src_range);
-    Table::copy(dst_table, src_table, dst, src, len)
+    let gc_store = (*instance.store()).gc_store();
+    Table::copy(gc_store, dst_table, src_table, dst, src, len)
 }
 
 // Implementation of `table.init`.
@@ -364,75 +366,90 @@ unsafe fn table_get_lazy_init_func_ref(
 ) -> *mut u8 {
     let table_index = TableIndex::from_u32(table_index);
     let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
+    let gc_store = (*instance.store()).gc_store();
     let elem = (*table)
-        .get(index)
+        .get(gc_store, index)
         .expect("table access already bounds-checked");
 
-    elem.into_ref_asserting_initialized()
+    elem.into_func_ref_asserting_initialized().cast()
 }
 
-// Drop a `VMExternRef`.
+// Drop a GC reference.
 #[cfg(feature = "gc")]
-unsafe fn drop_externref(_instance: &mut Instance, externref: *mut u8) {
-    use crate::VMGcRef;
-
-    let non_null = std::ptr::NonNull::new(externref).unwrap();
-    let gc_ref = VMGcRef::from_non_null(non_null);
-    crate::gc::VMExternData::drop_and_dealloc(gc_ref);
+unsafe fn drop_gc_ref(instance: &mut Instance, gc_ref: *mut u8) {
+    let gc_ref = VMGcRef::from_r64(u64::try_from(gc_ref as usize).unwrap())
+        .expect("valid r64")
+        .expect("non-null VMGcRef");
+    log::trace!("libcalls::drop_gc_ref({gc_ref:?})");
+    (*instance.store()).gc_store().drop_gc_ref(gc_ref);
 }
 
-// Do a GC and insert the given `externref` into the
-// `VMExternRefActivationsTable`.
+// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
+// reference.
 #[cfg(feature = "gc")]
-unsafe fn activations_table_insert_with_gc(instance: &mut Instance, externref: *mut u8) {
-    let externref = VMExternRef::clone_from_raw(externref).unwrap();
-    let limits = *instance.runtime_limits();
-    let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
+unsafe fn gc(instance: &mut Instance, gc_ref: *mut u8) -> Result<*mut u8> {
+    let gc_ref = u64::try_from(gc_ref as usize).unwrap();
+    let gc_ref = VMGcRef::from_r64(gc_ref).expect("valid r64");
+    let gc_ref = gc_ref.map(|r| (*instance.store()).gc_store().clone_gc_ref(&r));
 
-    // Invariant: all `externref`s on the stack have an entry in the activations
-    // table. So we need to ensure that this `externref` is in the table
-    // *before* we GC, even though `insert_with_gc` will ensure that it is in
-    // the table *after* the GC. This technically results in one more hash table
-    // look up than is strictly necessary -- which we could avoid by having an
-    // additional GC method that is aware of these GC-triggering references --
-    // but it isn't really a concern because this is already a slow path.
-    activations_table.insert_without_gc(externref.clone());
+    if let Some(gc_ref) = &gc_ref {
+        // It is possible that we are GC'ing because the DRC's activation
+        // table's bump region is full, and we failed to insert `gc_ref` into
+        // the bump region. But it is an invariant for DRC collection that all
+        // GC references on the stack are in the DRC's activations table at the
+        // time of a GC. So make sure to "expose" this GC reference to Wasm (aka
+        // insert it into the DRC's activation table) before we do the actual
+        // GC.
+        let gc_store = (*instance.store()).gc_store();
+        let gc_ref = gc_store.clone_gc_ref(gc_ref);
+        gc_store.expose_gc_ref_to_wasm(gc_ref);
+    }
 
-    activations_table.insert_with_gc(limits, externref, module_info_lookup);
-}
-
-// Perform a Wasm `global.get` for `externref` globals.
-#[cfg(feature = "gc")]
-unsafe fn externref_global_get(instance: &mut Instance, index: u32) -> *mut u8 {
-    let index = wasmtime_environ::GlobalIndex::from_u32(index);
-    let limits = *instance.runtime_limits();
-    let global = instance.defined_or_imported_global_ptr(index);
-    match (*global).as_externref().clone() {
-        None => std::ptr::null_mut(),
-        Some(externref) => {
-            let raw = externref.as_raw();
-            let (activations_table, module_info_lookup) =
-                (*instance.store()).externref_activations_table();
-            activations_table.insert_with_gc(limits, externref, module_info_lookup);
-            raw
+    match (*instance.store()).gc(gc_ref)? {
+        None => Ok(std::ptr::null_mut()),
+        Some(r) => {
+            let r64 = r.as_r64();
+            (*instance.store()).gc_store().expose_gc_ref_to_wasm(r);
+            Ok(usize::try_from(r64).unwrap() as *mut u8)
         }
     }
 }
 
-// Perform a Wasm `global.set` for `externref` globals.
+// Perform a Wasm `global.get` for GC reference globals.
 #[cfg(feature = "gc")]
-unsafe fn externref_global_set(instance: &mut Instance, index: u32, externref: *mut u8) {
-    let externref = VMExternRef::clone_from_raw(externref);
+unsafe fn gc_ref_global_get(instance: &mut Instance, index: u32) -> Result<*mut u8> {
+    use std::num::NonZeroUsize;
 
     let index = wasmtime_environ::GlobalIndex::from_u32(index);
     let global = instance.defined_or_imported_global_ptr(index);
+    let gc_store = (*instance.store()).gc_store();
 
-    // Swap the new `externref` value into the global before we drop the old
-    // value. This protects against an `externref` with a `Drop` implementation
-    // that calls back into Wasm and touches this global again (we want to avoid
-    // it observing a halfway-deinitialized value).
-    let old = std::mem::replace((*global).as_externref_mut(), externref);
-    drop(old);
+    if gc_store
+        .gc_heap
+        .need_gc_before_entering_wasm(NonZeroUsize::new(1).unwrap())
+    {
+        (*instance.store()).gc(None)?;
+    }
+
+    match (*global).as_gc_ref() {
+        None => Ok(std::ptr::null_mut()),
+        Some(gc_ref) => {
+            let gc_ref = gc_store.clone_gc_ref(gc_ref);
+            let ret = usize::try_from(gc_ref.as_r64()).unwrap() as *mut u8;
+            gc_store.expose_gc_ref_to_wasm(gc_ref);
+            Ok(ret)
+        }
+    }
+}
+
+// Perform a Wasm `global.set` for GC reference globals.
+#[cfg(feature = "gc")]
+unsafe fn gc_ref_global_set(instance: &mut Instance, index: u32, gc_ref: *mut u8) {
+    let index = wasmtime_environ::GlobalIndex::from_u32(index);
+    let global = instance.defined_or_imported_global_ptr(index);
+    let gc_ref = VMGcRef::from_r64(u64::try_from(gc_ref as usize).unwrap()).expect("valid r64");
+    let gc_store = (*instance.store()).gc_store();
+    (*global).write_gc_ref(gc_store, gc_ref.as_ref());
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.

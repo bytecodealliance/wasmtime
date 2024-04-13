@@ -191,9 +191,10 @@ pub static REG_SAVE_AREA_SIZE: u32 = 160;
 impl Into<MemArg> for StackAMode {
     fn into(self) -> MemArg {
         match self {
-            StackAMode::FPOffset(off, _ty) => MemArg::InitialSPOffset { off },
-            StackAMode::NominalSPOffset(off, _ty) => MemArg::NominalSPOffset { off },
-            StackAMode::SPOffset(off, _ty) => {
+            // Argument area always begins at the initial SP.
+            StackAMode::IncomingArg(off) => MemArg::InitialSPOffset { off },
+            StackAMode::Slot(off) => MemArg::NominalSPOffset { off },
+            StackAMode::OutgoingArg(off) => {
                 MemArg::reg_plus_off(stack_reg(), off, MemFlags::trusted())
             }
         }
@@ -404,10 +405,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         Ok((next_stack, extra_arg))
     }
 
-    fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        0
-    }
-
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
         Inst::gen_load(into_reg, mem.into(), ty)
     }
@@ -498,7 +495,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
+    fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {
         let mem = mem.into();
         Inst::LoadAddr { rd: into_reg, mem }
     }

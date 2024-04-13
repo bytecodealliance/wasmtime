@@ -254,6 +254,7 @@ impl<'a> Module<'a> {
             GlobalType {
                 val_type: ValType::I32,
                 mutable: true,
+                shared: false,
             },
             CoreDef::InstanceFlags(*instance),
         );
@@ -266,6 +267,7 @@ impl<'a> Module<'a> {
                     maximum: None,
                     shared: false,
                     memory64: *memory64,
+                    page_size_log2: None,
                 },
                 memory.clone().into(),
             )

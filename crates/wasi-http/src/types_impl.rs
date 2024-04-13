@@ -1,3 +1,5 @@
+//! Implementation for the `wasi:http/types` interface.
+
 use crate::{
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
@@ -14,10 +16,14 @@ use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{
     bindings::io::streams::{InputStream, OutputStream},
-    Pollable,
+    Pollable, ResourceTableError,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
+    fn convert_error_code(&mut self, err: crate::HttpError) -> wasmtime::Result<types::ErrorCode> {
+        err.downcast()
+    }
+
     fn http_error_code(
         &mut self,
         err: wasmtime::component::Resource<types::IoError>,
@@ -49,7 +55,10 @@ fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
 
 /// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
 /// fields resource references another fields, the returned [`FieldMap`] will be cloned.
-fn move_fields(table: &mut ResourceTable, id: Resource<HostFields>) -> wasmtime::Result<FieldMap> {
+fn move_fields(
+    table: &mut ResourceTable,
+    id: Resource<HostFields>,
+) -> Result<FieldMap, ResourceTableError> {
     match table.delete(id)? {
         HostFields::Ref { parent, get_fields } => {
             let entry = table.get_any_mut(parent)?;
@@ -839,10 +848,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
             headers: parts.headers,
             body: Some({
                 let mut body = HostIncomingBody::new(body, resp.between_bytes_timeout);
-                body.retain_worker(&resp.worker);
+                if let Some(worker) = resp.worker {
+                    body.retain_worker(worker);
+                }
                 body
             }),
-            worker: resp.worker,
         })?;
 
         Ok(Some(Ok(Ok(resp))))
@@ -862,7 +872,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         id: Resource<HostOutgoingBody>,
     ) -> wasmtime::Result<Result<Resource<OutputStream>, ()>> {
         let body = self.table().get_mut(&id)?;
-        if let Some(stream) = body.body_output_stream.take() {
+        if let Some(stream) = body.take_output_stream() {
             let id = self.table().push_child(stream, &id)?;
             Ok(Ok(id))
         } else {
@@ -874,7 +884,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         &mut self,
         id: Resource<HostOutgoingBody>,
         ts: Option<Resource<Trailers>>,
-    ) -> wasmtime::Result<Result<(), types::ErrorCode>> {
+    ) -> crate::HttpResult<()> {
         let body = self.table().delete(id)?;
 
         let ts = if let Some(ts) = ts {
@@ -883,7 +893,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
             None
         };
 
-        Ok(body.finish(ts))
+        body.finish(ts)?;
+        Ok(())
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingBody>) -> wasmtime::Result<()> {

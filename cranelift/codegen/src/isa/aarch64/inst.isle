@@ -1119,15 +1119,13 @@
         ;; Register plus register offset, scaled by type's size.
         (RegScaled
          (rn Reg)
-         (rm Reg)
-         (ty Type))
+         (rm Reg))
 
         ;; Register plus register offset, scaled by type's size, with index
         ;; sign- or zero-extended first.
         (RegScaledExtended
          (rn Reg)
          (rm Reg)
-         (ty Type)
          (extendop ExtendOp))
 
         ;; Register plus register offset, with index sign- or zero-extended
@@ -1157,18 +1155,15 @@
         ;; offsets with multiple instructions as necessary during code emission.
         (RegOffset
          (rn Reg)
-         (off i64)
-         (ty Type))
+         (off i64))
 
         ;; Offset from the stack pointer.
         (SPOffset
-         (off i64)
-         (ty Type))
+         (off i64))
 
         ;; Offset from the frame pointer.
         (FPOffset
-         (off i64)
-         (ty Type))
+         (off i64))
 
         ;; A reference to a constant which is placed outside of the function's
         ;; body, typically at the end.
@@ -1188,8 +1183,7 @@
         ;; clobber pushes. See the diagram in the documentation for
         ;; [crate::isa::aarch64::abi](the ABI module) for more details.
         (NominalSPOffset
-         (off i64)
-         (ty Type))))
+         (off i64))))
 
 ;; A memory argument to a load/store-pair.
 (type PairAMode (enum
@@ -3169,18 +3163,18 @@
 ;; first and then if that succeeds afterwards try to find an extend.
 (rule 6 (amode_no_more_iconst ty (iadd x (ishl y (iconst (u64_from_imm64 n)))) offset)
         (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
-        (amode_reg_scaled (amode_add x offset) y ty))
+        (amode_reg_scaled (amode_add x offset) y))
 (rule 7 (amode_no_more_iconst ty (iadd (ishl y (iconst (u64_from_imm64 n))) x) offset)
         (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
-        (amode_reg_scaled (amode_add x offset) y ty))
+        (amode_reg_scaled (amode_add x offset) y))
 
-(decl amode_reg_scaled (Reg Value Type) AMode)
-(rule 0 (amode_reg_scaled base index ty)
-        (AMode.RegScaled base index ty))
-(rule 1 (amode_reg_scaled base (uextend index @ (value_type $I32)) ty)
-        (AMode.RegScaledExtended base index ty (ExtendOp.UXTW)))
-(rule 2 (amode_reg_scaled base (sextend index @ (value_type $I32)) ty)
-        (AMode.RegScaledExtended base index ty (ExtendOp.SXTW)))
+(decl amode_reg_scaled (Reg Value) AMode)
+(rule 0 (amode_reg_scaled base index)
+        (AMode.RegScaled base index))
+(rule 1 (amode_reg_scaled base (uextend index @ (value_type $I32)))
+        (AMode.RegScaledExtended base index (ExtendOp.UXTW)))
+(rule 1 (amode_reg_scaled base (sextend index @ (value_type $I32)))
+        (AMode.RegScaledExtended base index (ExtendOp.SXTW)))
 
 ;; Helper to add a 32-bit signed immediate to the register provided. This will
 ;; select an appropriate `add` instruction to use.
@@ -3519,7 +3513,7 @@
             ;; the frame record that corresponds to the current subroutine on
             ;; the stack; the presence of the record is guaranteed by the
             ;; `preserve_frame_pointers` setting.
-            (addr AMode (AMode.FPOffset 8 $I64))
+            (addr AMode (AMode.FPOffset 8))
             (_ Unit (emit (MInst.ULoad64 dst addr (mem_flags_trusted)))))
            dst))
 
@@ -3529,7 +3523,7 @@
       ;; the frame record. Furthermore, we can use LR as a scratch register
       ;; because the function will set it to the return address immediately
       ;; before returning.
-      (let ((addr AMode (AMode.FPOffset 8 $I64))
+      (let ((addr AMode (AMode.FPOffset 8))
             (lr WritableReg (writable_link_reg))
             (_ Unit (emit (MInst.ULoad64 lr addr (mem_flags_trusted))))
             (_ Unit (emit (MInst.Xpaclri))))

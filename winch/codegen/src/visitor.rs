@@ -1469,7 +1469,7 @@ where
     fn visit_table_size(&mut self, table: u32) {
         let table_index = TableIndex::from_u32(table);
         let table_data = self.env.resolve_table_data(table_index);
-        self.masm.table_size(&table_data, &mut self.context);
+        self.emit_compute_table_size(&table_data);
     }
 
     fn visit_table_fill(&mut self, table: u32) {
@@ -1505,13 +1505,8 @@ where
                     let value = self.context.pop_to_reg(self.masm, None);
                     let index = self.context.pop_to_reg(self.masm, None);
                     let base = self.context.any_gpr(self.masm);
-                    let elem_addr = self.masm.table_elem_address(
-                        index.into(),
-                        base,
-                        &table_data,
-                        &mut self.context,
-                    );
-
+                    let elem_addr =
+                        self.emit_compute_table_elem_addr(index.into(), base, &table_data);
                     // Set the initialized bit.
                     self.masm.or(
                         value.into(),
@@ -1605,7 +1600,7 @@ where
 
     fn visit_memory_size(&mut self, mem: u32, _: u8) {
         let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
-        self.masm.memory_size(&heap, &mut self.context);
+        self.emit_compute_memory_size(&heap);
     }
 
     fn visit_memory_grow(&mut self, mem: u32, _: u8) {

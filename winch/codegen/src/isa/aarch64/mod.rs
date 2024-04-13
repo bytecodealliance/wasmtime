@@ -124,8 +124,9 @@ impl TargetIsa for Aarch64 {
 
         codegen.emit(&mut body, validator)?;
         let names = codegen.env.take_name_map();
+        let base = codegen.source_location.base;
         Ok(CompiledFunction::new(
-            masm.finalize(),
+            masm.finalize(base),
             names,
             self.function_alignment(),
         ))

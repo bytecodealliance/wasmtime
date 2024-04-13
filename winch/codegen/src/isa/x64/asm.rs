@@ -6,7 +6,8 @@ use crate::{
 };
 use cranelift_codegen::{
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, Opcode, TrapCode, UserExternalNameRef,
+        types, ConstantPool, ExternalName, LibCall, MemFlags, Opcode, SourceLoc, TrapCode,
+        UserExternalNameRef,
     },
     isa::{
         unwind::UnwindInst,
@@ -199,6 +200,11 @@ impl Assembler {
         &mut self.buffer
     }
 
+    /// Get a reference to the underlying machine buffer.
+    pub fn buffer(&self) -> &MachBuffer<Inst> {
+        &self.buffer
+    }
+
     /// Adds a constant to the constant pool and returns its address.
     pub fn add_constant(&mut self, constant: &[u8]) -> Address {
         let handle = self.pool.insert(constant.into());
@@ -206,11 +212,11 @@ impl Assembler {
     }
 
     /// Return the emitted code.
-    pub fn finalize(mut self) -> MachBufferFinalized<Final> {
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
         let stencil = self
             .buffer
             .finish(&self.constants, self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(Default::default())
+        stencil.apply_base_srcloc(loc.unwrap_or_default())
     }
 
     fn emit(&mut self, inst: Inst) {

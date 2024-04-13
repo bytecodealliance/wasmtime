@@ -215,6 +215,8 @@ impl Metadata<'_> {
             memory_control,
             function_references,
             gc,
+            custom_page_sizes,
+            shared_everything_threads,
             component_model_values,
             component_model_nested_names,
 
@@ -225,9 +227,14 @@ impl Metadata<'_> {
             floats: _,
         } = engine.config().features;
 
+        // These features are not implemented in Wasmtime yet. We match on them
+        // above so that once we do implement support for them, we won't
+        // silently ignore them during serialization.
         assert!(!memory_control);
         assert!(!component_model_values);
         assert!(!component_model_nested_names);
+        assert!(!custom_page_sizes);
+        assert!(!shared_everything_threads);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
