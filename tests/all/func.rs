@@ -2112,3 +2112,20 @@ fn wrap_and_typed_i31ref() -> Result<()> {
     assert_eq!(HITS.load(Ordering::SeqCst), 2);
     Ok(())
 }
+
+#[test]
+fn call_func_with_funcref_both_typed_and_untyped() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let f1 = Func::wrap(&mut store, |_: Option<Func>| {});
+    let f2 = Func::wrap(&mut store, || {});
+
+    f1.typed::<Func, ()>(&mut store)?.call(&mut store, f2)?;
+    f1.call(&mut store, &[Val::FuncRef(Some(f2))], &mut [])?;
+    Ok(())
+}
