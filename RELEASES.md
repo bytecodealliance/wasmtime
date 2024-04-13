@@ -24,6 +24,22 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 19.0.2
+
+Released 2024-04-11.
+
+* Fix a panic when compiling invalid components.
+  [#8322](https://github.com/bytecodealliance/wasmtime/issues/8322)
+
+* Fix `bindgen!` with `trappable_error_type` using unversioned/versioned
+  packages.
+  [#8305](https://github.com/bytecodealliance/wasmtime/pull/8305)
+
+* cranelift: Include clobbers and outgoing args in stack limit.
+  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+
+--------------------------------------------------------------------------------
+
 ## 19.0.1
 
 Released 2024-04-02.
@@ -133,6 +149,24 @@ Released 2024-03-20
 
 --------------------------------------------------------------------------------
 
+## 18.0.4
+
+Released 2024-04-11
+
+### Fixed
+
+* Fix `bindgen!` with `trappable_error_type` using unversioned/versioned
+  packages.
+  [#8305](https://github.com/bytecodealliance/wasmtime/pull/8305)
+
+* cranelift: Include clobbers and outgoing args in stack limit.
+  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+
+* Fix a panic when compiling invalid components.
+  [#8322](https://github.com/bytecodealliance/wasmtime/issues/8322)
+
+--------------------------------------------------------------------------------
+
 ## 18.0.3
 
 Released 2024-03-12
@@ -215,6 +249,17 @@ Released 2024-02-20
   supports both WASIp1 and WASIp2, as in the next release the
   `wasi-common`-based reexports of `wasmtime-wasi` will be deleted.
   [#7881](https://github.com/bytecodealliance/wasmtime/pull/7881)
+
+--------------------------------------------------------------------------------
+
+## 17.0.3
+
+Released 2024-04-11
+
+### Fixed
+
+* cranelift: Include clobbers and outgoing args in stack limit.
+  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
 
 --------------------------------------------------------------------------------
 
