@@ -3896,27 +3896,27 @@ fn test_x64_emit() {
     // XMM_CMP_RM_R
 
     insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, RegMem::reg(xmm1), xmm2),
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, xmm2, RegMem::reg(xmm1)),
         "0F2ED1",
-        "ucomiss %xmm1, %xmm2",
+        "ucomiss %xmm2, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, RegMem::reg(xmm0), xmm9),
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, xmm9, RegMem::reg(xmm0)),
         "440F2EC8",
-        "ucomiss %xmm0, %xmm9",
+        "ucomiss %xmm9, %xmm0",
     ));
 
     insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, RegMem::reg(xmm13), xmm4),
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, xmm4, RegMem::reg(xmm13)),
         "66410F2EE5",
-        "ucomisd %xmm13, %xmm4",
+        "ucomisd %xmm4, %xmm13",
     ));
 
     insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, RegMem::reg(xmm11), xmm12),
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, xmm12, RegMem::reg(xmm11)),
         "66450F2EE3",
-        "ucomisd %xmm11, %xmm12",
+        "ucomisd %xmm12, %xmm11",
     ));
 
     // ========================================================

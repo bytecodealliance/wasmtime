@@ -55,12 +55,12 @@ block0(v0: f64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movsd   0(%rdi), %xmm1
-;   ucomisd %xmm1, %xmm0
+;   ucomisd %xmm0, %xmm1
 ;   setnp   %dil
 ;   setz    %al
 ;   andl    %edi, %eax, %edi
 ;   movzbq  %dil, %rax
-;   ucomisd %xmm1, %xmm0
+;   ucomisd %xmm0, %xmm1
 ;   movdqa  %xmm0, %xmm2
 ;   movsd %xmm0, %xmm0; jnp $next; movsd %xmm2, %xmm0; $next:
 ;   movsd %xmm0, %xmm0; jz $next; movsd %xmm2, %xmm0; $next:

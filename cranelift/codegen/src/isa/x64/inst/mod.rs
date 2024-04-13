@@ -391,12 +391,12 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src: RegMem, dst: Reg) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.class() == RegClass::Float);
-        let src = XmmMemAligned::new(src).unwrap();
-        let dst = Xmm::new(dst).unwrap();
-        Inst::XmmCmpRmR { op, src, dst }
+    pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src1: Reg, src2: RegMem) -> Inst {
+        src2.assert_regclass_is(RegClass::Float);
+        debug_assert!(src1.class() == RegClass::Float);
+        let src2 = XmmMemAligned::new(src2).unwrap();
+        let src1 = Xmm::new(src1).unwrap();
+        Inst::XmmCmpRmR { op, src1, src2 }
     }
 
     #[allow(dead_code)]
@@ -1311,11 +1311,11 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::XmmCmpRmR { op, src, dst } => {
-                let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
-                let src = src.pretty_print(8, allocs);
+            Inst::XmmCmpRmR { op, src1, src2 } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
                 let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
+                format!("{op} {src1}, {src2}")
             }
 
             Inst::CvtIntToFloat {
@@ -2150,9 +2150,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src.to_reg());
             dst.get_operands(collector);
         }
-        Inst::XmmCmpRmR { src, dst, .. } => {
-            collector.reg_use(dst.to_reg());
-            src.get_operands(collector);
+        Inst::XmmCmpRmR { src1, src2, .. } => {
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
         }
         Inst::Imm { dst, .. } => {
             collector.reg_def(dst.to_writable_reg());

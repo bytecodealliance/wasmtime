@@ -995,9 +995,9 @@ impl Assembler {
         });
     }
 
-    /// Compares values in src and dst and sets ZF, PF, and CF flags in EFLAGS
+    /// Compares values in src1 and src2 and sets ZF, PF, and CF flags in EFLAGS
     /// register.
-    pub fn ucomis(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn ucomis(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => SseOpcode::Ucomiss,
             OperandSize::S64 => SseOpcode::Ucomisd,
@@ -1006,8 +1006,8 @@ impl Assembler {
 
         self.emit(Inst::XmmCmpRmR {
             op,
-            src: Xmm::from(src).into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: Xmm::from(src2).into(),
         });
     }
 

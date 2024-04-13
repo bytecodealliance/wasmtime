@@ -504,8 +504,8 @@
 
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmR (op SseOpcode)
-                  (src XmmMemAligned)
-                  (dst Xmm))
+                  (src1 Xmm)
+                  (src2 XmmMemAligned))
 
        ;; A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm
        ;; (reg addr) reg
@@ -2826,7 +2826,7 @@
       (cmp_rmi_r size (CmpOpcode.Cmp) (RegMemImm.Imm src1) src2))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
-(decl xmm_cmp_rm_r (SseOpcode XmmMemAligned Xmm) ProducesFlags)
+(decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
 (rule (xmm_cmp_rm_r opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
@@ -2846,7 +2846,7 @@
       (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
 
 ;; Helper for creating `ptest` instructions.
-(decl x64_ptest (XmmMem Xmm) ProducesFlags)
+(decl x64_ptest (Xmm XmmMem) ProducesFlags)
 (rule (x64_ptest src1 src2)
       (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
 
@@ -4896,45 +4896,45 @@
 (decl emit_fcmp (FloatCC Value Value) FcmpCondResult)
 
 (rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.AndCondition (x64_ucomis b a) (CC.NP) (CC.Z)))
+      (FcmpCondResult.AndCondition (x64_ucomis a b) (CC.NP) (CC.Z)))
 
 (rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.OrCondition (x64_ucomis b a) (CC.P) (CC.NZ)))
+      (FcmpCondResult.OrCondition (x64_ucomis a b) (CC.P) (CC.NZ)))
 
 ;; Some scalar lowerings correspond to one condition code.
 
 (rule (emit_fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NP)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NP)))
 (rule (emit_fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.P)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.P)))
 (rule (emit_fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NZ)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NZ)))
 (rule (emit_fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.Z)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.Z)))
 (rule (emit_fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
 
 ;; Other scalar lowerings are made possible by flipping the operands and
 ;; reversing the condition code.
 
 (rule (emit_fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThan`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThan`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.BE)))
 
 ;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
