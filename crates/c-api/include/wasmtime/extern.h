@@ -8,8 +8,8 @@
 #define WASMTIME_EXTERN_H
 
 #include <wasmtime/module.h>
-#include <wasmtime/store.h>
 #include <wasmtime/sharedmemory.h>
+#include <wasmtime/store.h>
 
 #ifdef __cplusplus
 extern "C" {
