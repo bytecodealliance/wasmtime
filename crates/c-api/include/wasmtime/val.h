@@ -7,6 +7,7 @@
 #ifndef WASMTIME_VAL_H
 #define WASMTIME_VAL_H
 
+#include <stdalign.h>
 #include <wasm.h>
 #include <wasmtime/extern.h>
 
@@ -305,6 +306,15 @@ typedef union wasmtime_val_raw {
   /// Note that this field is always stored in a little-endian format.
   void *funcref;
 } wasmtime_val_raw_t;
+
+// Assert that the shape of this type is as expected since it needs to match
+// Rust.
+static inline void __wasmtime_val_assertions() {
+  static_assert(sizeof(wasmtime_valunion_t) == 16, "should be 16-bytes large");
+  static_assert(alignof(wasmtime_valunion_t) == 8, "should be 8-byte aligned");
+  static_assert(sizeof(wasmtime_val_raw_t) == 16, "should be 16 bytes large");
+  static_assert(alignof(wasmtime_val_raw_t) == 8, "should be 8-byte aligned");
+}
 
 /**
  * \typedef wasmtime_val_t
