@@ -150,6 +150,11 @@ pub union wasmtime_val_union {
     pub v128: [u8; 16],
 }
 
+const _: () = {
+    assert!(std::mem::size_of::<wasmtime_val_union>() == 16);
+    assert!(std::mem::align_of::<wasmtime_val_union>() == 8);
+};
+
 // The raw pointers are actually optional boxes.
 unsafe impl Send for wasmtime_val_union
 where
