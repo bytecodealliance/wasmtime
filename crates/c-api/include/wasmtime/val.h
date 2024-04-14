@@ -311,9 +311,10 @@ typedef union wasmtime_val_raw {
 // Rust.
 static inline void __wasmtime_val_assertions() {
   static_assert(sizeof(wasmtime_valunion_t) == 16, "should be 16-bytes large");
-  static_assert(alignof(wasmtime_valunion_t) == 8, "should be 8-byte aligned");
+  static_assert(__alignof(wasmtime_valunion_t) == 8,
+                "should be 8-byte aligned");
   static_assert(sizeof(wasmtime_val_raw_t) == 16, "should be 16 bytes large");
-  static_assert(alignof(wasmtime_val_raw_t) == 8, "should be 8-byte aligned");
+  static_assert(__alignof(wasmtime_val_raw_t) == 8, "should be 8-byte aligned");
 }
 
 /**
