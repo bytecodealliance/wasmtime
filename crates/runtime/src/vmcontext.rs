@@ -943,6 +943,52 @@ mod test_vmruntime_limits {
     }
 }
 
+/// One call-indirect cache entry.
+///
+/// It consists of the last observed function-pointer index, and the
+/// direct code pointer (with the same vmctx, i.e., in the same
+/// instance) to call if this index matches.
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct VMCallIndirectCache {
+    /// Function pointer for this funcref if being called via the Wasm
+    /// calling convention.
+    pub wasm_call: NonNull<VMWasmCallFunction>,
+
+    /// Table index corresponding to the above function pointer.
+    pub index: usize,
+    // If more elements are added here, remember to add offset_of tests below!
+}
+
+unsafe impl Send for VMCallIndirectCache {}
+unsafe impl Sync for VMCallIndirectCache {}
+
+#[cfg(test)]
+mod test_vm_call_indirect_cache {
+    use super::VMCallIndirectCache;
+    use memoffset::offset_of;
+    use std::mem::size_of;
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
+
+    #[test]
+    fn check_vm_call_indirect_cache_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(
+            size_of::<VMCallIndirectCache>(),
+            usize::from(offsets.ptr.size_of_vmcall_indirect_cache())
+        );
+        assert_eq!(
+            offset_of!(VMCallIndirectCache, wasm_call),
+            usize::from(offsets.ptr.vmcall_indirect_cache_wasm_call())
+        );
+        assert_eq!(
+            offset_of!(VMCallIndirectCache, index),
+            usize::from(offsets.ptr.vmcall_indirect_cache_index())
+        );
+    }
+}
+
 /// The VM "context", which is pointed to by the `vmctx` arg in Cranelift.
 /// This has information about globals, memories, tables, and other runtime
 /// state associated with the current instance.

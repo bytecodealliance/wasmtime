@@ -148,8 +148,14 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env =
-            FuncEnvironment::new(isa, translation, types, &self.tunables, self.wmemcheck);
+        let mut func_env = FuncEnvironment::new(
+            isa,
+            translation,
+            types,
+            &self.tunables,
+            self.wmemcheck,
+            input.call_indirect_start,
+        );
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -203,7 +209,11 @@ impl wasmtime_environ::Compiler for Compiler {
             flags: MemFlags::trusted(),
         });
         context.func.stack_limit = Some(stack_limit);
-        let FunctionBodyData { validator, body } = input;
+        let FunctionBodyData {
+            validator,
+            body,
+            call_indirect_start: _,
+        } = input;
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
         compiler.cx.func_translator.translate_body(

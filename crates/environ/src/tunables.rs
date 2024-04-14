@@ -59,6 +59,10 @@ pub struct Tunables {
 
     /// Whether or not Wasm functions target the winch abi.
     pub winch_callable: bool,
+
+    /// Whether we implement a one-entry cache at each call_indirect
+    /// site.
+    pub cache_call_indirects: bool,
 }
 
 impl Tunables {
@@ -110,6 +114,7 @@ impl Tunables {
             relaxed_simd_deterministic: false,
             tail_callable: false,
             winch_callable: false,
+            cache_call_indirects: false,
         }
     }
 

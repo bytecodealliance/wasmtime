@@ -371,13 +371,24 @@ pub struct TablePlan {
     pub table: Table,
     /// Our chosen implementation style.
     pub style: TableStyle,
+    /// Whether the table is observed to be written or possibly
+    /// written: either by some opcode present in the code section, or
+    /// by the fact that the table is exported.
+    pub written: bool,
+    /// Whether this table may have a non-null zero element.
+    pub non_null_zero: bool,
 }
 
 impl TablePlan {
     /// Draw up a plan for implementing a `Table`.
     pub fn for_table(table: Table, tunables: &Tunables) -> Self {
         let style = TableStyle::for_table(table, tunables);
-        Self { table, style }
+        Self {
+            table,
+            style,
+            written: false,
+            non_null_zero: false,
+        }
     }
 }
 
@@ -508,6 +519,9 @@ pub struct Module {
     /// This is also the number of functions in the `functions` array below with
     /// an `func_ref` index (and is the maximum func_ref index).
     pub num_escaped_funcs: usize,
+
+    /// Number of call-indirect caches.
+    pub num_call_indirect_caches: usize,
 
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, FunctionType>,

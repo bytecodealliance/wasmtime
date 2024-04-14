@@ -23,6 +23,7 @@
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
+//      call_indirect_caches: [VMCallIndirectCache; module.num_call_indirect_caches],
 // }
 
 use crate::{
@@ -72,6 +73,8 @@ pub struct VMOffsets<P> {
     /// The number of escaped functions in the module, the size of the func_refs
     /// array.
     pub num_escaped_funcs: u32,
+    /// The number of call_indirect cache entries in the cache array.
+    pub num_call_indirect_caches: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
@@ -93,6 +96,7 @@ pub struct VMOffsets<P> {
     owned_memories: u32,
     defined_globals: u32,
     defined_func_refs: u32,
+    call_indirect_caches: u32,
     size: u32,
 }
 
@@ -231,6 +235,23 @@ pub trait PtrSize {
         ))
         .unwrap()
     }
+
+    // Offsets within `VMCallIndirectCache`.
+
+    /// Return the offset of `VMCallIndirectCache::wasm_call`.
+    fn vmcall_indirect_cache_wasm_call(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMCallIndirectCache::index`.
+    fn vmcall_indirect_cache_index(&self) -> u8 {
+        self.size()
+    }
+
+    /// Return the size of a `VMCallIndirectCache`.
+    fn size_of_vmcall_indirect_cache(&self) -> u8 {
+        2 * self.size()
+    }
 }
 
 /// Type representing the size of a pointer for the current compilation host
@@ -274,6 +295,8 @@ pub struct VMOffsetsFields<P> {
     /// The number of escaped functions in the module, the size of the function
     /// references array.
     pub num_escaped_funcs: u32,
+    /// The number of call_indirect cache entries in the cache array.
+    pub num_call_indirect_caches: u32,
 }
 
 impl<P: PtrSize> VMOffsets<P> {
@@ -300,6 +323,7 @@ impl<P: PtrSize> VMOffsets<P> {
             num_owned_memories,
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
+            num_call_indirect_caches: cast_to_u32(module.num_call_indirect_caches),
         })
     }
 
@@ -329,6 +353,7 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_memories: _,
                     num_owned_memories: _,
                     num_escaped_funcs: _,
+                    num_call_indirect_caches: _,
 
                     // used as the initial size below
                     size,
@@ -354,6 +379,7 @@ impl<P: PtrSize> VMOffsets<P> {
         }
 
         calculate_sizes! {
+            call_indirect_caches: "call_indirect caches",
             defined_func_refs: "module functions",
             defined_globals: "defined globals",
             owned_memories: "owned memories",
@@ -390,6 +416,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_owned_memories: fields.num_owned_memories,
             num_defined_globals: fields.num_defined_globals,
             num_escaped_funcs: fields.num_escaped_funcs,
+            num_call_indirect_caches: fields.num_call_indirect_caches,
             magic: 0,
             runtime_limits: 0,
             builtin_functions: 0,
@@ -409,6 +436,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             owned_memories: 0,
             defined_globals: 0,
             defined_func_refs: 0,
+            call_indirect_caches: 0,
             size: 0,
         };
 
@@ -473,6 +501,10 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(defined_func_refs) = cmul(
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vm_func_ref(),
+            ),
+            size(call_indirect_caches) = cmul(
+                ret.num_call_indirect_caches,
+                ret.ptr.size_of_vmcall_indirect_cache(),
             ),
         }
 
@@ -738,6 +770,12 @@ impl<P: PtrSize> VMOffsets<P> {
         self.builtin_functions
     }
 
+    /// The offset of the `call_indirect_caches` array.
+    #[inline]
+    pub fn vmctx_call_indirec_caches_begin(&self) -> u32 {
+        self.call_indirect_caches
+    }
+
     /// Return the size of the `VMContext` allocation.
     #[inline]
     pub fn size_of_vmctx(&self) -> u32 {
@@ -887,6 +925,28 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmglobal_import_from(&self, index: GlobalIndex) -> u32 {
         self.vmctx_vmglobal_import(index) + u32::from(self.vmglobal_import_from())
+    }
+
+    /// Return the offset to the `VMCallIndirectCache` for the given
+    /// call-indirect site.
+    #[inline]
+    pub fn vmctx_call_indirect_cache(&self, index: u32) -> u32 {
+        assert!(index < self.num_call_indirect_caches);
+        self.vmctx_call_indirec_caches_begin()
+            + index * u32::from(self.ptr.size_of_vmcall_indirect_cache())
+    }
+
+    /// Return the offset to the `wasm_call` field in `*const VMCallIndirectCache` index `index`.
+    #[inline]
+    pub fn vmctx_call_indirect_cache_wasm_call(&self, index: u32) -> u32 {
+        self.vmctx_call_indirect_cache(index)
+            + u32::from(self.ptr.vmcall_indirect_cache_wasm_call())
+    }
+
+    /// Return the offset to the `index` field in `*const VMCallIndirectCache` index `index`.
+    #[inline]
+    pub fn vmctx_call_indirect_cache_index(&self, index: u32) -> u32 {
+        self.vmctx_call_indirect_cache(index) + u32::from(self.ptr.vmcall_indirect_cache_index())
     }
 }
 

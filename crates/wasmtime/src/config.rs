@@ -151,6 +151,7 @@ struct ConfigTunables {
     debug_adapter_modules: Option<bool>,
     relaxed_simd_deterministic: Option<bool>,
     tail_callable: Option<bool>,
+    cache_call_indirects: Option<bool>,
 }
 
 /// User-provided configuration for the compiler.
@@ -946,6 +947,12 @@ impl Config {
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::COMPONENT_MODEL, enable);
+        self
+    }
+
+    /// Configures whether we enable the "indirect call cache" optimization.
+    pub fn cache_call_indirects(&mut self, enable: bool) -> &mut Self {
+        self.tunables.cache_call_indirects = Some(enable);
         self
     }
 
@@ -1745,6 +1752,7 @@ impl Config {
             debug_adapter_modules
             relaxed_simd_deterministic
             tail_callable
+            cache_call_indirects
         }
 
         // If we're going to compile with winch, we must use the winch calling convention.

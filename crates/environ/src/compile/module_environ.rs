@@ -114,6 +114,8 @@ pub struct FunctionBodyData<'a> {
     pub body: FunctionBody<'a>,
     /// Validator for the function body
     pub validator: FuncToValidate<ValidatorResources>,
+    /// The start index for call-indirects in this body.
+    pub call_indirect_start: usize,
 }
 
 #[derive(Debug, Default)]
@@ -432,6 +434,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         // this never gets past validation
                         ExternalKind::Tag => unreachable!(),
                     };
+                    if let EntityIndex::Table(table) = entity {
+                        self.flag_written_table(table);
+                    }
                     self.result
                         .module
                         .exports
@@ -508,6 +513,10 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 }
                             };
 
+                            if offset == 0 {
+                                self.flag_table_possibly_non_null_zero_element(table_index);
+                            }
+
                             self.result
                                 .module
                                 .table_initialization
@@ -548,6 +557,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
 
+                let call_indirect_start = self.result.module.num_call_indirect_caches;
+
                 if self.tunables.generate_native_debuginfo {
                     let sig_index = self.result.module.functions[func_index].signature;
                     let sig = self.types[sig_index].unwrap_func();
@@ -566,10 +577,32 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             params: sig.params().into(),
                         });
                 }
+                if self.tunables.cache_call_indirects {
+                    for op in body.get_operators_reader()? {
+                        let op = op?;
+                        match op {
+                            Operator::TableSet { table }
+                            | Operator::TableFill { table }
+                            | Operator::TableInit { table, .. }
+                            | Operator::TableCopy {
+                                dst_table: table, ..
+                            } => {
+                                self.flag_written_table(TableIndex::from_u32(table));
+                            }
+                            Operator::CallIndirect { .. } => {
+                                self.result.module.num_call_indirect_caches += 1;
+                            }
+
+                            _ => {}
+                        }
+                    }
+                }
                 body.allow_memarg64(self.validator.features().contains(WasmFeatures::MEMORY64));
-                self.result
-                    .function_body_inputs
-                    .push(FunctionBodyData { validator, body });
+                self.result.function_body_inputs.push(FunctionBodyData {
+                    validator,
+                    body,
+                    call_indirect_start,
+                });
                 self.result.code_index += 1;
             }
 
@@ -811,6 +844,14 @@ and for re-adding support for interface types you can see this issue:
         let index = self.result.module.num_escaped_funcs as u32;
         ty.func_ref = FuncRefIndex::from_u32(index);
         self.result.module.num_escaped_funcs += 1;
+    }
+
+    fn flag_written_table(&mut self, table: TableIndex) {
+        self.result.module.table_plans[table].written = true;
+    }
+
+    fn flag_table_possibly_non_null_zero_element(&mut self, table: TableIndex) {
+        self.result.module.table_plans[table].non_null_zero = true;
     }
 
     /// Parses the Name section of the wasm module.

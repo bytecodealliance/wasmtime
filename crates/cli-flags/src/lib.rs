@@ -244,6 +244,8 @@ wasmtime_option_group! {
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
         pub gc: Option<bool>,
+        /// Wheter to enable call-indirect caching.
+        pub cache_call_indirects: Option<bool>,
     }
 
     enum Wasm {
@@ -543,6 +545,9 @@ impl CommonOptions {
         }
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
+        }
+        if let Some(enable) = self.wasm.cache_call_indirects {
+            config.cache_call_indirects(enable);
         }
 
         match_feature! {
