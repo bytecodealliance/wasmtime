@@ -57,18 +57,6 @@ WASM_API_EXTERN wasmtime_sharedmemory_t *
 wasmtime_sharedmemory_clone(const wasmtime_sharedmemory_t *memory);
 
 /**
- * \brief Moves shared linear memory into wasmtime_extern_t object
- *
- * \param memory memory to be moved
- * \param out where to store resulting `wasmtime_extern_t`
- *
- * This function moves ownership of `memory` into resulting `wasmtime_extern_t`.
- */
-WASM_API_EXTERN void
-wasmtime_sharedmemory_into_extern(wasmtime_sharedmemory_t *memory,
-                                  wasmtime_extern_t *out);
-
-/**
  * \brief Returns the type of the shared memory specified
  */
 WASM_API_EXTERN wasm_memorytype_t *
