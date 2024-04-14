@@ -279,28 +279,28 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn float_add(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
+    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        self.asm.fadd_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_sub(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
+    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        self.asm.fsub_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_mul(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
+    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        self.asm.fmul_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_div(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
+    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        self.asm.fdiv_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_min(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
+    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        self.asm.fmin_rrr(rhs, lhs, dst, size);
     }
 
-    fn float_max(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
+    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        self.asm.fmax_rrr(rhs, lhs, dst, size);
     }
 
     fn float_copysign(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
