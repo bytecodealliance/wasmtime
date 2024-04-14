@@ -161,6 +161,23 @@ impl Assembler {
         });
     }
 
+    pub fn fmov64_rr(&mut self, rm: Reg, rd: Reg) {
+        let writable_rd = Writable::from_reg(rd.into());
+        self.emit(Inst::FpuMove64 {
+            rd: writable_rd,
+            rn: rm.into(),
+        })
+    }
+
+    pub fn mov_to_fpu(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        let writable_rd = Writable::from_reg(rd.into());
+        self.emit(Inst::MovToFpu {
+            size: size.into(),
+            rd: writable_rd,
+            rn: rn.into(),
+        });
+    }
+
     /// Add with three registers.
     pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);

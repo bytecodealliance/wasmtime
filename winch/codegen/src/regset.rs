@@ -1,6 +1,6 @@
 use crate::isa::reg::{Reg, RegClass};
 
-/// A bit set to track regiter availability.
+/// A bit set to track register availability.
 pub(crate) struct RegSet {
     /// Bitset to track general purpose register availability.
     gpr: RegBitSet,

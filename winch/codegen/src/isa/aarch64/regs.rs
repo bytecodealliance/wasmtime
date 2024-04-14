@@ -31,6 +31,11 @@ pub(crate) const fn scratch() -> Reg {
     ip0()
 }
 
+// Alias to register v31.
+pub(crate) const fn float_scratch() -> Reg {
+    vreg(31)
+}
+
 /// Scratch register.
 /// Intra-procedure-call corruptible register.
 pub(crate) const fn ip1() -> Reg {
@@ -135,7 +140,7 @@ pub(crate) const fn shadow_sp() -> Reg {
     xreg(28)
 }
 
-/// Bitmask for non-allocatble GPR.
+/// Bitmask for non-allocatable GPR.
 pub(crate) const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
     | (1 << ip1().hw_enc())
     | (1 << platform().hw_enc())
@@ -147,3 +152,10 @@ pub(crate) const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
 
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;
+
+/// Bitmask for non-allocatable FPR.
+/// All FPRs are allocatable, v0..=v7 are generally used for params and results.
+pub(crate) const NON_ALLOCATABLE_FPR: u32 = 0;
+
+/// Bitmask to represent the available general purpose registers
+pub(crate) const ALL_FPR: u32 = u32::MAX;

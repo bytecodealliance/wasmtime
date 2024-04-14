@@ -14,6 +14,7 @@ use cranelift_codegen::{
     ir::{RelSourceLoc, SourceLoc},
     settings, Final, MachBufferFinalized, MachLabel,
 };
+use regalloc2::RegClass;
 use wasmtime_environ::PtrSize;
 
 /// Aarch64 MacroAssembler.
@@ -197,16 +198,24 @@ impl Masm for MacroAssembler {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => panic!(),
+                    I::F32(v) => v as u64,
+                    I::F64(v) => v,
                 };
 
                 let scratch = regs::scratch();
                 self.asm.load_constant(imm, scratch);
-                self.asm.mov_rr(scratch, rd, size);
+                match rd.class() {
+                    RegClass::Int => self.asm.mov_rr(scratch, rd, size),
+                    RegClass::Float => self.asm.mov_to_fpu(scratch, rd, size),
+                    _ => todo!(),
+                }
             }
-            (RegImm::Reg(rs), rd) => {
-                self.asm.mov_rr(rs, rd, size);
-            }
+            (RegImm::Reg(rs), rd) => match (rs.class(), rd.class()) {
+                (RegClass::Int, RegClass::Int) => self.asm.mov_rr(rs, rd, size),
+                (RegClass::Float, RegClass::Float) => self.asm.fmov64_rr(rs, rd),
+                (RegClass::Int, RegClass::Float) => self.asm.mov_to_fpu(rs, rd, size),
+                _ => todo!(),
+            },
         }
     }
 
