@@ -1,7 +1,6 @@
-use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t, wasmtime_extern_t};
+use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t};
 use std::cell::UnsafeCell;
-use std::mem::MaybeUninit;
-use wasmtime::{Extern, SharedMemory};
+use wasmtime::SharedMemory;
 
 type wasmtime_sharedmemory_t = SharedMemory;
 
@@ -25,14 +24,6 @@ pub extern "C" fn wasmtime_sharedmemory_clone(
     mem: &wasmtime_sharedmemory_t,
 ) -> Box<wasmtime_sharedmemory_t> {
     Box::new(mem.clone())
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_sharedmemory_into_extern(
-    mem: Box<wasmtime_sharedmemory_t>,
-    ext: &mut MaybeUninit<wasmtime_extern_t>,
-) {
-    crate::initialize(ext, Extern::from(*mem).into());
 }
 
 #[no_mangle]
