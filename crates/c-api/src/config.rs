@@ -87,6 +87,19 @@ pub extern "C" fn wasmtime_config_wasm_reference_types_set(c: &mut wasm_config_t
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_function_references_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_function_references(enable);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_gc_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_gc(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_wasm_simd_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_simd(enable);
 }

@@ -31,6 +31,7 @@ default = [
   'addr2line',
   'demangle',
   'threads',
+  'gc',
 ]
 async = ['wasmtime-c-api/async']
 profiling = ["wasmtime-c-api/profiling"]
@@ -44,3 +45,4 @@ addr2line = ["wasmtime-c-api/addr2line"]
 demangle = ["wasmtime-c-api/demangle"]
 wat = ["wasmtime-c-api/wat"]
 threads = ["wasmtime-c-api/threads"]
+gc = ["wasmtime-c-api/gc"]
