@@ -28,8 +28,7 @@ each other directly.
 This is a simple C function that computes the average of an array of floats:
 
 ```c
-float
-average(const float *array, size_t count)
+float average(const float *array, size_t count)
 {
     double sum = 0;
     for (size_t i = 0; i < count; i++)
