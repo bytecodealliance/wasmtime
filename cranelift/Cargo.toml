@@ -19,7 +19,6 @@ path = "src/clif-util.rs"
 [[test]]
 name = "filetests"
 path = "tests/filetests.rs"
-harness = false
 
 [dependencies]
 cfg-if = { workspace = true }
@@ -52,9 +51,6 @@ fxhash = "0.2.1"
 # Note that this just enables `trace-log` for `clif-util` and doesn't turn it on
 # for all of Cranelift, which would be bad.
 regalloc2 = { workspace = true, features = ["trace-log"] }
-
-[dev-dependencies]
-libtest-mimic = { workspace = true }
 
 [features]
 default = ["disas", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]
