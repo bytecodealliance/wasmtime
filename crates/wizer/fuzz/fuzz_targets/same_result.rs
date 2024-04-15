@@ -132,7 +132,8 @@ fuzz_target!(|data: &[u8]| {
             // Instantiate the snapshot and call the main function.
             let snapshot_instance = Instance::new(&mut store, &snapshot_module, &[]).unwrap();
             let snapshot_main_func = snapshot_instance.get_func(&mut store, main_func).unwrap();
-            let main_args = wizer::dummy::dummy_values(snapshot_main_func.ty(&store).params());
+            let main_args =
+                wizer::dummy::dummy_values(snapshot_main_func.ty(&store).params()).unwrap();
             let mut snapshot_result =
                 vec![wasmtime::Val::I32(0); snapshot_main_func.ty(&store).results().len()];
             let snapshot_call_result =

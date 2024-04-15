@@ -48,7 +48,7 @@ fn wizen_and_run_wasm(
     config.wasm_multi_value(true);
 
     let engine = wasmtime::Engine::new(&config)?;
-    let wasi_ctx = wasmtime_wasi::WasiCtxBuilder::new().build();
+    let wasi_ctx = wasi_common::sync::WasiCtxBuilder::new().build();
     let mut store = wasmtime::Store::new(&engine, wasi_ctx);
     let module =
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
@@ -61,7 +61,7 @@ fn wizen_and_run_wasm(
         .define_name(&mut store, "f", thunk)?
         .define(&mut store, "x", "f", thunk)?;
 
-    wasmtime_wasi::add_to_linker(&mut linker, |wasi| wasi)?;
+    wasi_common::sync::add_to_linker(&mut linker, |wasi| wasi)?;
 
     let instance = linker.instantiate(&mut store, &module)?;
 

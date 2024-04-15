@@ -59,20 +59,32 @@ pub fn dummy_func(store: &mut crate::Store, ty: FuncType, name: &str) -> Func {
 
 /// Construct a dummy value for the given value type.
 #[cfg(fuzzing)]
-pub fn dummy_value(val_ty: ValType) -> Val {
-    match val_ty {
+pub fn dummy_value(val_ty: ValType) -> Result<Val> {
+    Ok(match val_ty {
         ValType::I32 => Val::I32(0),
         ValType::I64 => Val::I64(0),
         ValType::F32 => Val::F32(0),
         ValType::F64 => Val::F64(0),
         ValType::V128 => Val::V128(0.into()),
-        ValType::ExternRef => Val::ExternRef(None),
-        ValType::FuncRef => Val::FuncRef(None),
-    }
+        ValType::Ref(ref_type) => {
+            if !ref_type.is_nullable() {
+                anyhow::bail!("cannot create a dummy value for a non-nullable reference type");
+            }
+            if ref_type.matches(&RefType::EXTERNREF) {
+                Val::ExternRef(None)
+            } else if ref_type.matches(&RefType::FUNCREF) {
+                Val::FuncRef(None)
+            } else if ref_type.matches(&RefType::NULLFUNCREF) {
+                Val::FuncRef(None)
+            } else {
+                panic!("Unknown RefType {:?}", ref_type);
+            }
+        }
+    })
 }
 
 /// Construct a sequence of dummy values for the given types.
 #[cfg(fuzzing)]
-pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Vec<Val> {
-    val_tys.into_iter().map(dummy_value).collect()
+pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Result<Vec<Val>> {
+    val_tys.into_iter().map(|ty| dummy_value(ty)).collect()
 }

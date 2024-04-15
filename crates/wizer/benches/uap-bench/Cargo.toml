@@ -11,8 +11,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 serde = { version = "1.0.197", features = ["derive"] }
-regex = "1.10.3"
-serde_yaml = "0.9.32"
+regex = "1.10.4"
+serde_yaml = "0.9.34"
 
 [features]
 wizer = []
