@@ -3,7 +3,7 @@ use crate::{
     wasmtime_val_t, WasmtimeStoreContext, WasmtimeStoreContextMut,
 };
 use std::mem::MaybeUninit;
-use wasmtime::{Extern, Global};
+use wasmtime::{Extern, Global, RootScope};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -84,8 +84,9 @@ pub unsafe extern "C" fn wasmtime_global_new(
     val: &wasmtime_val_t,
     ret: &mut Global,
 ) -> Option<Box<wasmtime_error_t>> {
-    let val = val.to_val(&mut store);
-    let global = Global::new(store, gt.ty().ty.clone(), val);
+    let mut scope = RootScope::new(&mut store);
+    let val = val.to_val(&mut scope);
+    let global = Global::new(scope, gt.ty().ty.clone(), val);
     handle_result(global, |global| {
         *ret = global;
     })
@@ -101,12 +102,13 @@ pub extern "C" fn wasmtime_global_type(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_global_get(
-    mut store: WasmtimeStoreContextMut<'_>,
+    store: WasmtimeStoreContextMut<'_>,
     global: &Global,
     val: &mut MaybeUninit<wasmtime_val_t>,
 ) {
-    let gval = global.get(&mut store);
-    crate::initialize(val, wasmtime_val_t::from_val(store, gval))
+    let mut scope = RootScope::new(store);
+    let gval = global.get(&mut scope);
+    crate::initialize(val, wasmtime_val_t::from_val(&mut scope, gval))
 }
 
 #[no_mangle]
@@ -115,6 +117,7 @@ pub unsafe extern "C" fn wasmtime_global_set(
     global: &Global,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let val = val.to_val(&mut store);
-    handle_result(global.set(store, val), |()| {})
+    let mut scope = RootScope::new(&mut store);
+    let val = val.to_val(&mut scope);
+    handle_result(global.set(scope, val), |()| {})
 }

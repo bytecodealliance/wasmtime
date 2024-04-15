@@ -3,7 +3,7 @@ use crate::{
     wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, WasmtimeStoreContext,
     WasmtimeStoreContextMut,
 };
-use crate::{wasm_trap_t, WasmtimeCaller};
+use crate::{wasm_trap_t, WasmtimeCaller, WasmtimeStoreData};
 use anyhow::{Error, Result};
 use std::any::Any;
 use std::ffi::c_void;
@@ -11,7 +11,11 @@ use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-use wasmtime::{AsContextMut, Extern, Func, Trap, Val, ValRaw};
+use wasmtime::{
+    AsContext, AsContextMut, Extern, Func, RootScope, StoreContext, StoreContextMut, Trap, Val,
+    ValRaw,
+};
+
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct wasm_func_t {
@@ -203,6 +207,20 @@ pub struct wasmtime_caller_t<'a> {
     pub(crate) caller: WasmtimeCaller<'a>,
 }
 
+impl AsContext for wasmtime_caller_t<'_> {
+    type Data = WasmtimeStoreData;
+
+    fn as_context(&self) -> StoreContext<'_, WasmtimeStoreData> {
+        self.caller.as_context()
+    }
+}
+
+impl AsContextMut for wasmtime_caller_t<'_> {
+    fn as_context_mut(&mut self) -> StoreContextMut<'_, WasmtimeStoreData> {
+        self.caller.as_context_mut()
+    }
+}
+
 pub type wasmtime_func_callback_t = extern "C" fn(
     *mut c_void,
     *mut wasmtime_caller_t,
@@ -253,7 +271,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
             params
                 .iter()
                 .cloned()
-                .map(|p| wasmtime_val_t::from_val(&mut caller, p)),
+                .map(|p| wasmtime_val_t::from_val_unrooted(&mut caller, p)),
         );
         vals.extend((0..results.len()).map(|_| wasmtime_val_t {
             kind: crate::WASMTIME_I32,
@@ -277,7 +295,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 
         // Translate the `wasmtime_val_t` results into the `results` space
         for (i, result) in out_results.iter().enumerate() {
-            results[i] = result.to_val(&mut caller.caller);
+            results[i] = result.to_val_unrooted(&mut caller);
         }
 
         // Move our `vals` storage back into the store now that we no longer
@@ -329,13 +347,13 @@ pub unsafe extern "C" fn wasmtime_func_call(
     nresults: usize,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let mut store = store.as_context_mut();
-    let mut params = mem::take(&mut store.data_mut().wasm_val_storage);
+    let mut scope = RootScope::new(&mut store);
+    let mut params = mem::take(&mut scope.as_context_mut().data_mut().wasm_val_storage);
     let (wt_params, wt_results) = translate_args(
         &mut params,
         crate::slice_from_raw_parts(args, nargs)
             .iter()
-            .map(|i| i.to_val(&mut store)),
+            .map(|i| i.to_val(&mut scope)),
         nresults,
     );
 
@@ -344,16 +362,16 @@ pub unsafe extern "C" fn wasmtime_func_call(
     // can. As a result we catch panics here and transform them to traps to
     // allow the caller to have any insulation possible against Rust panics.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        func.call(&mut store, wt_params, wt_results)
+        func.call(&mut scope, wt_params, wt_results)
     }));
     match result {
         Ok(Ok(())) => {
             let results = crate::slice_from_raw_parts_mut(results, nresults);
             for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
-                crate::initialize(slot, wasmtime_val_t::from_val(&mut store, val.clone()));
+                crate::initialize(slot, wasmtime_val_t::from_val(&mut scope, val.clone()));
             }
             params.truncate(0);
-            store.data_mut().wasm_val_storage = params;
+            scope.as_context_mut().data_mut().wasm_val_storage = params;
             None
         }
         Ok(Err(trap)) => store_err(trap, trap_ret),

@@ -5,7 +5,7 @@ use crate::{
 };
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ptr;
-use wasmtime::{AsContextMut, Func, HeapType, Ref, Val, ValType};
+use wasmtime::{AsContextMut, Func, HeapType, Ref, RootScope, Val, ValType};
 
 #[repr(C)]
 pub struct wasm_val_t {
@@ -177,7 +177,24 @@ pub struct wasmtime_func_t {
 }
 
 impl wasmtime_val_t {
-    pub fn from_val(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
+    /// Creates a new `wasmtime_val_t` from a `wasmtime::Val`.
+    ///
+    /// Note that this requires a `RootScope` to be present to serve as proof
+    /// that `val` is not require to be rooted in the store itself which would
+    /// prevent GC. Callers should prefer this API where possible, creating a
+    /// temporary `RootScope` when needed.
+    pub fn from_val(cx: &mut RootScope<impl AsContextMut>, val: Val) -> wasmtime_val_t {
+        Self::from_val_unrooted(cx, val)
+    }
+
+    /// Equivalent of [`wasmtime_val_t::from_val`] except that a `RootScope`
+    /// is not required.
+    ///
+    /// This method should only be used when a `RootScope` is known to be
+    /// elsewhere on the stack. For example this is used when we call back out
+    /// to the embedder. In such a situation we know we previously entered with
+    /// some other call so the root scope is on the stack there.
+    pub fn from_val_unrooted(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
         match val {
             Val::I32(i) => wasmtime_val_t {
                 kind: crate::WASMTIME_I32,
@@ -232,7 +249,22 @@ impl wasmtime_val_t {
         }
     }
 
-    pub unsafe fn to_val(&self, cx: impl AsContextMut) -> Val {
+    /// Convert this `wasmtime_val_t` into a `wasmtime::Val`.
+    ///
+    /// See [`wasmtime_val_t::from_val`] for notes on the `RootScope`
+    /// requirement here. Note that this is particularly meaningful for this
+    /// API as the `Val` returned may contain a `Rooted<T>` which requires a
+    /// `RootScope` if we don't want the value to live for the entire lifetime
+    /// of the `Store`.
+    pub unsafe fn to_val(&self, cx: &mut RootScope<impl AsContextMut>) -> Val {
+        self.to_val_unrooted(cx)
+    }
+
+    /// Equivalent of `to_val` except doesn't require a `RootScope`.
+    ///
+    /// See notes on [`wasmtime_val_t::from_val_unrooted`] for notes on when to
+    /// use this.
+    pub unsafe fn to_val_unrooted(&self, cx: impl AsContextMut) -> Val {
         match self.kind {
             crate::WASMTIME_I32 => Val::I32(self.of.i32),
             crate::WASMTIME_I64 => Val::I64(self.of.i64),
@@ -293,10 +325,11 @@ pub unsafe extern "C" fn wasmtime_val_delete(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_val_copy(
-    mut cx: WasmtimeStoreContextMut<'_>,
+    cx: WasmtimeStoreContextMut<'_>,
     dst: &mut MaybeUninit<wasmtime_val_t>,
     src: &wasmtime_val_t,
 ) {
-    let val = src.to_val(&mut cx);
-    crate::initialize(dst, wasmtime_val_t::from_val(cx, val))
+    let mut scope = RootScope::new(cx);
+    let val = src.to_val(&mut scope);
+    crate::initialize(dst, wasmtime_val_t::from_val(&mut scope, val))
 }
