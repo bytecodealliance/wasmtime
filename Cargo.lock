@@ -823,6 +823,7 @@ dependencies = [
  "filecheck",
  "fxhash",
  "indicatif",
+ "libtest-mimic",
  "log",
  "pretty_env_logger",
  "rayon",

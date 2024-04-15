@@ -53,6 +53,9 @@ fxhash = "0.2.1"
 # for all of Cranelift, which would be bad.
 regalloc2 = { workspace = true, features = ["trace-log"] }
 
+[dev-dependencies]
+libtest-mimic = { workspace = true }
+
 [features]
 default = ["disas", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]
 disas = ["capstone"]
