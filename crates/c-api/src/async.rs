@@ -117,7 +117,7 @@ async fn invoke_c_async_callback<'a>(
         params
             .iter()
             .cloned()
-            .map(|p| wasmtime_val_t::from_val_unrooted(&mut caller, p)),
+            .map(|p| wasmtime_val_t::from_val_unscoped(&mut caller, p)),
     );
     hostcall_val_storage.extend((0..results.len()).map(|_| wasmtime_val_t {
         kind: WASMTIME_I32,
@@ -156,7 +156,7 @@ async fn invoke_c_async_callback<'a>(
     // Translate the `wasmtime_val_t` results into the `results` space
     for (i, result) in out_results.iter().enumerate() {
         unsafe {
-            results[i] = result.to_val_unrooted(&mut caller.caller);
+            results[i] = result.to_val_unscoped(&mut caller.caller);
         }
     }
     // Move our `vals` storage back into the store now that we no longer

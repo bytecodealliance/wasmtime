@@ -271,7 +271,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
             params
                 .iter()
                 .cloned()
-                .map(|p| wasmtime_val_t::from_val_unrooted(&mut caller, p)),
+                .map(|p| wasmtime_val_t::from_val_unscoped(&mut caller, p)),
         );
         vals.extend((0..results.len()).map(|_| wasmtime_val_t {
             kind: crate::WASMTIME_I32,
@@ -295,7 +295,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 
         // Translate the `wasmtime_val_t` results into the `results` space
         for (i, result) in out_results.iter().enumerate() {
-            results[i] = result.to_val_unrooted(&mut caller);
+            results[i] = result.to_val_unscoped(&mut caller);
         }
 
         // Move our `vals` storage back into the store now that we no longer

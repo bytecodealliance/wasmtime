@@ -184,7 +184,7 @@ impl wasmtime_val_t {
     /// prevent GC. Callers should prefer this API where possible, creating a
     /// temporary `RootScope` when needed.
     pub fn from_val(cx: &mut RootScope<impl AsContextMut>, val: Val) -> wasmtime_val_t {
-        Self::from_val_unrooted(cx, val)
+        Self::from_val_unscoped(cx, val)
     }
 
     /// Equivalent of [`wasmtime_val_t::from_val`] except that a `RootScope`
@@ -194,7 +194,7 @@ impl wasmtime_val_t {
     /// elsewhere on the stack. For example this is used when we call back out
     /// to the embedder. In such a situation we know we previously entered with
     /// some other call so the root scope is on the stack there.
-    pub fn from_val_unrooted(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
+    pub fn from_val_unscoped(cx: impl AsContextMut, val: Val) -> wasmtime_val_t {
         match val {
             Val::I32(i) => wasmtime_val_t {
                 kind: crate::WASMTIME_I32,
@@ -257,14 +257,14 @@ impl wasmtime_val_t {
     /// `RootScope` if we don't want the value to live for the entire lifetime
     /// of the `Store`.
     pub unsafe fn to_val(&self, cx: &mut RootScope<impl AsContextMut>) -> Val {
-        self.to_val_unrooted(cx)
+        self.to_val_unscoped(cx)
     }
 
     /// Equivalent of `to_val` except doesn't require a `RootScope`.
     ///
-    /// See notes on [`wasmtime_val_t::from_val_unrooted`] for notes on when to
+    /// See notes on [`wasmtime_val_t::from_val_unscoped`] for notes on when to
     /// use this.
-    pub unsafe fn to_val_unrooted(&self, cx: impl AsContextMut) -> Val {
+    pub unsafe fn to_val_unscoped(&self, cx: impl AsContextMut) -> Val {
         match self.kind {
             crate::WASMTIME_I32 => Val::I32(self.of.i32),
             crate::WASMTIME_I64 => Val::I64(self.of.i64),
