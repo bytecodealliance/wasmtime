@@ -101,7 +101,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   load_ext_name x3, TestCase(%g)+0
-;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;   return_call_ind x3 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -113,9 +113,7 @@ block0(v0: i64):
 ;   b #0x1c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ldp x16, x30, [x29]
-;   add sp, x29, #0x10
-;   mov x29, x16
+;   ldp x29, x30, [sp], #0x10
 ;   autiaz
 ;   br x3
 

@@ -22,14 +22,27 @@ pub fn mem_finalize(
         &AMode::RegOffset { off, .. }
         | &AMode::SPOffset { off }
         | &AMode::FPOffset { off }
+        | &AMode::IncomingArg { off }
         | &AMode::NominalSPOffset { off } => {
             let basereg = match mem {
                 &AMode::RegOffset { rn, .. } => rn,
-                &AMode::SPOffset { .. } | &AMode::NominalSPOffset { .. } => stack_reg(),
+                &AMode::SPOffset { .. }
+                | &AMode::NominalSPOffset { .. }
+                | &AMode::IncomingArg { .. } => stack_reg(),
                 &AMode::FPOffset { .. } => fp_reg(),
                 _ => unreachable!(),
             };
-            let adj = match mem {
+            let off = match mem {
+                &AMode::IncomingArg { .. } => {
+                    let frame_layout = state.frame_layout();
+                    i64::from(
+                        frame_layout.setup_area_size
+                            + frame_layout.tail_args_size
+                            + frame_layout.clobber_size
+                            + frame_layout.fixed_frame_storage_size
+                            + frame_layout.outgoing_args_size,
+                    ) - off
+                }
                 &AMode::NominalSPOffset { .. } => {
                     trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
@@ -37,11 +50,10 @@ pub fn mem_finalize(
                         state.virtual_sp_offset,
                         off + state.virtual_sp_offset
                     );
-                    state.virtual_sp_offset
+                    off + state.virtual_sp_offset
                 }
-                _ => 0,
+                _ => off,
             };
-            let off = off + adj;
 
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
                 let mem = AMode::Unscaled { rn: basereg, simm9 };
@@ -659,6 +671,7 @@ pub struct EmitState {
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
+    frame_layout: FrameLayout,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -668,6 +681,7 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             ctrl_plane,
+            frame_layout: abi.frame_layout().clone(),
         }
     }
 
@@ -691,6 +705,10 @@ impl EmitState {
 
     fn clear_post_insn(&mut self) {
         self.stack_map = None;
+    }
+
+    fn frame_layout(&self) -> &FrameLayout {
+        &self.frame_layout
     }
 }
 
@@ -1103,6 +1121,7 @@ impl MachInstEmit for Inst {
                     // Eliminated by `mem_finalize()` above.
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
+                    | &AMode::IncomingArg { .. }
                     | &AMode::NominalSPOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
@@ -1197,6 +1216,7 @@ impl MachInstEmit for Inst {
                     // Eliminated by `mem_finalize()` above.
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
+                    | &AMode::IncomingArg { .. }
                     | &AMode::NominalSPOffset { .. }
                     | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
@@ -3778,145 +3798,177 @@ fn emit_return_call_common_sequence(
         let _ = allocs.next(u.vreg);
     }
 
-    // We are emitting a dynamic number of instructions and might need an
-    // island. We emit four instructions regardless of how many stack arguments
-    // we have, and then two instructions per word of stack argument space.
-    let new_stack_words = info.new_stack_arg_size / 8;
-    let insts = 4 + 2 * new_stack_words;
-    let size_of_inst = 4;
-    let space_needed = insts * size_of_inst;
-    if sink.island_needed(space_needed) {
-        let jump_around_label = sink.get_label();
-        let jmp = Inst::Jump {
-            dest: BranchTarget::Label(jump_around_label),
-        };
-        jmp.emit(&[], sink, emit_info, state);
-        sink.emit_island(space_needed + 4, &mut state.ctrl_plane);
-        sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+    for inst in
+        AArch64MachineDeps::gen_clobber_restore(CallConv::Tail, &emit_info.0, state.frame_layout())
+    {
+        inst.emit(&[], sink, emit_info, state);
     }
 
-    // Copy the new frame on top of our current frame.
-    //
-    // The current stack layout is the following:
-    //
-    //            | ...                 |
-    //            +---------------------+
-    //            | ...                 |
-    //            | stack arguments     |
-    //            | ...                 |
-    //    current | return address      |
-    //    frame   | old FP              | <-- FP
-    //            | ...                 |
-    //            | old stack slots     |
-    //            | ...                 |
-    //            +---------------------+
-    //            | ...                 |
-    //    new     | new stack arguments |
-    //    frame   | ...                 | <-- SP
-    //            +---------------------+
-    //
-    // We need to restore the old FP, restore the return address from the stack
-    // to the link register, copy the new stack arguments over the old stack
-    // arguments, adjust SP to point to the new stack arguments, and then jump
-    // to the callee (which will push the old FP and RA again). Note that the
-    // actual jump happens outside this helper function.
+    let setup_area_size = state.frame_layout().setup_area_size;
+    if setup_area_size > 0 {
+        // N.B.: sp is already adjusted to the appropriate place by the
+        // clobber-restore code (which also frees the fixed frame). Hence, there
+        // is no need for the usual `mov sp, fp` here.
 
-    assert_eq!(
-        info.new_stack_arg_size % 8,
-        0,
-        "size of new stack arguments must be 8-byte aligned"
-    );
-
-    // The delta from our frame pointer to the (eventual) stack pointer value
-    // when we jump to the tail callee. This is the difference in size of stack
-    // arguments as well as accounting for the two words we pushed onto the
-    // stack upon entry to this function (the return address and old frame
-    // pointer).
-    let fp_to_callee_sp =
-        i64::from(info.old_stack_arg_size) - i64::from(info.new_stack_arg_size) + 16;
-
-    let tmp1 = regs::writable_spilltmp_reg();
-    let tmp2 = regs::writable_tmp2_reg();
-
-    // Restore the return address to the link register, and load the old FP into
-    // a temporary register.
-    //
-    // We can't put the old FP into the FP register until after we copy the
-    // stack arguments into place, since that uses address modes that are
-    // relative to our current FP.
-    //
-    // Note that the FP is saved in the function prologue for all non-leaf
-    // functions, even when `preserve_frame_pointers=false`. Note also that
-    // `return_call` instructions make it so that a function is considered
-    // non-leaf. Therefore we always have an FP to restore here.
-    Inst::LoadP64 {
-        rt: tmp1,
-        rt2: writable_link_reg(),
-        mem: PairAMode::SignedOffset {
-            reg: regs::fp_reg(),
-            simm7: SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
-        },
-        flags: MemFlags::trusted(),
-    }
-    .emit(&[], sink, emit_info, state);
-
-    // Copy the new stack arguments over the old stack arguments.
-    for i in (0..new_stack_words).rev() {
-        // Load the `i`th new stack argument word from the temporary stack
-        // space.
-        Inst::ULoad64 {
-            rd: tmp2,
-            mem: AMode::SPOffset {
-                off: i64::from(i * 8),
+        // `ldp fp, lr, [sp], #16`
+        Inst::LoadP64 {
+            rt: writable_fp_reg(),
+            rt2: writable_link_reg(),
+            mem: PairAMode::SPPostIndexed {
+                simm7: SImm7Scaled::maybe_from_i64(i64::from(setup_area_size), types::I64).unwrap(),
             },
-            flags: ir::MemFlags::trusted(),
-        }
-        .emit(&[], sink, emit_info, state);
-
-        // Store it to its final destination on the stack, overwriting our
-        // current frame.
-        Inst::Store64 {
-            rd: tmp2.to_reg(),
-            mem: AMode::FPOffset {
-                off: fp_to_callee_sp + i64::from(i * 8),
-            },
-            flags: ir::MemFlags::trusted(),
+            flags: MemFlags::trusted(),
         }
         .emit(&[], sink, emit_info, state);
     }
 
-    // Initialize the SP for the tail callee, deallocating the temporary stack
-    // argument space and our current frame at the same time.
-    let (off, alu_op) = if let Ok(off) = u64::try_from(fp_to_callee_sp) {
-        (off, ALUOp::Add)
-    } else {
-        let abs = fp_to_callee_sp.abs();
-        let off = u64::try_from(abs).unwrap();
-        (off, ALUOp::Sub)
-    };
-    Inst::AluRRImm12 {
-        alu_op,
-        size: OperandSize::Size64,
-        rd: regs::writable_stack_reg(),
-        rn: regs::fp_reg(),
-        imm12: Imm12::maybe_from_u64(off).unwrap(),
+    let incoming_args_diff = state.frame_layout().tail_args_size - info.new_stack_arg_size;
+    if incoming_args_diff > 0 {
+        for inst in
+            AArch64MachineDeps::gen_sp_reg_adjust(i32::try_from(incoming_args_diff).unwrap())
+        {
+            inst.emit(&[], sink, emit_info, state);
+        }
     }
-    .emit(&[], sink, emit_info, state);
 
-    // Move the old FP value from the temporary into the FP register.
-    Inst::Mov {
-        size: OperandSize::Size64,
-        rd: regs::writable_fp_reg(),
-        rm: tmp1.to_reg(),
-    }
-    .emit(&[], sink, emit_info, state);
-
-    state.virtual_sp_offset -= i64::from(info.new_stack_arg_size);
-    trace!(
-        "return_call[_ind] adjusts virtual sp offset by {} -> {}",
-        info.new_stack_arg_size,
-        state.virtual_sp_offset
-    );
+    // // We are emitting a dynamic number of instructions and might need an
+    // // island. We emit four instructions regardless of how many stack arguments
+    // // we have, and then two instructions per word of stack argument space.
+    // let new_stack_words = info.new_stack_arg_size / 8;
+    // let insts = 4 + 2 * new_stack_words;
+    // let size_of_inst = 4;
+    // let space_needed = insts * size_of_inst;
+    // if sink.island_needed(space_needed) {
+    //     let jump_around_label = sink.get_label();
+    //     let jmp = Inst::Jump {
+    //         dest: BranchTarget::Label(jump_around_label),
+    //     };
+    //     jmp.emit(&[], sink, emit_info, state);
+    //     sink.emit_island(space_needed + 4, &mut state.ctrl_plane);
+    //     sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+    // }
+    //
+    // // Copy the new frame on top of our current frame.
+    // //
+    // // The current stack layout is the following:
+    // //
+    // //            | ...                 |
+    // //            +---------------------+
+    // //            | ...                 |
+    // //            | stack arguments     |
+    // //            | ...                 |
+    // //    current | return address      |
+    // //    frame   | old FP              | <-- FP
+    // //            | ...                 |
+    // //            | old stack slots     |
+    // //            | ...                 |
+    // //            +---------------------+
+    // //            | ...                 |
+    // //    new     | new stack arguments |
+    // //    frame   | ...                 | <-- SP
+    // //            +---------------------+
+    // //
+    // // We need to restore the old FP, restore the return address from the stack
+    // // to the link register, copy the new stack arguments over the old stack
+    // // arguments, adjust SP to point to the new stack arguments, and then jump
+    // // to the callee (which will push the old FP and RA again). Note that the
+    // // actual jump happens outside this helper function.
+    //
+    // assert_eq!(
+    //     info.new_stack_arg_size % 8,
+    //     0,
+    //     "size of new stack arguments must be 8-byte aligned"
+    // );
+    //
+    // // The delta from our frame pointer to the (eventual) stack pointer value
+    // // when we jump to the tail callee. This is the difference in size of stack
+    // // arguments as well as accounting for the two words we pushed onto the
+    // // stack upon entry to this function (the return address and old frame
+    // // pointer).
+    // let fp_to_callee_sp = i64::from(info.new_stack_arg_size) + 16;
+    //
+    // let tmp1 = regs::writable_spilltmp_reg();
+    // let tmp2 = regs::writable_tmp2_reg();
+    //
+    // // Restore the return address to the link register, and load the old FP into
+    // // a temporary register.
+    // //
+    // // We can't put the old FP into the FP register until after we copy the
+    // // stack arguments into place, since that uses address modes that are
+    // // relative to our current FP.
+    // //
+    // // Note that the FP is saved in the function prologue for all non-leaf
+    // // functions, even when `preserve_frame_pointers=false`. Note also that
+    // // `return_call` instructions make it so that a function is considered
+    // // non-leaf. Therefore we always have an FP to restore here.
+    // Inst::LoadP64 {
+    //     rt: tmp1,
+    //     rt2: writable_link_reg(),
+    //     mem: PairAMode::SignedOffset {
+    //         reg: regs::fp_reg(),
+    //         simm7: SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
+    //     },
+    //     flags: MemFlags::trusted(),
+    // }
+    // .emit(&[], sink, emit_info, state);
+    //
+    // // Copy the new stack arguments over the old stack arguments.
+    // for i in (0..new_stack_words).rev() {
+    //     // Load the `i`th new stack argument word from the temporary stack
+    //     // space.
+    //     Inst::ULoad64 {
+    //         rd: tmp2,
+    //         mem: AMode::SPOffset {
+    //             off: i64::from(i * 8),
+    //         },
+    //         flags: ir::MemFlags::trusted(),
+    //     }
+    //     .emit(&[], sink, emit_info, state);
+    //
+    //     // Store it to its final destination on the stack, overwriting our
+    //     // current frame.
+    //     Inst::Store64 {
+    //         rd: tmp2.to_reg(),
+    //         mem: AMode::FPOffset {
+    //             off: fp_to_callee_sp + i64::from(i * 8),
+    //         },
+    //         flags: ir::MemFlags::trusted(),
+    //     }
+    //     .emit(&[], sink, emit_info, state);
+    // }
+    //
+    // // Initialize the SP for the tail callee, deallocating the temporary stack
+    // // argument space and our current frame at the same time.
+    // let (off, alu_op) = if let Ok(off) = u64::try_from(fp_to_callee_sp) {
+    //     (off, ALUOp::Add)
+    // } else {
+    //     let abs = fp_to_callee_sp.abs();
+    //     let off = u64::try_from(abs).unwrap();
+    //     (off, ALUOp::Sub)
+    // };
+    // Inst::AluRRImm12 {
+    //     alu_op,
+    //     size: OperandSize::Size64,
+    //     rd: regs::writable_stack_reg(),
+    //     rn: regs::fp_reg(),
+    //     imm12: Imm12::maybe_from_u64(off).unwrap(),
+    // }
+    // .emit(&[], sink, emit_info, state);
+    //
+    // // Move the old FP value from the temporary into the FP register.
+    // Inst::Mov {
+    //     size: OperandSize::Size64,
+    //     rd: regs::writable_fp_reg(),
+    //     rm: tmp1.to_reg(),
+    // }
+    // .emit(&[], sink, emit_info, state);
+    //
+    // state.virtual_sp_offset -= i64::from(info.new_stack_arg_size);
+    // trace!(
+    //     "return_call[_ind] adjusts virtual sp offset by {} -> {}",
+    //     info.new_stack_arg_size,
+    //     state.virtual_sp_offset
+    // );
 
     if let Some(key) = info.key {
         sink.put4(key.enc_auti_hint());

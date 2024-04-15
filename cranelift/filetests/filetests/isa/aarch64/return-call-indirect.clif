@@ -34,7 +34,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   load_ext_name x3, TestCase(%callee_i64)+0
-;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;   return_call_ind x3 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -45,9 +45,7 @@ block0(v0: i64):
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ldp x16, x30, [x29]
-;   add sp, x29, #0x10
-;   mov x29, x16
+;   ldp x29, x30, [sp], #0x10
 ;   br x3
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -66,7 +64,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   load_ext_name x3, TestCase(%callee_i64)+0
-;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;   return_call_ind x3 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -77,9 +75,7 @@ block0(v0: i64):
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ldp x16, x30, [x29]
-;   add sp, x29, #0x10
-;   mov x29, x16
+;   ldp x29, x30, [sp], #0x10
 ;   br x3
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -117,7 +113,7 @@ block0(v0: f64):
 ;   mov fp, sp
 ; block0:
 ;   load_ext_name x2, TestCase(%callee_f64)+0
-;   return_call_ind x2 old_stack_arg_size:0 new_stack_arg_size:0 v0=v0
+;   return_call_ind x2 new_stack_arg_size:0 v0=v0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -128,9 +124,7 @@ block0(v0: f64):
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ldp x16, x30, [x29]
-;   add sp, x29, #0x10
-;   mov x29, x16
+;   ldp x29, x30, [sp], #0x10
 ;   br x2
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -170,7 +164,7 @@ block0(v0: i8):
 ;   mov fp, sp
 ; block0:
 ;   load_ext_name x3, TestCase(%callee_i8)+0
-;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;   return_call_ind x3 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -181,9 +175,7 @@ block0(v0: i8):
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ldp x16, x30, [x29]
-;   add sp, x29, #0x10
-;   mov x29, x16
+;   ldp x29, x30, [sp], #0x10
 ;   br x3
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -226,6 +218,10 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
+;   ldr fp, [sp, #16]
+;   stp fp, lr, [sp]
+;   mov fp, sp
+;   sub sp, sp, #16
 ; block0:
 ;   movz x2, #10
 ;   movz x3, #15
@@ -255,20 +251,22 @@ block0:
 ;   movz x0, #130
 ;   movz x1, #135
 ;   load_ext_name x10, TestCase(%tail_callee_stack_args)+0
-;   sub sp, sp, #16
-;   virtual_sp_offset_adjust 16
-;   str x0, [sp]
-;   str x1, [sp, #8]
+;   str x0, [sp, #32]
+;   str x1, [sp, #40]
 ;   mov x0, x10
-;   ldr x10, [sp, #16]
-;   return_call_ind x0 old_stack_arg_size:0 new_stack_arg_size:16 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7 x8=x8 x9=x9 x10=x10 x11=x11 x12=x12 x13=x13 x14=x14 x15=x15 x19=x19 x20=x20 x21=x21 x22=x22 x23=x23 x24=x24 x25=x25 x26=x26 x27=x27 x28=x28
+;   ldr x10, [sp]
+;   return_call_ind x0 new_stack_arg_size:16 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7 x8=x8 x9=x9 x10=x10 x11=x11 x12=x12 x13=x13 x14=x14 x15=x15 x19=x19 x20=x20 x21=x21 x22=x22 x23=x23 x24=x24 x25=x25 x26=x26 x27=x27 x28=x28
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
-; block1: ; offset 0xc
+;   ldur x29, [sp, #0x10]
+;   stp x29, x30, [sp]
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0x1c
 ;   mov x2, #0xa
 ;   mov x3, #0xf
 ;   mov x4, #0x14
@@ -296,21 +294,15 @@ block0:
 ;   mov x28, #0x7d
 ;   mov x0, #0x82
 ;   mov x1, #0x87
-;   ldr x10, #0x80
-;   b #0x88
+;   ldr x10, #0x90
+;   b #0x98
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   sub sp, sp, #0x10
-;   stur x0, [sp]
-;   stur x1, [sp, #8]
+;   stur x0, [sp, #0x20]
+;   stur x1, [sp, #0x28]
 ;   mov x0, x10
-;   ldur x10, [sp, #0x10]
-;   ldp x16, x30, [x29]
-;   ldur x17, [sp, #8]
-;   stur x17, [x29, #8]
-;   ldur x17, [sp]
-;   stur x17, [x29]
-;   mov sp, x29
-;   mov x29, x16
+;   ldur x10, [sp]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   br x0
 

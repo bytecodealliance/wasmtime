@@ -2311,11 +2311,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 }),
                 ArgLoc::Stack { offset, ty } => {
                     let amode = if self.is_tail_call() {
-                        assert!(
-                            self.flags.preserve_frame_pointers(),
-                            "tail calls require frame pointers to be enabled"
-                        );
-
                         StackAMode::IncomingArg(offset, ctx.sigs()[self.sig].sized_stack_arg_space)
                     } else {
                         StackAMode::OutgoingArg(offset)
