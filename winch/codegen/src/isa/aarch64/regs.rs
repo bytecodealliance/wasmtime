@@ -155,7 +155,7 @@ pub(crate) const ALL_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;
 
 /// Bitmask for non-allocatable FPR.
 /// All FPRs are allocatable, v0..=v7 are generally used for params and results.
-pub(crate) const NON_ALLOCATABLE_FPR: u32 = 0;
+pub(crate) const NON_ALLOCATABLE_FPR: u32 = 1 << float_scratch().hw_enc();
 
 /// Bitmask to represent the available general purpose registers
-pub(crate) const ALL_FPR: u32 = u32::MAX;
+pub(crate) const ALL_FPR: u32 = u32::MAX & !NON_ALLOCATABLE_FPR;
