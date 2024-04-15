@@ -50,6 +50,9 @@ struct Wasmtime {
     interface_names: HashMap<InterfaceId, InterfaceName>,
     interface_last_seen_as_import: HashMap<InterfaceId, bool>,
     trappable_errors: IndexMap<TypeId, String>,
+    // Track the with options that were used. Remapped interfaces provided via `with`
+    // are required to be used.
+    used_with_opts: HashSet<String>,
 }
 
 struct ImportFunction {
@@ -179,7 +182,7 @@ impl TrappableImports {
 }
 
 impl Opts {
-    pub fn generate(&self, resolve: &Resolve, world: WorldId) -> String {
+    pub fn generate(&self, resolve: &Resolve, world: WorldId) -> anyhow::Result<String> {
         let mut r = Wasmtime::default();
         r.sizes.fill(resolve);
         r.opts = self.clone();
@@ -270,7 +273,7 @@ impl Wasmtime {
         format!("{base}{version}")
     }
 
-    fn generate(&mut self, resolve: &Resolve, id: WorldId) -> String {
+    fn generate(&mut self, resolve: &Resolve, id: WorldId) -> anyhow::Result<String> {
         self.types.analyze(resolve, id);
         for (i, te) in self.opts.trappable_error_type.iter().enumerate() {
             let id = resolve_type_in_package(resolve, &te.wit_path)
@@ -622,7 +625,20 @@ impl Wasmtime {
         uwriteln!(self.src, "}};"); // close `const _: () = ...
     }
 
-    fn finish(&mut self, resolve: &Resolve, world: WorldId) -> String {
+    fn finish(&mut self, resolve: &Resolve, world: WorldId) -> anyhow::Result<String> {
+        let remapping_keys = self.opts.with.keys().cloned().collect::<HashSet<String>>();
+
+        let mut unused_keys = remapping_keys
+            .difference(&self.used_with_opts)
+            .map(|s| s.as_str())
+            .collect::<Vec<&str>>();
+
+        unused_keys.sort();
+
+        if !unused_keys.is_empty() {
+            anyhow::bail!("interfaces were specified in the `with` config option but are not referenced in the target world: {unused_keys:?}");
+        }
+
         if !self.opts.only_interfaces {
             self.build_struct(resolve, world)
         }
@@ -658,7 +674,7 @@ impl Wasmtime {
             assert!(status.success());
         }
 
-        src.into()
+        Ok(src.into())
     }
 
     fn emit_modules(&mut self, modules: Vec<(String, InterfaceName)>) {
@@ -700,7 +716,7 @@ impl Wasmtime {
     /// Attempts to find the `key`, possibly with the resource projection
     /// `item`, within the `with` map provided to bindings configuration.
     fn lookup_replacement(
-        &self,
+        &mut self,
         resolve: &Resolve,
         key: &WorldKey,
         item: Option<&str>,
@@ -729,7 +745,11 @@ impl Wasmtime {
                     Some(item) => format!("{key}/{item}"),
                     None => key.to_string(),
                 };
-                return self.opts.with.get(&to_lookup).cloned();
+                let result = self.opts.with.get(&to_lookup).cloned();
+                if result.is_some() {
+                    self.used_with_opts.insert(to_lookup.clone());
+                }
+                return result;
             }
         };
 
@@ -749,6 +769,7 @@ impl Wasmtime {
             if let Some(renamed) = self.opts.with.get(&lookup) {
                 projection.push(renamed.clone());
                 projection.reverse();
+                self.used_with_opts.insert(lookup);
                 return Some(projection.join("::"));
             }
             if !name.pop(resolve, &mut projection) {
@@ -1102,7 +1123,10 @@ impl<'a> InterfaceGenerator<'a> {
 
             let replacement = match self.current_interface {
                 Some((_, key, _)) => self.gen.lookup_replacement(self.resolve, key, Some(name)),
-                None => self.gen.opts.with.get(name).cloned(),
+                None => {
+                    self.gen.used_with_opts.insert(name.into());
+                    self.gen.opts.with.get(name).cloned()
+                }
             };
             match replacement {
                 Some(path) => {
