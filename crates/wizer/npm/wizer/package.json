@@ -1,6 +1,6 @@
 {
   "name": "@bytecodealliance/wizer",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "The WebAssembly Pre-Initializer",
   "type": "module",
   "scripts": {
@@ -20,12 +20,12 @@
     "wizer": "./wizer.js"
   },
   "optionalDependencies": {
-    "@bytecodealliance/wizer-darwin-arm64": "5.0.0",
-    "@bytecodealliance/wizer-darwin-x64": "5.0.0",
-    "@bytecodealliance/wizer-linux-x64": "5.0.0",
-    "@bytecodealliance/wizer-linux-arm64": "5.0.0",
-    "@bytecodealliance/wizer-linux-s390x": "5.0.0",
-    "@bytecodealliance/wizer-win32-x64": "5.0.0"
+    "@bytecodealliance/wizer-darwin-arm64": "6.0.0",
+    "@bytecodealliance/wizer-darwin-x64": "6.0.0",
+    "@bytecodealliance/wizer-linux-x64": "6.0.0",
+    "@bytecodealliance/wizer-linux-arm64": "6.0.0",
+    "@bytecodealliance/wizer-linux-s390x": "6.0.0",
+    "@bytecodealliance/wizer-win32-x64": "6.0.0"
   },
   "license": "Apache-2.0",
   "repository": {
