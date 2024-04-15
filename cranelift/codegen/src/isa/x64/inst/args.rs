@@ -492,6 +492,12 @@ pub enum SyntheticAmode {
     /// A real amode.
     Real(Amode),
 
+    /// A (virtual) offset into the incoming argument area.
+    IncomingArg {
+        /// The downward offset from the start of the incoming argument area.
+        offset: u32,
+    },
+
     /// A (virtual) offset to the "nominal SP" value, which will be recomputed as we push and pop
     /// within the function.
     NominalSPOffset {
@@ -520,6 +526,9 @@ impl SyntheticAmode {
     ) {
         match self {
             SyntheticAmode::Real(addr) => addr.get_operands(collector),
+            SyntheticAmode::IncomingArg { .. } => {
+                // Nothing to do; the base is known and isn't involved in regalloc.
+            }
             SyntheticAmode::NominalSPOffset { .. } => {
                 // Nothing to do; the base is SP and isn't involved in regalloc.
             }
@@ -534,6 +543,9 @@ impl SyntheticAmode {
     ) {
         match self {
             SyntheticAmode::Real(addr) => addr.get_operands_late(collector),
+            SyntheticAmode::IncomingArg { .. } => {
+                // Nothing to do; the base is known and isn't involved in regalloc.
+            }
             SyntheticAmode::NominalSPOffset { .. } => {
                 // Nothing to do; the base is SP and isn't involved in regalloc.
             }
@@ -544,6 +556,16 @@ impl SyntheticAmode {
     pub(crate) fn finalize(&self, state: &mut EmitState, buffer: &mut MachBuffer<Inst>) -> Amode {
         match self {
             SyntheticAmode::Real(addr) => addr.clone(),
+            SyntheticAmode::IncomingArg { offset } => {
+                // NOTE: this could be made relative to RSP by adding additional offsets from the
+                // frame_layout.
+                let args_max_fp_offset =
+                    state.frame_layout().tail_args_size + state.frame_layout().setup_area_size;
+                Amode::imm_reg(
+                    i32::try_from(args_max_fp_offset - offset).unwrap(),
+                    regs::rbp(),
+                )
+            }
             SyntheticAmode::NominalSPOffset { simm32 } => {
                 let off = *simm32 as i64 + state.virtual_sp_offset();
                 Amode::imm_reg(off.try_into().expect("invalid sp offset"), regs::rsp())
@@ -557,16 +579,18 @@ impl SyntheticAmode {
     pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
             SyntheticAmode::Real(addr) => SyntheticAmode::Real(addr.with_allocs(allocs)),
-            &SyntheticAmode::NominalSPOffset { .. } | &SyntheticAmode::ConstantOffset { .. } => {
-                self.clone()
-            }
+            &SyntheticAmode::IncomingArg { .. }
+            | &SyntheticAmode::NominalSPOffset { .. }
+            | &SyntheticAmode::ConstantOffset { .. } => self.clone(),
         }
     }
 
     pub(crate) fn aligned(&self) -> bool {
         match self {
             SyntheticAmode::Real(addr) => addr.aligned(),
-            SyntheticAmode::NominalSPOffset { .. } | SyntheticAmode::ConstantOffset { .. } => true,
+            &SyntheticAmode::IncomingArg { .. }
+            | SyntheticAmode::NominalSPOffset { .. }
+            | SyntheticAmode::ConstantOffset { .. } => true,
         }
     }
 }
@@ -588,6 +612,9 @@ impl PrettyPrint for SyntheticAmode {
         match self {
             // See note in `Amode` regarding constant size of `8`.
             SyntheticAmode::Real(addr) => addr.pretty_print(8, allocs),
+            &SyntheticAmode::IncomingArg { offset } => {
+                format!("rbp(stack args max - {offset})")
+            }
             SyntheticAmode::NominalSPOffset { simm32 } => {
                 format!("rsp({} + virtual offset)", *simm32)
             }

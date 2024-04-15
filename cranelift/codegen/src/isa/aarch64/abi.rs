@@ -36,7 +36,7 @@ impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
             // Argument area begins after saved frame pointer + return address.
-            StackAMode::IncomingArg(off) => AMode::FPOffset { off: off + 16 },
+            StackAMode::IncomingArg(off, _) => AMode::FPOffset { off: off + 16 },
             StackAMode::Slot(off) => AMode::NominalSPOffset { off },
             StackAMode::OutgoingArg(off) => AMode::SPOffset { off },
         }
@@ -630,9 +630,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             });
         }
 
-        if call_conv == isa::CallConv::Tail && frame_layout.stack_args_size > 0 {
+        if call_conv == isa::CallConv::Tail && frame_layout.incoming_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.stack_args_size.try_into().unwrap(),
+                frame_layout.incoming_args_size.try_into().unwrap(),
             ));
         }
 
@@ -1134,7 +1134,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         sig: &Signature,
         regs: &[Writable<RealReg>],
         is_leaf: bool,
-        stack_args_size: u32,
+        incoming_args_size: u32,
+        tail_args_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -1158,7 +1159,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             || !is_leaf
             // The function arguments that are passed on the stack are addressed
             // relative to the Frame Pointer.
-            || stack_args_size > 0
+            || incoming_args_size > 0
             || clobber_size > 0
             || fixed_frame_storage_size > 0
         {
@@ -1169,7 +1170,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         // Return FrameLayout structure.
         FrameLayout {
-            stack_args_size,
+            incoming_args_size,
+            tail_args_size,
             setup_area_size,
             clobber_size,
             fixed_frame_storage_size,
