@@ -230,10 +230,9 @@ jobs:
         key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
     - run: |
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
-        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook --locked
     - run: (cd docs && mdbook build)
     - run: cargo build -p wasi-common --features wasmtime/wat,wasmtime/cranelift
-    - run: (cd docs/rust_wasi_markdown_parser && cargo build)
     - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation.
@@ -360,7 +359,7 @@ jobs:
         path: ${{ runner.tool_cache }}/cargo-ndk
         key: cargo-ndk-bin-${{ env.CARGO_NDK_VERSION }}
     - run: echo "${{ runner.tool_cache }}/cargo-ndk/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk
+    - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk --locked
     - run: cargo ndk -t arm64-v8a check -p wasmtime
 
     # Run clippy configuration
@@ -426,7 +425,7 @@ jobs:
     #
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
-    - run: cargo install cargo-fuzz --vers "^0.11"
+    - run: cargo install cargo-fuzz --vers "^0.11" --locked
     - run: sudo apt-get update && sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
@@ -437,7 +436,7 @@ jobs:
     #
     # Afterwards make sure the generated header file is up to date by ensuring
     # that the regeneration process didn't change anything in-tree.
-    - run: cargo install cbindgen --vers "^0.26"
+    - run: cargo install cbindgen --vers "^0.26" --locked
     - run: rustup component add rust-src
     - run: ./build.sh ./embedding/x86_64-unknown-unknown.json
       working-directory: ./examples/min-platform
@@ -747,7 +746,7 @@ jobs:
         path: ${{ runner.tool_cache }}/cargo-nextest
         key: cargo-nextest-bin-${{ env.CARGO_NEXTEST_VERSION }}
     - run: echo "${{ runner.tool_cache }}/cargo-nextest/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest
+    - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest --locked
     - run: |
         cargo miri nextest run -j4 --no-fail-fast \
           -p wasmtime \
