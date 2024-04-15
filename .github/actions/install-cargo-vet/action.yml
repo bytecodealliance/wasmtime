@@ -16,5 +16,5 @@ runs:
         key: cargo-vet-bin-${{ inputs.version }}
     - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
       shell: bash
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ inputs.version }} cargo-vet
+    - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ inputs.version }} cargo-vet --locked
       shell: bash
