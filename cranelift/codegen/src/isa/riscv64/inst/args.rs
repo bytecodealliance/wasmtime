@@ -101,6 +101,9 @@ pub enum AMode {
     /// [crate::isa::riscv64::abi](the ABI module) for more details.
     NominalSPOffset(i64),
 
+    /// Offset into the argument area.
+    IncomingArg(i64),
+
     /// A reference to a constant which is placed outside of the function's
     /// body, typically at the end.
     Const(VCodeConstant),
@@ -116,6 +119,7 @@ impl AMode {
             AMode::SPOffset(..)
             | AMode::FPOffset(..)
             | AMode::NominalSPOffset(..)
+            | AMode::IncomingArg(..)
             | AMode::Const(..)
             | AMode::Label(..) => self,
         }
@@ -129,6 +133,7 @@ impl AMode {
             AMode::SPOffset(..)
             | AMode::FPOffset(..)
             | AMode::NominalSPOffset(..)
+            | AMode::IncomingArg(..)
             | AMode::Const(..)
             | AMode::Label(..) => None,
         }
@@ -140,6 +145,7 @@ impl AMode {
             &AMode::SPOffset(..) => Some(stack_reg()),
             &AMode::FPOffset(..) => Some(fp_reg()),
             &AMode::NominalSPOffset(..) => Some(stack_reg()),
+            &AMode::IncomingArg(..) => Some(stack_reg()),
             &AMode::Const(..) | AMode::Label(..) => None,
         }
     }
@@ -147,6 +153,18 @@ impl AMode {
     pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
         match self {
             &AMode::NominalSPOffset(offset) => offset + state.virtual_sp_offset,
+
+            // Compute the offset into the incoming argument area relative to SP
+            &AMode::IncomingArg(offset) => {
+                let frame_layout = state.frame_layout();
+                let sp_offset = frame_layout.tail_args_size
+                    + frame_layout.setup_area_size
+                    + frame_layout.clobber_size
+                    + frame_layout.fixed_frame_storage_size
+                    + frame_layout.outgoing_args_size;
+                i64::from(sp_offset) - offset
+            }
+
             &AMode::RegOffset(_, offset) => offset,
             &AMode::SPOffset(offset) => offset,
             &AMode::FPOffset(offset) => offset,
@@ -162,6 +180,7 @@ impl AMode {
             &AMode::RegOffset(..)
             | &AMode::SPOffset(..)
             | &AMode::FPOffset(..)
+            | &AMode::IncomingArg(..)
             | &AMode::NominalSPOffset(..) => None,
         }
     }
@@ -183,6 +202,9 @@ impl Display for AMode {
             &AMode::NominalSPOffset(offset, ..) => {
                 write!(f, "{}(nominal_sp)", offset)
             }
+            &AMode::IncomingArg(offset) => {
+                write!(f, "{}(incoming_arg)", offset)
+            }
             &AMode::FPOffset(offset, ..) => {
                 write!(f, "{}(fp)", offset)
             }
@@ -199,8 +221,9 @@ impl Display for AMode {
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            // Argument area begins after saved lr + fp.
-            StackAMode::IncomingArg(offset, _) => AMode::FPOffset(offset + 16),
+            StackAMode::IncomingArg(offset, stack_args_size) => {
+                AMode::IncomingArg(i64::from(stack_args_size) - offset)
+            }
             StackAMode::OutgoingArg(offset) => AMode::SPOffset(offset),
             StackAMode::Slot(offset) => AMode::NominalSPOffset(offset),
         }
