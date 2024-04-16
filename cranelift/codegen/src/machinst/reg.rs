@@ -53,11 +53,7 @@ impl Reg {
     /// Get the physical register (`RealReg`), if this register is
     /// one.
     pub fn to_real_reg(self) -> Option<RealReg> {
-        if pinned_vreg_to_preg(self.0).is_some() {
-            Some(RealReg(self.0))
-        } else {
-            None
-        }
+        pinned_vreg_to_preg(self.0).map(RealReg)
     }
 
     /// Get the virtual (non-physical) register, if this register is
@@ -104,7 +100,7 @@ impl std::fmt::Debug for Reg {
 /// ISA's named registers and can be used as an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct RealReg(VReg);
+pub struct RealReg(PReg);
 
 impl RealReg {
     /// Get the class of this register.
@@ -114,7 +110,7 @@ impl RealReg {
 
     /// The physical register number.
     pub fn hw_enc(self) -> u8 {
-        PReg::from(self).hw_enc() as u8
+        self.0.hw_enc() as u8
     }
 }
 
@@ -189,7 +185,7 @@ impl<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> Writabl
     }
 }
 
-// Conversions between regalloc2 types (VReg) and our types
+// Conversions between regalloc2 types (VReg, PReg) and our types
 // (VirtualReg, RealReg, Reg).
 
 impl std::convert::From<regalloc2::VReg> for Reg {
@@ -202,13 +198,6 @@ impl std::convert::From<regalloc2::VReg> for VirtualReg {
     fn from(vreg: regalloc2::VReg) -> VirtualReg {
         debug_assert!(pinned_vreg_to_preg(vreg).is_none());
         VirtualReg(vreg)
-    }
-}
-
-impl std::convert::From<regalloc2::VReg> for RealReg {
-    fn from(vreg: regalloc2::VReg) -> RealReg {
-        debug_assert!(pinned_vreg_to_preg(vreg).is_some());
-        RealReg(vreg)
     }
 }
 
@@ -234,31 +223,33 @@ impl std::convert::From<VirtualReg> for regalloc2::VReg {
 
 impl std::convert::From<RealReg> for regalloc2::VReg {
     fn from(reg: RealReg) -> regalloc2::VReg {
-        reg.0
+        // This representation is redundant: the class is implied in the vreg
+        // index as well as being in the vreg class field.
+        VReg::new(reg.0.index(), reg.0.class())
     }
 }
 
 impl std::convert::From<RealReg> for regalloc2::PReg {
     fn from(reg: RealReg) -> regalloc2::PReg {
-        PReg::from_index(reg.0.vreg())
+        reg.0
     }
 }
 
 impl std::convert::From<regalloc2::PReg> for RealReg {
     fn from(preg: regalloc2::PReg) -> RealReg {
-        RealReg(VReg::new(preg.index(), preg.class()))
+        RealReg(preg)
     }
 }
 
 impl std::convert::From<regalloc2::PReg> for Reg {
     fn from(preg: regalloc2::PReg) -> Reg {
-        Reg(VReg::new(preg.index(), preg.class()))
+        RealReg(preg).into()
     }
 }
 
 impl std::convert::From<RealReg> for Reg {
     fn from(reg: RealReg) -> Reg {
-        Reg(reg.0)
+        Reg(reg.into())
     }
 }
 
