@@ -1055,6 +1055,22 @@ pub struct FrameLayout {
     pub clobbered_callee_saves: Vec<Writable<RealReg>>,
 }
 
+impl FrameLayout {
+    /// Split the clobbered callee-save registers into integer-class and
+    /// float-class groups.
+    ///
+    /// This method does not currently support vector-class callee-save
+    /// registers because no current backend has them.
+    pub fn clobbered_callee_saves_by_class(&self) -> (&[Writable<RealReg>], &[Writable<RealReg>]) {
+        let (ints, floats) = self.clobbered_callee_saves.split_at(
+            self.clobbered_callee_saves
+                .partition_point(|r| r.to_reg().class() == RegClass::Int),
+        );
+        debug_assert!(floats.iter().all(|r| r.to_reg().class() == RegClass::Float));
+        (ints, floats)
+    }
+}
+
 /// ABI object for a function body.
 pub struct Callee<M: ABIMachineSpec> {
     /// CLIF-level signature, possibly normalized.
