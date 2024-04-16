@@ -144,7 +144,11 @@ pub fn default_send_request(
     HostFutureIncomingResponse::pending(handle)
 }
 
-async fn handler(
+/// The underlying implementation of how an outgoing request is sent. This should likely be spawned
+/// in a task.
+///
+/// This is called from [default_send_request] to actually send the request.
+pub async fn handler(
     mut request: hyper::Request<HyperOutgoingBody>,
     OutgoingRequestConfig {
         use_tls,
