@@ -592,7 +592,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   mv fp,sp
 ; block0:
 ;   mv a0,a7
-;   ld a1,16(fp)
+;   ld a1,16(incoming_arg)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -606,7 +606,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   mv a0, a7
-;   ld a1, 0x10(s0)
+;   ld a1, 0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -690,7 +690,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   mv fp,sp
 ; block0:
 ;   mv a0,a7
-;   ld a1,16(fp)
+;   ld a1,16(incoming_arg)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -704,7 +704,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   mv a0, a7
-;   ld a1, 0x10(s0)
+;   ld a1, 0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

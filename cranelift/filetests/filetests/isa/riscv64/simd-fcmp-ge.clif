@@ -14,8 +14,8 @@ block0(v0: f32x4, v1: f32x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmfle.vv v0,v11,v9 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vmv.v.i v8,0 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vmerge.vim v10,v8,-1,v0.t #avl=4, #vtype=(e32, m1, ta, ma)
@@ -33,9 +33,9 @@ block0(v0: f32x4, v1: f32x4):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   addi t6, s0, 0x10
+;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
-;   addi t6, s0, 0x20
+;   addi t6, sp, 0x20
 ;   .byte 0x87, 0x85, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x90, 0xb4, 0x66
@@ -61,7 +61,7 @@ block0(v0: f32x4, v1: f32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmfge.vf v0,v9,fa0 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vmv.v.i v15,0 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vmerge.vim v9,v15,-1,v0.t #avl=4, #vtype=(e32, m1, ta, ma)
@@ -79,7 +79,7 @@ block0(v0: f32x4, v1: f32):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   addi t6, s0, 0x10
+;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x50, 0x95, 0x7e
@@ -105,7 +105,7 @@ block0(v0: f32x4, v1: f32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmfle.vf v0,v9,fa0 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vmv.v.i v15,0 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vmerge.vim v9,v15,-1,v0.t #avl=4, #vtype=(e32, m1, ta, ma)
@@ -123,7 +123,7 @@ block0(v0: f32x4, v1: f32):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   addi t6, s0, 0x10
+;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x50, 0x95, 0x66
@@ -148,8 +148,8 @@ block0(v0: f64x2, v1: f64x2):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmfle.vv v0,v11,v9 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmv.v.i v8,0 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmerge.vim v10,v8,-1,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
@@ -167,9 +167,9 @@ block0(v0: f64x2, v1: f64x2):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   addi t6, s0, 0x10
+;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
-;   addi t6, s0, 0x20
+;   addi t6, sp, 0x20
 ;   .byte 0x87, 0x85, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x90, 0xb4, 0x66
@@ -195,7 +195,7 @@ block0(v0: f64x2, v1: f64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmfge.vf v0,v9,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmv.v.i v15,0 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmerge.vim v9,v15,-1,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
@@ -213,7 +213,7 @@ block0(v0: f64x2, v1: f64):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   addi t6, s0, 0x10
+;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x50, 0x95, 0x7e
@@ -239,7 +239,7 @@ block0(v0: f64x2, v1: f64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmfle.vf v0,v9,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmv.v.i v15,0 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmerge.vim v9,v15,-1,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
@@ -257,7 +257,7 @@ block0(v0: f64x2, v1: f64):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   addi t6, s0, 0x10
+;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x50, 0x95, 0x66
