@@ -1,6 +1,5 @@
-use cranelift_codegen::RealReg;
+use regalloc2::PReg;
 pub use regalloc2::RegClass;
-use regalloc2::{PReg, VReg};
 
 /// A newtype abstraction on top of a physical register.
 //
@@ -70,17 +69,5 @@ impl From<Reg> for cranelift_codegen::Reg {
 impl std::fmt::Debug for Reg {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl Into<VReg> for Reg {
-    fn into(self) -> VReg {
-        VReg::new(self.inner().index(), self.class())
-    }
-}
-
-impl Into<RealReg> for Reg {
-    fn into(self) -> RealReg {
-        Into::<VReg>::into(self).into()
     }
 }

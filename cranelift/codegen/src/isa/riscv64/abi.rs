@@ -491,7 +491,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 }
                 insts.push(Inst::gen_store(
                     AMode::SPOffset(-(cur_offset as i64)),
-                    real_reg_to_reg(reg.to_reg()),
+                    Reg::from(reg.to_reg()),
                     ty,
                     MemFlags::trusted(),
                 ));
@@ -530,7 +530,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 RegClass::Vector => unimplemented!("Vector Clobber Restores"),
             };
             insts.push(Inst::gen_load(
-                Writable::from_reg(real_reg_to_reg(reg.to_reg())),
+                reg.map(Reg::from),
                 AMode::SPOffset(-cur_offset),
                 ty,
                 MemFlags::trusted(),
