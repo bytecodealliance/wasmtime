@@ -259,16 +259,21 @@ impl Config {
         // Conditionally enabled features depending on compile-time crate
         // features. Note that if these features are disabled then `Config` has
         // no way of re-enabling them.
-        ret.features.reference_types = cfg!(feature = "gc");
-        ret.features.threads = cfg!(feature = "threads");
-        ret.features.component_model = cfg!(feature = "component-model");
+        ret.features
+            .set(WasmFeatures::REFERENCE_TYPES, cfg!(feature = "gc"));
+        ret.features
+            .set(WasmFeatures::THREADS, cfg!(feature = "threads"));
+        ret.features.set(
+            WasmFeatures::COMPONENT_MODEL,
+            cfg!(feature = "component-model"),
+        );
 
         // If GC is disabled at compile time also disable it in features
         // forcibly irrespective of `wasmparser` defaults. Note that these also
         // aren't yet fully implemented in Wasmtime.
         if !cfg!(feature = "gc") {
-            ret.features.function_references = false;
-            ret.features.gc = false;
+            ret.features.set(WasmFeatures::FUNCTION_REFERENCES, false);
+            ret.features.set(WasmFeatures::GC, false);
         }
 
         ret.wasm_multi_value(true);
@@ -278,7 +283,7 @@ impl Config {
 
         // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
         // but it's not implemented in Wasmtime yet so disable it.
-        ret.features.tail_call = false;
+        ret.features.set(WasmFeatures::TAIL_CALL, false);
 
         ret
     }
@@ -702,7 +707,7 @@ impl Config {
     ///
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
-        self.features.tail_call = enable;
+        self.features.set(WasmFeatures::TAIL_CALL, enable);
         self.tunables.tail_callable = Some(enable);
         self
     }
@@ -727,7 +732,7 @@ impl Config {
     #[cfg(feature = "threads")]
     #[cfg_attr(docsrs, doc(cfg(feature = "threads")))]
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
-        self.features.threads = enable;
+        self.features.set(WasmFeatures::THREADS, enable);
         self
     }
 
@@ -750,7 +755,7 @@ impl Config {
     #[cfg(feature = "gc")]
     #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
-        self.features.reference_types = enable;
+        self.features.set(WasmFeatures::REFERENCE_TYPES, enable);
         self
     }
 
@@ -770,7 +775,7 @@ impl Config {
     #[cfg(feature = "gc")]
     #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
-        self.features.function_references = enable;
+        self.features.set(WasmFeatures::FUNCTION_REFERENCES, enable);
         self
     }
 
@@ -792,7 +797,7 @@ impl Config {
     #[cfg(feature = "gc")]
     #[cfg_attr(docsrs, doc(cfg(feature = "gc")))]
     pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
-        self.features.gc = enable;
+        self.features.set(WasmFeatures::GC, enable);
         self
     }
 
@@ -812,7 +817,7 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/simd
     /// [relaxed simd proposal]: https://github.com/WebAssembly/relaxed-simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
-        self.features.simd = enable;
+        self.features.set(WasmFeatures::SIMD, enable);
         self
     }
 
@@ -839,7 +844,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/relaxed-simd
     pub fn wasm_relaxed_simd(&mut self, enable: bool) -> &mut Self {
-        self.features.relaxed_simd = enable;
+        self.features.set(WasmFeatures::RELAXED_SIMD, enable);
         self
     }
 
@@ -883,7 +888,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/bulk-memory-operations
     pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
-        self.features.bulk_memory = enable;
+        self.features.set(WasmFeatures::BULK_MEMORY, enable);
         self
     }
 
@@ -897,7 +902,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/multi-value
     pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
-        self.features.multi_value = enable;
+        self.features.set(WasmFeatures::MULTI_VALUE, enable);
         self
     }
 
@@ -911,7 +916,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/multi-memory
     pub fn wasm_multi_memory(&mut self, enable: bool) -> &mut Self {
-        self.features.multi_memory = enable;
+        self.features.set(WasmFeatures::MULTI_MEMORY, enable);
         self
     }
 
@@ -926,7 +931,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/memory64
     pub fn wasm_memory64(&mut self, enable: bool) -> &mut Self {
-        self.features.memory64 = enable;
+        self.features.set(WasmFeatures::MEMORY64, enable);
         self
     }
 
@@ -940,7 +945,7 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/component-model
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model(&mut self, enable: bool) -> &mut Self {
-        self.features.component_model = enable;
+        self.features.set(WasmFeatures::COMPONENT_MODEL, enable);
         self
     }
 
@@ -1671,16 +1676,24 @@ impl Config {
     }
 
     pub(crate) fn validate(&self) -> Result<Tunables> {
-        if self.features.reference_types && !self.features.bulk_memory {
+        if self.features.contains(WasmFeatures::REFERENCE_TYPES)
+            && !self.features.contains(WasmFeatures::BULK_MEMORY)
+        {
             bail!("feature 'reference_types' requires 'bulk_memory' to be enabled");
         }
-        if self.features.threads && !self.features.bulk_memory {
+        if self.features.contains(WasmFeatures::THREADS)
+            && !self.features.contains(WasmFeatures::BULK_MEMORY)
+        {
             bail!("feature 'threads' requires 'bulk_memory' to be enabled");
         }
-        if self.features.function_references && !self.features.reference_types {
+        if self.features.contains(WasmFeatures::FUNCTION_REFERENCES)
+            && !self.features.contains(WasmFeatures::REFERENCE_TYPES)
+        {
             bail!("feature 'function_references' requires 'reference_types' to be enabled");
         }
-        if self.features.gc && !self.features.function_references {
+        if self.features.contains(WasmFeatures::GC)
+            && !self.features.contains(WasmFeatures::FUNCTION_REFERENCES)
+        {
             bail!("feature 'gc' requires 'function_references' to be enabled");
         }
         #[cfg(feature = "async")]
@@ -1854,7 +1867,7 @@ impl Config {
                 .insert("enable_probestack".into());
         }
 
-        if self.features.tail_call {
+        if self.features.contains(WasmFeatures::TAIL_CALL) {
             ensure!(
                 target.architecture != Architecture::S390x,
                 "Tail calls are not supported on s390x yet: \
@@ -1888,7 +1901,7 @@ impl Config {
             .insert("preserve_frame_pointers".into(), "true".into());
 
         // check for incompatible compiler options and set required values
-        if self.features.reference_types {
+        if self.features.contains(WasmFeatures::REFERENCE_TYPES) {
             if !self
                 .compiler_config
                 .ensure_setting_unset_or_given("enable_safepoints", "true")
@@ -1897,7 +1910,9 @@ impl Config {
             }
         }
 
-        if self.features.relaxed_simd && !self.features.simd {
+        if self.features.contains(WasmFeatures::RELAXED_SIMD)
+            && !self.features.contains(WasmFeatures::SIMD)
+        {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
         }
 
@@ -1996,17 +2011,32 @@ impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut f = f.debug_struct("Config");
         f.field("debug_info", &self.tunables.generate_native_debuginfo)
-            .field("wasm_threads", &self.features.threads)
-            .field("wasm_reference_types", &self.features.reference_types)
+            .field(
+                "wasm_threads",
+                &self.features.contains(WasmFeatures::THREADS),
+            )
+            .field(
+                "wasm_reference_types",
+                &self.features.contains(WasmFeatures::REFERENCE_TYPES),
+            )
             .field(
                 "wasm_function_references",
-                &self.features.function_references,
+                &self.features.contains(WasmFeatures::FUNCTION_REFERENCES),
             )
-            .field("wasm_gc", &self.features.gc)
-            .field("wasm_bulk_memory", &self.features.bulk_memory)
-            .field("wasm_simd", &self.features.simd)
-            .field("wasm_relaxed_simd", &self.features.relaxed_simd)
-            .field("wasm_multi_value", &self.features.multi_value)
+            .field("wasm_gc", &self.features.contains(WasmFeatures::GC))
+            .field(
+                "wasm_bulk_memory",
+                &self.features.contains(WasmFeatures::BULK_MEMORY),
+            )
+            .field("wasm_simd", &self.features.contains(WasmFeatures::SIMD))
+            .field(
+                "wasm_relaxed_simd",
+                &self.features.contains(WasmFeatures::RELAXED_SIMD),
+            )
+            .field(
+                "wasm_multi_value",
+                &self.features.contains(WasmFeatures::MULTI_VALUE),
+            )
             .field("parallel_compilation", &self.parallel_compilation);
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {

@@ -901,12 +901,6 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn wasm_features(&self) -> WasmFeatures {
-        WasmFeatures {
-            multi_value: true,
-            simd: true,
-            reference_types: true,
-            bulk_memory: true,
-            ..WasmFeatures::default()
-        }
+        WasmFeatures::default()
     }
 }

@@ -283,11 +283,7 @@ mod tests {
             let u = Unstructured::new(&buf);
             if let Ok(ops) = TableOps::arbitrary_take_rest(u) {
                 let wasm = ops.to_wasm_binary();
-                let mut validator =
-                    wasmparser::Validator::new_with_features(wasmparser::WasmFeatures {
-                        reference_types: true,
-                        ..Default::default()
-                    });
+                let mut validator = wasmparser::Validator::new();
                 let result = validator.validate_all(&wasm);
                 assert!(result.is_ok());
             }
