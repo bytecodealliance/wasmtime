@@ -58,6 +58,9 @@ pub struct ReturnCallInfo {
 
     /// The in-register arguments and their constraints.
     pub uses: CallArgList,
+
+    /// A temporary for use when moving the return address.
+    pub tmp: WritableGpr,
 }
 
 #[test]
@@ -1668,8 +1671,11 @@ impl PrettyPrint for Inst {
                 let ReturnCallInfo {
                     uses,
                     new_stack_arg_size,
+                    tmp,
                 } = &**info;
-                let mut s = format!("return_call_known {callee:?} ({new_stack_arg_size})");
+                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
+                let mut s =
+                    format!("return_call_known {callee:?} ({new_stack_arg_size}) tmp={tmp}");
                 for ret in uses {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
@@ -1682,9 +1688,12 @@ impl PrettyPrint for Inst {
                 let ReturnCallInfo {
                     uses,
                     new_stack_arg_size,
+                    tmp,
                 } = &**info;
                 let callee = callee.pretty_print(8, allocs);
-                let mut s = format!("return_call_unknown {callee} ({new_stack_arg_size})");
+                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
+                let mut s =
+                    format!("return_call_unknown {callee} ({new_stack_arg_size}) tmp={tmp}");
                 for ret in uses {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
@@ -2342,7 +2351,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::ReturnCallKnown { callee, info } => {
-            let ReturnCallInfo { uses, .. } = &**info;
+            let ReturnCallInfo { uses, tmp, .. } = &**info;
+            collector.reg_early_def(tmp.to_writable_reg());
             // Same as in the `Inst::CallKnown` branch.
             debug_assert_ne!(*callee, ExternalName::LibCall(LibCall::Probestack));
             for u in uses {
@@ -2351,8 +2361,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::ReturnCallUnknown { callee, info } => {
-            let ReturnCallInfo { uses, .. } = &**info;
+            let ReturnCallInfo { uses, tmp, .. } = &**info;
             callee.get_operands(collector);
+            collector.reg_early_def(tmp.to_writable_reg());
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }

@@ -1,4 +1,6 @@
 test compile precise-output
+set enable_llvm_abi_extensions
+set preserve_frame_pointers
 target x86_64
 
 ;; Test the `tail` calling convention with non-tail calls and stack arguments.
@@ -892,4 +894,45 @@ block0:
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+
+
+;; Test that tail calls that shrink the argument area don't clobber the location
+;; of an indirect jump
+
+function %tail_call_indirect_with_shrink(f64, f64, i8, i32 sext, i128, i32 sext, i128, i32, i128) -> i8 tail {
+    sig0 = () -> i8 tail
+    fn0 = %callee_simple sig0
+
+block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, v8: i128):
+    v14 = func_addr.i64 fn0
+    return_call_indirect sig0, v14()
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    rbp(stack args max - 32), %rsi
+;   movq    rbp(stack args max - 24), %rax
+;   movq    rbp(stack args max - 16), %rdx
+;   movq    rbp(stack args max - 8), %r9
+;   load_ext_name %callee_simple+0, %rsi
+;   return_call_unknown %rsi (0) tmp=%rdi
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x10(%rbp), %rsi
+;   movq 0x18(%rbp), %rax
+;   movq 0x20(%rbp), %rdx
+;   movq 0x28(%rbp), %r9
+;   movabsq $0, %rsi ; reloc_external Abs8 %callee_simple 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   movq (%rsp), %rdi
+;   movq %rdi, 0x20(%rsp)
+;   addq $0x20, %rsp
+;   jmpq *%rsi
 
