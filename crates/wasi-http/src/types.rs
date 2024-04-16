@@ -140,7 +140,9 @@ pub fn default_send_request(
     request: hyper::Request<HyperOutgoingBody>,
     config: OutgoingRequestConfig,
 ) -> HostFutureIncomingResponse {
-    let handle = wasmtime_wasi::runtime::spawn(async move { Ok(handler(request, config).await) });
+    let handle = wasmtime_wasi::runtime::spawn(async move {
+        Ok(default_send_request_handler(request, config).await)
+    });
     HostFutureIncomingResponse::pending(handle)
 }
 
@@ -148,7 +150,7 @@ pub fn default_send_request(
 /// in a task.
 ///
 /// This is called from [default_send_request] to actually send the request.
-pub async fn handler(
+pub async fn default_send_request_handler(
     mut request: hyper::Request<HyperOutgoingBody>,
     OutgoingRequestConfig {
         use_tls,
