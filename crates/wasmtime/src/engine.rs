@@ -9,6 +9,7 @@ use once_cell::sync::OnceCell;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
 #[cfg(feature = "runtime")]
@@ -299,7 +300,7 @@ impl Engine {
             // like typed function references and GC) are enabled this must be
             // enabled, otherwise this setting can have any value.
             "enable_safepoints" => {
-                if self.config().features.reference_types {
+                if self.config().features.contains(WasmFeatures::REFERENCE_TYPES) {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())

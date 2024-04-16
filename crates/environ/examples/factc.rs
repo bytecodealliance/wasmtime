@@ -120,10 +120,7 @@ impl Factc {
 
         let mut adapters = Vec::new();
         let input = wat::parse_file(&self.input)?;
-        let mut validator = Validator::new_with_features(WasmFeatures {
-            component_model: true,
-            ..Default::default()
-        });
+        let mut validator = Validator::new();
         let wasm_types = validator
             .validate_all(&input)
             .context("failed to validate input wasm")?;
@@ -191,13 +188,9 @@ impl Factc {
         }
 
         if !self.skip_validate {
-            Validator::new_with_features(WasmFeatures {
-                multi_memory: true,
-                memory64: true,
-                ..WasmFeatures::default()
-            })
-            .validate_all(&wasm)
-            .context("failed to validate generated module")?;
+            Validator::new_with_features(WasmFeatures::default() | WasmFeatures::MEMORY64)
+                .validate_all(&wasm)
+                .context("failed to validate generated module")?;
         }
 
         Ok(())

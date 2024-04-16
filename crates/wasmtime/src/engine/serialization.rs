@@ -199,7 +199,7 @@ struct WasmFeatures {
 impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new(engine: &Engine) -> Metadata<'static> {
-        let wasmparser::WasmFeatures {
+        let wasmparser::WasmFeaturesInflated {
             reference_types,
             multi_value,
             bulk_memory,
@@ -225,7 +225,7 @@ impl Metadata<'_> {
             saturating_float_to_int: _,
             sign_extension: _,
             floats: _,
-        } = engine.config().features;
+        } = engine.config().features.inflate();
 
         // These features are not implemented in Wasmtime yet. We match on them
         // above so that once we do implement support for them, we won't
@@ -460,69 +460,78 @@ impl Metadata<'_> {
             gc,
         } = self.features;
 
+        use wasmparser::WasmFeatures as F;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
             "gc",
             reference_types,
-            other.reference_types,
+            other.contains(F::REFERENCE_TYPES),
             "WebAssembly reference types support",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
             "gc",
             function_references,
-            other.function_references,
+            other.contains(F::FUNCTION_REFERENCES),
             "WebAssembly function-references support",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
             "gc",
             gc,
-            other.gc,
+            other.contains(F::GC),
             "WebAssembly garbage collection support",
         )?;
 
         Self::check_bool(
             multi_value,
-            other.multi_value,
+            other.contains(F::MULTI_VALUE),
             "WebAssembly multi-value support",
         )?;
         Self::check_bool(
             bulk_memory,
-            other.bulk_memory,
+            other.contains(F::BULK_MEMORY),
             "WebAssembly bulk memory support",
         )?;
         Self::check_bool(
             component_model,
-            other.component_model,
+            other.contains(F::COMPONENT_MODEL),
             "WebAssembly component model support",
         )?;
-        Self::check_bool(simd, other.simd, "WebAssembly SIMD support")?;
-        Self::check_bool(tail_call, other.tail_call, "WebAssembly tail calls support")?;
-        Self::check_bool(threads, other.threads, "WebAssembly threads support")?;
+        Self::check_bool(simd, other.contains(F::SIMD), "WebAssembly SIMD support")?;
+        Self::check_bool(
+            tail_call,
+            other.contains(F::TAIL_CALL),
+            "WebAssembly tail calls support",
+        )?;
+        Self::check_bool(
+            threads,
+            other.contains(F::THREADS),
+            "WebAssembly threads support",
+        )?;
         Self::check_bool(
             multi_memory,
-            other.multi_memory,
+            other.contains(F::MULTI_MEMORY),
             "WebAssembly multi-memory support",
         )?;
         Self::check_bool(
             exceptions,
-            other.exceptions,
+            other.contains(F::EXCEPTIONS),
             "WebAssembly exceptions support",
         )?;
         Self::check_bool(
             memory64,
-            other.memory64,
+            other.contains(F::MEMORY64),
             "WebAssembly 64-bit memory support",
         )?;
         Self::check_bool(
             extended_const,
-            other.extended_const,
+            other.contains(F::EXTENDED_CONST),
             "WebAssembly extended-const support",
         )?;
         Self::check_bool(
             relaxed_simd,
-            other.relaxed_simd,
+            other.contains(F::RELAXED_SIMD),
             "WebAssembly relaxed-simd support",
         )?;
 

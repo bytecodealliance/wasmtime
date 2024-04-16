@@ -79,12 +79,10 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
     }
 
     fn wasm_features(&self) -> wasmparser::WasmFeatures {
-        wasmparser::WasmFeatures {
-            memory64: true,
-            multi_memory: true,
-            relaxed_simd: true,
-            ..self.inner.wasm_features()
-        }
+        self.inner.wasm_features()
+            | wasmparser::WasmFeatures::MEMORY64
+            | wasmparser::WasmFeatures::MULTI_MEMORY
+            | wasmparser::WasmFeatures::RELAXED_SIMD
     }
 
     // ================================================================

@@ -212,10 +212,9 @@ impl<'data> Translator<'_, 'data> {
             // specifically enabled here since the adapter module is highly
             // likely to use that if anything is actually indirected through
             // memory.
-            let mut validator = Validator::new_with_features(WasmFeatures {
-                multi_memory: true,
-                ..*self.validator.features()
-            });
+            let mut validator = Validator::new_with_features(
+                *self.validator.features() | WasmFeatures::MULTI_MEMORY,
+            );
             let translation = ModuleEnvironment::new(
                 self.tunables,
                 &mut validator,

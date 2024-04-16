@@ -19,7 +19,7 @@ use wasmparser::types::{CoreTypeId, Types};
 use wasmparser::{
     CompositeType, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding,
     ExternalKind, FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser,
-    Payload, TypeRef, Validator, ValidatorResources,
+    Payload, TypeRef, Validator, ValidatorResources, WasmFeatures,
 };
 use wasmtime_types::ModuleInternedTypeIndex;
 
@@ -605,7 +605,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             params: sig.params().into(),
                         });
                 }
-                body.allow_memarg64(self.validator.features().memory64);
+                body.allow_memarg64(self.validator.features().contains(WasmFeatures::MEMORY64));
                 self.result
                     .function_body_inputs
                     .push(FunctionBodyData { validator, body });

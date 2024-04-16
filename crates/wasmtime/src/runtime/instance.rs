@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::ptr::NonNull;
 use std::sync::Arc;
+use wasmparser::WasmFeatures;
 use wasmtime_environ::{
     EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TypeTrace,
 };
@@ -340,7 +341,11 @@ impl Instance {
         // look at them.
         instance_handle.initialize(
             compiled_module.module(),
-            store.engine().config().features.bulk_memory,
+            store
+                .engine()
+                .config()
+                .features
+                .contains(WasmFeatures::BULK_MEMORY),
         )?;
 
         Ok((instance, compiled_module.module().start_func))
