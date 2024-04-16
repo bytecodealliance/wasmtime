@@ -374,7 +374,12 @@ pub(crate) fn check(
             let addr = addr.clone();
             let bits: u16 = size.to_bits().into();
             check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
-                clamp_range(ctx, 64, bits, compute_addr(ctx, vcode, &addr, bits))
+                let fact = if let SyntheticAmode::Real(amode) = &addr {
+                    compute_addr(ctx, vcode, amode, bits)
+                } else {
+                    None
+                };
+                clamp_range(ctx, 64, bits, fact)
             })
         }
 
@@ -922,15 +927,12 @@ fn check_mem<'a>(
     ty: Type,
     op: LoadOrStore<'a>,
 ) -> PccResult<Option<Fact>> {
-    match amode {
-        SyntheticAmode::Real(amode) if !amode.get_flags().checked() => return Ok(None),
-        SyntheticAmode::IncomingArg { .. }
-        | SyntheticAmode::NominalSPOffset { .. }
-        | SyntheticAmode::ConstantOffset(_) => return Ok(None),
-        _ => {}
-    }
-
-    let addr = compute_addr(ctx, vcode, amode, 64).ok_or(PccError::MissingFact)?;
+    let addr = match amode {
+        SyntheticAmode::Real(amode) if amode.get_flags().checked() => {
+            compute_addr(ctx, vcode, amode, 64).ok_or(PccError::MissingFact)?
+        }
+        _ => return Ok(None),
+    };
 
     match op {
         LoadOrStore::Load {
@@ -957,15 +959,10 @@ fn check_mem<'a>(
     }
 }
 
-fn compute_addr(
-    ctx: &FactContext,
-    vcode: &VCode<Inst>,
-    amode: &SyntheticAmode,
-    bits: u16,
-) -> Option<Fact> {
+fn compute_addr(ctx: &FactContext, vcode: &VCode<Inst>, amode: &Amode, bits: u16) -> Option<Fact> {
     trace!("compute_addr: {:?}", amode);
     match *amode {
-        SyntheticAmode::Real(Amode::ImmReg { simm32, base, .. }) => {
+        Amode::ImmReg { simm32, base, .. } => {
             let base = get_fact_or_default(vcode, base, bits);
             trace!("base = {:?}", base);
             let simm32: i64 = simm32.into();
@@ -975,13 +972,13 @@ fn compute_addr(
             trace!("sum = {:?}", sum);
             Some(sum)
         }
-        SyntheticAmode::Real(Amode::ImmRegRegShift {
+        Amode::ImmRegRegShift {
             simm32,
             base,
             index,
             shift,
             ..
-        }) => {
+        } => {
             let base = get_fact_or_default(vcode, base.into(), bits);
             let index = get_fact_or_default(vcode, index.into(), bits);
             trace!("base = {:?} index = {:?}", base, index);
@@ -994,9 +991,6 @@ fn compute_addr(
             trace!("sum = {:?}", sum);
             Some(sum)
         }
-        SyntheticAmode::Real(Amode::RipRelative { .. })
-        | SyntheticAmode::IncomingArg { .. }
-        | SyntheticAmode::ConstantOffset(_)
-        | SyntheticAmode::NominalSPOffset { .. } => None,
+        Amode::RipRelative { .. } => None,
     }
 }
