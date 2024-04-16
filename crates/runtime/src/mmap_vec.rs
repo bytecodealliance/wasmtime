@@ -68,28 +68,6 @@ impl MmapVec {
         Ok(MmapVec::new(mmap, len))
     }
 
-    /// Splits the collection into two at the given index.
-    ///
-    /// Returns a separate `MmapVec` which shares the underlying mapping, but
-    /// only has access to elements in the range `[at, len)`. After the call,
-    /// the original `MmapVec` will be left with access to the elements in the
-    /// range `[0, at)`.
-    ///
-    /// This is an `O(1)` operation which does not involve copies.
-    pub fn split_off(&mut self, at: usize) -> MmapVec {
-        assert!(at <= self.range.len());
-
-        // Create a new `MmapVec` which refers to the same underlying mmap, but
-        // has a disjoint range from ours. Our own range is adjusted to be
-        // disjoint just after `ret` is created.
-        let ret = MmapVec {
-            mmap: self.mmap.clone(),
-            range: at..self.range.end,
-        };
-        self.range.end = self.range.start + at;
-        return ret;
-    }
-
     /// Makes the specified `range` within this `mmap` to be read/execute.
     pub unsafe fn make_executable(
         &self,
@@ -175,27 +153,5 @@ mod tests {
         assert!(mmap.get(10).is_none());
         assert_eq!(mmap[0], 1);
         assert_eq!(mmap[2], 3);
-    }
-
-    #[test]
-    fn split_off() {
-        let mut vec = Vec::from([1, 2, 3, 4]);
-        let mut mmap = MmapVec::from_slice(&vec).unwrap();
-        assert_eq!(&mmap[..], &vec[..]);
-        // remove nothing; vec length remains 4
-        assert_eq!(&mmap.split_off(4)[..], &vec.split_off(4)[..]);
-        assert_eq!(&mmap[..], &vec[..]);
-        // remove 1 element; vec length is now 3
-        assert_eq!(&mmap.split_off(3)[..], &vec.split_off(3)[..]);
-        assert_eq!(&mmap[..], &vec[..]);
-        // remove 2 elements; vec length is now 1
-        assert_eq!(&mmap.split_off(1)[..], &vec.split_off(1)[..]);
-        assert_eq!(&mmap[..], &vec[..]);
-        // remove last element; vec length is now 0
-        assert_eq!(&mmap.split_off(0)[..], &vec.split_off(0)[..]);
-        assert_eq!(&mmap[..], &vec[..]);
-        // nothing left to remove, but that's okay
-        assert_eq!(&mmap.split_off(0)[..], &vec.split_off(0)[..]);
-        assert_eq!(&mmap[..], &vec[..]);
     }
 }
