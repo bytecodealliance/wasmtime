@@ -694,7 +694,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
             .collect();
 
-        regs.sort();
+        regs.sort_unstable();
 
         // Compute clobber size.
         let clobber_size = compute_clobber_size(&regs);

@@ -79,7 +79,7 @@ use crate::machinst::*;
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::{MachineEnv, PReg, PRegSet};
+use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::sync::OnceLock;
 
@@ -599,8 +599,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut insts = SmallVec::new();
 
         // Collect clobbered registers.
-        let (first_clobbered_gpr, clobbered_fpr) =
-            get_clobbered_gpr_fpr(&frame_layout.clobbered_callee_saves);
+        let (first_clobbered_gpr, clobbered_fpr) = get_clobbered_gpr_fpr(frame_layout);
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::DefineNewFrame {
@@ -696,8 +695,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut insts = SmallVec::new();
 
         // Collect clobbered registers.
-        let (first_clobbered_gpr, clobbered_fpr) =
-            get_clobbered_gpr_fpr(&frame_layout.clobbered_callee_saves);
+        let (first_clobbered_gpr, clobbered_fpr) = get_clobbered_gpr_fpr(frame_layout);
 
         // Restore FPRs.
         for (i, reg) in clobbered_fpr.iter().enumerate() {
@@ -851,7 +849,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| PReg::from(r.to_reg()).index());
+        regs.sort_unstable();
 
         // Compute clobber size.  We only need to count FPR save slots.
         let mut clobber_size = 0;
@@ -892,28 +890,18 @@ fn is_reg_saved_in_prologue(_call_conv: isa::CallConv, r: RealReg) -> bool {
     }
 }
 
-fn get_clobbered_gpr_fpr(
-    clobbered_callee_saves: &[Writable<RealReg>],
-) -> (u8, SmallVec<[Writable<RealReg>; 8]>) {
+fn get_clobbered_gpr_fpr(frame_layout: &FrameLayout) -> (u8, &[Writable<RealReg>]) {
     // Collect clobbered registers.  Note we save/restore GPR always as
     // a block of registers using LOAD MULTIPLE / STORE MULTIPLE, starting
     // with the clobbered GPR with the lowest number up to %r15.  We
     // return the number of that first GPR (or 16 if none is to be saved).
-    let mut clobbered_fpr = SmallVec::new();
-    let mut first_clobbered_gpr = 16;
+    let (clobbered_gpr, clobbered_fpr) = frame_layout.clobbered_callee_saves_by_class();
 
-    for &reg in clobbered_callee_saves.iter() {
-        match reg.to_reg().class() {
-            RegClass::Int => {
-                let enc = reg.to_reg().hw_enc();
-                if enc < first_clobbered_gpr {
-                    first_clobbered_gpr = enc;
-                }
-            }
-            RegClass::Float => clobbered_fpr.push(reg),
-            RegClass::Vector => unreachable!(),
-        }
-    }
+    let first_clobbered_gpr = clobbered_gpr.split_first().map_or(16, |(first, rest)| {
+        let first = first.to_reg().hw_enc();
+        debug_assert!(rest.iter().all(|r| r.to_reg().hw_enc() > first));
+        first
+    });
 
     (first_clobbered_gpr, clobbered_fpr)
 }

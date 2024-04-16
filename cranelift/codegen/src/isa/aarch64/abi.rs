@@ -14,7 +14,7 @@ use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::{MachineEnv, PReg, PRegSet, VReg};
+use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::sync::OnceLock;
 
@@ -690,16 +690,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
-        let mut clobbered_int = vec![];
-        let mut clobbered_vec = vec![];
-
-        for &reg in frame_layout.clobbered_callee_saves.iter() {
-            match reg.to_reg().class() {
-                RegClass::Int => clobbered_int.push(reg),
-                RegClass::Float => clobbered_vec.push(reg),
-                RegClass::Vector => unreachable!(),
-            }
-        }
+        let (clobbered_int, clobbered_vec) = frame_layout.clobbered_callee_saves_by_class();
 
         let mut insts = SmallVec::new();
         let setup_frame = frame_layout.setup_area_size > 0;
@@ -923,16 +914,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let mut clobbered_int = vec![];
-        let mut clobbered_vec = vec![];
-
-        for &reg in frame_layout.clobbered_callee_saves.iter() {
-            match reg.to_reg().class() {
-                RegClass::Int => clobbered_int.push(reg),
-                RegClass::Float => clobbered_vec.push(reg),
-                RegClass::Vector => unreachable!(),
-            }
-        }
+        let (clobbered_int, clobbered_vec) = frame_layout.clobbered_callee_saves_by_class();
 
         // Free the fixed frame if necessary.
         let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
@@ -1189,7 +1171,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         // Sort registers for deterministic code output. We can do an unstable
         // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| VReg::from(r.to_reg()).vreg());
+        regs.sort_unstable();
 
         // Compute clobber size.
         let clobber_size = compute_clobber_size(&regs);
