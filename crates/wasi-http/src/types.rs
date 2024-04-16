@@ -14,6 +14,8 @@ use std::any::Any;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
+use tracing::field::Empty;
+use tracing::{instrument, Instrument};
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, Subscribe};
 
@@ -136,11 +138,30 @@ pub struct OutgoingRequestConfig {
 ///
 /// This implementation is used by the `wasi:http/outgoing-handler` interface
 /// default implementation.
+#[instrument(skip_all, fields(otel.kind = "client", url.full = Empty, http.request.method = Empty, http.response.status_code = Empty, otel.name = Empty, server.address = Empty, server.port = Empty))]
 pub fn default_send_request(
     request: hyper::Request<HyperOutgoingBody>,
     config: OutgoingRequestConfig,
 ) -> HostFutureIncomingResponse {
-    let handle = wasmtime_wasi::runtime::spawn(async move { Ok(handler(request, config).await) });
+    let current_span = tracing::Span::current();
+    let method = format!("{:?}", request.method());
+    current_span.record("otel.name", method.clone());
+    current_span.record("url.full", request.uri().to_string());
+    current_span.record("http.request.method", method);
+
+    let handle = wasmtime_wasi::runtime::spawn(
+        async move {
+            let resp = handler(request, config).await;
+
+            if let Ok(ref resp) = resp {
+                tracing::Span::current()
+                    .record("http.response.status_code", resp.resp.status().as_u16());
+            }
+            Ok(resp)
+        }
+        .instrument(current_span),
+    );
+
     HostFutureIncomingResponse::pending(handle)
 }
 
