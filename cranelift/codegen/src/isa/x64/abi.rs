@@ -1037,6 +1037,7 @@ impl X64CallSite {
         let info = Box::new(ReturnCallInfo {
             new_stack_arg_size,
             uses: self.take_uses(),
+            tmp: ctx.temp_writable_gpr(),
         });
         match dest {
             CallDest::ExtName(callee, RelocDistance::Near) => {

@@ -4238,6 +4238,8 @@ fn emit_return_call_common_sequence(
                  but the current implementation relies on them being present"
     );
 
+    let tmp = allocs.next_writable(call_info.tmp.to_writable_reg());
+
     for u in call_info.uses.iter() {
         let _ = allocs.next(u.vreg);
     }
@@ -4260,14 +4262,10 @@ fn emit_return_call_common_sequence(
     let incoming_args_diff = state.frame_layout().tail_args_size - call_info.new_stack_arg_size;
     if incoming_args_diff > 0 {
         // Move the saved return address up by `incoming_args_diff`
-        Inst::mov64_m_r(
-            Amode::imm_reg(0, regs::rsp()),
-            Writable::from_reg(regs::r11()),
-        )
-        .emit(&[], sink, info, state);
+        Inst::mov64_m_r(Amode::imm_reg(0, regs::rsp()), tmp).emit(&[], sink, info, state);
         Inst::mov_r_m(
             OperandSize::Size64,
-            regs::r11(),
+            tmp.to_reg(),
             Amode::imm_reg(i32::try_from(incoming_args_diff).unwrap(), regs::rsp()),
         )
         .emit(&[], sink, info, state);
