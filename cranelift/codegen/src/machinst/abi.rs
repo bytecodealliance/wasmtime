@@ -1108,9 +1108,6 @@ pub struct Callee<M: ABIMachineSpec> {
     /// manually register-allocated and carefully only use caller-saved
     /// registers and keep nothing live after this sequence of instructions.
     stack_limit: Option<(Reg, SmallInstVec<M::I>)>,
-    /// Are we to invoke the probestack function in the prologue? If so,
-    /// what is the minimum size at which we must invoke it?
-    probestack_min_frame: Option<u32>,
 
     _mach: PhantomData<M>,
 }
@@ -1218,18 +1215,6 @@ impl<M: ABIMachineSpec> Callee<M> {
                         .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv))
                 });
 
-        // Determine whether a probestack call is required for large enough
-        // frames (and the minimum frame size if so).
-        let probestack_min_frame = if flags.enable_probestack() {
-            assert!(
-                !flags.probestack_func_adjusts_sp(),
-                "SP-adjusting probestack not supported in new backends"
-            );
-            Some(1 << flags.probestack_size_log2())
-        } else {
-            None
-        };
-
         let tail_args_size = sigs[sig].sized_stack_arg_space;
 
         Ok(Self {
@@ -1252,7 +1237,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             isa_flags: isa_flags.clone(),
             is_leaf: f.is_leaf(),
             stack_limit,
-            probestack_min_frame,
             _mach: PhantomData,
         })
     }
@@ -1890,22 +1874,20 @@ impl<M: ABIMachineSpec> Callee<M> {
                 self.insert_stack_check(*reg, total_stacksize, &mut insts);
             }
 
-            let needs_probestack = self
-                .probestack_min_frame
-                .map_or(false, |min_frame| total_stacksize >= min_frame);
-
-            if needs_probestack {
-                match self.flags.probestack_strategy() {
-                    ProbestackStrategy::Inline => {
-                        let guard_size = 1 << self.flags.probestack_size_log2();
-                        M::gen_inline_probestack(
+            if self.flags.enable_probestack() {
+                let guard_size = 1 << self.flags.probestack_size_log2();
+                if total_stacksize >= guard_size {
+                    match self.flags.probestack_strategy() {
+                        ProbestackStrategy::Inline => M::gen_inline_probestack(
                             &mut insts,
                             self.call_conv,
                             total_stacksize,
                             guard_size,
-                        )
+                        ),
+                        ProbestackStrategy::Outline => {
+                            M::gen_probestack(&mut insts, total_stacksize)
+                        }
                     }
-                    ProbestackStrategy::Outline => M::gen_probestack(&mut insts, total_stacksize),
                 }
             }
         }
