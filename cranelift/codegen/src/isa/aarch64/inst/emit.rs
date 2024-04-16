@@ -3815,6 +3815,9 @@ fn emit_return_call_common_sequence(
             rt: writable_fp_reg(),
             rt2: writable_link_reg(),
             mem: PairAMode::SPPostIndexed {
+                // TODO: we could fold the increment for incoming_args_diff here, as long as that
+                // value is less than 502*8, by adding it to `setup_area_size`.
+                // https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/LDP--Load-Pair-of-Registers-
                 simm7: SImm7Scaled::maybe_from_i64(i64::from(setup_area_size), types::I64).unwrap(),
             },
             flags: MemFlags::trusted(),
