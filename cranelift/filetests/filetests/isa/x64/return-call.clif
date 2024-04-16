@@ -243,7 +243,7 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   movq    rbp(stack args max - 24), %r9
 ;   movq    rbp(stack args max - 16), %rax
 ;   movl    %eax, rbp(stack args max - 16)
-;   return_call_known TestCase(%one_stack_arg) (16) tmp=%r8 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
+;   return_call_known TestCase(%one_stack_arg) (16) tmp=%r10 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -260,8 +260,8 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   movl %eax, 0x20(%rbp)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   movq (%rsp), %r8
-;   movq %r8, 0x10(%rsp)
+;   movq (%rsp), %r10
+;   movq %r10, 0x10(%rsp)
 ;   addq $0x10, %rsp
 ;   jmp 0x35 ; reloc_external CallPCRel4 %one_stack_arg -4
 
@@ -325,7 +325,7 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ;   movl    %esi, rbp(stack args max - 16)
 ;   movq    %rsi, %rdi
 ;   movq    %r10, %rsi
-;   return_call_known TestCase(%call_one_stack_arg) (32) tmp=%rcx %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
+;   return_call_known TestCase(%call_one_stack_arg) (32) tmp=%r10 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
