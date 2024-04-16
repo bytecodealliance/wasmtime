@@ -35,8 +35,9 @@ static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            // Argument area begins after saved frame pointer + return address.
-            StackAMode::IncomingArg(off, _) => AMode::FPOffset { off: off + 16 },
+            StackAMode::IncomingArg(off, stack_args_size) => AMode::IncomingArg {
+                off: i64::from(stack_args_size) - off,
+            },
             StackAMode::Slot(off) => AMode::NominalSPOffset { off },
             StackAMode::OutgoingArg(off) => AMode::SPOffset { off },
         }
@@ -630,9 +631,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             });
         }
 
-        if call_conv == isa::CallConv::Tail && frame_layout.incoming_args_size > 0 {
+        if call_conv == isa::CallConv::Tail && frame_layout.tail_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.incoming_args_size.try_into().unwrap(),
+                frame_layout.tail_args_size.try_into().unwrap(),
             ));
         }
 
@@ -701,8 +702,47 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         let mut insts = SmallVec::new();
+        let setup_frame = frame_layout.setup_area_size > 0;
 
-        if flags.unwind_info() && frame_layout.setup_area_size > 0 {
+        // When a return_call within this function required more stack arguments than we have
+        // present, resize the incoming argument area of the frame to accommodate those arguments.
+        let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
+        if incoming_args_diff > 0 {
+            // Decrement SP to account for the additional space required by a tail call
+            insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
+
+            // Move fp and lr down
+            if setup_frame {
+                // Reload the frame pointer from the stack
+                insts.push(Inst::ULoad64 {
+                    rd: regs::writable_fp_reg(),
+                    mem: AMode::SPOffset {
+                        off: i64::from(incoming_args_diff),
+                    },
+                    flags: MemFlags::trusted(),
+                });
+
+                // Store the frame pointer and link register again at the new SP
+                insts.push(Inst::StoreP64 {
+                    rt: fp_reg(),
+                    rt2: link_reg(),
+                    mem: PairAMode::SignedOffset {
+                        reg: regs::stack_reg(),
+                        simm7: SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
+                    },
+                    flags: MemFlags::trusted(),
+                });
+
+                // Keep the frame pointer in sync
+                insts.push(Self::gen_move(
+                    regs::writable_fp_reg(),
+                    regs::stack_reg(),
+                    types::I64,
+                ));
+            }
+        }
+
+        if flags.unwind_info() && setup_frame {
             // The *unwind* frame (but not the actual frame) starts at the
             // clobbers, just below the saved FP/LR pair.
             insts.push(Inst::Unwind {
@@ -1261,8 +1301,15 @@ impl AArch64CallSite {
         args: isle::ValueSlice,
         isa_flags: &aarch64_settings::Flags,
     ) {
-        let (new_stack_arg_size, old_stack_arg_size) =
-            self.emit_temporary_tail_call_frame(ctx, args);
+        let new_stack_arg_size =
+            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
+
+        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.emit_args(ctx, args);
+        self.emit_stack_ret_arg_for_tail_call(ctx);
 
         let dest = self.dest().clone();
         let opcode = self.opcode();
@@ -1270,7 +1317,6 @@ impl AArch64CallSite {
         let info = Box::new(ReturnCallInfo {
             uses,
             opcode,
-            old_stack_arg_size,
             new_stack_arg_size,
             key: select_api_key(isa_flags, isa::CallConv::Tail, true),
         });

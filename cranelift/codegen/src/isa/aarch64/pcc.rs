@@ -505,6 +505,7 @@ fn check_addr<'a>(
         }
         &AMode::SPOffset { .. }
         | &AMode::FPOffset { .. }
+        | &AMode::IncomingArg { .. }
         | &AMode::NominalSPOffset { .. }
         | &AMode::SPPostIndexed { .. }
         | &AMode::SPPreIndexed { .. } => {

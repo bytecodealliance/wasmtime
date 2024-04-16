@@ -130,8 +130,6 @@ pub struct ReturnCallInfo {
     pub uses: CallArgList,
     /// Instruction opcode.
     pub opcode: Opcode,
-    /// The size of the current/old stack frame's stack arguments.
-    pub old_stack_arg_size: u32,
     /// The size of the new stack frame's stack arguments. This is necessary
     /// for copying the frame over our current frame. It must already be
     /// allocated on the stack.
@@ -413,7 +411,7 @@ fn memarg_operands<F: Fn(VReg) -> VReg>(memarg: &AMode, collector: &mut OperandC
         }
         &AMode::Label { .. } => {}
         &AMode::SPPreIndexed { .. } | &AMode::SPPostIndexed { .. } => {}
-        &AMode::FPOffset { .. } => {}
+        &AMode::FPOffset { .. } | &AMode::IncomingArg { .. } => {}
         &AMode::SPOffset { .. } | &AMode::NominalSPOffset { .. } => {}
         &AMode::RegOffset { rn, .. } => {
             collector.reg_use(rn);
@@ -2615,8 +2613,8 @@ impl Inst {
                 ref info,
             } => {
                 let mut s = format!(
-                    "return_call {callee:?} old_stack_arg_size:{} new_stack_arg_size:{}",
-                    info.old_stack_arg_size, info.new_stack_arg_size
+                    "return_call {callee:?} new_stack_arg_size:{}",
+                    info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
@@ -2628,8 +2626,8 @@ impl Inst {
             &Inst::ReturnCallInd { callee, ref info } => {
                 let callee = pretty_print_reg(callee, allocs);
                 let mut s = format!(
-                    "return_call_ind {callee} old_stack_arg_size:{} new_stack_arg_size:{}",
-                    info.old_stack_arg_size, info.new_stack_arg_size
+                    "return_call_ind {callee} new_stack_arg_size:{}",
+                    info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = pretty_print_reg(ret.preg, &mut empty_allocs);

@@ -12,8 +12,8 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x9, [fp, #16]
-;   ldr x2, [fp, #24]
+;   ldr x9, [sp, #16]
+;   ldr x2, [sp, #24]
 ;   ldp fp, lr, [sp], #16
 ;   add sp, sp, #16
 ;   ret
@@ -23,8 +23,8 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldur x9, [x29, #0x10]
-;   ldur x2, [x29, #0x18]
+;   ldur x9, [sp, #0x10]
+;   ldur x2, [sp, #0x18]
 ;   ldp x29, x30, [sp], #0x10
 ;   add sp, sp, #0x10
 ;   ret
@@ -316,8 +316,8 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sub sp, sp, #16
 ; block0:
 ;   str x9, [sp]
-;   ldr x9, [fp, #16]
-;   ldr x1, [fp, #24]
+;   ldr x9, [sp, #32]
+;   ldr x1, [sp, #40]
 ;   str x9, [x0]
 ;   str x1, [x0, #8]
 ;   ldr x9, [sp]
@@ -333,8 +333,8 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
 ;   stur x9, [sp]
-;   ldur x9, [x29, #0x10]
-;   ldur x1, [x29, #0x18]
+;   ldur x9, [sp, #0x20]
+;   ldur x1, [sp, #0x28]
 ;   stur x9, [x0]
 ;   stur x1, [x0, #8]
 ;   ldur x9, [sp]
