@@ -643,9 +643,10 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-        # There's no way to disable rustdoc tests with a flag to `cargo test`,
-        # but shadowing `rustdoc` as `/bin/true` works just as well.
-        RUSTDOC: /bin/true
+        # Explicitly shadow rustdoc so that no doctests will be run in this
+        # build. The `true` executable lives in different places on linux and
+        # osx, but it's in the path on both.
+        RUSTDOC: /usr/bin/true
 
     # Test debug (DWARF) related functionality.
     - run: |

@@ -61,7 +61,7 @@ pub struct RunCommon {
     ///
     /// The `guest` option can be additionally configured as:
     ///
-    /// ```ignore
+    /// ```
     /// --profile=guest[,path[,interval]]
     /// ```
     ///
