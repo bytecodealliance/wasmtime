@@ -159,7 +159,9 @@ pub struct RunCommand {
     ///
     /// The `guest` option can be additionally configured as:
     ///
-    ///     --profile=guest[,path[,interval]]
+    /// ```ignore
+    /// --profile=guest[,path[,interval]]
+    /// ```
     ///
     /// where `path` is where to write the profile and `interval` is the
     /// duration between samples. When used with `--wasm-timeout` the timeout
