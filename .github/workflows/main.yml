@@ -513,6 +513,30 @@ jobs:
         RUST_BACKTRACE: 1
       if: matrix.os != 'windows-latest'
 
+  # Run doctests
+  doctest:
+    needs: determine
+    name: Doctests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    # Install targets in order to build various tests throughout the repo
+    - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
+    - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+      if: matrix.target != ''
+
+    # cargo-nextest doesn't support doctests, so we run those once on
+    # ubuntu-latest, rather than on every architecture.
+    - run: ./ci/run-tests.sh --doc --locked
+      env:
+        USE_NEXTEST: 0
+        CARGO_TERM_COLOR: always
+        RUST_BACKTRACE: 1
+
   # Perform all tests (debug mode) for `wasmtime`.
   #
   # Note that the full matrix for what may run here is defined within
@@ -534,6 +558,8 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
+
+    - uses: ./.github/actions/install-cargo-nextest
 
     # Install targets in order to build various tests throughout the repo
     - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
@@ -624,9 +650,21 @@ jobs:
           echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (\`cargo run --example mpk-available\`)."
         fi
 
-    # Build and test all features
-    - run: ./ci/run-tests.sh ${{ matrix.extra_features }} --locked
+    # Build and test all features, skipping the preview1_poll_oneoff_stdio
+    # tests from wasi-common, which require a pty to run successfully.
+    # https://github.com/nextest-rs/nextest/issues/1357
+    - run: ./ci/run-tests.sh -E 'all() - test(/::preview1_poll_oneoff_stdio$/)' ${{ matrix.extra_features }} --locked
       env:
+        USE_NEXTEST: 1
+        CARGO_TERM_COLOR: always
+        RUST_BACKTRACE: 1
+
+    # Run the preview1_poll_oneoff_stdio tests now, without `cargo-nextest`.
+    - run: ./ci/run-tests.sh ${{ matrix.extra_features }} --locked -- preview1_poll_oneoff_stdio
+      name: Test wasi-common preview1_poll_oneoff_stdio
+      env:
+        USE_NEXTEST: 0
+        CARGO_TERM_COLOR: always
         RUST_BACKTRACE: 1
 
     # Test debug (DWARF) related functionality.
@@ -890,6 +928,7 @@ jobs:
       - cargo_deny
       - cargo_vet
       - doc
+      - doctest
       - checks
       - checks_winarm64
       - test_nightly
