@@ -353,9 +353,8 @@ block0:
 ;   ld s1, 0x10(sp)
 ;   mv t0, a2
 ;   ld a2, 0(sp)
-;   addi sp, sp, 0x20
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   ld ra, 0x28(sp)
+;   ld s0, 0x20(sp)
+;   addi sp, sp, 0x30
 ;   jr t0
 

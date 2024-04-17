@@ -373,10 +373,9 @@ block0:
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ld s1, 8(sp)
 ;   ld a0, 0(sp)
-;   addi sp, sp, 0x10
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   ld ra, 0x18(sp)
+;   ld s0, 0x10(sp)
+;   addi sp, sp, 0x20
 ;   jr t0
 
 ;;;; Test diff blocks with diff return calls with diff # of stack args ;;;;;;;;;
@@ -613,7 +612,7 @@ block2:
 ;   addi t2, zero, 0x7d
 ;   addi t1, zero, 0x82
 ;   addi t0, zero, 0x87
-;   bnez s1, 0x54
+;   bnez s1, 0x50
 ; block2: ; offset 0xa0
 ;   addi s1, zero, 0x8c
 ;   sd a1, 0x30(sp)
@@ -630,12 +629,11 @@ block2:
 ;   ld s1, 0x10(sp)
 ;   ld a0, 8(sp)
 ;   ld a1, 0(sp)
-;   addi sp, sp, 0x20
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   ld ra, 0x28(sp)
+;   ld s0, 0x20(sp)
+;   addi sp, sp, 0x30
 ;   jr t1
-; block3: ; offset 0xf0
+; block3: ; offset 0xec
 ;   ld s1, 0x10(sp)
 ;   sd a1, 0x30(sp)
 ;   sd a0, 0x38(sp)
@@ -649,9 +647,8 @@ block2:
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ld a0, 8(sp)
 ;   ld a1, 0(sp)
-;   addi sp, sp, 0x20
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   ld ra, 0x28(sp)
+;   ld s0, 0x20(sp)
+;   addi sp, sp, 0x30
 ;   jr t0
 

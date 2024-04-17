@@ -1225,11 +1225,6 @@ impl Inst {
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
-
-                // `emit_return_call_common_sequence` emits an island if
-                // necessary, so we can safely disable the worst-case-size check
-                // in this case.
-                *start_off = sink.cur_offset();
             }
 
             &Inst::ReturnCallInd { callee, ref info } => {
@@ -1241,11 +1236,6 @@ impl Inst {
                     offset: Imm12::ZERO,
                 }
                 .emit(&[], sink, emit_info, state);
-
-                // `emit_return_call_common_sequence` emits an island if
-                // necessary, so we can safely disable the worst-case-size check
-                // in this case.
-                *start_off = sink.cur_offset();
             }
             &Inst::Jal { label } => {
                 sink.use_label_at_offset(*start_off, label, LabelUse::Jal20);
@@ -3327,21 +3317,41 @@ fn emit_return_call_common_sequence(
     state: &mut EmitState,
     info: &ReturnCallInfo,
 ) {
-    // Restore clobbers, moving SP to FP
-    for inst in Riscv64MachineDeps::gen_clobber_restore(
-        CallConv::Tail,
-        &emit_info.shared_flag,
-        state.frame_layout(),
-    ) {
-        inst.emit(&[], sink, emit_info, state);
+    let sp_to_fp_offset = {
+        let frame_layout = state.frame_layout();
+        i64::from(
+            frame_layout.clobber_size
+                + frame_layout.fixed_frame_storage_size
+                + frame_layout.outgoing_args_size,
+        )
+    };
+
+    let mut clobber_offset = sp_to_fp_offset - 8;
+    for reg in state.frame_layout().clobbered_callee_saves.clone() {
+        let rreg = reg.to_reg();
+        let ty = match rreg.class() {
+            RegClass::Int => I64,
+            RegClass::Float => F64,
+            RegClass::Vector => unimplemented!("Vector Clobber Restores"),
+        };
+
+        Inst::gen_load(
+            reg.map(Reg::from),
+            AMode::SPOffset(clobber_offset),
+            ty,
+            MemFlags::trusted(),
+        )
+        .emit(&[], sink, emit_info, state);
+
+        clobber_offset -= 8
     }
 
     // Restore the link register and frame pointer
-    let setup_area_size = state.frame_layout().setup_area_size;
+    let setup_area_size = i64::from(state.frame_layout().setup_area_size);
     if setup_area_size > 0 {
         Inst::gen_load(
             writable_link_reg(),
-            AMode::SPOffset(8),
+            AMode::SPOffset(sp_to_fp_offset + 8),
             I64,
             MemFlags::trusted(),
         )
@@ -3349,24 +3359,22 @@ fn emit_return_call_common_sequence(
 
         Inst::gen_load(
             writable_fp_reg(),
-            AMode::SPOffset(0),
+            AMode::SPOffset(sp_to_fp_offset),
             I64,
             MemFlags::trusted(),
         )
         .emit(&[], sink, emit_info, state);
-
-        for inst in Riscv64MachineDeps::gen_sp_reg_adjust(i32::try_from(setup_area_size).unwrap()) {
-            inst.emit(&[], sink, emit_info, state);
-        }
     }
 
     // If we over-allocated the incoming args area in the prologue, resize down to what the callee
     // is expecting.
-    let incoming_args_diff = state.frame_layout().tail_args_size - info.new_stack_arg_size;
-    if incoming_args_diff > 0 {
-        for inst in
-            Riscv64MachineDeps::gen_sp_reg_adjust(i32::try_from(incoming_args_diff).unwrap())
-        {
+    let incoming_args_diff =
+        i64::from(state.frame_layout().tail_args_size - info.new_stack_arg_size);
+
+    // Increment SP all at once
+    let sp_increment = sp_to_fp_offset + setup_area_size + incoming_args_diff;
+    if sp_increment > 0 {
+        for inst in Riscv64MachineDeps::gen_sp_reg_adjust(i32::try_from(sp_increment).unwrap()) {
             inst.emit(&[], sink, emit_info, state);
         }
     }
