@@ -14,8 +14,8 @@ block0(v0: f32x4, v1: f32x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vfadd.vv v13,v9,v11 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   lui a1,523264
 ;   fmv.w.x fa2,a1

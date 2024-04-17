@@ -286,11 +286,11 @@ block0:
 ;   li s1,130
 ;   li a0,135
 ;   load_sym a2,%tail_callee_stack_args+0
-;   sd t0,48(incoming_arg)
-;   sd t1,40(incoming_arg)
-;   sd t2,32(incoming_arg)
-;   sd s1,24(incoming_arg)
-;   sd a0,16(incoming_arg)
+;   sd t0,-48(incoming_arg)
+;   sd t1,-40(incoming_arg)
+;   sd t2,-32(incoming_arg)
+;   sd s1,-24(incoming_arg)
+;   sd a0,-16(incoming_arg)
 ;   ld a0,8(nominal_sp)
 ;   ld s1,16(nominal_sp)
 ;   mv t0,a2

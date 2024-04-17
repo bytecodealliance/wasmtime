@@ -208,11 +208,11 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a4,48(incoming_arg)
-;   ld a0,40(incoming_arg)
-;   ld a2,32(incoming_arg)
-;   ld a4,24(incoming_arg)
-;   ld s1,16(incoming_arg)
+;   ld a4,-48(incoming_arg)
+;   ld a0,-40(incoming_arg)
+;   ld a2,-32(incoming_arg)
+;   ld a4,-24(incoming_arg)
+;   ld s1,-16(incoming_arg)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -310,11 +310,11 @@ block0:
 ;   li t2,125
 ;   li s1,130
 ;   li a0,135
-;   sd t0,48(incoming_arg)
-;   sd t1,40(incoming_arg)
-;   sd t2,32(incoming_arg)
-;   sd s1,24(incoming_arg)
-;   sd a0,16(incoming_arg)
+;   sd t0,-48(incoming_arg)
+;   sd t1,-40(incoming_arg)
+;   sd t2,-32(incoming_arg)
+;   sd s1,-24(incoming_arg)
+;   sd a0,-16(incoming_arg)
 ;   load_sym t0,%tail_callee_stack_args+0
 ;   ld s1,8(nominal_sp)
 ;   ld a0,0(nominal_sp)
@@ -391,11 +391,11 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a4,48(incoming_arg)
-;   ld a0,40(incoming_arg)
-;   ld a2,32(incoming_arg)
-;   ld a4,24(incoming_arg)
-;   ld s1,16(incoming_arg)
+;   ld a4,-48(incoming_arg)
+;   ld a0,-40(incoming_arg)
+;   ld a2,-32(incoming_arg)
+;   ld a4,-24(incoming_arg)
+;   ld s1,-16(incoming_arg)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -431,12 +431,12 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a4,48(incoming_arg)
-;   ld a0,40(incoming_arg)
-;   ld a2,32(incoming_arg)
-;   ld a4,24(incoming_arg)
-;   ld a0,16(incoming_arg)
-;   ld s1,8(incoming_arg)
+;   ld a4,-48(incoming_arg)
+;   ld a0,-40(incoming_arg)
+;   ld a2,-32(incoming_arg)
+;   ld a4,-24(incoming_arg)
+;   ld a0,-16(incoming_arg)
+;   ld s1,-8(incoming_arg)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -547,12 +547,12 @@ block2:
 ;   bne s1,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li s1,140
-;   sd a1,48(incoming_arg)
-;   sd a0,40(incoming_arg)
-;   sd t2,32(incoming_arg)
-;   sd t1,24(incoming_arg)
-;   sd t0,16(incoming_arg)
-;   sd s1,8(incoming_arg)
+;   sd a1,-48(incoming_arg)
+;   sd a0,-40(incoming_arg)
+;   sd t2,-32(incoming_arg)
+;   sd t1,-24(incoming_arg)
+;   sd t0,-16(incoming_arg)
+;   sd s1,-8(incoming_arg)
 ;   load_sym t1,%different_callee2+0
 ;   ld s1,16(nominal_sp)
 ;   ld a0,8(nominal_sp)
@@ -560,11 +560,11 @@ block2:
 ;   return_call_ind t1 new_stack_arg_size:48 s1=s1 a0=a0 a1=a1 a2=a2 a3=a3 a4=a4 a5=a5 a6=a6 a7=a7 s2=s2 s3=s3 s4=s4 s5=s5 s6=s6 s7=s7 s8=s8 s9=s9 s10=s10 s11=s11 t3=t3 t4=t4
 ; block2:
 ;   ld s1,16(nominal_sp)
-;   sd a1,48(incoming_arg)
-;   sd a0,40(incoming_arg)
-;   sd t2,32(incoming_arg)
-;   sd t1,24(incoming_arg)
-;   sd t0,16(incoming_arg)
+;   sd a1,-48(incoming_arg)
+;   sd a0,-40(incoming_arg)
+;   sd t2,-32(incoming_arg)
+;   sd t1,-24(incoming_arg)
+;   sd t0,-16(incoming_arg)
 ;   load_sym t0,%different_callee1+0
 ;   ld a0,8(nominal_sp)
 ;   ld a1,0(nominal_sp)

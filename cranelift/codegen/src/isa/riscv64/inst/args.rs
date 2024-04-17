@@ -203,7 +203,7 @@ impl Display for AMode {
                 write!(f, "{}(nominal_sp)", offset)
             }
             &AMode::IncomingArg(offset) => {
-                write!(f, "{}(incoming_arg)", offset)
+                write!(f, "-{}(incoming_arg)", offset)
             }
             &AMode::FPOffset(offset, ..) => {
                 write!(f, "{}(fp)", offset)

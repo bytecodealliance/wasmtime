@@ -15,8 +15,8 @@ block0(v0:i8x8, v1:i8x8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,8(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,-8(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   vadd.vv v14,v9,v11 #avl=8, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v14,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
@@ -55,8 +55,8 @@ block0(v0:i16x4, v1:i16x4):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,8(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,-8(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   vadd.vv v14,v9,v11 #avl=4, #vtype=(e16, m1, ta, ma)
 ;   vse8.v v14,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
@@ -97,8 +97,8 @@ block0(v0:i32x2, v1:i32x2):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,8(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-16(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,-8(incoming_arg) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   vadd.vv v14,v9,v11 #avl=2, #vtype=(e32, m1, ta, ma)
 ;   vse8.v v14,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)

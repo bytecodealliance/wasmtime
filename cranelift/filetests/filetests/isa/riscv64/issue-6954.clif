@@ -125,10 +125,10 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   mv fp,sp
 ;   addi sp,sp,-384
 ; block0:
-;   vle8.v v11,64(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v15,48(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v10,32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v12,16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,-64(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v15,-48(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v10,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v12,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   li a2,0
 ;   li a3,0
 ;   li a4,0
