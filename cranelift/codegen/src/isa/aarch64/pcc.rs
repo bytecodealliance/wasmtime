@@ -304,8 +304,9 @@ pub(crate) fn check(
         Inst::MovK { rd, rn, imm, .. } => {
             let input = get_fact_or_default(vcode, rn, 64);
             if let Some(input_constant) = input.as_const(64) {
+                let mask = 0xffff << (imm.shift * 16);
                 let constant = u64::from(imm.bits) << (imm.shift * 16);
-                let constant = input_constant | constant;
+                let constant = input_constant & !mask | constant;
                 check_constant(ctx, vcode, rd, 64, constant)
             } else {
                 check_output(ctx, vcode, rd, &[], |_vcode| {

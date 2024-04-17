@@ -386,6 +386,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                 let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
                 self.emit(&MInst::MovK { rd, rn, imm, size });
                 if pcc {
+                    let mask = 0xffff << shift;
+                    running_value &= !mask;
                     running_value |= imm16 << shift;
                     self.lower_ctx
                         .add_range_fact(rd.to_reg(), 64, running_value, running_value);
