@@ -156,8 +156,8 @@ block0:
 ;   str x24, [sp, #136]
 ;   str x25, [sp, #144]
 ;   str x26, [sp, #152]
-;   load_ext_name x1, TestCase(%tail_callee_stack_args)+0
-;   blr x1
+;   load_ext_name x15, TestCase(%tail_callee_stack_args)+0
+;   blr x15
 ;   sub sp, sp, #160
 ;   virtual_sp_offset_adjust 160
 ;   add sp, sp, #160
@@ -226,11 +226,11 @@ block0:
 ;   stur x24, [sp, #0x88]
 ;   stur x25, [sp, #0x90]
 ;   stur x26, [sp, #0x98]
-;   ldr x1, #0xe0
+;   ldr x15, #0xe0
 ;   b #0xe8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x1
+;   blr x15
 ;   sub sp, sp, #0xa0
 ;   add sp, sp, #0xa0
 ;   ldp x19, x20, [sp], #0x10
@@ -424,8 +424,8 @@ block0:
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   mov x0, sp
-;   load_ext_name x1, TestCase(%tail_callee_stack_rets)+0
-;   blr x1
+;   load_ext_name x12, TestCase(%tail_callee_stack_rets)+0
+;   blr x12
 ;   ldr x9, [sp]
 ;   ldr x11, [sp, #8]
 ;   ldr x13, [sp, #16]
@@ -457,11 +457,11 @@ block0:
 ;   sub sp, sp, #0xa0
 ; block1: ; offset 0xc
 ;   mov x0, sp
-;   ldr x1, #0x18
+;   ldr x12, #0x18
 ;   b #0x20
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x1
+;   blr x12
 ;   ldur x9, [sp]
 ;   ldur x11, [sp, #8]
 ;   ldur x13, [sp, #0x10]
@@ -711,8 +711,8 @@ block0:
 ;   str x20, [sp, #144]
 ;   str x22, [sp, #152]
 ;   add x0, sp, #160
-;   load_ext_name x1, TestCase(%tail_callee_stack_args_and_rets)+0
-;   blr x1
+;   load_ext_name x10, TestCase(%tail_callee_stack_args_and_rets)+0
+;   blr x10
 ;   sub sp, sp, #160
 ;   virtual_sp_offset_adjust 160
 ;   ldr x9, [sp, #160]
@@ -802,11 +802,11 @@ block0:
 ;   stur x20, [sp, #0x90]
 ;   stur x22, [sp, #0x98]
 ;   add x0, sp, #0xa0
-;   ldr x1, #0xe4
+;   ldr x10, #0xe4
 ;   b #0xec
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x1
+;   blr x10
 ;   sub sp, sp, #0xa0
 ;   ldur x9, [sp, #0xa0]
 ;   ldur x11, [sp, #0xa8]

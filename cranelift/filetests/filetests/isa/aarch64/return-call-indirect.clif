@@ -33,20 +33,20 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%callee_i64)+0
-;   return_call_ind x3 new_stack_arg_size:0 x2=x2
+;   load_ext_name x1, TestCase(%callee_i64)+0
+;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldr x3, #0x10
+;   ldr x1, #0x10
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ldp x29, x30, [sp], #0x10
-;   br x3
+;   br x1
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -63,20 +63,20 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%callee_i64)+0
-;   return_call_ind x3 new_stack_arg_size:0 x2=x2
+;   load_ext_name x1, TestCase(%callee_i64)+0
+;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldr x3, #0x10
+;   ldr x1, #0x10
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ldp x29, x30, [sp], #0x10
-;   br x3
+;   br x1
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -112,20 +112,20 @@ block0(v0: f64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x2, TestCase(%callee_f64)+0
-;   return_call_ind x2 new_stack_arg_size:0 v0=v0
+;   load_ext_name x1, TestCase(%callee_f64)+0
+;   return_call_ind x1 new_stack_arg_size:0 v0=v0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldr x2, #0x10
+;   ldr x1, #0x10
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ldp x29, x30, [sp], #0x10
-;   br x2
+;   br x1
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -163,20 +163,20 @@ block0(v0: i8):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x3, TestCase(%callee_i8)+0
-;   return_call_ind x3 new_stack_arg_size:0 x2=x2
+;   load_ext_name x1, TestCase(%callee_i8)+0
+;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldr x3, #0x10
+;   ldr x1, #0x10
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ldp x29, x30, [sp], #0x10
-;   br x3
+;   br x1
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -276,9 +276,9 @@ block0:
 ;   str x23, [sp, #248]
 ;   str x24, [sp, #256]
 ;   str x25, [sp, #264]
-;   mov x10, x2
+;   mov x1, x2
 ;   ldr x2, [sp]
-;   return_call_ind x10 new_stack_arg_size:160 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7
+;   return_call_ind x1 new_stack_arg_size:160 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -346,7 +346,7 @@ block0:
 ;   stur x23, [sp, #0xf8]
 ;   str x24, [sp, #0x100]
 ;   str x25, [sp, #0x108]
-;   mov x10, x2
+;   mov x1, x2
 ;   ldur x2, [sp]
 ;   add sp, sp, #0x10
 ;   ldp x19, x20, [sp], #0x10
@@ -355,5 +355,5 @@ block0:
 ;   ldp x25, x26, [sp], #0x10
 ;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
-;   br x10
+;   br x1
 

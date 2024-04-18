@@ -15,15 +15,12 @@ block0:
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   str x20, [sp, #-16]!
+;   str x19, [sp, #-16]!
 ; block0:
-;   load_ext_name x1, User(userextname0)+0
-;   mov x20, x1
-;   mov x1, x20
-;   blr x1
-;   mov x1, x20
-;   blr x1
-;   ldr x20, [sp], #16
+;   load_ext_name x19, User(userextname0)+0
+;   blr x19
+;   blr x19
+;   ldr x19, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -31,18 +28,15 @@ block0:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   str x20, [sp, #-0x10]!
+;   str x19, [sp, #-0x10]!
 ; block1: ; offset 0xc
-;   ldr x1, #0x14
+;   ldr x19, #0x14
 ;   b #0x1c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 u1:7 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mov x20, x1
-;   mov x1, x20
-;   blr x1
-;   mov x1, x20
-;   blr x1
-;   ldr x20, [sp], #0x10
+;   blr x19
+;   blr x19
+;   ldr x19, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
