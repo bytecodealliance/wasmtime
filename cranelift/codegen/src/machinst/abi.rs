@@ -2206,41 +2206,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
     }
 }
 
-fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, amount: i32) {
-    if amount == 0 {
-        return;
-    }
-    for inst in M::gen_sp_reg_adjust(amount) {
-        ctx.emit(inst);
-    }
-    ctx.emit(M::gen_nominal_sp_adj(-amount));
-}
-
 impl<M: ABIMachineSpec> CallSite<M> {
     /// Get the number of arguments expected.
     pub fn num_args(&self, sigs: &SigSet) -> usize {
         sigs.num_args(self.sig)
-    }
-
-    /// Allocate space for building a `return_call`'s temporary frame before we
-    /// copy it over the current frame.
-    pub fn emit_allocate_tail_call_frame(&self, ctx: &mut Lower<M::I>) -> u32 {
-        // The necessary stack space is:
-        //
-        //     sizeof(callee_sig.stack_args)
-        //
-        // Note that any stack return space conceptually belongs to our caller
-        // and the function we are tail calling to has the same return type and
-        // will reuse that stack return space.
-        //
-        // The return address is pushed later on, after the stack arguments are
-        // filled in.
-        let frame_size = ctx.sigs()[self.sig].sized_stack_arg_space;
-
-        let adjustment = -i32::try_from(frame_size).unwrap();
-        adjust_stack_and_nominal_sp::<M>(ctx, adjustment);
-
-        frame_size
     }
 
     /// Emit a copy of a large argument into its associated stack buffer, if
@@ -2441,33 +2410,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
             );
             self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg()));
         }
-    }
-
-    /// Builds a new temporary callee frame for the tail call and puts arguments into
-    /// registers and stack slots (within the new temporary frame).
-    ///
-    /// It is the caller's responsibility to move the temporary callee frame on
-    /// top of the current caller frame before performing the actual tail call.
-    ///
-    /// Returns a pair of the old caller's stack argument size and the new
-    /// callee's stack argument size.
-    pub fn emit_temporary_tail_call_frame(
-        &mut self,
-        ctx: &mut Lower<M::I>,
-        args: isle::ValueSlice,
-    ) -> (u32, u32) {
-        // Allocate additional stack space for the new stack frame. We will
-        // build it in the newly allocated space, but then copy it over our
-        // current frame at the last moment.
-        let new_stack_arg_size = self.emit_allocate_tail_call_frame(ctx);
-        let old_stack_arg_size = ctx.abi().stack_args_size(ctx.sigs());
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
-
-        (new_stack_arg_size, old_stack_arg_size)
     }
 
     /// Define a return value after the call returns.

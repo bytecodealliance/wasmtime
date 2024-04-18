@@ -412,9 +412,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             insts.extend(Self::gen_sp_reg_adjust(16));
         }
 
-        if call_conv == isa::CallConv::Tail && frame_layout.incoming_args_size > 0 {
+        if call_conv == isa::CallConv::Tail && frame_layout.tail_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.incoming_args_size.try_into().unwrap(),
+                frame_layout.tail_args_size.try_into().unwrap(),
             ));
         }
 
@@ -454,7 +454,41 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        if flags.unwind_info() && frame_layout.setup_area_size > 0 {
+        let setup_frame = frame_layout.setup_area_size > 0;
+
+        let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
+        if incoming_args_diff > 0 {
+            // Decrement SP by the amount of additional incoming argument space we need
+            insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
+
+            if setup_frame {
+                // Write the lr position on the stack again, as it hasn't changed since it was
+                // pushed in `gen_prologue_frame_setup`
+                insts.push(Inst::gen_store(
+                    AMode::SPOffset(8),
+                    link_reg(),
+                    I64,
+                    MemFlags::trusted(),
+                ));
+                insts.push(Inst::gen_load(
+                    writable_fp_reg(),
+                    AMode::SPOffset(i64::from(incoming_args_diff)),
+                    I64,
+                    MemFlags::trusted(),
+                ));
+                insts.push(Inst::gen_store(
+                    AMode::SPOffset(0),
+                    fp_reg(),
+                    I64,
+                    MemFlags::trusted(),
+                ));
+
+                // Finally, sync the frame pointer with SP
+                insts.push(Inst::gen_move(writable_fp_reg(), stack_reg(), I64));
+            }
+        }
+
+        if flags.unwind_info() && setup_frame {
             // The *unwind* frame (but not the actual frame) starts at the
             // clobbers, just below the saved FP/LR pair.
             insts.push(Inst::Unwind {
@@ -763,8 +797,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
 impl Riscv64ABICallSite {
     pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
-        let (new_stack_arg_size, old_stack_arg_size) =
-            self.emit_temporary_tail_call_frame(ctx, args);
+        let new_stack_arg_size =
+            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
+
+        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.emit_args(ctx, args);
+        self.emit_stack_ret_arg_for_tail_call(ctx);
 
         let dest = self.dest().clone();
         let opcode = self.opcode();
@@ -772,7 +813,6 @@ impl Riscv64ABICallSite {
         let info = Box::new(ReturnCallInfo {
             uses,
             opcode,
-            old_stack_arg_size,
             new_stack_arg_size,
         });
 

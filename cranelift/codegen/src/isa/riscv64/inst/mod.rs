@@ -85,7 +85,6 @@ pub struct CallIndInfo {
 pub struct ReturnCallInfo {
     pub uses: CallArgList,
     pub opcode: Opcode,
-    pub old_stack_arg_size: u32,
     pub new_stack_arg_size: u32,
 }
 
@@ -1475,8 +1474,8 @@ impl Inst {
                 ref info,
             } => {
                 let mut s = format!(
-                    "return_call {callee:?} old_stack_arg_size:{} new_stack_arg_size:{}",
-                    info.old_stack_arg_size, info.new_stack_arg_size
+                    "return_call {callee:?} new_stack_arg_size:{}",
+                    info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = format_reg(ret.preg, &mut empty_allocs);
@@ -1488,8 +1487,8 @@ impl Inst {
             &MInst::ReturnCallInd { callee, ref info } => {
                 let callee = format_reg(callee, allocs);
                 let mut s = format!(
-                    "return_call_ind {callee} old_stack_arg_size:{} new_stack_arg_size:{}",
-                    info.old_stack_arg_size, info.new_stack_arg_size
+                    "return_call_ind {callee} new_stack_arg_size:{}",
+                    info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = format_reg(ret.preg, &mut empty_allocs);
