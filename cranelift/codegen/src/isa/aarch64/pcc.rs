@@ -306,7 +306,7 @@ pub(crate) fn check(
             if let Some(input_constant) = input.as_const(64) {
                 let mask = 0xffff << (imm.shift * 16);
                 let constant = u64::from(imm.bits) << (imm.shift * 16);
-                let constant = input_constant & !mask | constant;
+                let constant = (input_constant & !mask) | constant;
                 check_constant(ctx, vcode, rd, 64, constant)
             } else {
                 check_output(ctx, vcode, rd, &[], |_vcode| {
