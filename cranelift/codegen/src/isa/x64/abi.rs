@@ -723,35 +723,32 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // Store each clobbered register in order at offsets from RSP,
         // placing them above the fixed frame slots.
-        let mut cur_offset =
+        let clobber_offset =
             frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
+        let mut cur_offset = 0;
         for reg in &frame_layout.clobbered_callee_saves {
             let r_reg = reg.to_reg();
-            let off = cur_offset;
-            match r_reg.class() {
-                RegClass::Int => {
-                    insts.push(Inst::store(
-                        types::I64,
-                        r_reg.into(),
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                    ));
-                    cur_offset += 8;
-                }
-                RegClass::Float => {
-                    cur_offset = align_to(cur_offset, 16);
-                    insts.push(Inst::store(
-                        types::I8X16,
-                        r_reg.into(),
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                    ));
-                    cur_offset += 16;
-                }
+            let ty = match r_reg.class() {
+                RegClass::Int => types::I64,
+                RegClass::Float => types::I8X16,
                 RegClass::Vector => unreachable!(),
             };
+
+            // Align to 8 or 16 bytes as required by the storage type of the clobber.
+            cur_offset = align_to(cur_offset, ty.bytes());
+            let off = cur_offset;
+            cur_offset += ty.bytes();
+
+            insts.push(Inst::store(
+                ty,
+                r_reg.into(),
+                Amode::imm_reg(i32::try_from(off + clobber_offset).unwrap(), regs::rsp()),
+            ));
+
             if flags.unwind_info() {
                 insts.push(Inst::Unwind {
                     inst: UnwindInst::SaveReg {
-                        clobber_offset: off - frame_layout.fixed_frame_storage_size,
+                        clobber_offset: off,
                         reg: r_reg,
                     },
                 });
