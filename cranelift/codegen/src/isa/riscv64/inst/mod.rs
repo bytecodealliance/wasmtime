@@ -439,7 +439,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
         }
         &Inst::ReturnCallInd { ref info, callee } => {
-            collector.reg_use(callee);
+            // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+            // This shouldn't be a fixed register constraint.
+            collector.reg_fixed_use(callee, x_reg(5));
+
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }

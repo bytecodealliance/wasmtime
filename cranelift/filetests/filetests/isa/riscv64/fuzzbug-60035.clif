@@ -17,57 +17,17 @@ block0:
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-192
-;   sd s1,184(sp)
-;   sd s2,176(sp)
-;   sd s3,168(sp)
-;   sd s4,160(sp)
-;   sd s5,152(sp)
-;   sd s6,144(sp)
-;   sd s7,136(sp)
-;   sd s8,128(sp)
-;   sd s9,120(sp)
-;   sd s10,112(sp)
-;   sd s11,104(sp)
-;   fsd fs2,96(sp)
-;   fsd fs3,88(sp)
-;   fsd fs4,80(sp)
-;   fsd fs5,72(sp)
-;   fsd fs6,64(sp)
-;   fsd fs7,56(sp)
-;   fsd fs8,48(sp)
-;   fsd fs9,40(sp)
-;   fsd fs10,32(sp)
-;   fsd fs11,24(sp)
+;   addi sp,sp,-16
+;   sd s1,8(sp)
 ; block0:
 ;   load_sym t0,userextname0+0
-;   sd t0,0(nominal_sp)
-;   ld t0,0(nominal_sp)
+;   mv s1,t0
+;   mv t0,s1
 ;   callind t0
-;   ld t0,0(nominal_sp)
+;   mv t0,s1
 ;   callind t0
-;   ld s1,184(sp)
-;   ld s2,176(sp)
-;   ld s3,168(sp)
-;   ld s4,160(sp)
-;   ld s5,152(sp)
-;   ld s6,144(sp)
-;   ld s7,136(sp)
-;   ld s8,128(sp)
-;   ld s9,120(sp)
-;   ld s10,112(sp)
-;   ld s11,104(sp)
-;   fld fs2,96(sp)
-;   fld fs3,88(sp)
-;   fld fs4,80(sp)
-;   fld fs5,72(sp)
-;   fld fs6,64(sp)
-;   fld fs7,56(sp)
-;   fld fs8,48(sp)
-;   fld fs9,40(sp)
-;   fld fs10,32(sp)
-;   fld fs11,24(sp)
-;   addi sp,sp,192
+;   ld s1,8(sp)
+;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -79,61 +39,21 @@ block0:
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   addi sp, sp, -0xc0
-;   sd s1, 0xb8(sp)
-;   sd s2, 0xb0(sp)
-;   sd s3, 0xa8(sp)
-;   sd s4, 0xa0(sp)
-;   sd s5, 0x98(sp)
-;   sd s6, 0x90(sp)
-;   sd s7, 0x88(sp)
-;   sd s8, 0x80(sp)
-;   sd s9, 0x78(sp)
-;   sd s10, 0x70(sp)
-;   sd s11, 0x68(sp)
-;   fsd fs2, 0x60(sp)
-;   fsd fs3, 0x58(sp)
-;   fsd fs4, 0x50(sp)
-;   fsd fs5, 0x48(sp)
-;   fsd fs6, 0x40(sp)
-;   fsd fs7, 0x38(sp)
-;   fsd fs8, 0x30(sp)
-;   fsd fs9, 0x28(sp)
-;   fsd fs10, 0x20(sp)
-;   fsd fs11, 0x18(sp)
-; block1: ; offset 0x68
+;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+; block1: ; offset 0x18
 ;   auipc t0, 0
 ;   ld t0, 0xc(t0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 u1:7 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   sd t0, 0(sp)
-;   ld t0, 0(sp)
+;   mv s1, t0
+;   mv t0, s1
 ;   jalr t0
-;   ld t0, 0(sp)
+;   mv t0, s1
 ;   jalr t0
-;   ld s1, 0xb8(sp)
-;   ld s2, 0xb0(sp)
-;   ld s3, 0xa8(sp)
-;   ld s4, 0xa0(sp)
-;   ld s5, 0x98(sp)
-;   ld s6, 0x90(sp)
-;   ld s7, 0x88(sp)
-;   ld s8, 0x80(sp)
-;   ld s9, 0x78(sp)
-;   ld s10, 0x70(sp)
-;   ld s11, 0x68(sp)
-;   fld fs2, 0x60(sp)
-;   fld fs3, 0x58(sp)
-;   fld fs4, 0x50(sp)
-;   fld fs5, 0x48(sp)
-;   fld fs6, 0x40(sp)
-;   fld fs7, 0x38(sp)
-;   fld fs8, 0x30(sp)
-;   fld fs9, 0x28(sp)
-;   fld fs10, 0x20(sp)
-;   fld fs11, 0x18(sp)
-;   addi sp, sp, 0xc0
+;   ld s1, 8(sp)
+;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
