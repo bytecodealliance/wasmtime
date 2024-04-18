@@ -3,7 +3,6 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 use generated_code::Context;
-use smallvec::SmallVec;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
@@ -271,7 +270,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         extend: &generated_code::ImmExtend,
         value: u64,
     ) -> Reg {
-        let pcc = self.backend.flags.enable_pcc();
         let bits = ty.bits();
         let value = if bits < 64 {
             if *extend == generated_code::ImmExtend::Sign {
@@ -285,170 +283,100 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         } else {
             value
         };
-        let size = OperandSize::Size64;
 
-        // If the top 32 bits are zero, use 32-bit `mov` operations.
-        if value >> 32 == 0 {
-            let size = OperandSize::Size32;
-            let lower_halfword = value as u16;
-            let upper_halfword = (value >> 16) as u16;
+        // Divide the value into 16-bit slices that we can manipulate using
+        // `movz`, `movn`, and `movk`.
+        fn get(value: u64, shift: u8) -> u16 {
+            (value >> (shift * 16)) as u16
+        }
+        fn replace(mut old: u64, new: u16, shift: u8) -> u64 {
+            let offset = shift * 16;
+            old &= !(0xffff << offset);
+            old |= u64::from(new) << offset;
+            old
+        }
 
-            let rd = self.temp_writable_reg(I64);
-            if upper_halfword == u16::MAX {
-                self.emit(&MInst::MovWide {
-                    op: MoveWideOp::MovN,
-                    rd,
-                    imm: MoveWideConst::maybe_with_shift(!lower_halfword, 0).unwrap(),
-                    size,
-                });
-                if pcc {
-                    self.lower_ctx.add_range_fact(
-                        rd.to_reg(),
-                        64,
-                        u64::from(value),
-                        u64::from(value),
-                    );
-                }
-            } else {
-                self.emit(&MInst::MovWide {
-                    op: MoveWideOp::MovZ,
-                    rd,
-                    imm: MoveWideConst::maybe_with_shift(lower_halfword, 0).unwrap(),
-                    size,
-                });
-                if pcc {
-                    self.lower_ctx.add_range_fact(
-                        rd.to_reg(),
-                        64,
-                        u64::from(lower_halfword),
-                        u64::from(lower_halfword),
-                    );
-                }
-
-                if upper_halfword != 0 {
-                    let tmp = self.temp_writable_reg(I64);
-                    self.emit(&MInst::MovK {
-                        rd: tmp,
-                        rn: rd.to_reg(),
-                        imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
-                        size,
-                    });
-                    if pcc {
-                        self.lower_ctx
-                            .add_range_fact(tmp.to_reg(), 64, value, value);
-                    }
-                    return tmp.to_reg();
-                }
-            };
-
-            return rd.to_reg();
-        } else if value == u64::MAX {
-            let rd = self.temp_writable_reg(I64);
-            self.emit(&MInst::MovWide {
-                op: MoveWideOp::MovN,
-                rd,
-                imm: MoveWideConst::zero(),
-                size,
-            });
-            if pcc {
-                self.lower_ctx
-                    .add_range_fact(rd.to_reg(), 64, u64::MAX, u64::MAX);
-            }
-            return rd.to_reg();
+        // The 32-bit versions of `movz`/`movn`/`movk` will clear the upper 32
+        // bits, so if that's the outcome we want we might as well use them. For
+        // simplicity and ease of reading the disassembly, we use the same size
+        // for all instructions in the sequence.
+        let size = if value >> 32 == 0 {
+            OperandSize::Size32
+        } else {
+            OperandSize::Size64
         };
 
-        // If the number of 0xffff half words is greater than the number of 0x0000 half words
-        // it is more efficient to use `movn` for the first instruction.
-        let first_is_inverted = count_zero_half_words(!value) > count_zero_half_words(value);
+        // The `movz` instruction initially sets all bits to zero, while `movn`
+        // initially sets all bits to one. A good choice of initial value can
+        // reduce the number of `movk` instructions we need afterward, so we
+        // check both variants to determine which is closest to the constant
+        // we actually wanted. In case they're equally good, we prefer `movz`
+        // because the assembly listings are generally harder to read when the
+        // operands are negated.
+        let (mut running_value, op, first) =
+            [(MoveWideOp::MovZ, 0), (MoveWideOp::MovN, size.max_value())]
+                .into_iter()
+                .map(|(op, base)| {
+                    // Both `movz` and `movn` can overwrite one slice after setting
+                    // the initial value; we get to pick which one. 32-bit variants
+                    // can only modify the lower two slices.
+                    let first = (0..(size.bits() / 16))
+                        // Pick one slice that's different from the initial value
+                        .find(|&i| get(base ^ value, i) != 0)
+                        // If none are different, we still have to pick one
+                        .unwrap_or(0);
+                    // Compute the value we'll get from this `movz`/`movn`
+                    (replace(base, get(value, first), first), op, first)
+                })
+                // Count how many `movk` instructions we'll need.
+                .min_by_key(|(base, ..)| (0..4).filter(|&i| get(base ^ value, i) != 0).count())
+                // `variants` isn't empty so `min_by_key` always returns something.
+                .unwrap();
 
-        // Either 0xffff or 0x0000 half words can be skipped, depending on the first
-        // instruction used.
-        let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
+        // Build the initial instruction we chose above, putting the result
+        // into a new temporary virtual register. Note that the encoding for the
+        // immediate operand is bitwise-inverted for `movn`.
+        let mut rd = self.temp_writable_reg(I64);
+        self.lower_ctx.emit(MInst::MovWide {
+            op,
+            rd,
+            imm: MoveWideConst {
+                bits: match op {
+                    MoveWideOp::MovZ => get(value, first),
+                    MoveWideOp::MovN => !get(value, first),
+                },
+                shift: first,
+            },
+            size,
+        });
+        if self.backend.flags.enable_pcc() {
+            self.lower_ctx
+                .add_range_fact(rd.to_reg(), 64, running_value, running_value);
+        }
 
-        let halfwords: SmallVec<[_; 4]> = (0..4)
-            .filter_map(|i| {
-                let imm16 = (value >> (16 * i)) & 0xffff;
-                if imm16 == ignored_halfword {
-                    None
-                } else {
-                    Some((i, imm16))
-                }
-            })
-            .collect();
-
-        let mut prev_result = None;
-        let mut running_value: u64 = 0;
-        for (i, imm16) in halfwords {
-            let shift = i * 16;
-            let rd = self.temp_writable_reg(I64);
-
-            if let Some(rn) = prev_result {
-                let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
-                self.emit(&MInst::MovK { rd, rn, imm, size });
-                if pcc {
-                    let mask = 0xffff << shift;
-                    running_value &= !mask;
-                    running_value |= imm16 << shift;
+        // Emit a `movk` instruction for each remaining slice of the desired
+        // constant that does not match the initial value constructed above.
+        for shift in (first + 1)..(size.bits() / 16) {
+            let bits = get(value, shift);
+            if bits != get(running_value, shift) {
+                let rn = rd.to_reg();
+                rd = self.temp_writable_reg(I64);
+                self.lower_ctx.emit(MInst::MovK {
+                    rd,
+                    rn,
+                    imm: MoveWideConst { bits, shift },
+                    size,
+                });
+                running_value = replace(running_value, bits, shift);
+                if self.backend.flags.enable_pcc() {
                     self.lower_ctx
                         .add_range_fact(rd.to_reg(), 64, running_value, running_value);
                 }
-            } else {
-                if first_is_inverted {
-                    let imm =
-                        MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, shift).unwrap();
-                    self.emit(&MInst::MovWide {
-                        op: MoveWideOp::MovN,
-                        rd,
-                        imm,
-                        size,
-                    });
-                    if pcc {
-                        running_value = !(u64::from(imm.bits) << shift);
-                        self.lower_ctx.add_range_fact(
-                            rd.to_reg(),
-                            64,
-                            running_value,
-                            running_value,
-                        );
-                    }
-                } else {
-                    let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
-                    self.emit(&MInst::MovWide {
-                        op: MoveWideOp::MovZ,
-                        rd,
-                        imm,
-                        size,
-                    });
-                    if pcc {
-                        running_value = imm16 << shift;
-                        self.lower_ctx.add_range_fact(
-                            rd.to_reg(),
-                            64,
-                            running_value,
-                            running_value,
-                        );
-                    }
-                }
             }
-
-            prev_result = Some(rd.to_reg());
         }
 
-        assert!(prev_result.is_some());
-
-        return prev_result.unwrap();
-
-        fn count_zero_half_words(mut value: u64) -> usize {
-            let mut count = 0;
-            for _ in 0..4 {
-                if value & 0xffff == 0 {
-                    count += 1;
-                }
-                value >>= 16;
-            }
-
-            count
-        }
+        debug_assert_eq!(value, running_value);
+        return rd.to_reg();
     }
 
     fn zero_reg(&mut self) -> Reg {
