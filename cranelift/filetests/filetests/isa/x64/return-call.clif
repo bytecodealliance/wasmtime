@@ -40,18 +40,18 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i64+0, %rcx
-;   return_call_unknown %rcx (0) tmp=%rdx %rdi=%rdi
+;   load_ext_name %callee_i64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %callee_i64 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_i64 0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rcx
+;   jmpq *%r10
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -131,18 +131,18 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_f64+0, %rcx
-;   return_call_unknown %rcx (0) tmp=%rdx %xmm0=%xmm0
+;   load_ext_name %callee_f64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%rcx %xmm0=%xmm0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %callee_f64 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_f64 0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rcx
+;   jmpq *%r10
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -185,18 +185,18 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i8+0, %rcx
-;   return_call_unknown %rcx (0) tmp=%rdx %rdi=%rdi
+;   load_ext_name %callee_i8+0, %r10
+;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %callee_i8 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_i8 0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rcx
+;   jmpq *%r10
 
 ;;;; Test passing fewer arguments on the stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -531,14 +531,14 @@ block0:
 ;   movq    %rsi, rbp(stack args max - 16)
 ;   movq    rsp(0 + virtual offset), %rsi
 ;   movq    %rsi, rbp(stack args max - 8)
-;   load_ext_name %tail_callee_stack_args+0, %rax
+;   load_ext_name %tail_callee_stack_args+0, %r10
 ;   movq    rsp(72 + virtual offset), %rcx
 ;   movq    rsp(80 + virtual offset), %rdx
 ;   movq    rsp(88 + virtual offset), %rsi
 ;   movq    rsp(96 + virtual offset), %rdi
 ;   movq    rsp(64 + virtual offset), %r8
 ;   movq    rsp(56 + virtual offset), %r9
-;   return_call_unknown %rax (160) tmp=%r10 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
+;   return_call_unknown %r10 (160) tmp=%rax %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -623,7 +623,7 @@ block0:
 ;   movq %rsi, 0xa0(%rbp)
 ;   movq (%rsp), %rsi
 ;   movq %rsi, 0xa8(%rbp)
-;   movabsq $0, %rax ; reloc_external Abs8 %tail_callee_stack_args 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   movq 0x48(%rsp), %rcx
 ;   movq 0x50(%rsp), %rdx
 ;   movq 0x58(%rsp), %rsi
@@ -638,5 +638,5 @@ block0:
 ;   addq $0xa0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rax
+;   jmpq *%r10
 

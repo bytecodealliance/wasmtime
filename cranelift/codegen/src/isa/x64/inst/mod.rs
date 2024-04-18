@@ -2336,8 +2336,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             match dest {
                 RegMem::Reg { reg } if info.callee_conv == CallConv::Winch => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
-                    // This shouldn't be a fixed register constraint.
-                    collector.reg_fixed_use(*reg, regs::r15())
+                    // This shouldn't be a fixed register constraint. r10 is caller-saved, so this
+                    // should be safe to use.
+                    collector.reg_fixed_use(*reg, regs::r10())
                 }
                 _ => dest.get_operands(collector),
             }
@@ -2362,7 +2363,17 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 
         Inst::ReturnCallUnknown { callee, info } => {
             let ReturnCallInfo { uses, tmp, .. } = &**info;
-            callee.get_operands(collector);
+            match callee {
+                RegMem::Reg { reg } => {
+                    // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+                    // This shouldn't be a fixed register constraint, but it's not clear how to
+                    // pick a register that won't be clobbered by the callee-save restore code
+                    // emitted with a return_call_indirect. r10 is caller-saved, so this should be
+                    // safe to use.
+                    collector.reg_fixed_use(*reg, regs::r10())
+                }
+                RegMem::Mem { addr } => addr.get_operands(collector),
+            }
             collector.reg_early_def(tmp.to_writable_reg());
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);

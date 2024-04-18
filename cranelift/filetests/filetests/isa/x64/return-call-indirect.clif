@@ -42,18 +42,18 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i64+0, %rcx
-;   return_call_unknown %rcx (0) tmp=%rdx %rdi=%rdi
+;   load_ext_name %callee_i64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %callee_i64 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_i64 0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rcx
+;   jmpq *%r10
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -70,18 +70,18 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i64+0, %rcx
-;   return_call_unknown %rcx (0) tmp=%rdx %rdi=%rdi
+;   load_ext_name %callee_i64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leaq (%rip), %rcx ; reloc_external CallPCRel4 %callee_i64 -4
+;   leaq (%rip), %r10 ; reloc_external CallPCRel4 %callee_i64 -4
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rcx
+;   jmpq *%r10
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -139,18 +139,18 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_f64+0, %rcx
-;   return_call_unknown %rcx (0) tmp=%rdx %xmm0=%xmm0
+;   load_ext_name %callee_f64+0, %r10
+;   return_call_unknown %r10 (0) tmp=%rcx %xmm0=%xmm0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %callee_f64 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_f64 0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rcx
+;   jmpq *%r10
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -195,18 +195,18 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %callee_i8+0, %rcx
-;   return_call_unknown %rcx (0) tmp=%rdx %rdi=%rdi
+;   load_ext_name %callee_i8+0, %r10
+;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %callee_i8 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_i8 0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   jmpq *%rcx
+;   jmpq *%r10
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -38,8 +38,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   subq    %rsp, $16, %rsp
 ; block0:
 ;   movq    %rdi, rsp(0 + virtual offset)
-;   load_ext_name %g+0, %r15
-;   call    *%r15
+;   load_ext_name %g+0, %r10
+;   call    *%r10
 ;   movq    rsp(0 + virtual offset), %rax
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
@@ -53,8 +53,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   subq $0x10, %rsp
 ; block1: ; offset 0x8
 ;   movq %rdi, (%rsp)
-;   movabsq $0, %r15 ; reloc_external Abs8 %g 0
-;   callq *%r15
+;   movabsq $0, %r10 ; reloc_external Abs8 %g 0
+;   callq *%r10
 ;   movq (%rsp), %rax
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
@@ -81,8 +81,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   movq    %r15, 48(%rsp)
 ; block0:
 ;   movq    %rdi, rsp(0 + virtual offset)
-;   load_ext_name %g+0, %r15
-;   call    *%r15
+;   load_ext_name %g+0, %r10
+;   call    *%r10
 ;   movq    rsp(0 + virtual offset), %rax
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r12
@@ -106,8 +106,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   movq %r15, 0x30(%rsp)
 ; block1: ; offset 0x21
 ;   movq %rdi, (%rsp)
-;   movabsq $0, %r15 ; reloc_external Abs8 %g 0
-;   callq *%r15
+;   movabsq $0, %r10 ; reloc_external Abs8 %g 0
+;   callq *%r10
 ;   movq (%rsp), %rax
 ;   movq 0x10(%rsp), %rbx
 ;   movq 0x18(%rsp), %r12
@@ -135,8 +135,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   movq    %rdi, %rax
 ;   movq    %r9, %rdi
 ;   movq    %rax, %r9
-;   load_ext_name %g+0, %r15
-;   call    *%r15
+;   load_ext_name %g+0, %r10
+;   call    *%r10
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -149,8 +149,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   movq %rdi, %rax
 ;   movq %r9, %rdi
 ;   movq %rax, %r9
-;   movabsq $0, %r15 ; reloc_external Abs8 %g 0
-;   callq *%r15
+;   movabsq $0, %r10 ; reloc_external Abs8 %g 0
+;   callq *%r10
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -177,8 +177,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   movq    %rdi, %rax
 ;   movq    %r9, %rdi
 ;   movq    %rax, %r9
-;   load_ext_name %g+0, %r15
-;   call    *%r15
+;   load_ext_name %g+0, %r10
+;   call    *%r10
 ;   movq    0(%rsp), %rbx
 ;   movq    8(%rsp), %r12
 ;   movq    16(%rsp), %r13
@@ -203,8 +203,8 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   movq %rdi, %rax
 ;   movq %r9, %rdi
 ;   movq %rax, %r9
-;   movabsq $0, %r15 ; reloc_external Abs8 %g 0
-;   callq *%r15
+;   movabsq $0, %r10 ; reloc_external Abs8 %g 0
+;   callq *%r10
 ;   movq (%rsp), %rbx
 ;   movq 8(%rsp), %r12
 ;   movq 0x10(%rsp), %r13
@@ -236,12 +236,12 @@ block0:
 ;   movq    %r14, 40(%rsp)
 ;   movq    %r15, 48(%rsp)
 ; block0:
-;   load_ext_name userextname0+0, %r15
-;   movq    %r15, rsp(0 + virtual offset)
-;   movq    rsp(0 + virtual offset), %r15
-;   call    *%r15
-;   movq    rsp(0 + virtual offset), %r15
-;   call    *%r15
+;   load_ext_name userextname0+0, %r10
+;   movq    %r10, rsp(0 + virtual offset)
+;   movq    rsp(0 + virtual offset), %r10
+;   call    *%r10
+;   movq    rsp(0 + virtual offset), %r10
+;   call    *%r10
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r12
 ;   movq    32(%rsp), %r13
@@ -263,12 +263,12 @@ block0:
 ;   movq %r14, 0x28(%rsp)
 ;   movq %r15, 0x30(%rsp)
 ; block1: ; offset 0x21
-;   movabsq $0, %r15 ; reloc_external Abs8 u2:0 0
-;   movq %r15, (%rsp)
-;   movq (%rsp), %r15
-;   callq *%r15
-;   movq (%rsp), %r15
-;   callq *%r15
+;   movabsq $0, %r10 ; reloc_external Abs8 u2:0 0
+;   movq %r10, (%rsp)
+;   movq (%rsp), %r10
+;   callq *%r10
+;   movq (%rsp), %r10
+;   callq *%r10
 ;   movq 0x10(%rsp), %rbx
 ;   movq 0x18(%rsp), %r12
 ;   movq 0x20(%rsp), %r13
@@ -301,8 +301,8 @@ block0(v0:i64):
 ;   movq    %r15, 48(%rsp)
 ; block0:
 ;   lea     0(%rsp), %rdi
-;   load_ext_name %g+0, %r15
-;   call    *%r15
+;   load_ext_name %g+0, %r10
+;   call    *%r10
 ;   movq    4(%rsp), %rax
 ;   movq    0(%rsp), %r11
 ;   andl    %eax, %r11d, %eax
@@ -328,8 +328,8 @@ block0(v0:i64):
 ;   movq %r15, 0x30(%rsp)
 ; block1: ; offset 0x21
 ;   leaq (%rsp), %rdi
-;   movabsq $0, %r15 ; reloc_external Abs8 %g 0
-;   callq *%r15
+;   movabsq $0, %r10 ; reloc_external Abs8 %g 0
+;   callq *%r10
 ;   movq 4(%rsp), %rax
 ;   movq (%rsp), %r11
 ;   andl %r11d, %eax
