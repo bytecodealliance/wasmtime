@@ -826,8 +826,7 @@ macro_rules! isle_prelude_method_helpers {
                 call_site.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
-                let moves = call_site.gen_arg(self.lower_ctx, i, *arg_regs);
-                call_site.emit_arg_moves(self.lower_ctx, moves);
+                call_site.gen_arg(self.lower_ctx, i, *arg_regs);
             }
         }
 
