@@ -624,8 +624,8 @@ block0(v0: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s11,-8(sp)
 ;   addi sp,sp,-16
+;   sd s11,8(sp)
 ; block0:
 ;   li a2,5
 ;   li a3,0
@@ -656,8 +656,8 @@ block0(v0: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s11, -8(sp)
 ;   addi sp, sp, -0x10
+;   sd s11, 8(sp)
 ; block1: ; offset 0x18
 ;   addi a2, zero, 5
 ;   mv a3, zero

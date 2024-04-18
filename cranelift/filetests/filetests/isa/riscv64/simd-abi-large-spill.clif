@@ -20,8 +20,8 @@ block0:
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s1,-8(sp)
 ;   addi sp,sp,-1040
+;   sd s1,1032(sp)
 ; block0:
 ;   mv s1,a0
 ;   vle16.v v11,[const(0)] #avl=8, #vtype=(e16, m1, ta, ma)
@@ -43,8 +43,8 @@ block0:
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s1, -8(sp)
 ;   addi sp, sp, -0x410
+;   sd s1, 0x408(sp)
 ; block1: ; offset 0x18
 ;   mv s1, a0
 ;   .byte 0x57, 0x70, 0x84, 0xcc

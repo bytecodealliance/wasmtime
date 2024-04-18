@@ -659,8 +659,8 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s11,-8(sp)
 ;   addi sp,sp,-16
+;   sd s11,8(sp)
 ; block0:
 ;   mv s11,a3
 ;   xori a3,a0,42
@@ -688,8 +688,8 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s11, -8(sp)
 ;   addi sp, sp, -0x10
+;   sd s11, 8(sp)
 ; block1: ; offset 0x18
 ;   mv s11, a3
 ;   xori a3, a0, 0x2a

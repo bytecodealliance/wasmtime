@@ -80,18 +80,18 @@ block0(v0: f64):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   fsd fs0,-8(sp)
-;   fsd fs2,-16(sp)
-;   fsd fs3,-24(sp)
-;   fsd fs4,-32(sp)
-;   fsd fs5,-40(sp)
-;   fsd fs6,-48(sp)
-;   fsd fs7,-56(sp)
-;   fsd fs8,-64(sp)
-;   fsd fs9,-72(sp)
-;   fsd fs10,-80(sp)
-;   fsd fs11,-88(sp)
 ;   addi sp,sp,-96
+;   fsd fs0,88(sp)
+;   fsd fs2,80(sp)
+;   fsd fs3,72(sp)
+;   fsd fs4,64(sp)
+;   fsd fs5,56(sp)
+;   fsd fs6,48(sp)
+;   fsd fs7,40(sp)
+;   fsd fs8,32(sp)
+;   fsd fs9,24(sp)
+;   fsd fs10,16(sp)
+;   fsd fs11,8(sp)
 ; block0:
 ;   fadd.d fa3,fa0,fa0,rne
 ;   fadd.d fa4,fa0,fa0,rne
@@ -178,18 +178,18 @@ block0(v0: f64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   fsd fs0, -8(sp)
-;   fsd fs2, -0x10(sp)
-;   fsd fs3, -0x18(sp)
-;   fsd fs4, -0x20(sp)
-;   fsd fs5, -0x28(sp)
-;   fsd fs6, -0x30(sp)
-;   fsd fs7, -0x38(sp)
-;   fsd fs8, -0x40(sp)
-;   fsd fs9, -0x48(sp)
-;   fsd fs10, -0x50(sp)
-;   fsd fs11, -0x58(sp)
 ;   addi sp, sp, -0x60
+;   fsd fs0, 0x58(sp)
+;   fsd fs2, 0x50(sp)
+;   fsd fs3, 0x48(sp)
+;   fsd fs4, 0x40(sp)
+;   fsd fs5, 0x38(sp)
+;   fsd fs6, 0x30(sp)
+;   fsd fs7, 0x28(sp)
+;   fsd fs8, 0x20(sp)
+;   fsd fs9, 0x18(sp)
+;   fsd fs10, 0x10(sp)
+;   fsd fs11, 8(sp)
 ; block1: ; offset 0x40
 ;   fadd.d fa3, fa0, fa0, rne
 ;   fadd.d fa4, fa0, fa0, rne
@@ -321,14 +321,14 @@ block0(v0: i64):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s1,-8(sp)
-;   sd s2,-16(sp)
-;   sd s3,-24(sp)
-;   sd s4,-32(sp)
-;   sd s5,-40(sp)
-;   sd s6,-48(sp)
-;   sd s7,-56(sp)
 ;   addi sp,sp,-64
+;   sd s1,56(sp)
+;   sd s2,48(sp)
+;   sd s3,40(sp)
+;   sd s4,32(sp)
+;   sd s5,24(sp)
+;   sd s6,16(sp)
+;   sd s7,8(sp)
 ; block0:
 ;   add a1,a0,a0
 ;   add a2,a0,a1
@@ -385,14 +385,14 @@ block0(v0: i64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s1, -8(sp)
-;   sd s2, -0x10(sp)
-;   sd s3, -0x18(sp)
-;   sd s4, -0x20(sp)
-;   sd s5, -0x28(sp)
-;   sd s6, -0x30(sp)
-;   sd s7, -0x38(sp)
 ;   addi sp, sp, -0x40
+;   sd s1, 0x38(sp)
+;   sd s2, 0x30(sp)
+;   sd s3, 0x28(sp)
+;   sd s4, 0x20(sp)
+;   sd s5, 0x18(sp)
+;   sd s6, 0x10(sp)
+;   sd s7, 8(sp)
 ; block1: ; offset 0x30
 ;   add a1, a0, a0
 ;   add a2, a0, a1

@@ -107,9 +107,9 @@ block0(v0: i128, v1: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s7,-8(sp)
-;   sd s9,-16(sp)
 ;   addi sp,sp,-16
+;   sd s7,8(sp)
+;   sd s9,0(sp)
 ; block0:
 ;   sltu a5,a1,a3
 ;   sltu a4,a0,a2
@@ -133,9 +133,9 @@ block0(v0: i128, v1: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s7, -8(sp)
-;   sd s9, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s7, 8(sp)
+;   sd s9, 0(sp)
 ; block1: ; offset 0x1c
 ;   sltu a5, a1, a3
 ;   sltu a4, a0, a2

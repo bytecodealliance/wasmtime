@@ -123,9 +123,9 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s1,-8(sp)
-;   sd s8,-16(sp)
 ;   addi sp,sp,-16
+;   sd s1,8(sp)
+;   sd s8,0(sp)
 ; block0:
 ;   mv s8,a1
 ;   li a5,42
@@ -146,9 +146,9 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s1, -8(sp)
-;   sd s8, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+;   sd s8, 0(sp)
 ; block1: ; offset 0x1c
 ;   mv s8, a1
 ;   addi a5, zero, 0x2a
@@ -305,9 +305,9 @@ block0(v0: i16, v1: i128, v2: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s6,-8(sp)
-;   sd s7,-16(sp)
 ;   addi sp,sp,-16
+;   sd s6,8(sp)
+;   sd s7,0(sp)
 ; block0:
 ;   mv t0,a1
 ;   li s6,42
@@ -330,9 +330,9 @@ block0(v0: i16, v1: i128, v2: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s6, -8(sp)
-;   sd s7, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s6, 8(sp)
+;   sd s7, 0(sp)
 ; block1: ; offset 0x1c
 ;   mv t0, a1
 ;   addi s6, zero, 0x2a
@@ -475,9 +475,9 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s1,-8(sp)
-;   sd s8,-16(sp)
 ;   addi sp,sp,-16
+;   sd s1,8(sp)
+;   sd s8,0(sp)
 ; block0:
 ;   mv s8,a1
 ;   li a5,42
@@ -498,9 +498,9 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s1, -8(sp)
-;   sd s8, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+;   sd s8, 0(sp)
 ; block1: ; offset 0x1c
 ;   mv s8, a1
 ;   addi a5, zero, 0x2a
@@ -625,9 +625,9 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s4,-8(sp)
-;   sd s6,-16(sp)
 ;   addi sp,sp,-16
+;   sd s4,8(sp)
+;   sd s6,0(sp)
 ; block0:
 ;   mv s4,a1
 ;   mv s6,a0
@@ -647,9 +647,9 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s4, -8(sp)
-;   sd s6, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s4, 8(sp)
+;   sd s6, 0(sp)
 ; block1: ; offset 0x1c
 ;   mv s4, a1
 ;   mv s6, a0
@@ -818,10 +818,10 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s7,-8(sp)
-;   sd s8,-16(sp)
-;   sd s9,-24(sp)
 ;   addi sp,sp,-32
+;   sd s7,24(sp)
+;   sd s8,16(sp)
+;   sd s9,8(sp)
 ; block0:
 ;   li s8,42
 ;   li s9,0
@@ -846,10 +846,10 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s7, -8(sp)
-;   sd s8, -0x10(sp)
-;   sd s9, -0x18(sp)
 ;   addi sp, sp, -0x20
+;   sd s7, 0x18(sp)
+;   sd s8, 0x10(sp)
+;   sd s9, 8(sp)
 ; block1: ; offset 0x20
 ;   addi s8, zero, 0x2a
 ;   mv s9, zero
