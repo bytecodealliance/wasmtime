@@ -22,8 +22,8 @@ block0(v0: i32):
 ;   elf_tls_get_addr a0,userextname0
 ;   mv a1,a0
 ;   mv a0,s1
+;   ld s1,8(sp)
 ;   addi sp,sp,16
-;   ld s1,-8(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -45,8 +45,8 @@ block0(v0: i32):
 ;   jalr ra
 ;   mv a1, a0
 ;   mv a0, s1
+;   ld s1, 8(sp)
 ;   addi sp, sp, 0x10
-;   ld s1, -8(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

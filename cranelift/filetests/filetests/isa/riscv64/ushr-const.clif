@@ -594,8 +594,8 @@ block0(v0: i128):
 ;   srl a3,a1,a5
 ;   andi a5,a4,127
 ;   select [a0,a1],[a3,zero],[s11,a3]##condition=(a5 uge a2)
+;   ld s11,8(sp)
 ;   addi sp,sp,16
-;   ld s11,-8(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -629,8 +629,8 @@ block0(v0: i128):
 ;   j 0xc
 ;   mv a0, s11
 ;   mv a1, a3
+;   ld s11, 8(sp)
 ;   addi sp, sp, 0x10
-;   ld s11, -8(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

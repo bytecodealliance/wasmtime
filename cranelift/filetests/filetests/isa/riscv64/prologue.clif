@@ -155,18 +155,18 @@ block0(v0: f64):
 ;   fadd.d fa3,fa3,fa4,rne
 ;   fadd.d fa4,fa5,fa0,rne
 ;   fadd.d fa0,fa3,fa4,rne
+;   fld fs0,88(sp)
+;   fld fs2,80(sp)
+;   fld fs3,72(sp)
+;   fld fs4,64(sp)
+;   fld fs5,56(sp)
+;   fld fs6,48(sp)
+;   fld fs7,40(sp)
+;   fld fs8,32(sp)
+;   fld fs9,24(sp)
+;   fld fs10,16(sp)
+;   fld fs11,8(sp)
 ;   addi sp,sp,96
-;   fld fs0,-8(sp)
-;   fld fs2,-16(sp)
-;   fld fs3,-24(sp)
-;   fld fs4,-32(sp)
-;   fld fs5,-40(sp)
-;   fld fs6,-48(sp)
-;   fld fs7,-56(sp)
-;   fld fs8,-64(sp)
-;   fld fs9,-72(sp)
-;   fld fs10,-80(sp)
-;   fld fs11,-88(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -253,18 +253,18 @@ block0(v0: f64):
 ;   fadd.d fa3, fa3, fa4, rne
 ;   fadd.d fa4, fa5, fa0, rne
 ;   fadd.d fa0, fa3, fa4, rne
+;   fld fs0, 0x58(sp)
+;   fld fs2, 0x50(sp)
+;   fld fs3, 0x48(sp)
+;   fld fs4, 0x40(sp)
+;   fld fs5, 0x38(sp)
+;   fld fs6, 0x30(sp)
+;   fld fs7, 0x28(sp)
+;   fld fs8, 0x20(sp)
+;   fld fs9, 0x18(sp)
+;   fld fs10, 0x10(sp)
+;   fld fs11, 8(sp)
 ;   addi sp, sp, 0x60
-;   fld fs0, -8(sp)
-;   fld fs2, -0x10(sp)
-;   fld fs3, -0x18(sp)
-;   fld fs4, -0x20(sp)
-;   fld fs5, -0x28(sp)
-;   fld fs6, -0x30(sp)
-;   fld fs7, -0x38(sp)
-;   fld fs8, -0x40(sp)
-;   fld fs9, -0x48(sp)
-;   fld fs10, -0x50(sp)
-;   fld fs11, -0x58(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -366,14 +366,14 @@ block0(v0: i64):
 ;   add a2,a3,a4
 ;   add a1,a5,a1
 ;   add a0,a2,a1
+;   ld s1,56(sp)
+;   ld s2,48(sp)
+;   ld s3,40(sp)
+;   ld s4,32(sp)
+;   ld s5,24(sp)
+;   ld s6,16(sp)
+;   ld s7,8(sp)
 ;   addi sp,sp,64
-;   ld s1,-8(sp)
-;   ld s2,-16(sp)
-;   ld s3,-24(sp)
-;   ld s4,-32(sp)
-;   ld s5,-40(sp)
-;   ld s6,-48(sp)
-;   ld s7,-56(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -430,14 +430,14 @@ block0(v0: i64):
 ;   add a2, a3, a4
 ;   add a1, a5, a1
 ;   add a0, a2, a1
+;   ld s1, 0x38(sp)
+;   ld s2, 0x30(sp)
+;   ld s3, 0x28(sp)
+;   ld s4, 0x20(sp)
+;   ld s5, 0x18(sp)
+;   ld s6, 0x10(sp)
+;   ld s7, 8(sp)
 ;   addi sp, sp, 0x40
-;   ld s1, -8(sp)
-;   ld s2, -0x10(sp)
-;   ld s3, -0x18(sp)
-;   ld s4, -0x20(sp)
-;   ld s5, -0x28(sp)
-;   ld s6, -0x30(sp)
-;   ld s7, -0x38(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

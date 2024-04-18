@@ -31,9 +31,9 @@ block0(v0: i128, v1: i128):
 ;   li a4,64
 ;   andi a2,a2,127
 ;   select [a0,a1],[a5,a3],[a3,a5]##condition=(a2 uge a4)
+;   ld s7,8(sp)
+;   ld s9,0(sp)
 ;   addi sp,sp,16
-;   ld s7,-8(sp)
-;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -74,9 +74,9 @@ block0(v0: i128, v1: i128):
 ;   j 0xc
 ;   mv a0, a3
 ;   mv a1, a5
+;   ld s7, 8(sp)
+;   ld s9, 0(sp)
 ;   addi sp, sp, 0x10
-;   ld s7, -8(sp)
-;   ld s9, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
