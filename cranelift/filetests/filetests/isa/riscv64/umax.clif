@@ -107,9 +107,9 @@ block0(v0: i128, v1: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s7,-8(sp)
-;   sd s9,-16(sp)
 ;   addi sp,sp,-16
+;   sd s7,8(sp)
+;   sd s9,0(sp)
 ; block0:
 ;   sltu a5,a3,a1
 ;   sltu a4,a2,a0
@@ -119,9 +119,9 @@ block0(v0: i128, v1: i128):
 ;   select a5,a4,a5##condition=(a0 eq zero)
 ;   mv a4,s7
 ;   select [a0,a1],[a4,s9],[a2,a3]##condition=(a5 ne zero)
+;   ld s7,8(sp)
+;   ld s9,0(sp)
 ;   addi sp,sp,16
-;   ld s7,-8(sp)
-;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -133,9 +133,9 @@ block0(v0: i128, v1: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s7, -8(sp)
-;   sd s9, -0x10(sp)
 ;   addi sp, sp, -0x10
+;   sd s7, 8(sp)
+;   sd s9, 0(sp)
 ; block1: ; offset 0x1c
 ;   sltu a5, a3, a1
 ;   sltu a4, a2, a0
@@ -151,9 +151,9 @@ block0(v0: i128, v1: i128):
 ;   j 0xc
 ;   mv a0, a2
 ;   mv a1, a3
+;   ld s7, 8(sp)
+;   ld s9, 0(sp)
 ;   addi sp, sp, 0x10
-;   ld s7, -8(sp)
-;   ld s9, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

@@ -454,11 +454,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        // Adjust the stack pointer downward for clobbers and the function fixed
-        // frame (spillslots and storage slots).
-        let stack_size = frame_layout.fixed_frame_storage_size
-            + frame_layout.clobber_size
-            + frame_layout.outgoing_args_size;
         if flags.unwind_info() && frame_layout.setup_area_size > 0 {
             // The *unwind* frame (but not the actual frame) starts at the
             // clobbers, just below the saved FP/LR pair.
@@ -469,10 +464,24 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 },
             });
         }
+
+        // Adjust the stack pointer downward for clobbers, the function fixed
+        // frame (spillslots and storage slots), and outgoing arguments.
+        let stack_size = frame_layout.clobber_size
+            + frame_layout.fixed_frame_storage_size
+            + frame_layout.outgoing_args_size;
+
         // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
-            // since we use fp, we didn't need use UnwindInst::StackAlloc.
+            insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
+
+            // Adjust the nominal sp to account for the outgoing argument area.
+            let sp_adj = frame_layout.outgoing_args_size as i32;
+            if sp_adj > 0 {
+                insts.push(Self::gen_nominal_sp_adj(sp_adj));
+            }
+
             let mut cur_offset = 8;
             for reg in &frame_layout.clobbered_callee_saves {
                 let r_reg = reg.to_reg();
@@ -481,6 +490,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     RegClass::Float => F64,
                     RegClass::Vector => unimplemented!("Vector Clobber Saves"),
                 };
+                insts.push(Inst::gen_store(
+                    AMode::SPOffset((stack_size - cur_offset) as i64),
+                    Reg::from(reg.to_reg()),
+                    ty,
+                    MemFlags::trusted(),
+                ));
+
                 if flags.unwind_info() {
                     insts.push(Inst::Unwind {
                         inst: UnwindInst::SaveReg {
@@ -489,21 +505,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         },
                     });
                 }
-                insts.push(Inst::gen_store(
-                    AMode::SPOffset(-(cur_offset as i64)),
-                    Reg::from(reg.to_reg()),
-                    ty,
-                    MemFlags::trusted(),
-                ));
+
                 cur_offset += 8
-            }
-
-            insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
-
-            // Adjust the nominal sp to account for the outgoing argument area.
-            let sp_adj = frame_layout.outgoing_args_size as i32;
-            if sp_adj > 0 {
-                insts.push(Self::gen_nominal_sp_adj(sp_adj));
             }
         }
         insts
@@ -515,12 +518,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let stack_size = frame_layout.fixed_frame_storage_size
-            + frame_layout.clobber_size
+
+        let stack_size = frame_layout.clobber_size
+            + frame_layout.fixed_frame_storage_size
             + frame_layout.outgoing_args_size;
-        if stack_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
-        }
+
         let mut cur_offset = 8;
         for reg in &frame_layout.clobbered_callee_saves {
             let rreg = reg.to_reg();
@@ -531,12 +533,17 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             };
             insts.push(Inst::gen_load(
                 reg.map(Reg::from),
-                AMode::SPOffset(-cur_offset),
+                AMode::SPOffset(i64::from(stack_size - cur_offset)),
                 ty,
                 MemFlags::trusted(),
             ));
             cur_offset += 8
         }
+
+        if stack_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
+        }
+
         insts
     }
 
