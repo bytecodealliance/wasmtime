@@ -556,7 +556,7 @@ GV = [colocated] symbol Name
 
 A few instructions have variants that take immediate operands, but in general
 an instruction is required to load a constant into an SSA value: `iconst`,
-`f32const`, `f64const` and `bconst` serve this purpose.
+`f32const` and `f64const` serve this purpose.
 
 ### Bitwise operations
 
