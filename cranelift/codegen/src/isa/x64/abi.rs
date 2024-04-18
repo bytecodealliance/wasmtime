@@ -772,26 +772,23 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
         for reg in &frame_layout.clobbered_callee_saves {
             let rreg = reg.to_reg();
-            match rreg.class() {
-                RegClass::Int => {
-                    insts.push(Inst::mov64_m_r(
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                        Writable::from_reg(rreg.into()),
-                    ));
-                    cur_offset += 8;
-                }
-                RegClass::Float => {
-                    cur_offset = align_to(cur_offset, 16);
-                    insts.push(Inst::load(
-                        types::I8X16,
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                        Writable::from_reg(rreg.into()),
-                        ExtKind::None,
-                    ));
-                    cur_offset += 16;
-                }
+            let ty = match rreg.class() {
+                RegClass::Int => types::I64,
+                RegClass::Float => types::I8X16,
                 RegClass::Vector => unreachable!(),
-            }
+            };
+
+            // Align to 8 or 16 bytes as required by the storage type of the clobber.
+            cur_offset = align_to(cur_offset, ty.bytes());
+
+            insts.push(Inst::load(
+                ty,
+                Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
+                Writable::from_reg(rreg.into()),
+                ExtKind::None,
+            ));
+
+            cur_offset += ty.bytes();
         }
 
         let stack_size = frame_layout.fixed_frame_storage_size
