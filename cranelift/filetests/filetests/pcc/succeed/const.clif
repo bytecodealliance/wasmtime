@@ -34,3 +34,9 @@ block0:
     v0 = iconst.i64 0xffff_fff7
     return v0
 }
+
+function %f4() -> i64 {
+block0:
+    v0 ! range(64, 0x1_0001_ffff_ffff, 0x1_0001_ffff_ffff) = iconst.i64 0x1_0001_ffff_ffff
+    return v0
+}
