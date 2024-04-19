@@ -2820,11 +2820,9 @@
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
 (decl x64_ucomis (Value Value) ProducesFlags)
 (rule (x64_ucomis src1 @ (value_type $F32) src2)
-      ;; N.B.: cmp can be generated more than once, so cannot do a
-      ;; load-op merge. So `put_in_xmm` for src1, not `put_in_xmm_mem`.
-      (xmm_cmp_rm_r (SseOpcode.Ucomiss) (put_in_xmm src1) (put_in_xmm src2)))
+      (xmm_cmp_rm_r (SseOpcode.Ucomiss) src1 src2))
 (rule (x64_ucomis src1 @ (value_type $F64) src2)
-      (xmm_cmp_rm_r (SseOpcode.Ucomisd) (put_in_xmm src1) (put_in_xmm src2)))
+      (xmm_cmp_rm_r (SseOpcode.Ucomisd) src1 src2))
 
 ;; Helper for creating `test` instructions.
 (decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)

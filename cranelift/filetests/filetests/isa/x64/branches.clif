@@ -630,15 +630,13 @@ block202:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $1112539136, %eax
-;   movd    %eax, %xmm4
-;   ucomiss %xmm4, %xmm0
+;   ucomiss const(1), %xmm0
 ;   jp      label2
 ;   jnz     label2; j label1
 ; block1:
 ;   jmp     label5
 ; block2:
-;   ucomiss %xmm4, %xmm0
+;   ucomiss const(0), %xmm0
 ;   jnp     label4; j label3
 ; block3:
 ;   jmp     label5
@@ -654,20 +652,36 @@ block202:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x42500000, %eax
-;   movd %eax, %xmm4
-;   ucomiss %xmm4, %xmm0
-;   jp 0x1c
-;   je 0x27
-; block2: ; offset 0x1c
-;   ucomiss %xmm4, %xmm0
-;   jp 0x27
-; block3: ; offset 0x25
+;   ucomiss 0x25(%rip), %xmm0
+;   jp 0x17
+;   je 0x26
+; block2: ; offset 0x17
+;   ucomiss 0x22(%rip), %xmm0
+;   jp 0x26
+; block3: ; offset 0x24
 ;   ud2 ; trap: heap_oob
-; block4: ; offset 0x27
+; block4: ; offset 0x26
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %dl, 0x42(%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   pushq %rax
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 
 function %br_i8_icmp(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
