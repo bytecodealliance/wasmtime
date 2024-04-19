@@ -1025,7 +1025,7 @@ impl Assembler {
     }
 
     /// Emit a test instruction with two register operands.
-    pub fn test_rr(&mut self, src2: Reg, src1: Reg, size: OperandSize) {
+    pub fn test_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Test,

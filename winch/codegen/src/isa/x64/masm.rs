@@ -761,7 +761,7 @@ impl Masm for MacroAssembler {
                 // are the same register, emit a test instruction. Else we emit
                 // a normal comparison.
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
-                    self.asm.test_rr(*rrhs, *rlhs, size);
+                    self.asm.test_rr(*rlhs, *rrhs, size);
                 } else {
                     self.cmp(lhs, rhs, size);
                 }
