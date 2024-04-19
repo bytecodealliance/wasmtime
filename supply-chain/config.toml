@@ -315,6 +315,10 @@ version = "0.3.19"
 criteria = "safe-to-deploy"
 notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
 
+[[exemptions.h2]]
+version = "0.4.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.hermit-abi]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
@@ -387,6 +391,10 @@ criteria = "safe-to-deploy"
 version = "0.8.6"
 criteria = "safe-to-deploy"
 notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
+
+[[exemptions.mio]]
+version = "0.8.11"
+criteria = "safe-to-deploy"
 
 [[exemptions.num_cpus]]
 version = "1.13.1"
@@ -491,6 +499,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rustls]]
 version = "0.22.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.rustls]]
+version = "0.22.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-pki-types]]
