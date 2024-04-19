@@ -3332,9 +3332,9 @@
 (rule (cmp_zero_i128 (cc_nz_or_z cc) val)
       (let ((lo Gpr (value_regs_get_gpr val 0))
             (hi Gpr (value_regs_get_gpr val 1))
-            (lo_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) lo (RegMemImm.Imm 0))
+            (lo_z Gpr (with_flags_reg (x64_cmp_imm (OperandSize.Size64) lo 0)
                                       (x64_setcc (CC.Z))))
-            (hi_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) hi (RegMemImm.Imm 0))
+            (hi_z Gpr (with_flags_reg (x64_cmp_imm (OperandSize.Size64) hi 0)
                                       (x64_setcc (CC.Z)))))
           (icmp_cond_result (x64_test (OperandSize.Size8) hi_z lo_z) cc)))
 
@@ -4639,7 +4639,7 @@
           (any_byte_zero Xmm (x64_pcmpeqb val (xmm_zero $I8X16)))
           (mask Gpr (x64_pmovmskb (OperandSize.Size32) any_byte_zero))
         )
-        (with_flags (x64_cmp (OperandSize.Size32) mask (RegMemImm.Imm 0xffff))
+        (with_flags (x64_cmp_imm (OperandSize.Size32) mask 0xffff)
                     (x64_setcc (CC.NZ)))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
