@@ -93,7 +93,7 @@ impl Masm for MacroAssembler {
 
         self.add_stack_max(scratch);
 
-        self.asm.cmp_rr(regs::rsp(), scratch, self.ptr_size);
+        self.asm.cmp_rr(scratch, regs::rsp(), self.ptr_size);
         self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
 
         // Emit unwind info.
@@ -627,19 +627,19 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
-    fn cmp(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
-        match src {
+    fn cmp(&mut self, src2: RegImm, src1: Reg, size: OperandSize) {
+        match src2 {
             RegImm::Imm(imm) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.cmp_ir(v, dst, size);
+                    self.asm.cmp_ir(v, src1, size);
                 } else {
                     let scratch = regs::scratch();
                     self.load_constant(&imm, scratch, size);
-                    self.asm.cmp_rr(scratch, dst, size);
+                    self.asm.cmp_rr(src1, scratch, size);
                 }
             }
-            RegImm::Reg(src) => {
-                self.asm.cmp_rr(src, dst, size);
+            RegImm::Reg(src2) => {
+                self.asm.cmp_rr(src1, src2, size);
             }
         }
     }
@@ -959,7 +959,7 @@ impl Masm for MacroAssembler {
         let max = default_index;
         let size = OperandSize::S32;
         self.asm.mov_ir(max as u64, tmp, size);
-        self.asm.cmp_rr(index, tmp, size);
+        self.asm.cmp_rr(tmp, index, size);
         self.asm.cmov(tmp, index, IntCmpKind::LtU, size);
 
         let default = targets[default_index];

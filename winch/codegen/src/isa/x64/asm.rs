@@ -986,7 +986,7 @@ impl Assembler {
         });
     }
 
-    pub fn cmp_rr(&mut self, src2: Reg, src1: Reg, size: OperandSize) {
+    pub fn cmp_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
