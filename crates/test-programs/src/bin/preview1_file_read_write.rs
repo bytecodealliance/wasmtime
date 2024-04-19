@@ -1,7 +1,7 @@
 use std::{env, process};
 use test_programs::preview1::open_scratch_directory;
 
-unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
+unsafe fn test_file_read_write(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
     let file_fd = wasi::path_open(
         dir_fd,
@@ -23,8 +23,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    let mut nwritten =
-        wasi::fd_pwrite(file_fd, &mut [ciovec], 0).expect("writing bytes at offset 0");
+    let mut nwritten = wasi::fd_write(file_fd, &mut [ciovec]).expect("writing bytes at offset 0");
     assert_eq!(nwritten, 4, "nwritten bytes check");
 
     let contents = &mut [0u8; 4];
@@ -32,7 +31,8 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         buf: contents.as_mut_ptr() as *mut _,
         buf_len: contents.len(),
     };
-    let mut nread = wasi::fd_pread(file_fd, &[iovec], 0).expect("reading bytes at offset 0");
+    wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking to offset 0");
+    let mut nread = wasi::fd_read(file_fd, &[iovec]).expect("reading bytes at offset 0");
     assert_eq!(nread, 4, "nread bytes check");
     assert_eq!(contents, &[0u8, 1, 2, 3], "written bytes equal read bytes");
 
@@ -43,6 +43,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
     // See https://github.com/rust-lang/rust/issues/74825.
     let contents = &[0u8, 1, 2, 3];
     let mut offset = 0usize;
+    wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking to offset 0");
     loop {
         let mut ciovecs: Vec<wasi::Ciovec> = Vec::new();
         let mut remaining = contents.len() - offset;
@@ -58,8 +59,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
             buf_len: remaining,
         });
 
-        nwritten = wasi::fd_pwrite(file_fd, ciovecs.as_slice(), offset.try_into().unwrap())
-            .expect("writing bytes at offset 0");
+        nwritten = wasi::fd_write(file_fd, ciovecs.as_slice()).expect("writing bytes at offset 0");
 
         offset += nwritten;
         if offset == contents.len() {
@@ -75,6 +75,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
     // See https://github.com/rust-lang/rust/issues/74825.
     let contents = &mut [0u8; 4];
     let mut offset = 0usize;
+    wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking to offset 0");
     loop {
         let buffer = &mut [0u8; 4];
         let iovecs = &[
@@ -87,7 +88,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
                 buf_len: 2,
             },
         ];
-        nread = wasi::fd_pread(file_fd, iovecs, offset as _).expect("reading bytes at offset 0");
+        nread = wasi::fd_read(file_fd, iovecs).expect("reading bytes at offset 0");
         if nread == 0 {
             break;
         }
@@ -102,7 +103,8 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         buf: contents.as_mut_ptr() as *mut _,
         buf_len: contents.len(),
     };
-    nread = wasi::fd_pread(file_fd, &[iovec], 2).expect("reading bytes at offset 2");
+    wasi::fd_seek(file_fd, 2, wasi::WHENCE_SET).expect("seeking to offset 2");
+    nread = wasi::fd_read(file_fd, &[iovec]).expect("reading bytes at offset 2");
     assert_eq!(nread, 2, "nread bytes check");
     assert_eq!(contents, &[2u8, 3, 0, 0], "file cursor was overwritten");
 
@@ -111,7 +113,8 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    nwritten = wasi::fd_pwrite(file_fd, &mut [ciovec], 2).expect("writing bytes at offset 2");
+    wasi::fd_seek(file_fd, 2, wasi::WHENCE_SET).expect("seeking to offset 2");
+    nwritten = wasi::fd_write(file_fd, &mut [ciovec]).expect("writing bytes at offset 2");
     assert_eq!(nwritten, 2, "nwritten bytes check");
 
     let contents = &mut [0u8; 4];
@@ -119,7 +122,8 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         buf: contents.as_mut_ptr() as *mut _,
         buf_len: contents.len(),
     };
-    nread = wasi::fd_pread(file_fd, &[iovec], 0).expect("reading bytes at offset 0");
+    wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking to offset 0");
+    nread = wasi::fd_read(file_fd, &[iovec]).expect("reading bytes at offset 0");
     assert_eq!(nread, 4, "nread bytes check");
     assert_eq!(contents, &[0u8, 1, 1, 0], "file cursor was overwritten");
 
@@ -127,7 +131,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
-unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
+unsafe fn test_file_write_and_file_pos(dir_fd: wasi::Fd) {
     let path = "file2";
     let file_fd = wasi::path_open(
         dir_fd,
@@ -152,10 +156,11 @@ unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
         buf: [].as_ptr(),
         buf_len: 0,
     };
-    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 2");
+    wasi::fd_seek(file_fd, 2, wasi::WHENCE_SET).expect("seeking to offset 2");
+    let n = wasi::fd_write(file_fd, &mut [ciovec]).expect("writing bytes at offset 2");
     assert_eq!(n, 0);
 
-    assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);
+    assert_eq!(wasi::fd_tell(file_fd).unwrap(), 2);
     let stat = wasi::fd_filestat_get(file_fd).unwrap();
     assert_eq!(stat.size, 0);
 
@@ -165,10 +170,11 @@ unsafe fn test_file_pwrite_and_file_pos(dir_fd: wasi::Fd) {
         buf: buf.as_ptr(),
         buf_len: buf.len(),
     };
-    let n = wasi::fd_pwrite(file_fd, &mut [ciovec], 50).expect("writing bytes at offset 50");
+    wasi::fd_seek(file_fd, 50, wasi::WHENCE_SET).expect("seeking to offset 50");
+    let n = wasi::fd_write(file_fd, &mut [ciovec]).expect("writing bytes at offset 50");
     assert_eq!(n, 1);
 
-    assert_eq!(wasi::fd_tell(file_fd).unwrap(), 0);
+    assert_eq!(wasi::fd_tell(file_fd).unwrap(), 51);
     let stat = wasi::fd_filestat_get(file_fd).unwrap();
     assert_eq!(stat.size, 51);
 
@@ -197,7 +203,7 @@ fn main() {
 
     // Run the tests.
     unsafe {
-        test_file_pread_pwrite(dir_fd);
-        test_file_pwrite_and_file_pos(dir_fd);
+        test_file_read_write(dir_fd);
+        test_file_write_and_file_pos(dir_fd);
     }
 }

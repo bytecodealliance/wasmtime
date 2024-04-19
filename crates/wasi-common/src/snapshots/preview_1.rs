@@ -340,13 +340,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 return Ok(0);
             }
         } else {
-            // Convert all of the unsafe guest slices to safe ones--this uses
-            // Wiggle's internal borrow checker to ensure no overlaps. We assume
-            // here that, because the memory is not shared, there are no other
-            // threads to access it while it is written to.
+            // Convert the first unsafe guest slice into a safe one--Wiggle
+            // can only track mutable borrows for an entire region, and converting
+            // all guest pointers to slices would cause a runtime borrow-checking
+            // error. As read is allowed to return less than the requested amount,
+            // it's valid (though not as efficient) for us to only perform the
+            // read of the first buffer.
             let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
                 .into_iter()
+                .filter(|iov| iov.len() > 0)
                 .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
+                .take(1)
                 .collect::<Result<_, Error>>()?;
 
             // Read directly into the Wasm memory.
