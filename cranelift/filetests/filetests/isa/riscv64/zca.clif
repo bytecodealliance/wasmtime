@@ -183,8 +183,8 @@ block0(v0: i8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_sym a2,%callee_i8+0
-;   return_call_ind a2 new_stack_arg_size:0 s1=s1
+;   load_sym t0,%callee_i8+0
+;   return_call_ind t0 new_stack_arg_size:0 a0=a0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -193,8 +193,8 @@ block0(v0: i8):
 ;   c.sdsp s0, 0(sp)
 ;   c.mv s0, sp
 ; block1: ; offset 0x8
-;   auipc a2, 0
-;   ld a2, 0xa(a2)
+;   auipc t0, 0
+;   ld t0, 0xa(t0)
 ;   c.j 0xa
 ;   c.unimp ; reloc_external Abs8 %callee_i8 0
 ;   c.unimp
@@ -203,7 +203,7 @@ block0(v0: i8):
 ;   c.ldsp ra, 8(sp)
 ;   c.ldsp s0, 0(sp)
 ;   c.addi16sp sp, 0x10
-;   c.jr a2
+;   c.jr t0
 
 function %c_ret(i32) -> i32 {
 block0(v0: i32):

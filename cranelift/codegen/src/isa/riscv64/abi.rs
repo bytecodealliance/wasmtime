@@ -103,10 +103,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
         // All registers that can be used as parameters or rets.
         // both start and end are included.
-        let (x_start, x_end, f_start, f_end) = match (call_conv, args_or_rets) {
-            (isa::CallConv::Tail, _) => (9, 29, 0, 31),
-            (_, ArgsOrRets::Args) => (10, 17, 10, 17),
-            (_, ArgsOrRets::Rets) => (10, 11, 10, 11),
+        let (x_start, x_end, f_start, f_end) = match args_or_rets {
+            ArgsOrRets::Args => (10, 17, 10, 17),
+            ArgsOrRets::Rets => (10, 11, 10, 11),
         };
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
@@ -710,16 +709,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         MACHINE_ENV.get_or_init(create_reg_enviroment)
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Tail {
-            TAIL_CLOBBERS
-        } else {
-            DEFAULT_CLOBBERS
-        }
+    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
+        DEFAULT_CLOBBERS
     }
 
     fn compute_frame_layout(
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
@@ -732,7 +727,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
             .cloned()
-            .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
+            .filter(|r| DEFAULT_CALLEE_SAVES.contains(r.to_reg().into()))
             .collect();
 
         regs.sort_unstable();
@@ -768,7 +763,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_inline_probestack(
         insts: &mut SmallInstVec<Self::I>,
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         frame_size: u32,
         guard_size: u32,
     ) {
@@ -778,10 +773,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let probe_count = align_to(frame_size, guard_size) / guard_size;
 
         // Must be a caller-saved register that is not an argument.
-        let tmp = match call_conv {
-            isa::CallConv::Tail => Writable::from_reg(x_reg(1)),
-            _ => Writable::from_reg(x_reg(28)), // t3
-        };
+        let tmp = Writable::from_reg(x_reg(28)); // t3
 
         if probe_count <= PROBE_MAX_UNROLL {
             Self::gen_probestack_unroll(insts, tmp, guard_size, probe_count)
@@ -840,33 +832,34 @@ impl Riscv64ABICallSite {
     }
 }
 
-const CALLEE_SAVE_X_REG: [bool; 32] = [
-    false, false, true, false, false, false, false, false, // 0-7
-    true, true, false, false, false, false, false, false, // 8-15
-    false, false, true, true, true, true, true, true, // 16-23
-    true, true, true, true, false, false, false, false, // 24-31
-];
-const CALLEE_SAVE_F_REG: [bool; 32] = [
-    false, false, false, false, false, false, false, false, // 0-7
-    true, false, false, false, false, false, false, false, // 8-15
-    false, false, true, true, true, true, true, true, // 16-23
-    true, true, true, true, false, false, false, false, // 24-31
-];
-
-/// This should be the registers that must be saved by callee.
-#[inline]
-fn is_reg_saved_in_prologue(conv: CallConv, reg: RealReg) -> bool {
-    if conv == CallConv::Tail {
-        return false;
-    }
-
-    match reg.class() {
-        RegClass::Int => CALLEE_SAVE_X_REG[reg.hw_enc() as usize],
-        RegClass::Float => CALLEE_SAVE_F_REG[reg.hw_enc() as usize],
-        // All vector registers are caller saved.
-        RegClass::Vector => false,
-    }
-}
+// NOTE: no V regs are callee save.
+const DEFAULT_CALLEE_SAVES: PRegSet = PRegSet::empty()
+    // X Regs
+    .with(px_reg(2))
+    .with(px_reg(8))
+    .with(px_reg(9))
+    .with(px_reg(18))
+    .with(px_reg(19))
+    .with(px_reg(20))
+    .with(px_reg(21))
+    .with(px_reg(22))
+    .with(px_reg(23))
+    .with(px_reg(24))
+    .with(px_reg(25))
+    .with(px_reg(26))
+    .with(px_reg(27))
+    // F Regs
+    .with(pf_reg(8))
+    .with(pf_reg(18))
+    .with(pf_reg(19))
+    .with(pf_reg(20))
+    .with(pf_reg(21))
+    .with(pf_reg(22))
+    .with(pf_reg(23))
+    .with(pf_reg(24))
+    .with(pf_reg(25))
+    .with(pf_reg(26))
+    .with(pf_reg(27));
 
 fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
     let mut clobbered_size = 0;
@@ -884,188 +877,78 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
     align_to(clobbered_size, 16)
 }
 
-const fn default_clobbers() -> PRegSet {
-    PRegSet::empty()
-        .with(px_reg(1))
-        .with(px_reg(5))
-        .with(px_reg(6))
-        .with(px_reg(7))
-        .with(px_reg(10))
-        .with(px_reg(11))
-        .with(px_reg(12))
-        .with(px_reg(13))
-        .with(px_reg(14))
-        .with(px_reg(15))
-        .with(px_reg(16))
-        .with(px_reg(17))
-        .with(px_reg(28))
-        .with(px_reg(29))
-        .with(px_reg(30))
-        .with(px_reg(31))
-        // F Regs
-        .with(pf_reg(0))
-        .with(pf_reg(1))
-        .with(pf_reg(2))
-        .with(pf_reg(3))
-        .with(pf_reg(4))
-        .with(pf_reg(5))
-        .with(pf_reg(6))
-        .with(pf_reg(7))
-        .with(pf_reg(9))
-        .with(pf_reg(10))
-        .with(pf_reg(11))
-        .with(pf_reg(12))
-        .with(pf_reg(13))
-        .with(pf_reg(14))
-        .with(pf_reg(15))
-        .with(pf_reg(16))
-        .with(pf_reg(17))
-        .with(pf_reg(28))
-        .with(pf_reg(29))
-        .with(pf_reg(30))
-        .with(pf_reg(31))
-        // V Regs - All vector regs get clobbered
-        .with(pv_reg(0))
-        .with(pv_reg(1))
-        .with(pv_reg(2))
-        .with(pv_reg(3))
-        .with(pv_reg(4))
-        .with(pv_reg(5))
-        .with(pv_reg(6))
-        .with(pv_reg(7))
-        .with(pv_reg(8))
-        .with(pv_reg(9))
-        .with(pv_reg(10))
-        .with(pv_reg(11))
-        .with(pv_reg(12))
-        .with(pv_reg(13))
-        .with(pv_reg(14))
-        .with(pv_reg(15))
-        .with(pv_reg(16))
-        .with(pv_reg(17))
-        .with(pv_reg(18))
-        .with(pv_reg(19))
-        .with(pv_reg(20))
-        .with(pv_reg(21))
-        .with(pv_reg(22))
-        .with(pv_reg(23))
-        .with(pv_reg(24))
-        .with(pv_reg(25))
-        .with(pv_reg(26))
-        .with(pv_reg(27))
-        .with(pv_reg(28))
-        .with(pv_reg(29))
-        .with(pv_reg(30))
-        .with(pv_reg(31))
-}
-
-const DEFAULT_CLOBBERS: PRegSet = default_clobbers();
-
-// All allocatable registers are clobbered by calls using the `tail` calling
-// convention.
-const fn tail_clobbers() -> PRegSet {
-    PRegSet::empty()
-        // `x0` is the zero register, and not allocatable.
-        .with(px_reg(1))
-        // `x2` is the stack pointer, `x3` is the global pointer, and `x4` is
-        // the thread pointer. None are allocatable.
-        .with(px_reg(5))
-        .with(px_reg(6))
-        .with(px_reg(7))
-        // `x8` is the frame pointer, and not allocatable.
-        .with(px_reg(9))
-        .with(px_reg(10))
-        .with(px_reg(10))
-        .with(px_reg(11))
-        .with(px_reg(12))
-        .with(px_reg(13))
-        .with(px_reg(14))
-        .with(px_reg(15))
-        .with(px_reg(16))
-        .with(px_reg(17))
-        .with(px_reg(18))
-        .with(px_reg(19))
-        .with(px_reg(20))
-        .with(px_reg(21))
-        .with(px_reg(22))
-        .with(px_reg(23))
-        .with(px_reg(24))
-        .with(px_reg(25))
-        .with(px_reg(26))
-        .with(px_reg(27))
-        .with(px_reg(28))
-        .with(px_reg(29))
-        // `x30` and `x31` are reserved as scratch registers, and are not
-        // allocatable.
-        //
-        // F Regs
-        .with(pf_reg(0))
-        .with(pf_reg(1))
-        .with(pf_reg(2))
-        .with(pf_reg(3))
-        .with(pf_reg(4))
-        .with(pf_reg(5))
-        .with(pf_reg(6))
-        .with(pf_reg(7))
-        .with(pf_reg(9))
-        .with(pf_reg(10))
-        .with(pf_reg(11))
-        .with(pf_reg(12))
-        .with(pf_reg(13))
-        .with(pf_reg(14))
-        .with(pf_reg(15))
-        .with(pf_reg(16))
-        .with(pf_reg(17))
-        .with(pf_reg(18))
-        .with(pf_reg(19))
-        .with(pf_reg(20))
-        .with(pf_reg(21))
-        .with(pf_reg(22))
-        .with(pf_reg(23))
-        .with(pf_reg(24))
-        .with(pf_reg(25))
-        .with(pf_reg(26))
-        .with(pf_reg(27))
-        .with(pf_reg(28))
-        .with(pf_reg(29))
-        .with(pf_reg(30))
-        .with(pf_reg(31))
-        // V Regs
-        .with(pv_reg(0))
-        .with(pv_reg(1))
-        .with(pv_reg(2))
-        .with(pv_reg(3))
-        .with(pv_reg(4))
-        .with(pv_reg(5))
-        .with(pv_reg(6))
-        .with(pv_reg(7))
-        .with(pv_reg(8))
-        .with(pv_reg(9))
-        .with(pv_reg(10))
-        .with(pv_reg(11))
-        .with(pv_reg(12))
-        .with(pv_reg(13))
-        .with(pv_reg(14))
-        .with(pv_reg(15))
-        .with(pv_reg(16))
-        .with(pv_reg(17))
-        .with(pv_reg(18))
-        .with(pv_reg(19))
-        .with(pv_reg(20))
-        .with(pv_reg(21))
-        .with(pv_reg(22))
-        .with(pv_reg(23))
-        .with(pv_reg(24))
-        .with(pv_reg(25))
-        .with(pv_reg(26))
-        .with(pv_reg(27))
-        .with(pv_reg(28))
-        .with(pv_reg(29))
-        .with(pv_reg(30))
-        .with(pv_reg(31))
-}
-
-const TAIL_CLOBBERS: PRegSet = tail_clobbers();
+const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
+    .with(px_reg(1))
+    .with(px_reg(5))
+    .with(px_reg(6))
+    .with(px_reg(7))
+    .with(px_reg(10))
+    .with(px_reg(11))
+    .with(px_reg(12))
+    .with(px_reg(13))
+    .with(px_reg(14))
+    .with(px_reg(15))
+    .with(px_reg(16))
+    .with(px_reg(17))
+    .with(px_reg(28))
+    .with(px_reg(29))
+    .with(px_reg(30))
+    .with(px_reg(31))
+    // F Regs
+    .with(pf_reg(0))
+    .with(pf_reg(1))
+    .with(pf_reg(2))
+    .with(pf_reg(3))
+    .with(pf_reg(4))
+    .with(pf_reg(5))
+    .with(pf_reg(6))
+    .with(pf_reg(7))
+    .with(pf_reg(9))
+    .with(pf_reg(10))
+    .with(pf_reg(11))
+    .with(pf_reg(12))
+    .with(pf_reg(13))
+    .with(pf_reg(14))
+    .with(pf_reg(15))
+    .with(pf_reg(16))
+    .with(pf_reg(17))
+    .with(pf_reg(28))
+    .with(pf_reg(29))
+    .with(pf_reg(30))
+    .with(pf_reg(31))
+    // V Regs - All vector regs get clobbered
+    .with(pv_reg(0))
+    .with(pv_reg(1))
+    .with(pv_reg(2))
+    .with(pv_reg(3))
+    .with(pv_reg(4))
+    .with(pv_reg(5))
+    .with(pv_reg(6))
+    .with(pv_reg(7))
+    .with(pv_reg(8))
+    .with(pv_reg(9))
+    .with(pv_reg(10))
+    .with(pv_reg(11))
+    .with(pv_reg(12))
+    .with(pv_reg(13))
+    .with(pv_reg(14))
+    .with(pv_reg(15))
+    .with(pv_reg(16))
+    .with(pv_reg(17))
+    .with(pv_reg(18))
+    .with(pv_reg(19))
+    .with(pv_reg(20))
+    .with(pv_reg(21))
+    .with(pv_reg(22))
+    .with(pv_reg(23))
+    .with(pv_reg(24))
+    .with(pv_reg(25))
+    .with(pv_reg(26))
+    .with(pv_reg(27))
+    .with(pv_reg(28))
+    .with(pv_reg(29))
+    .with(pv_reg(30))
+    .with(pv_reg(31));
 
 fn create_reg_enviroment() -> MachineEnv {
     // Some C Extension instructions can only use a subset of the registers.
