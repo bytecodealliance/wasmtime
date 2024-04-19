@@ -19,7 +19,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vucomiss %xmm0, %xmm1
+;   vucomiss %xmm1, %xmm0
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
@@ -70,7 +70,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vucomisd %xmm0, %xmm1
+;   vucomisd %xmm1, %xmm0
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
