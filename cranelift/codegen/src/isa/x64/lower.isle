@@ -1659,7 +1659,7 @@
             ;; allow for load-op merging, here we cannot do that.
             (x_reg Reg x)
             (y_reg Reg y))
-        (with_flags_reg (x64_cmp size x_reg y_reg)
+        (with_flags_reg (x64_cmp size y_reg x_reg)
                         (cmove ty cc y_reg x_reg))))
 
 (rule -1 (lower (has_type (fits_in_64 ty) (umin x y)))
@@ -3332,9 +3332,9 @@
 (rule (cmp_zero_i128 (cc_nz_or_z cc) val)
       (let ((lo Gpr (value_regs_get_gpr val 0))
             (hi Gpr (value_regs_get_gpr val 1))
-            (lo_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) (RegMemImm.Imm 0) lo)
+            (lo_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) lo (RegMemImm.Imm 0))
                                       (x64_setcc (CC.Z))))
-            (hi_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) (RegMemImm.Imm 0) hi)
+            (hi_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) hi (RegMemImm.Imm 0))
                                       (x64_setcc (CC.Z)))))
           (icmp_cond_result (x64_test (OperandSize.Size8) hi_z lo_z) cc)))
 
@@ -3353,7 +3353,7 @@
             (size_reg Reg (imm ty (u32_as_u64 jt_size)))
             (idx_reg Gpr (extend_to_gpr idx $I64 (ExtendKind.Zero)))
             (clamped_idx Reg (with_flags_reg
-              (x64_cmp size size_reg idx_reg)
+              (x64_cmp size idx_reg size_reg)
               (cmove ty (CC.B) idx_reg size_reg))))
       (emit_side_effect (jmp_table_seq ty clamped_idx default_target jt_targets))))
 
@@ -4639,7 +4639,7 @@
           (any_byte_zero Xmm (x64_pcmpeqb val (xmm_zero $I8X16)))
           (mask Gpr (x64_pmovmskb (OperandSize.Size32) any_byte_zero))
         )
-        (with_flags (x64_cmp (OperandSize.Size32) (RegMemImm.Imm 0xffff) mask)
+        (with_flags (x64_cmp (OperandSize.Size32) mask (RegMemImm.Imm 0xffff))
                     (x64_setcc (CC.NZ)))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

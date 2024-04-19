@@ -2802,9 +2802,9 @@
                       src2)))
 
 ;; Helper for creating `cmp` instructions.
-(decl x64_cmp (OperandSize GprMemImm Gpr) ProducesFlags)
+(decl x64_cmp (OperandSize Gpr GprMemImm) ProducesFlags)
 (rule (x64_cmp size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) src2 src1))
+      (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
 
 ;; Helper for creating `cmp` instructions with an immediate.
 (decl x64_cmp_imm (OperandSize Gpr u32) ProducesFlags)
@@ -4746,17 +4746,16 @@
 
 ;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
 ;; Cranelift's verification that `a` and `b` are of the same type.
-;; Unfortunately for clarity, the registers are flipped here (TODO).
 (rule 0 (emit_cmp cc a @ (value_type ty) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size b a) cc)))
+        (icmp_cond_result (x64_cmp size a b) cc)))
 
 ;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
 (rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) (intcc_swap_args cc))))
+        (icmp_cond_result (x64_cmp size b a) (intcc_swap_args cc))))
 
 ;; Special case: use the test instruction for comparisons with 0.
 (rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
@@ -4776,8 +4775,8 @@
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
             (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.Z))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.Z))))
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo) (x64_setcc (CC.Z))))
+            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_hi b_hi) (x64_setcc (CC.Z))))
             ;; At this point, `cmp_lo` and `cmp_hi` contain either 0 or 1 in the
             ;; lowest 8 bits--`SETcc` guarantees this. The upper bits may be
             ;; unchanged so we must compare against 1 below; this instruction
@@ -4797,8 +4796,8 @@
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
             (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.NZ))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.NZ))))
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo) (x64_setcc (CC.NZ))))
+            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_hi b_hi) (x64_setcc (CC.NZ))))
             ;; See comments for `IntCC.Equal`.
             (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
            (icmp_cond_result
@@ -4812,14 +4811,14 @@
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
             (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) b_hi a_hi)
+            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) a_hi b_hi)
                                        (consumes_flags_concat
                                                  (x64_setcc (intcc_without_eq cc))
                                                  (x64_setcc (CC.Z)))))
             (cc_hi Reg (value_regs_get cmp_hi 0))
             (eq_hi Reg (value_regs_get cmp_hi 1))
 
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo)
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo)
                                         (x64_setcc (intcc_unsigned cc))))
 
             (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
