@@ -489,7 +489,7 @@ impl Inst {
 
     /// Does a comparison of dst - src for operands of size `size`, as stated by the machine
     /// instruction semantics. Be careful with the order of parameters!
-    pub(crate) fn cmp_rmi_r(size: OperandSize, src2: RegMemImm, src1: Reg) -> Inst {
+    pub(crate) fn cmp_rmi_r(size: OperandSize, src1: Reg, src2: RegMemImm) -> Inst {
         src2.assert_regclass_is(RegClass::Int);
         debug_assert_eq!(src1.class(), RegClass::Int);
         Inst::CmpRmiR {
