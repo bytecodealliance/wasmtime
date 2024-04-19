@@ -538,7 +538,7 @@
                         (info BoxReturnCallInfo))
 
        ;; Tail call to an indirect destination.
-       (ReturnCallUnknown (callee RegMem)
+       (ReturnCallUnknown (callee Reg)
                           (info BoxReturnCallInfo))
 
        ;; A pseudo-instruction that captures register arguments in vregs.

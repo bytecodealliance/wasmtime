@@ -1647,11 +1647,14 @@ pub(crate) fn emit(
             callee,
             info: call_info,
         } => {
-            let callee = callee.with_allocs(allocs);
+            let callee = allocs.next(*callee);
 
             emit_return_call_common_sequence(allocs, sink, info, state, &call_info);
 
-            Inst::JmpUnknown { target: callee }.emit(&[], sink, info, state);
+            Inst::JmpUnknown {
+                target: RegMem::reg(callee),
+            }
+            .emit(&[], sink, info, state);
             sink.add_call_site(ir::Opcode::ReturnCallIndirect);
         }
 

@@ -822,10 +822,9 @@ pub(crate) fn check(
         | Inst::Ud2 { .. } => Ok(()),
         Inst::Rets { .. } => Ok(()),
 
+        Inst::ReturnCallUnknown { .. } => Ok(()),
+
         Inst::CallUnknown { ref dest, .. }
-        | Inst::ReturnCallUnknown {
-            callee: ref dest, ..
-        }
         | Inst::JmpUnknown {
             target: ref dest, ..
         } => match <&RegMem>::from(dest) {
