@@ -20,12 +20,9 @@ block0:
 ;   addi sp,sp,-16
 ;   sd s1,8(sp)
 ; block0:
-;   load_sym t0,userextname0+0
-;   mv s1,t0
-;   mv t0,s1
-;   callind t0
-;   mv t0,s1
-;   callind t0
+;   load_sym s1,userextname0+0
+;   callind s1
+;   callind s1
 ;   ld s1,8(sp)
 ;   addi sp,sp,16
 ;   ld ra,8(sp)
@@ -42,16 +39,13 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd s1, 8(sp)
 ; block1: ; offset 0x18
-;   auipc t0, 0
-;   ld t0, 0xc(t0)
+;   auipc s1, 0
+;   ld s1, 0xc(s1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 u1:7 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   mv s1, t0
-;   mv t0, s1
-;   jalr t0
-;   mv t0, s1
-;   jalr t0
+;   jalr s1
+;   jalr s1
 ;   ld s1, 8(sp)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)

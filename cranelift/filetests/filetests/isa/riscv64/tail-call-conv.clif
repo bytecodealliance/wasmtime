@@ -168,10 +168,10 @@ block0:
 ;   sd s2,120(sp)
 ;   sd a0,128(sp)
 ;   sd a1,136(sp)
-;   load_sym t0,%tail_callee_stack_args+0
+;   load_sym s3,%tail_callee_stack_args+0
 ;   ld a0,8(nominal_sp)
 ;   ld a1,0(nominal_sp)
-;   callind t0
+;   callind s3
 ;   addi sp,sp,-144
 ;   virtual_sp_offset_adj +144
 ;   ld s1,248(sp)
@@ -256,14 +256,14 @@ block0:
 ;   sd s2, 0x78(sp)
 ;   sd a0, 0x80(sp)
 ;   sd a1, 0x88(sp)
-;   auipc t0, 0
-;   ld t0, 0xc(t0)
+;   auipc s3, 0
+;   ld s3, 0xc(s3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ld a0, 0x98(sp)
 ;   ld a1, 0x90(sp)
-;   jalr t0
+;   jalr s3
 ;   addi sp, sp, -0x90
 ;   ld s1, 0xf8(sp)
 ;   ld s2, 0xf0(sp)
@@ -519,8 +519,8 @@ block0:
 ;   virtual_sp_offset_adj +192
 ; block0:
 ;   load_addr a0,0(sp)
-;   load_sym t0,%tail_callee_stack_rets+0
-;   callind t0
+;   load_sym a4,%tail_callee_stack_rets+0
+;   callind a4
 ;   ld a5,0(sp)
 ;   ld a1,8(sp)
 ;   ld a3,16(sp)
@@ -560,12 +560,12 @@ block0:
 ;   addi sp, sp, -0xc0
 ; block1: ; offset 0x14
 ;   mv a0, sp
-;   auipc t0, 0
-;   ld t0, 0xc(t0)
+;   auipc a4, 0
+;   ld a4, 0xc(a4)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr t0
+;   jalr a4
 ;   ld a5, 0(sp)
 ;   ld a1, 8(sp)
 ;   ld a3, 0x10(sp)
@@ -876,10 +876,10 @@ block0:
 ;   sd a1,136(sp)
 ;   load_addr a0,160(sp)
 ;   sd a0,144(sp)
-;   load_sym t0,%tail_callee_stack_args_and_rets+0
+;   load_sym t1,%tail_callee_stack_args_and_rets+0
 ;   ld a0,8(nominal_sp)
 ;   ld a1,0(nominal_sp)
-;   callind t0
+;   callind t1
 ;   addi sp,sp,-160
 ;   virtual_sp_offset_adj +160
 ;   ld a4,160(sp)
@@ -990,14 +990,14 @@ block0:
 ;   sd a1, 0x88(sp)
 ;   addi a0, sp, 0xa0
 ;   sd a0, 0x90(sp)
-;   auipc t0, 0
-;   ld t0, 0xc(t0)
+;   auipc t1, 0
+;   ld t1, 0xc(t1)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ld a0, 0x168(sp)
 ;   ld a1, 0x160(sp)
-;   jalr t0
+;   jalr t1
 ;   addi sp, sp, -0xa0
 ;   ld a4, 0xa0(sp)
 ;   ld a0, 0xa8(sp)
