@@ -1278,8 +1278,8 @@ pub(crate) fn emit(
 
         Inst::CmpRmiR {
             size,
-            src: src_e,
-            dst: reg_g,
+            src1: reg_g,
+            src2: src_e,
             opcode,
         } => {
             let reg_g = allocs.next(reg_g.to_reg());

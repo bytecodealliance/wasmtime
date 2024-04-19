@@ -835,8 +835,8 @@ impl Assembler {
             DivKind::Signed => {
                 self.emit(Inst::CmpRmiR {
                     size: size.into(),
-                    src: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
-                    dst: divisor.into(),
+                    src1: divisor.into(),
+                    src2: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
                     opcode: CmpOpcode::Cmp,
                 });
                 self.emit(Inst::TrapIf {
@@ -975,23 +975,23 @@ impl Assembler {
         });
     }
 
-    pub fn cmp_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+    pub fn cmp_ir(&mut self, imm: i32, src1: Reg, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
 
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
-            src: GprMemImm::new(imm).expect("valid immediate"),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: GprMemImm::new(imm).expect("valid immediate"),
         });
     }
 
-    pub fn cmp_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn cmp_rr(&mut self, src2: Reg, src1: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
-            src: src.into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: src2.into(),
         });
     }
 
@@ -1025,12 +1025,12 @@ impl Assembler {
     }
 
     /// Emit a test instruction with two register operands.
-    pub fn test_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn test_rr(&mut self, src2: Reg, src1: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Test,
-            src: src.into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: src2.into(),
         })
     }
 

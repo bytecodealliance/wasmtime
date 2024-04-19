@@ -218,8 +218,8 @@
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
        (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
                 (opcode CmpOpcode)
-                (src GprMemImm)
-                (dst Gpr))
+                (src1 Gpr)
+                (src2 GprMemImm))
 
        ;; Materializes the requested condition code in the destinaton reg.
        (Setcc (cc CC)
@@ -2798,8 +2798,8 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.CmpRmiR size
                       opcode
-                      src1
-                      src2)))
+                      src2
+                      src1)))
 
 ;; Helper for creating `cmp` instructions.
 (decl x64_cmp (OperandSize GprMemImm Gpr) ProducesFlags)

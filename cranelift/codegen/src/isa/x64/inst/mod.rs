@@ -489,13 +489,13 @@ impl Inst {
 
     /// Does a comparison of dst - src for operands of size `size`, as stated by the machine
     /// instruction semantics. Be careful with the order of parameters!
-    pub(crate) fn cmp_rmi_r(size: OperandSize, src: RegMemImm, dst: Reg) -> Inst {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert_eq!(dst.class(), RegClass::Int);
+    pub(crate) fn cmp_rmi_r(size: OperandSize, src2: RegMemImm, src1: Reg) -> Inst {
+        src2.assert_regclass_is(RegClass::Int);
+        debug_assert_eq!(src1.class(), RegClass::Int);
         Inst::CmpRmiR {
             size,
-            src: GprMemImm::new(src).unwrap(),
-            dst: Gpr::new(dst).unwrap(),
+            src1: Gpr::new(src1).unwrap(),
+            src2: GprMemImm::new(src2).unwrap(),
             opcode: CmpOpcode::Cmp,
         }
     }
@@ -1565,18 +1565,18 @@ impl PrettyPrint for Inst {
 
             Inst::CmpRmiR {
                 size,
-                src,
-                dst,
+                src1,
+                src2,
                 opcode,
             } => {
-                let dst = pretty_print_reg(dst.to_reg(), size.to_bytes(), allocs);
-                let src = src.pretty_print(size.to_bytes(), allocs);
+                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes(), allocs);
+                let src2 = src2.pretty_print(size.to_bytes(), allocs);
                 let op = match opcode {
                     CmpOpcode::Cmp => "cmp",
                     CmpOpcode::Test => "test",
                 };
                 let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
+                format!("{op} {src2}, {src1}")
             }
 
             Inst::Setcc { cc, dst } => {
@@ -2273,10 +2273,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                 collector.reg_fixed_use(reg, regs::rcx());
             }
         }
-        Inst::CmpRmiR { src, dst, .. } => {
-            // N.B.: use, not def (cmp doesn't write its result).
-            collector.reg_use(dst.to_reg());
-            src.get_operands(collector);
+        Inst::CmpRmiR { src1, src2, .. } => {
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
         }
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
