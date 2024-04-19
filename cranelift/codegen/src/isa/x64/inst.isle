@@ -502,7 +502,10 @@
                      (rhs Xmm)
                      (dst WritableXmm))
 
-       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+       ;; Float comparisons/tests
+       ;;
+       ;; Compares `src1` against `src2` with `op`. Note that if you're testing
+       ;; `a < b` then `src1 == a` and `src2 == b`.
        (XmmCmpRmR (op SseOpcode)
                   (src1 Xmm)
                   (src2 XmmMemAligned))

@@ -3898,25 +3898,25 @@ fn test_x64_emit() {
     insns.push((
         Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, xmm2, RegMem::reg(xmm1)),
         "0F2ED1",
-        "ucomiss %xmm2, %xmm1",
+        "ucomiss %xmm1, %xmm2",
     ));
 
     insns.push((
         Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, xmm9, RegMem::reg(xmm0)),
         "440F2EC8",
-        "ucomiss %xmm9, %xmm0",
+        "ucomiss %xmm0, %xmm9",
     ));
 
     insns.push((
         Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, xmm4, RegMem::reg(xmm13)),
         "66410F2EE5",
-        "ucomisd %xmm4, %xmm13",
+        "ucomisd %xmm13, %xmm4",
     ));
 
     insns.push((
         Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, xmm12, RegMem::reg(xmm11)),
         "66450F2EE3",
-        "ucomisd %xmm12, %xmm11",
+        "ucomisd %xmm11, %xmm12",
     ));
 
     // ========================================================

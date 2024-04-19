@@ -1315,7 +1315,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 let op = ljustify(op.to_string());
-                format!("{op} {src1}, {src2}")
+                format!("{op} {src2}, {src1}")
             }
 
             Inst::CvtIntToFloat {

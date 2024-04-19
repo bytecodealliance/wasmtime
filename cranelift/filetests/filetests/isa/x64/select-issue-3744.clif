@@ -17,7 +17,7 @@ block0(v0: f32, v1: f32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $1, %eax
-;   ucomiss %xmm0, %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   cmovpl  const(0), %eax, %eax
 ;   cmovnzl const(0), %eax, %eax
 ;   movq    %rbp, %rsp

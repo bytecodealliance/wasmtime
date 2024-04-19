@@ -166,7 +166,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss %xmm0, %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
@@ -215,7 +215,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss %xmm0, %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
@@ -264,7 +264,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss %xmm0, %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   jp      label2
 ;   jnz     label2; j label1
 ; block1:
@@ -632,13 +632,13 @@ block202:
 ; block0:
 ;   movl    $1112539136, %eax
 ;   movd    %eax, %xmm4
-;   ucomiss %xmm0, %xmm4
+;   ucomiss %xmm4, %xmm0
 ;   jp      label2
 ;   jnz     label2; j label1
 ; block1:
 ;   jmp     label5
 ; block2:
-;   ucomiss %xmm0, %xmm4
+;   ucomiss %xmm4, %xmm0
 ;   jnp     label4; j label3
 ; block3:
 ;   jmp     label5
@@ -738,7 +738,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss %xmm0, %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
@@ -840,7 +840,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss %xmm0, %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
