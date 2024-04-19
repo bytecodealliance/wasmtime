@@ -2249,7 +2249,7 @@ impl RoundImm {
 }
 
 /// An operand's size in bits.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OperandSize {
     /// 8-bit.
     Size8,
