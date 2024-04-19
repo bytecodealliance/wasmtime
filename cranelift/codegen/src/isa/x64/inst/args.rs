@@ -1814,7 +1814,10 @@ impl AvxOpcode {
             | AvxOpcode::Vsqrtsd
             | AvxOpcode::Vroundss
             | AvxOpcode::Vroundsd
-            | AvxOpcode::Vunpcklpd => {
+            | AvxOpcode::Vunpcklpd
+            | AvxOpcode::Vptest
+            | AvxOpcode::Vucomiss
+            | AvxOpcode::Vucomisd => {
                 smallvec![InstructionSet::AVX]
             }
 

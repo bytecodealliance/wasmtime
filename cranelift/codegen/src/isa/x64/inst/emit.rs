@@ -2855,6 +2855,32 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
+        Inst::XmmCmpRmRVex { op, src1, src2 } => {
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (prefix, map, opcode) = match op {
+                AvxOpcode::Vucomiss => (LegacyPrefixes::None, OpcodeMap::_0F, 0x2E),
+                AvxOpcode::Vucomisd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x2E),
+                AvxOpcode::Vptest => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x17),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .rm(src2)
+                .reg(src1.to_real_reg().unwrap().hw_enc())
+                .encode(sink);
+        }
+
         Inst::XmmRmREvex {
             op,
             src1,

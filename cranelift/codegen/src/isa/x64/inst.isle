@@ -367,6 +367,10 @@
                     (dst WritableGpr)
                     (dst_size OperandSize))
 
+       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+       (XmmCmpRmRVex (op AvxOpcode)
+                     (src1 Xmm)
+                     (src2 XmmMem))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
@@ -1413,6 +1417,9 @@
             Vsqrtsd
             Vroundss
             Vroundsd
+            Vucomiss
+            Vucomisd
+            Vptest
           ))
 
 (type Avx512Opcode
@@ -2817,14 +2824,24 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
 
+;; Helper for creating `MInst.XmmCmpRmRVex` instructions.
+(decl xmm_cmp_rm_r_vex (AvxOpcode Xmm XmmMem) ProducesFlags)
+(rule (xmm_cmp_rm_r_vex opcode src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.XmmCmpRmRVex opcode src1 src2)))
+
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
-(decl x64_ucomis (Value Value) ProducesFlags)
-(rule (x64_ucomis src1 @ (value_type $F32) src2)
-      ;; N.B.: cmp can be generated more than once, so cannot do a
-      ;; load-op merge. So `put_in_xmm` for src1, not `put_in_xmm_mem`.
-      (xmm_cmp_rm_r (SseOpcode.Ucomiss) (put_in_xmm src1) (put_in_xmm src2)))
-(rule (x64_ucomis src1 @ (value_type $F64) src2)
-      (xmm_cmp_rm_r (SseOpcode.Ucomisd) (put_in_xmm src1) (put_in_xmm src2)))
+(decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
+(rule (x64_ucomis $F32 src1 src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomiss) src1 src2))
+(rule (x64_ucomis $F64 src1 src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomisd) src1 src2))
+(rule 1 (x64_ucomis $F32 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomiss) src1 src2))
+(rule 1 (x64_ucomis $F64 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomisd) src1 src2))
 
 ;; Helper for creating `test` instructions.
 (decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
@@ -2835,6 +2852,9 @@
 (decl x64_ptest (Xmm XmmMem) ProducesFlags)
 (rule (x64_ptest src1 src2)
       (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
+(rule 1 (x64_ptest src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vptest) src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps
@@ -4881,46 +4901,46 @@
 ;;  - equal assigns        Z = 1, P = 0, C = 0
 (decl emit_fcmp (FloatCC Value Value) FcmpCondResult)
 
-(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.AndCondition (x64_ucomis a b) (CC.NP) (CC.Z)))
+(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.AndCondition (x64_ucomis ty a b) (CC.NP) (CC.Z)))
 
-(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.OrCondition (x64_ucomis a b) (CC.P) (CC.NZ)))
+(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.OrCondition (x64_ucomis ty a b) (CC.P) (CC.NZ)))
 
 ;; Some scalar lowerings correspond to one condition code.
 
 (rule (emit_fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NP)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NP)))
 (rule (emit_fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.P)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.P)))
 (rule (emit_fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NZ)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NZ)))
 (rule (emit_fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.Z)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.Z)))
 (rule (emit_fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.BE)))
 
 ;; Other scalar lowerings are made possible by flipping the operands and
 ;; reversing the condition code.
 
 (rule (emit_fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThan`.
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThan`.
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.BE)))
 
 ;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
