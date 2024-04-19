@@ -452,7 +452,7 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn cmp(&mut self, _src: RegImm, _dest: Reg, _size: OperandSize) {
+    fn cmp(&mut self, _src1: Reg, _src2: RegImm, _size: OperandSize) {
         todo!()
     }
 
@@ -495,8 +495,8 @@ impl Masm for MacroAssembler {
     fn branch(
         &mut self,
         _kind: IntCmpKind,
-        _lhs: RegImm,
-        _rhs: Reg,
+        _lhs: Reg,
+        _rhs: RegImm,
         _taken: MachLabel,
         _size: OperandSize,
     ) {

@@ -627,7 +627,7 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
-    fn cmp(&mut self, src2: RegImm, src1: Reg, size: OperandSize) {
+    fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) {
         match src2 {
             RegImm::Imm(imm) => {
                 if let Some(v) = imm.to_i32() {
@@ -645,7 +645,7 @@ impl Masm for MacroAssembler {
     }
 
     fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize) {
-        self.cmp(src, dst, size);
+        self.cmp(dst, src, size);
         self.asm.setcc(kind, dst);
     }
 
@@ -748,15 +748,15 @@ impl Masm for MacroAssembler {
     fn branch(
         &mut self,
         kind: IntCmpKind,
-        lhs: RegImm,
-        rhs: Reg,
+        lhs: Reg,
+        rhs: RegImm,
         taken: MachLabel,
         size: OperandSize,
     ) {
         use IntCmpKind::*;
 
         match &(lhs, rhs) {
-            (RegImm::Reg(rlhs), rrhs) => {
+            (rlhs, RegImm::Reg(rrhs)) => {
                 // If the comparision kind is zero or not zero and both operands
                 // are the same register, emit a test instruction. Else we emit
                 // a normal comparison.
