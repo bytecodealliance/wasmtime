@@ -2543,6 +2543,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::StructGet { .. } => {
             unimplemented!("GC operators not yet implemented")
         }
+
+        Operator::GlobalAtomicGet { .. } | Operator::GlobalAtomicSet { .. } => {
+            unimplemented!("shared-everything-threads not yet implemented")
+        }
     };
     Ok(())
 }
