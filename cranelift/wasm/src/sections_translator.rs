@@ -10,8 +10,8 @@
 use crate::environ::ModuleEnvironment;
 use crate::wasm_unsupported;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, GlobalInit, Memory, MemoryIndex, TableIndex, Tag,
-    TagIndex, TypeIndex, WasmError, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, Memory, MemoryIndex, TableIndex, Tag, TagIndex,
+    TypeIndex, WasmError, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
@@ -23,6 +23,7 @@ use wasmparser::{
     ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator,
     TableSectionReader, TagSectionReader, TagType, TypeRef, TypeSectionReader,
 };
+use wasmtime_types::ConstExpr;
 
 fn memory(ty: MemoryType) -> Memory {
     Memory {
@@ -169,29 +170,7 @@ pub fn parse_global_section(
 
     for entry in globals {
         let wasmparser::Global { ty, init_expr } = entry?;
-        let mut init_expr_reader = init_expr.get_binary_reader();
-        let initializer = match init_expr_reader.read_operator()? {
-            Operator::I32Const { value } => GlobalInit::I32Const(value),
-            Operator::I64Const { value } => GlobalInit::I64Const(value),
-            Operator::F32Const { value } => GlobalInit::F32Const(value.bits()),
-            Operator::F64Const { value } => GlobalInit::F64Const(value.bits()),
-            Operator::V128Const { value } => {
-                GlobalInit::V128Const(u128::from_le_bytes(*value.bytes()))
-            }
-            Operator::RefNull { hty: _ } => GlobalInit::RefNullConst,
-            Operator::RefFunc { function_index } => {
-                GlobalInit::RefFunc(FuncIndex::from_u32(function_index))
-            }
-            Operator::GlobalGet { global_index } => {
-                GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
-            }
-            ref s => {
-                return Err(wasm_unsupported!(
-                    "unsupported init expr in global section: {:?}",
-                    s
-                ));
-            }
-        };
+        let (initializer, _escaped) = ConstExpr::from_wasmparser(init_expr)?;
         let ty = environ.convert_global_type(&ty);
         environ.declare_global(ty, initializer)?;
     }

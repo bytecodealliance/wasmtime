@@ -1,6 +1,7 @@
 //! Internal dependency of Wasmtime and Cranelift that defines types for
 //! WebAssembly.
 
+use smallvec::SmallVec;
 pub use wasmparser;
 
 use cranelift_entity::entity_impl;
@@ -190,20 +191,22 @@ impl TypeTrace for WasmValType {
 }
 
 impl WasmValType {
+    /// Is this a type that is represented as a `VMGcRef`?
     pub fn is_vmgcref_type(&self) -> bool {
-        self.is_gc_heap_type()
-            || matches!(
-                self,
-                WasmValType::Ref(WasmRefType {
-                    heap_type: WasmHeapType::I31,
-                    nullable: _,
-                })
-            )
+        match self {
+            WasmValType::Ref(r) => r.is_vmgcref_type(),
+            _ => false,
+        }
     }
 
-    pub fn is_gc_heap_type(&self) -> bool {
+    /// Is this a type that is represented as a `VMGcRef` and is additionally
+    /// not an `i31`?
+    ///
+    /// That is, is this a a type that actually refers to an object allocated in
+    /// a GC heap?
+    pub fn is_vmgcref_type_and_not_i31(&self) -> bool {
         match self {
-            WasmValType::Ref(r) => r.is_gc_heap_type(),
+            WasmValType::Ref(r) => r.is_vmgcref_type_and_not_i31(),
             _ => false,
         }
     }
@@ -242,10 +245,18 @@ impl WasmRefType {
         heap_type: WasmHeapType::Func,
     };
 
-    /// Is this a GC type that is allocated within the GC heap? (As opposed to
-    /// `i31ref` which is a GC type that is not allocated on the GC heap.)
-    pub fn is_gc_heap_type(&self) -> bool {
-        self.heap_type.is_gc_heap_type()
+    /// Is this a type that is represented as a `VMGcRef`?
+    pub fn is_vmgcref_type(&self) -> bool {
+        self.heap_type.is_vmgcref_type()
+    }
+
+    /// Is this a type that is represented as a `VMGcRef` and is additionally
+    /// not an `i31`?
+    ///
+    /// That is, is this a a type that actually refers to an object allocated in
+    /// a GC heap?
+    pub fn is_vmgcref_type_and_not_i31(&self) -> bool {
+        self.heap_type.is_vmgcref_type_and_not_i31()
     }
 }
 
@@ -409,32 +420,25 @@ impl TypeTrace for WasmHeapType {
 }
 
 impl WasmHeapType {
-    /// Is this a GC type that is allocated within the GC heap? (As opposed to
-    /// `i31ref` which is a GC type that is not allocated on the GC heap.)
-    pub fn is_gc_heap_type(&self) -> bool {
-        // All `t <: (ref null any)` and `t <: (ref null extern)` that are
-        // not `(ref null? i31)` are GC-managed references.
+    /// Is this a type that is represented as a `VMGcRef`?
+    pub fn is_vmgcref_type(&self) -> bool {
         match self {
-            // These types are managed by the GC.
-            Self::Extern | Self::Any => true,
+            // All `t <: (ref null any)` and `t <: (ref null extern)` are
+            // represented as `VMGcRef`s.
+            Self::Extern | Self::Any | Self::I31 | Self::None => true,
 
-            // TODO: Once we support concrete struct and array types, we will
-            // need to look at the payload to determine whether the type is
-            // GC-managed or not.
-            Self::Concrete(_) => false,
-
-            // These are compatible with GC references, but don't actually point
-            // to GC objects.
-            Self::I31 => false,
-
-            // These are a subtype of GC-managed types, but are uninhabited, so
-            // can never actually point to a GC object. Again, we could return
-            // `true` here but there is no need.
-            Self::None => false,
-
-            // These types are not managed by the GC.
-            Self::Func | Self::NoFunc => false,
+            // All `t <: (ref null func)` are not.
+            Self::Func | Self::Concrete(_) | Self::NoFunc => false,
         }
+    }
+
+    /// Is this a type that is represented as a `VMGcRef` and is additionally
+    /// not an `i31`?
+    ///
+    /// That is, is this a a type that actually refers to an object allocated in
+    /// a GC heap?
+    pub fn is_vmgcref_type_and_not_i31(&self) -> bool {
+        self.is_vmgcref_type() && *self != Self::I31
     }
 }
 
@@ -478,8 +482,14 @@ impl TypeTrace for WasmFuncType {
 impl WasmFuncType {
     #[inline]
     pub fn new(params: Box<[WasmValType]>, returns: Box<[WasmValType]>) -> Self {
-        let non_i31_gc_ref_params_count = params.iter().filter(|p| p.is_gc_heap_type()).count();
-        let non_i31_gc_ref_returns_count = returns.iter().filter(|r| r.is_gc_heap_type()).count();
+        let non_i31_gc_ref_params_count = params
+            .iter()
+            .filter(|p| p.is_vmgcref_type_and_not_i31())
+            .count();
+        let non_i31_gc_ref_returns_count = returns
+            .iter()
+            .filter(|r| r.is_vmgcref_type_and_not_i31())
+            .count();
         WasmFuncType {
             params,
             non_i31_gc_ref_params_count,
@@ -856,27 +866,103 @@ impl TypeTrace for Global {
     }
 }
 
-/// Globals are initialized via the `const` operators or by referring to another import.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum GlobalInit {
-    /// An `i32.const`.
+/// A constant expression.
+///
+/// These are used to initialize globals, table elements, etc...
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct ConstExpr {
+    ops: SmallVec<[ConstOp; 2]>,
+}
+
+impl ConstExpr {
+    /// Create a new const expression from the given opcodes.
+    ///
+    /// Does not do any validation that the const expression is well-typed.
+    ///
+    /// Panics if given zero opcodes.
+    pub fn new(ops: impl IntoIterator<Item = ConstOp>) -> Self {
+        let ops = ops.into_iter().collect::<SmallVec<[ConstOp; 2]>>();
+        assert!(!ops.is_empty());
+        ConstExpr { ops }
+    }
+
+    /// Create a new const expression from a `wasmparser` const expression.
+    ///
+    /// Returns the new const expression as well as the escaping function
+    /// indices that appeared in `ref.func` instructions, if any.
+    pub fn from_wasmparser(
+        expr: wasmparser::ConstExpr<'_>,
+    ) -> WasmResult<(Self, SmallVec<[FuncIndex; 1]>)> {
+        let mut iter = expr
+            .get_operators_reader()
+            .into_iter_with_offsets()
+            .peekable();
+
+        let mut ops = SmallVec::<[ConstOp; 2]>::new();
+        let mut escaped = SmallVec::<[FuncIndex; 1]>::new();
+        while let Some(res) = iter.next() {
+            let (op, offset) = res?;
+
+            // If we reach an `end` instruction, and there are no more
+            // instructions after that, then we are done reading this const
+            // expression.
+            if matches!(op, wasmparser::Operator::End) && iter.peek().is_none() {
+                break;
+            }
+
+            // Track any functions that appear in `ref.func` so that callers can
+            // make sure to flag them as escaping.
+            if let wasmparser::Operator::RefFunc { function_index } = &op {
+                escaped.push(FuncIndex::from_u32(*function_index));
+            }
+
+            ops.push(ConstOp::from_wasmparser(op, offset)?);
+        }
+        Ok((Self { ops }, escaped))
+    }
+
+    /// Get the opcodes that make up this const expression.
+    pub fn ops(&self) -> &[ConstOp] {
+        &self.ops
+    }
+}
+
+/// The subset of Wasm opcodes that are constant.
+#[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum ConstOp {
     I32Const(i32),
-    /// An `i64.const`.
     I64Const(i64),
-    /// An `f32.const`.
     F32Const(u32),
-    /// An `f64.const`.
     F64Const(u64),
-    /// A `vconst`.
     V128Const(u128),
-    /// A `global.get` of another global.
-    GetGlobal(GlobalIndex),
-    /// A `(ref.i31 (global.get N))` initializer.
-    RefI31Const(i32),
-    /// A `ref.null`.
-    RefNullConst,
-    /// A `ref.func <index>`.
+    GlobalGet(GlobalIndex),
+    RefI31,
+    RefNull,
     RefFunc(FuncIndex),
+}
+
+impl ConstOp {
+    /// Convert a `wasmparser::Operator` to a `ConstOp`.
+    pub fn from_wasmparser(op: wasmparser::Operator<'_>, offset: usize) -> WasmResult<Self> {
+        use wasmparser::Operator as O;
+        Ok(match op {
+            O::I32Const { value } => Self::I32Const(value),
+            O::I64Const { value } => Self::I64Const(value),
+            O::F32Const { value } => Self::F32Const(value.bits()),
+            O::F64Const { value } => Self::F64Const(value.bits()),
+            O::V128Const { value } => Self::V128Const(u128::from_le_bytes(*value.bytes())),
+            O::RefNull { hty: _ } => Self::RefNull,
+            O::RefFunc { function_index } => Self::RefFunc(FuncIndex::from_u32(function_index)),
+            O::GlobalGet { global_index } => Self::GlobalGet(GlobalIndex::from_u32(global_index)),
+            O::RefI31 => Self::RefI31,
+            op => {
+                return Err(wasm_unsupported!(
+                    "unsupported opcode in const expression at offset {offset:#x}: {op:?}",
+                ));
+            }
+        })
+    }
 }
 
 /// WebAssembly table.

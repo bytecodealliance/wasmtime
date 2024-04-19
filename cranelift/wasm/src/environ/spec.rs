@@ -8,8 +8,8 @@
 
 use crate::state::FuncTranslationState;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
-    MemoryIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData, Memory, MemoryIndex,
+    Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
     WasmHeapType, WasmResult,
 };
 use cranelift_codegen::cursor::FuncCursor;
@@ -21,7 +21,7 @@ use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
 use std::string::ToString;
 use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
-use wasmtime_types::ModuleInternedTypeIndex;
+use wasmtime_types::{ConstExpr, ModuleInternedTypeIndex};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -802,7 +802,7 @@ pub trait ModuleEnvironment<'data>: TypeConvert {
     }
 
     /// Declares a global to the environment.
-    fn declare_global(&mut self, global: Global, init: GlobalInit) -> WasmResult<()>;
+    fn declare_global(&mut self, global: Global, init: ConstExpr) -> WasmResult<()>;
 
     /// Provides the number of exports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
