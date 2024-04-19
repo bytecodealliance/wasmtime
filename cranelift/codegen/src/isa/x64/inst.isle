@@ -2827,9 +2827,9 @@
       (xmm_cmp_rm_r (SseOpcode.Ucomisd) (put_in_xmm src1) (put_in_xmm src2)))
 
 ;; Helper for creating `test` instructions.
-(decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
+(decl x64_test (OperandSize Gpr GprMemImm) ProducesFlags)
 (rule (x64_test size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Test) src2 src1))
+      (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
 
 ;; Helper for creating `ptest` instructions.
 (decl x64_ptest (Xmm XmmMem) ProducesFlags)
@@ -4789,7 +4789,7 @@
         ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
         ;; with `NZ`.
         (icmp_cond_result
-          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+          (x64_test (OperandSize.Size64) cmp (RegMemImm.Imm 1))
           (CC.NZ))))
 
 (rule 5 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
@@ -4802,7 +4802,7 @@
             ;; See comments for `IntCC.Equal`.
             (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
            (icmp_cond_result
-             (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+             (x64_test (OperandSize.Size64) cmp (RegMemImm.Imm 1))
              (CC.NZ))))
 
 ;; Result = (a_hi <> b_hi) ||
@@ -4825,7 +4825,7 @@
             (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
             (res Reg (x64_or $I64 cc_hi res_lo)))
         (icmp_cond_result
-          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) res)
+          (x64_test (OperandSize.Size64) res (RegMemImm.Imm 1))
           (CC.NZ))))
 
 (type FcmpCondResult
