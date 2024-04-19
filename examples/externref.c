@@ -101,11 +101,13 @@ int main() {
   void *data = wasmtime_externref_data(context, externref);
   assert(strcmp((char *)data, "Hello, World!") == 0);
 
-  printf("Touching `externref` table...\n");
-
   wasmtime_extern_t item;
+  wasmtime_val_t externref_val;
+  externref_val.kind = WASMTIME_EXTERNREF;
+  externref_val.of.externref = externref;
 
   // Lookup the `table` export.
+  printf("Touching `externref` table...\n");
   {
     ok = wasmtime_instance_export_get(context, &instance, "table",
                                       strlen("table"), &item);
@@ -113,9 +115,6 @@ int main() {
     assert(item.kind == WASMTIME_EXTERN_TABLE);
 
     // Set `table[3]` to our `externref`.
-    wasmtime_val_t externref_val;
-    externref_val.kind = WASMTIME_EXTERNREF;
-    externref_val.of.externref = externref;
     error = wasmtime_table_set(context, &item.of.table, 3, &externref_val);
     if (error != NULL)
       exit_with_error("failed to set table", error, NULL);
