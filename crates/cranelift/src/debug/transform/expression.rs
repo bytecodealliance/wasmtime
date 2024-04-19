@@ -3,7 +3,7 @@
 use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
 use anyhow::{Context, Error, Result};
-use cranelift_codegen::ir::{StackSlots, ValueLabel};
+use cranelift_codegen::ir::ValueLabel;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
@@ -19,7 +19,6 @@ use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 pub struct FunctionFrameInfo<'a> {
     pub value_ranges: &'a ValueLabelsRanges,
     pub memory_offset: ModuleMemoryOffset,
-    pub sized_stack_slots: &'a StackSlots,
 }
 
 impl<'a> FunctionFrameInfo<'a> {
@@ -1206,15 +1205,12 @@ mod tests {
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
         use crate::debug::ModuleMemoryOffset;
-        use cranelift_codegen::ir::StackSlots;
         use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
         let addr_tr = create_mock_address_transform();
-        let sized_stack_slots = StackSlots::new();
         let (value_ranges, value_labels) = create_mock_value_ranges();
         let fi = FunctionFrameInfo {
             memory_offset: ModuleMemoryOffset::None,
-            sized_stack_slots: &sized_stack_slots,
             value_ranges: &value_ranges,
         };
 

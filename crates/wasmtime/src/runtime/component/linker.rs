@@ -195,7 +195,6 @@ impl<T> Linker<T> {
 
     fn typecheck<'a>(&'a self, component: &'a Component) -> Result<TypeChecker<'a>> {
         let mut cx = TypeChecker {
-            component: component.env_component(),
             types: component.types(),
             strings: &self.strings,
             imported_resources: Default::default(),

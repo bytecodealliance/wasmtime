@@ -93,7 +93,7 @@ impl<T: ?Sized> Copy for SendSyncPtr<T> {}
 impl<T: ?Sized> PartialEq for SendSyncPtr<T> {
     #[inline]
     fn eq(&self, other: &SendSyncPtr<T>) -> bool {
-        self.0 == other.0
+        std::ptr::eq(self.0.as_ptr(), other.0.as_ptr())
     }
 }
 

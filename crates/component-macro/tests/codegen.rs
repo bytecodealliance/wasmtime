@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 macro_rules! gentest {
     ($id:ident $name:tt $path:tt) => {
         mod $id {
