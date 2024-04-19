@@ -2154,7 +2154,7 @@
                             (RegMemImm.Imm 64)))
             (result_lo Gpr
               (with_flags_reg
-               (x64_cmp_imm (OperandSize.Size64) 64 upper)
+               (x64_cmp_imm (OperandSize.Size64) upper 64)
                (cmove $I64 (CC.NZ) upper lower))))
         (value_regs result_lo (imm $I64 0))))
 
@@ -2191,7 +2191,7 @@
                             (RegMemImm.Imm 64)))
             (result_lo Gpr
               (with_flags_reg
-               (x64_cmp_imm (OperandSize.Size64) 64 lower)
+               (x64_cmp_imm (OperandSize.Size64) lower 64)
                (cmove $I64 (CC.Z) upper lower))))
         (value_regs result_lo (imm $I64 0))))
 
@@ -2452,7 +2452,7 @@
 ;; Null references are represented by the constant value `0`.
 (rule (lower (is_null src @ (value_type $R64)))
       (with_flags
-       (x64_cmp_imm (OperandSize.Size64) 0 src)
+       (x64_cmp_imm (OperandSize.Size64) src 0)
        (x64_setcc (CC.Z))))
 
 ;; Rules for `is_invalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2460,7 +2460,7 @@
 ;; Invalid references are represented by the constant value `-1`.
 (rule (lower (is_invalid src @ (value_type $R64)))
       (with_flags
-       (x64_cmp_imm (OperandSize.Size64) 0xffffffff src)  ;; simm32 0xffff_ffff is sign-extended to -1.
+       (x64_cmp_imm (OperandSize.Size64) src 0xffffffff)  ;; simm32 0xffff_ffff is sign-extended to -1.
        (x64_setcc (CC.Z))))
 
 
