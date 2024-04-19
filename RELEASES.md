@@ -29,14 +29,14 @@ Unreleased.
 Released 2024-04-11.
 
 * Fix a panic when compiling invalid components.
-  [#8322](https://github.com/bytecodealliance/wasmtime/issues/8322)
+  [#8323](https://github.com/bytecodealliance/wasmtime/issues/8323)
 
 * Fix `bindgen!` with `trappable_error_type` using unversioned/versioned
   packages.
   [#8305](https://github.com/bytecodealliance/wasmtime/pull/8305)
 
 * cranelift: Include clobbers and outgoing args in stack limit.
-  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+  [#8301](https://github.com/bytecodealliance/wasmtime/pull/8301)
 
 --------------------------------------------------------------------------------
 
@@ -160,10 +160,10 @@ Released 2024-04-11
   [#8305](https://github.com/bytecodealliance/wasmtime/pull/8305)
 
 * cranelift: Include clobbers and outgoing args in stack limit.
-  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+  [#8301](https://github.com/bytecodealliance/wasmtime/pull/8301)
 
 * Fix a panic when compiling invalid components.
-  [#8322](https://github.com/bytecodealliance/wasmtime/issues/8322)
+  [#8323](https://github.com/bytecodealliance/wasmtime/issues/8323)
 
 --------------------------------------------------------------------------------
 
@@ -259,7 +259,10 @@ Released 2024-04-11
 ### Fixed
 
 * cranelift: Include clobbers and outgoing args in stack limit.
-  [#8334](https://github.com/bytecodealliance/wasmtime/pull/8334)
+  [#8301](https://github.com/bytecodealliance/wasmtime/pull/8301)
+
+* Fix a panic when compiling invalid components.
+  [#8323](https://github.com/bytecodealliance/wasmtime/issues/8323)
 
 --------------------------------------------------------------------------------
 
