@@ -1,4 +1,5 @@
 #![cfg(not(miri))]
+#![allow(dead_code)]
 
 use super::engine;
 use anyhow::Result;

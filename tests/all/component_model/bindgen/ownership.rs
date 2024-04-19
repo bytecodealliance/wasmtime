@@ -114,8 +114,9 @@ fn component() -> String {
     )
 }
 
-#[test]
-fn owning() -> Result<()> {
+mod owning {
+    use super::*;
+
     wasmtime::component::bindgen!({
         inline: "
         package inline:inline;
@@ -157,33 +158,36 @@ fn owning() -> Result<()> {
         }
     }
 
-    let engine = engine();
-    let component = Component::new(&engine, component())?;
+    #[test]
+    fn owning() -> Result<()> {
+        let engine = engine();
+        let component = Component::new(&engine, component())?;
 
-    let linker = Linker::new(&engine);
-    let mut store = Store::new(&engine, ());
-    let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
+        let linker = Linker::new(&engine);
+        let mut store = Store::new(&engine, ());
+        let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
 
-    let value = vec![vec!["a".to_owned(), "b".to_owned()]];
-    assert_eq!(value, test.lists().call_foo(&mut store, &value)?);
+        let value = vec![vec!["a".to_owned(), "b".to_owned()]];
+        assert_eq!(value, test.lists().call_foo(&mut store, &value)?);
 
-    let value = exports::thing_in::Thing {
-        name: "thing 1".to_owned(),
-        value: vec!["some value".to_owned(), "another value".to_owned()],
-    };
-    test.thing_in().call_bar(&mut store, &value)?;
+        let value = exports::thing_in::Thing {
+            name: "thing 1".to_owned(),
+            value: vec!["some value".to_owned(), "another value".to_owned()],
+        };
+        test.thing_in().call_bar(&mut store, &value)?;
 
-    let value = exports::thing_in_and_out::Thing {
-        name: "thing 1".to_owned(),
-        value: vec!["some value".to_owned(), "another value".to_owned()],
-    };
-    assert_eq!(value, test.thing_in_and_out().call_baz(&mut store, &value)?);
+        let value = exports::thing_in_and_out::Thing {
+            name: "thing 1".to_owned(),
+            value: vec!["some value".to_owned(), "another value".to_owned()],
+        };
+        assert_eq!(value, test.thing_in_and_out().call_baz(&mut store, &value)?);
 
-    Ok(())
+        Ok(())
+    }
 }
 
-#[test]
-fn borrowing_no_duplication() -> Result<()> {
+mod borrowing_no_duplication {
+    use super::*;
     wasmtime::component::bindgen!({
         inline: "
         package inline:inline;
@@ -227,33 +231,37 @@ fn borrowing_no_duplication() -> Result<()> {
         }
     }
 
-    let engine = engine();
-    let component = Component::new(&engine, component())?;
+    #[test]
+    fn borrowing_no_duplication() -> Result<()> {
+        let engine = engine();
+        let component = Component::new(&engine, component())?;
 
-    let linker = Linker::new(&engine);
-    let mut store = Store::new(&engine, ());
-    let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
+        let linker = Linker::new(&engine);
+        let mut store = Store::new(&engine, ());
+        let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
 
-    let value = &[&["a", "b"] as &[_]] as &[_];
-    assert_eq!(value, test.lists().call_foo(&mut store, value)?);
+        let value = &[&["a", "b"] as &[_]] as &[_];
+        assert_eq!(value, test.lists().call_foo(&mut store, value)?);
 
-    let value = exports::thing_in::Thing {
-        name: "thing 1",
-        value: &["some value", "another value"],
-    };
-    test.thing_in().call_bar(&mut store, value)?;
+        let value = exports::thing_in::Thing {
+            name: "thing 1",
+            value: &["some value", "another value"],
+        };
+        test.thing_in().call_bar(&mut store, value)?;
 
-    let value = exports::thing_in_and_out::Thing {
-        name: "thing 1".to_owned(),
-        value: vec!["some value".to_owned(), "another value".to_owned()],
-    };
-    assert_eq!(value, test.thing_in_and_out().call_baz(&mut store, &value)?);
+        let value = exports::thing_in_and_out::Thing {
+            name: "thing 1".to_owned(),
+            value: vec!["some value".to_owned(), "another value".to_owned()],
+        };
+        assert_eq!(value, test.thing_in_and_out().call_baz(&mut store, &value)?);
 
-    Ok(())
+        Ok(())
+    }
 }
 
-#[test]
-fn borrowing_with_duplication() -> Result<()> {
+mod borrowing_with_duplication {
+    use super::*;
+
     wasmtime::component::bindgen!({
         inline: "
         package inline:inline;
@@ -297,33 +305,36 @@ fn borrowing_with_duplication() -> Result<()> {
         }
     }
 
-    let engine = engine();
-    let component = Component::new(&engine, component())?;
+    #[test]
+    fn borrowing_with_duplication() -> Result<()> {
+        let engine = engine();
+        let component = Component::new(&engine, component())?;
 
-    let linker = Linker::new(&engine);
-    let mut store = Store::new(&engine, ());
-    let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
+        let linker = Linker::new(&engine);
+        let mut store = Store::new(&engine, ());
+        let (test, _) = Test::instantiate(&mut store, &component, &linker)?;
 
-    let value = &[&["a", "b"] as &[_]] as &[_];
-    assert_eq!(value, test.lists().call_foo(&mut store, value)?);
+        let value = &[&["a", "b"] as &[_]] as &[_];
+        assert_eq!(value, test.lists().call_foo(&mut store, value)?);
 
-    let value = exports::thing_in::Thing {
-        name: "thing 1",
-        value: &["some value", "another value"],
-    };
-    test.thing_in().call_bar(&mut store, value)?;
+        let value = exports::thing_in::Thing {
+            name: "thing 1",
+            value: &["some value", "another value"],
+        };
+        test.thing_in().call_bar(&mut store, value)?;
 
-    let value = exports::thing_in_and_out::ThingParam {
-        name: "thing 1",
-        value: &["some value", "another value"],
-    };
-    assert_eq!(
-        exports::thing_in_and_out::ThingResult {
-            name: "thing 1".to_owned(),
-            value: vec!["some value".to_owned(), "another value".to_owned()],
-        },
-        test.thing_in_and_out().call_baz(&mut store, value)?
-    );
+        let value = exports::thing_in_and_out::ThingParam {
+            name: "thing 1",
+            value: &["some value", "another value"],
+        };
+        assert_eq!(
+            exports::thing_in_and_out::ThingResult {
+                name: "thing 1".to_owned(),
+                value: vec!["some value".to_owned(), "another value".to_owned()],
+            },
+            test.thing_in_and_out().call_baz(&mut store, value)?
+        );
 
-    Ok(())
+        Ok(())
+    }
 }
