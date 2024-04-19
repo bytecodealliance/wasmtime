@@ -43,7 +43,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_i64+0, %r10
-;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
+;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -71,7 +71,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_i64+0, %r10
-;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
+;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -140,7 +140,7 @@ block0(v0: f64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_f64+0, %r10
-;   return_call_unknown %r10 (0) tmp=%rcx %xmm0=%xmm0
+;   return_call_unknown %r10 (0) tmp=%r11 %xmm0=%xmm0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -196,7 +196,7 @@ block0(v0: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_i8+0, %r10
-;   return_call_unknown %r10 (0) tmp=%rcx %rdi=%rdi
+;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -335,7 +335,7 @@ block0:
 ;   movq    rsp(72 + virtual offset), %r8
 ;   movq    rsp(64 + virtual offset), %r9
 ;   movq    rsp(0 + virtual offset), %r10
-;   return_call_unknown %r10 (160) tmp=%rax %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
+;   return_call_unknown %r10 (160) tmp=%r11 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

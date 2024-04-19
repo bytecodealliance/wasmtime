@@ -2353,7 +2353,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 
         Inst::ReturnCallKnown { callee, info } => {
             let ReturnCallInfo { uses, tmp, .. } = &**info;
-            collector.reg_early_def(tmp.to_writable_reg());
+            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
             // Same as in the `Inst::CallKnown` branch.
             debug_assert_ne!(*callee, ExternalName::LibCall(LibCall::Probestack));
             for u in uses {
@@ -2374,7 +2374,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                 }
                 RegMem::Mem { addr } => addr.get_operands(collector),
             }
-            collector.reg_early_def(tmp.to_writable_reg());
+            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
