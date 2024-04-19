@@ -109,7 +109,7 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
     /// `Fiber::suspend`.
     pub fn new(
         stack: FiberStack,
-        func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return + 'a,
+        func: impl FnOnce(Resume, &mut Suspend<Resume, Yield, Return>) -> Return + 'a,
     ) -> io::Result<Self> {
         let inner = imp::Fiber::new(&stack.0, func)?;
 
@@ -172,7 +172,7 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
     /// # Panics
     ///
     /// Panics if the current thread is not executing a fiber from this library.
-    pub fn suspend(&self, value: Yield) -> Resume {
+    pub fn suspend(&mut self, value: Yield) -> Resume {
         self.inner
             .switch::<Resume, Yield, Return>(RunResult::Yield(value))
     }
@@ -180,13 +180,13 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
     fn execute(
         inner: imp::Suspend,
         initial: Resume,
-        func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return,
+        func: impl FnOnce(Resume, &mut Suspend<Resume, Yield, Return>) -> Return,
     ) {
-        let suspend = Suspend {
+        let mut suspend = Suspend {
             inner,
             _phantom: PhantomData,
         };
-        let result = panic::catch_unwind(AssertUnwindSafe(|| (func)(initial, &suspend)));
+        let result = panic::catch_unwind(AssertUnwindSafe(|| (func)(initial, &mut suspend)));
         suspend.inner.switch::<Resume, Yield, Return>(match result {
             Ok(result) => RunResult::Returned(result),
             Err(panic) => RunResult::Panicked(panic),

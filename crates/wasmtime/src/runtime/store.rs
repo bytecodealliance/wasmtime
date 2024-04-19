@@ -382,7 +382,7 @@ pub struct StoreOpaque {
 
 #[cfg(feature = "async")]
 struct AsyncState {
-    current_suspend: UnsafeCell<*const wasmtime_fiber::Suspend<Result<()>, (), Result<()>>>,
+    current_suspend: UnsafeCell<*mut wasmtime_fiber::Suspend<Result<()>, (), Result<()>>>,
     current_poll_cx: UnsafeCell<*mut Context<'static>>,
 }
 
@@ -501,7 +501,7 @@ impl<T> Store<T> {
                 table_limit: crate::DEFAULT_TABLE_LIMIT,
                 #[cfg(feature = "async")]
                 async_state: AsyncState {
-                    current_suspend: UnsafeCell::new(ptr::null()),
+                    current_suspend: UnsafeCell::new(ptr::null_mut()),
                     current_poll_cx: UnsafeCell::new(ptr::null_mut()),
                 },
                 fuel_reserve: 0,
@@ -2273,7 +2273,7 @@ impl<T> StoreContextMut<'_, T> {
 
 #[cfg(feature = "async")]
 pub struct AsyncCx {
-    current_suspend: *mut *const wasmtime_fiber::Suspend<Result<()>, (), Result<()>>,
+    current_suspend: *mut *mut wasmtime_fiber::Suspend<Result<()>, (), Result<()>>,
     current_poll_cx: *mut *mut Context<'static>,
     track_pkey_context_switch: bool,
 }
@@ -2319,7 +2319,7 @@ impl AsyncCx {
         // if this `Reset` is removed.
         let suspend = *self.current_suspend;
         let _reset = Reset(self.current_suspend, suspend);
-        *self.current_suspend = ptr::null();
+        *self.current_suspend = ptr::null_mut();
         assert!(!suspend.is_null());
 
         loop {
@@ -2419,7 +2419,9 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
         #[cfg(feature = "async")]
-        let async_cx = if self.async_support() {
+        let async_cx = if self.async_support()
+            && matches!(self.limiter, Some(ResourceLimiterInner::Async(_)))
+        {
             Some(self.async_cx().unwrap())
         } else {
             None

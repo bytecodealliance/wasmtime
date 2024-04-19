@@ -4,6 +4,14 @@ use wasmtime_versioned_export_macros::versioned_suffix;
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    // NB: duplicating a workaround in the wasmtime-fiber build script.
+    match env::var("CARGO_CFG_SANITIZE") {
+        Ok(s) if s == "address" => {
+            println!("cargo:rustc-cfg=asan");
+        }
+        _ => {}
+    }
+
     // If this platform is neither unix nor windows then there's no default need
     // for a C helper library since `helpers.c` is tailored for just these
     // platforms currently.

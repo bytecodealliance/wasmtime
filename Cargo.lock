@@ -3752,6 +3752,7 @@ dependencies = [
  "component-fuzz-util",
  "component-test-util",
  "env_logger",
+ "futures",
  "log",
  "rand",
  "rayon",

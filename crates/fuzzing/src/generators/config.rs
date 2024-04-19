@@ -1,8 +1,8 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
 use super::{
-    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, NormalMemoryConfig,
-    UnalignedMemoryCreator,
+    AsyncConfig, CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig,
+    NormalMemoryConfig, UnalignedMemoryCreator,
 };
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
@@ -227,6 +227,8 @@ impl Config {
             cfg.cranelift_pcc(pcc);
         }
 
+        self.wasmtime.async_config.configure(&mut cfg);
+
         // Vary the memory configuration, but only if threads are not enabled.
         // When the threads proposal is enabled we might generate shared memory,
         // which is less amenable to different memory configurations:
@@ -285,20 +287,26 @@ impl Config {
     /// Configures a store based on this configuration.
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
-        if self.wasmtime.consume_fuel {
-            store.set_fuel(u64::MAX).unwrap();
-        }
-        if self.wasmtime.epoch_interruption {
-            // Without fuzzing of async execution, we can't test the
-            // "update deadline and continue" behavior, but we can at
-            // least test the codegen paths and checks with the
-            // trapping behavior, which works synchronously too. We'll
-            // set the deadline one epoch tick in the future; then
-            // this works exactly like an interrupt flag. We expect no
-            // traps/interrupts unless we bump the epoch, which we do
-            // as one particular Timeout mode (`Timeout::Epoch`).
-            store.epoch_deadline_trap();
-            store.set_epoch_deadline(1);
+        match self.wasmtime.async_config {
+            AsyncConfig::Disabled => {
+                if self.wasmtime.consume_fuel {
+                    store.set_fuel(u64::MAX).unwrap();
+                }
+                if self.wasmtime.epoch_interruption {
+                    store.epoch_deadline_trap();
+                    store.set_epoch_deadline(1);
+                }
+            }
+            AsyncConfig::YieldWithFuel(amt) => {
+                assert!(self.wasmtime.consume_fuel);
+                store.fuel_async_yield_interval(Some(amt)).unwrap();
+                store.set_fuel(amt).unwrap();
+            }
+            AsyncConfig::YieldWithEpochs { ticks, .. } => {
+                assert!(self.wasmtime.epoch_interruption);
+                store.set_epoch_deadline(ticks);
+                store.epoch_deadline_async_yield_and_update(ticks);
+            }
         }
     }
 
@@ -354,6 +362,23 @@ impl Config {
         self.module_config.config.tail_call_enabled = false;
         self.module_config.config.exceptions_enabled = false;
         self.module_config.config.reference_types_enabled = false;
+    }
+
+    /// Updates this configuration to forcibly enable async support. Only useful
+    /// in fuzzers which do async calls.
+    pub fn enable_async(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
+        if self.wasmtime.consume_fuel || u.arbitrary()? {
+            self.wasmtime.async_config =
+                AsyncConfig::YieldWithFuel(u.int_in_range(1000..=100_000)?);
+            self.wasmtime.consume_fuel = true;
+        } else {
+            self.wasmtime.async_config = AsyncConfig::YieldWithEpochs {
+                dur: Duration::from_millis(u.int_in_range(1..=10)?),
+                ticks: u.int_in_range(1..=10)?,
+            };
+            self.wasmtime.epoch_interruption = true;
+        }
+        Ok(())
     }
 }
 
@@ -454,6 +479,10 @@ pub struct WasmtimeConfig {
 
     /// Whether or not fuzzing should enable PCC.
     pcc: bool,
+
+    /// Configuration for whether wasm is invoked in an async fashion and how
+    /// it's cooperatively time-sliced.
+    pub async_config: AsyncConfig,
 }
 
 impl WasmtimeConfig {

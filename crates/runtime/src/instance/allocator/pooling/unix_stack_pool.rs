@@ -1,3 +1,5 @@
+#![cfg_attr(asan, allow(dead_code))]
+
 use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2,
