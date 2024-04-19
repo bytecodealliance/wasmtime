@@ -2809,7 +2809,7 @@
 ;; Helper for creating `cmp` instructions with an immediate.
 (decl x64_cmp_imm (OperandSize Gpr u32) ProducesFlags)
 (rule (x64_cmp_imm size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) src1 (RegMemImm.Imm src2)))
+      (x64_cmp size src1 (RegMemImm.Imm src2)))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
 (decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
