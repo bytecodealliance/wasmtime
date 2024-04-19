@@ -975,7 +975,7 @@ impl Assembler {
         });
     }
 
-    pub fn cmp_ir(&mut self, imm: i32, src1: Reg, size: OperandSize) {
+    pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
 
         self.emit(Inst::CmpRmiR {

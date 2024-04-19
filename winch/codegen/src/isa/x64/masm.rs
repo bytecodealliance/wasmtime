@@ -631,7 +631,7 @@ impl Masm for MacroAssembler {
         match src2 {
             RegImm::Imm(imm) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.cmp_ir(v, src1, size);
+                    self.asm.cmp_ir(src1, v, size);
                 } else {
                     let scratch = regs::scratch();
                     self.load_constant(&imm, scratch, size);
