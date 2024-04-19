@@ -356,7 +356,7 @@ where
         );
 
         // Typecheck.
-        self.masm.cmp(callee_id.into(), caller_id, OperandSize::S32);
+        self.masm.cmp(caller_id, callee_id.into(), OperandSize::S32);
         self.masm.trapif(IntCmpKind::Ne, TrapCode::BadSignature);
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
@@ -492,8 +492,8 @@ where
 
         self.masm.branch(
             IntCmpKind::Ne,
-            elem_value.into(),
             elem_value,
+            elem_value.into(),
             defined,
             ptr_type.into(),
         );
@@ -613,8 +613,8 @@ where
                     |masm, bounds, _| {
                         let bounds_reg = bounds.as_typed_reg().reg;
                         masm.cmp(
-                            bounds_reg.into(),
                             index_offset_and_access_size.into(),
+                            bounds_reg.into(),
                             heap.ty.into(),
                         );
                         IntCmpKind::GtU
@@ -697,8 +697,8 @@ where
                         let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
                         let index_reg = index.as_typed_reg().reg;
                         masm.cmp(
-                            RegImm::i64(adjusted_bounds as i64),
                             index_reg,
+                            RegImm::i64(adjusted_bounds as i64),
                             heap.ty.into(),
                         );
                         IntCmpKind::GtU
@@ -776,7 +776,7 @@ where
             .address_at_reg(base, table_data.current_elems_offset);
         let bound_size = table_data.current_elements_size;
         self.masm.load(bound_addr, bound, bound_size.into());
-        self.masm.cmp(bound.into(), index, bound_size);
+        self.masm.cmp(index, bound.into(), bound_size);
         self.masm
             .trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
 
@@ -801,7 +801,7 @@ where
         if self.env.table_access_spectre_mitigation() {
             // Perform a bounds check and override the value of the
             // table element address in case the index is out of bounds.
-            self.masm.cmp(bound.into(), index, OperandSize::S32);
+            self.masm.cmp(index, bound.into(), OperandSize::S32);
             self.masm.cmov(tmp, base, IntCmpKind::GeU, ptr_size);
         }
         self.context.free_reg(bound);

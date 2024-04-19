@@ -1885,7 +1885,7 @@ where
         let val2 = self.context.pop_to_reg(self.masm, None);
         let val1 = self.context.pop_to_reg(self.masm, None);
         self.masm
-            .cmp(RegImm::i32(0), cond.reg.into(), OperandSize::S32);
+            .cmp(cond.reg.into(), RegImm::i32(0), OperandSize::S32);
         // Conditionally move val1 to val2 if the the comparision is
         // not zero.
         self.masm

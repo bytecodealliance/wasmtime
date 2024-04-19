@@ -765,7 +765,7 @@ pub(crate) fn emit(
 
             // Check if the divisor is -1, and if it isn't then immediately
             // go to the `idiv`.
-            let inst = Inst::cmp_rmi_r(size, RegMemImm::imm(0xffffffff), divisor);
+            let inst = Inst::cmp_rmi_r(size, divisor, RegMemImm::imm(0xffffffff));
             inst.emit(&[], sink, info, state);
             one_way_jmp(sink, CC::NZ, do_op);
 
@@ -1278,8 +1278,8 @@ pub(crate) fn emit(
 
         Inst::CmpRmiR {
             size,
-            src: src_e,
-            dst: reg_g,
+            src1: reg_g,
+            src2: src_e,
             opcode,
         } => {
             let reg_g = allocs.next(reg_g.to_reg());
@@ -1580,8 +1580,8 @@ pub(crate) fn emit(
             // cmp  rsp, tmp_reg
             let inst = Inst::cmp_rmi_r(
                 OperandSize::Size64,
-                RegMemImm::reg(regs::rsp()),
                 tmp.to_reg(),
+                RegMemImm::reg(regs::rsp()),
             );
             inst.emit(&[], sink, info, state);
 
@@ -3335,7 +3335,7 @@ pub(crate) fn emit(
             // If x seen as a signed int64 is not negative, a signed-conversion will do the right
             // thing.
             // TODO use tst src, src here.
-            let inst = Inst::cmp_rmi_r(OperandSize::Size64, RegMemImm::imm(0), src);
+            let inst = Inst::cmp_rmi_r(OperandSize::Size64, src, RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::L, handle_negative);
@@ -3483,7 +3483,7 @@ pub(crate) fn emit(
             inst.emit(&[], sink, info, state);
 
             // Compare against 1, in case of overflow the dst operand was INT_MIN.
-            let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(1), dst);
+            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(1));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NO, done); // no overflow => done
@@ -3730,7 +3730,7 @@ pub(crate) fn emit(
             let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
+            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
@@ -3767,7 +3767,7 @@ pub(crate) fn emit(
             let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2, Writable::from_reg(dst), *dst_size);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
+            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             if *is_saturating {
@@ -3969,8 +3969,8 @@ pub(crate) fn emit(
                     // cmp %r_temp, %r_operand
                     let i3 = Inst::cmp_rmi_r(
                         OperandSize::from_ty(*ty),
-                        RegMemImm::reg(temp.to_reg()),
                         operand,
+                        RegMemImm::reg(temp.to_reg()),
                     );
                     i3.emit(&[], sink, info, state);
 

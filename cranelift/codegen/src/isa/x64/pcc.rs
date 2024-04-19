@@ -438,15 +438,18 @@ pub(crate) fn check(
         }
 
         Inst::CmpRmiR {
-            size, dst, ref src, ..
-        } => match <&RegMemImm>::from(src) {
+            size,
+            src1,
+            ref src2,
+            ..
+        } => match <&RegMemImm>::from(src2) {
             RegMemImm::Mem {
                 addr: SyntheticAmode::ConstantOffset(k),
             } => {
                 match vcode.constants.get(*k) {
                     VCodeConstantData::U64(bytes) => {
                         let value = u64::from_le_bytes(*bytes);
-                        let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                        let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                         let rhs = Fact::constant(64, value);
                         state.cmp_flags = Some((lhs, rhs));
                     }
@@ -456,19 +459,19 @@ pub(crate) fn check(
             }
             RegMemImm::Mem { ref addr } => {
                 if let Some(rhs) = check_load(ctx, None, addr, vcode, size.to_type(), 64)? {
-                    let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                    let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                     state.cmp_flags = Some((lhs, rhs));
                 }
                 Ok(())
             }
             RegMemImm::Reg { reg } => {
                 let rhs = get_fact_or_default(vcode, *reg, 64);
-                let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                 state.cmp_flags = Some((lhs, rhs));
                 Ok(())
             }
             RegMemImm::Imm { simm32 } => {
-                let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                 let rhs = Fact::constant(64, (*simm32 as i32) as i64 as u64);
                 state.cmp_flags = Some((lhs, rhs));
                 Ok(())
