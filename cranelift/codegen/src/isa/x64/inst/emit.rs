@@ -2964,7 +2964,7 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs), dst);
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, dst, RegMem::reg(lhs));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
@@ -3171,9 +3171,9 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmCmpRmR { op, src, dst } => {
-            let dst = allocs.next(dst.to_reg());
-            let src = src.clone().to_reg_mem().with_allocs(allocs);
+        Inst::XmmCmpRmR { op, src1, src2 } => {
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, len) = match op {
@@ -3183,13 +3183,13 @@ pub(crate) fn emit(
                 _ => unimplemented!("Emit xmm cmp rm r"),
             };
 
-            match src {
+            match src2 {
                 RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, len, dst, reg, rex);
+                    emit_std_reg_reg(sink, prefix, opcode, len, src1, reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
-                    emit_std_reg_mem(sink, prefix, opcode, len, dst, addr, rex, 0);
+                    emit_std_reg_mem(sink, prefix, opcode, len, src1, addr, rex, 0);
                 }
             }
         }
@@ -3461,7 +3461,7 @@ pub(crate) fn emit(
 
             // Check for NaN.
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), src);
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(src));
             inst.emit(&[], sink, info, state);
 
             if *is_saturating {
@@ -3492,7 +3492,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm);
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm, RegMem::reg(src));
                 inst.emit(&[], sink, info, state);
 
                 // Jump if >= to done.
@@ -3553,7 +3553,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm), src);
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm));
                 inst.emit(&[], sink, info, state);
 
                 // no trap if src >= or > threshold
@@ -3570,7 +3570,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm);
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm, RegMem::reg(src));
                 inst.emit(&[], sink, info, state);
 
                 // no trap if 0 >= src
@@ -3668,7 +3668,7 @@ pub(crate) fn emit(
             );
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm), src);
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm));
             inst.emit(&[], sink, info, state);
 
             let handle_large = sink.get_label();

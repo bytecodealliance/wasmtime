@@ -768,13 +768,17 @@ pub(crate) fn check(
 
         Inst::XmmMinMaxSeq { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 
-        Inst::XmmCmpRmR { ref src, .. } => match <&RegMem>::from(src) {
-            RegMem::Mem { ref addr } => {
-                check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                Ok(())
+        Inst::XmmCmpRmR {
+            ref src1, ref src2, ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
             }
-            RegMem::Reg { .. } => Ok(()),
-        },
+            ensure_no_fact(vcode, src1.to_reg())
+        }
 
         Inst::XmmRmRImm {
             dst,
