@@ -148,7 +148,8 @@ int main() {
     wasmtime_val_t global_val;
     wasmtime_global_get(context, &item.of.global, &global_val);
     assert(global_val.kind == WASMTIME_EXTERNREF);
-    assert(strcmp((char *)wasmtime_externref_data(context, global_val.of.externref),
+    assert(strcmp((char *)wasmtime_externref_data(context,
+                                                  global_val.of.externref),
                   "Hello, World!") == 0);
     wasmtime_val_delete(context, &global_val);
   }
@@ -157,24 +158,24 @@ int main() {
 
   // Lookup the `func` export.
   {
-    ok = wasmtime_instance_export_get(context, &instance, "func", strlen("func"),
-                                      &item);
+    ok = wasmtime_instance_export_get(context, &instance, "func",
+                                      strlen("func"), &item);
     assert(ok);
     assert(item.kind == WASMTIME_EXTERN_FUNC);
 
     // And call it!
     wasmtime_val_t results[1];
-    error = wasmtime_func_call(context, &item.of.func, &externref_val, 1, results,
-                               1, &trap);
+    error = wasmtime_func_call(context, &item.of.func, &externref_val, 1,
+                               results, 1, &trap);
     if (error != NULL || trap != NULL)
       exit_with_error("failed to call function", error, trap);
 
-    // `func` returns the same reference we gave it, so `results[0]` should be our
-    // `externref`.
+    // `func` returns the same reference we gave it, so `results[0]` should be
+    // our `externref`.
     assert(results[0].kind == WASMTIME_EXTERNREF);
-    assert(
-        strcmp((char *)wasmtime_externref_data(context, results[0].of.externref),
-               "Hello, World!") == 0);
+    assert(strcmp((char *)wasmtime_externref_data(context,
+                                                  results[0].of.externref),
+                  "Hello, World!") == 0);
     wasmtime_val_delete(context, &results[0]);
   }
   wasmtime_val_delete(context, &externref_val);
