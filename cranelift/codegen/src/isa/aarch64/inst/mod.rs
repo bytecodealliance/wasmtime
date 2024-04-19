@@ -891,14 +891,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_clobbers(info.clobbers);
         }
         &Inst::CallInd { ref info, .. } => {
-            match info.callee_callconv {
-                CallConv::Tail => {
-                    // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
-                    // This shouldn't be a fixed register constraint.
-                    collector.reg_fixed_use(info.rn, xreg(1))
-                }
-                _ => collector.reg_use(info.rn),
-            }
+            collector.reg_use(info.rn);
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
@@ -916,7 +909,11 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
         }
         &Inst::ReturnCallInd { ref info, callee } => {
-            collector.reg_use(callee);
+            // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+            // This shouldn't be a fixed register constraint, but it's not clear how to pick a
+            // register that won't be clobbered by the callee-save restore code emitted with a
+            // return_call_indirect.
+            collector.reg_fixed_use(callee, xreg(1));
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
