@@ -2793,23 +2793,23 @@
         dst))
 
 ;; Helper for creating `MInst.CmpRmiR` instructions.
-(decl cmp_rmi_r (OperandSize CmpOpcode GprMemImm Gpr) ProducesFlags)
+(decl cmp_rmi_r (OperandSize CmpOpcode Gpr GprMemImm) ProducesFlags)
 (rule (cmp_rmi_r size opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.CmpRmiR size
                       opcode
-                      src2
-                      src1)))
+                      src1
+                      src2)))
 
 ;; Helper for creating `cmp` instructions.
 (decl x64_cmp (OperandSize GprMemImm Gpr) ProducesFlags)
 (rule (x64_cmp size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
+      (cmp_rmi_r size (CmpOpcode.Cmp) src2 src1))
 
 ;; Helper for creating `cmp` instructions with an immediate.
 (decl x64_cmp_imm (OperandSize u32 Gpr) ProducesFlags)
 (rule (x64_cmp_imm size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) (RegMemImm.Imm src1) src2))
+      (cmp_rmi_r size (CmpOpcode.Cmp) src2 (RegMemImm.Imm src1)))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
 (decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
@@ -2829,7 +2829,7 @@
 ;; Helper for creating `test` instructions.
 (decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
 (rule (x64_test size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
+      (cmp_rmi_r size (CmpOpcode.Test) src2 src1))
 
 ;; Helper for creating `ptest` instructions.
 (decl x64_ptest (Xmm XmmMem) ProducesFlags)
