@@ -895,7 +895,6 @@ block0:
 ;   popq %rbp
 ;   retq
 
-
 ;; Test that tail calls that shrink the argument area don't clobber the location
 ;; of an indirect jump
 
@@ -916,8 +915,8 @@ block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, 
 ;   movq    rbp(stack args max - 24), %rax
 ;   movq    rbp(stack args max - 16), %rdx
 ;   movq    rbp(stack args max - 8), %r9
-;   load_ext_name %callee_simple+0, %rsi
-;   return_call_unknown %rsi (0) tmp=%rdi
+;   load_ext_name %callee_simple+0, %r10
+;   return_call_unknown %r10 (0) tmp=%r11
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -928,11 +927,11 @@ block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, 
 ;   movq 0x18(%rbp), %rax
 ;   movq 0x20(%rbp), %rdx
 ;   movq 0x28(%rbp), %r9
-;   movabsq $0, %rsi ; reloc_external Abs8 %callee_simple 0
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_simple 0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   movq (%rsp), %rdi
-;   movq %rdi, 0x20(%rsp)
+;   movq (%rsp), %r11
+;   movq %r11, 0x20(%rsp)
 ;   addq $0x20, %rsp
-;   jmpq *%rsi
+;   jmpq *%r10
 

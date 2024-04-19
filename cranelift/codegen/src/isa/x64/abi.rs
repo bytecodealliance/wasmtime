@@ -1046,7 +1046,7 @@ impl X64CallSite {
                     distance: RelocDistance::Far,
                 });
                 ctx.emit(Inst::ReturnCallUnknown {
-                    callee: tmp2.to_writable_reg().into(),
+                    callee: tmp2.to_reg().to_reg(),
                     info,
                 });
             }

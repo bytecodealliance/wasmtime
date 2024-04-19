@@ -1697,7 +1697,7 @@ impl PrettyPrint for Inst {
                     new_stack_arg_size,
                     tmp,
                 } = &**info;
-                let callee = callee.pretty_print(8, allocs);
+                let callee = pretty_print_reg(*callee, 8, allocs);
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
                 let mut s =
                     format!("return_call_unknown {callee} ({new_stack_arg_size}) tmp={tmp}");
@@ -2347,8 +2347,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             match dest {
                 RegMem::Reg { reg } if info.callee_conv == CallConv::Winch => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
-                    // This shouldn't be a fixed register constraint.
-                    collector.reg_fixed_use(*reg, regs::r15())
+                    // This shouldn't be a fixed register constraint. r10 is caller-saved, so this
+                    // should be safe to use.
+                    collector.reg_fixed_use(*reg, regs::r10())
                 }
                 _ => dest.get_operands(collector),
             }
@@ -2363,7 +2364,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 
         Inst::ReturnCallKnown { callee, info } => {
             let ReturnCallInfo { uses, tmp, .. } = &**info;
-            collector.reg_early_def(tmp.to_writable_reg());
+            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
             // Same as in the `Inst::CallKnown` branch.
             debug_assert_ne!(*callee, ExternalName::LibCall(LibCall::Probestack));
             for u in uses {
@@ -2373,8 +2374,15 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 
         Inst::ReturnCallUnknown { callee, info } => {
             let ReturnCallInfo { uses, tmp, .. } = &**info;
-            callee.get_operands(collector);
-            collector.reg_early_def(tmp.to_writable_reg());
+
+            // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+            // This shouldn't be a fixed register constraint, but it's not clear how to
+            // pick a register that won't be clobbered by the callee-save restore code
+            // emitted with a return_call_indirect. r10 is caller-saved, so this should be
+            // safe to use.
+            collector.reg_fixed_use(*callee, regs::r10());
+
+            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
