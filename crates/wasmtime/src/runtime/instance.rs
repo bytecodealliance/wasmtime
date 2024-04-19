@@ -982,7 +982,7 @@ fn typecheck<I>(
     }
     let cx = matching::MatchCx::new(module.engine());
     for ((name, field, mut expected_ty), actual) in env_module.imports().zip(imports) {
-        expected_ty.canonicalize(&mut |module_index| {
+        expected_ty.canonicalize_for_runtime_usage(&mut |module_index| {
             module.signatures().shared_type(module_index).unwrap()
         });
 

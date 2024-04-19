@@ -5,7 +5,7 @@ pub use wasmparser;
 
 use cranelift_entity::entity_impl;
 use serde_derive::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, ops::Range};
 
 mod error;
 pub use error::*;
@@ -29,10 +29,28 @@ pub trait TypeTrace {
     where
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>;
 
+    /// Trace all `VMSharedTypeIndex` edges, ignoring other edges.
+    fn trace_engine_indices<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(VMSharedTypeIndex) -> Result<(), E>,
+    {
+        self.trace(&mut |idx| match idx {
+            EngineOrModuleTypeIndex::Engine(idx) => func(idx),
+            EngineOrModuleTypeIndex::Module(_) | EngineOrModuleTypeIndex::RecGroup(_) => Ok(()),
+        })
+    }
+
     /// Canonicalize `self` by rewriting all type references inside `self` from
     /// module-level interned type indices to engine-level interned type
     /// indices.
-    fn canonicalize<F>(&mut self, module_to_engine: &mut F)
+    ///
+    /// This produces types that are suitable for usage by the runtime (only
+    /// contains `VMSharedTypeIndex` type references).
+    ///
+    /// This does not produce types that are suitable for hash consing types
+    /// (must have recgroup-relative indices for type indices referencing other
+    /// types in the same recgroup).
+    fn canonicalize_for_runtime_usage<F>(&mut self, module_to_engine: &mut F)
     where
         F: FnMut(ModuleInternedTypeIndex) -> VMSharedTypeIndex,
     {
@@ -43,8 +61,71 @@ pub trait TypeTrace {
                 *idx = EngineOrModuleTypeIndex::Engine(engine_index);
                 Ok(())
             }
+            EngineOrModuleTypeIndex::RecGroup(_) => {
+                panic!("should not already be canonicalized for hash consing")
+            }
         })
         .unwrap()
+    }
+
+    /// Is this type canonicalized for runtime usage?
+    fn is_canonicalized_for_runtime_usage(&self) -> bool {
+        self.trace(&mut |idx| match idx {
+            EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+            EngineOrModuleTypeIndex::Module(_) | EngineOrModuleTypeIndex::RecGroup(_) => Err(()),
+        })
+        .is_ok()
+    }
+
+    /// Canonicalize `self` by rewriting all type references inside `self` from
+    /// module-level interned type indices to either engine-level interned type
+    /// indices or recgroup-relative indices.
+    ///
+    /// This produces types that are suitable for hash consing and deduplicating
+    /// recgroups (types may have recgroup-relative indices for references to
+    /// other types within the same recgroup).
+    ///
+    /// This does *not* produce types that are suitable for usage by the runtime
+    /// (only contain `VMSharedTypeIndex` type references).
+    fn canonicalize_for_hash_consing<F>(
+        &mut self,
+        rec_group_range: Range<ModuleInternedTypeIndex>,
+        module_to_engine: &mut F,
+    ) where
+        F: FnMut(ModuleInternedTypeIndex) -> VMSharedTypeIndex,
+    {
+        self.trace_mut::<_, ()>(&mut |idx| match *idx {
+            EngineOrModuleTypeIndex::Engine(_) => Ok(()),
+            EngineOrModuleTypeIndex::Module(module_index) => {
+                *idx = if rec_group_range.start <= module_index {
+                    // Any module index within the recursion group gets
+                    // translated into a recgroup-relative index.
+                    debug_assert!(module_index < rec_group_range.end);
+                    let relative = module_index.as_u32() - rec_group_range.start.as_u32();
+                    let relative = RecGroupRelativeTypeIndex::from_u32(relative);
+                    EngineOrModuleTypeIndex::RecGroup(relative)
+                } else {
+                    // Cross-group indices are translated directly into
+                    // `VMSharedTypeIndex`es.
+                    debug_assert!(module_index < rec_group_range.start);
+                    EngineOrModuleTypeIndex::Engine(module_to_engine(module_index))
+                };
+                Ok(())
+            }
+            EngineOrModuleTypeIndex::RecGroup(_) => {
+                panic!("should not already be canonicalized for hash consing")
+            }
+        })
+        .unwrap()
+    }
+
+    /// Is this type canonicalized for hash consing?
+    fn is_canonicalized_for_hash_consing(&self) -> bool {
+        self.trace(&mut |idx| match idx {
+            EngineOrModuleTypeIndex::Engine(_) | EngineOrModuleTypeIndex::RecGroup(_) => Ok(()),
+            EngineOrModuleTypeIndex::Module(_) => Err(()),
+        })
+        .is_ok()
     }
 }
 
@@ -193,9 +274,15 @@ pub enum EngineOrModuleTypeIndex {
     /// An index within an engine, canonicalized among all modules that can
     /// interact with each other.
     Engine(VMSharedTypeIndex),
+
     /// An index within the current Wasm module, canonicalized within just this
     /// current module.
     Module(ModuleInternedTypeIndex),
+
+    /// An index within the containing type's rec group. This is only used when
+    /// hashing and canonicalizing rec groups, and should never appear outside
+    /// of the engine's type registry.
+    RecGroup(RecGroupRelativeTypeIndex),
 }
 
 impl From<ModuleInternedTypeIndex> for EngineOrModuleTypeIndex {
@@ -209,6 +296,7 @@ impl fmt::Display for EngineOrModuleTypeIndex {
         match self {
             Self::Engine(i) => write!(f, "(engine {})", i.bits()),
             Self::Module(i) => write!(f, "(module {})", i.as_u32()),
+            Self::RecGroup(i) => write!(f, "(recgroup {})", i.as_u32()),
         }
     }
 }
@@ -223,14 +311,14 @@ impl EngineOrModuleTypeIndex {
     pub fn as_engine_type_index(self) -> Option<VMSharedTypeIndex> {
         match self {
             Self::Engine(e) => Some(e),
-            Self::Module(_) => None,
+            Self::RecGroup(_) | Self::Module(_) => None,
         }
     }
 
     /// Get the underlying engine-level type index, or panic.
     pub fn unwrap_engine_type_index(self) -> VMSharedTypeIndex {
         self.as_engine_type_index()
-            .expect("`unwrap_engine_type_index` on module type index")
+            .unwrap_or_else(|| panic!("`unwrap_engine_type_index` on {self:?}"))
     }
 
     /// Is this an module-level type index?
@@ -242,14 +330,33 @@ impl EngineOrModuleTypeIndex {
     pub fn as_module_type_index(self) -> Option<ModuleInternedTypeIndex> {
         match self {
             Self::Module(e) => Some(e),
-            Self::Engine(_) => None,
+            Self::RecGroup(_) | Self::Engine(_) => None,
         }
     }
 
     /// Get the underlying module-level type index, or panic.
     pub fn unwrap_module_type_index(self) -> ModuleInternedTypeIndex {
         self.as_module_type_index()
-            .expect("`unwrap_module_type_index` on engine type index")
+            .unwrap_or_else(|| panic!("`unwrap_module_type_index` on {self:?}"))
+    }
+
+    /// Is this an recgroup-level type index?
+    pub fn is_rec_group_type_index(self) -> bool {
+        matches!(self, Self::RecGroup(_))
+    }
+
+    /// Get the underlying recgroup-level type index, if any.
+    pub fn as_rec_group_type_index(self) -> Option<RecGroupRelativeTypeIndex> {
+        match self {
+            Self::RecGroup(r) => Some(r),
+            Self::Module(_) | Self::Engine(_) => None,
+        }
+    }
+
+    /// Get the underlying module-level type index, or panic.
+    pub fn unwrap_rec_group_type_index(self) -> RecGroupRelativeTypeIndex {
+        self.as_rec_group_type_index()
+            .unwrap_or_else(|| panic!("`unwrap_rec_group_type_index` on {self:?}"))
     }
 }
 
@@ -406,6 +513,44 @@ impl WasmFuncType {
     }
 }
 
+/// A recursive type group.
+///
+/// Types within a recgroup can have forward references to each other, which
+/// allows for cyclic types, for example a function `$f` that returns a
+/// reference to a function `$g` which returns a reference to a function `$f`:
+///
+/// ```ignore
+/// (rec (type (func $f (result (ref null $g))))
+///      (type (func $g (result (ref null $f)))))
+/// ```
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct WasmRecGroup {
+    /// The types inside of this recgroup.
+    pub types: Box<[WasmFuncType]>,
+}
+
+impl TypeTrace for WasmRecGroup {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for ty in self.types.iter() {
+            ty.trace(func)?;
+        }
+        Ok(())
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for ty in self.types.iter_mut() {
+            ty.trace_mut(func)?;
+        }
+        Ok(())
+    }
+}
+
 /// Index type of a function (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct FuncIndex(u32);
@@ -451,10 +596,31 @@ entity_impl!(GlobalIndex);
 pub struct MemoryIndex(u32);
 entity_impl!(MemoryIndex);
 
+/// Index type of a canonicalized recursive type group inside a WebAssembly
+/// module (as opposed to canonicalized within the whole engine).
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct ModuleInternedRecGroupIndex(u32);
+entity_impl!(ModuleInternedRecGroupIndex);
+
+/// Index type of a canonicalized recursive type group inside the whole engine
+/// (as opposed to canonicalized within just a single Wasm module).
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct EngineInternedRecGroupIndex(u32);
+entity_impl!(EngineInternedRecGroupIndex);
+
 /// Index type of a type (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TypeIndex(u32);
 entity_impl!(TypeIndex);
+
+/// A canonicalized type index referencing a type within a single recursion
+/// group from another type within that same recursion group.
+///
+/// This is only suitable for use when hash consing and deduplicating rec
+/// groups.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct RecGroupRelativeTypeIndex(u32);
+entity_impl!(RecGroupRelativeTypeIndex);
 
 /// A canonicalized type index for a type within a single WebAssembly module.
 ///

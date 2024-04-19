@@ -18,8 +18,8 @@ use cranelift_wasm::{
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleType,
-    ModuleTypesBuilder, PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypesBuilder,
+    PtrSize, TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -1204,7 +1204,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 // If `ty_index` matches `table_ty`, then this call is
                 // statically known to have the right type, so no checks are
                 // necessary.
-                let ModuleType::Function(specified_ty) = self.env.module.types[ty_index];
+                let specified_ty = self.env.module.types[ty_index];
                 if specified_ty == table_ty {
                     return CheckIndirectCallTypeSignature::StaticMatch {
                         may_be_null: table.table.wasm_ty.nullable,
@@ -1244,6 +1244,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
             WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(_))
+            | WasmHeapType::Concrete(EngineOrModuleTypeIndex::RecGroup(_))
             | WasmHeapType::Extern
             | WasmHeapType::Any
             | WasmHeapType::I31
@@ -1265,7 +1266,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             base,
             i32::try_from(self.env.offsets.vmctx_type_ids_array()).unwrap(),
         );
-        let sig_index = self.env.module.types[ty_index].unwrap_function();
+        let sig_index = self.env.module.types[ty_index];
         let offset =
             i32::try_from(sig_index.as_u32().checked_mul(sig_id_type.bytes()).unwrap()).unwrap();
         let caller_sig_id = self
@@ -1390,11 +1391,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
 impl TypeConvert for FuncEnvironment<'_> {
     fn lookup_heap_type(&self, ty: wasmparser::UnpackedIndex) -> WasmHeapType {
-        wasmtime_environ::WasmparserTypeConverter {
-            module: self.module,
-            types: self.types,
-        }
-        .lookup_heap_type(ty)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, self.module).lookup_heap_type(ty)
     }
 }
 
@@ -2005,7 +2002,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
-        let index = self.module.types[index].unwrap_function();
+        let index = self.module.types[index];
         let sig = crate::wasm_call_signature(self.isa, &self.types[index], &self.tunables);
         Ok(func.import_signature(sig))
     }

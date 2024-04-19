@@ -454,7 +454,7 @@ jobs:
       with:
         toolchain: nightly-2024-03-21
 
-    # Ensure that fuzzers sitll build.
+    # Ensure that fuzzers still build.
     #
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.

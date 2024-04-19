@@ -82,8 +82,6 @@ impl Factc {
     fn execute(self) -> Result<()> {
         env_logger::init();
 
-        let mut types = ComponentTypesBuilder::default();
-
         // Manufactures a unique `CoreDef` so all function imports get unique
         // function imports.
         let mut next_def = 0;
@@ -118,9 +116,11 @@ impl Factc {
             }
         };
 
+        let mut validator = Validator::new();
+        let mut types = ComponentTypesBuilder::new(&validator);
+
         let mut adapters = Vec::new();
         let input = wat::parse_file(&self.input)?;
-        let mut validator = Validator::new();
         let wasm_types = validator
             .validate_all(&input)
             .context("failed to validate input wasm")?;

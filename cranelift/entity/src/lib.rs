@@ -38,6 +38,9 @@ extern crate alloc;
 #[doc(hidden)]
 pub extern crate core as __core;
 
+use core::iter::FusedIterator;
+use core::ops::Range;
+
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
 /// of an `SecondaryMap` or `SparseMap`.
 pub trait EntityRef: Copy + Eq {
@@ -47,6 +50,67 @@ pub trait EntityRef: Copy + Eq {
 
     /// Get the index that was used to create this entity reference.
     fn index(self) -> usize;
+}
+
+/// Iterate over a `Range<E: EntityRef>`, yielding a sequence of `E` items.
+#[inline]
+pub fn iter_entity_range<E>(range: Range<E>) -> IterEntityRange<E>
+where
+    E: EntityRef,
+{
+    IterEntityRange {
+        range: range.start.index()..range.end.index(),
+        _phantom: core::marker::PhantomData,
+    }
+}
+
+/// Iterator type returned by `iter_entity_range`.
+pub struct IterEntityRange<E> {
+    range: Range<usize>,
+    _phantom: core::marker::PhantomData<E>,
+}
+
+impl<E> Iterator for IterEntityRange<E>
+where
+    E: EntityRef,
+{
+    type Item = E;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let i = self.range.next()?;
+        Some(E::new(i))
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.range.size_hint()
+    }
+}
+
+impl<E> DoubleEndedIterator for IterEntityRange<E>
+where
+    E: EntityRef,
+{
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let i = self.range.next_back()?;
+        Some(E::new(i))
+    }
+}
+
+impl<E> FusedIterator for IterEntityRange<E>
+where
+    E: EntityRef,
+    Range<usize>: FusedIterator,
+{
+}
+
+impl<E> ExactSizeIterator for IterEntityRange<E>
+where
+    E: EntityRef,
+    Range<usize>: ExactSizeIterator,
+{
 }
 
 /// Macro which provides the common implementation of a 32-bit entity reference.
