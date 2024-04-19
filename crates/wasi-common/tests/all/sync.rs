@@ -125,6 +125,10 @@ fn preview1_file_pread_pwrite() {
     run(PREVIEW1_FILE_PREAD_PWRITE, true).unwrap()
 }
 #[test_log::test]
+fn preview1_file_read_write() {
+    run(PREVIEW1_FILE_READ_WRITE, true).unwrap()
+}
+#[test_log::test]
 fn preview1_file_seek_tell() {
     run(PREVIEW1_FILE_SEEK_TELL, true).unwrap()
 }

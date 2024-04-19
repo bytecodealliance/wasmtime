@@ -99,6 +99,12 @@ async fn preview1_file_pread_pwrite() {
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview1_file_read_write() {
+    run(PREVIEW1_FILE_READ_WRITE_COMPONENT, false)
+        .await
+        .unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_seek_tell() {
     run(PREVIEW1_FILE_SEEK_TELL_COMPONENT, false).await.unwrap()
 }
