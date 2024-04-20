@@ -111,7 +111,7 @@ fn read_dwarf_package_from_bytes<'data>(
 ) -> Option<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
     let mut validator = wasmparser::Validator::new();
     let parser = wasmparser::Parser::new(0);
-    let mut types = Default::default();
+    let mut types = wasmtime_environ::ModuleTypesBuilder::new(&validator);
     let translation =
         wasmtime_environ::ModuleEnvironment::new(tunables, &mut validator, &mut types)
             .translate(parser, dwp_bytes)
