@@ -32,7 +32,6 @@ target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmprinter = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
-typed-arena = "2"
 
 [dev-dependencies]
 clap = { workspace = true, features = ['default'] }

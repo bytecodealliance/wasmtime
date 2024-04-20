@@ -80,9 +80,6 @@ impl<'a> CodeBuilder<'a> {
         }
         self.wasm = Some(wasm_bytes.into());
         self.wasm_path = wasm_path.map(|p| p.into());
-        if self.wasm_path.is_some() {
-            self.dwarf_package_from_wasm_path()?;
-        }
 
         Ok(self)
     }
@@ -112,6 +109,10 @@ impl<'a> CodeBuilder<'a> {
     /// either as a WebAssembly binary or as a WebAssembly text file. The
     /// contents are inspected to do this, the file extension is not consulted.
     ///
+    /// A DWARF package file will be probed using the root of `file` and with a
+    /// `.dwp` extension.  If found, it will be loaded and DWARF fusion
+    /// performed.
+    ///
     /// # Errors
     ///
     /// If wasm bytes have already been configured via a call to this method or
@@ -119,6 +120,9 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// If `file` can't be read or an error happens reading it then that will
     /// also be returned.
+    ///
+    /// If DWARF fusion is performed and the DWARF packaged file cannot be read
+    /// then exeuction will bail.
     pub fn wasm_file(&mut self, file: &'a Path) -> Result<&mut Self> {
         if self.wasm.is_some() {
             bail!("cannot call `wasm` or `wasm_file` twice");
@@ -159,6 +163,8 @@ impl<'a> CodeBuilder<'a> {
             bail!("DWARF package file does not exist");
         }
 
+        self.dwarf_package_path = Some(Cow::Owned(file.to_owned()));
+
         let dwarf_package = std::fs::read(file)
             .with_context(|| format!("failed to read dwarf input file: {}", file.display()))?;
         self.dwarf_package = Some(dwarf_package.into());
@@ -169,30 +175,30 @@ impl<'a> CodeBuilder<'a> {
     fn dwarf_package_from_wasm_path(&mut self) -> Result<&mut Self> {
         let dwarf_package_path_buf = self.wasm_path.as_ref().unwrap().with_extension("dwp");
         if dwarf_package_path_buf.exists() {
-            self.dwarf_package_path = Some(Cow::Owned(dwarf_package_path_buf.as_path().to_owned()));
-            let path = dwarf_package_path_buf.as_path();
-            return self.dwarf_package_file(path);
+            return self.dwarf_package_file(dwarf_package_path_buf.as_path());
         }
 
         Ok(self)
     }
 
     /// Gets the DWARF package.
-    pub fn dwarf_package_binary(&self) -> &Option<Cow<'_, [u8]>> {
-        return &self.dwarf_package;
+    pub fn dwarf_package_binary(&self) -> Option<&[u8]> {
+        return self.dwarf_package.as_deref();
     }
 
-    /// Set the dwarf package binary and path.
-    pub fn dwarf_package(
-        &mut self,
-        dwp_bytes: &'a [u8],
-        dwarf_package_path: Option<&'a Path>,
-    ) -> Result<&mut Self> {
+    /// Set the DWARF package binary.
+    /// Initializes `dwarf_package` from `dwp_bytes` in preparation for
+    /// DWARF fusion.  Allows the DWARF package to be supplied as a byte array
+    ///  when the file probing performed in `wasm_file` is not appropriate.
+    ///
+    /// # Errors
+    ///
+    /// Bails if `dwarf_package` has alread been loaded.
+    pub fn dwarf_package(&mut self, dwp_bytes: &'a [u8]) -> Result<&mut Self> {
         if self.dwarf_package.is_some() {
             bail!("cannot call `dwarf_package` or `dwarf_package_file` twice");
         }
         self.dwarf_package = Some(dwp_bytes.into());
-        self.dwarf_package_path = dwarf_package_path.map(|p| p.into());
         Ok(self)
     }
 

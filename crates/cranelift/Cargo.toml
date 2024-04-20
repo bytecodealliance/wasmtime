@@ -30,8 +30,6 @@ object = { workspace = true, features = ['write'] }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
-fallible-iterator = "0.3.0"
-typed-arena = "2"
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]

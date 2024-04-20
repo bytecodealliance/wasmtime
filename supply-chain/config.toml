@@ -280,10 +280,6 @@ criteria = "safe-to-deploy"
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.fallible-iterator]]
-version = "0.2.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.fslock]]
 version = "0.1.8"
 criteria = "safe-to-run"
@@ -584,10 +580,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tracing-core]]
 version = "0.1.28"
-criteria = "safe-to-deploy"
-
-[[exemptions.typed-arena]]
-version = "2.0.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.typenum]]

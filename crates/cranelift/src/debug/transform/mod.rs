@@ -121,7 +121,7 @@ fn read_dwarf_package_from_bytes<'data>(
     match load_dwp(translation, buffer) {
         Ok(package) => Some(package),
         Err(err) => {
-            eprintln!("Failed to load Dwarf package {}", err);
+            log::warn!("Failed to load Dwarf package {}", err);
             None
         }
     }

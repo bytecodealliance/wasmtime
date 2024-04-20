@@ -318,25 +318,6 @@ impl Module {
             .compile_module()
     }
 
-    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
-    /// data and DWARF pacakage binary.
-    ///
-    /// Simlilar to [`Module::from_binary`] but with the addition of the DWARF
-    /// package binary.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
-    pub fn from_binary_and_dwp(
-        engine: &Engine,
-        binary: &[u8],
-        dwp_binary: &[u8],
-    ) -> Result<Module> {
-        crate::CodeBuilder::new(engine)
-            .wasm(binary, None)?
-            .wat(false)?
-            .dwarf_package(dwp_binary, None)?
-            .compile_module()
-    }
-
     /// Creates a new WebAssembly `Module` from the contents of the given `file`
     /// on disk, but with assumptions that the file is from a trusted source.
     /// The file should be a binary- or text-format WebAssembly module, or a

@@ -286,7 +286,9 @@ where
         program_unit = split_unit.unwrap();
 
         // From the spec, a skeleton unit has no children so we can assume the first, and only, entry is the DW_TAG_skeleton_unit (https://dwarfstd.org/doc/DWARF5.pdf).
-        skeleton_die = Some(skeleton_entries.next_dfs()?.unwrap().1);
+        if let Some(die_tuple) = skeleton_entries.next_dfs()? {
+            skeleton_die = Some(die_tuple.1);
+        }
     }
 
     // Iterate over all of this compilation unit's entries.
