@@ -61,7 +61,7 @@ for (let build of array) {
   // Next generate a "min" build and add it to the builds list. Min builds
   // require Nightly rust due to some nightly build options that are configured.
   build.build += '-min';
-  build.rust = 'nightly-2024-03-21';
+  build.rust = 'nightly-2024-04-19';
   builds.push(build);
 }
 

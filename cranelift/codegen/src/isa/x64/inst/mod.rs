@@ -52,8 +52,15 @@ pub struct CallInfo {
 /// Out-of-line data for return-calls, to keep the size of `Inst` down.
 #[derive(Clone, Debug)]
 pub struct ReturnCallInfo {
+    /// The size of the argument area for this return-call, potentially smaller than that of the
+    /// caller, but never larger.
+    pub new_stack_arg_size: u32,
+
     /// The in-register arguments and their constraints.
     pub uses: CallArgList,
+
+    /// A temporary for use when moving the return address.
+    pub tmp: WritableGpr,
 }
 
 #[test]
@@ -124,8 +131,6 @@ impl Inst {
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
-            | Inst::GrowArgumentArea { .. }
-            | Inst::ShrinkArgumentArea { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::Ret { .. }
@@ -186,7 +191,8 @@ impl Inst {
             | Inst::XmmToGprImmVex { op, .. }
             | Inst::XmmToGprVex { op, .. }
             | Inst::GprToXmmVex { op, .. }
-            | Inst::CvtIntToFloatVex { op, .. } => op.available_from(),
+            | Inst::CvtIntToFloatVex { op, .. }
+            | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
         }
     }
 }
@@ -391,12 +397,12 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src: RegMem, dst: Reg) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.class() == RegClass::Float);
-        let src = XmmMemAligned::new(src).unwrap();
-        let dst = Xmm::new(dst).unwrap();
-        Inst::XmmCmpRmR { op, src, dst }
+    pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src1: Reg, src2: RegMem) -> Inst {
+        src2.assert_regclass_is(RegClass::Float);
+        debug_assert!(src1.class() == RegClass::Float);
+        let src2 = XmmMemAligned::new(src2).unwrap();
+        let src1 = Xmm::new(src1).unwrap();
+        Inst::XmmCmpRmR { op, src1, src2 }
     }
 
     #[allow(dead_code)]
@@ -484,13 +490,13 @@ impl Inst {
 
     /// Does a comparison of dst - src for operands of size `size`, as stated by the machine
     /// instruction semantics. Be careful with the order of parameters!
-    pub(crate) fn cmp_rmi_r(size: OperandSize, src: RegMemImm, dst: Reg) -> Inst {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert_eq!(dst.class(), RegClass::Int);
+    pub(crate) fn cmp_rmi_r(size: OperandSize, src1: Reg, src2: RegMemImm) -> Inst {
+        src2.assert_regclass_is(RegClass::Int);
+        debug_assert_eq!(src1.class(), RegClass::Int);
         Inst::CmpRmiR {
             size,
-            src: GprMemImm::new(src).unwrap(),
-            dst: Gpr::new(dst).unwrap(),
+            src1: Gpr::new(src1).unwrap(),
+            src2: GprMemImm::new(src2).unwrap(),
             opcode: CmpOpcode::Cmp,
         }
     }
@@ -1311,11 +1317,11 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::XmmCmpRmR { op, src, dst } => {
-                let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
-                let src = src.pretty_print(8, allocs);
+            Inst::XmmCmpRmR { op, src1, src2 } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
                 let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
+                format!("{op} {src2}, {src1}")
             }
 
             Inst::CvtIntToFloat {
@@ -1344,6 +1350,12 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(src2_size.to_bytes(), allocs);
                 let op = ljustify(op.to_string());
                 format!("{op} {src1}, {src2}, {dst}")
+            }
+
+            Inst::XmmCmpRmRVex { op, src1, src2 } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
+                format!("{} {src2}, {src1}", ljustify(op.to_string()))
             }
 
             Inst::CvtUint64ToFloatSeq {
@@ -1560,18 +1572,18 @@ impl PrettyPrint for Inst {
 
             Inst::CmpRmiR {
                 size,
-                src,
-                dst,
+                src1,
+                src2,
                 opcode,
             } => {
-                let dst = pretty_print_reg(dst.to_reg(), size.to_bytes(), allocs);
-                let src = src.pretty_print(size.to_bytes(), allocs);
+                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes(), allocs);
+                let src2 = src2.pretty_print(size.to_bytes(), allocs);
                 let op = match opcode {
                     CmpOpcode::Cmp => "cmp",
                     CmpOpcode::Test => "test",
                 };
                 let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
+                format!("{op} {src2}, {src1}")
             }
 
             Inst::Setcc { cc, dst } => {
@@ -1663,8 +1675,14 @@ impl PrettyPrint for Inst {
             }
 
             Inst::ReturnCallKnown { callee, info } => {
-                let ReturnCallInfo { uses } = &**info;
-                let mut s = format!("return_call_known {callee:?}");
+                let ReturnCallInfo {
+                    uses,
+                    new_stack_arg_size,
+                    tmp,
+                } = &**info;
+                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
+                let mut s =
+                    format!("return_call_known {callee:?} ({new_stack_arg_size}) tmp={tmp}");
                 for ret in uses {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
@@ -1674,27 +1692,21 @@ impl PrettyPrint for Inst {
             }
 
             Inst::ReturnCallUnknown { callee, info } => {
-                let ReturnCallInfo { uses } = &**info;
-                let callee = callee.pretty_print(8, allocs);
-                let mut s = format!("return_call_unknown {callee}");
+                let ReturnCallInfo {
+                    uses,
+                    new_stack_arg_size,
+                    tmp,
+                } = &**info;
+                let callee = pretty_print_reg(*callee, 8, allocs);
+                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
+                let mut s =
+                    format!("return_call_unknown {callee} ({new_stack_arg_size}) tmp={tmp}");
                 for ret in uses {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
-            }
-
-            Inst::GrowArgumentArea { amount, tmp } => {
-                let amount = *amount;
-                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
-                format!("grow_argument_area {amount} {tmp}")
-            }
-
-            Inst::ShrinkArgumentArea { amount, tmp } => {
-                let amount = *amount;
-                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
-                format!("shrink_argument_area {amount} {tmp}")
             }
 
             Inst::Args { args } => {
@@ -2150,9 +2162,13 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src.to_reg());
             dst.get_operands(collector);
         }
-        Inst::XmmCmpRmR { src, dst, .. } => {
-            collector.reg_use(dst.to_reg());
-            src.get_operands(collector);
+        Inst::XmmCmpRmR { src1, src2, .. } => {
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
+        }
+        Inst::XmmCmpRmRVex { src1, src2, .. } => {
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
         }
         Inst::Imm { dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
@@ -2268,10 +2284,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                 collector.reg_fixed_use(reg, regs::rcx());
             }
         }
-        Inst::CmpRmiR { src, dst, .. } => {
-            // N.B.: use, not def (cmp doesn't write its result).
-            collector.reg_use(dst.to_reg());
-            src.get_operands(collector);
+        Inst::CmpRmiR { src1, src2, .. } => {
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
         }
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
@@ -2331,8 +2346,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             match dest {
                 RegMem::Reg { reg } if info.callee_conv == CallConv::Winch => {
                     // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
-                    // This shouldn't be a fixed register constraint.
-                    collector.reg_fixed_use(*reg, regs::r15())
+                    // This shouldn't be a fixed register constraint. r10 is caller-saved, so this
+                    // should be safe to use.
+                    collector.reg_fixed_use(*reg, regs::r10())
                 }
                 _ => dest.get_operands(collector),
             }
@@ -2346,7 +2362,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::ReturnCallKnown { callee, info } => {
-            let ReturnCallInfo { uses } = &**info;
+            let ReturnCallInfo { uses, tmp, .. } = &**info;
+            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
             // Same as in the `Inst::CallKnown` branch.
             debug_assert_ne!(*callee, ExternalName::LibCall(LibCall::Probestack));
             for u in uses {
@@ -2355,15 +2372,19 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::ReturnCallUnknown { callee, info } => {
-            let ReturnCallInfo { uses } = &**info;
-            callee.get_operands(collector);
+            let ReturnCallInfo { uses, tmp, .. } = &**info;
+
+            // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+            // This shouldn't be a fixed register constraint, but it's not clear how to
+            // pick a register that won't be clobbered by the callee-save restore code
+            // emitted with a return_call_indirect. r10 is caller-saved, so this should be
+            // safe to use.
+            collector.reg_fixed_use(*callee, regs::r10());
+
+            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
-        }
-
-        Inst::GrowArgumentArea { tmp, .. } | Inst::ShrinkArgumentArea { tmp, .. } => {
-            collector.reg_def(tmp.to_writable_reg());
         }
 
         Inst::JmpTableSeq {

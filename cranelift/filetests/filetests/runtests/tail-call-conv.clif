@@ -1,5 +1,7 @@
 test interpret
 test run
+set enable_llvm_abi_extensions
+set preserve_frame_pointers
 target x86_64
 target aarch64
 target aarch64 sign_return_address
@@ -125,3 +127,24 @@ block0:
 }
 
 ; run: %tail_caller_stack_rets() == 135
+
+
+;; Test that tail calls that shrink the argument area don't clobber the location
+;; of an indirect jump
+
+function %g() -> i8 tail {
+block0:
+    v0 = iconst.i8 0
+    return v0
+}
+
+function %f(f64, f64, i8, i32 sext, i128, i32 sext, i128, i32, i128) -> i8 tail {
+    sig0 = () -> i8 tail
+    fn0 = %g sig0
+
+block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, v8: i128):
+    v14 = func_addr.i64 fn0
+    return_call_indirect sig0, v14()
+}
+
+; run: %f(0.0, 0.0, 0, 0, 0, 0, 0, 0, 0) == 0

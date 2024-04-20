@@ -1292,11 +1292,11 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
 ; block0:
 ;   movq    %rdx, %rbx
 ;   movq    %rcx, %r14
-;   movq    16(%rbp), %rcx
-;   movq    24(%rbp), %rax
-;   movq    32(%rbp), %rdx
-;   movq    40(%rbp), %r11
-;   movq    48(%rbp), %r10
+;   movq    rbp(stack args max - 48), %rcx
+;   movq    rbp(stack args max - 40), %rax
+;   movq    rbp(stack args max - 32), %rdx
+;   movq    rbp(stack args max - 24), %r11
+;   movq    rbp(stack args max - 16), %r10
 ;   addq    %rdi, %rbx, %rdi
 ;   movq    %r14, %r15
 ;   adcq    %rsi, %r15, %rsi

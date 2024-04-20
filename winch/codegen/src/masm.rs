@@ -717,11 +717,20 @@ pub(crate) trait MacroAssembler {
     /// Calculate remainder.
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
-    /// Compare src and dst and put the result in dst.
-    fn cmp(&mut self, src: RegImm, dest: Reg, size: OperandSize);
+    /// Compares `src1` against `src2` for the side effect of setting processor
+    /// flags.
+    ///
+    /// Note that `src1` is the left-hand-side of the comparison and `src2` is
+    /// the right-hand-side, so if testing `a < b` then `src1 == a` and
+    /// `src2 == b`
+    fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize);
 
     /// Compare src and dst and put the result in dst.
     /// This function will potentially emit a series of instructions.
+    ///
+    /// The initial value in `dst` is the left-hand-side of the comparison and
+    /// the initial value in `src` is the right-hand-side of the comparison.
+    /// That means for `a < b` then `dst == a` and `src == b`.
     fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize);
 
     /// Compare floats in src1 and src2 and put the result in dst.
@@ -881,8 +890,8 @@ pub(crate) trait MacroAssembler {
     fn branch(
         &mut self,
         kind: IntCmpKind,
-        lhs: RegImm,
-        rhs: Reg,
+        lhs: Reg,
+        rhs: RegImm,
         taken: MachLabel,
         size: OperandSize,
     );

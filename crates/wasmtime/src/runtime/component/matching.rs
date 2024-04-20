@@ -15,7 +15,6 @@ use wasmtime_runtime::component::ComponentInstance;
 
 pub struct TypeChecker<'a> {
     pub types: &'a Arc<ComponentTypes>,
-    pub component: &'a wasmtime_environ::component::Component,
     pub strings: &'a Strings,
     pub imported_resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
 }

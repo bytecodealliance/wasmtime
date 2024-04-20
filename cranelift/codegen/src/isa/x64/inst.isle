@@ -218,8 +218,8 @@
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
        (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
                 (opcode CmpOpcode)
-                (src GprMemImm)
-                (dst Gpr))
+                (src1 Gpr)
+                (src2 GprMemImm))
 
        ;; Materializes the requested condition code in the destinaton reg.
        (Setcc (cc CC)
@@ -367,6 +367,10 @@
                     (dst WritableGpr)
                     (dst_size OperandSize))
 
+       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+       (XmmCmpRmRVex (op AvxOpcode)
+                     (src1 Xmm)
+                     (src2 XmmMem))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
@@ -502,10 +506,13 @@
                      (rhs Xmm)
                      (dst WritableXmm))
 
-       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+       ;; Float comparisons/tests
+       ;;
+       ;; Compares `src1` against `src2` with `op`. Note that if you're testing
+       ;; `a < b` then `src1 == a` and `src2 == b`.
        (XmmCmpRmR (op SseOpcode)
-                  (src XmmMemAligned)
-                  (dst Xmm))
+                  (src1 Xmm)
+                  (src2 XmmMemAligned))
 
        ;; A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm
        ;; (reg addr) reg
@@ -538,25 +545,8 @@
                         (info BoxReturnCallInfo))
 
        ;; Tail call to an indirect destination.
-       (ReturnCallUnknown (callee RegMem)
+       (ReturnCallUnknown (callee Reg)
                           (info BoxReturnCallInfo))
-
-       ;; GrowArgumentArea does a memmove of everything in the frame except for
-       ;; the argument area, to make room for more arguments. That includes all
-       ;; the stack slots, the callee-saved registers, and the saved FP and
-       ;; return address. To keep the stack pointers in sync with that change,
-       ;; it also subtracts the given amount from both the FP and SP registers.
-       (GrowArgumentArea (amount u32)
-                         (tmp WritableGpr))
-
-       ;; ShrinkArgumentArea does a memmove of everything in the frame except
-       ;; for the argument area, to trim space for fewer arguments. That
-       ;; includes all the stack slots, the callee-saved registers, and the
-       ;; saved FP and return address. To keep the stack pointers in sync with
-       ;; that change, it also adds the given amount to both the FP and SP
-       ;; registers.
-       (ShrinkArgumentArea (amount u32)
-                           (tmp WritableGpr))
 
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
@@ -1427,6 +1417,9 @@
             Vsqrtsd
             Vroundss
             Vroundsd
+            Vucomiss
+            Vucomisd
+            Vptest
           ))
 
 (type Avx512Opcode
@@ -2807,7 +2800,7 @@
         dst))
 
 ;; Helper for creating `MInst.CmpRmiR` instructions.
-(decl cmp_rmi_r (OperandSize CmpOpcode GprMemImm Gpr) ProducesFlags)
+(decl cmp_rmi_r (OperandSize CmpOpcode Gpr GprMemImm) ProducesFlags)
 (rule (cmp_rmi_r size opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.CmpRmiR size
@@ -2816,39 +2809,52 @@
                       src2)))
 
 ;; Helper for creating `cmp` instructions.
-(decl x64_cmp (OperandSize GprMemImm Gpr) ProducesFlags)
+(decl x64_cmp (OperandSize Gpr GprMemImm) ProducesFlags)
 (rule (x64_cmp size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
 
 ;; Helper for creating `cmp` instructions with an immediate.
-(decl x64_cmp_imm (OperandSize u32 Gpr) ProducesFlags)
+(decl x64_cmp_imm (OperandSize Gpr u32) ProducesFlags)
 (rule (x64_cmp_imm size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) (RegMemImm.Imm src1) src2))
+      (x64_cmp size src1 (RegMemImm.Imm src2)))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
-(decl xmm_cmp_rm_r (SseOpcode XmmMemAligned Xmm) ProducesFlags)
+(decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
 (rule (xmm_cmp_rm_r opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
 
+;; Helper for creating `MInst.XmmCmpRmRVex` instructions.
+(decl xmm_cmp_rm_r_vex (AvxOpcode Xmm XmmMem) ProducesFlags)
+(rule (xmm_cmp_rm_r_vex opcode src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.XmmCmpRmRVex opcode src1 src2)))
+
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
-(decl x64_ucomis (Value Value) ProducesFlags)
-(rule (x64_ucomis src1 @ (value_type $F32) src2)
-      ;; N.B.: cmp can be generated more than once, so cannot do a
-      ;; load-op merge. So `put_in_xmm` for src1, not `put_in_xmm_mem`.
-      (xmm_cmp_rm_r (SseOpcode.Ucomiss) (put_in_xmm src1) (put_in_xmm src2)))
-(rule (x64_ucomis src1 @ (value_type $F64) src2)
-      (xmm_cmp_rm_r (SseOpcode.Ucomisd) (put_in_xmm src1) (put_in_xmm src2)))
+(decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
+(rule (x64_ucomis $F32 src1 src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomiss) src1 src2))
+(rule (x64_ucomis $F64 src1 src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomisd) src1 src2))
+(rule 1 (x64_ucomis $F32 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomiss) src1 src2))
+(rule 1 (x64_ucomis $F64 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomisd) src1 src2))
 
 ;; Helper for creating `test` instructions.
-(decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
+(decl x64_test (OperandSize Gpr GprMemImm) ProducesFlags)
 (rule (x64_test size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
 
 ;; Helper for creating `ptest` instructions.
-(decl x64_ptest (XmmMem Xmm) ProducesFlags)
+(decl x64_ptest (Xmm XmmMem) ProducesFlags)
 (rule (x64_ptest src1 src2)
       (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
+(rule 1 (x64_ptest src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vptest) src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps
@@ -4760,17 +4766,16 @@
 
 ;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
 ;; Cranelift's verification that `a` and `b` are of the same type.
-;; Unfortunately for clarity, the registers are flipped here (TODO).
 (rule 0 (emit_cmp cc a @ (value_type ty) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size b a) cc)))
+        (icmp_cond_result (x64_cmp size a b) cc)))
 
 ;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
 (rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) (intcc_swap_args cc))))
+        (icmp_cond_result (x64_cmp size b a) (intcc_swap_args cc))))
 
 ;; Special case: use the test instruction for comparisons with 0.
 (rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
@@ -4790,8 +4795,8 @@
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
             (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.Z))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.Z))))
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo) (x64_setcc (CC.Z))))
+            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_hi b_hi) (x64_setcc (CC.Z))))
             ;; At this point, `cmp_lo` and `cmp_hi` contain either 0 or 1 in the
             ;; lowest 8 bits--`SETcc` guarantees this. The upper bits may be
             ;; unchanged so we must compare against 1 below; this instruction
@@ -4803,7 +4808,7 @@
         ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
         ;; with `NZ`.
         (icmp_cond_result
-          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+          (x64_test (OperandSize.Size64) cmp (RegMemImm.Imm 1))
           (CC.NZ))))
 
 (rule 5 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
@@ -4811,12 +4816,12 @@
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
             (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.NZ))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.NZ))))
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo) (x64_setcc (CC.NZ))))
+            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_hi b_hi) (x64_setcc (CC.NZ))))
             ;; See comments for `IntCC.Equal`.
             (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
            (icmp_cond_result
-             (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+             (x64_test (OperandSize.Size64) cmp (RegMemImm.Imm 1))
              (CC.NZ))))
 
 ;; Result = (a_hi <> b_hi) ||
@@ -4826,20 +4831,20 @@
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
             (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) b_hi a_hi)
+            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) a_hi b_hi)
                                        (consumes_flags_concat
                                                  (x64_setcc (intcc_without_eq cc))
                                                  (x64_setcc (CC.Z)))))
             (cc_hi Reg (value_regs_get cmp_hi 0))
             (eq_hi Reg (value_regs_get cmp_hi 1))
 
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo)
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo)
                                         (x64_setcc (intcc_unsigned cc))))
 
             (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
             (res Reg (x64_or $I64 cc_hi res_lo)))
         (icmp_cond_result
-          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) res)
+          (x64_test (OperandSize.Size64) res (RegMemImm.Imm 1))
           (CC.NZ))))
 
 (type FcmpCondResult
@@ -4895,46 +4900,46 @@
 ;;  - equal assigns        Z = 1, P = 0, C = 0
 (decl emit_fcmp (FloatCC Value Value) FcmpCondResult)
 
-(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.AndCondition (x64_ucomis b a) (CC.NP) (CC.Z)))
+(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.AndCondition (x64_ucomis ty a b) (CC.NP) (CC.Z)))
 
-(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.OrCondition (x64_ucomis b a) (CC.P) (CC.NZ)))
+(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.OrCondition (x64_ucomis ty a b) (CC.P) (CC.NZ)))
 
 ;; Some scalar lowerings correspond to one condition code.
 
 (rule (emit_fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NP)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NP)))
 (rule (emit_fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.P)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.P)))
 (rule (emit_fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NZ)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NZ)))
 (rule (emit_fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.Z)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.Z)))
 (rule (emit_fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.BE)))
 
 ;; Other scalar lowerings are made possible by flipping the operands and
 ;; reversing the condition code.
 
 (rule (emit_fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThan`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThan`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.BE)))
 
 ;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

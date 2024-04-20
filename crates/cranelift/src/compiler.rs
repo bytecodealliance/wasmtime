@@ -967,7 +967,9 @@ impl Compiler {
         // despite this load/store being unrelated to execution in wasm itself.
         // For more details on this see the `ValRaw` type in the
         // `wasmtime-runtime` crate.
-        let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+        let flags = ir::MemFlags::new()
+            .with_notrap()
+            .with_endianness(ir::Endianness::Little);
 
         let value_size = mem::size_of::<u128>();
         for (i, (val, ty)) in values.iter().copied().zip(types).enumerate() {
@@ -1004,7 +1006,9 @@ impl Compiler {
 
         // Note that this is little-endian like `store_values_to_array` above,
         // see notes there for more information.
-        let flags = MemFlags::trusted().with_endianness(ir::Endianness::Little);
+        let flags = MemFlags::new()
+            .with_notrap()
+            .with_endianness(ir::Endianness::Little);
 
         let mut results = Vec::new();
         for (i, ty) in types.iter().enumerate() {

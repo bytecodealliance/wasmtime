@@ -835,8 +835,8 @@ impl Assembler {
             DivKind::Signed => {
                 self.emit(Inst::CmpRmiR {
                     size: size.into(),
-                    src: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
-                    dst: divisor.into(),
+                    src1: divisor.into(),
+                    src2: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
                     opcode: CmpOpcode::Cmp,
                 });
                 self.emit(Inst::TrapIf {
@@ -975,29 +975,29 @@ impl Assembler {
         });
     }
 
-    pub fn cmp_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+    pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
 
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
-            src: GprMemImm::new(imm).expect("valid immediate"),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: GprMemImm::new(imm).expect("valid immediate"),
         });
     }
 
-    pub fn cmp_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn cmp_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
-            src: src.into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: src2.into(),
         });
     }
 
-    /// Compares values in src and dst and sets ZF, PF, and CF flags in EFLAGS
+    /// Compares values in src1 and src2 and sets ZF, PF, and CF flags in EFLAGS
     /// register.
-    pub fn ucomis(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn ucomis(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => SseOpcode::Ucomiss,
             OperandSize::S64 => SseOpcode::Ucomisd,
@@ -1006,8 +1006,8 @@ impl Assembler {
 
         self.emit(Inst::XmmCmpRmR {
             op,
-            src: Xmm::from(src).into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: Xmm::from(src2).into(),
         });
     }
 
@@ -1025,12 +1025,12 @@ impl Assembler {
     }
 
     /// Emit a test instruction with two register operands.
-    pub fn test_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn test_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
             size: size.into(),
             opcode: CmpOpcode::Test,
-            src: src.into(),
-            dst: dst.into(),
+            src1: src1.into(),
+            src2: src2.into(),
         })
     }
 

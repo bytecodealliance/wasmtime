@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::ptr::NonNull;
 use std::sync::Arc;
+use wasmparser::WasmFeatures;
 use wasmtime_environ::{
     EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TypeTrace,
 };
@@ -340,7 +341,11 @@ impl Instance {
         // look at them.
         instance_handle.initialize(
             compiled_module.module(),
-            store.engine().config().features.bulk_memory,
+            store
+                .engine()
+                .config()
+                .features
+                .contains(WasmFeatures::BULK_MEMORY),
         )?;
 
         Ok((instance, compiled_module.module().start_func))
@@ -977,7 +982,7 @@ fn typecheck<I>(
     }
     let cx = matching::MatchCx::new(module.engine());
     for ((name, field, mut expected_ty), actual) in env_module.imports().zip(imports) {
-        expected_ty.canonicalize(&mut |module_index| {
+        expected_ty.canonicalize_for_runtime_usage(&mut |module_index| {
             module.signatures().shared_type(module_index).unwrap()
         });
 

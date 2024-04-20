@@ -1,4 +1,6 @@
 test compile precise-output
+set enable_llvm_abi_extensions
+set preserve_frame_pointers
 target x86_64
 
 ;; Test the `tail` calling convention with non-tail calls and stack arguments.
@@ -12,15 +14,15 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    16(%rbp), %r10
-;   movq    24(%rbp), %rsi
-;   movq    32(%rbp), %rax
-;   movq    40(%rbp), %rdx
-;   movq    48(%rbp), %r9
-;   movq    56(%rbp), %r11
-;   movq    64(%rbp), %rdi
-;   movq    72(%rbp), %rcx
-;   movq    80(%rbp), %rax
+;   movq    rbp(stack args max - 80), %r10
+;   movq    rbp(stack args max - 72), %rsi
+;   movq    rbp(stack args max - 64), %rax
+;   movq    rbp(stack args max - 56), %rdx
+;   movq    rbp(stack args max - 48), %r9
+;   movq    rbp(stack args max - 40), %r11
+;   movq    rbp(stack args max - 32), %rdi
+;   movq    rbp(stack args max - 24), %rcx
+;   movq    rbp(stack args max - 16), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret 80
@@ -475,34 +477,34 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   movq    %rcx, rsp(24 + virtual offset)
 ;   movq    %r8, rsp(32 + virtual offset)
 ;   movq    %r9, rsp(40 + virtual offset)
-;   movq    16(%rbp), %r9
+;   movq    rbp(stack args max - 176), %r9
 ;   movq    %r9, rsp(48 + virtual offset)
-;   movq    24(%rbp), %r10
+;   movq    rbp(stack args max - 168), %r10
 ;   movq    %r10, rsp(56 + virtual offset)
-;   movq    32(%rbp), %r11
+;   movq    rbp(stack args max - 160), %r11
 ;   movq    %r11, rsp(64 + virtual offset)
-;   movq    40(%rbp), %rdx
-;   movq    48(%rbp), %r9
+;   movq    rbp(stack args max - 152), %rdx
+;   movq    rbp(stack args max - 144), %r9
 ;   movq    %r9, rsp(72 + virtual offset)
-;   movq    56(%rbp), %r11
+;   movq    rbp(stack args max - 136), %r11
 ;   movq    %r11, rsp(80 + virtual offset)
-;   movq    64(%rbp), %r11
-;   movq    72(%rbp), %r10
-;   movq    80(%rbp), %r9
-;   movq    88(%rbp), %rsi
+;   movq    rbp(stack args max - 128), %r11
+;   movq    rbp(stack args max - 120), %r10
+;   movq    rbp(stack args max - 112), %r9
+;   movq    rbp(stack args max - 104), %rsi
 ;   movq    %rsi, rsp(88 + virtual offset)
-;   movq    96(%rbp), %r13
-;   movq    104(%rbp), %r15
-;   movq    112(%rbp), %r12
-;   movq    120(%rbp), %r14
-;   movq    128(%rbp), %rbx
-;   movq    136(%rbp), %rdi
+;   movq    rbp(stack args max - 96), %r13
+;   movq    rbp(stack args max - 88), %r15
+;   movq    rbp(stack args max - 80), %r12
+;   movq    rbp(stack args max - 72), %r14
+;   movq    rbp(stack args max - 64), %rbx
+;   movq    rbp(stack args max - 56), %rdi
 ;   movq    %rdi, rsp(96 + virtual offset)
-;   movq    144(%rbp), %rcx
-;   movq    152(%rbp), %r8
-;   movq    160(%rbp), %rdi
-;   movq    168(%rbp), %rsi
-;   movq    176(%rbp), %rax
+;   movq    rbp(stack args max - 48), %rcx
+;   movq    rbp(stack args max - 40), %r8
+;   movq    rbp(stack args max - 32), %rdi
+;   movq    rbp(stack args max - 24), %rsi
+;   movq    rbp(stack args max - 16), %rax
 ;   movq    %rdx, 0(%rax)
 ;   movq    rsp(72 + virtual offset), %rdx
 ;   movq    %rdx, 8(%rax)
@@ -892,4 +894,44 @@ block0:
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+
+;; Test that tail calls that shrink the argument area don't clobber the location
+;; of an indirect jump
+
+function %tail_call_indirect_with_shrink(f64, f64, i8, i32 sext, i128, i32 sext, i128, i32, i128) -> i8 tail {
+    sig0 = () -> i8 tail
+    fn0 = %callee_simple sig0
+
+block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, v8: i128):
+    v14 = func_addr.i64 fn0
+    return_call_indirect sig0, v14()
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    rbp(stack args max - 32), %rsi
+;   movq    rbp(stack args max - 24), %rax
+;   movq    rbp(stack args max - 16), %rdx
+;   movq    rbp(stack args max - 8), %r9
+;   load_ext_name %callee_simple+0, %r10
+;   return_call_unknown %r10 (0) tmp=%r11
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x10(%rbp), %rsi
+;   movq 0x18(%rbp), %rax
+;   movq 0x20(%rbp), %rdx
+;   movq 0x28(%rbp), %r9
+;   movabsq $0, %r10 ; reloc_external Abs8 %callee_simple 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   movq (%rsp), %r11
+;   movq %r11, 0x20(%rsp)
+;   addq $0x20, %rsp
+;   jmpq *%r10
 

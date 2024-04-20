@@ -1170,6 +1170,14 @@
         (Const
           (addr VCodeConstant))
 
+        ;; Offset from the beginning of the argument area to the argument
+        ;; referenced. This can only be determined when the function has been
+        ;; processed fully, as the size of the argument area after the prologue
+        ;; is only known once all return_call instructions in the function body
+        ;; have been processed.
+        (IncomingArg
+          (off i64))
+
         ;; Offset from the "nominal stack pointer", which is where the real SP is
         ;; just after stack and spill slots are allocated in the function prologue.
         ;; At emission time, this is converted to `SPOffset` with a fixup added to

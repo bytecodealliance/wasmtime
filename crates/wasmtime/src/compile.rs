@@ -35,8 +35,8 @@ use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex,
     FinishedObject, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleType, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
-    RelocationTarget, StaticModuleIndex, WasmFunctionInfo,
+    ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, RelocationTarget,
+    StaticModuleIndex, WasmFunctionInfo,
 };
 
 mod code_builder;
@@ -70,9 +70,9 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     // about the wasm module. This is where the WebAssembly is parsed and
     // validated. Afterwards `types` will have all the type information for
     // this module.
-    let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
     let parser = wasmparser::Parser::new(0);
-    let mut types = Default::default();
+    let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
+    let mut types = ModuleTypesBuilder::new(&validator);
     let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
         .translate(parser, wasm)
         .context("failed to parse WebAssembly module")?;
@@ -126,7 +126,9 @@ pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
     binary: &[u8],
     _dwarf_package: Option<&[u8]>,
 ) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
-    use wasmtime_environ::component::{CompiledComponentInfo, ComponentArtifacts};
+    use wasmtime_environ::component::{
+        CompiledComponentInfo, ComponentArtifacts, ComponentTypesBuilder,
+    };
     use wasmtime_environ::ScopeVec;
 
     let tunables = engine.tunables();
@@ -134,7 +136,7 @@ pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
 
     let scope = ScopeVec::new();
     let mut validator = wasmparser::Validator::new_with_features(engine.config().features.clone());
-    let mut types = Default::default();
+    let mut types = ComponentTypesBuilder::new(&validator);
     let (component, mut module_translations) =
         Translator::new(tunables, &mut validator, &mut types, &scope)
             .translate(binary)
@@ -486,9 +488,7 @@ impl<'a> CompileInputs<'a> {
                 }
             }
 
-            sigs.extend(translation.module.types.iter().map(|(_, ty)| match ty {
-                ModuleType::Function(ty) => *ty,
-            }));
+            sigs.extend(translation.module.types.iter().map(|(_, ty)| *ty));
         }
 
         for signature in sigs {
@@ -837,9 +837,7 @@ impl FunctionIndices {
                     .module
                     .types
                     .iter()
-                    .map(|(_, ty)| match ty {
-                        ModuleType::Function(ty) => *ty,
-                    })
+                    .map(|(_, ty)| *ty)
                     .collect::<BTreeSet<_>>();
                 let wasm_to_native_trampolines = unique_and_sorted_sigs
                     .iter()

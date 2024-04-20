@@ -85,7 +85,6 @@ pub struct CallIndInfo {
 pub struct ReturnCallInfo {
     pub uses: CallArgList,
     pub opcode: Opcode,
-    pub old_stack_arg_size: u32,
     pub new_stack_arg_size: u32,
 }
 
@@ -415,14 +414,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_clobbers(info.clobbers);
         }
         &Inst::CallInd { ref info } => {
-            if info.callee_callconv == CallConv::Tail {
-                // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
-                // This shouldn't be a fixed register constraint.
-                collector.reg_fixed_use(info.rn, x_reg(5));
-            } else {
-                collector.reg_use(info.rn);
-            }
-
+            collector.reg_use(info.rn);
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
@@ -440,7 +432,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
         }
         &Inst::ReturnCallInd { ref info, callee } => {
-            collector.reg_use(callee);
+            // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+            // This shouldn't be a fixed register constraint.
+            collector.reg_fixed_use(callee, x_reg(5));
+
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
@@ -1475,8 +1470,8 @@ impl Inst {
                 ref info,
             } => {
                 let mut s = format!(
-                    "return_call {callee:?} old_stack_arg_size:{} new_stack_arg_size:{}",
-                    info.old_stack_arg_size, info.new_stack_arg_size
+                    "return_call {callee:?} new_stack_arg_size:{}",
+                    info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = format_reg(ret.preg, &mut empty_allocs);
@@ -1488,8 +1483,8 @@ impl Inst {
             &MInst::ReturnCallInd { callee, ref info } => {
                 let callee = format_reg(callee, allocs);
                 let mut s = format!(
-                    "return_call_ind {callee} old_stack_arg_size:{} new_stack_arg_size:{}",
-                    info.old_stack_arg_size, info.new_stack_arg_size
+                    "return_call_ind {callee} new_stack_arg_size:{}",
+                    info.new_stack_arg_size
                 );
                 for ret in &info.uses {
                     let preg = format_reg(ret.preg, &mut empty_allocs);

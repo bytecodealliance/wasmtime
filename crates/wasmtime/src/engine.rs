@@ -9,6 +9,7 @@ use once_cell::sync::OnceCell;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
 #[cfg(feature = "runtime")]
@@ -299,7 +300,7 @@ impl Engine {
             // like typed function references and GC) are enabled this must be
             // enabled, otherwise this setting can have any value.
             "enable_safepoints" => {
-                if self.config().features.reference_types {
+                if self.config().features.contains(WasmFeatures::REFERENCE_TYPES) {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())
@@ -333,7 +334,6 @@ impl Engine {
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
-            | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled
             | "regalloc" // shouldn't change semantics
             | "enable_incremental_compilation_cache_checks" // shouldn't change semantics

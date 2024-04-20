@@ -14,8 +14,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vle8.v v11,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,-32(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v14,[const(0)] #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vrgather.vv v8,v9,v14 #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vadd.vi v10,v14,-16 #avl=16, #vtype=(e8, m1, ta, ma)
@@ -35,9 +35,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   addi t6, s0, 0x10
+;   addi t6, sp, 0x10
 ;   .byte 0x87, 0x84, 0x0f, 0x02
-;   addi t6, s0, 0x20
+;   addi t6, sp, 0x20
 ;   .byte 0x87, 0x85, 0x0f, 0x02
 ;   auipc t6, 0
 ;   addi t6, t6, 0x3c

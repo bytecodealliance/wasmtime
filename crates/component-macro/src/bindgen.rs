@@ -25,7 +25,10 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
         ));
     }
 
-    let mut src = input.opts.generate(&input.resolve, input.world);
+    let mut src = match input.opts.generate(&input.resolve, input.world) {
+        Ok(s) => s,
+        Err(e) => return Err(Error::new(Span::call_site(), e.to_string())),
+    };
 
     // If a magical `WASMTIME_DEBUG_BINDGEN` environment variable is set then
     // place a formatted version of the expanded code into a file. This file

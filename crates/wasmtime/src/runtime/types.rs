@@ -671,7 +671,8 @@ impl HeapType {
             WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(idx)) => {
                 HeapType::Concrete(FuncType::from_shared_type_index(engine, *idx))
             }
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(_)) => {
+            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(_))
+            | WasmHeapType::Concrete(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonical heap type")
             }
         }
@@ -769,6 +770,7 @@ impl ExternType {
                 EngineOrModuleTypeIndex::Module(m) => {
                     FuncType::from_wasm_func_type(engine, types[*m].clone()).into()
                 }
+                EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
             },
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(engine, ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
@@ -1089,16 +1091,10 @@ impl TableType {
     pub fn new(element: RefType, min: u32, max: Option<u32>) -> TableType {
         let wasm_ty = element.to_wasm_type();
 
-        if cfg!(debug_assertions) {
-            wasm_ty
-                .trace(&mut |idx| match idx {
-                    EngineOrModuleTypeIndex::Engine(_) => Ok(()),
-                    EngineOrModuleTypeIndex::Module(module_idx) => Err(format!(
-                        "found module-level canonicalized type index: {module_idx:?}"
-                    )),
-                })
-                .expect("element type should be engine-level canonicalized");
-        }
+        debug_assert!(
+            wasm_ty.is_canonicalized_for_runtime_usage(),
+            "should be canonicalized for runtime usage: {wasm_ty:?}"
+        );
 
         TableType {
             element,

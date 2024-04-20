@@ -8,6 +8,7 @@
 #define WASMTIME_EXTERN_H
 
 #include <wasmtime/module.h>
+#include <wasmtime/sharedmemory.h>
 #include <wasmtime/store.h>
 
 #ifdef __cplusplus
@@ -88,8 +89,6 @@ typedef uint8_t wasmtime_extern_kind_t;
 /// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
 /// shared memory
 #define WASMTIME_EXTERN_SHAREDMEMORY 4
-
-struct wasmtime_sharedmemory;
 
 /**
  * \typedef wasmtime_extern_union_t

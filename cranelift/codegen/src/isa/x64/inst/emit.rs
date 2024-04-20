@@ -765,7 +765,7 @@ pub(crate) fn emit(
 
             // Check if the divisor is -1, and if it isn't then immediately
             // go to the `idiv`.
-            let inst = Inst::cmp_rmi_r(size, RegMemImm::imm(0xffffffff), divisor);
+            let inst = Inst::cmp_rmi_r(size, divisor, RegMemImm::imm(0xffffffff));
             inst.emit(&[], sink, info, state);
             one_way_jmp(sink, CC::NZ, do_op);
 
@@ -1278,8 +1278,8 @@ pub(crate) fn emit(
 
         Inst::CmpRmiR {
             size,
-            src: src_e,
-            dst: reg_g,
+            src1: reg_g,
+            src2: src_e,
             opcode,
         } => {
             let reg_g = allocs.next(reg_g.to_reg());
@@ -1580,8 +1580,8 @@ pub(crate) fn emit(
             // cmp  rsp, tmp_reg
             let inst = Inst::cmp_rmi_r(
                 OperandSize::Size64,
-                RegMemImm::reg(regs::rsp()),
                 tmp.to_reg(),
+                RegMemImm::reg(regs::rsp()),
             );
             inst.emit(&[], sink, info, state);
 
@@ -1628,7 +1628,7 @@ pub(crate) fn emit(
             callee,
             info: call_info,
         } => {
-            emit_return_call_common_sequence(allocs, sink, info, state, &call_info.uses);
+            emit_return_call_common_sequence(allocs, sink, info, state, &call_info);
 
             // Finally, jump to the callee!
             //
@@ -1647,11 +1647,14 @@ pub(crate) fn emit(
             callee,
             info: call_info,
         } => {
-            let callee = callee.with_allocs(allocs);
+            let callee = allocs.next(*callee);
 
-            emit_return_call_common_sequence(allocs, sink, info, state, &call_info.uses);
+            emit_return_call_common_sequence(allocs, sink, info, state, &call_info);
 
-            Inst::JmpUnknown { target: callee }.emit(&[], sink, info, state);
+            Inst::JmpUnknown {
+                target: RegMem::reg(callee),
+            }
+            .emit(&[], sink, info, state);
             sink.add_call_site(ir::Opcode::ReturnCallIndirect);
         }
 
@@ -1698,138 +1701,6 @@ pub(crate) fn emit(
                 let callee_pop_size = i64::from(call_info.callee_pop_size);
                 state.adjust_virtual_sp_offset(-callee_pop_size);
             }
-        }
-
-        Inst::GrowArgumentArea { amount, tmp } => {
-            debug_assert!(*amount > 0);
-            debug_assert_eq!(*amount % 8, 0);
-
-            assert!(
-                info.flags.preserve_frame_pointers(),
-                "frame pointers must be enabled for GrowArgumentArea"
-            );
-
-            let tmp = allocs.next(tmp.to_reg().to_reg());
-            let tmp = Gpr::new(tmp).unwrap();
-            let tmp_w = WritableGpr::from_reg(tmp);
-
-            // As we're increasing the number of stack arguments, we need to move the frame down in
-            // memory, by decrementing SP by `amount` and looping from lower addresses to higher
-            // ones, copying down.
-
-            // Decrement SP and FP by `amount`
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rsp()),
-            )
-            .emit(&[], sink, info, state);
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rbp()),
-            )
-            .emit(&[], sink, info, state);
-
-            // The total size that we're going to copy, including the return address and frame
-            // pointer that are pushed on the stack already.
-            let size = i32::try_from(
-                state.frame_layout().setup_area_size
-                    + state.frame_layout().clobber_size
-                    + state.frame_layout().fixed_frame_storage_size,
-            )
-            .unwrap();
-
-            debug_assert_eq!(size % 8, 0);
-
-            // Copy the `i`th word in the stack from `SP + amount + i * 8` to `SP + i * 8`. Do this
-            // from lower to higher addresses to avoid clobbering words we haven't copied yet.
-            for sp_word_offset in 0..(size / 8) {
-                let sp_byte_offset = sp_word_offset * 8;
-                Inst::Mov64MR {
-                    src: SyntheticAmode::nominal_sp_offset(
-                        sp_byte_offset + i32::try_from(*amount).unwrap(),
-                    ),
-                    dst: tmp_w,
-                }
-                .emit(&[], sink, info, state);
-
-                Inst::MovRM {
-                    size: OperandSize::Size64,
-                    src: tmp,
-                    dst: SyntheticAmode::nominal_sp_offset(sp_byte_offset),
-                }
-                .emit(&[], sink, info, state);
-            }
-        }
-
-        Inst::ShrinkArgumentArea { amount, tmp } => {
-            debug_assert!(*amount > 0);
-            debug_assert_eq!(*amount % 8, 0);
-
-            assert!(
-                info.flags.preserve_frame_pointers(),
-                "frame pointers must be enabled for ShrinkArgumentArea"
-            );
-
-            let tmp = allocs.next(tmp.to_reg().to_reg());
-            let tmp = Gpr::new(tmp).unwrap();
-            let tmp_w = WritableGpr::from_reg(tmp);
-
-            // As we're decreasing the number of stack arguments, we need to move the frame up in
-            // memory, looping from higher addresses to lower ones copying up, and finally
-            // incrementing `SP` by `amount`.
-
-            // The total size that we're going to copy, including the return address and frame
-            // pointer that are pushed on the stack alreadcy.
-            let size = i32::try_from(
-                state.frame_layout().setup_area_size
-                    + state.frame_layout().clobber_size
-                    + state.frame_layout().fixed_frame_storage_size,
-            )
-            .unwrap();
-
-            debug_assert_eq!(size % 8, 0);
-
-            // Copy the `i`th word in the stack from `SP + i * 8` to `SP + amount + i * 8`. Do this
-            // from higher to lower addresses to avoid clobbering words we haven't copied yet.
-            for sp_word_offset in (0..(size / 8)).rev() {
-                let sp_byte_offset = sp_word_offset * 8;
-                Inst::Mov64MR {
-                    src: SyntheticAmode::nominal_sp_offset(sp_byte_offset),
-                    dst: tmp_w,
-                }
-                .emit(&[], sink, info, state);
-
-                Inst::MovRM {
-                    size: OperandSize::Size64,
-                    src: tmp,
-                    dst: SyntheticAmode::nominal_sp_offset(
-                        sp_byte_offset + i32::try_from(*amount).unwrap(),
-                    ),
-                }
-                .emit(&[], sink, info, state);
-            }
-
-            // Increment SP by `amount`
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rsp()),
-            )
-            .emit(&[], sink, info, state);
-
-            // Increment FP by `amount`
-            Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::imm(*amount),
-                Writable::from_reg(regs::rbp()),
-            )
-            .emit(&[], sink, info, state);
         }
 
         Inst::Args { .. } => {}
@@ -2987,6 +2858,32 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
+        Inst::XmmCmpRmRVex { op, src1, src2 } => {
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (prefix, map, opcode) = match op {
+                AvxOpcode::Vucomiss => (LegacyPrefixes::None, OpcodeMap::_0F, 0x2E),
+                AvxOpcode::Vucomisd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x2E),
+                AvxOpcode::Vptest => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x17),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .rm(src2)
+                .reg(src1.to_real_reg().unwrap().hw_enc())
+                .encode(sink);
+        }
+
         Inst::XmmRmREvex {
             op,
             src1,
@@ -3096,7 +2993,7 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs), dst);
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, dst, RegMem::reg(lhs));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
@@ -3303,9 +3200,9 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmCmpRmR { op, src, dst } => {
-            let dst = allocs.next(dst.to_reg());
-            let src = src.clone().to_reg_mem().with_allocs(allocs);
+        Inst::XmmCmpRmR { op, src1, src2 } => {
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, len) = match op {
@@ -3315,13 +3212,13 @@ pub(crate) fn emit(
                 _ => unimplemented!("Emit xmm cmp rm r"),
             };
 
-            match src {
+            match src2 {
                 RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, len, dst, reg, rex);
+                    emit_std_reg_reg(sink, prefix, opcode, len, src1, reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
-                    emit_std_reg_mem(sink, prefix, opcode, len, dst, addr, rex, 0);
+                    emit_std_reg_mem(sink, prefix, opcode, len, src1, addr, rex, 0);
                 }
             }
         }
@@ -3438,7 +3335,7 @@ pub(crate) fn emit(
             // If x seen as a signed int64 is not negative, a signed-conversion will do the right
             // thing.
             // TODO use tst src, src here.
-            let inst = Inst::cmp_rmi_r(OperandSize::Size64, RegMemImm::imm(0), src);
+            let inst = Inst::cmp_rmi_r(OperandSize::Size64, src, RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::L, handle_negative);
@@ -3586,14 +3483,14 @@ pub(crate) fn emit(
             inst.emit(&[], sink, info, state);
 
             // Compare against 1, in case of overflow the dst operand was INT_MIN.
-            let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(1), dst);
+            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(1));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NO, done); // no overflow => done
 
             // Check for NaN.
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), src);
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(src));
             inst.emit(&[], sink, info, state);
 
             if *is_saturating {
@@ -3624,7 +3521,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm);
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm, RegMem::reg(src));
                 inst.emit(&[], sink, info, state);
 
                 // Jump if >= to done.
@@ -3685,7 +3582,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm), src);
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm));
                 inst.emit(&[], sink, info, state);
 
                 // no trap if src >= or > threshold
@@ -3702,7 +3599,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(&[], sink, info, state);
 
-                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm);
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm, RegMem::reg(src));
                 inst.emit(&[], sink, info, state);
 
                 // no trap if 0 >= src
@@ -3800,7 +3697,7 @@ pub(crate) fn emit(
             );
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm), src);
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm));
             inst.emit(&[], sink, info, state);
 
             let handle_large = sink.get_label();
@@ -3833,7 +3730,7 @@ pub(crate) fn emit(
             let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
+            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
@@ -3870,7 +3767,7 @@ pub(crate) fn emit(
             let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2, Writable::from_reg(dst), *dst_size);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
+            let inst = Inst::cmp_rmi_r(*dst_size, dst, RegMemImm::imm(0));
             inst.emit(&[], sink, info, state);
 
             if *is_saturating {
@@ -4072,8 +3969,8 @@ pub(crate) fn emit(
                     // cmp %r_temp, %r_operand
                     let i3 = Inst::cmp_rmi_r(
                         OperandSize::from_ty(*ty),
-                        RegMemImm::reg(temp.to_reg()),
                         operand,
+                        RegMemImm::reg(temp.to_reg()),
                     );
                     i3.emit(&[], sink, info, state);
 
@@ -4362,7 +4259,7 @@ fn emit_return_call_common_sequence(
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
-    uses: &CallArgList,
+    call_info: &ReturnCallInfo,
 ) {
     assert!(
         info.flags.preserve_frame_pointers(),
@@ -4370,7 +4267,9 @@ fn emit_return_call_common_sequence(
                  but the current implementation relies on them being present"
     );
 
-    for u in uses {
+    let tmp = allocs.next_writable(call_info.tmp.to_writable_reg());
+
+    for u in call_info.uses.iter() {
         let _ = allocs.next(u.vreg);
     }
 
@@ -4387,5 +4286,26 @@ fn emit_return_call_common_sequence(
         state.frame_layout(),
     ) {
         inst.emit(&[], sink, info, state);
+    }
+
+    let incoming_args_diff = state.frame_layout().tail_args_size - call_info.new_stack_arg_size;
+    if incoming_args_diff > 0 {
+        // Move the saved return address up by `incoming_args_diff`
+        Inst::mov64_m_r(Amode::imm_reg(0, regs::rsp()), tmp).emit(&[], sink, info, state);
+        Inst::mov_r_m(
+            OperandSize::Size64,
+            tmp.to_reg(),
+            Amode::imm_reg(i32::try_from(incoming_args_diff).unwrap(), regs::rsp()),
+        )
+        .emit(&[], sink, info, state);
+
+        // Increment the stack pointer to shrink the argument area for the new call.
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Add,
+            RegMemImm::imm(incoming_args_diff),
+            Writable::from_reg(regs::rsp()),
+        )
+        .emit(&[], sink, info, state);
     }
 }

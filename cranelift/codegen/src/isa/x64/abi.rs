@@ -11,7 +11,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
-use regalloc2::{MachineEnv, PReg, PRegSet, VReg};
+use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::sync::OnceLock;
 
@@ -469,7 +469,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
         smallvec![
-            Inst::cmp_rmi_r(OperandSize::Size64, RegMemImm::reg(regs::rsp()), limit_reg),
+            Inst::cmp_rmi_r(OperandSize::Size64, limit_reg, RegMemImm::reg(regs::rsp())),
             Inst::TrapIf {
                 // NBE == "> unsigned"; args above are reversed; this tests limit_reg > rsp.
                 cc: CC::NBE,
@@ -583,7 +583,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> SmallInstVec<Self::I> {
         // Emit return instruction.
         let stack_bytes_to_pop = if call_conv == isa::CallConv::Tail {
-            frame_layout.stack_args_size
+            frame_layout.tail_args_size
         } else {
             0
         };
@@ -640,7 +640,55 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
 
-        if flags.unwind_info() && frame_layout.setup_area_size > 0 {
+        // When a return_call within this function required more stack arguments than we have
+        // present, resize the incoming argument area of the frame to accommodate those arguments.
+        let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
+        if incoming_args_diff > 0 {
+            // Decrement the stack pointer to make space for the new arguments
+            insts.push(Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Sub,
+                RegMemImm::imm(incoming_args_diff),
+                Writable::from_reg(regs::rsp()),
+            ));
+
+            // Make sure to keep the frame pointer and stack pointer in sync at this point
+            insts.push(Inst::mov_r_r(
+                OperandSize::Size64,
+                regs::rsp(),
+                Writable::from_reg(regs::rbp()),
+            ));
+
+            let incoming_args_diff = i32::try_from(incoming_args_diff).unwrap();
+
+            // Move the saved frame pointer down by `incoming_args_diff`
+            insts.push(Inst::mov64_m_r(
+                Amode::imm_reg(incoming_args_diff, regs::rsp()),
+                Writable::from_reg(regs::r11()),
+            ));
+            insts.push(Inst::mov_r_m(
+                OperandSize::Size64,
+                regs::r11(),
+                Amode::imm_reg(0, regs::rsp()),
+            ));
+
+            // Move the saved return address down by `incoming_args_diff`
+            insts.push(Inst::mov64_m_r(
+                Amode::imm_reg(incoming_args_diff + 8, regs::rsp()),
+                Writable::from_reg(regs::r11()),
+            ));
+            insts.push(Inst::mov_r_m(
+                OperandSize::Size64,
+                regs::r11(),
+                Amode::imm_reg(8, regs::rsp()),
+            ));
+        }
+
+        // We need to factor `incoming_args_diff` into the offset upward here, as we have grown
+        // the argument area -- `setup_area_size` alone will not be the correct offset up to the
+        // original caller's SP.
+        let offset_upward_to_caller_sp = frame_layout.setup_area_size + incoming_args_diff;
+        if flags.unwind_info() && offset_upward_to_caller_sp > 0 {
             // Emit unwind info: start the frame. The frame (from unwind
             // consumers' point of view) starts at clobbbers, just below
             // the FP and return address. Spill slots and stack slots are
@@ -648,7 +696,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::DefineNewFrame {
                     offset_downward_to_clobbers: frame_layout.clobber_size,
-                    offset_upward_to_caller_sp: frame_layout.setup_area_size,
+                    offset_upward_to_caller_sp,
                 },
             });
         }
@@ -675,35 +723,32 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // Store each clobbered register in order at offsets from RSP,
         // placing them above the fixed frame slots.
-        let mut cur_offset =
+        let clobber_offset =
             frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
+        let mut cur_offset = 0;
         for reg in &frame_layout.clobbered_callee_saves {
             let r_reg = reg.to_reg();
-            let off = cur_offset;
-            match r_reg.class() {
-                RegClass::Int => {
-                    insts.push(Inst::store(
-                        types::I64,
-                        r_reg.into(),
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                    ));
-                    cur_offset += 8;
-                }
-                RegClass::Float => {
-                    cur_offset = align_to(cur_offset, 16);
-                    insts.push(Inst::store(
-                        types::I8X16,
-                        r_reg.into(),
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                    ));
-                    cur_offset += 16;
-                }
+            let ty = match r_reg.class() {
+                RegClass::Int => types::I64,
+                RegClass::Float => types::I8X16,
                 RegClass::Vector => unreachable!(),
             };
+
+            // Align to 8 or 16 bytes as required by the storage type of the clobber.
+            cur_offset = align_to(cur_offset, ty.bytes());
+            let off = cur_offset;
+            cur_offset += ty.bytes();
+
+            insts.push(Inst::store(
+                ty,
+                r_reg.into(),
+                Amode::imm_reg(i32::try_from(off + clobber_offset).unwrap(), regs::rsp()),
+            ));
+
             if flags.unwind_info() {
                 insts.push(Inst::Unwind {
                     inst: UnwindInst::SaveReg {
-                        clobber_offset: off - frame_layout.fixed_frame_storage_size,
+                        clobber_offset: off,
                         reg: r_reg,
                     },
                 });
@@ -727,26 +772,23 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
         for reg in &frame_layout.clobbered_callee_saves {
             let rreg = reg.to_reg();
-            match rreg.class() {
-                RegClass::Int => {
-                    insts.push(Inst::mov64_m_r(
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                        Writable::from_reg(rreg.into()),
-                    ));
-                    cur_offset += 8;
-                }
-                RegClass::Float => {
-                    cur_offset = align_to(cur_offset, 16);
-                    insts.push(Inst::load(
-                        types::I8X16,
-                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
-                        Writable::from_reg(rreg.into()),
-                        ExtKind::None,
-                    ));
-                    cur_offset += 16;
-                }
+            let ty = match rreg.class() {
+                RegClass::Int => types::I64,
+                RegClass::Float => types::I8X16,
                 RegClass::Vector => unreachable!(),
-            }
+            };
+
+            // Align to 8 or 16 bytes as required by the storage type of the clobber.
+            cur_offset = align_to(cur_offset, ty.bytes());
+
+            insts.push(Inst::load(
+                ty,
+                Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
+                Writable::from_reg(rreg.into()),
+                ExtKind::None,
+            ));
+
+            cur_offset += ty.bytes();
         }
 
         let stack_size = frame_layout.fixed_frame_storage_size
@@ -925,10 +967,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _sig: &Signature,
         regs: &[Writable<RealReg>],
         _is_leaf: bool,
-        stack_args_size: u32,
+        incoming_args_size: u32,
+        tail_args_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
+        debug_assert!(tail_args_size >= incoming_args_size);
+
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
             // The `winch` calling convention doesn't have any callee-save
             // registers.
@@ -948,7 +993,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         };
         // Sort registers for deterministic code output. We can do an unstable sort because the
         // registers will be unique (there are no dups).
-        regs.sort_unstable_by_key(|r| VReg::from(r.to_reg()).vreg());
+        regs.sort_unstable();
 
         // Compute clobber size.
         let clobber_size = compute_clobber_size(&regs);
@@ -958,7 +1003,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // Return FrameLayout structure.
         FrameLayout {
-            stack_args_size,
+            incoming_args_size,
+            tail_args_size: align_to(tail_args_size, 16),
             setup_area_size,
             clobber_size,
             fixed_frame_storage_size,
@@ -972,25 +1018,8 @@ impl X64CallSite {
     pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
         let new_stack_arg_size =
             u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
-        let old_stack_arg_size = ctx.abi().stack_args_size(ctx.sigs());
 
-        match new_stack_arg_size.cmp(&old_stack_arg_size) {
-            core::cmp::Ordering::Equal => {}
-            core::cmp::Ordering::Less => {
-                let tmp = ctx.temp_writable_gpr();
-                ctx.emit(Inst::ShrinkArgumentArea {
-                    amount: old_stack_arg_size - new_stack_arg_size,
-                    tmp,
-                });
-            }
-            core::cmp::Ordering::Greater => {
-                let tmp = ctx.temp_writable_gpr();
-                ctx.emit(Inst::GrowArgumentArea {
-                    amount: new_stack_arg_size - old_stack_arg_size,
-                    tmp,
-                });
-            }
-        }
+        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
 
         // Put all arguments in registers and stack slots (within that newly
         // allocated stack space).
@@ -1000,7 +1029,9 @@ impl X64CallSite {
         // Finally, do the actual tail call!
         let dest = self.dest().clone();
         let info = Box::new(ReturnCallInfo {
+            new_stack_arg_size,
             uses: self.take_uses(),
+            tmp: ctx.temp_writable_gpr(),
         });
         match dest {
             CallDest::ExtName(callee, RelocDistance::Near) => {
@@ -1015,7 +1046,7 @@ impl X64CallSite {
                     distance: RelocDistance::Far,
                 });
                 ctx.emit(Inst::ReturnCallUnknown {
-                    callee: tmp2.to_writable_reg().into(),
+                    callee: tmp2.to_reg().to_reg(),
                     info,
                 });
             }
@@ -1032,16 +1063,13 @@ impl From<StackAMode> for SyntheticAmode {
         // We enforce a 128 MB stack-frame size limit above, so these
         // `expect()`s should never fail.
         match amode {
-            StackAMode::IncomingArg(off) => {
-                let off = i32::try_from(off + 16) // frame pointer + return address
-                    .expect(
-                        "Offset in IncomingArg is greater than 2GB; should hit impl limit first",
-                    );
-                SyntheticAmode::Real(Amode::ImmReg {
-                    simm32: off,
-                    base: regs::rbp(),
-                    flags: MemFlags::trusted(),
-                })
+            StackAMode::IncomingArg(off, stack_args_size) => {
+                let offset = u32::try_from(off).expect(
+                    "Offset in IncomingArg is greater than 4GB; should hit impl limit first",
+                );
+                SyntheticAmode::IncomingArg {
+                    offset: stack_args_size - offset,
+                }
             }
             StackAMode::Slot(off) => {
                 let off = i32::try_from(off)

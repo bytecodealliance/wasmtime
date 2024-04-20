@@ -93,7 +93,7 @@ impl Masm for MacroAssembler {
 
         self.add_stack_max(scratch);
 
-        self.asm.cmp_rr(regs::rsp(), scratch, self.ptr_size);
+        self.asm.cmp_rr(scratch, regs::rsp(), self.ptr_size);
         self.asm.trapif(IntCmpKind::GtU, TrapCode::StackOverflow);
 
         // Emit unwind info.
@@ -627,25 +627,25 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
-    fn cmp(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
-        match src {
+    fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) {
+        match src2 {
             RegImm::Imm(imm) => {
                 if let Some(v) = imm.to_i32() {
-                    self.asm.cmp_ir(v, dst, size);
+                    self.asm.cmp_ir(src1, v, size);
                 } else {
                     let scratch = regs::scratch();
                     self.load_constant(&imm, scratch, size);
-                    self.asm.cmp_rr(scratch, dst, size);
+                    self.asm.cmp_rr(src1, scratch, size);
                 }
             }
-            RegImm::Reg(src) => {
-                self.asm.cmp_rr(src, dst, size);
+            RegImm::Reg(src2) => {
+                self.asm.cmp_rr(src1, src2, size);
             }
         }
     }
 
     fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize) {
-        self.cmp(src, dst, size);
+        self.cmp(dst, src, size);
         self.asm.setcc(kind, dst);
     }
 
@@ -748,20 +748,20 @@ impl Masm for MacroAssembler {
     fn branch(
         &mut self,
         kind: IntCmpKind,
-        lhs: RegImm,
-        rhs: Reg,
+        lhs: Reg,
+        rhs: RegImm,
         taken: MachLabel,
         size: OperandSize,
     ) {
         use IntCmpKind::*;
 
         match &(lhs, rhs) {
-            (RegImm::Reg(rlhs), rrhs) => {
+            (rlhs, RegImm::Reg(rrhs)) => {
                 // If the comparision kind is zero or not zero and both operands
                 // are the same register, emit a test instruction. Else we emit
                 // a normal comparison.
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
-                    self.asm.test_rr(*rrhs, *rlhs, size);
+                    self.asm.test_rr(*rlhs, *rrhs, size);
                 } else {
                     self.cmp(lhs, rhs, size);
                 }
@@ -959,7 +959,7 @@ impl Masm for MacroAssembler {
         let max = default_index;
         let size = OperandSize::S32;
         self.asm.mov_ir(max as u64, tmp, size);
-        self.asm.cmp_rr(index, tmp, size);
+        self.asm.cmp_rr(tmp, index, size);
         self.asm.cmov(tmp, index, IntCmpKind::LtU, size);
 
         let default = targets[default_index];

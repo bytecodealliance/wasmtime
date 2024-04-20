@@ -2,6 +2,7 @@
 
 use super::{address::Address, regs};
 use crate::{masm::OperandSize, reg::Reg};
+use cranelift_codegen::isa::aarch64::inst::{FPUOp2, ScalarSize};
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
@@ -19,6 +20,17 @@ impl From<OperandSize> for inst::OperandSize {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
             s => panic!("Invalid operand size {:?}", s),
+        }
+    }
+}
+impl Into<ScalarSize> for OperandSize {
+    fn into(self) -> ScalarSize {
+        match self {
+            OperandSize::S8 => ScalarSize::Size8,
+            OperandSize::S16 => ScalarSize::Size16,
+            OperandSize::S32 => ScalarSize::Size32,
+            OperandSize::S64 => ScalarSize::Size64,
+            OperandSize::S128 => ScalarSize::Size128,
         }
     }
 }
@@ -149,6 +161,23 @@ impl Assembler {
         });
     }
 
+    pub fn fmov64_rr(&mut self, rm: Reg, rd: Reg) {
+        let writable_rd = Writable::from_reg(rd.into());
+        self.emit(Inst::FpuMove64 {
+            rd: writable_rd,
+            rn: rm.into(),
+        })
+    }
+
+    pub fn mov_to_fpu(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        let writable_rd = Writable::from_reg(rd.into());
+        self.emit(Inst::MovToFpu {
+            size: size.into(),
+            rd: writable_rd,
+            rn: rn.into(),
+        });
+    }
+
     /// Add with three registers.
     pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
@@ -195,6 +224,36 @@ impl Assembler {
         self.emit_alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
     }
 
+    /// Float add with three registers.
+    pub fn fadd_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Add, rm, rn, rd, size);
+    }
+
+    /// Float sub with three registers.
+    pub fn fsub_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Sub, rm, rn, rd, size);
+    }
+
+    /// Float multiply with three registers.
+    pub fn fmul_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Mul, rm, rn, rd, size);
+    }
+
+    /// Float division with three registers.
+    pub fn fdiv_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Div, rm, rn, rd, size);
+    }
+
+    /// Float max with three registers.
+    pub fn fmax_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Max, rm, rn, rd, size);
+    }
+
+    /// Float min with three registers.
+    pub fn fmin_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_fpu_rrr(FPUOp2::Min, rm, rn, rd, size);
+    }
+
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {});
@@ -231,6 +290,16 @@ impl Assembler {
             rn: rn.into(),
             rm: rm.into(),
             ra: ra.into(),
+        });
+    }
+
+    fn emit_fpu_rrr(&mut self, op: FPUOp2, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::FpuRRR {
+            fpu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            rm: rm.into(),
         });
     }
 

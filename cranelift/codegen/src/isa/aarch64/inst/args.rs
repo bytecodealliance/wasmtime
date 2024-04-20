@@ -183,6 +183,7 @@ impl AMode {
             | &AMode::SPPostIndexed { .. }
             | &AMode::FPOffset { .. }
             | &AMode::SPOffset { .. }
+            | &AMode::IncomingArg { .. }
             | &AMode::NominalSPOffset { .. }
             | &AMode::Const { .. }
             | AMode::Label { .. } => self.clone(),
@@ -455,6 +456,7 @@ impl PrettyPrint for AMode {
             // Eliminated by `mem_finalize()`.
             &AMode::SPOffset { .. }
             | &AMode::FPOffset { .. }
+            | &AMode::IncomingArg { .. }
             | &AMode::NominalSPOffset { .. }
             | &AMode::RegOffset { .. } => {
                 panic!("Unexpected pseudo mem-arg mode: {:?}", self)

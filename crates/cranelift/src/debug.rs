@@ -8,7 +8,7 @@ pub enum ModuleMemoryOffset {
     /// Offset to the defined memory.
     Defined(u32),
     /// Offset to the imported memory.
-    Imported(u32),
+    Imported(#[allow(dead_code)] u32),
 }
 
 pub use write_debuginfo::{emit_dwarf, DwarfSectionRelocTarget};

@@ -374,7 +374,12 @@ pub(crate) fn check(
             let addr = addr.clone();
             let bits: u16 = size.to_bits().into();
             check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
-                clamp_range(ctx, 64, bits, compute_addr(ctx, vcode, &addr, bits))
+                let fact = if let SyntheticAmode::Real(amode) = &addr {
+                    compute_addr(ctx, vcode, amode, bits)
+                } else {
+                    None
+                };
+                clamp_range(ctx, 64, bits, fact)
             })
         }
 
@@ -433,15 +438,18 @@ pub(crate) fn check(
         }
 
         Inst::CmpRmiR {
-            size, dst, ref src, ..
-        } => match <&RegMemImm>::from(src) {
+            size,
+            src1,
+            ref src2,
+            ..
+        } => match <&RegMemImm>::from(src2) {
             RegMemImm::Mem {
                 addr: SyntheticAmode::ConstantOffset(k),
             } => {
                 match vcode.constants.get(*k) {
                     VCodeConstantData::U64(bytes) => {
                         let value = u64::from_le_bytes(*bytes);
-                        let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                        let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                         let rhs = Fact::constant(64, value);
                         state.cmp_flags = Some((lhs, rhs));
                     }
@@ -451,19 +459,19 @@ pub(crate) fn check(
             }
             RegMemImm::Mem { ref addr } => {
                 if let Some(rhs) = check_load(ctx, None, addr, vcode, size.to_type(), 64)? {
-                    let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                    let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                     state.cmp_flags = Some((lhs, rhs));
                 }
                 Ok(())
             }
             RegMemImm::Reg { reg } => {
                 let rhs = get_fact_or_default(vcode, *reg, 64);
-                let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                 state.cmp_flags = Some((lhs, rhs));
                 Ok(())
             }
             RegMemImm::Imm { simm32 } => {
-                let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                 let rhs = Fact::constant(64, (*simm32 as i32) as i64 as u64);
                 state.cmp_flags = Some((lhs, rhs));
                 Ok(())
@@ -763,13 +771,17 @@ pub(crate) fn check(
 
         Inst::XmmMinMaxSeq { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 
-        Inst::XmmCmpRmR { ref src, .. } => match <&RegMem>::from(src) {
-            RegMem::Mem { ref addr } => {
-                check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                Ok(())
+        Inst::XmmCmpRmR {
+            ref src1, ref src2, ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
             }
-            RegMem::Reg { .. } => Ok(()),
-        },
+            ensure_no_fact(vcode, src1.to_reg())
+        }
 
         Inst::XmmRmRImm {
             dst,
@@ -804,12 +816,22 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_reg())
         }
 
+        Inst::XmmCmpRmRVex {
+            ref src1, ref src2, ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, F32, 32)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, src1.to_reg())
+        }
+
         Inst::CallKnown { .. }
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
         | Inst::Ret { .. }
-        | Inst::GrowArgumentArea { .. }
-        | Inst::ShrinkArgumentArea { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::TrapIf { .. }
@@ -819,10 +841,9 @@ pub(crate) fn check(
         | Inst::Ud2 { .. } => Ok(()),
         Inst::Rets { .. } => Ok(()),
 
+        Inst::ReturnCallUnknown { .. } => Ok(()),
+
         Inst::CallUnknown { ref dest, .. }
-        | Inst::ReturnCallUnknown {
-            callee: ref dest, ..
-        }
         | Inst::JmpUnknown {
             target: ref dest, ..
         } => match <&RegMem>::from(dest) {
@@ -924,15 +945,12 @@ fn check_mem<'a>(
     ty: Type,
     op: LoadOrStore<'a>,
 ) -> PccResult<Option<Fact>> {
-    match amode {
-        SyntheticAmode::Real(amode) if !amode.get_flags().checked() => return Ok(None),
-        SyntheticAmode::NominalSPOffset { .. } | SyntheticAmode::ConstantOffset(_) => {
-            return Ok(None)
+    let addr = match amode {
+        SyntheticAmode::Real(amode) if amode.get_flags().checked() => {
+            compute_addr(ctx, vcode, amode, 64).ok_or(PccError::MissingFact)?
         }
-        _ => {}
-    }
-
-    let addr = compute_addr(ctx, vcode, amode, 64).ok_or(PccError::MissingFact)?;
+        _ => return Ok(None),
+    };
 
     match op {
         LoadOrStore::Load {
@@ -959,15 +977,10 @@ fn check_mem<'a>(
     }
 }
 
-fn compute_addr(
-    ctx: &FactContext,
-    vcode: &VCode<Inst>,
-    amode: &SyntheticAmode,
-    bits: u16,
-) -> Option<Fact> {
+fn compute_addr(ctx: &FactContext, vcode: &VCode<Inst>, amode: &Amode, bits: u16) -> Option<Fact> {
     trace!("compute_addr: {:?}", amode);
     match *amode {
-        SyntheticAmode::Real(Amode::ImmReg { simm32, base, .. }) => {
+        Amode::ImmReg { simm32, base, .. } => {
             let base = get_fact_or_default(vcode, base, bits);
             trace!("base = {:?}", base);
             let simm32: i64 = simm32.into();
@@ -977,13 +990,13 @@ fn compute_addr(
             trace!("sum = {:?}", sum);
             Some(sum)
         }
-        SyntheticAmode::Real(Amode::ImmRegRegShift {
+        Amode::ImmRegRegShift {
             simm32,
             base,
             index,
             shift,
             ..
-        }) => {
+        } => {
             let base = get_fact_or_default(vcode, base.into(), bits);
             let index = get_fact_or_default(vcode, index.into(), bits);
             trace!("base = {:?} index = {:?}", base, index);
@@ -996,8 +1009,6 @@ fn compute_addr(
             trace!("sum = {:?}", sum);
             Some(sum)
         }
-        SyntheticAmode::Real(Amode::RipRelative { .. })
-        | SyntheticAmode::ConstantOffset(_)
-        | SyntheticAmode::NominalSPOffset { .. } => None,
+        Amode::RipRelative { .. } => None,
     }
 }

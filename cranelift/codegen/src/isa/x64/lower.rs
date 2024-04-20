@@ -178,8 +178,7 @@ fn emit_vm_call(
     assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
 
     for (i, input) in inputs.iter().enumerate() {
-        let moves = abi.gen_arg(ctx, i, ValueRegs::one(*input));
-        abi.emit_arg_moves(ctx, moves);
+        abi.gen_arg(ctx, i, ValueRegs::one(*input));
     }
 
     let mut retval_insts: SmallInstVec<_> = smallvec![];

@@ -1,4 +1,5 @@
 use self::regs::{ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_GPR};
+use crate::isa::aarch64::regs::{ALL_FPR, NON_ALLOCATABLE_FPR};
 use crate::{
     abi::{wasm_sig, ABI},
     codegen::{CodeGen, CodeGenContext, FuncEnv, TypeConverter},
@@ -116,8 +117,11 @@ impl TargetIsa for Aarch64 {
             NON_ALLOCATABLE_GPR.into(),
             usize::try_from(MAX_GPR).unwrap(),
         );
-        // TODO: Add floating point bitmask
-        let fpr = RegBitSet::float(0, 0, usize::try_from(MAX_FPR).unwrap());
+        let fpr = RegBitSet::float(
+            ALL_FPR.into(),
+            NON_ALLOCATABLE_FPR.into(),
+            usize::try_from(MAX_FPR).unwrap(),
+        );
         let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);

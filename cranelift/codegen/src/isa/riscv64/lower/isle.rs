@@ -82,9 +82,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            // TODO: this should be Opcode::ReturnCall, once riscv64 has been ported to the new
-            // tail call strategy.
-            Opcode::Call,
+            Opcode::ReturnCall,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -113,9 +111,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            // TODO: this should be Opcode::ReturnCallIndirect, once riscv64 has
-            // been ported to the new tail call strategy.
-            Opcode::CallIndirect,
+            Opcode::ReturnCallIndirect,
             caller_conv,
             self.backend.flags().clone(),
         );

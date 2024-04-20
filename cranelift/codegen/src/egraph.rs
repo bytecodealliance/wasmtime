@@ -209,7 +209,7 @@ where
                 }
             };
 
-            self.attach_constant_fact(inst, result);
+            self.attach_constant_fact(inst, result, ty);
 
             self.available_block[result] = self.get_available_block(inst);
             let opt_value = self.optimize_pure_enode(inst);
@@ -485,7 +485,7 @@ where
     /// Helper to propagate facts on constant values: if PCC is
     /// enabled, then unconditionally add a fact attesting to the
     /// Value's concrete value.
-    fn attach_constant_fact(&mut self, inst: Inst, value: Value) {
+    fn attach_constant_fact(&mut self, inst: Inst, value: Value, ty: Type) {
         if self.flags.enable_pcc() {
             if let InstructionData::UnaryImm {
                 opcode: Opcode::Iconst,
@@ -493,7 +493,8 @@ where
             } = self.func.dfg.insts[inst]
             {
                 let imm: i64 = imm.into();
-                self.func.dfg.facts[value] = Some(Fact::constant(64, imm as u64));
+                self.func.dfg.facts[value] =
+                    Some(Fact::constant(ty.bits().try_into().unwrap(), imm as u64));
             }
         }
     }

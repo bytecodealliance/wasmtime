@@ -119,7 +119,6 @@ use crate::component::translate::*;
 use crate::fact;
 use crate::EntityType;
 use std::collections::HashSet;
-use wasmparser::WasmFeatures;
 
 /// Metadata information about a fused adapter.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -212,13 +211,10 @@ impl<'data> Translator<'_, 'data> {
             // specifically enabled here since the adapter module is highly
             // likely to use that if anything is actually indirected through
             // memory.
-            let mut validator = Validator::new_with_features(WasmFeatures {
-                multi_memory: true,
-                ..*self.validator.features()
-            });
+            self.validator.reset();
             let translation = ModuleEnvironment::new(
                 self.tunables,
-                &mut validator,
+                &mut self.validator,
                 self.types.module_types_builder(),
             )
             .translate(Parser::new(0), wasm)

@@ -1,6 +1,5 @@
 {
   "cfallin": ["isle"],
   "fitzgen": ["fuzzing", "isle", "wasmtime:ref-types"],
-  "peterhuene": ["wasmtime:api", "wasmtime:c-api"],
   "saulecabrera": ["winch"]
 }

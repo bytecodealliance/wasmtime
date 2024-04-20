@@ -1,4 +1,5 @@
 use crate::component::*;
+use crate::Module;
 use crate::ScopeVec;
 use crate::{
     EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables,
@@ -14,6 +15,7 @@ use wasmparser::types::{
 };
 use wasmparser::{Chunk, ComponentImportName, Encoding, Parser, Payload, Validator};
 use wasmtime_types::ModuleInternedTypeIndex;
+use wasmtime_types::WasmResult;
 
 mod adapt;
 pub use self::adapt::*;
@@ -487,7 +489,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let lower_ty = types.component_function_at(func_index);
                             let func = ComponentFuncIndex::from_u32(func_index);
                             let options = self.canonical_options(&options);
-                            let canonical_abi = self.core_func_signature(core_func_index);
+                            let canonical_abi = self.core_func_signature(core_func_index)?;
 
                             core_func_index += 1;
                             LocalInitializer::Lower {
@@ -499,19 +501,19 @@ impl<'a, 'data> Translator<'a, 'data> {
                         }
                         wasmparser::CanonicalFunction::ResourceNew { resource } => {
                             let resource = types.component_any_type_at(resource).unwrap_resource();
-                            let ty = self.core_func_signature(core_func_index);
+                            let ty = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ResourceNew(resource, ty)
                         }
                         wasmparser::CanonicalFunction::ResourceDrop { resource } => {
                             let resource = types.component_any_type_at(resource).unwrap_resource();
-                            let ty = self.core_func_signature(core_func_index);
+                            let ty = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ResourceDrop(resource, ty)
                         }
                         wasmparser::CanonicalFunction::ResourceRep { resource } => {
                             let resource = types.component_any_type_at(resource).unwrap_resource();
-                            let ty = self.core_func_signature(core_func_index);
+                            let ty = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ResourceRep(resource, ty)
                         }
@@ -911,12 +913,14 @@ impl<'a, 'data> Translator<'a, 'data> {
         return ret;
     }
 
-    fn core_func_signature(&mut self, idx: u32) -> ModuleInternedTypeIndex {
+    /// Get the interned type index for the `index`th core function.
+    fn core_func_signature(&mut self, index: u32) -> WasmResult<ModuleInternedTypeIndex> {
         let types = self.validator.types(0).unwrap();
-        let id = types.core_function_at(idx);
-        let ty = types[id].unwrap_func();
-        let ty = self.types.convert_func_type(ty);
-        self.types.module_types_builder().wasm_func_type(id, ty)
+        let id = types.core_function_at(index);
+        let module = Module::default();
+        self.types
+            .module_types_builder()
+            .intern_type(&module, types, id)
     }
 }
 

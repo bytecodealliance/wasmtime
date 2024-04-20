@@ -87,10 +87,7 @@ fn target(module: GenAdapterModule) {
         );
         let wasm = wat::parse_str(&wat).unwrap();
 
-        let mut validator = Validator::new_with_features(WasmFeatures {
-            component_model: true,
-            ..Default::default()
-        });
+        let mut validator = Validator::new();
 
         types.push_type_scope();
         for payload in Parser::new(0).parse_all(&wasm) {
@@ -148,12 +145,8 @@ fn target(module: GenAdapterModule) {
         fact_module.adapt(&format!("adapter{i}"), adapter);
     }
     let wasm = fact_module.encode();
-    let result = Validator::new_with_features(WasmFeatures {
-        multi_memory: true,
-        memory64: true,
-        ..WasmFeatures::default()
-    })
-    .validate_all(&wasm);
+    let result = Validator::new_with_features(WasmFeatures::default() | WasmFeatures::MEMORY64)
+        .validate_all(&wasm);
 
     let err = match result {
         Ok(_) => return,
