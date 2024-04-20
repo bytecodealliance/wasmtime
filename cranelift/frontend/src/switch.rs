@@ -289,8 +289,11 @@ impl Switch {
 }
 
 fn icmp_imm_u128(bx: &mut FunctionBuilder, cond: IntCC, x: Value, y: u128) -> Value {
-    if let Ok(index) = u64::try_from(y) {
-        bx.ins().icmp_imm(cond, x, index as i64)
+    if bx.func.dfg.value_type(x) != types::I128 {
+        assert!(u64::try_from(y).is_ok());
+        bx.ins().icmp_imm(cond, x, y as i64)
+    } else if let Ok(index) = i64::try_from(y) {
+        bx.ins().icmp_imm(cond, x, index)
     } else {
         let (lsb, msb) = (y as u64, (y >> 64) as u64);
         let lsb = bx.ins().iconst(types::I64, lsb as i64);
@@ -649,6 +652,45 @@ block4:
 block4:
     v3 = ireduce.i32 v1
     br_table v3, block3, [block2, block1]"
+        );
+    }
+
+    #[test]
+    fn switch_128bit_max_u64() {
+        let mut func = Function::new();
+        let mut func_ctx = FunctionBuilderContext::new();
+        {
+            let mut bx = FunctionBuilder::new(&mut func, &mut func_ctx);
+            let block0 = bx.create_block();
+            bx.switch_to_block(block0);
+            let val = bx.ins().iconst(types::I64, 0);
+            let val = bx.ins().uextend(types::I128, val);
+            let mut switch = Switch::new();
+            let block1 = bx.create_block();
+            switch.set_entry(u64::MAX.into(), block1);
+            let block2 = bx.create_block();
+            switch.set_entry(0, block2);
+            let block3 = bx.create_block();
+            switch.emit(&mut bx, val, block3);
+        }
+        let func = func
+            .to_string()
+            .trim_start_matches("function u0:0() fast {\n")
+            .trim_end_matches("\n}\n")
+            .to_string();
+        assert_eq_output!(
+            func,
+            "block0:
+    v0 = iconst.i64 0
+    v1 = uextend.i128 v0  ; v0 = 0
+    v2 = iconst.i64 -1
+    v3 = iconst.i64 0
+    v4 = iconcat v2, v3  ; v2 = -1, v3 = 0
+    v5 = icmp eq v1, v4
+    brif v5, block1, block4
+
+block4:
+    brif.i128 v1, block3, block2"
         );
     }
 }
