@@ -257,7 +257,7 @@ impl Assembler {
 
     /// Float neg with two registers.
     pub fn fneg_rr(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
-        self.emit_fpu_rr(FPUOp1::Abs, rn, rd, size);
+        self.emit_fpu_rr(FPUOp1::Neg, rn, rd, size);
     }
 
     /// Float abs with two registers.
@@ -270,7 +270,7 @@ impl Assembler {
         self.emit_fpu_rr(FPUOp1::Sqrt, rn, rd, size);
     }
 
-    /// Float ceil with two registers.
+    /// Float round (ceil, trunc, floor) with two registers.
     pub fn fround_rr(&mut self, rn: Reg, rd: Reg, mode: RoundingMode, size: OperandSize) {
         let fpu_mode = match (mode, size) {
             (RoundingMode::Nearest, OperandSize::S32) => FpuRoundMode::Nearest32,
