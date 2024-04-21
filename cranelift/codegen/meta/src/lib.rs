@@ -7,6 +7,7 @@ mod srcgen;
 
 pub mod error;
 pub mod isa;
+pub mod isle;
 
 mod gen_inst;
 mod gen_settings;
