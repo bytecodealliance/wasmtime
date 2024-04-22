@@ -1346,24 +1346,6 @@ impl Func {
         let (params, results) = val_vec.split_at_mut(nparams);
         func(caller.sub_caller(), params, results)?;
 
-        #[cfg(feature = "gc")]
-        {
-            // See the comment in `Func::call_impl_check_args`.
-            let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_returns_count();
-            if let Some(num_gc_refs) = NonZeroUsize::new(num_gc_refs) {
-                if caller
-                    .as_context()
-                    .0
-                    .gc_store()?
-                    .gc_heap
-                    .need_gc_before_entering_wasm(num_gc_refs)
-                {
-                    assert!(!caller.as_context().0.async_support());
-                    caller.as_context_mut().gc();
-                }
-            }
-        }
-
         // Unlike our arguments we need to dynamically check that the return
         // values produced are correct. There could be a bug in `func` that
         // produces the wrong number, wrong types, or wrong stores of
