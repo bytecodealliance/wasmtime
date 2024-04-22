@@ -5,7 +5,10 @@ fn main() {
     // Valid domains
     resolve("localhost").unwrap();
     resolve("example.com").unwrap();
-    resolve("münchen.de").unwrap();
+
+    // NB: this is an actual real resolution, so it might time out, might cause
+    // issues, etc. This result is ignored to prevent flaky failures in CI.
+    let _ = resolve("münchen.de");
 
     // Valid IP addresses
     assert_eq!(resolve_one("0.0.0.0").unwrap(), IpAddress::IPV4_UNSPECIFIED);
