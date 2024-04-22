@@ -141,7 +141,7 @@ jobs:
     if: |
       needs.determine.outputs.audit
       && github.event_name == 'pull_request'
-      && needs.cargo_vet.outputs.outcome == 'failed'
+      && needs.cargo_vet.outputs.outcome == 'failure'
     runs-on: ubuntu-latest
     steps:
     # NB: this message ideally would link back to the previous step, but I'm not
