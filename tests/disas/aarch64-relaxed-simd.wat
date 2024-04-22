@@ -53,35 +53,35 @@
 ;; wasm[0]::function[2]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       fcvtzs  v6.2d, v0.2d
-;;       sqxtn   v0.2s, v6.2d
+;;       fcvtzs  v4.2d, v0.2d
+;;       sqxtn   v0.2s, v4.2d
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[3]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       fcvtzu  v6.2d, v0.2d
-;;       uqxtn   v0.2s, v6.2d
+;;       fcvtzu  v4.2d, v0.2d
+;;       uqxtn   v0.2s, v4.2d
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[4]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       smull   v16.8h, v0.8b, v1.8b
-;;       smull2  v17.8h, v0.16b, v1.16b
-;;       addp    v0.8h, v16.8h, v17.8h
+;;       smull   v6.8h, v0.8b, v1.8b
+;;       smull2  v7.8h, v0.16b, v1.16b
+;;       addp    v0.8h, v6.8h, v7.8h
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[5]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       smull   v19.8h, v0.8b, v1.8b
-;;       smull2  v20.8h, v0.16b, v1.16b
-;;       addp    v19.8h, v19.8h, v20.8h
-;;       saddlp  v19.4s, v19.8h
-;;       add     v0.4s, v19.4s, v2.4s
+;;       smull   v17.8h, v0.8b, v1.8b
+;;       smull2  v18.8h, v0.16b, v1.16b
+;;       addp    v17.8h, v17.8h, v18.8h
+;;       saddlp  v17.4s, v17.8h
+;;       add     v0.4s, v17.4s, v2.4s
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

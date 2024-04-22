@@ -25,12 +25,12 @@
 ;;       mv      s0, sp
 ;;       ld      a4, 0x68(a0)
 ;;       bltu    a4, a2, 0x2c
-;;       ld      a5, 0x60(a0)
-;;       add     a5, a5, a2
-;;       lui     a4, 0xffff
-;;       slli    a0, a4, 4
-;;       add     a5, a5, a0
-;;       sw      a3, 0(a5)
+;;       ld      a4, 0x60(a0)
+;;       add     a4, a4, a2
+;;       lui     a5, 0xffff
+;;       slli    a5, a5, 4
+;;       add     a4, a4, a5
+;;       sw      a3, 0(a4)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -42,14 +42,14 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a4, 0x68(a0)
-;;       bltu    a4, a2, 0x2c
-;;       ld      a5, 0x60(a0)
-;;       add     a5, a5, a2
-;;       lui     a4, 0xffff
-;;       slli    a0, a4, 4
-;;       add     a5, a5, a0
-;;       lw      a0, 0(a5)
+;;       ld      a3, 0x68(a0)
+;;       bltu    a3, a2, 0x2c
+;;       ld      a4, 0x60(a0)
+;;       add     a4, a4, a2
+;;       lui     a3, 0xffff
+;;       slli    a5, a3, 4
+;;       add     a4, a4, a5
+;;       lw      a0, 0(a4)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

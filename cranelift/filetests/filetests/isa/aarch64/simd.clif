@@ -135,16 +135,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   ldrb w5, [x0]
-;   dup v0.16b, w5
-;   dup v1.16b, w5
+;   ldrb w4, [x0]
+;   dup v0.16b, w4
+;   dup v1.16b, w4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldrb w5, [x0] ; trap: heap_oob
-;   dup v0.16b, w5
-;   dup v1.16b, w5
+;   ldrb w4, [x0] ; trap: heap_oob
+;   dup v0.16b, w4
+;   dup v1.16b, w4
 ;   ret
 
 function %f9() -> i32x2 {

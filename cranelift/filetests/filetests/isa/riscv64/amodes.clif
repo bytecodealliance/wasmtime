@@ -287,20 +287,20 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   lui a1,-1
-;   addi a3,a1,-2
-;   slli a1,a3,32
-;   srli a3,a1,32
-;   lh a0,0(a3)
+;   lui a3,-1
+;   addi a5,a3,-2
+;   slli a3,a5,32
+;   srli a5,a3,32
+;   lh a0,0(a5)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a1, 0xfffff
-;   addi a3, a1, -2
-;   slli a1, a3, 0x20
-;   srli a3, a1, 0x20
-;   lh a0, 0(a3) ; trap: heap_oob
+;   lui a3, 0xfffff
+;   addi a5, a3, -2
+;   slli a3, a5, 0x20
+;   srli a5, a3, 0x20
+;   lh a0, 0(a5) ; trap: heap_oob
 ;   ret
 
 function %f19(i64, i64, i64) -> i32 {
@@ -313,20 +313,20 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   lui a1,1
-;   addi a3,a1,2
-;   slli a1,a3,32
-;   srli a3,a1,32
-;   lh a0,0(a3)
+;   lui a3,1
+;   addi a5,a3,2
+;   slli a3,a5,32
+;   srli a5,a3,32
+;   lh a0,0(a5)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a1, 1
-;   addi a3, a1, 2
-;   slli a1, a3, 0x20
-;   srli a3, a1, 0x20
-;   lh a0, 0(a3) ; trap: heap_oob
+;   lui a3, 1
+;   addi a5, a3, 2
+;   slli a3, a5, 0x20
+;   srli a5, a3, 0x20
+;   lh a0, 0(a5) ; trap: heap_oob
 ;   ret
 
 function %f20(i64, i64, i64) -> i32 {
@@ -339,18 +339,18 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   lui a0,-1
-;   addi a2,a0,-2
-;   sext.w a1,a2
-;   lh a0,0(a1)
+;   lui a2,-1
+;   addi a4,a2,-2
+;   sext.w a3,a4
+;   lh a0,0(a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a0, 0xfffff
-;   addi a2, a0, -2
-;   sext.w a1, a2
-;   lh a0, 0(a1) ; trap: heap_oob
+;   lui a2, 0xfffff
+;   addi a4, a2, -2
+;   sext.w a3, a4
+;   lh a0, 0(a3) ; trap: heap_oob
 ;   ret
 
 function %f21(i64, i64, i64) -> i32 {
@@ -363,18 +363,18 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   lui a0,1
-;   addi a2,a0,2
-;   sext.w a1,a2
-;   lh a0,0(a1)
+;   lui a2,1
+;   addi a4,a2,2
+;   sext.w a3,a4
+;   lh a0,0(a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a0, 1
-;   addi a2, a0, 2
-;   sext.w a1, a2
-;   lh a0, 0(a1) ; trap: heap_oob
+;   lui a2, 1
+;   addi a4, a2, 2
+;   sext.w a3, a4
+;   lh a0, 0(a3) ; trap: heap_oob
 ;   ret
 
 function %i128(i64) -> i128 {

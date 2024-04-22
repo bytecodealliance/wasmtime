@@ -660,19 +660,19 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   cghi %r4, 0
-;   lghi %r4, 0
-;   locghilh %r4, -1
-;   vlvgp %v17, %r4, %r4
-;   vst %v17, 0(%r2)
+;   lghi %r3, 0
+;   locghilh %r3, -1
+;   vlvgp %v16, %r3, %r3
+;   vst %v16, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cghi %r4, 0
-;   lghi %r4, 0
-;   locghilh %r4, -1
-;   vlvgp %v17, %r4, %r4
-;   vst %v17, 0(%r2)
+;   lghi %r3, 0
+;   locghilh %r3, -1
+;   vlvgp %v16, %r3, %r3
+;   vst %v16, 0(%r2)
 ;   br %r14
 
 function %bmask_i64_i64(i64, i64) -> i64 {
@@ -764,19 +764,19 @@ block0(v0: i32, v1: i32):
 ; VCode:
 ; block0:
 ;   chi %r4, 0
-;   lghi %r4, 0
-;   locghilh %r4, -1
-;   vlvgp %v17, %r4, %r4
-;   vst %v17, 0(%r2)
+;   lghi %r3, 0
+;   locghilh %r3, -1
+;   vlvgp %v16, %r3, %r3
+;   vst %v16, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   chi %r4, 0
-;   lghi %r4, 0
-;   locghilh %r4, -1
-;   vlvgp %v17, %r4, %r4
-;   vst %v17, 0(%r2)
+;   lghi %r3, 0
+;   locghilh %r3, -1
+;   vlvgp %v16, %r3, %r3
+;   vst %v16, 0(%r2)
 ;   br %r14
 
 function %bmask_i32_i64(i32, i32) -> i64 {
@@ -867,22 +867,22 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   lhr %r3, %r4
-;   chi %r3, 0
-;   lghi %r3, 0
-;   locghilh %r3, -1
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   lhr %r5, %r4
+;   chi %r5, 0
+;   lghi %r5, 0
+;   locghilh %r5, -1
+;   vlvgp %v18, %r5, %r5
+;   vst %v18, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhr %r3, %r4
-;   chi %r3, 0
-;   lghi %r3, 0
-;   locghilh %r3, -1
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   lhr %r5, %r4
+;   chi %r5, 0
+;   lghi %r5, 0
+;   locghilh %r5, -1
+;   vlvgp %v18, %r5, %r5
+;   vst %v18, 0(%r2)
 ;   br %r14
 
 function %bmask_i16_i64(i16, i16) -> i64 {
@@ -893,16 +893,16 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lghi %r2, 0
 ;   locghilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lghi %r2, 0
 ;   locghilh %r2, -1
 ;   br %r14
@@ -915,16 +915,16 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -937,16 +937,16 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -959,16 +959,16 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhr %r5, %r3
-;   chi %r5, 0
+;   lhr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -981,22 +981,22 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r3, %r4
-;   chi %r3, 0
-;   lghi %r3, 0
-;   locghilh %r3, -1
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   lbr %r5, %r4
+;   chi %r5, 0
+;   lghi %r5, 0
+;   locghilh %r5, -1
+;   vlvgp %v18, %r5, %r5
+;   vst %v18, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r3, %r4
-;   chi %r3, 0
-;   lghi %r3, 0
-;   locghilh %r3, -1
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   lbr %r5, %r4
+;   chi %r5, 0
+;   lghi %r5, 0
+;   locghilh %r5, -1
+;   vlvgp %v18, %r5, %r5
+;   vst %v18, 0(%r2)
 ;   br %r14
 
 function %bmask_i8_i64(i8, i8) -> i64 {
@@ -1007,16 +1007,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lghi %r2, 0
 ;   locghilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lghi %r2, 0
 ;   locghilh %r2, -1
 ;   br %r14
@@ -1029,16 +1029,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -1051,16 +1051,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -1073,16 +1073,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -1095,22 +1095,22 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r3, %r4
-;   chi %r3, 0
-;   lghi %r3, 0
-;   locghilh %r3, -1
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   lbr %r5, %r4
+;   chi %r5, 0
+;   lghi %r5, 0
+;   locghilh %r5, -1
+;   vlvgp %v18, %r5, %r5
+;   vst %v18, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r3, %r4
-;   chi %r3, 0
-;   lghi %r3, 0
-;   locghilh %r3, -1
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   lbr %r5, %r4
+;   chi %r5, 0
+;   lghi %r5, 0
+;   locghilh %r5, -1
+;   vlvgp %v18, %r5, %r5
+;   vst %v18, 0(%r2)
 ;   br %r14
 
 function %bmask_i8_i64(i8, i8) -> i64 {
@@ -1121,16 +1121,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lghi %r2, 0
 ;   locghilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lghi %r2, 0
 ;   locghilh %r2, -1
 ;   br %r14
@@ -1143,16 +1143,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -1165,16 +1165,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
@@ -1187,16 +1187,16 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lbr %r5, %r3
-;   chi %r5, 0
+;   lbr %r4, %r3
+;   chi %r4, 0
 ;   lhi %r2, 0
 ;   lochilh %r2, -1
 ;   br %r14

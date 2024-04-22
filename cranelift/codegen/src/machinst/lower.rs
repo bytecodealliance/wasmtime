@@ -590,13 +590,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.f.dfg.block_params(entry_bb)
             );
 
-            // Make the vmctx available in debuginfo.
-            if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
-                self.emit_value_label_marks_for_value(vmctx_val);
-            }
-
             for (i, param) in self.f.dfg.block_params(entry_bb).iter().enumerate() {
-                if !self.vcode.abi().arg_is_needed_in_body(i) {
+                if self.value_ir_uses[*param] == ValueUseState::Unused {
                     continue;
                 }
                 let regs = writable_value_regs(self.value_regs[*param]);
@@ -667,8 +662,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // for the benefit of debuginfo.
         if self.f.dfg.values_labels.is_some() {
             if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
-                let vmctx_reg = self.value_regs[vmctx_val].only_reg().unwrap();
-                self.emit(I::gen_dummy_use(vmctx_reg));
+                if self.value_ir_uses[vmctx_val] != ValueUseState::Unused {
+                    let vmctx_reg = self.value_regs[vmctx_val].only_reg().unwrap();
+                    self.emit(I::gen_dummy_use(vmctx_reg));
+                }
             }
         }
 

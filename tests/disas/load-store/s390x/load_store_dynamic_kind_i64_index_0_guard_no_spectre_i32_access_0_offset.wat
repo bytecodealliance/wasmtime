@@ -31,8 +31,8 @@
 ;;       aghi    %r3, -4
 ;;       clgr    %r4, %r3
 ;;       jgh     0x50
-;;       lg      %r3, 0x60(%r2)
-;;       strv    %r5, 0(%r4, %r3)
+;;       lg      %r2, 0x60(%r2)
+;;       strv    %r5, 0(%r4, %r2)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00
@@ -50,8 +50,8 @@
 ;;       aghi    %r5, -4
 ;;       clgr    %r4, %r5
 ;;       jgh     0xa4
-;;       lg      %r3, 0x60(%r2)
-;;       lrv     %r2, 0(%r4, %r3)
+;;       lg      %r2, 0x60(%r2)
+;;       lrv     %r2, 0(%r4, %r2)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00

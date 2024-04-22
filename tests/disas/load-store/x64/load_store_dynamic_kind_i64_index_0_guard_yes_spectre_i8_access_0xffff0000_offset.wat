@@ -21,42 +21,50 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    %rdx, %rax
-;;       addq    0x2a(%rip), %rax
-;;       jb      0x36
+;;       movq    %rdx, %r8
+;;       addq    0x32(%rip), %r8
+;;       jb      0x37
 ;;   14: movq    0x68(%rdi), %r9
-;;       xorq    %r8, %r8
+;;       xorq    %rax, %rax
 ;;       addq    0x60(%rdi), %rdx
 ;;       movl    $0xffff0000, %r10d
-;;       addq    %r10, %rdx
-;;       cmpq    %r9, %rax
-;;       cmovaq  %r8, %rdx
-;;       movb    %cl, (%rdx)
+;;       leaq    (%rdx, %r10), %rdi
+;;       cmpq    %r9, %r8
+;;       cmovaq  %rax, %rdi
+;;       movb    %cl, (%rdi)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   36: ud2
-;;   38: addl    %eax, (%rax)
+;;   37: ud2
+;;   39: addb    %al, (%rax)
+;;   3b: addb    %al, (%rax)
+;;   3d: addb    %al, (%rax)
+;;   3f: addb    %al, (%rcx)
+;;   41: addb    %bh, %bh
+;;   43: incl    (%rax)
+;;   45: addb    %al, (%rax)
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    %rdx, %rax
-;;       addq    0x32(%rip), %rax
-;;       jb      0x78
-;;   54: movq    0x68(%rdi), %r8
-;;       xorq    %rcx, %rcx
+;;       movq    %rdx, %rcx
+;;       addq    0x32(%rip), %rcx
+;;       jb      0x89
+;;   64: movq    0x68(%rdi), %r8
+;;       xorq    %rax, %rax
 ;;       addq    0x60(%rdi), %rdx
 ;;       movl    $0xffff0000, %r9d
-;;       addq    %r9, %rdx
-;;       cmpq    %r8, %rax
-;;       cmovaq  %rcx, %rdx
-;;       movzbq  (%rdx), %rax
+;;       leaq    (%rdx, %r9), %rdi
+;;       cmpq    %r8, %rcx
+;;       cmovaq  %rax, %rdi
+;;       movzbq  (%rdi), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   78: ud2
-;;   7a: addb    %al, (%rax)
-;;   7c: addb    %al, (%rax)
-;;   7e: addb    %al, (%rax)
-;;   80: addl    %eax, (%rax)
+;;   89: ud2
+;;   8b: addb    %al, (%rax)
+;;   8d: addb    %al, (%rax)
+;;   8f: addb    %al, (%rcx)
+;;   91: addb    %bh, %bh
+;;   93: incl    (%rax)
+;;   95: addb    %al, (%rax)

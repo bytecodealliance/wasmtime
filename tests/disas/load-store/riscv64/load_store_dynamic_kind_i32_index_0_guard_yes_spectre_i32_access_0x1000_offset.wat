@@ -23,21 +23,21 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a1, 0x68(a0)
-;;       ld      a0, 0x60(a0)
-;;       slli    a5, a2, 0x20
-;;       srli    a2, a5, 0x20
-;;       lui     a5, 1
-;;       addi    a4, a5, 4
-;;       sub     a1, a1, a4
-;;       sltu    a1, a1, a2
-;;       add     a0, a0, a2
-;;       lui     a2, 1
-;;       add     a0, a0, a2
-;;       neg     a4, a1
-;;       not     a1, a4
-;;       and     a2, a0, a1
-;;       sw      a3, 0(a2)
+;;       ld      a4, 0x68(a0)
+;;       ld      a5, 0x60(a0)
+;;       slli    a0, a2, 0x20
+;;       srli    a1, a0, 0x20
+;;       lui     a0, 1
+;;       addi    a0, a0, 4
+;;       sub     a0, a4, a0
+;;       sltu    a0, a0, a1
+;;       add     a5, a5, a1
+;;       lui     a1, 1
+;;       add     a5, a5, a1
+;;       neg     a4, a0
+;;       not     a0, a4
+;;       and     a1, a5, a0
+;;       sw      a3, 0(a1)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -48,21 +48,21 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a1, 0x68(a0)
-;;       ld      a0, 0x60(a0)
-;;       slli    a5, a2, 0x20
-;;       srli    a2, a5, 0x20
-;;       lui     a5, 1
-;;       addi    a3, a5, 4
-;;       sub     a1, a1, a3
-;;       sltu    a1, a1, a2
-;;       add     a0, a0, a2
-;;       lui     a2, 1
-;;       add     a0, a0, a2
-;;       neg     a4, a1
-;;       not     a1, a4
-;;       and     a2, a0, a1
-;;       lw      a0, 0(a2)
+;;       ld      a3, 0x68(a0)
+;;       ld      a5, 0x60(a0)
+;;       slli    a4, a2, 0x20
+;;       srli    a1, a4, 0x20
+;;       lui     a4, 1
+;;       addi    a0, a4, 4
+;;       sub     a0, a3, a0
+;;       sltu    a0, a0, a1
+;;       add     a5, a5, a1
+;;       lui     a1, 1
+;;       add     a5, a5, a1
+;;       neg     a3, a0
+;;       not     a0, a3
+;;       and     a1, a5, a0
+;;       lw      a0, 0(a1)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

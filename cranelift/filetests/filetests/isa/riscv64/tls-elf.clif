@@ -70,8 +70,8 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   elf_tls_get_addr a0,userextname0
-;   li a4,0
-;   sb a4,0(a0)
+;   li a2,0
+;   sb a2,0(a0)
 ;   li a0,0
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -89,8 +89,8 @@ block0(v0: i64):
 ;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+16 0
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt %ElfTlsGetAddr 0
 ;   jalr ra
-;   mv a4, zero
-;   sb a4, 0(a0)
+;   mv a2, zero
+;   sb a2, 0(a0)
 ;   mv a0, zero
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)

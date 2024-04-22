@@ -21,15 +21,15 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       ldr     x10, [x0, #0x68]
-;;       mov     w11, w2
-;;       mov     x12, #0x1004
-;;       sub     x10, x10, x12
-;;       cmp     x11, x10
+;;       ldr     x9, [x0, #0x68]
+;;       mov     w10, w2
+;;       mov     x11, #0x1004
+;;       sub     x9, x9, x11
+;;       cmp     x10, x9
 ;;       b.hi    #0x34
-;;   20: ldr     x12, [x0, #0x60]
-;;       add     x12, x12, #1, lsl #12
-;;       str     w3, [x12, w2, uxtw]
+;;   20: ldr     x11, [x0, #0x60]
+;;       add     x11, x11, #1, lsl #12
+;;       str     w3, [x11, w2, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   34: .byte   0x1f, 0xc1, 0x00, 0x00
@@ -37,15 +37,15 @@
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       ldr     x10, [x0, #0x68]
-;;       mov     w11, w2
-;;       mov     x12, #0x1004
-;;       sub     x10, x10, x12
-;;       cmp     x11, x10
+;;       ldr     x9, [x0, #0x68]
+;;       mov     w10, w2
+;;       mov     x11, #0x1004
+;;       sub     x9, x9, x11
+;;       cmp     x10, x9
 ;;       b.hi    #0x74
-;;   60: ldr     x12, [x0, #0x60]
-;;       add     x11, x12, #1, lsl #12
-;;       ldr     w0, [x11, w2, uxtw]
+;;   60: ldr     x11, [x0, #0x60]
+;;       add     x10, x11, #1, lsl #12
+;;       ldr     w0, [x10, w2, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   74: .byte   0x1f, 0xc1, 0x00, 0x00

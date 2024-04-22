@@ -14,14 +14,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    rbp(stack args max - 80), %r10
-;   movq    rbp(stack args max - 72), %rsi
-;   movq    rbp(stack args max - 64), %rax
-;   movq    rbp(stack args max - 56), %rdx
-;   movq    rbp(stack args max - 48), %r9
-;   movq    rbp(stack args max - 40), %r11
-;   movq    rbp(stack args max - 32), %rdi
-;   movq    rbp(stack args max - 24), %rcx
 ;   movq    rbp(stack args max - 16), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -32,14 +24,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq 0x10(%rbp), %r10
-;   movq 0x18(%rbp), %rsi
-;   movq 0x20(%rbp), %rax
-;   movq 0x28(%rbp), %rdx
-;   movq 0x30(%rbp), %r9
-;   movq 0x38(%rbp), %r11
-;   movq 0x40(%rbp), %rdi
-;   movq 0x48(%rbp), %rcx
 ;   movq 0x50(%rbp), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -911,10 +895,6 @@ block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    rbp(stack args max - 32), %rsi
-;   movq    rbp(stack args max - 24), %rax
-;   movq    rbp(stack args max - 16), %rdx
-;   movq    rbp(stack args max - 8), %r9
 ;   load_ext_name %callee_simple+0, %r10
 ;   return_call_unknown %r10 (0) tmp=%r11
 ;
@@ -923,10 +903,6 @@ block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, 
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq 0x10(%rbp), %rsi
-;   movq 0x18(%rbp), %rax
-;   movq 0x20(%rbp), %rdx
-;   movq 0x28(%rbp), %r9
 ;   movabsq $0, %r10 ; reloc_external Abs8 %callee_simple 0
 ;   movq %rbp, %rsp
 ;   popq %rbp

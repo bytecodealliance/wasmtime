@@ -1597,13 +1597,6 @@ impl<M: ABIMachineSpec> Callee<M> {
         insts
     }
 
-    /// Is the given argument needed in the body (as opposed to, e.g., serving
-    /// only as a special ABI-specific placeholder)? This controls whether
-    /// lowering will copy it to a virtual reg use by CLIF instructions.
-    pub fn arg_is_needed_in_body(&self, _idx: usize) -> bool {
-        true
-    }
-
     /// Generate an instruction which copies a source register to a return value slot.
     pub fn gen_copy_regs_to_retval(
         &self,

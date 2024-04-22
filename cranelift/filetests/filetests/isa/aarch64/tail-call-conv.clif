@@ -12,25 +12,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x7, [sp, #16]
-;   ldr x9, [sp, #24]
-;   ldr x11, [sp, #32]
-;   ldr x13, [sp, #40]
-;   ldr x15, [sp, #48]
-;   ldr x1, [sp, #56]
-;   ldr x3, [sp, #64]
-;   ldr x5, [sp, #72]
-;   ldr x7, [sp, #80]
-;   ldr x9, [sp, #88]
-;   ldr x11, [sp, #96]
-;   ldr x13, [sp, #104]
-;   ldr x15, [sp, #112]
-;   ldr x1, [sp, #120]
-;   ldr x3, [sp, #128]
-;   ldr x5, [sp, #136]
-;   ldr x7, [sp, #144]
-;   ldr x9, [sp, #152]
-;   ldr x11, [sp, #160]
 ;   ldr x2, [sp, #168]
 ;   ldp fp, lr, [sp], #16
 ;   add sp, sp, #160
@@ -41,25 +22,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldur x7, [sp, #0x10]
-;   ldur x9, [sp, #0x18]
-;   ldur x11, [sp, #0x20]
-;   ldur x13, [sp, #0x28]
-;   ldur x15, [sp, #0x30]
-;   ldur x1, [sp, #0x38]
-;   ldur x3, [sp, #0x40]
-;   ldur x5, [sp, #0x48]
-;   ldur x7, [sp, #0x50]
-;   ldur x9, [sp, #0x58]
-;   ldur x11, [sp, #0x60]
-;   ldur x13, [sp, #0x68]
-;   ldur x15, [sp, #0x70]
-;   ldur x1, [sp, #0x78]
-;   ldur x3, [sp, #0x80]
-;   ldur x5, [sp, #0x88]
-;   ldur x7, [sp, #0x90]
-;   ldur x9, [sp, #0x98]
-;   ldur x11, [sp, #0xa0]
 ;   ldur x2, [sp, #0xa8]
 ;   ldp x29, x30, [sp], #0x10
 ;   add sp, sp, #0xa0

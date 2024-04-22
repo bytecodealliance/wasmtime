@@ -25,9 +25,9 @@
 ;;       mv      s0, sp
 ;;       ld      a1, 0x68(a0)
 ;;       bgeu    a2, a1, 0x20
-;;       ld      a4, 0x60(a0)
-;;       add     a2, a4, a2
-;;       sb      a3, 0(a2)
+;;       ld      a1, 0x60(a0)
+;;       add     a1, a1, a2
+;;       sb      a3, 0(a1)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -41,9 +41,9 @@
 ;;       mv      s0, sp
 ;;       ld      a1, 0x68(a0)
 ;;       bgeu    a2, a1, 0x20
-;;       ld      a3, 0x60(a0)
-;;       add     a2, a3, a2
-;;       lbu     a0, 0(a2)
+;;       ld      a1, 0x60(a0)
+;;       add     a1, a1, a2
+;;       lbu     a0, 0(a1)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

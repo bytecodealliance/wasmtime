@@ -546,14 +546,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,1
-;   sub a0,zero,a3
+;   li a1,1
+;   sub a0,zero,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 1
-;   neg a0, a3
+;   addi a1, zero, 1
+;   neg a0, a1
 ;   ret
 
 function %add_i128(i128, i128) -> i128 {

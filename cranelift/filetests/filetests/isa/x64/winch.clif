@@ -304,8 +304,8 @@ block0(v0:i64):
 ;   load_ext_name %g+0, %r10
 ;   call    *%r10
 ;   movq    4(%rsp), %rax
-;   movq    0(%rsp), %r11
-;   andl    %eax, %r11d, %eax
+;   movq    0(%rsp), %r9
+;   andl    %eax, %r9d, %eax
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r12
 ;   movq    32(%rsp), %r13
@@ -331,8 +331,8 @@ block0(v0:i64):
 ;   movabsq $0, %r10 ; reloc_external Abs8 %g 0
 ;   callq *%r10
 ;   movq 4(%rsp), %rax
-;   movq (%rsp), %r11
-;   andl %r11d, %eax
+;   movq (%rsp), %r9
+;   andl %r9d, %eax
 ;   movq 0x10(%rsp), %rbx
 ;   movq 0x18(%rsp), %r12
 ;   movq 0x20(%rsp), %r13
