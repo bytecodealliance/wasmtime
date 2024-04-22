@@ -51,7 +51,7 @@ where
 
 fn load_dwp<'data>(
     translation: ModuleTranslation<'data>,
-    buffer: &'data Vec<u8>,
+    buffer: &'data [u8],
 ) -> anyhow::Result<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
     let endian_slice = gimli::EndianSlice::new(buffer, LittleEndian);
 
@@ -106,7 +106,7 @@ fn load_dwp<'data>(
 /// Attempts to load a DWARF package using the passed bytes.
 fn read_dwarf_package_from_bytes<'data>(
     dwp_bytes: &'data [u8],
-    buffer: &'data Vec<u8>,
+    buffer: &'data [u8],
     tunables: &Tunables,
 ) -> Option<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
     let mut validator = wasmparser::Validator::new();
