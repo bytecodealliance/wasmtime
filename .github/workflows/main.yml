@@ -138,17 +138,12 @@ jobs:
     needs:
     - determine
     - cargo_vet
+    if: |
+      needs.determine.outputs.audit
+      && github.event_name == 'pull_request'
+      && needs.cargo_vet.outputs.outcome == 'failed'
     runs-on: ubuntu-latest
     steps:
-    - run: echo ${{ needs.determine.outputs.audit }}
-    - run: echo ${{ github.event_name }}
-    - run: echo ${{ needs.cargo_vet.outputs.outcome }}
-    - run: echo a
-      if: needs.determine.outputs.audit
-    - run: echo a
-      if: github.event_name == 'pull_request'
-    - run: echo a
-      if: needs.cargo_vet.outputs.outcome == 'failed'
     # NB: this message ideally would link back to the previous step, but I'm not
     # sure how to easily do that.
     - run: |
