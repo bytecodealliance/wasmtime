@@ -652,14 +652,14 @@ block0(v0: i8x16, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm7
-;   punpcklbw %xmm7, %xmm0, %xmm7
+;   movdqa  %xmm0, %xmm6
+;   punpcklbw %xmm6, %xmm0, %xmm6
 ;   punpckhbw %xmm0, %xmm0, %xmm0
-;   movdqa  %xmm0, %xmm5
-;   movdqa  %xmm7, %xmm0
+;   movdqa  %xmm0, %xmm4
+;   movdqa  %xmm6, %xmm0
 ;   psraw   %xmm0, $11, %xmm0
-;   psraw   %xmm5, $11, %xmm5
-;   packsswb %xmm0, %xmm5, %xmm0
+;   psraw   %xmm4, $11, %xmm4
+;   packsswb %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -669,14 +669,14 @@ block0(v0: i8x16, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm7
-;   punpcklbw %xmm0, %xmm7
+;   movdqa %xmm0, %xmm6
+;   punpcklbw %xmm0, %xmm6
 ;   punpckhbw %xmm0, %xmm0
-;   movdqa %xmm0, %xmm5
-;   movdqa %xmm7, %xmm0
+;   movdqa %xmm0, %xmm4
+;   movdqa %xmm6, %xmm0
 ;   psraw $0xb, %xmm0
-;   psraw $0xb, %xmm5
-;   packsswb %xmm5, %xmm0
+;   psraw $0xb, %xmm4
+;   packsswb %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

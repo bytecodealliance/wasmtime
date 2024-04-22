@@ -13,9 +13,9 @@ block0(v0: i64, v2: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  80(%rdi), %xmm0
-;   uninit  %xmm5
-;   pxor    %xmm5, %xmm5, %xmm5
-;   punpckhbw %xmm0, %xmm5, %xmm0
+;   uninit  %xmm4
+;   pxor    %xmm4, %xmm4, %xmm4
+;   punpckhbw %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -26,8 +26,8 @@ block0(v0: i64, v2: i8x16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movdqu 0x50(%rdi), %xmm0
-;   pxor %xmm5, %xmm5
-;   punpckhbw %xmm5, %xmm0
+;   pxor %xmm4, %xmm4
+;   punpckhbw %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -23,18 +23,18 @@
 ;;       lg      %r1, 0(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgrtle %r15, %r1
-;;       stmg    %r14, %r15, 0x70(%r15)
+;;       stmg    %r13, %r15, 0x68(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lghi    %r14, 0
+;;       lghi    %r13, 0
 ;;       lgr     %r3, %r4
 ;;       ag      %r3, 0x60(%r2)
 ;;       aghi    %r3, 0x1000
 ;;       clgfi   %r4, 0xffffefff
-;;       locgrh  %r3, %r14
+;;       locgrh  %r3, %r13
 ;;       stc     %r5, 0(%r3)
-;;       lmg     %r14, %r15, 0x110(%r15)
+;;       lmg     %r13, %r15, 0x108(%r15)
 ;;       br      %r14
 ;;
 ;; wasm[0]::function[1]:
@@ -46,12 +46,12 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lghi    %r3, 0
-;;       lgr     %r5, %r4
-;;       ag      %r5, 0x60(%r2)
-;;       aghi    %r5, 0x1000
+;;       lghi    %r5, 0
+;;       lgr     %r3, %r4
+;;       ag      %r3, 0x60(%r2)
+;;       aghik   %r2, %r3, 0x1000
 ;;       clgfi   %r4, 0xffffefff
-;;       locgrh  %r5, %r3
-;;       llc     %r2, 0(%r5)
+;;       locgrh  %r2, %r5
+;;       llc     %r2, 0(%r2)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

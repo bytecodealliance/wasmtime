@@ -209,7 +209,6 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    rbp(stack args max - 16), %r10
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret 16
@@ -219,7 +218,6 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq 0x10(%rbp), %r10
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq $0x10
@@ -235,14 +233,15 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   movq    %rcx, %r10
 ;   movq    %rdx, %rdi
-;   movq    %rcx, %rsi
 ;   movq    %r8, %rdx
 ;   movq    %r9, %rcx
 ;   movq    rbp(stack args max - 32), %r8
 ;   movq    rbp(stack args max - 24), %r9
-;   movq    rbp(stack args max - 16), %rax
-;   movl    %eax, rbp(stack args max - 16)
+;   movq    rbp(stack args max - 16), %rsi
+;   movl    %esi, rbp(stack args max - 16)
+;   movq    %r10, %rsi
 ;   return_call_known TestCase(%one_stack_arg) (16) tmp=%r11 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
 ;
 ; Disassembled:
@@ -250,20 +249,21 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   movq %rcx, %r10
 ;   movq %rdx, %rdi
-;   movq %rcx, %rsi
 ;   movq %r8, %rdx
 ;   movq %r9, %rcx
 ;   movq 0x10(%rbp), %r8
 ;   movq 0x18(%rbp), %r9
-;   movq 0x20(%rbp), %rax
-;   movl %eax, 0x20(%rbp)
+;   movq 0x20(%rbp), %rsi
+;   movl %esi, 0x20(%rbp)
+;   movq %r10, %rsi
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   movq (%rsp), %r11
 ;   movq %r11, 0x10(%rsp)
 ;   addq $0x10, %rsp
-;   jmp 0x35 ; reloc_external CallPCRel4 %one_stack_arg -4
+;   jmp 0x38 ; reloc_external CallPCRel4 %one_stack_arg -4
 
 function %call_zero_stack_args(i32, i32, i32, i32, i32, i32, i32, i32, i8) -> i8 tail {
     fn0 = colocated %callee_i8(i8) -> i8 tail
@@ -276,8 +276,6 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    rbp(stack args max - 32), %r10
-;   movq    rbp(stack args max - 24), %rsi
 ;   movq    rbp(stack args max - 16), %rdi
 ;   return_call_known TestCase(%callee_i8) (0) tmp=%r11 %rdi=%rdi
 ;
@@ -286,15 +284,13 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq 0x10(%rbp), %r10
-;   movq 0x18(%rbp), %rsi
 ;   movq 0x20(%rbp), %rdi
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   movq (%rsp), %r11
 ;   movq %r11, 0x20(%rsp)
 ;   addq $0x20, %rsp
-;   jmp 0x26 ; reloc_external CallPCRel4 %callee_i8 -4
+;   jmp 0x1e ; reloc_external CallPCRel4 %callee_i8 -4
 
 ;;;; Test growing the argument area when it's non-empty ;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -363,25 +359,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    rbp(stack args max - 160), %r10
-;   movq    rbp(stack args max - 152), %rsi
-;   movq    rbp(stack args max - 144), %rax
-;   movq    rbp(stack args max - 136), %rdx
-;   movq    rbp(stack args max - 128), %r9
-;   movq    rbp(stack args max - 120), %r11
-;   movq    rbp(stack args max - 112), %rdi
-;   movq    rbp(stack args max - 104), %rcx
-;   movq    rbp(stack args max - 96), %r8
-;   movq    rbp(stack args max - 88), %r10
-;   movq    rbp(stack args max - 80), %rsi
-;   movq    rbp(stack args max - 72), %rax
-;   movq    rbp(stack args max - 64), %rdx
-;   movq    rbp(stack args max - 56), %r9
-;   movq    rbp(stack args max - 48), %r11
-;   movq    rbp(stack args max - 40), %rdi
-;   movq    rbp(stack args max - 32), %rcx
-;   movq    rbp(stack args max - 24), %r8
-;   movq    rbp(stack args max - 16), %r10
 ;   movq    rbp(stack args max - 8), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -392,25 +369,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq 0x10(%rbp), %r10
-;   movq 0x18(%rbp), %rsi
-;   movq 0x20(%rbp), %rax
-;   movq 0x28(%rbp), %rdx
-;   movq 0x30(%rbp), %r9
-;   movq 0x38(%rbp), %r11
-;   movq 0x40(%rbp), %rdi
-;   movq 0x48(%rbp), %rcx
-;   movq 0x50(%rbp), %r8
-;   movq 0x58(%rbp), %r10
-;   movq 0x60(%rbp), %rsi
-;   movq 0x68(%rbp), %rax
-;   movq 0x70(%rbp), %rdx
-;   movq 0x78(%rbp), %r9
-;   movq 0x80(%rbp), %r11
-;   movq 0x88(%rbp), %rdi
-;   movq 0x90(%rbp), %rcx
-;   movq 0x98(%rbp), %r8
-;   movq 0xa0(%rbp), %r10
 ;   movq 0xa8(%rbp), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp

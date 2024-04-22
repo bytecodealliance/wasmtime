@@ -127,8 +127,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x15, 0xa6, 0x48
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x15, 0xe6, 0x48
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -194,8 +194,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x55, 0xa6, 0x48
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x55, 0xe6, 0x48
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -206,8 +206,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x55, 0xa6, 0x48
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x55, 0xe6, 0x48
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -218,8 +218,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x55, 0xa6, 0x48
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x55, 0xe6, 0x48
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -230,8 +230,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x55, 0xa6, 0x48
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x55, 0xe6, 0x48
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -374,8 +374,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x15, 0xa6, 0x68
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x15, 0xe6, 0x68
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -386,8 +386,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x15, 0xa6, 0x68
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x15, 0xe6, 0x68
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -464,8 +464,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x15, 0xa6, 0x28
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x15, 0xe6, 0x28
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -476,8 +476,8 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       andi    a0, a3, 0x1f
-;;       .byte   0x33, 0x15, 0xa6, 0x28
+;;       andi    a4, a3, 0x1f
+;;       .byte   0x33, 0x15, 0xe6, 0x28
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

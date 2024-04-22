@@ -48,19 +48,19 @@
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       xorps   %xmm1, %xmm1
-;;       maxps   %xmm1, %xmm0
-;;       pcmpeqd %xmm1, %xmm1
-;;       psrld   $1, %xmm1
-;;       cvtdq2ps %xmm1, %xmm2
-;;       cvttps2dq %xmm0, %xmm1
-;;       subps   %xmm2, %xmm0
-;;       cmpleps %xmm0, %xmm2
+;;       xorps   %xmm7, %xmm7
+;;       maxps   %xmm7, %xmm0
+;;       pcmpeqd %xmm7, %xmm7
+;;       psrld   $1, %xmm7
+;;       cvtdq2ps %xmm7, %xmm1
+;;       cvttps2dq %xmm0, %xmm7
+;;       subps   %xmm1, %xmm0
+;;       cmpleps %xmm0, %xmm1
 ;;       cvttps2dq %xmm0, %xmm0
-;;       pxor    %xmm2, %xmm0
-;;       pxor    %xmm4, %xmm4
-;;       pmaxsd  %xmm4, %xmm0
-;;       paddd   %xmm1, %xmm0
+;;       pxor    %xmm1, %xmm0
+;;       pxor    %xmm2, %xmm2
+;;       pmaxsd  %xmm2, %xmm0
+;;       paddd   %xmm7, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -76,12 +76,12 @@
 ;; wasm[0]::function[3]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       xorpd   %xmm6, %xmm6
-;;       maxpd   %xmm6, %xmm0
+;;       xorpd   %xmm4, %xmm4
+;;       maxpd   %xmm4, %xmm0
 ;;       minpd   0x1c(%rip), %xmm0
 ;;       roundpd $3, %xmm0, %xmm0
 ;;       addpd   0x1e(%rip), %xmm0
-;;       shufps  $0x88, %xmm6, %xmm0
+;;       shufps  $0x88, %xmm4, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -93,9 +93,9 @@
 ;; wasm[0]::function[4]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movdqa  %xmm0, %xmm7
+;;       movdqa  %xmm0, %xmm5
 ;;       movdqa  %xmm1, %xmm0
-;;       pmaddubsw %xmm7, %xmm0
+;;       pmaddubsw %xmm5, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

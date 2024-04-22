@@ -23,21 +23,22 @@
 ;;       lg      %r1, 0(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgrtle %r15, %r1
-;;       stmg    %r12, %r15, 0x60(%r15)
+;;       stmg    %r7, %r15, 0x38(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       llgfr   %r12, %r4
-;;       llilf   %r3, 0xffff0001
-;;       algfr   %r3, %r4
-;;       jgnle   0x38
-;;       lg      %r4, 0x68(%r2)
-;;       clgr    %r3, %r4
-;;       jgh     0x62
-;;       ag      %r12, 0x60(%r2)
-;;       llilh   %r3, 0xffff
-;;       stc     %r5, 0(%r3, %r12)
-;;       lmg     %r12, %r15, 0x100(%r15)
+;;       llgfr   %r3, %r4
+;;       lgr     %r9, %r4
+;;       llilf   %r4, 0xffff0001
+;;       algfr   %r4, %r9
+;;       jgnle   0x3c
+;;       lg      %r7, 0x68(%r2)
+;;       clgr    %r4, %r7
+;;       jgh     0x66
+;;       ag      %r3, 0x60(%r2)
+;;       llilh   %r2, 0xffff
+;;       stc     %r5, 0(%r2, %r3)
+;;       lmg     %r7, %r15, 0xd8(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00
 ;;
@@ -50,16 +51,17 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       llgfr   %r5, %r4
-;;       llilf   %r3, 0xffff0001
-;;       algfr   %r3, %r4
-;;       jgnle   0x9c
-;;       lg      %r4, 0x68(%r2)
-;;       clgr    %r3, %r4
-;;       jgh     0xc8
-;;       ag      %r5, 0x60(%r2)
-;;       llilh   %r3, 0xffff
-;;       llc     %r2, 0(%r3, %r5)
+;;       llgfr   %r3, %r4
+;;       lgr     %r5, %r4
+;;       llilf   %r4, 0xffff0001
+;;       algfr   %r4, %r5
+;;       jgnle   0xa4
+;;       lg      %r5, 0x68(%r2)
+;;       clgr    %r4, %r5
+;;       jgh     0xd0
+;;       ag      %r3, 0x60(%r2)
+;;       llilh   %r2, 0xffff
+;;       llc     %r2, 0(%r2, %r3)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00

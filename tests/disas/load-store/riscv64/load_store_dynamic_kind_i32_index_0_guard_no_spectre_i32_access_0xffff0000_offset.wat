@@ -23,22 +23,22 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       slli    a4, a2, 0x20
-;;       srli    a5, a4, 0x20
-;;       lui     a2, 0x3fffc
-;;       addi    a4, a2, 1
-;;       slli    a1, a4, 2
-;;       add     a4, a5, a1
-;;       bgeu    a4, a5, 8
+;;       slli    a2, a2, 0x20
+;;       srli    a4, a2, 0x20
+;;       lui     a1, 0x3fffc
+;;       addi    a5, a1, 1
+;;       slli    a5, a5, 2
+;;       add     a5, a4, a5
+;;       bgeu    a5, a4, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       ld      a1, 0x68(a0)
-;;       bltu    a1, a4, 0x2c
-;;       ld      a0, 0x60(a0)
-;;       add     a0, a0, a5
-;;       lui     a5, 0xffff
-;;       slli    a1, a5, 4
-;;       add     a0, a0, a1
-;;       sw      a3, 0(a0)
+;;       bltu    a1, a5, 0x2c
+;;       ld      a5, 0x60(a0)
+;;       add     a5, a5, a4
+;;       lui     a4, 0xffff
+;;       slli    a0, a4, 4
+;;       add     a5, a5, a0
+;;       sw      a3, 0(a5)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
@@ -50,22 +50,22 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       slli    a3, a2, 0x20
-;;       srli    a5, a3, 0x20
-;;       lui     a2, 0x3fffc
-;;       addi    a4, a2, 1
-;;       slli    a1, a4, 2
-;;       add     a4, a5, a1
-;;       bgeu    a4, a5, 8
+;;       slli    a2, a2, 0x20
+;;       srli    a4, a2, 0x20
+;;       lui     a1, 0x3fffc
+;;       addi    a3, a1, 1
+;;       slli    a5, a3, 2
+;;       add     a3, a4, a5
+;;       bgeu    a3, a4, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x68(a0)
-;;       bltu    a1, a4, 0x2c
-;;       ld      a0, 0x60(a0)
-;;       add     a0, a0, a5
-;;       lui     a5, 0xffff
-;;       slli    a1, a5, 4
-;;       add     a0, a0, a1
-;;       lw      a0, 0(a0)
+;;       ld      a5, 0x68(a0)
+;;       bltu    a5, a3, 0x2c
+;;       ld      a5, 0x60(a0)
+;;       add     a5, a5, a4
+;;       lui     a4, 0xffff
+;;       slli    a0, a4, 4
+;;       add     a5, a5, a0
+;;       lw      a0, 0(a5)
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

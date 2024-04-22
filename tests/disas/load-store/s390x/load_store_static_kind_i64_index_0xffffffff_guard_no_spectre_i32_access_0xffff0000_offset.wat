@@ -48,8 +48,8 @@
 ;;       clgfi   %r4, 0xfffc
 ;;       jgh     0x9c
 ;;       ag      %r4, 0x60(%r2)
-;;       llilh   %r2, 0xffff
-;;       lrv     %r2, 0(%r2, %r4)
+;;       llilh   %r5, 0xffff
+;;       lrv     %r2, 0(%r5, %r4)
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
 ;;       .byte   0x00, 0x00

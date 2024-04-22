@@ -65,7 +65,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movl    4(%rsp), %edx
-;;       callq   0x33d
+;;       callq   0x33f
 ;;       addq    $4, %rsp
 ;;       addq    $4, %rsp
 ;;       movq    0x10(%rsp), %r14
