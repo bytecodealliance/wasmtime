@@ -246,25 +246,11 @@ fn replace_unit_from_split_dwarf<'a>(
     Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize>,
     Dwarf<gimli::EndianSlice<'a, gimli::LittleEndian>>,
 )> {
-    if let Some(dwo_id) = unit.dwo_id {
-        return match dwp.find_cu(dwo_id, parent) {
-            Ok(cu) => match cu {
-                Some(split_unit_dwarf) => match split_unit_dwarf.debug_info.units().next() {
-                    Ok(Some(unit_header)) => Some((
-                        split_unit_dwarf.unit(unit_header).unwrap(),
-                        split_unit_dwarf,
-                    )),
-                    Err(err) => {
-                        eprintln!("Failed to get unit header from compilation unit {}", err);
-                        None
-                    }
-                    _ => None,
-                },
-                _ => None,
-            },
-            _ => None,
-        };
-    }
-
-    None
+    let dwo_id = unit.dwo_id?;
+    let split_unit_dwarf = dwp.find_cu(dwo_id, parent).ok()??;
+    let unit_header = split_unit_dwarf.debug_info.units().next().ok()??;
+    Some((
+        split_unit_dwarf.unit(unit_header).unwrap(),
+        split_unit_dwarf,
+    ))
 }
