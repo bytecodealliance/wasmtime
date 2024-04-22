@@ -183,27 +183,18 @@ pub fn transform_dwarf<'data>(
     while let Some(header) = iter.next().unwrap_or(None) {
         let unit = di.dwarf.unit(header)?;
 
-        let resolved_unit;
-
+        let mut resolved_unit = None;
         let mut split_dwarf = None;
 
         if let gimli::UnitType::Skeleton(_dwo_id) = unit.header.type_() {
-            if dwarf_package.is_some() {
-                if let Some((fused, fused_dwarf)) = replace_unit_from_split_dwarf(
-                    &unit,
-                    &dwarf_package.as_ref().unwrap(),
-                    &di.dwarf,
-                ) {
+            if let Some(dwarf_package) = &dwarf_package {
+                if let Some((fused, fused_dwarf)) =
+                    replace_unit_from_split_dwarf(&unit, dwarf_package, &di.dwarf)
+                {
                     resolved_unit = Some(fused);
                     split_dwarf = Some(fused_dwarf);
-                } else {
-                    resolved_unit = None;
                 }
-            } else {
-                resolved_unit = None;
             }
-        } else {
-            resolved_unit = None;
         }
 
         if let Some((id, ref_map, pending_refs)) = clone_unit(
