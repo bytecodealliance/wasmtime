@@ -983,3 +983,65 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn async_gc_with_func_new_and_func_wrap() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module $m1
+                (import "" "a" (func $a (result externref)))
+                (import "" "b" (func $b (result externref)))
+
+                (table 2 funcref)
+                (elem (i32.const 0) func $a $b)
+
+                (func (export "a")
+                    (call $call (i32.const 0))
+                )
+                (func (export "b")
+                    (call $call (i32.const 1))
+                )
+
+                (func $call (param i32)
+                    (local $cnt i32)
+                    (loop $l
+                        (drop (call_indirect (result externref) (local.get 0)))
+                        (local.set $cnt (i32.add (local.get $cnt) (i32.const 1)))
+
+                        (if (i32.lt_u (local.get $cnt) (i32.const 1000))
+                         (then (br $l)))
+                    )
+                )
+            )
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap("", "a", |mut cx: Caller<'_, _>| {
+        Ok(Some(ExternRef::new(&mut cx, 100)?))
+    })?;
+    let ty = FuncType::new(&engine, [], [ValType::EXTERNREF]);
+    linker.func_new("", "b", ty, |mut cx, _, results| {
+        results[0] = ExternRef::new(&mut cx, 100)?.into();
+        Ok(())
+    })?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let a = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+    a.call_async(&mut store, ()).await?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let b = instance.get_typed_func::<(), ()>(&mut store, "b")?;
+    b.call_async(&mut store, ()).await?;
+
+    Ok(())
+}
