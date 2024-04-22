@@ -122,7 +122,7 @@ impl<'a> CodeBuilder<'a> {
     /// also be returned.
     ///
     /// If DWARF fusion is performed and the DWARF packaged file cannot be read
-    /// then exeuction will bail.
+    /// then an error will be returned.
     pub fn wasm_file(&mut self, file: &'a Path) -> Result<&mut Self> {
         if self.wasm.is_some() {
             bail!("cannot call `wasm` or `wasm_file` twice");
@@ -154,19 +154,22 @@ impl<'a> CodeBuilder<'a> {
     }
 
     /// Explicitly specify DWARF `.dwp` path.
+    ///
+    /// # Errors
+    ///
+    /// This method will return an error if the `.dwp` file has already been set
+    /// through [`CodeBuilder::dwarf_package`] or auto-detection in
+    /// [`CodeBuilder::wasm_file`].
+    ///
+    /// This method will also return an error if `file` cannot be read.
     pub fn dwarf_package_file(&mut self, file: &Path) -> Result<&mut Self> {
         if self.dwarf_package.is_some() {
             bail!("cannot call `dwarf_package` or `dwarf_package_file` twice");
         }
 
-        if !file.exists() {
-            bail!("DWARF package file does not exist");
-        }
-
-        self.dwarf_package_path = Some(Cow::Owned(file.to_owned()));
-
         let dwarf_package = std::fs::read(file)
             .with_context(|| format!("failed to read dwarf input file: {}", file.display()))?;
+        self.dwarf_package_path = Some(Cow::Owned(file.to_owned()));
         self.dwarf_package = Some(dwarf_package.into());
 
         Ok(self)
@@ -187,13 +190,16 @@ impl<'a> CodeBuilder<'a> {
     }
 
     /// Set the DWARF package binary.
+    ///
     /// Initializes `dwarf_package` from `dwp_bytes` in preparation for
-    /// DWARF fusion.  Allows the DWARF package to be supplied as a byte array
-    ///  when the file probing performed in `wasm_file` is not appropriate.
+    /// DWARF fusion. Allows the DWARF package to be supplied as a byte array
+    /// when the file probing performed in `wasm_file` is not appropriate.
     ///
     /// # Errors
     ///
-    /// Bails if `dwarf_package` has alread been loaded.
+    /// Returns an error if the `*.dwp` file is already set via auto-probing in
+    /// [`CodeBuilder::wasm_file`] or explicitly via
+    /// [`CodeBuilder::dwarf_package_file`].
     pub fn dwarf_package(&mut self, dwp_bytes: &'a [u8]) -> Result<&mut Self> {
         if self.dwarf_package.is_some() {
             bail!("cannot call `dwarf_package` or `dwarf_package_file` twice");
