@@ -116,7 +116,7 @@ jobs:
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     outputs:
-      outcome: ${{ steps.vet.outcome }}
+      outcome: ${{ steps.vet.outputs.outcome }}
     steps:
     - uses: actions/checkout@v4
       with:
