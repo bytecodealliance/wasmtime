@@ -2514,6 +2514,15 @@
                         dst)
          dst)))
 
+(decl x64_alurmi_flags_side_effect (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_alurmi_flags_side_effect opc (fits_in_64 ty) src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRmiR (raw_operand_size_of_type ty)
+                      opc
+                      src1
+                      src2
+                      (temp_writable_gpr))))
+
 ;; Should only be used for Adc and Sbb
 (decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
 (rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
@@ -4790,62 +4799,42 @@
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
-(rule 5 (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
-      (let ((a_lo Gpr (value_regs_get_gpr a 0))
-            (a_hi Gpr (value_regs_get_gpr a 1))
-            (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo) (x64_setcc (CC.Z))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_hi b_hi) (x64_setcc (CC.Z))))
-            ;; At this point, `cmp_lo` and `cmp_hi` contain either 0 or 1 in the
-            ;; lowest 8 bits--`SETcc` guarantees this. The upper bits may be
-            ;; unchanged so we must compare against 1 below; this instruction
-            ;; combines `cmp_lo` and `cmp_hi` for that final comparison.
-            (cmp Reg (x64_and $I64 cmp_lo cmp_hi)))
-        ;; We must compare one more time against the immediate value 1 to
-        ;; check if both `cmp_lo` and `cmp_hi` are true. If `cmp AND 1 == 0`
-        ;; then the `ZF` will be set (see `TEST` definition); if either of
-        ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
-        ;; with `NZ`.
-        (icmp_cond_result
-          (x64_test (OperandSize.Size64) cmp (RegMemImm.Imm 1))
-          (CC.NZ))))
-
-(rule 5 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
-      (let ((a_lo Gpr (value_regs_get_gpr a 0))
-            (a_hi Gpr (value_regs_get_gpr a 1))
-            (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo) (x64_setcc (CC.NZ))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_hi b_hi) (x64_setcc (CC.NZ))))
-            ;; See comments for `IntCC.Equal`.
-            (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
-           (icmp_cond_result
-             (x64_test (OperandSize.Size64) cmp (RegMemImm.Imm 1))
-             (CC.NZ))))
-
-;; Result = (a_hi <> b_hi) ||
-;;          (a_hi == b_hi && a_lo <> b_lo)
 (rule 4 (emit_cmp cc a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) a_hi b_hi)
-                                       (consumes_flags_concat
-                                                 (x64_setcc (intcc_without_eq cc))
-                                                 (x64_setcc (CC.Z)))))
-            (cc_hi Reg (value_regs_get cmp_hi 0))
-            (eq_hi Reg (value_regs_get cmp_hi 1))
+            (b_hi Gpr (value_regs_get_gpr b 1)))
+      (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)))
 
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) a_lo b_lo)
-                                        (x64_setcc (intcc_unsigned cc))))
+(decl emit_cmp_i128 (CC Gpr Gpr Gpr Gpr) IcmpCondResult)
+;; Eliminate cases which compare something "or equal" by swapping arguments.
+(rule 2 (emit_cmp_i128 (CC.NLE) a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.L)   b_hi b_lo a_hi a_lo))
+(rule 2 (emit_cmp_i128 (CC.LE)  a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.NL)  b_hi b_lo a_hi a_lo))
+(rule 2 (emit_cmp_i128 (CC.NBE) a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.B)   b_hi b_lo a_hi a_lo))
+(rule 2 (emit_cmp_i128 (CC.BE)  a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.NB)  b_hi b_lo a_hi a_lo))
 
-            (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
-            (res Reg (x64_or $I64 cc_hi res_lo)))
+;; 128-bit strict equality/inequality can't be easily tested using subtraction
+;; but we can quickly determine whether any bits are different instead.
+(rule 1 (emit_cmp_i128 (cc_nz_or_z cc) a_hi a_lo b_hi b_lo)
+        (let ((same_lo Reg (x64_xor $I64 a_lo b_lo))
+              (same_hi Reg (x64_xor $I64 a_hi b_hi)))
+          (icmp_cond_result
+            (x64_alurmi_flags_side_effect (AluRmiROpcode.Or) $I64 same_lo same_hi)
+            cc)))
+
+;; The only cases left are L/NL/B/NB which we can implement with a sub/sbb
+;; sequence. But since we don't care about anything but the flags we can
+;; replace the sub with cmp, which avoids clobbering one of the registers.
+(rule 0 (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)
         (icmp_cond_result
-          (x64_test (OperandSize.Size64) res (RegMemImm.Imm 1))
-          (CC.NZ))))
+          (produces_flags_concat
+            (x64_cmp (OperandSize.Size64) a_lo b_lo)
+            (x64_alurmi_flags_side_effect (AluRmiROpcode.Sbb) $I64 a_hi b_hi))
+          cc))
 
 (type FcmpCondResult
       (enum

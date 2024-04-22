@@ -3323,7 +3323,7 @@
 
 
 ;; Compare an I128 value to zero, returning a flags result suitable for making a
-;; jump decision. The comparison is implemented as `(hi == 0) && (low == 0)`,
+;; jump decision. The comparison is implemented as `(hi | low) == 0`,
 ;; and the result can be interpreted as follows
 ;; * CC.Z indicates that the value was non-zero, as one or both of the halves of
 ;;   the value were non-zero
@@ -3331,12 +3331,10 @@
 (decl cmp_zero_i128 (CC ValueRegs) IcmpCondResult)
 (rule (cmp_zero_i128 (cc_nz_or_z cc) val)
       (let ((lo Gpr (value_regs_get_gpr val 0))
-            (hi Gpr (value_regs_get_gpr val 1))
-            (lo_z Gpr (with_flags_reg (x64_cmp_imm (OperandSize.Size64) lo 0)
-                                      (x64_setcc (CC.Z))))
-            (hi_z Gpr (with_flags_reg (x64_cmp_imm (OperandSize.Size64) hi 0)
-                                      (x64_setcc (CC.Z)))))
-          (icmp_cond_result (x64_test (OperandSize.Size8) hi_z lo_z) cc)))
+            (hi Gpr (value_regs_get_gpr val 1)))
+          (icmp_cond_result
+            (x64_alurmi_flags_side_effect (AluRmiROpcode.Or) $I64 lo hi)
+            (cc_invert cc))))
 
 
 (decl cmp_zero_int_bool_ref (Value) ProducesFlags)
