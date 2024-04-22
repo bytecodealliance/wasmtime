@@ -12,7 +12,7 @@ Unreleased.
 
 ## 20.0.0
 
-Released 2024-04-20
+Released 2024-04-22
 
 ### Added
 
