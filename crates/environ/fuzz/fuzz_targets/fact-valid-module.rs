@@ -9,35 +9,79 @@
 
 #![no_main]
 
-use arbitrary::Arbitrary;
-use component_fuzz_util::TestCase;
+use arbitrary::Unstructured;
+use component_fuzz_util::{TestCase, Type, MAX_TYPE_DEPTH};
 use libfuzzer_sys::fuzz_target;
+use wasmparser::types::ComponentAnyTypeId;
 use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
 
-#[derive(Arbitrary, Debug)]
-struct GenAdapterModule {
+const TYPE_COUNT: usize = 50;
+const MAX_ARITY: u32 = 5;
+const TEST_CASE_COUNT: usize = 20;
+
+#[derive(Debug)]
+struct GenAdapterModule<'a> {
     debug: bool,
-    adapters: Vec<GenAdapter>,
+    adapters: Vec<GenAdapter<'a>>,
 }
 
-#[derive(Arbitrary, Debug)]
-struct GenAdapter {
+#[derive(Debug)]
+struct GenAdapter<'a> {
     post_return: bool,
     lift_memory64: bool,
     lower_memory64: bool,
-    test: TestCase,
+    test: TestCase<'a>,
 }
 
-fuzz_target!(|module: GenAdapterModule| {
-    target(module);
+fuzz_target!(|data: &[u8]| {
+    let _ = target(data);
 });
 
-fn target(module: GenAdapterModule) {
+fn target(data: &[u8]) -> arbitrary::Result<()> {
     drop(env_logger::try_init());
 
-    let mut types = ComponentTypesBuilder::default();
+    let mut u = Unstructured::new(data);
+
+    // First generate a set of type to select from.
+    let mut type_fuel = 1000;
+    let mut types = Vec::new();
+    for _ in 0..u.int_in_range(1..=TYPE_COUNT)? {
+        // Only discount fuel if the generation was successful,
+        // otherwise we'll get more random data and try again.
+        types.push(Type::generate(&mut u, MAX_TYPE_DEPTH, &mut type_fuel)?);
+    }
+
+    // Next generate a set of static API test cases driven by the above
+    // types.
+    let mut ret = GenAdapterModule {
+        debug: u.arbitrary()?,
+        adapters: Vec::new(),
+    };
+    for _ in 0..u.int_in_range(1..=TEST_CASE_COUNT)? {
+        let mut params = Vec::new();
+        let mut results = Vec::new();
+        for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+            params.push(u.choose(&types)?);
+        }
+        for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+            results.push(u.choose(&types)?);
+        }
+
+        let test = TestCase {
+            params,
+            results,
+            encoding1: u.arbitrary()?,
+            encoding2: u.arbitrary()?,
+        };
+        ret.adapters.push(GenAdapter {
+            test,
+            post_return: u.arbitrary()?,
+            lift_memory64: u.arbitrary()?,
+            lower_memory64: u.arbitrary()?,
+        });
+    }
 
     // Manufactures a unique `CoreDef` so all function imports get unique
     // function imports.
@@ -72,9 +116,11 @@ fn target(module: GenAdapterModule) {
             item: ExportItem::Name(String::new()),
         }
     };
+    let mut validator = Validator::new();
+    let mut types = ComponentTypesBuilder::new(&validator);
 
     let mut adapters = Vec::new();
-    for adapter in module.adapters.iter() {
+    for adapter in ret.adapters.iter() {
         let wat_decls = adapter.test.declarations();
         let wat = format!(
             "(component
@@ -87,9 +133,7 @@ fn target(module: GenAdapterModule) {
         );
         let wasm = wat::parse_str(&wat).unwrap();
 
-        let mut validator = Validator::new();
-
-        types.push_type_scope();
+        let mut type_index = 0;
         for payload in Parser::new(0).parse_all(&wasm) {
             let payload = payload.unwrap();
             validator.payload(&payload).unwrap();
@@ -97,13 +141,17 @@ fn target(module: GenAdapterModule) {
                 Payload::ComponentTypeSection(s) => s,
                 _ => continue,
             };
-            for ty in section {
-                let ty = types.intern_component_type(&ty.unwrap()).unwrap();
-                types.push_component_typedef(ty);
-                let ty = match ty {
-                    TypeDef::ComponentFunc(ty) => ty,
+            for _ in section {
+                let validator_types = validator.types(0).unwrap();
+                let id = validator_types.component_any_type_at(type_index);
+                type_index += 1;
+                let id = match id {
+                    ComponentAnyTypeId::Func(id) => id,
                     _ => continue,
                 };
+                let ty = types
+                    .convert_component_func_type(validator_types, id)
+                    .unwrap();
                 adapters.push(Adapter {
                     lift_ty: ty,
                     lower_ty: ty,
@@ -137,10 +185,10 @@ fn target(module: GenAdapterModule) {
                 });
             }
         }
-        types.pop_type_scope();
+        validator.reset();
     }
 
-    let mut fact_module = Module::new(&types, module.debug);
+    let mut fact_module = Module::new(&types, ret.debug);
     for (i, adapter) in adapters.iter().enumerate() {
         fact_module.adapt(&format!("adapter{i}"), adapter);
     }
@@ -149,11 +197,11 @@ fn target(module: GenAdapterModule) {
         .validate_all(&wasm);
 
     let err = match result {
-        Ok(_) => return,
+        Ok(_) => return Ok(()),
         Err(e) => e,
     };
     eprintln!("invalid wasm module: {err:?}");
-    for adapter in module.adapters.iter() {
+    for adapter in ret.adapters.iter() {
         eprintln!("adapter: {adapter:?}");
     }
     std::fs::write("invalid.wasm", &wasm).unwrap();

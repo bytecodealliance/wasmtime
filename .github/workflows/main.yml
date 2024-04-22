@@ -464,6 +464,7 @@ jobs:
       working-directory: ./fuzz
     - run: cargo fuzz build --dev -s none
     - run: cargo fuzz build --dev -s none --fuzz-dir ./cranelift/isle/fuzz
+    - run: cargo fuzz build --dev -s none --fuzz-dir ./crates/environ/fuzz --features component-model
 
     # Verify the "min platform" example still works.
     #
