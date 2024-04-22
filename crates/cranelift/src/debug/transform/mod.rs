@@ -10,7 +10,7 @@ use gimli::{
     write, DebugAddr, DebugLine, DebugStr, Dwarf, DwarfPackage, LittleEndian, LocationLists,
     RangeLists, Section, Unit, UnitSectionOffset,
 };
-use std::{collections::HashSet, fmt::Debug, result::Result};
+use std::{collections::HashSet, fmt::Debug};
 use thiserror::Error;
 use wasmtime_environ::{DebugInfoData, ModuleTranslation, Tunables};
 
