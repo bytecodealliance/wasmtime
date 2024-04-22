@@ -4,7 +4,7 @@ use self::unit::clone_unit;
 use crate::debug::gc::build_dependencies;
 use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctionsMetadata;
-use anyhow::{Context, Error};
+use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
     write, DebugAddr, DebugLine, DebugStr, Dwarf, DwarfPackage, LittleEndian, LocationLists,
@@ -113,10 +113,15 @@ fn read_dwarf_package_from_bytes<'data>(
     let parser = wasmparser::Parser::new(0);
     let mut types = wasmtime_environ::ModuleTypesBuilder::new(&validator);
     let translation =
-        wasmtime_environ::ModuleEnvironment::new(tunables, &mut validator, &mut types)
+        match wasmtime_environ::ModuleEnvironment::new(tunables, &mut validator, &mut types)
             .translate(parser, dwp_bytes)
-            .context("failed to parse WebAssembly DWARF package")
-            .unwrap();
+        {
+            Ok(translation) => translation,
+            Err(e) => {
+                log::warn!("failed to parse wasm dwarf package: {e:?}");
+                return None;
+            }
+        };
 
     match load_dwp(translation, buffer) {
         Ok(package) => Some(package),
