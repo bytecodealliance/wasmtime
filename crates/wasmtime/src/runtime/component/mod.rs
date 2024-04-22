@@ -511,6 +511,15 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // useful when working with the typed methods of `ResourceTable`.
 ///         "wasi:filesystem/types/descriptor": MyDescriptorType,
 ///     },
+///
+///     // Addtional derive attributes to include on generated types (structs or enums).
+///     //
+///     // These are deduplicated and attached in a deterministic order.
+///     additional_derives: [
+///         Hash,
+///         serde::Deserialize,
+///         serde::Serialize,
+///     ]
 /// });
 /// ```
 pub use wasmtime_component_macro::bindgen;

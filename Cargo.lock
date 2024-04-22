@@ -3612,6 +3612,8 @@ dependencies = [
  "component-macro-test-helpers",
  "proc-macro2",
  "quote",
+ "serde",
+ "serde_json",
  "syn 2.0.32",
  "tracing",
  "wasmtime",

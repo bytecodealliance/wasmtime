@@ -31,6 +31,9 @@ wit-parser = { workspace = true }
 wasmtime = { path = '../wasmtime', features = ['component-model'] }
 component-macro-test-helpers = { path = 'test-helpers' }
 tracing = { workspace = true }
+# For use with the custom attributes test
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 [features]
 async = []

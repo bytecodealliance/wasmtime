@@ -3,7 +3,7 @@ use crate::types::{TypeInfo, Types};
 use anyhow::{bail, Context};
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::mem;
@@ -113,6 +113,12 @@ pub struct Opts {
     /// Remapping of interface names to rust module names.
     /// TODO: is there a better type to use for the value of this map?
     pub with: HashMap<String, String>,
+
+    /// Additional derive attributes to add to generated types. If using in a CLI, this flag can be
+    /// specified multiple times to add multiple attributes.
+    ///
+    /// These derive attributes will be added to any generated structs or enums
+    pub additional_derive_attributes: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1199,9 +1205,21 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn type_record(&mut self, id: TypeId, _name: &str, record: &Record, docs: &Docs) {
         let info = self.info(id);
+
+        // We use a BTree set to make sure we don't have any duplicates and we have a stable order
+        let additional_derives: BTreeSet<String> = self
+            .gen
+            .opts
+            .additional_derive_attributes
+            .iter()
+            .cloned()
+            .collect();
+
         for (name, mode) in self.modes_of(id) {
             let lt = self.lifetime_for(&info, mode);
             self.rustdoc(docs);
+
+            let mut derives = additional_derives.clone();
 
             self.push_str("#[derive(wasmtime::component::ComponentType)]\n");
             if lt.is_none() {
@@ -1211,10 +1229,17 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("#[component(record)]\n");
 
             if info.is_copy() {
-                self.push_str("#[derive(Copy, Clone)]\n");
+                derives.extend(["Copy", "Clone"].into_iter().map(|s| s.to_string()));
             } else if info.is_clone() {
-                self.push_str("#[derive(Clone)]\n");
+                derives.insert("Clone".to_string());
             }
+
+            if !derives.is_empty() {
+                self.push_str("#[derive(");
+                self.push_str(&derives.into_iter().collect::<Vec<_>>().join(", "));
+                self.push_str(")]\n")
+            }
+
             self.push_str(&format!("pub struct {}", name));
             self.print_generics(lt);
             self.push_str(" {\n");
@@ -1496,13 +1521,32 @@ impl<'a> InterfaceGenerator<'a> {
     fn type_enum(&mut self, id: TypeId, name: &str, enum_: &Enum, docs: &Docs) {
         let info = self.info(id);
 
+        // We use a BTree set to make sure we don't have any duplicates and have a stable order
+        let mut derives: BTreeSet<String> = self
+            .gen
+            .opts
+            .additional_derive_attributes
+            .iter()
+            .cloned()
+            .collect();
+
+        derives.extend(
+            ["Clone", "Copy", "PartialEq", "Eq"]
+                .into_iter()
+                .map(|s| s.to_string()),
+        );
+
         let name = to_rust_upper_camel_case(name);
         self.rustdoc(docs);
         self.push_str("#[derive(wasmtime::component::ComponentType)]\n");
         self.push_str("#[derive(wasmtime::component::Lift)]\n");
         self.push_str("#[derive(wasmtime::component::Lower)]\n");
         self.push_str("#[component(enum)]\n");
-        self.push_str("#[derive(Clone, Copy, PartialEq, Eq)]\n");
+
+        self.push_str("#[derive(");
+        self.push_str(&derives.into_iter().collect::<Vec<_>>().join(", "));
+        self.push_str(")]\n");
+
         self.push_str(&format!("pub enum {} {{\n", name));
         for case in enum_.cases.iter() {
             self.rustdoc(&case.docs);
