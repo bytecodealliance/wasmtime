@@ -282,8 +282,8 @@ where
 
     // Get entries in outer scope to avoid borrowing on short lived temporary.
     let mut skeleton_entries = unit.entries();
-    if split_unit.is_some() {
-        program_unit = split_unit.unwrap();
+    if let Some(unit) = split_unit {
+        program_unit = unit;
 
         // From the spec, a skeleton unit has no children so we can assume the first, and only, entry is the DW_TAG_skeleton_unit (https://dwarfstd.org/doc/DWARF5.pdf).
         if let Some(die_tuple) = skeleton_entries.next_dfs()? {
