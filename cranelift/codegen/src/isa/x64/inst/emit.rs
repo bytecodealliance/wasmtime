@@ -1276,10 +1276,10 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::CmpRmiR {
+        &Inst::CmpRmiR {
             size,
             src1: reg_g,
-            src2: src_e,
+            src2: ref src_e,
             opcode,
         } => {
             let reg_g = allocs.next(reg_g.to_reg());
@@ -1289,24 +1289,52 @@ pub(crate) fn emit(
                 CmpOpcode::Test => false,
             };
 
+            let src_e = src_e.clone().to_reg_mem_imm();
+            let size = match (opcode, &src_e) {
+                // Bitwise-and against a constant can safely truncate any upper
+                // bits that are zero. We don't currently support comparing
+                // memory to an immediate, but if we did, note that since x86 is
+                // little-endian, narrowing the operand size for a memory access
+                // doesn't require adjusting the address mode.
+                (CmpOpcode::Test, &RegMemImm::Imm { simm32 }) => {
+                    // Choose whichever operand size is narrower: the specified
+                    // size or the size implied by the immediate.
+                    size.min(if simm32 <= u8::MAX as u32 {
+                        OperandSize::Size8
+                    } else if simm32 <= u16::MAX as u32 {
+                        OperandSize::Size16
+                    } else if simm32 <= i32::MAX as u32 {
+                        // When the `test` instruction is used with a r/m64, the
+                        // 32-bit immediate is sign-extended. If the immediate
+                        // has the sign bit clear then this makes no difference
+                        // and we can truncate to a 32-bit comparison, to avoid
+                        // the REX.W prefix.
+                        OperandSize::Size32
+                    } else {
+                        OperandSize::Size64
+                    })
+                }
+                _ => size,
+            };
+
             let mut prefix = LegacyPrefixes::None;
-            if *size == OperandSize::Size16 {
+            if size == OperandSize::Size16 {
                 prefix = LegacyPrefixes::_66;
             }
             // A redundant REX prefix can change the meaning of this instruction.
-            let mut rex = RexFlags::from((*size, reg_g));
+            let mut rex = RexFlags::from((size, reg_g));
 
-            match src_e.clone().to_reg_mem_imm() {
+            match src_e {
                 RegMemImm::Reg { reg: reg_e } => {
                     let reg_e = allocs.next(reg_e);
-                    if *size == OperandSize::Size8 {
+                    if size == OperandSize::Size8 {
                         // Check whether the E register forces the use of a redundant REX.
                         rex.always_emit_if_8bit_needed(reg_e);
                     }
 
                     // Use the swapped operands encoding for CMP, to stay consistent with the output of
                     // gcc/llvm.
-                    let opcode = match (*size, is_cmp) {
+                    let opcode = match (size, is_cmp) {
                         (OperandSize::Size8, true) => 0x38,
                         (_, true) => 0x39,
                         (OperandSize::Size8, false) => 0x84,
@@ -1318,7 +1346,7 @@ pub(crate) fn emit(
                 RegMemImm::Mem { addr } => {
                     let addr = &addr.finalize(state, sink).with_allocs(allocs);
                     // Whereas here we revert to the "normal" G-E ordering for CMP.
-                    let opcode = match (*size, is_cmp) {
+                    let opcode = match (size, is_cmp) {
                         (OperandSize::Size8, true) => 0x3A,
                         (_, true) => 0x3B,
                         (OperandSize::Size8, false) => 0x84,
@@ -1334,7 +1362,7 @@ pub(crate) fn emit(
 
                     // And also here we use the "normal" G-E ordering.
                     let opcode = if is_cmp {
-                        if *size == OperandSize::Size8 {
+                        if size == OperandSize::Size8 {
                             0x80
                         } else if use_imm8 {
                             0x83
@@ -1342,7 +1370,7 @@ pub(crate) fn emit(
                             0x81
                         }
                     } else {
-                        if *size == OperandSize::Size8 {
+                        if size == OperandSize::Size8 {
                             0xF6
                         } else {
                             0xF7

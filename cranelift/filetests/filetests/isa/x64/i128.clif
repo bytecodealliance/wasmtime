@@ -446,14 +446,14 @@ block0(v0: i128, v1: i128):
 ;   cmpq %rcx, %rsi
 ;   sete %r10b
 ;   andq %r10, %r9
-;   testq $1, %r9
+;   testb $1, %r9b
 ;   setne %al
 ;   cmpq %rdx, %rdi
 ;   setne %r8b
 ;   cmpq %rcx, %rsi
 ;   setne %r9b
 ;   orq %r9, %r8
-;   testq $1, %r8
+;   testb $1, %r8b
 ;   setne %r9b
 ;   movq %r9, (%rsp)
 ;   cmpq %rcx, %rsi
@@ -463,7 +463,7 @@ block0(v0: i128, v1: i128):
 ;   setb %r11b
 ;   andq %r11, %r10
 ;   orq %r10, %r8
-;   testq $1, %r8
+;   testb $1, %r8b
 ;   setne %r10b
 ;   cmpq %rcx, %rsi
 ;   setl %r11b
@@ -472,7 +472,7 @@ block0(v0: i128, v1: i128):
 ;   setbe %r15b
 ;   andq %r15, %r8
 ;   orq %r8, %r11
-;   testq $1, %r11
+;   testb $1, %r11b
 ;   setne %r8b
 ;   cmpq %rcx, %rsi
 ;   setg %r11b
@@ -481,7 +481,7 @@ block0(v0: i128, v1: i128):
 ;   seta %r13b
 ;   andq %r13, %r12
 ;   orq %r12, %r11
-;   testq $1, %r11
+;   testb $1, %r11b
 ;   setne %r11b
 ;   cmpq %rcx, %rsi
 ;   setg %r15b
@@ -490,7 +490,7 @@ block0(v0: i128, v1: i128):
 ;   setae %r12b
 ;   andq %r12, %rbx
 ;   orq %rbx, %r15
-;   testq $1, %r15
+;   testb $1, %r15b
 ;   setne %r13b
 ;   cmpq %rcx, %rsi
 ;   setb %r14b
@@ -499,7 +499,7 @@ block0(v0: i128, v1: i128):
 ;   setb %bl
 ;   andq %rbx, %r15
 ;   orq %r15, %r14
-;   testq $1, %r14
+;   testb $1, %r14b
 ;   setne %r14b
 ;   cmpq %rcx, %rsi
 ;   setb %bl
@@ -508,7 +508,7 @@ block0(v0: i128, v1: i128):
 ;   setbe %r15b
 ;   andq %r15, %r12
 ;   orq %r12, %rbx
-;   testq $1, %rbx
+;   testb $1, %bl
 ;   setne %r15b
 ;   cmpq %rcx, %rsi
 ;   seta %bl
@@ -517,7 +517,7 @@ block0(v0: i128, v1: i128):
 ;   seta %r9b
 ;   andq %r9, %r12
 ;   orq %r12, %rbx
-;   testq $1, %rbx
+;   testb $1, %bl
 ;   setne %bl
 ;   cmpq %rcx, %rsi
 ;   seta %sil
@@ -526,7 +526,7 @@ block0(v0: i128, v1: i128):
 ;   setae %dil
 ;   andq %rdi, %rcx
 ;   orq %rcx, %rsi
-;   testq $1, %rsi
+;   testb $1, %sil
 ;   setne %sil
 ;   movq (%rsp), %rcx
 ;   andl %ecx, %eax
@@ -1622,10 +1622,10 @@ block0(v0: i128, v1: i128):
 ;   subq %r8, %rcx
 ;   shrq %cl, %rdi
 ;   xorq %rax, %rax
-;   testq $0x7f, %r8
+;   testb $0x7f, %r8b
 ;   cmoveq %rax, %rdi
 ;   orq %rsi, %rdi
-;   testq $0x40, %r8
+;   testb $0x40, %r8b
 ;   cmoveq %rdx, %rax
 ;   cmoveq %rdi, %rdx
 ;   movq %rbp, %rsp
@@ -1680,10 +1680,10 @@ block0(v0: i128, v1: i128):
 ;   subq %rax, %rcx
 ;   shlq %cl, %rsi
 ;   xorq %rdx, %rdx
-;   testq $0x7f, %rax
+;   testb $0x7f, %al
 ;   cmoveq %rdx, %rsi
 ;   orq %rdi, %rsi
-;   testq $0x40, %rax
+;   testb $0x40, %al
 ;   movq %r10, %rax
 ;   cmoveq %rsi, %rax
 ;   cmoveq %r10, %rdx
@@ -1743,11 +1743,11 @@ block0(v0: i128, v1: i128):
 ;   movq %rsi, %r9
 ;   shlq %cl, %r9
 ;   xorq %r11, %r11
-;   testq $0x7f, %rax
+;   testb $0x7f, %al
 ;   cmoveq %r11, %r9
 ;   orq %r9, %rdi
 ;   sarq $0x3f, %rsi
-;   testq $0x40, %rax
+;   testb $0x40, %al
 ;   movq %r10, %rax
 ;   cmoveq %rdi, %rax
 ;   movq %rsi, %rdx
@@ -1830,10 +1830,10 @@ block0(v0: i128, v1: i128):
 ;   shrq %cl, %r10
 ;   xorq %rax, %rax
 ;   movq %r8, %rcx
-;   testq $0x7f, %rcx
+;   testb $0x7f, %cl
 ;   cmoveq %rax, %r10
 ;   orq %r11, %r10
-;   testq $0x40, %rcx
+;   testb $0x40, %cl
 ;   cmoveq %rdx, %rax
 ;   cmoveq %r10, %rdx
 ;   movl $0x80, %ecx
@@ -1848,10 +1848,10 @@ block0(v0: i128, v1: i128):
 ;   subq %r10, %rcx
 ;   shlq %cl, %rsi
 ;   xorq %r8, %r8
-;   testq $0x7f, %r10
+;   testb $0x7f, %r10b
 ;   cmoveq %r8, %rsi
 ;   orq %rdi, %rsi
-;   testq $0x40, %r10
+;   testb $0x40, %r10b
 ;   movq %r9, %r10
 ;   cmoveq %rsi, %r10
 ;   cmoveq %r9, %r8
@@ -1934,10 +1934,10 @@ block0(v0: i128, v1: i128):
 ;   shlq %cl, %r11
 ;   xorq %rdx, %rdx
 ;   movq %r9, %rcx
-;   testq $0x7f, %rcx
+;   testb $0x7f, %cl
 ;   cmoveq %rdx, %r11
 ;   orq %r8, %r11
-;   testq $0x40, %rcx
+;   testb $0x40, %cl
 ;   movq %r10, %rax
 ;   cmoveq %r11, %rax
 ;   cmoveq %r10, %rdx
@@ -1952,10 +1952,10 @@ block0(v0: i128, v1: i128):
 ;   subq %r9, %rcx
 ;   shrq %cl, %rdi
 ;   xorq %r11, %r11
-;   testq $0x7f, %r9
+;   testb $0x7f, %r9b
 ;   cmoveq %r11, %rdi
 ;   orq %rsi, %rdi
-;   testq $0x40, %r9
+;   testb $0x40, %r9b
 ;   cmoveq %r8, %r11
 ;   cmoveq %rdi, %r8
 ;   orq %r11, %rax
