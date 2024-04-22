@@ -138,10 +138,6 @@ jobs:
     needs:
     - determine
     - cargo_vet
-    if: |
-      needs.determine.outputs.audit
-      && github.event_name == 'pull_request'
-      && needs.cargo_vet.outputs.outcome == 'failed'
     runs-on: ubuntu-latest
     steps:
     - run: echo ${{ needs.determine.outputs.audit }}
