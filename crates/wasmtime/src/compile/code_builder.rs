@@ -185,7 +185,7 @@ impl<'a> CodeBuilder<'a> {
     }
 
     /// Gets the DWARF package.
-    pub fn dwarf_package_binary(&self) -> Option<&[u8]> {
+    pub(super) fn dwarf_package_binary(&self) -> Option<&[u8]> {
         return self.dwarf_package.as_deref();
     }
 
