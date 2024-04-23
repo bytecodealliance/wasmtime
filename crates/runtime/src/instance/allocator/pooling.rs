@@ -30,6 +30,7 @@ mod generic_stack_pool;
 #[cfg(all(feature = "async", unix))]
 mod unix_stack_pool;
 
+#[cfg(all(feature = "async"))]
 cfg_if::cfg_if! {
     if #[cfg(all(unix, not(miri), not(asan)))] {
         use unix_stack_pool as stack_pool;
