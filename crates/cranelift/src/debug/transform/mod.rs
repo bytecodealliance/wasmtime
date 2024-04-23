@@ -4,13 +4,13 @@ use self::unit::clone_unit;
 use crate::debug::gc::build_dependencies;
 use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctionsMetadata;
-use anyhow::{Context, Error};
+use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
     write, DebugAddr, DebugLine, DebugStr, Dwarf, DwarfPackage, LittleEndian, LocationLists,
     RangeLists, Section, Unit, UnitSectionOffset,
 };
-use std::{collections::HashSet, fmt::Debug, result::Result};
+use std::{collections::HashSet, fmt::Debug};
 use thiserror::Error;
 use wasmtime_environ::{DebugInfoData, ModuleTranslation, Tunables};
 
@@ -51,7 +51,7 @@ where
 
 fn load_dwp<'data>(
     translation: ModuleTranslation<'data>,
-    buffer: &'data Vec<u8>,
+    buffer: &'data [u8],
 ) -> anyhow::Result<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
     let endian_slice = gimli::EndianSlice::new(buffer, LittleEndian);
 
@@ -106,17 +106,22 @@ fn load_dwp<'data>(
 /// Attempts to load a DWARF package using the passed bytes.
 fn read_dwarf_package_from_bytes<'data>(
     dwp_bytes: &'data [u8],
-    buffer: &'data Vec<u8>,
+    buffer: &'data [u8],
     tunables: &Tunables,
 ) -> Option<DwarfPackage<gimli::EndianSlice<'data, gimli::LittleEndian>>> {
     let mut validator = wasmparser::Validator::new();
     let parser = wasmparser::Parser::new(0);
     let mut types = wasmtime_environ::ModuleTypesBuilder::new(&validator);
     let translation =
-        wasmtime_environ::ModuleEnvironment::new(tunables, &mut validator, &mut types)
+        match wasmtime_environ::ModuleEnvironment::new(tunables, &mut validator, &mut types)
             .translate(parser, dwp_bytes)
-            .context("failed to parse WebAssembly DWARF package")
-            .unwrap();
+        {
+            Ok(translation) => translation,
+            Err(e) => {
+                log::warn!("failed to parse wasm dwarf package: {e:?}");
+                return None;
+            }
+        };
 
     match load_dwp(translation, buffer) {
         Ok(package) => Some(package),
@@ -178,27 +183,18 @@ pub fn transform_dwarf<'data>(
     while let Some(header) = iter.next().unwrap_or(None) {
         let unit = di.dwarf.unit(header)?;
 
-        let resolved_unit;
-
+        let mut resolved_unit = None;
         let mut split_dwarf = None;
 
         if let gimli::UnitType::Skeleton(_dwo_id) = unit.header.type_() {
-            if dwarf_package.is_some() {
-                if let Some((fused, fused_dwarf)) = replace_unit_from_split_dwarf(
-                    &unit,
-                    &dwarf_package.as_ref().unwrap(),
-                    &di.dwarf,
-                ) {
+            if let Some(dwarf_package) = &dwarf_package {
+                if let Some((fused, fused_dwarf)) =
+                    replace_unit_from_split_dwarf(&unit, dwarf_package, &di.dwarf)
+                {
                     resolved_unit = Some(fused);
                     split_dwarf = Some(fused_dwarf);
-                } else {
-                    resolved_unit = None;
                 }
-            } else {
-                resolved_unit = None;
             }
-        } else {
-            resolved_unit = None;
         }
 
         if let Some((id, ref_map, pending_refs)) = clone_unit(
@@ -250,25 +246,11 @@ fn replace_unit_from_split_dwarf<'a>(
     Unit<gimli::EndianSlice<'a, gimli::LittleEndian>, usize>,
     Dwarf<gimli::EndianSlice<'a, gimli::LittleEndian>>,
 )> {
-    if let Some(dwo_id) = unit.dwo_id {
-        return match dwp.find_cu(dwo_id, parent) {
-            Ok(cu) => match cu {
-                Some(split_unit_dwarf) => match split_unit_dwarf.debug_info.units().next() {
-                    Ok(Some(unit_header)) => Some((
-                        split_unit_dwarf.unit(unit_header).unwrap(),
-                        split_unit_dwarf,
-                    )),
-                    Err(err) => {
-                        eprintln!("Failed to get unit header from compilation unit {}", err);
-                        None
-                    }
-                    _ => None,
-                },
-                _ => None,
-            },
-            _ => None,
-        };
-    }
-
-    None
+    let dwo_id = unit.dwo_id?;
+    let split_unit_dwarf = dwp.find_cu(dwo_id, parent).ok()??;
+    let unit_header = split_unit_dwarf.debug_info.units().next().ok()??;
+    Some((
+        split_unit_dwarf.unit(unit_header).unwrap(),
+        split_unit_dwarf,
+    ))
 }
