@@ -636,6 +636,10 @@ jobs:
         uname -a
         python --version
         echo $PATH
+        echo usr lib local lib
+        ls /usr/lib/local/lib
+        echo usr lib 
+        ls /usr/lib
         sudo ln -s /usr/lib/llvm-14/lib/python3.10/dist-packages/lldb /usr/lib/local/lib/python3.10/dist-packages/lldb
         lldb -P
         cargo test test_debug_dwarf -- --ignored --test-threads 1
