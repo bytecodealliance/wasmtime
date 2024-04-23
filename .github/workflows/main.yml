@@ -639,10 +639,9 @@ jobs:
         echo usr lib local lib
         echo usr lib 
         ls /usr/lib
-        ls -R /usr/lib
-        ls /usr/lib/local
-        ls /usr/lib/local/lib
-        sudo ln -s /usr/lib/llvm-14/lib/python3.10/dist-packages/lldb /usr/lib/local/lib/python3.10/dist-packages/lldb
+        mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
+        ls /usr/lib/llvm-15/lib
+        sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb /usr/lib/local/lib/python3.10/dist-packages/lldb
         lldb -P
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
