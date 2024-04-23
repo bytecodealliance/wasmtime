@@ -69,7 +69,7 @@ wasmtime-versioned-export-macros = { workspace = true }
 async = ["dep:wasmtime-fiber"]
 pooling-allocator = []
 component-model = ["wasmtime-environ/component-model", "dep:encoding_rs"]
-wmemcheck = ['dep:wasmtime-wmemcheck']
+wmemcheck = ['dep:wasmtime-wmemcheck', 'wasmtime-environ/wmemcheck']
 debug-builtins = ['dep:wasmtime-jit-debug']
 gc = ["wasmtime-environ/gc"]
 coredump = ["dep:wasm-encoder"]
