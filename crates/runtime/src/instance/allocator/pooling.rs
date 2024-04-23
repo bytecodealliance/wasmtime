@@ -27,7 +27,7 @@ mod gc_heap_pool;
 
 #[cfg(all(feature = "async"))]
 mod generic_stack_pool;
-#[cfg(all(feature = "async", unix))]
+#[cfg(all(feature = "async", unix, not(miri)))]
 mod unix_stack_pool;
 
 #[cfg(all(feature = "async"))]
