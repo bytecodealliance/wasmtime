@@ -954,28 +954,10 @@ impl Wasmtime {
             uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
         }
         if has_world_trait {
-            uwriteln!(self.src, "Self::add_root_to_linker(linker, get)?;");
-        }
-        uwriteln!(self.src, "Ok(())\n}}");
-        if !has_world_trait {
-            return;
-        }
-
-        uwrite!(
-            self.src,
-            "
-                pub fn add_root_to_linker<T, U>(
-                    linker: &mut wasmtime::component::Linker<T>,
-                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> wasmtime::Result<()>
-                    where U: {world_trait}{maybe_send}
-                {{
-                    let mut linker = linker.root();
-            ",
-        );
-        for name in get_world_resources(resolve, world) {
-            let camel = name.to_upper_camel_case();
-            uwriteln!(
+            uwriteln!(self.src, "let mut linker = linker.root();");
+            for name in get_world_resources(resolve, world) {
+                let camel = name.to_upper_camel_case();
+                uwriteln!(
                 self.src,
                 "linker.resource(
                     \"{name}\",
@@ -985,11 +967,11 @@ impl Wasmtime {
                     }},
                 )?;"
             )
-        }
-
-        for f in self.import_functions.iter() {
-            self.src.push_str(&f.add_to_linker);
-            self.src.push_str("\n");
+            }
+            for f in self.import_functions.iter() {
+                self.src.push_str(&f.add_to_linker);
+                self.src.push_str("\n");
+            }
         }
         uwriteln!(self.src, "Ok(())\n}}");
     }
