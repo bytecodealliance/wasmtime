@@ -632,7 +632,7 @@ jobs:
     # Test debug (DWARF) related functionality.
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb llvm
-        lldb -P
+        lldb-15 -P
         uname -a
         python --version
         echo $PATH
@@ -641,13 +641,14 @@ jobs:
         ls /usr/lib
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         ls /usr/lib/llvm-15/lib
-        lldb --version
+        lldb-15 --version
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
-        lldb -P
+        lldb-15 -P
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
         RUST_BACKTRACE: 1
+        LLDB: lldb-15
 
     # NB: the test job here is explicitly lacking in cancellation of this run if
     # something goes wrong. These take the longest anyway and otherwise if
