@@ -326,6 +326,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
     - run: cargo check -p wasmtime --no-default-features --features winch
     - run: cargo check -p wasmtime --no-default-features --features wmemcheck
+    - run: cargo check -p wasmtime --no-default-features --features wmemcheck,cranelift,runtime
     - run: cargo check -p wasmtime --no-default-features --features demangle
     - run: cargo check -p wasmtime --no-default-features --features addr2line
     - run: cargo check -p wasmtime --no-default-features --features gc
@@ -337,6 +338,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features cranelift,threads
     - run: cargo check --features component-model
     - run: cargo check -p wasmtime --features incremental-cache
+    - run: cargo check -p wasmtime --all-features
 
     # Feature combinations of the `wasmtime-cli`
     - run: cargo check -p wasmtime-cli --no-default-features
@@ -345,6 +347,7 @@ jobs:
     - run: cargo check -p wasmtime-cli --no-default-features --features compile
     - run: cargo check -p wasmtime-cli --no-default-features --features compile,cranelift
     - run: cargo check -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
+    - run: cargo check -p wasmtime-cli --all-features
 
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
