@@ -2,7 +2,6 @@
 
 use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use wasmtime_fuzzing::generators::InstanceAllocationStrategy;
 use wasmtime_fuzzing::{generators, oracles};
 
 fuzz_target!(|data: &[u8]| {
