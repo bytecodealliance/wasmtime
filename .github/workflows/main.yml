@@ -636,8 +636,8 @@ jobs:
         uname -a
         python --version
         echo $PATH
-        ls -l /usr/lib/local/lib/python3.10/dist-packages
         sudo ln -s /usr/lib/llvm-14/lib/python3.10/dist-packages/lldb /usr/lib/local/lib/python3.10/dist-packages/lldb
+        lldb -P
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
