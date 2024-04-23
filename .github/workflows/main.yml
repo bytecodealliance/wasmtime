@@ -631,7 +631,7 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb llvm
+        sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
         lldb-15 -P
         uname -a
         python --version
