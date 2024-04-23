@@ -644,6 +644,7 @@ jobs:
         lldb-15 --version
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         lldb-15 -P
+        /home/runner/work/wasmtime/wasmtime/target/debug/wasmtime -Ccache=n -Ddebug-info tests/all/debug/testsuite/dwarf_fission.wasm
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
