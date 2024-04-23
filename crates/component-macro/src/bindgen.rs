@@ -138,6 +138,12 @@ impl Parse for Config {
                         opts.only_interfaces = true;
                     }
                     Opt::With(val) => opts.with.extend(val),
+                    Opt::AdditionalDerives(paths) => {
+                        opts.additional_derive_attributes = paths
+                            .into_iter()
+                            .map(|p| p.into_token_stream().to_string())
+                            .collect()
+                    }
                 }
             }
         } else {
@@ -206,6 +212,7 @@ mod kw {
     syn::custom_keyword!(except_imports);
     syn::custom_keyword!(only_imports);
     syn::custom_keyword!(trappable_imports);
+    syn::custom_keyword!(additional_derives);
 }
 
 enum Opt {
@@ -219,6 +226,7 @@ enum Opt {
     Interfaces(syn::LitStr),
     With(HashMap<String, String>),
     TrappableImports(TrappableImports),
+    AdditionalDerives(Vec<syn::Path>),
 }
 
 impl Parse for Opt {
@@ -352,6 +360,13 @@ impl Parse for Opt {
                 TrappableImports::Only(fields.iter().map(|s| s.value()).collect())
             };
             Ok(Opt::TrappableImports(config))
+        } else if l.peek(kw::additional_derives) {
+            input.parse::<kw::additional_derives>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            syn::bracketed!(contents in input);
+            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
+            Ok(Opt::AdditionalDerives(list.iter().cloned().collect()))
         } else {
             Err(l.error())
         }

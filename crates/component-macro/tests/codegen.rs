@@ -522,3 +522,47 @@ mod trappable_imports {
         }
     }
 }
+
+mod custom_derives {
+    use std::collections::{hash_map::RandomState, HashSet};
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package my:inline;
+
+            interface blah {
+                record foo {
+                    field1: string,
+                    field2: list<u32>
+                }
+
+                bar: func(cool: foo);
+            }
+
+            world baz {
+                import blah;
+            }
+        ",
+        // Clone is included by default almost everywhere, so include it here to make sure it
+        // doesn't conflict
+        additional_derives: [serde::Serialize, serde::Deserialize, Hash, Clone, PartialEq, Eq],
+    });
+
+    use my::inline::blah::{Foo, Host};
+
+    struct X;
+
+    impl Host for X {
+        fn bar(&mut self, cool: Foo) {
+            // Check that built in derives that I've added actually work by seeing that this hashes
+            let _blah: HashSet<Foo, RandomState> = HashSet::from_iter([Foo {
+                field1: "hello".to_string(),
+                field2: vec![1, 2, 3],
+            }]);
+
+            // Check that the attributes from an external crate actually work. If they don't work,
+            // compilation will fail here
+            let _ = serde_json::to_string(&cool);
+        }
+    }
+}
