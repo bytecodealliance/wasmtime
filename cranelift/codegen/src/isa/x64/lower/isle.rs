@@ -582,15 +582,15 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn gpr_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<Gpr> {
-        match val.clone().to_imm8_reg() {
-            Imm8Reg::Reg { reg } => Some(Gpr::new(reg).unwrap()),
+        match val.as_imm8_reg() {
+            &Imm8Reg::Reg { reg } => Some(Gpr::new(reg).unwrap()),
             Imm8Reg::Imm8 { .. } => None,
         }
     }
 
     fn imm8_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<u8> {
-        match val.clone().to_imm8_reg() {
-            Imm8Reg::Imm8 { imm } => Some(imm),
+        match val.as_imm8_reg() {
+            &Imm8Reg::Imm8 { imm } => Some(imm),
             Imm8Reg::Reg { .. } => None,
         }
     }

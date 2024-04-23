@@ -1181,8 +1181,8 @@ pub(crate) fn emit(
             };
             let enc_dst = int_reg_enc(dst);
             let rex_flags = RexFlags::from((*size, dst));
-            match num_bits.clone().to_imm8_reg() {
-                Imm8Reg::Reg { reg } => {
+            match num_bits.as_imm8_reg() {
+                &Imm8Reg::Reg { reg } => {
                     let reg = allocs.next(reg);
                     debug_assert_eq!(reg, regs::rcx());
                     let (opcode, prefix) = match size {
@@ -1199,7 +1199,7 @@ pub(crate) fn emit(
                     emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_dst, rex_flags);
                 }
 
-                Imm8Reg::Imm8 { imm: num_bits } => {
+                &Imm8Reg::Imm8 { imm: num_bits } => {
                     let (opcode, prefix) = match size {
                         OperandSize::Size8 => (0xC0, LegacyPrefixes::None),
                         OperandSize::Size16 => (0xC1, LegacyPrefixes::_66),

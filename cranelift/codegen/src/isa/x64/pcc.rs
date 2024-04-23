@@ -409,8 +409,8 @@ pub(crate) fn check(
             src,
             ref num_bits,
             dst,
-        } => match num_bits.clone().to_imm8_reg() {
-            Imm8Reg::Imm8 { imm } => {
+        } => match num_bits.as_imm8_reg() {
+            &Imm8Reg::Imm8 { imm } => {
                 check_unop(ctx, vcode, 64, dst.to_writable_reg(), src.to_reg(), |src| {
                     clamp_range(
                         ctx,
