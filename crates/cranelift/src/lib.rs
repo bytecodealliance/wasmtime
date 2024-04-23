@@ -228,6 +228,12 @@ fn wasm_call_signature(
                 Architecture::S390x,
                 "https://github.com/bytecodealliance/wasmtime/issues/6530"
             );
+
+            assert!(
+                !tunables.winch_callable,
+                "Winch doesn't support the WebAssembly tail call proposal",
+            );
+
             CallConv::Tail
         }
 
