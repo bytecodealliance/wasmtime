@@ -60,6 +60,9 @@ impl FiberStack {
         let page_size = rustix::param::page_size();
         let stack = MmapFiberStack::new(size)?;
 
+        // An `MmapFiberStack` allocates a guard page at the bottom of the
+        // region so the base and length of our stack are both offset by a
+        // single page.
         Ok(FiberStack {
             base: stack.mapping_base.wrapping_byte_add(page_size),
             len: stack.mapping_len - page_size,
