@@ -1755,11 +1755,16 @@ impl Config {
                 Strategy::Cranelift => false,
                 Strategy::Winch => true,
             };
+
+            if tunables.winch_callable && tunables.tail_callable {
+                bail!("Winch does not support the WebAssembly tail call proposal");
+            }
         }
 
         if tunables.static_memory_offset_guard_size < tunables.dynamic_memory_offset_guard_size {
             bail!("static memory guard size cannot be smaller than dynamic memory guard size");
         }
+
         Ok(tunables)
     }
 
