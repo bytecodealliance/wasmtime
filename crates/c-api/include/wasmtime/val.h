@@ -44,7 +44,8 @@ typedef struct wasmtime_anyref {
 } wasmtime_anyref_t;
 
 /// Helper macro to create a `wasmtime_anyref_t` value that is null.
-#define WASMTIME_ANYREF_NULL {0}
+#define WASMTIME_ANYREF_NULL                                                   \
+  { 0 }
 
 /// Helper macro to test whether a `wasmtime_anyref_t` value references null.
 #define WASMTIME_ANYREF_IS_NULL(p) ((p).store_id == 0)
@@ -168,7 +169,8 @@ typedef struct wasmtime_externref {
 } wasmtime_externref_t;
 
 /// Helper macro to create a `wasmtime_externref_t` value that is null.
-#define WASMTIME_EXTERNREF_NULL {0}
+#define WASMTIME_EXTERNREF_NULL                                                \
+  { 0 }
 
 /// Helper macro to test whether a `wasmtime_externref_t` value references null.
 #define WASMTIME_EXTERNREF_IS_NULL(p) ((p).store_id == 0)
