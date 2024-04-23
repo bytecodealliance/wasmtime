@@ -403,7 +403,7 @@ fn memarg_operands<F: Fn(VReg) -> VReg>(memarg: &MemArg, collector: &mut Operand
     }
     // mem_finalize might require %r1 to hold (part of) the address.
     // Conservatively assume this will always be necessary here.
-    collector.reg_early_def(writable_gpr(1));
+    collector.reg_fixed_nonallocatable(gpr_preg(1));
 }
 
 fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
@@ -486,9 +486,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            if shift_reg != zero_reg() {
-                collector.reg_use(shift_reg);
-            }
+            collector.reg_use(shift_reg);
         }
         &Inst::RxSBG { rd, ri, rn, .. } => {
             collector.reg_reuse_def(rd, 1);
@@ -604,7 +602,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             let first_regnum = rt.to_reg().to_real_reg().unwrap().hw_enc();
             let last_regnum = rt2.to_reg().to_real_reg().unwrap().hw_enc();
             for regnum in first_regnum..last_regnum + 1 {
-                collector.reg_def(writable_gpr(regnum));
+                collector.reg_fixed_nonallocatable(gpr_preg(regnum));
             }
         }
         &Inst::StoreMultiple64 {
@@ -614,15 +612,15 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             let first_regnum = rt.to_real_reg().unwrap().hw_enc();
             let last_regnum = rt2.to_real_reg().unwrap().hw_enc();
             for regnum in first_regnum..last_regnum + 1 {
-                collector.reg_use(gpr(regnum));
+                collector.reg_fixed_nonallocatable(gpr_preg(regnum));
             }
         }
         &Inst::Mov64 { rd, rm } => {
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
-        &Inst::MovPReg { rd, rm } => {
-            debug_assert!([regs::gpr(0), regs::gpr(14), regs::gpr(15)].contains(&rm.into()));
+        &Inst::MovPReg { rd, ref rm } => {
+            debug_assert!([gpr_preg(0), gpr_preg(14), gpr_preg(15)].contains(rm));
             debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
         }
@@ -689,7 +687,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         }
         &Inst::LoadFpuConst32 { rd, .. } | &Inst::LoadFpuConst64 { rd, .. } => {
             collector.reg_def(rd);
-            collector.reg_def(writable_gpr(1));
+            collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
         &Inst::FpuRound { rd, rn, .. } => {
             collector.reg_def(rd);
@@ -709,9 +707,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            if shift_reg != zero_reg() {
-                collector.reg_use(shift_reg);
-            }
+            collector.reg_use(shift_reg);
         }
         &Inst::VecSelect { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
@@ -833,7 +829,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         }
         &Inst::VecLoadConst { rd, .. } | &Inst::VecLoadConstReplicate { rd, .. } => {
             collector.reg_def(rd);
-            collector.reg_def(writable_gpr(1));
+            collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
         &Inst::VecImmByteMask { rd, .. } => {
             collector.reg_def(rd);
@@ -884,27 +880,21 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_reuse_def(rd, 1);
             collector.reg_use(ri);
             collector.reg_use(rn);
-            if lane_reg != zero_reg() {
-                collector.reg_use(lane_reg);
-            }
+            collector.reg_use(lane_reg);
         }
         &Inst::VecInsertLaneUndef {
             rd, rn, lane_reg, ..
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            if lane_reg != zero_reg() {
-                collector.reg_use(lane_reg);
-            }
+            collector.reg_use(lane_reg);
         }
         &Inst::VecExtractLane {
             rd, rn, lane_reg, ..
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            if lane_reg != zero_reg() {
-                collector.reg_use(lane_reg);
-            }
+            collector.reg_use(lane_reg);
         }
         &Inst::VecInsertLaneImm { rd, ri, .. } => {
             collector.reg_reuse_def(rd, 1);
@@ -966,11 +956,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::TrapIf { .. } => {}
         &Inst::JTSequence { ridx, .. } => {
             collector.reg_use(ridx);
-            collector.reg_early_def(writable_gpr(1));
+            collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
         &Inst::LoadSymbolReloc { rd, .. } => {
             collector.reg_def(rd);
-            collector.reg_def(writable_gpr(1));
+            collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
         &Inst::LoadAddr { rd, ref mem } => {
             collector.reg_def(rd);
