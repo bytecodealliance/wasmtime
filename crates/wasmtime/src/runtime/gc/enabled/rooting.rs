@@ -186,11 +186,18 @@ pub(crate) use sealed::*;
 // Just `pub` to avoid `warn(private_interfaces)` in public APIs, which we can't
 // `allow(...)` on our MSRV yet.
 #[doc(hidden)]
+#[repr(C)] // NB: if this layout changes be sure to change the C API as well
 pub struct GcRootIndex {
     store_id: StoreId,
     generation: u32,
     index: PackedIndex,
 }
+
+const _: () = {
+    // NB: these match the C API which should also be updated if this changes
+    assert!(std::mem::size_of::<GcRootIndex>() == 16);
+    assert!(std::mem::align_of::<GcRootIndex>() == 8);
+};
 
 impl GcRootIndex {
     #[inline]
@@ -271,6 +278,7 @@ impl GcRootIndex {
 /// where the high bit is the discriminant and the lower 31 bits are the
 /// payload.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 struct PackedIndex(u32);
 
 impl Debug for PackedIndex {
@@ -1192,6 +1200,7 @@ where
 /// unroot. Sometimes leaking is intentional and desirable, particularly when
 /// dealing with short-lived [`Store`][crate::Store]s where unrooting would just
 /// be busy work since the whole store is about to be dropped.
+#[repr(transparent)] // NB: the C API relies on this
 pub struct ManuallyRooted<T>
 where
     T: GcRef,

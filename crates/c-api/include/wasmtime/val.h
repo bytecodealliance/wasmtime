@@ -20,38 +20,72 @@ extern "C" {
  * \brief Convenience alias for #wasmtime_anyref
  *
  * \struct wasmtime_anyref
- * \brief A host-defined un-forgeable reference to pass into WebAssembly.
+ * \brief A WebAssembly value in the `any` hierarchy of GC types.
  *
- * This structure represents an `anyref` that can be passed to WebAssembly.
- * It cannot be forged by WebAssembly itself and is guaranteed to have been
- * created by the host.
+ * This structure represents an `anyref` that WebAssembly can create and
+ * pass back to the host. The host can also create values to pass to a guest.
+ *
+ * Note that this structure does not itself contain the data that it refers to.
+ * Instead to contains metadata to point back within a #wasmtime_context_t, so
+ * referencing the internal data requires using a `wasmtime_context_t`.
+ *
+ * Anyref values are required to be explicitly unrooted via
+ * #wasmtime_anyref_unroot to enable them to be garbage-collected.
+ *
+ * Null anyref values are represented by this structure and can be tested and
+ * created with the #WASMTIME_ANYREF_IS_NULL and #WASMTIME_ANYREF_NULL macros.
  */
-typedef struct wasmtime_anyref wasmtime_anyref_t;
+typedef struct wasmtime_anyref {
+  /// Internal metadata tracking within the store, embedders should not
+  /// configure or modify these fields.
+  uint64_t store_id;
+  uint32_t __private1;
+  uint32_t __private2;
+} wasmtime_anyref_t;
+
+/// Helper macro to create a `wasmtime_anyref_t` value that is null.
+#define WASMTIME_ANYREF_NULL {0}
+
+/// Helper macro to test whether a `wasmtime_anyref_t` value references null.
+#define WASMTIME_ANYREF_IS_NULL(p) ((p).store_id == 0)
 
 /**
- * \brief Creates a shallow copy of the `anyref` argument, returning a
- * separately owned pointer (depending on the configured collector this might
- * increase a reference count or create a new GC root).
+ * \brief Creates a new reference pointing to the same data that `anyref`
+ * points to (depending on the configured collector this might increase a
+ * reference count or create a new GC root).
+ *
+ * The returned reference is stored in `out`.
  */
-WASM_API_EXTERN wasmtime_anyref_t *
-wasmtime_anyref_clone(wasmtime_context_t *context, wasmtime_anyref_t *ref);
+WASM_API_EXTERN void wasmtime_anyref_clone(wasmtime_context_t *context,
+                                           const wasmtime_anyref_t *anyref,
+                                           wasmtime_anyref_t *out);
 
 /**
- * \brief Drops an owned pointer to `ref`, potentially deleting it if it's the
- * last reference, or allowing it to be collected during the next GC.
+ * \brief Unroots the `ref` provided within the `context`.
+ *
+ * This API is required to enable the `ref` value provided to be
+ * garbage-collected. This API itself does not necessarily garbage-collect the
+ * value, but it's possible to collect it in the future after this.
+ *
+ * This may modify `ref` and the contents of `ref` are left in an undefined
+ * state after this API is called and it should no longer be used.
+ *
+ * Note that null or i32 anyref values do not need to be unrooted but are still
+ * valid to pass to this function.
  */
-WASM_API_EXTERN void wasmtime_anyref_delete(wasmtime_context_t *context,
+WASM_API_EXTERN void wasmtime_anyref_unroot(wasmtime_context_t *context,
                                             wasmtime_anyref_t *ref);
 
 /**
  * \brief Converts a raw `anyref` value coming from #wasmtime_val_raw_t into
  * a #wasmtime_anyref_t.
  *
- * Note that the returned #wasmtime_anyref_t is an owned value that must be
- * deleted via #wasmtime_anyref_delete by the caller if it is non-null.
+ * The provided `out` pointer is filled in with a reference converted from
+ * `raw`.
  */
-WASM_API_EXTERN wasmtime_anyref_t *
-wasmtime_anyref_from_raw(wasmtime_context_t *context, uint32_t raw);
+WASM_API_EXTERN void wasmtime_anyref_from_raw(wasmtime_context_t *context,
+                                              uint32_t raw,
+                                              wasmtime_anyref_t *out);
 
 /**
  * \brief Converts a #wasmtime_anyref_t to a raw value suitable for storing
@@ -74,8 +108,9 @@ WASM_API_EXTERN uint32_t wasmtime_anyref_to_raw(wasmtime_context_t *context,
  *
  * If `i31val` does not fit in 31 bits, it is wrapped.
  */
-WASM_API_EXTERN wasmtime_anyref_t *
-wasmtime_anyref_from_i31(wasmtime_context_t *context, uint32_t i31val);
+WASM_API_EXTERN void wasmtime_anyref_from_i31(wasmtime_context_t *context,
+                                              uint32_t i31val,
+                                              wasmtime_anyref_t *out);
 
 /**
  * \brief Get the `anyref`'s underlying `i31ref` value, zero extended, if any.
@@ -87,7 +122,7 @@ wasmtime_anyref_from_i31(wasmtime_context_t *context, uint32_t i31val);
  * returned and `dst` is left unmodified.
  */
 WASM_API_EXTERN bool wasmtime_anyref_i31_get_u(wasmtime_context_t *context,
-                                               wasmtime_anyref_t *anyref,
+                                               const wasmtime_anyref_t *anyref,
                                                uint32_t *dst);
 
 /**
@@ -100,7 +135,7 @@ WASM_API_EXTERN bool wasmtime_anyref_i31_get_u(wasmtime_context_t *context,
  * returned and `dst` is left unmodified.
  */
 WASM_API_EXTERN bool wasmtime_anyref_i31_get_s(wasmtime_context_t *context,
-                                               wasmtime_anyref_t *anyref,
+                                               const wasmtime_anyref_t *anyref,
                                                int32_t *dst);
 
 /**
@@ -113,28 +148,54 @@ WASM_API_EXTERN bool wasmtime_anyref_i31_get_s(wasmtime_context_t *context,
  * This structure represents an `externref` that can be passed to WebAssembly.
  * It cannot be forged by WebAssembly itself and is guaranteed to have been
  * created by the host.
+ *
+ * This structure is similar to #wasmtime_anyref_t but represents the
+ * `externref` type in WebAssembly. This can be created on the host from
+ * arbitrary host pointers/destructors. Note that this value is itself a
+ * reference into a #wasmtime_context_t and must be explicitly unrooted to
+ * enable garbage collection.
+ *
+ * Note that null is represented with this structure and created with
+ * #WASMTIME_EXTERNREF_NULL. Null can be tested for with the
+ * #WASMTIME_EXTERNREF_IS_NULL macro.
  */
-typedef struct wasmtime_externref wasmtime_externref_t;
+typedef struct wasmtime_externref {
+  /// Internal metadata tracking within the store, embedders should not
+  /// configure or modify these fields.
+  uint64_t store_id;
+  uint32_t __private1;
+  uint32_t __private2;
+} wasmtime_externref_t;
+
+/// Helper macro to create a `wasmtime_externref_t` value that is null.
+#define WASMTIME_EXTERNREF_NULL {0}
+
+/// Helper macro to test whether a `wasmtime_externref_t` value references null.
+#define WASMTIME_EXTERNREF_IS_NULL(p) ((p).store_id == 0)
 
 /**
  * \brief Create a new `externref` value.
  *
- * Creates a new `externref` value wrapping the provided data, returning the
- * pointer to the externref.
+ * Creates a new `externref` value wrapping the provided data, returning whether
+ * it was created or not.
  *
  * \param context the store context to allocate this externref within
  * \param data the host-specific data to wrap
  * \param finalizer an optional finalizer for `data`
+ * \param out where to store the created value.
  *
  * When the reference is reclaimed, the wrapped data is cleaned up with the
  * provided `finalizer`.
  *
- * The returned value must be deleted with #wasmtime_externref_delete and may
- * not be used after the context is destroyed.
+ * If `true` is returned then `out` has been filled in and must be unrooted
+ * in the future with #wasmtime_externref_unroot. If `false` is returned then
+ * the host wasn't able to create more GC values at this time. Performing a GC
+ * may free up enough space to try again.
  */
-WASM_API_EXTERN wasmtime_externref_t *
-wasmtime_externref_new(wasmtime_context_t *context, void *data,
-                       void (*finalizer)(void *));
+WASM_API_EXTERN bool wasmtime_externref_new(wasmtime_context_t *context,
+                                            void *data,
+                                            void (*finalizer)(void *),
+                                            wasmtime_externref_t *out);
 
 /**
  * \brief Get an `externref`'s wrapped data
@@ -143,33 +204,45 @@ wasmtime_externref_new(wasmtime_context_t *context, void *data,
  * that `data` is not `NULL`.
  */
 WASM_API_EXTERN void *wasmtime_externref_data(wasmtime_context_t *context,
-                                              wasmtime_externref_t *data);
+                                              const wasmtime_externref_t *data);
 
 /**
- * \brief Creates a shallow copy of the `externref` argument, returning a
- * separately owned pointer (depending on the configured collector this might
- * increase a reference count or create a new GC root).
+ * \brief Creates a new reference pointing to the same data that `ref` points
+ * to (depending on the configured collector this might increase a reference
+ * count or create a new GC root).
+ *
+ * The `out` parameter stores the cloned reference. This reference must
+ * eventually be unrooted with #wasmtime_externref_unroot in the future to
+ * enable GC'ing it.
  */
-WASM_API_EXTERN wasmtime_externref_t *
-wasmtime_externref_clone(wasmtime_context_t *context,
-                         wasmtime_externref_t *ref);
+WASM_API_EXTERN void wasmtime_externref_clone(wasmtime_context_t *context,
+                                              const wasmtime_externref_t *ref,
+                                              wasmtime_externref_t *out);
 
 /**
- * \brief Drops an owned pointer to `ref`, potentially deleting it if it's the
- * last reference, or allowing it to be collected during the next GC.
+ * \brief Unroots the pointer `ref` from the `context` provided.
+ *
+ * This function will enable future garbage collection of the value pointed to
+ * by `ref` once there are no more references. The `ref` value may be mutated in
+ * place by this function and its contents are undefined after this function
+ * returns. It should not be used until after re-initializing it.
+ *
+ * Note that null externref values do not need to be unrooted but are still
+ * valid to pass to this function.
  */
-WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_context_t *context,
+WASM_API_EXTERN void wasmtime_externref_unroot(wasmtime_context_t *context,
                                                wasmtime_externref_t *ref);
 
 /**
  * \brief Converts a raw `externref` value coming from #wasmtime_val_raw_t into
  * a #wasmtime_externref_t.
  *
- * Note that the returned #wasmtime_externref_t is an owned value that must be
- * deleted via #wasmtime_externref_delete by the caller if it is non-null.
+ * The `out` reference is filled in with the non-raw version of this externref.
+ * It must eventually be unrooted with #wasmtime_externref_unroot.
  */
-WASM_API_EXTERN wasmtime_externref_t *
-wasmtime_externref_from_raw(wasmtime_context_t *context, uint32_t raw);
+WASM_API_EXTERN void wasmtime_externref_from_raw(wasmtime_context_t *context,
+                                                 uint32_t raw,
+                                                 wasmtime_externref_t *out);
 
 /**
  * \brief Converts a #wasmtime_externref_t to a raw value suitable for storing
@@ -230,15 +303,9 @@ typedef union wasmtime_valunion {
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_F64
   float64_t f64;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_ANYREF
-  ///
-  /// If this value represents a `ref.null any` value then this pointer will
-  /// be `NULL`.
-  wasmtime_anyref_t *anyref;
+  wasmtime_anyref_t anyref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXTERNREF
-  ///
-  /// If this value represents a `ref.null extern` value then this pointer will
-  /// be `NULL`.
-  wasmtime_externref_t *externref;
+  wasmtime_externref_t externref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_FUNCREF
   ///
   /// If this value represents a `ref.null func` value then the `store_id` field
@@ -338,20 +405,29 @@ typedef struct wasmtime_val {
 } wasmtime_val_t;
 
 /**
- * \brief Deletes an owned #wasmtime_val_t.
+ * \brief Unroot the value contained by `val`.
  *
- * Note that this only deletes the contents, not the memory that `val` points to
- * itself (which is owned by the caller).
+ * This function will unroot any GC references that `val` points to, for
+ * example if it has the `WASMTIME_EXTERNREF` or `WASMTIME_ANYREF` kinds. This
+ * function leaves `val` in an undefined state and it should not be used again
+ * without re-initializing.
+ *
+ * This method does not need to be called for integers, floats, v128, or
+ * funcref values.
  */
-WASM_API_EXTERN void wasmtime_val_delete(wasmtime_context_t *context,
+WASM_API_EXTERN void wasmtime_val_unroot(wasmtime_context_t *context,
                                          wasmtime_val_t *val);
 
 /**
- * \brief Copies `src` into `dst`.
+ * \brief Clones the value pointed to by `src` into the `dst` provided.
+ *
+ * This function will clone any rooted GC values in `src` and have them
+ * newly rooted inside of `dst`. When using this API the `dst` should be
+ * later unrooted with #wasmtime_val_unroot if it contains GC values.
  */
-WASM_API_EXTERN void wasmtime_val_copy(wasmtime_context_t *context,
-                                       wasmtime_val_t *dst,
-                                       const wasmtime_val_t *src);
+WASM_API_EXTERN void wasmtime_val_clone(wasmtime_context_t *context,
+                                        const wasmtime_val_t *src,
+                                        wasmtime_val_t *dst);
 
 #ifdef __cplusplus
 } // extern "C"

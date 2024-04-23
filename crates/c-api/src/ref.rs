@@ -1,5 +1,9 @@
 use crate::{abort, WasmtimeStoreContextMut};
-use std::{mem::MaybeUninit, os::raw::c_void, ptr};
+use std::{
+    mem::{ManuallyDrop, MaybeUninit},
+    os::raw::c_void,
+    ptr,
+};
 use wasmtime::{AnyRef, ExternRef, ManuallyRooted, Ref, RootScope, Val, I31};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
@@ -182,25 +186,100 @@ pub extern "C" fn wasm_foreign_new(_store: &crate::wasm_store_t) -> Box<wasm_for
     abort("wasm_foreign_new")
 }
 
-pub type wasmtime_anyref_t = ManuallyRooted<AnyRef>;
-pub type wasmtime_externref_t = ManuallyRooted<ExternRef>;
+/// C-API representation of `anyref`.
+///
+/// This represented differently in the C API from the header to handle how
+/// this is dispatched internally. Null anyref values are represented with a
+/// `store_id` of zero, and otherwise the `rooted` field is valid.
+///
+/// Note that this relies on the Wasmtime definition of `ManuallyRooted` to have
+/// a 64-bit store_id first.
+pub union wasmtime_anyref_t {
+    store_id: u64,
+    rooted: ManuallyDrop<ManuallyRooted<AnyRef>>,
+}
 
-#[no_mangle]
-pub extern "C" fn wasmtime_anyref_clone(
-    cx: WasmtimeStoreContextMut<'_>,
-    anyref: Option<&wasmtime_anyref_t>,
-) -> Option<Box<wasmtime_anyref_t>> {
-    let anyref = anyref?;
-    Some(Box::new((*anyref).clone(cx)))
+/// Same as `wasmtime_anyref_t`, but for extenref.
+pub union wasmtime_externref_t {
+    store_id: u64,
+    rooted: ManuallyDrop<ManuallyRooted<ExternRef>>,
+}
+
+impl wasmtime_anyref_t {
+    pub unsafe fn as_wasmtime(&self) -> Option<&ManuallyRooted<AnyRef>> {
+        if self.store_id == 0 {
+            None
+        } else {
+            Some(&self.rooted)
+        }
+    }
+
+    pub unsafe fn into_wasmtime(self) -> Option<ManuallyRooted<AnyRef>> {
+        if self.store_id == 0 {
+            None
+        } else {
+            Some(ManuallyDrop::into_inner(self.rooted))
+        }
+    }
+}
+
+impl From<Option<ManuallyRooted<AnyRef>>> for wasmtime_anyref_t {
+    fn from(rooted: Option<ManuallyRooted<AnyRef>>) -> wasmtime_anyref_t {
+        match rooted {
+            Some(val) => wasmtime_anyref_t {
+                rooted: ManuallyDrop::new(val),
+            },
+            None => wasmtime_anyref_t { store_id: 0 },
+        }
+    }
+}
+
+impl wasmtime_externref_t {
+    pub unsafe fn as_wasmtime(&self) -> Option<&ManuallyRooted<ExternRef>> {
+        if self.store_id == 0 {
+            None
+        } else {
+            Some(&self.rooted)
+        }
+    }
+
+    pub unsafe fn into_wasmtime(self) -> Option<ManuallyRooted<ExternRef>> {
+        if self.store_id == 0 {
+            None
+        } else {
+            Some(ManuallyDrop::into_inner(self.rooted))
+        }
+    }
+}
+
+impl From<Option<ManuallyRooted<ExternRef>>> for wasmtime_externref_t {
+    fn from(rooted: Option<ManuallyRooted<ExternRef>>) -> wasmtime_externref_t {
+        match rooted {
+            Some(val) => wasmtime_externref_t {
+                rooted: ManuallyDrop::new(val),
+            },
+            None => wasmtime_externref_t { store_id: 0 },
+        }
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_anyref_delete(
+pub unsafe extern "C" fn wasmtime_anyref_clone(
     cx: WasmtimeStoreContextMut<'_>,
-    val: Option<Box<wasmtime_anyref_t>>,
+    anyref: Option<&wasmtime_anyref_t>,
+    out: &mut MaybeUninit<wasmtime_anyref_t>,
 ) {
-    if let Some(e) = val {
-        e.unroot(cx);
+    let anyref = anyref.and_then(|a| a.as_wasmtime()).map(|a| a.clone(cx));
+    crate::initialize(out, anyref.into());
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_anyref_unroot(
+    cx: WasmtimeStoreContextMut<'_>,
+    val: Option<&mut MaybeUninit<wasmtime_anyref_t>>,
+) {
+    if let Some(val) = val.and_then(|v| v.assume_init_read().into_wasmtime()) {
+        val.unroot(cx);
     }
 }
 
@@ -209,39 +288,42 @@ pub unsafe extern "C" fn wasmtime_anyref_to_raw(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&wasmtime_anyref_t>,
 ) -> u32 {
-    val.and_then(|e| e.to_raw(cx).ok()).unwrap_or_default()
+    val.and_then(|v| v.as_wasmtime())
+        .and_then(|e| e.to_raw(cx).ok())
+        .unwrap_or_default()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_anyref_from_raw(
     cx: WasmtimeStoreContextMut<'_>,
     raw: u32,
-) -> Option<Box<wasmtime_anyref_t>> {
+    val: &mut MaybeUninit<wasmtime_anyref_t>,
+) {
     let mut scope = RootScope::new(cx);
-    let e = AnyRef::from_raw(&mut scope, raw)?;
-    Some(Box::new(
-        e.to_manually_rooted(&mut scope).expect("in scope"),
-    ))
+    let anyref = AnyRef::from_raw(&mut scope, raw)
+        .map(|a| a.to_manually_rooted(&mut scope).expect("in scope"));
+    crate::initialize(val, anyref.into());
 }
 
 #[no_mangle]
 pub extern "C" fn wasmtime_anyref_from_i31(
     cx: WasmtimeStoreContextMut<'_>,
     val: u32,
-) -> Box<wasmtime_anyref_t> {
+    out: &mut MaybeUninit<wasmtime_anyref_t>,
+) {
     let mut scope = RootScope::new(cx);
     let anyref = AnyRef::from_i31(&mut scope, I31::wrapping_u32(val));
     let anyref = anyref.to_manually_rooted(&mut scope).expect("in scope");
-    Box::new(anyref)
+    crate::initialize(out, Some(anyref).into())
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_anyref_i31_get_u(
+pub unsafe extern "C" fn wasmtime_anyref_i31_get_u(
     cx: WasmtimeStoreContextMut<'_>,
     anyref: Option<&wasmtime_anyref_t>,
     dst: &mut MaybeUninit<u32>,
 ) -> bool {
-    match anyref {
+    match anyref.and_then(|a| a.as_wasmtime()) {
         Some(anyref) if anyref.is_i31(&cx).expect("ManuallyRooted always in scope") => {
             let val = anyref
                 .unwrap_i31(&cx)
@@ -255,12 +337,12 @@ pub extern "C" fn wasmtime_anyref_i31_get_u(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_anyref_i31_get_s(
+pub unsafe extern "C" fn wasmtime_anyref_i31_get_s(
     cx: WasmtimeStoreContextMut<'_>,
     anyref: Option<&wasmtime_anyref_t>,
     dst: &mut MaybeUninit<i32>,
 ) -> bool {
-    match anyref {
+    match anyref.and_then(|a| a.as_wasmtime()) {
         Some(anyref) if anyref.is_i31(&cx).expect("ManuallyRooted always in scope") => {
             let val = anyref
                 .unwrap_i31(&cx)
@@ -278,19 +360,25 @@ pub extern "C" fn wasmtime_externref_new(
     cx: WasmtimeStoreContextMut<'_>,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
-) -> Option<Box<wasmtime_externref_t>> {
+    out: &mut MaybeUninit<wasmtime_externref_t>,
+) -> bool {
     let mut scope = RootScope::new(cx);
-    let e = ExternRef::new(&mut scope, crate::ForeignData { data, finalizer }).ok()?;
+    let e = match ExternRef::new(&mut scope, crate::ForeignData { data, finalizer }) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
     let e = e.to_manually_rooted(&mut scope).expect("in scope");
-    Some(Box::new(e))
+    crate::initialize(out, Some(e).into());
+    true
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_data(
+pub unsafe extern "C" fn wasmtime_externref_data(
     cx: WasmtimeStoreContextMut<'_>,
     externref: Option<&wasmtime_externref_t>,
 ) -> *mut c_void {
     externref
+        .and_then(|e| e.as_wasmtime())
         .and_then(|e| {
             let data = e.data(cx).ok()?;
             Some(data.downcast_ref::<crate::ForeignData>().unwrap().data)
@@ -299,21 +387,22 @@ pub extern "C" fn wasmtime_externref_data(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_clone(
+pub unsafe extern "C" fn wasmtime_externref_clone(
     cx: WasmtimeStoreContextMut<'_>,
     externref: Option<&wasmtime_externref_t>,
-) -> Option<Box<wasmtime_externref_t>> {
-    let externref = externref?;
-    Some(Box::new((*externref).clone(cx)))
+    out: &mut MaybeUninit<wasmtime_externref_t>,
+) {
+    let externref = externref.and_then(|e| e.as_wasmtime()).map(|e| e.clone(cx));
+    crate::initialize(out, externref.into());
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_delete(
+pub unsafe extern "C" fn wasmtime_externref_unroot(
     cx: WasmtimeStoreContextMut<'_>,
-    val: Option<Box<wasmtime_externref_t>>,
+    val: Option<&mut MaybeUninit<wasmtime_externref_t>>,
 ) {
-    if let Some(e) = val {
-        e.unroot(cx);
+    if let Some(val) = val.and_then(|v| v.assume_init_read().into_wasmtime()) {
+        val.unroot(cx);
     }
 }
 
@@ -322,17 +411,19 @@ pub unsafe extern "C" fn wasmtime_externref_to_raw(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&wasmtime_externref_t>,
 ) -> u32 {
-    val.and_then(|e| e.to_raw(cx).ok()).unwrap_or_default()
+    val.and_then(|e| e.as_wasmtime())
+        .and_then(|e| e.to_raw(cx).ok())
+        .unwrap_or_default()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_externref_from_raw(
     cx: WasmtimeStoreContextMut<'_>,
     raw: u32,
-) -> Option<Box<wasmtime_externref_t>> {
+    val: &mut MaybeUninit<wasmtime_externref_t>,
+) {
     let mut scope = RootScope::new(cx);
-    let e = ExternRef::from_raw(&mut scope, raw)?;
-    Some(Box::new(
-        e.to_manually_rooted(&mut scope).expect("in scope"),
-    ))
+    let rooted = ExternRef::from_raw(&mut scope, raw)
+        .map(|e| e.to_manually_rooted(&mut scope).expect("in scope"));
+    crate::initialize(val, rooted.into());
 }
