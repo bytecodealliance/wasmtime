@@ -639,7 +639,7 @@ jobs:
         echo usr lib local lib
         echo usr lib 
         ls /usr/lib
-        mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
+        sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         ls /usr/lib/llvm-15/lib
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb /usr/lib/local/lib/python3.10/dist-packages/lldb
         lldb -P
