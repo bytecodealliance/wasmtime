@@ -24,8 +24,11 @@ use crate::generators::{self, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
@@ -149,7 +152,7 @@ pub fn instantiate(
         None => return,
     };
 
-    let mut timeout_state = SignalOnDrop::default();
+    let mut timeout_state = HelperThread::default();
     match timeout {
         Timeout::Fuel(fuel) => store.set_fuel(fuel).unwrap(),
 
@@ -164,7 +167,7 @@ pub fn instantiate(
         // infrastructure.
         Timeout::Epoch(timeout) => {
             let engine = store.engine().clone();
-            timeout_state.spawn_timeout(timeout, move || engine.increment_epoch());
+            timeout_state.run_periodically(timeout, move || engine.increment_epoch());
         }
         Timeout::None => {}
     }
@@ -328,7 +331,13 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     // the two steps together to match on the error below.
     let instance =
         dummy::dummy_linker(store, module).and_then(|l| l.instantiate(&mut *store, module));
+    unwrap_instance(store, instance)
+}
 
+fn unwrap_instance(
+    store: &Store<StoreLimits>,
+    instance: anyhow::Result<Instance>,
+) -> Option<Instance> {
     let e = match instance {
         Ok(i) => return Some(i),
         Err(e) => e,
@@ -811,56 +820,54 @@ fn table_ops_eventually_gcs() {
 }
 
 #[derive(Default)]
-struct SignalOnDrop {
-    state: Arc<(Mutex<bool>, Condvar)>,
+struct HelperThread {
+    state: Arc<HelperThreadState>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
-impl SignalOnDrop {
-    fn spawn_timeout(&mut self, dur: Duration, closure: impl FnOnce() + Send + 'static) {
+#[derive(Default)]
+struct HelperThreadState {
+    should_exit: Mutex<bool>,
+    should_exit_cvar: Condvar,
+}
+
+impl HelperThread {
+    fn run_periodically(&mut self, dur: Duration, mut closure: impl FnMut() + Send + 'static) {
         let state = self.state.clone();
-        let start = Instant::now();
         self.thread = Some(std::thread::spawn(move || {
             // Using our mutex/condvar we wait here for the first of `dur` to
-            // pass or the `SignalOnDrop` instance to get dropped.
-            let (lock, cvar) = &*state;
-            let mut signaled = lock.lock().unwrap();
-            while !*signaled {
-                // Adjust our requested `dur` based on how much time has passed.
-                let dur = match dur.checked_sub(start.elapsed()) {
-                    Some(dur) => dur,
-                    None => break,
-                };
-                let (lock, result) = cvar.wait_timeout(signaled, dur).unwrap();
-                signaled = lock;
+            // pass or the `HelperThread` instance to get dropped.
+            let mut should_exit = state.should_exit.lock().unwrap();
+            while !*should_exit {
+                let (lock, result) = state
+                    .should_exit_cvar
+                    .wait_timeout(should_exit, dur)
+                    .unwrap();
+                should_exit = lock;
                 // If we timed out for sure then there's no need to continue
                 // since we'll just abort on the next `checked_sub` anyway.
                 if result.timed_out() {
-                    break;
+                    closure();
                 }
             }
-            drop(signaled);
-
-            closure();
         }));
     }
 }
 
-impl Drop for SignalOnDrop {
+impl Drop for HelperThread {
     fn drop(&mut self) {
-        if let Some(thread) = self.thread.take() {
-            let (lock, cvar) = &*self.state;
-            // Signal our thread that we've been dropped and wake it up if it's
-            // blocked.
-            let mut g = lock.lock().unwrap();
-            *g = true;
-            cvar.notify_one();
-            drop(g);
+        let thread = match self.thread.take() {
+            Some(thread) => thread,
+            None => return,
+        };
+        // Signal our thread that it should exit and wake it up in case it's
+        // sleeping.
+        *self.state.should_exit.lock().unwrap() = true;
+        self.state.should_exit_cvar.notify_one();
 
-            // ... and then wait for the thread to exit to ensure we clean up
-            // after ourselves.
-            thread.join().unwrap();
-        }
+        // ... and then wait for the thread to exit to ensure we clean up
+        // after ourselves.
+        thread.join().unwrap();
     }
 }
 
@@ -950,4 +957,206 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     }
 
     Ok(())
+}
+
+/// Instantiates a wasm module and runs its exports with dummy values, all in
+/// an async fashion.
+///
+/// Attempts to stress yields in host functions to ensure that exiting and
+/// resuming a wasm function call works.
+pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32]) {
+    let mut store = config.to_store();
+    let module = match compile_module(store.engine(), wasm, KnownValid::Yes, config) {
+        Some(module) => module,
+        None => return,
+    };
+
+    // Configure a helper thread to periodically increment the epoch to
+    // forcibly enable yields-via-epochs if epochs are in use. Note that this
+    // is required because the wasm isn't otherwise guaranteed to necessarily
+    // call any imports which will also increment the epoch.
+    let mut helper_thread = HelperThread::default();
+    if let generators::AsyncConfig::YieldWithEpochs { dur, .. } = &config.wasmtime.async_config {
+        let engine = store.engine().clone();
+        helper_thread.run_periodically(*dur, move || engine.increment_epoch());
+    }
+
+    // Generate a `Linker` where all function imports are custom-built to yield
+    // periodically and additionally increment the epoch.
+    let mut imports = Vec::new();
+    for import in module.imports() {
+        let item = match import.ty() {
+            ExternType::Func(ty) => {
+                let poll_amt = take_poll_amt(&mut poll_amts);
+                Func::new_async(&mut store, ty.clone(), move |caller, _, results| {
+                    let ty = ty.clone();
+                    Box::new(async move {
+                        caller.engine().increment_epoch();
+                        log::info!("yielding {} times in import", poll_amt);
+                        YieldN(poll_amt).await;
+                        for (ret_ty, result) in ty.results().zip(results) {
+                            *result = dummy::dummy_value(ret_ty)?;
+                        }
+                        Ok(())
+                    })
+                })
+                .into()
+            }
+            other_ty => match dummy::dummy_extern(&mut store, other_ty) {
+                Ok(item) => item,
+                Err(e) => {
+                    log::warn!("couldn't create import: {}", e);
+                    return;
+                }
+            },
+        };
+        imports.push(item);
+    }
+
+    // Run the instantiation process, asynchronously, and if everything
+    // succeeds then pull out the instance.
+    // log::info!("starting instantiation");
+    let instance = run(Timeout {
+        future: Instance::new_async(&mut store, &module, &imports),
+        polls: take_poll_amt(&mut poll_amts),
+        end: Instant::now() + Duration::from_millis(2_000),
+    });
+    let instance = match instance {
+        Ok(instantiation_result) => match unwrap_instance(&store, instantiation_result) {
+            Some(instance) => instance,
+            None => {
+                log::info!("instantiation hit a nominal error");
+                return; // resource exhaustion or limits met
+            }
+        },
+        Err(_) => {
+            log::info!("instantiation failed to complete");
+            return; // Timed out or ran out of polls
+        }
+    };
+
+    // Run each export of the instance in the same manner as instantiation
+    // above. Dummy values are passed in for argument values here:
+    //
+    // TODO: this should probably be more clever about passing in arguments for
+    // example they might be used as pointers or something and always using 0
+    // isn't too interesting.
+    let funcs = instance
+        .exports(&mut store)
+        .filter_map(|e| {
+            let name = e.name().to_string();
+            let func = e.into_extern().into_func()?;
+            Some((name, func))
+        })
+        .collect::<Vec<_>>();
+    for (name, func) in funcs {
+        let ty = func.ty(&store);
+        let params = ty
+            .params()
+            .map(|ty| dummy::dummy_value(ty).unwrap())
+            .collect::<Vec<_>>();
+        let mut results = ty
+            .results()
+            .map(|ty| dummy::dummy_value(ty).unwrap())
+            .collect::<Vec<_>>();
+
+        log::info!("invoking export {:?}", name);
+        let future = func.call_async(&mut store, &params, &mut results);
+        match run(Timeout {
+            future,
+            polls: take_poll_amt(&mut poll_amts),
+            end: Instant::now() + Duration::from_millis(2_000),
+        }) {
+            // On success or too many polls, try the next export.
+            Ok(_) | Err(Exhausted::Polls) => {}
+
+            // If time ran out then stop the current test case as we might have
+            // already sucked up a lot of time for this fuzz test case so don't
+            // keep it going.
+            Err(Exhausted::Time) => return,
+        }
+    }
+
+    fn take_poll_amt(polls: &mut &[u32]) -> u32 {
+        match polls.split_first() {
+            Some((a, rest)) => {
+                *polls = rest;
+                *a
+            }
+            None => 0,
+        }
+    }
+
+    /// Helper future to yield N times before resolving.
+    struct YieldN(u32);
+
+    impl Future for YieldN {
+        type Output = ();
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+            if self.0 == 0 {
+                Poll::Ready(())
+            } else {
+                self.0 -= 1;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+        }
+    }
+
+    /// Helper future for applying a timeout to `future` up to either when `end`
+    /// is the current time or `polls` polls happen.
+    ///
+    /// Note that this helps to time out infinite loops in wasm, for example.
+    struct Timeout<F> {
+        future: F,
+        /// If the future isn't ready by this time then the `Timeout<F>` future
+        /// will return `None`.
+        end: Instant,
+        /// If the future doesn't resolve itself in this many calls to `poll`
+        /// then the `Timeout<F>` future will return `None`.
+        polls: u32,
+    }
+
+    enum Exhausted {
+        Time,
+        Polls,
+    }
+
+    impl<F: Future> Future for Timeout<F> {
+        type Output = Result<F::Output, Exhausted>;
+
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            let (end, polls, future) = unsafe {
+                let me = self.get_unchecked_mut();
+                (me.end, &mut me.polls, Pin::new_unchecked(&mut me.future))
+            };
+            match future.poll(cx) {
+                Poll::Ready(val) => Poll::Ready(Ok(val)),
+                Poll::Pending => {
+                    if Instant::now() >= end {
+                        log::warn!("future operation timed out");
+                        return Poll::Ready(Err(Exhausted::Time));
+                    }
+                    if *polls == 0 {
+                        log::warn!("future operation ran out of polls");
+                        return Poll::Ready(Err(Exhausted::Polls));
+                    }
+                    *polls -= 1;
+                    Poll::Pending
+                }
+            }
+        }
+    }
+
+    fn run<F: Future>(future: F) -> F::Output {
+        let mut f = Box::pin(future);
+        let mut cx = Context::from_waker(futures::task::noop_waker_ref());
+        loop {
+            match f.as_mut().poll(&mut cx) {
+                Poll::Ready(val) => break val,
+                Poll::Pending => {}
+            }
+        }
+    }
 }

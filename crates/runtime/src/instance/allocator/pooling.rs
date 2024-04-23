@@ -25,8 +25,19 @@ mod table_pool;
 #[cfg(feature = "gc")]
 mod gc_heap_pool;
 
+#[cfg(all(feature = "async"))]
+mod generic_stack_pool;
 #[cfg(all(feature = "async", unix, not(miri)))]
-mod stack_pool;
+mod unix_stack_pool;
+
+#[cfg(all(feature = "async"))]
+cfg_if::cfg_if! {
+    if #[cfg(all(unix, not(miri), not(asan)))] {
+        use unix_stack_pool as stack_pool;
+    } else {
+        use generic_stack_pool as stack_pool;
+    }
+}
 
 use super::{
     InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
@@ -55,7 +66,7 @@ use crate::{GcHeap, GcRuntime};
 #[cfg(feature = "gc")]
 use gc_heap_pool::GcHeapPool;
 
-#[cfg(all(feature = "async", unix, not(miri)))]
+#[cfg(feature = "async")]
 use stack_pool::StackPool;
 
 #[cfg(feature = "component-model")]
@@ -232,13 +243,8 @@ pub struct PoolingInstanceAllocator {
     #[cfg(feature = "gc")]
     gc_heaps: GcHeapPool,
 
-    #[cfg(all(feature = "async", unix, not(miri)))]
+    #[cfg(feature = "async")]
     stacks: StackPool,
-
-    #[cfg(all(feature = "async", windows))]
-    stack_size: usize,
-    #[cfg(all(feature = "async", windows))]
-    live_stacks: AtomicU64,
 }
 
 impl Drop for PoolingInstanceAllocator {
@@ -252,10 +258,8 @@ impl Drop for PoolingInstanceAllocator {
         #[cfg(feature = "gc")]
         debug_assert!(self.gc_heaps.is_empty());
 
-        #[cfg(all(feature = "async", unix, not(miri)))]
+        #[cfg(feature = "async")]
         debug_assert!(self.stacks.is_empty());
-        #[cfg(all(feature = "async", windows))]
-        debug_assert_eq!(self.live_stacks.load(Ordering::Acquire), 0);
     }
 }
 
@@ -270,12 +274,8 @@ impl PoolingInstanceAllocator {
             tables: TablePool::new(config)?,
             #[cfg(feature = "gc")]
             gc_heaps: GcHeapPool::new(config)?,
-            #[cfg(all(feature = "async", unix, not(miri)))]
+            #[cfg(feature = "async")]
             stacks: StackPool::new(config)?,
-            #[cfg(all(feature = "async", windows))]
-            stack_size: config.stack_size,
-            #[cfg(all(feature = "async", windows))]
-            live_stacks: AtomicU64::new(0),
         })
     }
 
@@ -513,58 +513,12 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
 
     #[cfg(feature = "async")]
     fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
-        cfg_if::cfg_if! {
-            if #[cfg(miri)] {
-                unimplemented!()
-            } else if #[cfg(unix)] {
-                self.stacks.allocate()
-            } else if #[cfg(windows)] {
-                if self.stack_size == 0 {
-                    bail!("fiber stack allocation not supported")
-                }
-
-                // On windows, we don't use a stack pool as we use the native
-                // fiber implementation. We do still enforce the `total_stacks`
-                // limit, however.
-
-                let old_count = self.live_stacks.fetch_add(1, Ordering::AcqRel);
-                if old_count >= u64::from(self.limits.total_stacks) {
-                    self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-                    bail!(
-                        "maximum concurrent fiber limit of {} reached",
-                        self.limits.total_stacks
-                    );
-                }
-
-                match wasmtime_fiber::FiberStack::new(self.stack_size) {
-                    Ok(stack) => Ok(stack),
-                    Err(e) => {
-                        self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-                        Err(anyhow::Error::from(e))
-                    }
-                }
-            } else {
-                compile_error!("not implemented");
-            }
-        }
+        self.stacks.allocate()
     }
 
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack) {
-        cfg_if::cfg_if! {
-            if #[cfg(miri)] {
-                let _ = stack;
-                unimplemented!()
-            } else if #[cfg(unix)] {
-                self.stacks.deallocate(stack);
-            } else if #[cfg(windows)] {
-                self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-                // A no-op as we don't own the fiber stack on Windows.
-                let _ = stack;
-            } else {
-                compile_error!("not implemented");
-            }
-        }
+        self.stacks.deallocate(stack);
     }
 
     fn purge_module(&self, module: CompiledModuleId) {
