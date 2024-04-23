@@ -146,7 +146,8 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
-            if let Some(imm) = to_simm32(c as i64) {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            if let Some(imm) = to_simm32(c as i64, ty) {
                 return imm.to_reg_mem_imm();
             }
         }
@@ -158,7 +159,8 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
-            if let Some(imm) = to_simm32(c as i64) {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            if let Some(imm) = to_simm32(c as i64, ty) {
                 return XmmMemImm::new(imm.to_reg_mem_imm()).unwrap();
             }
         }
@@ -325,13 +327,9 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn simm32_from_value(&mut self, val: Value) -> Option<GprMemImm> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant: u64 = self.lower_ctx.get_constant(inst)?;
+        let ty = self.lower_ctx.dfg().value_type(val);
         let constant = constant as i64;
-        to_simm32(constant)
-    }
-
-    #[inline]
-    fn simm32_from_imm64(&mut self, imm: Imm64) -> Option<GprMemImm> {
-        to_simm32(imm.bits())
+        to_simm32(constant, ty)
     }
 
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
@@ -1052,8 +1050,8 @@ const I8X16_USHR_MASKS: [u8; 128] = [
 ];
 
 #[inline]
-fn to_simm32(constant: i64) -> Option<GprMemImm> {
-    if constant == ((constant << 32) >> 32) {
+fn to_simm32(constant: i64, ty: Type) -> Option<GprMemImm> {
+    if ty.bits() <= 32 || constant == ((constant << 32) >> 32) {
         Some(
             GprMemImm::new(RegMemImm::Imm {
                 simm32: constant as u32,
