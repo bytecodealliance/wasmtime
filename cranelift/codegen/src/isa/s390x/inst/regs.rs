@@ -2,7 +2,6 @@
 
 use alloc::string::String;
 use regalloc2::PReg;
-use regalloc2::VReg;
 
 use crate::isa::s390x::inst::{RegPair, WritableRegPair};
 use crate::machinst::*;
@@ -12,8 +11,7 @@ use crate::machinst::*;
 
 /// Get a reference to a GPR (integer register).
 pub fn gpr(num: u8) -> Reg {
-    let preg = gpr_preg(num);
-    Reg::from(VReg::new(preg.index(), RegClass::Int))
+    Reg::from(gpr_preg(num))
 }
 
 pub(crate) const fn gpr_preg(num: u8) -> PReg {
@@ -28,8 +26,7 @@ pub fn writable_gpr(num: u8) -> Writable<Reg> {
 
 /// Get a reference to a VR (vector register).
 pub fn vr(num: u8) -> Reg {
-    let preg = vr_preg(num);
-    Reg::from(VReg::new(preg.index(), RegClass::Float))
+    Reg::from(vr_preg(num))
 }
 
 pub(crate) const fn vr_preg(num: u8) -> PReg {
