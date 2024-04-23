@@ -96,13 +96,13 @@ pub mod foo {
                     wasmtime::component::__internal::Vec<u32>,
                 >;
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/simple-lists")?;
                 inst.func_wrap(
                     "simple-list1",
@@ -110,7 +110,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::__internal::Vec<u32>,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::simple_list1(host, arg0);
                         Ok(r)
                     },
@@ -118,7 +118,7 @@ pub mod foo {
                 inst.func_wrap(
                     "simple-list2",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::simple_list2(host);
                         Ok((r,))
                     },
@@ -135,7 +135,7 @@ pub mod foo {
                             wasmtime::component::__internal::Vec<u32>,
                         )|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::simple_list3(host, arg0, arg1);
                         Ok((r,))
                     },
@@ -152,12 +152,61 @@ pub mod foo {
                             >,
                         )|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::simple_list4(host, arg0);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn simple_list1(
+                    &mut self,
+                    l: wasmtime::component::__internal::Vec<u32>,
+                ) -> () {
+                    Host::simple_list1(*self, l)
+                }
+                fn simple_list2(&mut self) -> wasmtime::component::__internal::Vec<u32> {
+                    Host::simple_list2(*self)
+                }
+                fn simple_list3(
+                    &mut self,
+                    a: wasmtime::component::__internal::Vec<u32>,
+                    b: wasmtime::component::__internal::Vec<u32>,
+                ) -> (
+                    wasmtime::component::__internal::Vec<u32>,
+                    wasmtime::component::__internal::Vec<u32>,
+                ) {
+                    Host::simple_list3(*self, a, b)
+                }
+                fn simple_list4(
+                    &mut self,
+                    l: wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::Vec<u32>,
+                    >,
+                ) -> wasmtime::component::__internal::Vec<
+                    wasmtime::component::__internal::Vec<u32>,
+                > {
+                    Host::simple_list4(*self, l)
+                }
             }
         }
     }

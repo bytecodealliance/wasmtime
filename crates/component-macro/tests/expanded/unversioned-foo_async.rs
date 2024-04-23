@@ -8,8 +8,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::a::Host + Send,
             T: Send,
+            U: foo::foo::a::Host + Send,
         {
             foo::foo::a::add_to_linker(linker, get)?;
             Ok(())
@@ -89,27 +89,55 @@ pub mod foo {
                 assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);
             };
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host {
+            pub trait Host: Send {
                 async fn g(&mut self) -> Result<(), Error>;
+            }
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()>
+            where
+                T: Send,
+            {
+                let mut inst = linker.instance("foo:foo/a")?;
+                inst.func_wrap_async(
+                    "g",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
+                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let r = Host::g(host).await;
+                        Ok((r,))
+                    }),
+                )?;
+                Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host + Send,
+                T: Send,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
             }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
-                T: Send,
                 U: Host + Send,
+                T: Send,
             {
-                let mut inst = linker.instance("foo:foo/a")?;
-                inst.func_wrap_async(
-                    "g",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
-                        let r = Host::g(host).await;
-                        Ok((r,))
-                    }),
-                )?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
+            }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn g(&mut self) -> Result<(), Error> {
+                    Host::g(*self).await
+                }
             }
         }
     }

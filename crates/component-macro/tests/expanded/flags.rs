@@ -194,13 +194,13 @@ pub mod foo {
                 fn roundtrip_flag32(&mut self, x: Flag32) -> Flag32;
                 fn roundtrip_flag64(&mut self, x: Flag64) -> Flag64;
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/flegs")?;
                 inst.func_wrap(
                     "roundtrip-flag1",
@@ -208,7 +208,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag1,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::roundtrip_flag1(host, arg0);
                         Ok((r,))
                     },
@@ -219,7 +219,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag2,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::roundtrip_flag2(host, arg0);
                         Ok((r,))
                     },
@@ -230,7 +230,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag4,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::roundtrip_flag4(host, arg0);
                         Ok((r,))
                     },
@@ -241,7 +241,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag8,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::roundtrip_flag8(host, arg0);
                         Ok((r,))
                     },
@@ -252,7 +252,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag16,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::roundtrip_flag16(host, arg0);
                         Ok((r,))
                     },
@@ -263,7 +263,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag32,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::roundtrip_flag32(host, arg0);
                         Ok((r,))
                     },
@@ -274,12 +274,53 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Flag64,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::roundtrip_flag64(host, arg0);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn roundtrip_flag1(&mut self, x: Flag1) -> Flag1 {
+                    Host::roundtrip_flag1(*self, x)
+                }
+                fn roundtrip_flag2(&mut self, x: Flag2) -> Flag2 {
+                    Host::roundtrip_flag2(*self, x)
+                }
+                fn roundtrip_flag4(&mut self, x: Flag4) -> Flag4 {
+                    Host::roundtrip_flag4(*self, x)
+                }
+                fn roundtrip_flag8(&mut self, x: Flag8) -> Flag8 {
+                    Host::roundtrip_flag8(*self, x)
+                }
+                fn roundtrip_flag16(&mut self, x: Flag16) -> Flag16 {
+                    Host::roundtrip_flag16(*self, x)
+                }
+                fn roundtrip_flag32(&mut self, x: Flag32) -> Flag32 {
+                    Host::roundtrip_flag32(*self, x)
+                }
+                fn roundtrip_flag64(&mut self, x: Flag64) -> Flag64 {
+                    Host::roundtrip_flag64(*self, x)
+                }
             }
         }
     }

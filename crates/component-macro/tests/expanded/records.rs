@@ -232,13 +232,13 @@ pub mod foo {
                 fn aggregate_result(&mut self) -> Aggregates;
                 fn typedef_inout(&mut self, e: TupleTypedef2) -> i32;
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/records")?;
                 inst.func_wrap(
                     "tuple-arg",
@@ -246,7 +246,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): ((char, u32),)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::tuple_arg(host, arg0);
                         Ok(r)
                     },
@@ -254,7 +254,7 @@ pub mod foo {
                 inst.func_wrap(
                     "tuple-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::tuple_result(host);
                         Ok((r,))
                     },
@@ -265,7 +265,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Empty,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::empty_arg(host, arg0);
                         Ok(r)
                     },
@@ -273,7 +273,7 @@ pub mod foo {
                 inst.func_wrap(
                     "empty-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::empty_result(host);
                         Ok((r,))
                     },
@@ -284,7 +284,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Scalars,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::scalar_arg(host, arg0);
                         Ok(r)
                     },
@@ -292,7 +292,7 @@ pub mod foo {
                 inst.func_wrap(
                     "scalar-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::scalar_result(host);
                         Ok((r,))
                     },
@@ -303,7 +303,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (ReallyFlags,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::flags_arg(host, arg0);
                         Ok(r)
                     },
@@ -311,7 +311,7 @@ pub mod foo {
                 inst.func_wrap(
                     "flags-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::flags_result(host);
                         Ok((r,))
                     },
@@ -322,7 +322,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (Aggregates,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::aggregate_arg(host, arg0);
                         Ok(r)
                     },
@@ -330,7 +330,7 @@ pub mod foo {
                 inst.func_wrap(
                     "aggregate-result",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::aggregate_result(host);
                         Ok((r,))
                     },
@@ -341,12 +341,65 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (TupleTypedef2,)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::typedef_inout(host, arg0);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn tuple_arg(&mut self, x: (char, u32)) -> () {
+                    Host::tuple_arg(*self, x)
+                }
+                fn tuple_result(&mut self) -> (char, u32) {
+                    Host::tuple_result(*self)
+                }
+                fn empty_arg(&mut self, x: Empty) -> () {
+                    Host::empty_arg(*self, x)
+                }
+                fn empty_result(&mut self) -> Empty {
+                    Host::empty_result(*self)
+                }
+                fn scalar_arg(&mut self, x: Scalars) -> () {
+                    Host::scalar_arg(*self, x)
+                }
+                fn scalar_result(&mut self) -> Scalars {
+                    Host::scalar_result(*self)
+                }
+                fn flags_arg(&mut self, x: ReallyFlags) -> () {
+                    Host::flags_arg(*self, x)
+                }
+                fn flags_result(&mut self) -> ReallyFlags {
+                    Host::flags_result(*self)
+                }
+                fn aggregate_arg(&mut self, x: Aggregates) -> () {
+                    Host::aggregate_arg(*self, x)
+                }
+                fn aggregate_result(&mut self) -> Aggregates {
+                    Host::aggregate_result(*self)
+                }
+                fn typedef_inout(&mut self, e: TupleTypedef2) -> i32 {
+                    Host::typedef_inout(*self, e)
+                }
             }
         }
     }

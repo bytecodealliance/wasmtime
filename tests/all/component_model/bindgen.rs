@@ -1,4 +1,4 @@
-#![cfg(not(miri))]
+// DO NOT COMMIT: make rust-analyzer work #![cfg(not(miri))]
 #![allow(dead_code)]
 
 use super::engine;
@@ -325,6 +325,9 @@ mod async_config {
             package foo:foo;
 
             world t1 {
+                import foo: interface {
+                    foo: func();
+                }
                 import x: func();
                 import y: func();
                 export z: func();

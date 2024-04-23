@@ -66,6 +66,25 @@ pub mod foo {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait Host {}
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("foo:foo/green")?;
+                Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -73,9 +92,9 @@ pub mod foo {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("foo:foo/green")?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
         #[allow(clippy::all)]
         pub mod red {
@@ -89,6 +108,33 @@ pub mod foo {
             pub trait Host {
                 fn foo(&mut self) -> Thing;
             }
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("foo:foo/red")?;
+                inst.func_wrap(
+                    "foo",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let r = Host::foo(host);
+                        Ok((r,))
+                    },
+                )?;
+                Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -96,16 +142,12 @@ pub mod foo {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("foo:foo/red")?;
-                inst.func_wrap(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
-                        let r = Host::foo(host);
-                        Ok((r,))
-                    },
-                )?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn foo(&mut self) -> Thing {
+                    Host::foo(*self)
+                }
             }
         }
     }

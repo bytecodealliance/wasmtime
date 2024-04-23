@@ -80,18 +80,18 @@ pub mod foo {
                 fn mrd(&mut self) -> u32;
                 fn mre(&mut self) -> (u32, f32);
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/multi-return")?;
                 inst.func_wrap(
                     "mra",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mra(host);
                         Ok(r)
                     },
@@ -99,7 +99,7 @@ pub mod foo {
                 inst.func_wrap(
                     "mrb",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mrb(host);
                         Ok(r)
                     },
@@ -107,7 +107,7 @@ pub mod foo {
                 inst.func_wrap(
                     "mrc",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mrc(host);
                         Ok((r,))
                     },
@@ -115,7 +115,7 @@ pub mod foo {
                 inst.func_wrap(
                     "mrd",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mrd(host);
                         Ok((r,))
                     },
@@ -123,12 +123,47 @@ pub mod foo {
                 inst.func_wrap(
                     "mre",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mre(host);
                         Ok(r)
                     },
                 )?;
                 Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn mra(&mut self) -> () {
+                    Host::mra(*self)
+                }
+                fn mrb(&mut self) -> () {
+                    Host::mrb(*self)
+                }
+                fn mrc(&mut self) -> u32 {
+                    Host::mrc(*self)
+                }
+                fn mrd(&mut self) -> u32 {
+                    Host::mrd(*self)
+                }
+                fn mre(&mut self) -> (u32, f32) {
+                    Host::mre(*self)
+                }
             }
         }
     }

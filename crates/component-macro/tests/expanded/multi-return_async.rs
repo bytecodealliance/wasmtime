@@ -10,8 +10,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::multi_return::Host + Send,
             T: Send,
+            U: foo::foo::multi_return::Host + Send,
         {
             foo::foo::multi_return::add_to_linker(linker, get)?;
             Ok(())
@@ -75,26 +75,28 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host {
+            pub trait Host: Send {
                 async fn mra(&mut self) -> ();
                 async fn mrb(&mut self) -> ();
                 async fn mrc(&mut self) -> u32;
                 async fn mrd(&mut self) -> u32;
                 async fn mre(&mut self) -> (u32, f32);
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                host_getter: impl GetHost<T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
-                U: Host + Send,
             {
                 let mut inst = linker.instance("foo:foo/multi-return")?;
                 inst.func_wrap_async(
                     "mra",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mra(host).await;
                         Ok(r)
                     }),
@@ -102,7 +104,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "mrb",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mrb(host).await;
                         Ok(r)
                     }),
@@ -110,7 +112,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "mrc",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mrc(host).await;
                         Ok((r,))
                     }),
@@ -118,7 +120,7 @@ pub mod foo {
                 inst.func_wrap_async(
                     "mrd",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mrd(host).await;
                         Ok((r,))
                     }),
@@ -126,12 +128,50 @@ pub mod foo {
                 inst.func_wrap_async(
                     "mre",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| wasmtime::component::__internal::Box::new(async move {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::mre(host).await;
                         Ok(r)
                     }),
                 )?;
                 Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host + Send,
+                T: Send,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host + Send,
+                T: Send,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn mra(&mut self) -> () {
+                    Host::mra(*self).await
+                }
+                async fn mrb(&mut self) -> () {
+                    Host::mrb(*self).await
+                }
+                async fn mrc(&mut self) -> u32 {
+                    Host::mrc(*self).await
+                }
+                async fn mrd(&mut self) -> u32 {
+                    Host::mrd(*self).await
+                }
+                async fn mre(&mut self) -> (u32, f32) {
+                    Host::mre(*self).await
+                }
             }
         }
     }

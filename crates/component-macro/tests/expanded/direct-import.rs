@@ -2,10 +2,43 @@ pub struct Foo {}
 pub trait FooImports {
     fn foo(&mut self) -> ();
 }
+pub trait FooImportsGetHost<T>: Send + Sync + Copy + 'static {
+    fn get_host<'a>(&self, data: &'a mut T) -> impl FooImports;
+}
+impl<T, U, F> FooImportsGetHost<T> for F
+where
+    U: FooImports,
+    F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+{
+    fn get_host<'a>(&self, data: &'a mut T) -> impl FooImports {
+        self(data)
+    }
+}
+impl<_T: FooImports + ?Sized> FooImports for &mut _T {
+    fn foo(&mut self) -> () {
+        FooImports::foo(*self)
+    }
+}
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
     impl Foo {
+        pub fn add_to_linker_imports_get_host<T>(
+            linker: &mut wasmtime::component::Linker<T>,
+            host_getter: impl FooImportsGetHost<T>,
+        ) -> wasmtime::Result<()> {
+            let mut linker = linker.root();
+            linker
+                .func_wrap(
+                    "foo",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let r = FooImports::foo(host);
+                        Ok(r)
+                    },
+                )?;
+            Ok(())
+        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -13,26 +46,7 @@ const _: () = {
         where
             U: FooImports,
         {
-            Self::add_root_to_linker(linker, get)?;
-            Ok(())
-        }
-        pub fn add_root_to_linker<T, U>(
-            linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-        ) -> wasmtime::Result<()>
-        where
-            U: FooImports,
-        {
-            let mut linker = linker.root();
-            linker
-                .func_wrap(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
-                        let r = FooImports::foo(host);
-                        Ok(r)
-                    },
-                )?;
+            Self::add_to_linker_imports_get_host(linker, get)?;
             Ok(())
         }
         /// Instantiates the provided `module` using the specified

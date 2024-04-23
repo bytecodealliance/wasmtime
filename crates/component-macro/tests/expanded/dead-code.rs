@@ -84,6 +84,33 @@ pub mod a {
             pub trait Host {
                 fn f(&mut self) -> LiveType;
             }
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("a:b/interface-with-live-type")?;
+                inst.func_wrap(
+                    "f",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter.get_host(caller.data_mut());
+                        let r = Host::f(host);
+                        Ok((r,))
+                    },
+                )?;
+                Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -91,16 +118,12 @@ pub mod a {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("a:b/interface-with-live-type")?;
-                inst.func_wrap(
-                    "f",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
-                        let r = Host::f(host);
-                        Ok((r,))
-                    },
-                )?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn f(&mut self) -> LiveType {
+                    Host::f(*self)
+                }
             }
         }
         #[allow(clippy::all)]
@@ -108,6 +131,25 @@ pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
             pub trait Host {}
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
+                let mut inst = linker.instance("a:b/interface-with-dead-type")?;
+                Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
             pub fn add_to_linker<T, U>(
                 linker: &mut wasmtime::component::Linker<T>,
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
@@ -115,9 +157,9 @@ pub mod a {
             where
                 U: Host,
             {
-                let mut inst = linker.instance("a:b/interface-with-dead-type")?;
-                Ok(())
+                add_to_linker_get_host(linker, get)
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }

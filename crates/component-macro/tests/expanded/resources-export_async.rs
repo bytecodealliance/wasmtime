@@ -13,8 +13,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::transitive_import::Host + Send,
             T: Send,
+            U: foo::foo::transitive_import::Host + Send,
         {
             foo::foo::transitive_import::add_to_linker(linker, get)?;
             Ok(())
@@ -133,14 +133,25 @@ pub mod foo {
                 ) -> wasmtime::Result<()>;
             }
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host: HostY {}
-            pub fn add_to_linker<T, U>(
+            impl<_T: HostY + ?Sized + Send> HostY for &mut _T {
+                fn drop(
+                    &mut self,
+                    rep: wasmtime::component::Resource<Y>,
+                ) -> wasmtime::Result<()> {
+                    HostY::drop(*self, rep)
+                }
+            }
+            #[wasmtime::component::__internal::async_trait]
+            pub trait Host: Send + HostY {}
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                host_getter: impl GetHost<T>,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
-                U: Host + Send,
             {
                 let mut inst = linker.instance("foo:foo/transitive-import")?;
                 inst.resource(
@@ -148,13 +159,35 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Y>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         HostY::drop(
-                            get(store.data_mut()),
+                            &mut host_getter.get_host(store.data_mut()),
                             wasmtime::component::Resource::new_own(rep),
                         )
                     },
                 )?;
                 Ok(())
             }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host + Send,
+                T: Send,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host + Send,
+                T: Send,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            #[wasmtime::component::__internal::async_trait]
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }
 }

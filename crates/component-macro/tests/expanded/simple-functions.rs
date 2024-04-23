@@ -79,18 +79,18 @@ pub mod foo {
                 fn f5(&mut self) -> (u32, u32);
                 fn f6(&mut self, a: u32, b: u32, c: u32) -> (u32, u32, u32);
             }
-            pub fn add_to_linker<T, U>(
+            pub trait GetHost<T>: Send + Sync + Copy + 'static {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host;
+            }
+            pub fn add_to_linker_get_host<T>(
                 linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
+                host_getter: impl GetHost<T>,
+            ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/simple")?;
                 inst.func_wrap(
                     "f1",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::f1(host);
                         Ok(r)
                     },
@@ -98,7 +98,7 @@ pub mod foo {
                 inst.func_wrap(
                     "f2",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u32,)| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::f2(host, arg0);
                         Ok(r)
                     },
@@ -109,7 +109,7 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0, arg1): (u32, u32)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::f3(host, arg0, arg1);
                         Ok(r)
                     },
@@ -117,7 +117,7 @@ pub mod foo {
                 inst.func_wrap(
                     "f4",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::f4(host);
                         Ok((r,))
                     },
@@ -125,7 +125,7 @@ pub mod foo {
                 inst.func_wrap(
                     "f5",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::f5(host);
                         Ok((r,))
                     },
@@ -136,12 +136,50 @@ pub mod foo {
                         mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0, arg1, arg2): (u32, u32, u32)|
                     {
-                        let host = get(caller.data_mut());
+                        let host = &mut host_getter.get_host(caller.data_mut());
                         let r = Host::f6(host, arg0, arg1, arg2);
                         Ok((r,))
                     },
                 )?;
                 Ok(())
+            }
+            impl<T, U, F> GetHost<T> for F
+            where
+                U: Host,
+                F: Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            {
+                fn get_host<'a>(&self, data: &'a mut T) -> impl Host {
+                    self(data)
+                }
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn f1(&mut self) -> () {
+                    Host::f1(*self)
+                }
+                fn f2(&mut self, a: u32) -> () {
+                    Host::f2(*self, a)
+                }
+                fn f3(&mut self, a: u32, b: u32) -> () {
+                    Host::f3(*self, a, b)
+                }
+                fn f4(&mut self) -> u32 {
+                    Host::f4(*self)
+                }
+                fn f5(&mut self) -> (u32, u32) {
+                    Host::f5(*self)
+                }
+                fn f6(&mut self, a: u32, b: u32, c: u32) -> (u32, u32, u32) {
+                    Host::f6(*self, a, b, c)
+                }
             }
         }
     }
