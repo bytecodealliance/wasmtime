@@ -99,7 +99,7 @@ unsafe impl WasmTy for V128 {
         &self,
         _: &StoreOpaque,
         _: bool,
-        _: &crate::FuncType,
+        _: &crate::HeapType,
     ) -> anyhow::Result<()> {
         unreachable!()
     }

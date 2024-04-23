@@ -79,10 +79,11 @@ macro_rules! accessors {
 impl Val {
     /// Returns the null reference for the given heap type.
     pub fn null_ref(heap_type: HeapType) -> Val {
-        match heap_type {
-            HeapType::Func | HeapType::NoFunc | HeapType::ConcreteFunc(_) => Val::FuncRef(None),
+        match heap_type.top() {
+            HeapType::Func => Val::FuncRef(None),
             HeapType::Extern => Val::ExternRef(None),
-            HeapType::Any | HeapType::I31 | HeapType::None => Val::AnyRef(None),
+            HeapType::Any => Val::AnyRef(None),
+            _ => unreachable!(),
         }
     }
 
@@ -246,11 +247,18 @@ impl Val {
                     HeapType::Func | HeapType::ConcreteFunc(_) => {
                         Func::from_raw(store, raw.get_funcref()).into()
                     }
+
                     HeapType::NoFunc => Ref::Func(None),
+
                     HeapType::Extern => ExternRef::from_raw(store, raw.get_externref()).into(),
-                    HeapType::Any | HeapType::I31 => {
+
+                    HeapType::Any
+                    | HeapType::I31
+                    | HeapType::Array
+                    | HeapType::ConcreteArray(_) => {
                         AnyRef::from_raw(store, raw.get_anyref()).into()
                     }
+
                     HeapType::None => Ref::Any(None),
                 };
                 assert!(
@@ -838,7 +846,7 @@ impl Ref {
         self.ensure_matches_ty(&store, &ty)
             .context("type mismatch: value does not match table element type")?;
 
-        match (self, ty.heap_type().top(store.engine())) {
+        match (self, ty.heap_type().top()) {
             (Ref::Func(None), HeapType::Func) => {
                 assert!(ty.is_nullable());
                 Ok(TableElement::FuncRef(ptr::null_mut()))

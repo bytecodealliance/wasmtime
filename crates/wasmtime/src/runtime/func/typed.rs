@@ -299,8 +299,8 @@ pub unsafe trait WasmTy: Send {
                 (Some(expected_ref), Some(actual_ref)) if actual_ref.heap_type().is_concrete() => {
                     expected_ref
                         .heap_type()
-                        .top(engine)
-                        .ensure_matches(engine, &actual_ref.heap_type().top(engine))
+                        .top()
+                        .ensure_matches(engine, &actual_ref.heap_type().top())
                 }
                 _ => expected.ensure_matches(engine, &actual),
             },
@@ -327,7 +327,7 @@ pub unsafe trait WasmTy: Send {
         &self,
         store: &StoreOpaque,
         nullable: bool,
-        actual: &FuncType,
+        actual: &HeapType,
     ) -> Result<()>;
 
     // Is this an externref?
@@ -391,7 +391,7 @@ macro_rules! integers {
                 true
             }
             #[inline]
-            fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+            fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
                 unreachable!()
             }
             #[inline]
@@ -439,7 +439,7 @@ macro_rules! floats {
                 true
             }
             #[inline]
-            fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+            fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
                 unreachable!()
             }
             #[inline]
@@ -486,7 +486,7 @@ unsafe impl WasmTy for NoFunc {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
         match self._inner {}
     }
 
@@ -534,13 +534,13 @@ unsafe impl WasmTy for Option<NoFunc> {
         &self,
         _: &StoreOpaque,
         nullable: bool,
-        func_ty: &FuncType,
+        ty: &HeapType,
     ) -> Result<()> {
         if nullable {
             // `(ref null nofunc) <: (ref null $f)` for all function types `$f`.
             Ok(())
         } else {
-            bail!("argument type mismatch: expected (ref {func_ty}), found null reference")
+            bail!("argument type mismatch: expected non-nullable (ref {ty}), found null reference")
         }
     }
 
@@ -588,9 +588,10 @@ unsafe impl WasmTy for Func {
         &self,
         store: &StoreOpaque,
         _nullable: bool,
-        actual: &FuncType,
+        expected: &HeapType,
     ) -> Result<()> {
-        self.ensure_matches_ty(store, actual)
+        let expected = expected.unwrap_concrete_func();
+        self.ensure_matches_ty(store, expected)
             .context("argument type mismatch for reference to concrete type")
     }
 
@@ -643,15 +644,16 @@ unsafe impl WasmTy for Option<Func> {
         &self,
         store: &StoreOpaque,
         nullable: bool,
-        func_ty: &FuncType,
+        expected: &HeapType,
     ) -> Result<()> {
         if let Some(f) = self {
-            f.ensure_matches_ty(store, func_ty)
+            let expected = expected.unwrap_concrete_func();
+            f.ensure_matches_ty(store, expected)
                 .context("argument type mismatch for reference to concrete type")
         } else if nullable {
             Ok(())
         } else {
-            bail!("argument type mismatch: expected (ref {func_ty}), found null reference")
+            bail!("argument type mismatch: expected non-nullable (ref {expected}), found null reference")
         }
     }
 
@@ -808,10 +810,11 @@ macro_rules! impl_wasm_params {
                     }
 
                     if $t::valtype().is_ref() {
-                        let p = _func_ty.param(_i).unwrap();
-                        let r = p.unwrap_ref();
-                        if let Some(c) = r.heap_type().as_concrete() {
-                            $t.dynamic_concrete_type_check(_store, r.is_nullable(), c)?;
+                        let param_ty = _func_ty.param(_i).unwrap();
+                        let ref_ty = param_ty.unwrap_ref();
+                        let heap_ty = ref_ty.heap_type();
+                        if heap_ty.is_concrete() {
+                            $t.dynamic_concrete_type_check(_store, ref_ty.is_nullable(), heap_ty)?;
                         }
                     }
 

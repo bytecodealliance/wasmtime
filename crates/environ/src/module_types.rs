@@ -25,9 +25,9 @@ impl ModuleTypes {
         self.wasm_types.iter()
     }
 
-    /// Get the type at the specified index.
-    pub fn get(&self, ty: ModuleInternedTypeIndex) -> &WasmSubType {
-        &self.wasm_types[ty]
+    /// Get the type at the specified index, if it exists.
+    pub fn get(&self, ty: ModuleInternedTypeIndex) -> Option<&WasmSubType> {
+        self.wasm_types.get(ty)
     }
 
     /// Get an iterator over all recursion groups defined in this module and

@@ -13,7 +13,7 @@ use cranelift_frontend::Variable;
 use cranelift_wasm::{
     EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
     HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
-    TypeIndex, WasmHeapType, WasmResult,
+    TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
 };
 use std::mem;
 use wasmparser::Operator;
@@ -1228,6 +1228,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::Extern
             | WasmHeapType::Any
             | WasmHeapType::I31
+            | WasmHeapType::Array
+            | WasmHeapType::ConcreteArray(_)
             | WasmHeapType::None => {
                 unreachable!()
             }
@@ -1418,15 +1420,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let grow = match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
-                self.builtin_functions.table_grow_func_ref(&mut pos.func)
-            }
-
-            ty @ WasmHeapType::Any
-            | ty @ WasmHeapType::I31
-            | ty @ WasmHeapType::None
-            | ty @ WasmHeapType::Extern => gc::gc_ref_table_grow_builtin(ty, self, &mut pos.func)?,
+        let ty = self.module.table_plans[table_index].table.wasm_ty.heap_type;
+        let grow = if ty.is_vmgcref_type() {
+            gc::gc_ref_table_grow_builtin(ty, self, &mut pos.func)?
+        } else {
+            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
+            self.builtin_functions.table_grow_func_ref(&mut pos.func)
         };
 
         let vmctx = self.vmctx_val(&mut pos);
@@ -1448,9 +1447,22 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let plan = &self.module.table_plans[table_index];
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].as_ref().unwrap();
-        match plan.table.wasm_ty.heap_type {
+        let heap_ty = plan.table.wasm_ty.heap_type;
+        match heap_ty.top() {
+            // `i31ref`s never need barriers, and therefore don't need to go
+            // through the GC compiler.
+            WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
+                let (src, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::unbarriered_load_gc_ref(self, builder, WasmHeapType::I31, src, flags)
+            }
+
             // GC-managed types.
-            WasmHeapType::Any | WasmHeapType::Extern | WasmHeapType::None => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
                 let (src, flags) = table_data.prepare_table_addr(
                     builder,
                     index,
@@ -1466,26 +1478,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 )
             }
 
-            // `i31ref`s never need barriers, and therefore don't need to go
-            // through the GC compiler.
-            WasmHeapType::I31 => {
-                let (src, flags) = table_data.prepare_table_addr(
-                    builder,
-                    index,
-                    self.pointer_type(),
-                    self.isa.flags().enable_table_access_spectre_mitigation(),
-                );
-                gc::unbarriered_load_gc_ref(self, builder, WasmHeapType::I31, src, flags)
-            }
-
             // Function types.
-            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
-                match plan.style {
-                    TableStyle::CallerChecksSignature => {
-                        Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index))
-                    }
+            WasmHeapTopType::Func => match plan.style {
+                TableStyle::CallerChecksSignature => {
+                    Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index))
                 }
-            }
+            },
         }
     }
 
@@ -1500,9 +1498,22 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let plan = &self.module.table_plans[table_index];
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].as_ref().unwrap();
-        match plan.table.wasm_ty.heap_type {
+        let heap_ty = plan.table.wasm_ty.heap_type;
+        match heap_ty.top() {
+            // `i31ref`s never need GC barriers, and therefore don't need to go
+            // through the GC compiler.
+            WasmHeapTopType::Any if heap_ty == WasmHeapType::I31 => {
+                let (addr, flags) = table_data.prepare_table_addr(
+                    builder,
+                    index,
+                    self.pointer_type(),
+                    self.isa.flags().enable_table_access_spectre_mitigation(),
+                );
+                gc::unbarriered_store_gc_ref(self, builder, WasmHeapType::I31, addr, value, flags)
+            }
+
             // GC-managed types.
-            WasmHeapType::Any | WasmHeapType::Extern | WasmHeapType::None => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
                 let (dst, flags) = table_data.prepare_table_addr(
                     builder,
                     index,
@@ -1519,20 +1530,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 )
             }
 
-            // `i31ref`s never need GC barriers, and therefore don't need to go
-            // through the GC compiler.
-            WasmHeapType::I31 => {
-                let (addr, flags) = table_data.prepare_table_addr(
-                    builder,
-                    index,
-                    self.pointer_type(),
-                    self.isa.flags().enable_table_access_spectre_mitigation(),
-                );
-                gc::unbarriered_store_gc_ref(self, builder, WasmHeapType::I31, addr, value, flags)
-            }
-
             // Function types.
-            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
+            WasmHeapTopType::Func => {
                 match plan.style {
                     TableStyle::CallerChecksSignature => {
                         let (elem_addr, flags) = table_data.prepare_table_addr(
@@ -1565,14 +1564,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let libcall = match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
-                self.builtin_functions.table_fill_func_ref(&mut pos.func)
-            }
-            ty @ WasmHeapType::Extern
-            | ty @ WasmHeapType::Any
-            | ty @ WasmHeapType::I31
-            | ty @ WasmHeapType::None => gc::gc_ref_table_fill_builtin(ty, self, &mut pos.func)?,
+        let ty = self.module.table_plans[table_index].table.wasm_ty.heap_type;
+        let libcall = if ty.is_vmgcref_type() {
+            gc::gc_ref_table_fill_builtin(ty, self, &mut pos.func)?
+        } else {
+            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
+            self.builtin_functions.table_fill_func_ref(&mut pos.func)
         };
 
         let vmctx = self.vmctx_val(&mut pos);
@@ -1624,11 +1621,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: cranelift_codegen::cursor::FuncCursor,
         ht: WasmHeapType,
     ) -> WasmResult<ir::Value> {
-        Ok(match ht {
-            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
-                pos.ins().iconst(self.pointer_type(), 0)
-            }
-            WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
+        Ok(match ht.top() {
+            WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
                 pos.ins().null(self.reference_type(ht))
             }
         })

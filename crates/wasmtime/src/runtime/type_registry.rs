@@ -463,7 +463,7 @@ impl TypeRegistryInner {
             let entry = self.register_rec_group(
                 &map,
                 module_group.clone(),
-                iter_entity_range(module_group.clone()).map(|ty| types.get(ty).clone()),
+                iter_entity_range(module_group.clone()).map(|ty| types[ty].clone()),
             );
 
             for (module_ty, engine_ty) in
