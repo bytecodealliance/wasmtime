@@ -241,12 +241,30 @@ typedef union wasmtime_valunion {
   wasmtime_externref_t *externref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_FUNCREF
   ///
-  /// If this value represents a `ref.null func` value then the `store_id` field
-  /// is set to zero.
+  /// Use #wasmtime_funcref_is_null to test whether this is a null function
+  /// reference.
   wasmtime_func_t funcref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_V128
   wasmtime_v128 v128;
 } wasmtime_valunion_t;
+
+/// \brief Initialize a `wasmtime_func_t` value as a null function reference.
+///
+/// This function will initialize the `func` provided to be a null function
+/// reference. Used in conjunction with #wasmtime_val_t and
+/// #wasmtime_valunion_t.
+static inline void wasmtime_funcref_set_null(wasmtime_func_t *func) {
+  func->store_id = 0;
+}
+
+/// \brief Helper function to test whether the `func` provided is a null
+/// function reference.
+///
+/// This function is used with #wasmtime_val_t and #wasmtime_valunion_t and its
+/// `funcref` field. This will test whether the field represents a null funcref.
+static inline bool wasmtime_funcref_is_null(const wasmtime_func_t *func) {
+  return func->store_id == 0;
+}
 
 /**
  * \typedef wasmtime_val_raw_t

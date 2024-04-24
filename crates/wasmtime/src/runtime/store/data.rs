@@ -237,7 +237,7 @@ impl StoreId {
     }
 }
 
-#[repr(C)] // used by reference in the C API
+#[repr(C)] // used by reference in the C API, also in `wasmtime_func_t`.
 pub struct Stored<T> {
     store_id: StoreId,
     index: usize,

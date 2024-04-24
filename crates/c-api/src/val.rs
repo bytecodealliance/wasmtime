@@ -3,7 +3,7 @@ use crate::{
     from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_anyref_t,
     wasmtime_externref_t, wasmtime_valkind_t, WasmtimeStoreContextMut, WASM_I32,
 };
-use std::mem::{self, ManuallyDrop, MaybeUninit};
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
 use wasmtime::{AsContextMut, Func, HeapType, Ref, RootScope, Val, ValType};
 
@@ -171,9 +171,28 @@ where
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct wasmtime_func_t {
-    pub store_id: u64,
-    pub index: usize,
+pub union wasmtime_func_t {
+    store_id: u64,
+    func: Func,
+}
+
+impl wasmtime_func_t {
+    unsafe fn as_wasmtime(&self) -> Option<Func> {
+        if self.store_id == 0 {
+            None
+        } else {
+            Some(self.func)
+        }
+    }
+}
+
+impl From<Option<Func>> for wasmtime_func_t {
+    fn from(func: Option<Func>) -> wasmtime_func_t {
+        match func {
+            Some(func) => wasmtime_func_t { func },
+            None => wasmtime_func_t { store_id: 0 },
+        }
+    }
 }
 
 impl wasmtime_val_t {
@@ -231,13 +250,7 @@ impl wasmtime_val_t {
             Val::FuncRef(func) => wasmtime_val_t {
                 kind: crate::WASMTIME_FUNCREF,
                 of: wasmtime_val_union {
-                    funcref: match func {
-                        None => wasmtime_func_t {
-                            store_id: 0,
-                            index: 0,
-                        },
-                        Some(func) => unsafe { mem::transmute::<Func, wasmtime_func_t>(func) },
-                    },
+                    funcref: func.into(),
                 },
             },
             Val::V128(val) => wasmtime_val_t {
@@ -275,15 +288,7 @@ impl wasmtime_val_t {
             crate::WASMTIME_EXTERNREF => {
                 Val::ExternRef(self.of.externref.as_ref().map(|e| e.to_rooted(cx)))
             }
-            crate::WASMTIME_FUNCREF => {
-                let store = self.of.funcref.store_id;
-                let index = self.of.funcref.index;
-                Val::FuncRef(if store == 0 && index == 0 {
-                    None
-                } else {
-                    Some(mem::transmute::<wasmtime_func_t, Func>(self.of.funcref))
-                })
-            }
+            crate::WASMTIME_FUNCREF => Val::FuncRef(self.of.funcref.as_wasmtime()),
             other => panic!("unknown wasmtime_valkind_t: {}", other),
         }
     }
