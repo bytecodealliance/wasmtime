@@ -475,7 +475,7 @@ impl Inst {
         src: Reg,
         dst: Writable<Reg>,
     ) -> Inst {
-        if let Imm8Reg::Imm8 { imm: num_bits } = num_bits.clone().to_imm8_reg() {
+        if let &Imm8Reg::Imm8 { imm: num_bits } = num_bits.as_imm8_reg() {
             debug_assert!(num_bits < size.to_bits());
         }
         debug_assert!(dst.to_reg().class() == RegClass::Int);
@@ -1542,14 +1542,14 @@ impl PrettyPrint for Inst {
             } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                match num_bits.clone().to_imm8_reg() {
-                    Imm8Reg::Reg { reg } => {
+                match num_bits.as_imm8_reg() {
+                    &Imm8Reg::Reg { reg } => {
                         let reg = pretty_print_reg(reg, 1, allocs);
                         let op = ljustify2(kind.to_string(), suffix_bwlq(*size));
                         format!("{op} {reg}, {src}, {dst}")
                     }
 
-                    Imm8Reg::Imm8 { imm: num_bits } => {
+                    &Imm8Reg::Imm8 { imm: num_bits } => {
                         let op = ljustify2(kind.to_string(), suffix_bwlq(*size));
                         format!("{op} ${num_bits}, {src}, {dst}")
                     }
@@ -2280,7 +2280,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_use(src.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
-            if let Imm8Reg::Reg { reg } = num_bits.clone().to_imm8_reg() {
+            if let &Imm8Reg::Reg { reg } = num_bits.as_imm8_reg() {
                 collector.reg_fixed_use(reg, regs::rcx());
             }
         }

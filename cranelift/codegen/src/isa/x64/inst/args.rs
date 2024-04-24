@@ -263,10 +263,10 @@ macro_rules! newtype_of_reg {
                 }
             }
 
-            /// Convert this newtype into its underlying `Imm8Reg`.
+            /// Borrow this newtype as its underlying `Imm8Reg`.
             #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn to_imm8_reg(self) -> Imm8Reg {
-                self.0
+            pub fn as_imm8_reg(&self) -> &Imm8Reg {
+                &self.0
             }
         }
     };
