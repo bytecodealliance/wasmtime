@@ -267,7 +267,7 @@ fn wasm_call_signature(
 /// Returns the reference type to use for the provided wasm type.
 fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht {
-        WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => pointer_type,
+        WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => pointer_type,
         WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
             match pointer_type {
                 ir::types::I32 => ir::types::R32,

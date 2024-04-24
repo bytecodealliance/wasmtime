@@ -1773,7 +1773,10 @@ fn call_wasm_passing_subtype_func_param() -> anyhow::Result<()> {
     let h_ty = FuncType::new(
         &engine,
         None,
-        Some(ValType::Ref(RefType::new(true, HeapType::ConcreteFunc(g_ty)))),
+        Some(ValType::Ref(RefType::new(
+            true,
+            HeapType::ConcreteFunc(g_ty),
+        ))),
     );
     let h = Func::new(&mut store, h_ty, move |_caller, _params, results| {
         results[0] = Val::FuncRef(Some(g.clone()));

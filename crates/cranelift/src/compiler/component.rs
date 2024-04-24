@@ -43,7 +43,7 @@ impl<'a> TrampolineCompiler<'a> {
     ) -> TrampolineCompiler<'a> {
         let isa = &*compiler.isa;
         let signature = component.trampolines[index];
-        let ty = &types[signature];
+        let ty = types[signature].unwrap_func();
         let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
             match abi {
@@ -127,7 +127,7 @@ impl<'a> TrampolineCompiler<'a> {
         let pointer_type = self.isa.pointer_type();
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
-        let wasm_func_ty = &self.types[self.signature];
+        let wasm_func_ty = self.types[self.signature].unwrap_func();
 
         // More handling is necessary here if this changes
         assert!(matches!(
@@ -291,7 +291,10 @@ impl<'a> TrampolineCompiler<'a> {
         host_args.push(args[2]);
 
         // Currently this only support resources represented by `i32`
-        assert_eq!(self.types[self.signature].params()[0], WasmValType::I32);
+        assert_eq!(
+            self.types[self.signature].unwrap_func().params()[0],
+            WasmValType::I32
+        );
         let (host_sig, offset) = host::resource_new32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);
@@ -322,7 +325,10 @@ impl<'a> TrampolineCompiler<'a> {
         host_args.push(args[2]);
 
         // Currently this only support resources represented by `i32`
-        assert_eq!(self.types[self.signature].returns()[0], WasmValType::I32);
+        assert_eq!(
+            self.types[self.signature].unwrap_func().returns()[0],
+            WasmValType::I32
+        );
         let (host_sig, offset) = host::resource_rep32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);
@@ -493,7 +499,7 @@ impl<'a> TrampolineCompiler<'a> {
 
             let sig = crate::wasm_call_signature(
                 self.isa,
-                &self.types[self.signature],
+                &self.types[self.signature].unwrap_func(),
                 &self.compiler.tunables,
             );
             let sig_ref = self.builder.import_signature(sig);
@@ -586,7 +592,7 @@ impl<'a> TrampolineCompiler<'a> {
             // and those are used to load the actual wasm parameters.
             Abi::Array => {
                 let results = self.compiler.load_values_from_array(
-                    self.types[self.signature].params(),
+                    self.types[self.signature].unwrap_func().params(),
                     &mut self.builder,
                     block0_params[2],
                     block0_params[3],
@@ -613,7 +619,7 @@ impl<'a> TrampolineCompiler<'a> {
                 let (ptr, len) = (block0_params[2], block0_params[3]);
                 self.compiler.store_values_to_array(
                     &mut self.builder,
-                    self.types[self.signature].returns(),
+                    self.types[self.signature].unwrap_func().returns(),
                     results,
                     ptr,
                     len,

@@ -873,7 +873,7 @@ impl ComponentItem {
             TypeDef::Module(idx) => Self::Module(Module::from(*idx, ty)),
             TypeDef::CoreFunc(idx) => Self::CoreFunc(FuncType::from_wasm_func_type(
                 engine,
-                ty.types[*idx].clone(),
+                ty.types[*idx].unwrap_func().clone(),
             )),
             TypeDef::Resource(idx) => {
                 let resource_index = ty.types[*idx].ty;

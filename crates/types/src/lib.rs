@@ -523,6 +523,95 @@ impl WasmFuncType {
     }
 }
 
+/// A function, array, or struct type.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum WasmCompositeType {
+    Func(WasmFuncType),
+    //
+    // TODO: Array and struct types.
+}
+
+impl WasmCompositeType {
+    #[inline]
+    pub fn is_func(&self) -> bool {
+        matches!(self, Self::Func(_))
+    }
+
+    #[inline]
+    pub fn as_func(&self) -> Option<&WasmFuncType> {
+        match self {
+            WasmCompositeType::Func(f) => Some(f),
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_func(&self) -> &WasmFuncType {
+        self.as_func().unwrap()
+    }
+}
+
+impl TypeTrace for WasmCompositeType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            WasmCompositeType::Func(f) => f.trace(func),
+        }
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            WasmCompositeType::Func(f) => f.trace_mut(func),
+        }
+    }
+}
+
+/// A concrete, user-defined (or host-defined) Wasm type.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct WasmSubType {
+    // TODO: is_final, supertype
+    //
+    /// The array, function, or struct that is defined.
+    pub composite_type: WasmCompositeType,
+}
+
+impl WasmSubType {
+    #[inline]
+    pub fn is_func(&self) -> bool {
+        self.composite_type.is_func()
+    }
+
+    #[inline]
+    pub fn as_func(&self) -> Option<&WasmFuncType> {
+        self.composite_type.as_func()
+    }
+
+    #[inline]
+    pub fn unwrap_func(&self) -> &WasmFuncType {
+        self.composite_type.unwrap_func()
+    }
+}
+
+impl TypeTrace for WasmSubType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        self.composite_type.trace(func)
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        self.composite_type.trace_mut(func)
+    }
+}
+
 /// A recursive type group.
 ///
 /// Types within a recgroup can have forward references to each other, which
@@ -536,7 +625,7 @@ impl WasmFuncType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmRecGroup {
     /// The types inside of this recgroup.
-    pub types: Box<[WasmFuncType]>,
+    pub types: Box<[WasmSubType]>,
 }
 
 impl TypeTrace for WasmRecGroup {
@@ -1059,6 +1148,27 @@ pub trait TypeConvert {
             wasm_ty: self.convert_ref_type(ty.element_type),
             minimum: ty.initial,
             maximum: ty.maximum,
+        }
+    }
+
+    fn convert_sub_type(&self, ty: &wasmparser::SubType) -> WasmResult<WasmSubType> {
+        if ty.supertype_idx.is_some() {
+            return Err(wasm_unsupported!("wasm gc: explicit subtyping"));
+        }
+        let composite_type = self.convert_composite_type(&ty.composite_type)?;
+        Ok(WasmSubType { composite_type })
+    }
+
+    fn convert_composite_type(
+        &self,
+        ty: &wasmparser::CompositeType,
+    ) -> WasmResult<WasmCompositeType> {
+        match ty {
+            wasmparser::CompositeType::Func(f) => {
+                Ok(WasmCompositeType::Func(self.convert_func_type(f)))
+            }
+            wasmparser::CompositeType::Array(_) => Err(wasm_unsupported!("wasm gc: array types")),
+            wasmparser::CompositeType::Struct(_) => Err(wasm_unsupported!("wasm gc: struct types")),
         }
     }
 

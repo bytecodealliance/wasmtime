@@ -1,8 +1,8 @@
 use crate::{linker::DefinitionType, Engine, FuncType};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex, WasmFuncType,
-    WasmHeapType, WasmRefType, WasmValType,
+    EntityType, Global, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex,
+    WasmCompositeType, WasmHeapType, WasmRefType, WasmSubType, WasmValType,
 };
 
 pub struct MatchCx<'a> {
@@ -36,7 +36,7 @@ impl MatchCx<'_> {
             None => panic!("{actual:?} is not registered"),
         };
 
-        Err(func_ty_mismatch(msg, &expected, &actual))
+        Err(concrete_type_mismatch(msg, &expected, &actual))
     }
 
     /// Validates that the `expected` type matches the type of `actual`
@@ -96,7 +96,7 @@ pub fn entity_ty(
                 if expected == actual {
                     Ok(())
                 } else {
-                    Err(func_ty_mismatch(
+                    Err(concrete_type_mismatch(
                         "function types incompatible",
                         expected,
                         actual,
@@ -109,22 +109,29 @@ pub fn entity_ty(
     }
 }
 
-fn func_ty_mismatch(msg: &str, expected: &WasmFuncType, actual: &WasmFuncType) -> anyhow::Error {
-    let render = |ty: &WasmFuncType| {
-        let params = ty
-            .params()
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let returns = ty
-            .returns()
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!("`({}) -> ({})`", params, returns)
+fn concrete_type_mismatch(
+    msg: &str,
+    expected: &WasmSubType,
+    actual: &WasmSubType,
+) -> anyhow::Error {
+    let render = |ty: &WasmSubType| match &ty.composite_type {
+        WasmCompositeType::Func(ty) => {
+            let params = ty
+                .params()
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let returns = ty
+                .returns()
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("`({}) -> ({})`", params, returns)
+        }
     };
+
     anyhow!(
         "{msg}: expected func of type {}, found func of type {}",
         render(expected),

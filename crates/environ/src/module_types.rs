@@ -1,14 +1,14 @@
-use crate::{Module, PrimaryMap, TypeConvert, TypeIndex, WasmFuncType, WasmHeapType};
+use crate::{Module, PrimaryMap, TypeConvert, TypeIndex, WasmHeapType};
 use cranelift_entity::EntityRef;
 use serde_derive::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     ops::{Index, Range},
 };
-use wasmparser::{CompositeType, UnpackedIndex, Validator, ValidatorId};
+use wasmparser::{UnpackedIndex, Validator, ValidatorId};
 use wasmtime_types::{
-    wasm_unsupported, EngineOrModuleTypeIndex, ModuleInternedRecGroupIndex,
-    ModuleInternedTypeIndex, WasmResult,
+    EngineOrModuleTypeIndex, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, WasmResult,
+    WasmSubType,
 };
 
 /// All types used in a core wasm module.
@@ -21,7 +21,7 @@ use wasmtime_types::{
 #[derive(Default, Serialize, Deserialize)]
 pub struct ModuleTypes {
     rec_groups: PrimaryMap<ModuleInternedRecGroupIndex, Range<ModuleInternedTypeIndex>>,
-    wasm_types: PrimaryMap<ModuleInternedTypeIndex, WasmFuncType>,
+    wasm_types: PrimaryMap<ModuleInternedTypeIndex, WasmSubType>,
 }
 
 impl ModuleTypes {
@@ -29,12 +29,12 @@ impl ModuleTypes {
     /// this module.
     pub fn wasm_types(
         &self,
-    ) -> impl ExactSizeIterator<Item = (ModuleInternedTypeIndex, &WasmFuncType)> {
+    ) -> impl ExactSizeIterator<Item = (ModuleInternedTypeIndex, &WasmSubType)> {
         self.wasm_types.iter()
     }
 
     /// Get the type at the specified index.
-    pub fn get(&self, ty: ModuleInternedTypeIndex) -> &WasmFuncType {
+    pub fn get(&self, ty: ModuleInternedTypeIndex) -> &WasmSubType {
         &self.wasm_types[ty]
     }
 
@@ -58,9 +58,9 @@ impl ModuleTypes {
 }
 
 impl Index<ModuleInternedTypeIndex> for ModuleTypes {
-    type Output = WasmFuncType;
+    type Output = WasmSubType;
 
-    fn index(&self, sig: ModuleInternedTypeIndex) -> &WasmFuncType {
+    fn index(&self, sig: ModuleInternedTypeIndex) -> &WasmSubType {
         &self.wasm_types[sig]
     }
 }
@@ -163,17 +163,8 @@ impl ModuleTypesBuilder {
 
         for id in validator_types.rec_group_elements(rec_group_id) {
             let ty = &validator_types[id];
-            if ty.supertype_idx.is_some() {
-                return Err(wasm_unsupported!("wasm gc: explicit subtyping"));
-            }
-            match &ty.composite_type {
-                CompositeType::Func(ty) => {
-                    let wasm_ty = WasmparserTypeConverter::new(self, module).convert_func_type(ty);
-                    self.wasm_func_type_in_rec_group(id, wasm_ty);
-                }
-                CompositeType::Array(_) => return Err(wasm_unsupported!("wasm gc: array types")),
-                CompositeType::Struct(_) => return Err(wasm_unsupported!("wasm gc: struct types")),
-            }
+            let wasm_ty = WasmparserTypeConverter::new(self, module).convert_sub_type(ty)?;
+            self.wasm_sub_type_in_rec_group(id, wasm_ty);
         }
 
         Ok(self.end_rec_group(rec_group_id))
@@ -275,18 +266,18 @@ impl ModuleTypesBuilder {
         Ok(interned_type)
     }
 
-    /// Define a new Wasm function type while we are defining a rec group.
-    fn wasm_func_type_in_rec_group(
+    /// Define a new Wasm type while we are defining a rec group.
+    fn wasm_sub_type_in_rec_group(
         &mut self,
         id: wasmparser::types::CoreTypeId,
-        func_ty: WasmFuncType,
+        ty: WasmSubType,
     ) -> ModuleInternedTypeIndex {
         assert!(
             self.defining_rec_group.is_some(),
             "must be defining a rec group to define new types"
         );
 
-        let module_interned_index = self.types.wasm_types.push(func_ty);
+        let module_interned_index = self.types.wasm_types.push(ty);
         debug_assert_eq!(
             self.wasmparser_to_wasmtime.get(&id),
             Some(&module_interned_index),
@@ -309,11 +300,9 @@ impl ModuleTypesBuilder {
         self.types.rec_group_elements(rec_group)
     }
 
-    /// Returns an iterator over all the wasm function signatures found within
-    /// this module.
-    pub fn wasm_signatures(
-        &self,
-    ) -> impl Iterator<Item = (ModuleInternedTypeIndex, &WasmFuncType)> {
+    /// Returns an iterator over all the unique wasm types defined thus far
+    /// within this builder.
+    pub fn wasm_types(&self) -> impl Iterator<Item = (ModuleInternedTypeIndex, &WasmSubType)> {
         self.types.wasm_types()
     }
 }

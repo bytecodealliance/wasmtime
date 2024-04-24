@@ -129,9 +129,10 @@ impl Val {
             Val::V128(_) => ValType::V128,
             Val::ExternRef(_) => ValType::EXTERNREF,
             Val::FuncRef(None) => ValType::NULLFUNCREF,
-            Val::FuncRef(Some(f)) => {
-                ValType::Ref(RefType::new(false, HeapType::ConcreteFunc(f.load_ty(store))))
-            }
+            Val::FuncRef(Some(f)) => ValType::Ref(RefType::new(
+                false,
+                HeapType::ConcreteFunc(f.load_ty(store)),
+            )),
             Val::AnyRef(None) => ValType::NULLREF,
             Val::AnyRef(Some(_)) => {
                 assert!(VMGcRef::ONLY_EXTERN_REF_AND_I31);

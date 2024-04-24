@@ -1983,7 +1983,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         let index = self.module.types[index];
-        let sig = crate::wasm_call_signature(self.isa, &self.types[index], &self.tunables);
+        let sig =
+            crate::wasm_call_signature(self.isa, self.types[index].unwrap_func(), &self.tunables);
         Ok(func.import_signature(sig))
     }
 
@@ -1993,7 +1994,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
         let sig = self.module.functions[index].signature;
-        let sig = crate::wasm_call_signature(self.isa, &self.types[sig], &self.tunables);
+        let sig =
+            crate::wasm_call_signature(self.isa, self.types[sig].unwrap_func(), &self.tunables);
         let signature = func.import_signature(sig);
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {

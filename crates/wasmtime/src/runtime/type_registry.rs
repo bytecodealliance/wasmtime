@@ -20,7 +20,7 @@ use std::{
 };
 use wasmtime_environ::{
     iter_entity_range, EngineOrModuleTypeIndex, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
-    TypeTrace, VMSharedTypeIndex, WasmFuncType, WasmRecGroup,
+    TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
 };
 use wasmtime_slab::{Id as SlabId, Slab};
 
@@ -169,11 +169,11 @@ fn slab_id_to_shared_type_index(id: SlabId) -> VMSharedTypeIndex {
 /// Automatically unregisters the type on drop. (Unless other `RegisteredTypes`
 /// are keeping the type registered).
 ///
-/// Dereferences to its underlying `WasmFuncType`.
+/// Dereferences to its underlying `WasmSubType`.
 pub struct RegisteredType {
     engine: Engine,
     entry: RecGroupEntry,
-    ty: Arc<WasmFuncType>,
+    ty: Arc<WasmSubType>,
     index: VMSharedTypeIndex,
 }
 
@@ -218,7 +218,7 @@ impl Drop for RegisteredType {
 }
 
 impl std::ops::Deref for RegisteredType {
-    type Target = WasmFuncType;
+    type Target = WasmSubType;
 
     fn deref(&self) -> &Self::Target {
         &self.ty
@@ -254,7 +254,7 @@ impl Hash for RegisteredType {
 impl RegisteredType {
     /// Constructs a new `RegisteredType`, registering the given type with the
     /// engine's `TypeRegistry`.
-    pub fn new(engine: &Engine, ty: WasmFuncType) -> RegisteredType {
+    pub fn new(engine: &Engine, ty: WasmSubType) -> RegisteredType {
         let (entry, index, ty) = {
             log::trace!("RegisteredType::new({ty:?})");
 
@@ -317,7 +317,7 @@ impl RegisteredType {
         engine: Engine,
         entry: RecGroupEntry,
         index: VMSharedTypeIndex,
-        ty: Arc<WasmFuncType>,
+        ty: Arc<WasmSubType>,
     ) -> Self {
         debug_assert!(entry.0.registrations.load(Acquire) != 0);
         RegisteredType {
@@ -432,7 +432,7 @@ struct TypeRegistryInner {
     // Wasm type.
     //
     // These types are always canonicalized for runtime usage.
-    types: Slab<Arc<WasmFuncType>>,
+    types: Slab<Arc<WasmSubType>>,
 
     // A map that lets you walk backwards from a `VMSharedTypeIndex` to its
     // `RecGroupEntry`.
@@ -511,7 +511,7 @@ impl TypeRegistryInner {
         &mut self,
         map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         range: Range<ModuleInternedTypeIndex>,
-        types: impl ExactSizeIterator<Item = WasmFuncType>,
+        types: impl ExactSizeIterator<Item = WasmSubType>,
     ) -> RecGroupEntry {
         debug_assert_eq!(iter_entity_range(range.clone()).len(), types.len());
 
@@ -594,7 +594,7 @@ impl TypeRegistryInner {
     }
 
     /// Is the given type canonicalized for runtime usage this registry?
-    fn assert_canonicalized_for_runtime_usage_in_this_registry(&self, ty: &WasmFuncType) {
+    fn assert_canonicalized_for_runtime_usage_in_this_registry(&self, ty: &WasmSubType) {
         ty.trace::<_, ()>(&mut |index| match index {
             EngineOrModuleTypeIndex::RecGroup(_) | EngineOrModuleTypeIndex::Module(_) => {
                 panic!("not canonicalized for runtime usage: {ty:?}")
@@ -619,7 +619,7 @@ impl TypeRegistryInner {
     fn insert_one_type_from_rec_group(
         &mut self,
         module_index: ModuleInternedTypeIndex,
-        ty: WasmFuncType,
+        ty: WasmSubType,
     ) -> VMSharedTypeIndex {
         // Despite being canonicalized for runtime usage, this type may still
         // have forward references to other types in the rec group we haven't
@@ -648,7 +648,7 @@ impl TypeRegistryInner {
     ///
     /// The returned entry will have already had its reference count incremented
     /// on behalf of callers.
-    fn register_singleton_rec_group(&mut self, ty: WasmFuncType) -> RecGroupEntry {
+    fn register_singleton_rec_group(&mut self, ty: WasmSubType) -> RecGroupEntry {
         self.assert_canonicalized_for_runtime_usage_in_this_registry(&ty);
 
         // This type doesn't have any module-level type references, since it is
@@ -800,7 +800,7 @@ impl TypeRegistry {
     /// still using the resulting value! Use the `RegisteredType::root`
     /// constructor if you need to ensure that property and you don't have some
     /// other mechanism already keeping the type registered.
-    pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmFuncType>> {
+    pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmSubType>> {
         let id = shared_type_index_to_slab_id(index);
         let inner = self.0.read().unwrap();
         inner.types.get(id).cloned()
