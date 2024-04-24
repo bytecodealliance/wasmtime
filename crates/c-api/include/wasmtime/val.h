@@ -43,12 +43,20 @@ typedef struct wasmtime_anyref {
   uint32_t __private2;
 } wasmtime_anyref_t;
 
-/// Helper macro to create a `wasmtime_anyref_t` value that is null.
-#define WASMTIME_ANYREF_NULL                                                   \
-  { 0 }
+/// \brief Helper function to initialize the `ref` provided to a null anyref
+/// value.
+static inline void wasmtime_anyref_set_null(wasmtime_anyref_t *ref) {
+  ref->store_id = 0;
+}
 
-/// Helper macro to test whether a `wasmtime_anyref_t` value references null.
-#define WASMTIME_ANYREF_IS_NULL(p) ((p).store_id == 0)
+/// \brief Helper function to return whether the provided `ref` points to a null
+/// `anyref` value.
+///
+/// Note that `ref` itself should not be null as null is represented internally
+/// within a #wasmtime_anyref_t value.
+static inline bool wasmtime_anyref_is_null(const wasmtime_anyref_t *ref) {
+  return ref->store_id == 0;
+}
 
 /**
  * \brief Creates a new reference pointing to the same data that `anyref`
@@ -168,12 +176,20 @@ typedef struct wasmtime_externref {
   uint32_t __private2;
 } wasmtime_externref_t;
 
-/// Helper macro to create a `wasmtime_externref_t` value that is null.
-#define WASMTIME_EXTERNREF_NULL                                                \
-  { 0 }
+/// \brief Helper function to initialize the `ref` provided to a null externref
+/// value.
+static inline void wasmtime_externref_set_null(wasmtime_externref_t *ref) {
+  ref->store_id = 0;
+}
 
-/// Helper macro to test whether a `wasmtime_externref_t` value references null.
-#define WASMTIME_EXTERNREF_IS_NULL(p) ((p).store_id == 0)
+/// \brief Helper function to return whether the provided `ref` points to a null
+/// `externref` value.
+///
+/// Note that `ref` itself should not be null as null is represented internally
+/// within a #wasmtime_externref_t value.
+static inline bool wasmtime_externref_is_null(const wasmtime_externref_t *ref) {
+  return ref->store_id == 0;
+}
 
 /**
  * \brief Create a new `externref` value.
