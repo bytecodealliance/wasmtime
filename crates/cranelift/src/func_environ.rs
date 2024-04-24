@@ -759,7 +759,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         };
 
         let table = &self.module.table_plans[index].table;
-        let element_size = if table.wasm_ty.is_gc_heap_type() {
+        let element_size = if table.wasm_ty.is_vmgcref_type() {
             // For GC-managed references, tables store `Option<VMGcRef>`s.
             ir::types::I32.bytes()
         } else {

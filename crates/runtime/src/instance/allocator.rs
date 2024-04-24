@@ -1,9 +1,10 @@
+use crate::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle};
 use crate::memory::Memory;
 use crate::mpk::ProtectionKey;
-use crate::table::{Table, TableElementType};
-use crate::{CompiledModuleId, ModuleRuntimeInfo, Store, VMGcRef, I31};
+use crate::table::Table;
+use crate::{CompiledModuleId, ModuleRuntimeInfo, Store, VMFuncRef, VMGcRef};
 use anyhow::{anyhow, bail, Result};
 use std::{alloc, any::Any, mem, ptr, sync::Arc};
 use wasmtime_environ::{
@@ -557,49 +558,49 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
 }
 
 fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
+    let mut const_evaluator = ConstExprEvaluator::default();
+
     for (table, init) in module.table_initialization.initial_values.iter() {
         match init {
             // Tables are always initially null-initialized at this time
             TableInitialValue::Null { precomputed: _ } => {}
 
-            TableInitialValue::FuncRef(idx) => {
-                let funcref = instance.get_func_ref(*idx).unwrap();
-                let table = unsafe { &mut *instance.get_defined_table(table) };
-                let init = (0..table.size()).map(|_| funcref);
-                table.init_func(0, init)?;
-            }
-
-            TableInitialValue::GlobalGet(idx) => unsafe {
-                let global = instance.defined_or_imported_global_ptr(*idx);
-                let table = &mut *instance.get_defined_table(table);
-                match table.element_type() {
-                    TableElementType::Func => {
-                        let funcref = (*global).as_func_ref();
-                        let init = (0..table.size()).map(|_| funcref);
-                        table.init_func(0, init)?;
+            TableInitialValue::Expr(expr) => {
+                let mut context = ConstEvalContext::new(instance, module);
+                let raw = unsafe {
+                    const_evaluator
+                        .eval(&mut context, expr)
+                        .expect("const expression should be valid")
+                };
+                let idx = module.table_index(table);
+                let table = unsafe { instance.get_defined_table(table).as_mut().unwrap() };
+                match module.table_plans[idx].table.wasm_ty.heap_type {
+                    wasmtime_environ::WasmHeapType::Extern => {
+                        let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
+                        let gc_store = unsafe { (*instance.store()).gc_store() };
+                        let items = (0..table.size())
+                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
+                        table.init_gc_refs(0, items)?;
                     }
-                    TableElementType::GcRef => {
-                        let gc_ref = (*global).as_gc_ref();
-                        let gc_ref = gc_ref.map(|r| r.unchecked_copy());
-                        let init = (0..table.size()).map(|_| {
-                            gc_ref
-                                .as_ref()
-                                .map(|r| (*instance.store()).gc_store().clone_gc_ref(r))
-                        });
-                        table.init_gc_refs(0, init)?;
+
+                    wasmtime_environ::WasmHeapType::Any
+                    | wasmtime_environ::WasmHeapType::I31
+                    | wasmtime_environ::WasmHeapType::None => {
+                        let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
+                        let gc_store = unsafe { (*instance.store()).gc_store() };
+                        let items = (0..table.size())
+                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
+                        table.init_gc_refs(0, items)?;
+                    }
+
+                    wasmtime_environ::WasmHeapType::Func
+                    | wasmtime_environ::WasmHeapType::Concrete(_)
+                    | wasmtime_environ::WasmHeapType::NoFunc => {
+                        let funcref = raw.get_funcref().cast::<VMFuncRef>();
+                        let items = (0..table.size()).map(|_| funcref);
+                        table.init_func(0, items)?;
                     }
                 }
-            },
-
-            TableInitialValue::I31Ref(value) => {
-                let value = VMGcRef::from_i31(I31::wrapping_i32(*value));
-                let table = unsafe { &mut *instance.get_defined_table(table) };
-                let init = (0..table.size()).map(|_| {
-                    // NB: Okay to use `unchecked_copy` because `i31` doesn't
-                    // need GC barriers.
-                    Some(value.unchecked_copy())
-                });
-                table.init_gc_refs(0, init)?;
             }
         }
     }
@@ -614,6 +615,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     for segment in module.table_initialization.segments.iter() {
         let start = get_table_init_start(segment, instance)?;
         instance.table_init_segment(
+            &mut const_evaluator,
             segment.table_index,
             &segment.elements,
             start,

@@ -31,6 +31,7 @@ paste = "1.0.3"
 encoding_rs = { version = "0.8.31", optional = true }
 sptr = "0.3.2"
 wasm-encoder = { workspace = true, optional = true }
+smallvec = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 memfd = "0.6.2"

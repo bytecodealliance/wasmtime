@@ -2,6 +2,7 @@
 //! wasm module (except its callstack and register state). An
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
+use crate::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::export::Export;
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement, TableElementType};
@@ -12,7 +13,7 @@ use crate::vmcontext::{
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, GcStore, Imports, ModuleRuntimeInfo,
-    SendSyncPtr, Store, VMFunctionBody, VMGcRef, WasmFault, I31,
+    SendSyncPtr, Store, VMFunctionBody, VMGcRef, WasmFault,
 };
 use anyhow::Error;
 use anyhow::Result;
@@ -24,13 +25,12 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr};
-use wasmtime_environ::ModuleInternedTypeIndex;
+use wasmtime_environ::WasmHeapType;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, TableElementExpression,
-    TableIndex, TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex,
-    WasmRefType, WasmValType, VMCONTEXT_MAGIC,
+    HostPtr, MemoryIndex, MemoryPlan, Module, ModuleInternedTypeIndex, PrimaryMap, TableIndex,
+    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -362,11 +362,6 @@ impl Instance {
         self.memories
             .iter()
             .map(|(index, (_alloc_index, memory))| (index, memory))
-    }
-
-    /// Return the indexed `VMGlobalDefinition`.
-    fn global(&mut self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
-        unsafe { &*self.global_ptr(index) }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -843,11 +838,13 @@ impl Instance {
             }
             _ => &empty,
         };
-        self.table_init_segment(table_index, elements, dst, src, len)
+        let mut const_evaluator = ConstExprEvaluator::default();
+        self.table_init_segment(&mut const_evaluator, table_index, elements, dst, src, len)
     }
 
     pub(crate) fn table_init_segment(
         &mut self,
+        const_evaluator: &mut ConstExprEvaluator,
         table_index: TableIndex,
         elements: &TableSegmentElements,
         dst: u32,
@@ -859,6 +856,7 @@ impl Instance {
         let table = unsafe { &mut *self.get_table(table_index) };
         let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
         let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
+        let module = self.module().clone();
 
         match elements {
             TableSegmentElements::Functions(funcs) => {
@@ -874,44 +872,42 @@ impl Instance {
                 )?;
             }
             TableSegmentElements::Expressions(exprs) => {
-                let ty = table.element_type();
                 let exprs = exprs
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                match ty {
-                    TableElementType::Func => {
-                        table.init_func(
+                let mut context = ConstEvalContext::new(self, &module);
+                match module.table_plans[table_index].table.wasm_ty.heap_type {
+                    WasmHeapType::Extern => table.init_gc_refs(
+                        dst,
+                        exprs.iter().map(|expr| unsafe {
+                            let raw = const_evaluator
+                                .eval(&mut context, expr)
+                                .expect("const expr should be valid");
+                            VMGcRef::from_raw_u32(raw.get_externref())
+                        }),
+                    )?,
+                    WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => table
+                        .init_gc_refs(
                             dst,
-                            exprs.iter().map(|expr| match expr {
-                                TableElementExpression::Null => std::ptr::null_mut(),
-                                TableElementExpression::Function(idx) => {
-                                    self.get_func_ref(*idx).unwrap()
-                                }
-                                TableElementExpression::GlobalGet(idx) => {
-                                    let global = self.defined_or_imported_global_ptr(*idx);
-                                    unsafe { (*global).as_func_ref() }
-                                }
+                            exprs.iter().map(|expr| unsafe {
+                                let raw = const_evaluator
+                                    .eval(&mut context, expr)
+                                    .expect("const expr should be valid");
+                                VMGcRef::from_raw_u32(raw.get_anyref())
                             }),
-                        )?;
-                    }
-                    TableElementType::GcRef => {
-                        table.init_gc_refs(
+                        )?,
+                    WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => table
+                        .init_func(
                             dst,
-                            exprs.iter().map(|expr| match expr {
-                                TableElementExpression::Null => None,
-                                TableElementExpression::Function(_) => unreachable!(),
-                                TableElementExpression::GlobalGet(idx) => {
-                                    let global = self.defined_or_imported_global_ptr(*idx);
-                                    let gc_ref = unsafe { (*global).as_gc_ref() };
-                                    gc_ref.map(|r| {
-                                        let store = unsafe { &mut *self.store() };
-                                        store.gc_store().clone_gc_ref(r)
-                                    })
-                                }
+                            exprs.iter().map(|expr| unsafe {
+                                const_evaluator
+                                    .eval(&mut context, expr)
+                                    .expect("const expr should be valid")
+                                    .get_funcref()
+                                    .cast()
                             }),
-                        )?;
-                    }
+                        )?,
                 }
             }
         }
@@ -1129,11 +1125,7 @@ impl Instance {
                 let module = self.module();
                 let precomputed = match &module.table_initialization.initial_values[idx] {
                     TableInitialValue::Null { precomputed } => precomputed,
-                    TableInitialValue::FuncRef(_)
-                    | TableInitialValue::GlobalGet(_)
-                    | TableInitialValue::I31Ref(_) => {
-                        unreachable!()
-                    }
+                    TableInitialValue::Expr(_) => unreachable!(),
                 };
                 let func_index = precomputed.get(i as usize).cloned();
                 let func_ref = func_index
@@ -1271,66 +1263,33 @@ impl Instance {
         }
 
         // Initialize the defined globals
-        self.initialize_vmctx_globals(module);
+        let mut const_evaluator = ConstExprEvaluator::default();
+        self.initialize_vmctx_globals(&mut const_evaluator, module);
     }
 
-    unsafe fn initialize_vmctx_globals(&mut self, module: &Module) {
+    unsafe fn initialize_vmctx_globals(
+        &mut self,
+        const_evaluator: &mut ConstExprEvaluator,
+        module: &Module,
+    ) {
         for (index, init) in module.global_initializers.iter() {
+            let mut context = ConstEvalContext::new(self, module);
+            let raw = const_evaluator
+                .eval(&mut context, init)
+                .expect("should be a valid const expr");
+
             let to = self.global_ptr(index);
             let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
 
-            // Initialize the global before writing to it
-            ptr::write(to, VMGlobalDefinition::new());
-
-            match *init {
-                GlobalInit::I32Const(x) => {
-                    let index = module.global_index(index);
-                    if index.index() == 0 {
-                        #[cfg(feature = "wmemcheck")]
-                        {
-                            if let Some(wmemcheck) = &mut self.wmemcheck_state {
-                                wmemcheck.set_stack_size(x as usize);
-                            }
-                        }
-                    }
-                    *(*to).as_i32_mut() = x;
-                }
-                GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
-                GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
-                GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
-                GlobalInit::V128Const(x) => *(*to).as_u128_mut() = x,
-                GlobalInit::GetGlobal(x) => {
-                    let from = if let Some(def_x) = module.defined_global_index(x) {
-                        self.global(def_x)
-                    } else {
-                        &*self.imported_global(x).from
-                    };
-
-                    // GC-managed globals may need to invoke GC barriers,
-                    // everything else is just copy-able bits.
-                    if wasm_ty.is_gc_heap_type() {
-                        let gc_ref = (*from)
-                            .as_gc_ref()
-                            .map(|r| r.unchecked_copy())
-                            .map(|r| (*self.store()).gc_store().clone_gc_ref(&r));
-                        (*to).init_gc_ref(gc_ref);
-                    } else {
-                        ptr::copy_nonoverlapping(from, to, 1);
-                    }
-                }
-                GlobalInit::RefFunc(f) => {
-                    *(*to).as_func_ref_mut() = self.get_func_ref(f).unwrap();
-                }
-                GlobalInit::RefNullConst => match wasm_ty {
-                    // `VMGlobalDefinition::new()` already zeroed out the bits
-                    WasmValType::Ref(WasmRefType { nullable: true, .. }) => {}
-                    ty => panic!("unsupported reference type for global: {:?}", ty),
-                },
-                GlobalInit::RefI31Const(x) => {
-                    let gc_ref = VMGcRef::from_i31(I31::wrapping_i32(x));
-                    (*to).init_gc_ref(Some(gc_ref));
+            #[cfg(feature = "wmemcheck")]
+            if index.index() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
+                if let Some(wmemcheck) = &mut self.wmemcheck_state {
+                    let size = usize::try_from(raw.get_i32()).unwrap();
+                    wmemcheck.set_stack_size(size);
                 }
             }
+
+            ptr::write(to, VMGlobalDefinition::from_val_raw(wasm_ty, raw));
         }
     }
 

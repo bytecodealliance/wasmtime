@@ -17,6 +17,7 @@ mod arch;
 mod async_yield;
 #[cfg(feature = "component-model")]
 pub mod component;
+mod const_expr;
 mod export;
 mod gc;
 mod imports;

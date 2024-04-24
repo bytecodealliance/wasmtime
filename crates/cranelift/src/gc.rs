@@ -74,7 +74,7 @@ pub fn gc_ref_table_grow_builtin(
     func_env: &mut FuncEnvironment<'_>,
     func: &mut ir::Function,
 ) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_gc_heap_type());
+    debug_assert!(ty.is_vmgcref_type_and_not_i31());
     imp::gc_ref_table_grow_builtin(ty, func_env, func)
 }
 
@@ -85,7 +85,7 @@ pub fn gc_ref_table_fill_builtin(
     func_env: &mut FuncEnvironment<'_>,
     func: &mut ir::Function,
 ) -> WasmResult<ir::FuncRef> {
-    debug_assert!(ty.is_gc_heap_type());
+    debug_assert!(ty.is_vmgcref_type_and_not_i31());
     imp::gc_ref_table_fill_builtin(ty, func_env, func)
 }
 

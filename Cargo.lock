@@ -3812,6 +3812,7 @@ dependencies = [
  "psm",
  "rand",
  "rustix",
+ "smallvec",
  "sptr",
  "wasm-encoder 0.205.0",
  "wasmtime-asm-macros",
@@ -3835,6 +3836,7 @@ dependencies = [
  "cranelift-entity",
  "serde",
  "serde_derive",
+ "smallvec",
  "thiserror",
  "wasmparser 0.205.0",
 ]

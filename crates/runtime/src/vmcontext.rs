@@ -14,6 +14,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
 pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
 use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_environ::WasmHeapType;
+use wasmtime_environ::WasmValType;
 use wasmtime_environ::{BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC};
 
 /// A function pointer that exposes the array calling convention.
@@ -432,6 +434,62 @@ impl VMGlobalDefinition {
     /// Construct a `VMGlobalDefinition`.
     pub fn new() -> Self {
         Self { storage: [0; 16] }
+    }
+
+    /// Create a `VMGlobalDefinition` from a `ValRaw`.
+    ///
+    /// # Unsafety
+    ///
+    /// This raw value's type must match the given `WasmValType`.
+    pub unsafe fn from_val_raw(wasm_ty: WasmValType, raw: ValRaw) -> Self {
+        let mut global = Self::new();
+        match wasm_ty {
+            WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
+            WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
+            WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
+            WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
+            WasmValType::V128 => *global.as_u128_mut() = raw.get_v128(),
+            WasmValType::Ref(r) => match r.heap_type {
+                WasmHeapType::Extern => {
+                    global.init_gc_ref(VMGcRef::from_raw_u32(raw.get_externref()))
+                }
+                WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
+                    global.init_gc_ref(VMGcRef::from_raw_u32(raw.get_anyref()))
+                }
+                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+                    *global.as_func_ref_mut() = raw.get_funcref().cast()
+                }
+            },
+        }
+        global
+    }
+
+    /// Get this global's value as a `ValRaw`.
+    ///
+    /// # Unsafety
+    ///
+    /// This global's value's type must match the given `WasmValType`.
+    pub unsafe fn to_val_raw(&self, gc_store: &mut GcStore, wasm_ty: WasmValType) -> ValRaw {
+        match wasm_ty {
+            WasmValType::I32 => ValRaw::i32(*self.as_i32()),
+            WasmValType::I64 => ValRaw::i64(*self.as_i64()),
+            WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
+            WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
+            WasmValType::V128 => ValRaw::v128(*self.as_u128()),
+            WasmValType::Ref(r) => match r.heap_type {
+                WasmHeapType::Extern => ValRaw::externref(
+                    self.as_gc_ref()
+                        .map_or(0, |r| gc_store.clone_gc_ref(r).as_raw_u32()),
+                ),
+                WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => ValRaw::anyref(
+                    self.as_gc_ref()
+                        .map_or(0, |r| gc_store.clone_gc_ref(r).as_raw_u32()),
+                ),
+                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+                    ValRaw::funcref(self.as_func_ref().cast())
+                }
+            },
+        }
     }
 
     /// Return a reference to the value as an i32.
@@ -1074,6 +1132,18 @@ impl std::fmt::Debug for ValRaw {
 }
 
 impl ValRaw {
+    /// Create a null reference that is compatible with any of
+    /// `{any,extern,func}ref`.
+    pub fn null() -> ValRaw {
+        unsafe {
+            let raw = mem::MaybeUninit::<Self>::zeroed().assume_init();
+            debug_assert_eq!(raw.get_anyref(), 0);
+            debug_assert_eq!(raw.get_externref(), 0);
+            debug_assert_eq!(raw.get_funcref(), ptr::null_mut());
+            raw
+        }
+    }
+
     /// Creates a WebAssembly `i32` value
     #[inline]
     pub fn i32(i: i32) -> ValRaw {
