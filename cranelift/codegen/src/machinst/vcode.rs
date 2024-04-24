@@ -1260,26 +1260,8 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     #[inline]
-    fn assert_no_vreg_aliases<'a>(&self, list: &'a [VReg]) -> &'a [VReg] {
-        for vreg in list {
-            self.assert_not_vreg_alias(*vreg);
-        }
-        list
-    }
-
-    #[inline]
-    fn assert_not_vreg_alias(&self, vreg: VReg) -> VReg {
-        debug_assert!(self.resolve_vreg_alias(vreg) == vreg);
-        vreg
-    }
-
-    #[inline]
-    fn assert_operand_not_vreg_alias(&self, op: Operand) -> Operand {
-        // It should be true by construction that `Operand`s do not contain any
-        // aliased vregs since they're all collected and mapped when the VCode
-        // is itself constructed.
-        self.assert_not_vreg_alias(op.vreg());
-        op
+    fn assert_no_vreg_aliases(&self, mut list: impl Iterator<Item = VReg>) {
+        debug_assert!(list.all(|vreg| !self.vreg_aliases.contains_key(&vreg)));
     }
 
     /// Get the type of a VReg.
@@ -1356,7 +1338,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         let ret = &self.block_params[start as usize..end as usize];
         // Currently block params are never aliased to another vreg, but
         // double-check just to be sure.
-        self.assert_no_vreg_aliases(ret)
+        self.assert_no_vreg_aliases(ret.iter().copied());
+        ret
     }
 
     fn branch_blockparams(&self, block: BlockIndex, _insn: InsnIndex, succ_idx: usize) -> &[VReg] {
@@ -1366,7 +1349,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         let (branch_block_args_start, branch_block_args_end) = succ_ranges[succ_idx];
         let ret = &self.branch_block_args
             [branch_block_args_start as usize..branch_block_args_end as usize];
-        self.assert_no_vreg_aliases(ret)
+        self.assert_no_vreg_aliases(ret.iter().copied());
+        ret
     }
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
@@ -1392,9 +1376,10 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     fn inst_operands(&self, insn: InsnIndex) -> &[Operand] {
         let (start, end) = self.operand_ranges[insn.index()];
         let ret = &self.operands[start as usize..end as usize];
-        for op in ret {
-            self.assert_operand_not_vreg_alias(*op);
-        }
+        // It should be true by construction that `Operand`s do not contain any
+        // aliased vregs since they're all collected and mapped when the VCode
+        // is itself constructed.
+        self.assert_no_vreg_aliases(ret.iter().map(|op| op.vreg()));
         ret
     }
 
@@ -1407,17 +1392,18 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn reftype_vregs(&self) -> &[VReg] {
-        self.assert_no_vreg_aliases(&self.reftyped_vregs[..])
+        let ret = &self.reftyped_vregs;
+        self.assert_no_vreg_aliases(ret.iter().copied());
+        ret
     }
 
     fn debug_value_labels(&self) -> &[(VReg, InsnIndex, InsnIndex, u32)] {
         // VRegs here are inserted into `debug_value_labels` after code is
-        // generated and aliases are fully defined, so no double-check that
+        // generated and aliases are fully defined, so double-check that
         // aliases are not lingering.
-        for (vreg, ..) in self.debug_value_labels.iter() {
-            self.assert_not_vreg_alias(*vreg);
-        }
-        &self.debug_value_labels[..]
+        let ret = &self.debug_value_labels;
+        self.assert_no_vreg_aliases(ret.iter().map(|&(vreg, ..)| vreg));
+        ret
     }
 
     fn spillslot_size(&self, regclass: RegClass) -> usize {
