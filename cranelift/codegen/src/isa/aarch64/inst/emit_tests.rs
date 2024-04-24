@@ -6136,6 +6136,15 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::FpuMove32 {
+            rd: writable_vreg(8),
+            rn: vreg(4),
+        },
+        "8840201E",
+        "fmov s8, s4",
+    ));
+
+    insns.push((
         Inst::FpuMove128 {
             rd: writable_vreg(17),
             rn: vreg(26),
