@@ -213,7 +213,7 @@ impl Masm for MacroAssembler {
             (RegImm::Reg(rs), rd) => match (rs.class(), rd.class()) {
                 (RegClass::Int, RegClass::Int) => self.asm.mov_rr(rs, rd, size),
                 // TODO: verify whether we should use `fmov sd, sn` for F32.
-                (RegClass::Float, RegClass::Float) => self.asm.fmov64_rr(rs, rd),
+                (RegClass::Float, RegClass::Float) => self.asm.fmov_rr(rs, rd, size),
                 (RegClass::Int, RegClass::Float) => self.asm.mov_to_fpu(rs, rd, size),
                 _ => todo!(),
             },

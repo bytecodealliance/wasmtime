@@ -39,7 +39,7 @@
 ;;       ldur    w0, [x28]
 ;;       ldur    w1, [x28, #4]
 ;;       fmul    s1, s1, s0
-;;       fmov    d0, d1
+;;       fmov    s0, s1
 ;;       add     sp, sp, #0x18
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10
