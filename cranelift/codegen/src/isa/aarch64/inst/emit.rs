@@ -1831,6 +1831,11 @@ impl MachInstEmit for Inst {
             &Inst::Csdb {} => {
                 sink.put4(0xd503229f);
             }
+            &Inst::FpuMove32 { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                sink.put4(enc_fpurr(0b000_11110_00_1_000000_10000, rd, rn));
+            }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);

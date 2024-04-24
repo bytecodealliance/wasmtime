@@ -331,6 +331,11 @@
        ;; Consumption of speculative data barrier.
        (Csdb)
 
+       ;; FPU 32-bit move.
+       (FpuMove32
+         (rd WritableReg)
+         (rn Reg))
+
        ;; FPU move. Note that this is distinct from a vector-register
        ;; move; moving just 64 bits seems to be significantly faster.
        (FpuMove64
