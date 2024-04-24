@@ -241,7 +241,7 @@ typedef union wasmtime_valunion {
   wasmtime_externref_t *externref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_FUNCREF
   ///
-  /// Use #wasmtime_funcref_is_null to test whether this is a null function
+  /// Use `wasmtime_funcref_is_null` to test whether this is a null function
   /// reference.
   wasmtime_func_t funcref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_V128
