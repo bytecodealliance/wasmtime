@@ -54,7 +54,7 @@ wasmtime_global_type(const wasmtime_context_t *store,
  * \param out where to store the value in this global.
  *
  * This function returns ownership of the contents of `out`, so
- * #wasmtime_val_delete may need to be called on the value.
+ * #wasmtime_val_unroot may need to be called on the value.
  */
 WASM_API_EXTERN void wasmtime_global_get(wasmtime_context_t *store,
                                          const wasmtime_global_t *global,
