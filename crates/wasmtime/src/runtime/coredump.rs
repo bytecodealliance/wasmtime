@@ -179,7 +179,7 @@ impl WasmCoreDump {
                     ValType::Ref(r) => match r.heap_type() {
                         HeapType::Extern => wasm_encoder::ValType::EXTERNREF,
 
-                        HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => {
+                        HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => {
                             wasm_encoder::ValType::FUNCREF
                         }
 

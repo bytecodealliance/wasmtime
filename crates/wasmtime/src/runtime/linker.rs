@@ -345,7 +345,7 @@ impl<T> Linker<T> {
                                         debug_assert!(r.is_nullable());
                                         match r.heap_type() {
                                             HeapType::Func
-                                            | HeapType::Concrete(_)
+                                            | HeapType::ConcreteFunc(_)
                                             | HeapType::NoFunc => Val::null_func_ref(),
                                             HeapType::Extern => Val::null_extern_ref(),
                                             HeapType::Any | HeapType::I31 | HeapType::None => {

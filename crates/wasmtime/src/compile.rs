@@ -401,7 +401,8 @@ impl<'a> CompileInputs<'a> {
         if component.component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
                 ret.push_input(move |compiler| {
-                    let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
+                    let trampoline =
+                        compiler.compile_wasm_to_native_trampoline(types[sig].unwrap_func())?;
                     Ok(CompileOutput {
                         key: CompileKey::resource_drop_wasm_to_native_trampoline(),
                         symbol: "resource_drop_trampoline".to_string(),
@@ -493,7 +494,7 @@ impl<'a> CompileInputs<'a> {
 
         for signature in sigs {
             self.push_input(move |compiler| {
-                let wasm_func_ty = &types[signature];
+                let wasm_func_ty = types[signature].unwrap_func();
                 let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
                 Ok(CompileOutput {
                     key: CompileKey::wasm_to_native_trampoline(signature),

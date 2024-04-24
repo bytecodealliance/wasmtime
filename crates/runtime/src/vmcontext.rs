@@ -456,7 +456,7 @@ impl VMGlobalDefinition {
                 WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
                     global.init_gc_ref(VMGcRef::from_raw_u32(raw.get_anyref()))
                 }
-                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+                WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                     *global.as_func_ref_mut() = raw.get_funcref().cast()
                 }
             },
@@ -485,7 +485,7 @@ impl VMGlobalDefinition {
                     self.as_gc_ref()
                         .map_or(0, |r| gc_store.clone_gc_ref(r).as_raw_u32()),
                 ),
-                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+                WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                     ValRaw::funcref(self.as_func_ref().cast())
                 }
             },

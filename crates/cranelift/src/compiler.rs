@@ -133,7 +133,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let module = &translation.module;
         let func_index = module.func_index(func_index);
         let sig = translation.module.functions[func_index].signature;
-        let wasm_func_ty = &types[sig];
+        let wasm_func_ty = types[sig].unwrap_func();
 
         let mut compiler = self.function_compiler();
 
@@ -241,7 +241,7 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index].signature;
-        let wasm_func_ty = &types[sig];
+        let wasm_func_ty = types[sig].unwrap_func();
 
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
@@ -309,7 +309,7 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index].signature;
-        let wasm_func_ty = &types[sig];
+        let wasm_func_ty = types[sig].unwrap_func();
 
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();

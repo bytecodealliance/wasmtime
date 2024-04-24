@@ -2,7 +2,8 @@ use anyhow::{bail, Result};
 use std::fmt::{self, Display};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
-    VMSharedTypeIndex, WasmFuncType, WasmHeapType, WasmRefType, WasmValType,
+    VMSharedTypeIndex, WasmCompositeType, WasmFuncType, WasmHeapType, WasmRefType, WasmSubType,
+    WasmValType,
 };
 
 use crate::{type_registry::RegisteredType, Engine};
@@ -452,7 +453,7 @@ pub enum HeapType {
     /// specific, concrete type.
     ///
     /// This is a subtype of `func` and a supertype of `nofunc`.
-    Concrete(FuncType),
+    ConcreteFunc(FuncType),
 
     /// The `nofunc` heap type represents the null function reference.
     ///
@@ -486,7 +487,7 @@ impl Display for HeapType {
             HeapType::Any => write!(f, "any"),
             HeapType::I31 => write!(f, "i31"),
             HeapType::None => write!(f, "none"),
-            HeapType::Concrete(ty) => write!(f, "(concrete {:?})", ty.type_index()),
+            HeapType::ConcreteFunc(ty) => write!(f, "(concrete {:?})", ty.type_index()),
         }
     }
 }
@@ -494,7 +495,7 @@ impl Display for HeapType {
 impl From<FuncType> for HeapType {
     #[inline]
     fn from(f: FuncType) -> Self {
-        HeapType::Concrete(f)
+        HeapType::ConcreteFunc(f)
     }
 }
 
@@ -540,7 +541,7 @@ impl HeapType {
     ///
     /// Types that are not concrete, user-defined types are abstract types.
     pub fn is_concrete(&self) -> bool {
-        matches!(self, HeapType::Concrete(_))
+        matches!(self, HeapType::ConcreteFunc(_))
     }
 
     /// Get the underlying concrete, user-defined type, if any.
@@ -548,7 +549,7 @@ impl HeapType {
     /// Returns `None` for abstract types.
     pub fn as_concrete(&self) -> Option<&FuncType> {
         match self {
-            HeapType::Concrete(f) => Some(f),
+            HeapType::ConcreteFunc(f) => Some(f),
             _ => None,
         }
     }
@@ -570,7 +571,7 @@ impl HeapType {
         let _ = engine;
 
         match self {
-            HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => HeapType::Func,
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::Func,
             HeapType::Extern => HeapType::Extern,
             HeapType::Any | HeapType::I31 | HeapType::None => HeapType::Any,
         }
@@ -589,12 +590,14 @@ impl HeapType {
             (HeapType::Extern, HeapType::Extern) => true,
             (HeapType::Extern, _) => false,
 
-            (HeapType::NoFunc, HeapType::NoFunc | HeapType::Concrete(_) | HeapType::Func) => true,
+            (HeapType::NoFunc, HeapType::NoFunc | HeapType::ConcreteFunc(_) | HeapType::Func) => {
+                true
+            }
             (HeapType::NoFunc, _) => false,
 
-            (HeapType::Concrete(_), HeapType::Func) => true,
-            (HeapType::Concrete(a), HeapType::Concrete(b)) => a.matches(b),
-            (HeapType::Concrete(_), _) => false,
+            (HeapType::ConcreteFunc(_), HeapType::Func) => true,
+            (HeapType::ConcreteFunc(a), HeapType::ConcreteFunc(b)) => a.matches(b),
+            (HeapType::ConcreteFunc(_), _) => false,
 
             (HeapType::Func, HeapType::Func) => true,
             (HeapType::Func, _) => false,
@@ -642,7 +645,7 @@ impl HeapType {
             | HeapType::Any
             | HeapType::I31
             | HeapType::None => true,
-            HeapType::Concrete(ty) => ty.comes_from_same_engine(engine),
+            HeapType::ConcreteFunc(ty) => ty.comes_from_same_engine(engine),
         }
     }
 
@@ -654,8 +657,8 @@ impl HeapType {
             HeapType::Any => WasmHeapType::Any,
             HeapType::I31 => WasmHeapType::I31,
             HeapType::None => WasmHeapType::None,
-            HeapType::Concrete(f) => {
-                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(f.type_index()))
+            HeapType::ConcreteFunc(f) => {
+                WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(f.type_index()))
             }
         }
     }
@@ -668,11 +671,11 @@ impl HeapType {
             WasmHeapType::Any => HeapType::Any,
             WasmHeapType::I31 => HeapType::I31,
             WasmHeapType::None => HeapType::None,
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::Concrete(FuncType::from_shared_type_index(engine, *idx))
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(idx)) => {
+                HeapType::ConcreteFunc(FuncType::from_shared_type_index(engine, *idx))
             }
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(_))
-            | WasmHeapType::Concrete(EngineOrModuleTypeIndex::RecGroup(_)) => {
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(_))
+            | WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonical heap type")
             }
         }
@@ -688,7 +691,7 @@ impl HeapType {
             // TODO: Once we support concrete struct and array types, we will
             // need to inspect the payload to determine whether this is a
             // GC-managed type or not.
-            Self::Concrete(_) => false,
+            Self::ConcreteFunc(_) => false,
 
             // These are compatible with GC references, but don't actually point
             // to GC objecs. It would generally be safe to return `true` here,
@@ -768,7 +771,7 @@ impl ExternType {
                     FuncType::from_shared_type_index(engine, *e).into()
                 }
                 EngineOrModuleTypeIndex::Module(m) => {
-                    FuncType::from_wasm_func_type(engine, types[*m].clone()).into()
+                    FuncType::from_wasm_func_type(engine, types[*m].unwrap_func().clone()).into()
                 }
                 EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
             },
@@ -889,6 +892,7 @@ impl FuncType {
     pub fn param(&self, i: usize) -> Option<ValType> {
         let engine = self.engine();
         self.registered_type
+            .unwrap_func()
             .params()
             .get(i)
             .map(|ty| ValType::from_wasm_type(engine, ty))
@@ -899,6 +903,7 @@ impl FuncType {
     pub fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
         let engine = self.engine();
         self.registered_type
+            .unwrap_func()
             .params()
             .iter()
             .map(|ty| ValType::from_wasm_type(engine, ty))
@@ -910,6 +915,7 @@ impl FuncType {
     pub fn result(&self, i: usize) -> Option<ValType> {
         let engine = self.engine();
         self.registered_type
+            .unwrap_func()
             .returns()
             .get(i)
             .map(|ty| ValType::from_wasm_type(engine, ty))
@@ -920,6 +926,7 @@ impl FuncType {
     pub fn results(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
         let engine = self.engine();
         self.registered_type
+            .unwrap_func()
             .returns()
             .iter()
             .map(|ty| ValType::from_wasm_type(engine, ty))
@@ -980,7 +987,7 @@ impl FuncType {
     }
 
     pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
-        &self.registered_type
+        self.registered_type.unwrap_func()
     }
 
     pub(crate) fn into_registered_type(self) -> RegisteredType {
@@ -998,7 +1005,16 @@ impl FuncType {
     /// holding a strong reference to all of its types, including any `(ref null
     /// <index>)` types used in the function's parameters and results.
     pub(crate) fn from_wasm_func_type(engine: &Engine, ty: WasmFuncType) -> FuncType {
-        let ty = RegisteredType::new(engine, ty);
+        let ty = RegisteredType::new(
+            engine,
+            WasmSubType {
+                // TODO:
+                //
+                // is_final: true,
+                // supertype: None,
+                composite_type: WasmCompositeType::Func(ty),
+            },
+        );
         Self {
             registered_type: ty,
         }

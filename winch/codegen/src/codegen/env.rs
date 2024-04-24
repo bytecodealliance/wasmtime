@@ -198,7 +198,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             }
             FuncType(idx) => {
                 let sig_index = self.translation.module.types[TypeIndex::from_u32(idx)];
-                let sig = &self.types[sig_index];
+                let sig = self.types[sig_index].unwrap_func();
                 BlockSig::new(control::BlockType::func(sig.clone()))
             }
         }
@@ -340,7 +340,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             Callee::FuncRef(idx) => {
                 let val = || {
                     let sig_index = self.translation.module.types[*idx];
-                    let ty = &self.types[sig_index];
+                    let ty = self.types[sig_index].unwrap_func();
                     let sig = wasm_sig::<A>(ty);
                     sig
                 };

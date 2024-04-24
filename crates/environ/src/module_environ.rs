@@ -550,7 +550,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
                 if self.tunables.generate_native_debuginfo {
                     let sig_index = self.result.module.functions[func_index].signature;
-                    let sig = &self.types[sig_index];
+                    let sig = self.types[sig_index].unwrap_func();
                     let mut locals = Vec::new();
                     for pair in body.get_locals_reader()? {
                         let (cnt, ty) = pair?;
@@ -1185,7 +1185,7 @@ impl ModuleTranslation<'_> {
                 .wasm_ty
                 .heap_type
             {
-                WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {}
+                WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {}
                 // If this is not a funcref table, then we can't support a
                 // pre-computed table of function indices. Technically this
                 // initializer won't trap so we could continue processing

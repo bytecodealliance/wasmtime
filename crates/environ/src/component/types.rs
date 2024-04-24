@@ -480,21 +480,24 @@ impl ComponentTypesBuilder {
         (self.component_types, ty)
     }
 
-    /// Smaller helper method to find a `SignatureIndex` which corresponds to
-    /// the `resource.drop` intrinsic in components, namely a core wasm function
-    /// type which takes one `i32` argument and has no results.
+    /// Smaller helper method to find a `ModuleInternedTypeIndex` which
+    /// corresponds to the `resource.drop` intrinsic in components, namely a
+    /// core wasm function type which takes one `i32` argument and has no
+    /// results.
     ///
     /// This is a bit of a hack right now as ideally this find operation
-    /// wouldn't be needed and instead the `SignatureIndex` itself would be
-    /// threaded through appropriately, but that's left for a future
+    /// wouldn't be needed and instead the `ModuleInternedTypeIndex` itself
+    /// would be threaded through appropriately, but that's left for a future
     /// refactoring. Try not to lean too hard on this method though.
     pub fn find_resource_drop_signature(&self) -> Option<ModuleInternedTypeIndex> {
         self.module_types
-            .wasm_signatures()
-            .find(|(_, sig)| {
-                sig.params().len() == 1
-                    && sig.returns().len() == 0
-                    && sig.params()[0] == WasmValType::I32
+            .wasm_types()
+            .find(|(_, ty)| match &ty.composite_type {
+                wasmtime_types::WasmCompositeType::Func(sig) => {
+                    sig.params().len() == 1
+                        && sig.returns().len() == 0
+                        && sig.params()[0] == WasmValType::I32
+                }
             })
             .map(|(i, _)| i)
     }
