@@ -117,7 +117,7 @@ impl Global {
                 ValType::V128 => Val::V128((*definition.as_u128()).into()),
                 ValType::Ref(ref_ty) => {
                     let reference: Ref = match ref_ty.heap_type() {
-                        HeapType::Func | HeapType::Concrete(_) => {
+                        HeapType::Func | HeapType::ConcreteFunc(_) => {
                             Func::_from_raw(&mut store, definition.as_func_ref().cast()).into()
                         }
 

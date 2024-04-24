@@ -452,7 +452,7 @@ pub enum HeapType {
     /// specific, concrete type.
     ///
     /// This is a subtype of `func` and a supertype of `nofunc`.
-    Concrete(FuncType),
+    ConcreteFunc(FuncType),
 
     /// The `nofunc` heap type represents the null function reference.
     ///
@@ -486,7 +486,7 @@ impl Display for HeapType {
             HeapType::Any => write!(f, "any"),
             HeapType::I31 => write!(f, "i31"),
             HeapType::None => write!(f, "none"),
-            HeapType::Concrete(ty) => write!(f, "(concrete {:?})", ty.type_index()),
+            HeapType::ConcreteFunc(ty) => write!(f, "(concrete {:?})", ty.type_index()),
         }
     }
 }
@@ -494,7 +494,7 @@ impl Display for HeapType {
 impl From<FuncType> for HeapType {
     #[inline]
     fn from(f: FuncType) -> Self {
-        HeapType::Concrete(f)
+        HeapType::ConcreteFunc(f)
     }
 }
 
@@ -540,7 +540,7 @@ impl HeapType {
     ///
     /// Types that are not concrete, user-defined types are abstract types.
     pub fn is_concrete(&self) -> bool {
-        matches!(self, HeapType::Concrete(_))
+        matches!(self, HeapType::ConcreteFunc(_))
     }
 
     /// Get the underlying concrete, user-defined type, if any.
@@ -548,7 +548,7 @@ impl HeapType {
     /// Returns `None` for abstract types.
     pub fn as_concrete(&self) -> Option<&FuncType> {
         match self {
-            HeapType::Concrete(f) => Some(f),
+            HeapType::ConcreteFunc(f) => Some(f),
             _ => None,
         }
     }
@@ -570,7 +570,7 @@ impl HeapType {
         let _ = engine;
 
         match self {
-            HeapType::Func | HeapType::Concrete(_) | HeapType::NoFunc => HeapType::Func,
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::Func,
             HeapType::Extern => HeapType::Extern,
             HeapType::Any | HeapType::I31 | HeapType::None => HeapType::Any,
         }
@@ -589,12 +589,14 @@ impl HeapType {
             (HeapType::Extern, HeapType::Extern) => true,
             (HeapType::Extern, _) => false,
 
-            (HeapType::NoFunc, HeapType::NoFunc | HeapType::Concrete(_) | HeapType::Func) => true,
+            (HeapType::NoFunc, HeapType::NoFunc | HeapType::ConcreteFunc(_) | HeapType::Func) => {
+                true
+            }
             (HeapType::NoFunc, _) => false,
 
-            (HeapType::Concrete(_), HeapType::Func) => true,
-            (HeapType::Concrete(a), HeapType::Concrete(b)) => a.matches(b),
-            (HeapType::Concrete(_), _) => false,
+            (HeapType::ConcreteFunc(_), HeapType::Func) => true,
+            (HeapType::ConcreteFunc(a), HeapType::ConcreteFunc(b)) => a.matches(b),
+            (HeapType::ConcreteFunc(_), _) => false,
 
             (HeapType::Func, HeapType::Func) => true,
             (HeapType::Func, _) => false,
@@ -642,7 +644,7 @@ impl HeapType {
             | HeapType::Any
             | HeapType::I31
             | HeapType::None => true,
-            HeapType::Concrete(ty) => ty.comes_from_same_engine(engine),
+            HeapType::ConcreteFunc(ty) => ty.comes_from_same_engine(engine),
         }
     }
 
@@ -654,7 +656,7 @@ impl HeapType {
             HeapType::Any => WasmHeapType::Any,
             HeapType::I31 => WasmHeapType::I31,
             HeapType::None => WasmHeapType::None,
-            HeapType::Concrete(f) => {
+            HeapType::ConcreteFunc(f) => {
                 WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(f.type_index()))
             }
         }
@@ -669,7 +671,7 @@ impl HeapType {
             WasmHeapType::I31 => HeapType::I31,
             WasmHeapType::None => HeapType::None,
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::Concrete(FuncType::from_shared_type_index(engine, *idx))
+                HeapType::ConcreteFunc(FuncType::from_shared_type_index(engine, *idx))
             }
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(_))
             | WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::RecGroup(_)) => {
@@ -688,7 +690,7 @@ impl HeapType {
             // TODO: Once we support concrete struct and array types, we will
             // need to inspect the payload to determine whether this is a
             // GC-managed type or not.
-            Self::Concrete(_) => false,
+            Self::ConcreteFunc(_) => false,
 
             // These are compatible with GC references, but don't actually point
             // to GC objecs. It would generally be safe to return `true` here,

@@ -433,7 +433,7 @@ fn dummy_funcs_and_subtypes(
         None,
         Some(ValType::Ref(RefType::new(
             true,
-            HeapType::Concrete(FuncType::new(&engine, None, None)),
+            HeapType::ConcreteFunc(FuncType::new(&engine, None, None)),
         ))),
     );
     let b = Func::new(
