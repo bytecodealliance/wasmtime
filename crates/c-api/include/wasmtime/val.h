@@ -33,13 +33,16 @@ extern "C" {
  * #wasmtime_anyref_unroot to enable them to be garbage-collected.
  *
  * Null anyref values are represented by this structure and can be tested and
- * created with the #WASMTIME_ANYREF_IS_NULL and #WASMTIME_ANYREF_NULL macros.
+ * created with the #wasmtime_anyref_is_null and #wasmtime_anyref_set_null
+ * functions.
  */
 typedef struct wasmtime_anyref {
   /// Internal metadata tracking within the store, embedders should not
   /// configure or modify these fields.
   uint64_t store_id;
+  /// Internal to Wasmtime.
   uint32_t __private1;
+  /// Internal to Wasmtime.
   uint32_t __private2;
 } wasmtime_anyref_t;
 
@@ -165,14 +168,16 @@ WASM_API_EXTERN bool wasmtime_anyref_i31_get_s(wasmtime_context_t *context,
  * enable garbage collection.
  *
  * Note that null is represented with this structure and created with
- * #WASMTIME_EXTERNREF_NULL. Null can be tested for with the
- * #WASMTIME_EXTERNREF_IS_NULL macro.
+ * #wasmtime_externref_set_null. Null can be tested for with the
+ * #wasmtime_externref_is_null function.
  */
 typedef struct wasmtime_externref {
   /// Internal metadata tracking within the store, embedders should not
   /// configure or modify these fields.
   uint64_t store_id;
+  /// Internal to Wasmtime.
   uint32_t __private1;
+  /// Internal to Wasmtime.
   uint32_t __private2;
 } wasmtime_externref_t;
 
@@ -412,8 +417,8 @@ static inline void __wasmtime_val_assertions() {
  * Note that this structure may contain an owned value, namely rooted GC
  * references, depending on the context in which this is used. APIs which
  * consume a #wasmtime_val_t do not take ownership, but APIs that return
- * #wasmtime_val_t require that #wasmtime_val_delete is called to deallocate the
- * value.
+ * #wasmtime_val_t require that #wasmtime_val_unroot is called to clean up
+ * any possible GC roots in the value.
  */
 typedef struct wasmtime_val {
   /// Discriminant of which field of #of is valid.
