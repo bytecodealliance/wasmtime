@@ -17,58 +17,62 @@ extern "C" {
 
 /// \brief Representation of a function in Wasmtime.
 ///
-/// Functions are represented with a 64-bit identifying integer in Wasmtime.
-/// They do not have any destructor associated with them. Functions cannot
-/// interoperate between #wasmtime_store_t instances and if the wrong function
-/// is passed to the wrong store then it may trigger an assertion to abort the
-/// process.
+/// Functions in Wasmtime are represented as an index into a store and don't
+/// have any data or destructor associated with the #wasmtime_func_t value.
+/// Functions cannot interoperate between #wasmtime_store_t instances and if the
+/// wrong function is passed to the wrong store then it may trigger an assertion
+/// to abort the process.
 typedef struct wasmtime_func {
-  /// Internal identifier of what store this belongs to, never zero.
+  /// Internal identifier of what store this belongs to.
+  ///
+  /// This field may be zero when used in conjunction with #wasmtime_val_t
+  /// to represent a null `funcref` value in WebAssembly. For a valid function
+  /// this field is otherwise never zero.
   uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+  /// Private field for Wasmtime, undefined if `store_id` is zero.
+  size_t __private;
 } wasmtime_func_t;
 
 /// \brief Representation of a table in Wasmtime.
 ///
-/// Tables are represented with a 64-bit identifying integer in Wasmtime.
-/// They do not have any destructor associated with them. Tables cannot
-/// interoperate between #wasmtime_store_t instances and if the wrong table
-/// is passed to the wrong store then it may trigger an assertion to abort the
-/// process.
+/// Tables in Wasmtime are represented as an index into a store and don't
+/// have any data or destructor associated with the #wasmtime_table_t value.
+/// Tables cannot interoperate between #wasmtime_store_t instances and if the
+/// wrong table is passed to the wrong store then it may trigger an assertion
+/// to abort the process.
 typedef struct wasmtime_table {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+  /// Private field for Wasmtime.
+  size_t __private;
 } wasmtime_table_t;
 
 /// \brief Representation of a memory in Wasmtime.
 ///
-/// Memories are represented with a 64-bit identifying integer in Wasmtime.
-/// They do not have any destructor associated with them. Memories cannot
-/// interoperate between #wasmtime_store_t instances and if the wrong memory
-/// is passed to the wrong store then it may trigger an assertion to abort the
-/// process.
+/// Memories in Wasmtime are represented as an index into a store and don't
+/// have any data or destructor associated with the #wasmtime_memory_t value.
+/// Memories cannot interoperate between #wasmtime_store_t instances and if the
+/// wrong memory is passed to the wrong store then it may trigger an assertion
+/// to abort the process.
 typedef struct wasmtime_memory {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+  /// Private field for Wasmtime.
+  size_t __private;
 } wasmtime_memory_t;
 
 /// \brief Representation of a global in Wasmtime.
 ///
-/// Globals are represented with a 64-bit identifying integer in Wasmtime.
-/// They do not have any destructor associated with them. Globals cannot
-/// interoperate between #wasmtime_store_t instances and if the wrong global
-/// is passed to the wrong store then it may trigger an assertion to abort the
-/// process.
+/// Globals in Wasmtime are represented as an index into a store and don't
+/// have any data or destructor associated with the #wasmtime_global_t value.
+/// Globals cannot interoperate between #wasmtime_store_t instances and if the
+/// wrong global is passed to the wrong store then it may trigger an assertion
+/// to abort the process.
 typedef struct wasmtime_global {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+  /// Private field for Wasmtime.
+  size_t __private;
 } wasmtime_global_t;
 
 /// \brief Discriminant of #wasmtime_extern_t
