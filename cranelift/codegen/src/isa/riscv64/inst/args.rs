@@ -125,17 +125,21 @@ impl AMode {
         }
     }
 
-    /// Returns the registers that known to the register allocator.
+    /// Add the registers referenced by this AMode to `collector`.
     /// Keep this in sync with `with_allocs`.
-    pub(crate) fn get_allocatable_register(&self) -> Option<Reg> {
+    pub(crate) fn get_operands<F: Fn(regalloc2::VReg) -> regalloc2::VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
         match self {
-            AMode::RegOffset(reg, ..) => Some(*reg),
+            &AMode::RegOffset(reg, ..) => collector.reg_use(reg),
+            // Registers used in these modes aren't allocatable.
             AMode::SPOffset(..)
             | AMode::FPOffset(..)
             | AMode::NominalSPOffset(..)
             | AMode::IncomingArg(..)
             | AMode::Const(..)
-            | AMode::Label(..) => None,
+            | AMode::Label(..) => {}
         }
     }
 
