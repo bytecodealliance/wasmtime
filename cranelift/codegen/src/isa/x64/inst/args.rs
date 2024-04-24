@@ -55,6 +55,12 @@ macro_rules! newtype_of_reg {
             }
         }
 
+        impl From<&$newtype_reg> for Reg {
+            fn from(r: &$newtype_reg) -> Self {
+                r.0
+            }
+        }
+
         impl $newtype_reg {
             /// Create this newtype from the given register, or return `None` if the register
             /// is not a valid instance of this newtype.
@@ -365,13 +371,13 @@ impl Amode {
                     collector.reg_use(*base);
                 }
             }
-            Amode::ImmRegRegShift { base, index, .. } => {
+            &Amode::ImmRegRegShift { base, index, .. } => {
                 debug_assert_ne!(base.to_reg(), regs::rbp());
                 debug_assert_ne!(base.to_reg(), regs::rsp());
-                collector.reg_use(base.to_reg());
+                collector.reg_use(base);
                 debug_assert_ne!(index.to_reg(), regs::rbp());
                 debug_assert_ne!(index.to_reg(), regs::rsp());
-                collector.reg_use(index.to_reg());
+                collector.reg_use(index);
             }
             Amode::RipRelative { .. } => {
                 // RIP isn't involved in regalloc.
@@ -388,9 +394,9 @@ impl Amode {
             Amode::ImmReg { base, .. } => {
                 collector.reg_late_use(*base);
             }
-            Amode::ImmRegRegShift { base, index, .. } => {
-                collector.reg_late_use(base.to_reg());
-                collector.reg_late_use(index.to_reg());
+            &Amode::ImmRegRegShift { base, index, .. } => {
+                collector.reg_late_use(base);
+                collector.reg_late_use(index);
             }
             Amode::RipRelative { .. } => {
                 // RIP isn't involved in regalloc.
