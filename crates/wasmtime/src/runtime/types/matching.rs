@@ -197,15 +197,15 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
     let result = match (actual, expected) {
         // TODO: Wasm GC introduces subtyping between function types, so it will
         // no longer suffice to check whether canonicalized type IDs are equal.
-        (H::Concrete(actual), H::Concrete(expected)) => actual == expected,
+        (H::ConcreteFunc(actual), H::ConcreteFunc(expected)) => actual == expected,
 
         (H::NoFunc, H::NoFunc) => true,
         (_, H::NoFunc) => false,
 
-        (H::NoFunc, H::Concrete(_)) => true,
-        (_, H::Concrete(_)) => false,
+        (H::NoFunc, H::ConcreteFunc(_)) => true,
+        (_, H::ConcreteFunc(_)) => false,
 
-        (H::NoFunc | H::Concrete(_) | H::Func, H::Func) => true,
+        (H::NoFunc | H::ConcreteFunc(_) | H::Func, H::Func) => true,
         (_, H::Func) => false,
 
         (H::Extern, H::Extern) => true,

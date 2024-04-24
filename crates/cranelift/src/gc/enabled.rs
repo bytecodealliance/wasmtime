@@ -173,7 +173,7 @@ impl FuncEnvironment<'_> {
 
         let might_be_i31 = match ty.heap_type {
             WasmHeapType::Any => true,
-            WasmHeapType::Extern | WasmHeapType::None | WasmHeapType::Concrete(_) => false,
+            WasmHeapType::Extern | WasmHeapType::None | WasmHeapType::ConcreteFunc(_) => false,
             WasmHeapType::Func | WasmHeapType::NoFunc | WasmHeapType::I31 => {
                 unreachable!("we don't manage instances of these types with the GC")
             }

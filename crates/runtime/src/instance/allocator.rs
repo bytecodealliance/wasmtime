@@ -594,7 +594,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                     }
 
                     wasmtime_environ::WasmHeapType::Func
-                    | wasmtime_environ::WasmHeapType::Concrete(_)
+                    | wasmtime_environ::WasmHeapType::ConcreteFunc(_)
                     | wasmtime_environ::WasmHeapType::NoFunc => {
                         let funcref = raw.get_funcref().cast::<VMFuncRef>();
                         let items = (0..table.size()).map(|_| funcref);

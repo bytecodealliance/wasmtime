@@ -248,7 +248,7 @@ impl From<DynamicGcRefTable> for Table {
 
 fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
     match ty.heap_type {
-        WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+        WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
             TableElementType::Func
         }
         WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {

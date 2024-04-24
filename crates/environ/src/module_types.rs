@@ -348,12 +348,12 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
         match index {
             UnpackedIndex::Id(id) => {
                 let signature = self.types.wasmparser_to_wasmtime[&id];
-                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(signature))
+                WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(signature))
             }
             UnpackedIndex::Module(module_index) => {
                 let module_index = TypeIndex::from_u32(module_index);
                 let interned_index = self.module.types[module_index];
-                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(interned_index))
+                WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(interned_index))
             }
             UnpackedIndex::RecGroup(_) => unreachable!(),
         }

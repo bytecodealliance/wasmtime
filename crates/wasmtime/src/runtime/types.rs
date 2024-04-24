@@ -655,7 +655,7 @@ impl HeapType {
             HeapType::I31 => WasmHeapType::I31,
             HeapType::None => WasmHeapType::None,
             HeapType::Concrete(f) => {
-                WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(f.type_index()))
+                WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(f.type_index()))
             }
         }
     }
@@ -668,11 +668,11 @@ impl HeapType {
             WasmHeapType::Any => HeapType::Any,
             WasmHeapType::I31 => HeapType::I31,
             WasmHeapType::None => HeapType::None,
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(idx)) => {
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(idx)) => {
                 HeapType::Concrete(FuncType::from_shared_type_index(engine, *idx))
             }
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(_))
-            | WasmHeapType::Concrete(EngineOrModuleTypeIndex::RecGroup(_)) => {
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(_))
+            | WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonical heap type")
             }
         }

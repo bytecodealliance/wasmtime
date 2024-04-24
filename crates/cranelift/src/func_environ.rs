@@ -1180,7 +1180,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // Functions that have a statically known type are either going to
             // always succeed or always fail. Figure out by inspecting the types
             // further.
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Module(table_ty)) => {
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(table_ty)) => {
                 // If `ty_index` matches `table_ty`, then this call is
                 // statically known to have the right type, so no checks are
                 // necessary.
@@ -1223,8 +1223,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // Engine-indexed types don't show up until runtime and it's a wasm
             // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
-            WasmHeapType::Concrete(EngineOrModuleTypeIndex::Engine(_))
-            | WasmHeapType::Concrete(EngineOrModuleTypeIndex::RecGroup(_))
+            WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(_))
+            | WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::RecGroup(_))
             | WasmHeapType::Extern
             | WasmHeapType::Any
             | WasmHeapType::I31
@@ -1419,7 +1419,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
         let grow = match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 self.builtin_functions.table_grow_func_ref(&mut pos.func)
             }
 
@@ -1479,7 +1479,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
 
             // Function types.
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 match plan.style {
                     TableStyle::CallerChecksSignature => {
                         Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index))
@@ -1532,7 +1532,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
 
             // Function types.
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 match plan.style {
                     TableStyle::CallerChecksSignature => {
                         let (elem_addr, flags) = table_data.prepare_table_addr(
@@ -1566,7 +1566,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         len: ir::Value,
     ) -> WasmResult<()> {
         let libcall = match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 self.builtin_functions.table_fill_func_ref(&mut pos.func)
             }
             ty @ WasmHeapType::Extern
@@ -1625,7 +1625,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         ht: WasmHeapType,
     ) -> WasmResult<ir::Value> {
         Ok(match ht {
-            WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => {
+            WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 pos.ins().iconst(self.pointer_type(), 0)
             }
             WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {

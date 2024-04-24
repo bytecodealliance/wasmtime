@@ -376,7 +376,7 @@ impl EngineOrModuleTypeIndex {
 pub enum WasmHeapType {
     Extern,
     Func,
-    Concrete(EngineOrModuleTypeIndex),
+    ConcreteFunc(EngineOrModuleTypeIndex),
     NoFunc,
     Any,
     I31,
@@ -388,7 +388,7 @@ impl fmt::Display for WasmHeapType {
         match self {
             Self::Extern => write!(f, "extern"),
             Self::Func => write!(f, "func"),
-            Self::Concrete(i) => write!(f, "{i}"),
+            Self::ConcreteFunc(i) => write!(f, "func {i}"),
             Self::NoFunc => write!(f, "nofunc"),
             Self::Any => write!(f, "any"),
             Self::I31 => write!(f, "i31"),
@@ -403,7 +403,7 @@ impl TypeTrace for WasmHeapType {
         F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
     {
         match *self {
-            Self::Concrete(i) => func(i),
+            Self::ConcreteFunc(i) => func(i),
             _ => Ok(()),
         }
     }
@@ -413,7 +413,7 @@ impl TypeTrace for WasmHeapType {
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
     {
         match self {
-            Self::Concrete(i) => func(i),
+            Self::ConcreteFunc(i) => func(i),
             _ => Ok(()),
         }
     }
@@ -428,7 +428,7 @@ impl WasmHeapType {
             Self::Extern | Self::Any | Self::I31 | Self::None => true,
 
             // All `t <: (ref null func)` are not.
-            Self::Func | Self::Concrete(_) | Self::NoFunc => false,
+            Self::Func | Self::ConcreteFunc(_) | Self::NoFunc => false,
         }
     }
 

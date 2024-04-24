@@ -897,7 +897,7 @@ impl Instance {
                                 VMGcRef::from_raw_u32(raw.get_anyref())
                             }),
                         )?,
-                    WasmHeapType::Func | WasmHeapType::Concrete(_) | WasmHeapType::NoFunc => table
+                    WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => table
                         .init_func(
                             dst,
                             exprs.iter().map(|expr| unsafe {
