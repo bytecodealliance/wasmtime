@@ -509,6 +509,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     fn collect_operands(&mut self) {
+        let allocatable = PRegSet::from(self.vcode.machine_env());
         for (i, insn) in self.vcode.insts.iter().enumerate() {
             // Push operands from the instruction onto the operand list.
             //
@@ -522,7 +523,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             // its register fields (which is slow, branchy code) once.
 
             let vreg_aliases = &self.vcode.vreg_aliases;
-            let allocatable = PRegSet::from(self.vcode.machine_env());
             let mut op_collector =
                 OperandCollector::new(&mut self.vcode.operands, allocatable, |vreg| {
                     VCode::<I>::resolve_vreg_alias_impl(vreg_aliases, vreg)
