@@ -361,13 +361,6 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         }
     }
 
-    /// Add multiple register uses.
-    pub fn reg_uses(&mut self, regs: &[Reg]) {
-        for &reg in regs {
-            self.reg_use(reg);
-        }
-    }
-
     /// Add a register def, at the end of the instruction (`After`
     /// position). Use only when this def will be written after all
     /// uses are read.
@@ -377,13 +370,6 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         } else {
             debug_assert!(reg.to_reg().is_virtual());
             self.add_operand(Operand::reg_def(reg.to_reg().into()));
-        }
-    }
-
-    /// Add multiple register defs.
-    pub fn reg_defs(&mut self, regs: &[Writable<Reg>]) {
-        for &reg in regs {
-            self.reg_def(reg);
         }
     }
 
