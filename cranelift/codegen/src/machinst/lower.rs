@@ -751,7 +751,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
 
             // Normal instruction: codegen if the instruction is side-effecting
-            // or any of its outputs its used.
+            // or any of its outputs is used.
             if has_side_effect || value_needed {
                 trace!("lowering: inst {}: {:?}", inst, self.f.dfg.insts[inst]);
                 let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
@@ -777,13 +777,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 // regalloc to use. These aliases effectively rewrite any use of
                 // the pre-assigned register to the register that was returned by
                 // the ISLE lowering logic.
-                debug_assert_eq!(temp_regs.len(), self.num_outputs(inst));
-                for i in 0..self.num_outputs(inst) {
-                    let regs = temp_regs[i];
-                    let dsts = self.value_regs[self.f.dfg.inst_results(inst)[i]];
+                let results = self.f.dfg.inst_results(inst);
+                debug_assert_eq!(temp_regs.len(), results.len());
+                for (regs, &result) in temp_regs.iter().zip(results) {
+                    let dsts = self.value_regs[result];
                     debug_assert_eq!(regs.len(), dsts.len());
-                    for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
-                        self.set_vreg_alias(*dst, *temp);
+                    for (&dst, &temp) in dsts.regs().iter().zip(regs.regs()) {
+                        trace!("set vreg alias: {result:?} = {dst:?}, lowering = {temp:?}");
+                        self.vcode.set_vreg_alias(dst, temp);
 
                         // If there was any PCC fact about the
                         // original VReg, move it to the aliased reg
@@ -1425,12 +1426,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             self.emit(I::gen_move(new_reg, reg, ty));
             new_reg.to_reg()
         }
-    }
-
-    /// Note that one vreg is to be treated as an alias of another.
-    pub fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
-        trace!("set vreg alias: from {:?} to {:?}", from, to);
-        self.vcode.set_vreg_alias(from, to);
     }
 
     /// Add a range fact to a register, if no other fact is present.
