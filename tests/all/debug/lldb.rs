@@ -247,3 +247,51 @@ check: exited with status
     )?;
     Ok(())
 }
+
+/* C program used for this test, dwarf_fission.c, compiled with `emcc dwarf_fission.c -o dwarf_fission.wasm -gsplit-dwarf -gdwarf-5 -gpubnames -sWASM_BIGINT`:
+#include <stdio.h>
+
+int main()
+{
+    int i = 1;
+    i++;
+    return i - 2;
+}
+ */
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_debug_dwarf5_fission_lldb() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Ddebug-info",
+            "tests/all/debug/testsuite/dwarf_fission.wasm",
+        ],
+        r#"breakpoint set --file dwarf_fission.c --line 6
+r
+fr v
+s
+fr v
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: Breakpoint 1: no locations (pending)
+check: Unable to resolve breakpoint to any actual locations.
+check: 1 location added to breakpoint 1
+check: stop reason = breakpoint 1.1
+check: i = 1
+check: stop reason = step in
+check: i = 2
+check: resuming
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}

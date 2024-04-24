@@ -122,10 +122,12 @@ pub struct DebugInfoData<'a> {
     pub dwarf: Dwarf<'a>,
     pub name_section: NameSection<'a>,
     pub wasm_file: WasmFileInfo,
-    debug_loc: gimli::DebugLoc<Reader<'a>>,
-    debug_loclists: gimli::DebugLocLists<Reader<'a>>,
+    pub debug_loc: gimli::DebugLoc<Reader<'a>>,
+    pub debug_loclists: gimli::DebugLocLists<Reader<'a>>,
     pub debug_ranges: gimli::DebugRanges<Reader<'a>>,
     pub debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
+    pub debug_cu_index: gimli::DebugCuIndex<Reader<'a>>,
+    pub debug_tu_index: gimli::DebugTuIndex<Reader<'a>>,
 }
 
 #[allow(missing_docs)]
@@ -782,7 +784,7 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn register_dwarf_section(&mut self, section: &CustomSectionReader<'data>) {
-        let name = section.name();
+        let name = section.name().trim_end_matches(".dwo");
         if !name.starts_with(".debug_") {
             return;
         }
@@ -800,7 +802,9 @@ and for re-adding support for interface types you can see this issue:
             // `gimli::Dwarf` fields.
             ".debug_abbrev" => dwarf.debug_abbrev = gimli::DebugAbbrev::new(data, endian),
             ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
-            ".debug_info" => dwarf.debug_info = gimli::DebugInfo::new(data, endian),
+            ".debug_info" => {
+                dwarf.debug_info = gimli::DebugInfo::new(data, endian);
+            }
             ".debug_line" => dwarf.debug_line = gimli::DebugLine::new(data, endian),
             ".debug_line_str" => dwarf.debug_line_str = gimli::DebugLineStr::from(slice),
             ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),
@@ -818,9 +822,12 @@ and for re-adding support for interface types you can see this issue:
             ".debug_ranges" => info.debug_ranges = gimli::DebugRanges::new(data, endian),
             ".debug_rnglists" => info.debug_rnglists = gimli::DebugRngLists::new(data, endian),
 
+            // DWARF package fields
+            ".debug_cu_index" => info.debug_cu_index = gimli::DebugCuIndex::new(data, endian),
+            ".debug_tu_index" => info.debug_tu_index = gimli::DebugTuIndex::new(data, endian),
+
             // We don't use these at the moment.
             ".debug_aranges" | ".debug_pubnames" | ".debug_pubtypes" => return,
-
             other => {
                 log::warn!("unknown debug section `{}`", other);
                 return;

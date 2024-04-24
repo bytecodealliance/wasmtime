@@ -23,7 +23,6 @@ use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
     VMNativeCallFunction, VMWasmCallFunction,
 };
-
 mod registry;
 
 pub use registry::{

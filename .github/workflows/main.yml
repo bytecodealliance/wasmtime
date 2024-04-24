@@ -635,11 +635,15 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb llvm
+        sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
+        # woraround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
+        sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
+        sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
         RUST_BACKTRACE: 1
+        LLDB: lldb-15 # override default version, 14
 
     # NB: the test job here is explicitly lacking in cancellation of this run if
     # something goes wrong. These take the longest anyway and otherwise if

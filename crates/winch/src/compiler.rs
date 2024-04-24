@@ -233,6 +233,8 @@ impl wasmtime_environ::Compiler for Compiler {
         _obj: &mut Object<'_>,
         _translation: &ModuleTranslation<'_>,
         _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
+        _dwarf_package: Option<&[u8]>,
+        _tunables: &wasmtime_environ::Tunables,
     ) -> Result<()> {
         todo!()
     }

@@ -5,10 +5,7 @@ use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
 use cranelift_codegen::isa::TargetIsa;
-use gimli::{
-    write, AttributeValue, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
-    DebuggingInformationEntry, Unit,
-};
+use gimli::{write, AttributeValue, DebugLineOffset, DebuggingInformationEntry, Unit};
 
 #[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {
@@ -124,17 +121,11 @@ where
                     return Err(TransformError("unexpected file index attribute").into());
                 }
             }
-            AttributeValue::DebugStrRef(str_offset) => {
-                let s = context.debug_str.get_str(str_offset)?.to_slice()?.to_vec();
-                write::AttributeValue::StringRef(out_strings.add(s))
-            }
-            AttributeValue::DebugStrOffsetsIndex(i) => {
-                let str_offset = context.debug_str_offsets.get_str_offset(
-                    gimli::Format::Dwarf32,
-                    unit.str_offsets_base,
-                    i,
-                )?;
-                let s = context.debug_str.get_str(str_offset)?.to_slice()?.to_vec();
+            AttributeValue::DebugStrRef(_) | AttributeValue::DebugStrOffsetsIndex(_) => {
+                let s = dwarf
+                    .attr_string(unit, attr.value().clone())?
+                    .to_string_lossy()?
+                    .into_owned();
                 write::AttributeValue::StringRef(out_strings.add(s))
             }
             AttributeValue::RangeListsRef(r) => {
@@ -308,38 +299,22 @@ pub(crate) fn clone_attr_string<R>(
     attr_value: &AttributeValue<R>,
     form: gimli::DwForm,
     unit: &Unit<R, R::Offset>,
-    debug_str: &DebugStr<R>,
-    debug_str_offsets: &DebugStrOffsets<R>,
-    debug_line_str: &DebugLineStr<R>,
+    dwarf: &gimli::Dwarf<R>,
     out_strings: &mut write::StringTable,
 ) -> Result<write::LineString, Error>
 where
     R: Reader,
 {
-    let content = match attr_value {
-        AttributeValue::DebugStrRef(str_offset) => {
-            debug_str.get_str(*str_offset)?.to_slice()?.to_vec()
-        }
-        AttributeValue::DebugStrOffsetsIndex(i) => {
-            let str_offset = debug_str_offsets.get_str_offset(
-                gimli::Format::Dwarf32,
-                unit.str_offsets_base,
-                *i,
-            )?;
-            debug_str.get_str(str_offset)?.to_slice()?.to_vec()
-        }
-        AttributeValue::DebugLineStrRef(str_offset) => {
-            debug_line_str.get_str(*str_offset)?.to_slice()?.to_vec()
-        }
-        AttributeValue::String(b) => b.to_slice()?.to_vec(),
-        v => bail!("Unexpected attribute value: {:?}", v),
-    };
+    let content = dwarf
+        .attr_string(unit, attr_value.clone())?
+        .to_string_lossy()?
+        .into_owned();
     Ok(match form {
         gimli::DW_FORM_strp => {
             let id = out_strings.add(content);
             write::LineString::StringRef(id)
         }
-        gimli::DW_FORM_string => write::LineString::String(content),
+        gimli::DW_FORM_string => write::LineString::String(content.into()),
         _ => bail!("DW_FORM_line_strp or other not supported"),
     })
 }

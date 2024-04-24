@@ -5,7 +5,7 @@ use super::line_program::clone_line_program;
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
-use super::{DebugInputContext, Reader, TransformError};
+use super::{DebugInputContext, Reader};
 use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctionsMetadata;
 use anyhow::{Context, Error};
@@ -256,7 +256,9 @@ fn is_dead_code<R: Reader>(entry: &DebuggingInformationEntry<R>) -> bool {
 
 pub(crate) fn clone_unit<'a, R>(
     dwarf: &gimli::Dwarf<R>,
-    unit: Unit<R, R::Offset>,
+    unit: &Unit<R, R::Offset>,
+    split_unit: Option<&Unit<R, R::Offset>>,
+    split_dwarf: Option<&gimli::Dwarf<R>>,
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
     funcs: &'a CompiledFunctionsMetadata,
@@ -275,20 +277,35 @@ where
     let mut pending_di_refs = PendingDebugInfoRefs::new();
     let mut stack = Vec::new();
 
+    let mut program_unit = unit;
+    let mut skeleton_die = None;
+
+    // Get entries in outer scope to avoid borrowing on short lived temporary.
+    let mut skeleton_entries = unit.entries();
+    if let Some(unit) = split_unit {
+        program_unit = unit;
+
+        // From the spec, a skeleton unit has no children so we can assume the first, and only, entry is the DW_TAG_skeleton_unit (https://dwarfstd.org/doc/DWARF5.pdf).
+        if let Some(die_tuple) = skeleton_entries.next_dfs()? {
+            skeleton_die = Some(die_tuple.1);
+        }
+    }
+
     // Iterate over all of this compilation unit's entries.
-    let mut entries = unit.entries();
+    let mut entries = program_unit.entries();
     let (mut comp_unit, unit_id, file_map, file_index_base, cu_low_pc, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
             assert_eq!(depth_delta, 0);
             let (out_line_program, debug_line_offset, file_map, file_index_base) =
                 clone_line_program(
-                    &unit,
+                    split_dwarf.unwrap_or(dwarf),
+                    dwarf,
+                    program_unit,
                     entry,
+                    skeleton_die,
                     addr_tr,
                     out_encoding,
                     context.debug_str,
-                    context.debug_str_offsets,
-                    context.debug_line_str,
                     context.debug_line,
                     out_strings,
                 )?;
@@ -299,23 +316,11 @@ where
 
                 let root_id = comp_unit.root();
                 die_ref_map.insert(entry.offset(), root_id);
-
-                let cu_low_pc = if let Some(AttributeValue::Addr(addr)) =
-                    entry.attr_value(gimli::DW_AT_low_pc)?
-                {
-                    addr
-                } else if let Some(AttributeValue::DebugAddrIndex(i)) =
-                    entry.attr_value(gimli::DW_AT_low_pc)?
-                {
-                    context.debug_addr.get_address(4, unit.addr_base, i)?
-                } else {
-                    // FIXME? return Err(TransformError("No low_pc for unit header").into());
-                    0
-                };
+                let cu_low_pc = unit.low_pc;
 
                 clone_die_attributes(
-                    dwarf,
-                    &unit,
+                    split_dwarf.unwrap_or(dwarf),
+                    &program_unit,
                     entry,
                     context,
                     addr_tr,
@@ -346,7 +351,9 @@ where
                     vmctx_die_id,
                 )
             } else {
-                return Err(TransformError("Unexpected unit header").into());
+                // Can happen when the DWARF is split and we dont have the package/dwo files.
+                // This is a better user experience than errorring.
+                return Ok(None); // empty:
             }
         } else {
             return Ok(None); // empty
@@ -469,7 +476,7 @@ where
         die_ref_map.insert(entry.offset(), die_id);
 
         clone_die_attributes(
-            dwarf,
+            split_dwarf.unwrap_or(dwarf),
             &unit,
             entry,
             context,

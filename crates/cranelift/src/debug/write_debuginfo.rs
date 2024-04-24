@@ -179,8 +179,17 @@ pub fn emit_dwarf<'a>(
     debuginfo_data: &DebugInfoData,
     funcs: &CompiledFunctionsMetadata,
     memory_offset: &ModuleMemoryOffset,
+    dwarf_package_bytes: Option<&[u8]>,
+    tunables: &wasmtime_environ::Tunables,
 ) -> anyhow::Result<Vec<DwarfSection>> {
-    let dwarf = transform_dwarf(isa, debuginfo_data, funcs, memory_offset)?;
+    let dwarf = transform_dwarf(
+        isa,
+        debuginfo_data,
+        funcs,
+        memory_offset,
+        dwarf_package_bytes,
+        tunables,
+    )?;
     let frame_table = create_frame_table(isa, funcs);
     let sections = emit_dwarf_sections(isa, dwarf, frame_table)?;
     Ok(sections)

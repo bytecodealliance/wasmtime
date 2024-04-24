@@ -29,6 +29,7 @@ use std::{
     collections::{btree_map, BTreeMap, BTreeSet, HashMap, HashSet},
     mem,
 };
+
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
@@ -61,6 +62,7 @@ pub use self::runtime::finish_object;
 pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
+    dwarf_package: Option<&[u8]>,
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
     let tunables = engine.tunables();
 
@@ -101,6 +103,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
         engine,
         compiled_funcs,
         std::iter::once(translation).collect(),
+        dwarf_package,
     )?;
 
     let info = compilation_artifacts.unwrap_as_module_info();
@@ -118,9 +121,10 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 /// The output artifact here is the serialized object file contained within
 /// an owned mmap along with metadata about the compilation itself.
 #[cfg(feature = "component-model")]
-pub(crate) fn build_component_artifacts<T: FinishedObject>(
+pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
+    _dwarf_package: Option<&[u8]>,
 ) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
     use wasmtime_environ::component::{
         CompiledComponentInfo, ComponentArtifacts, ComponentTypesBuilder,
@@ -159,6 +163,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         engine,
         compiled_funcs,
         module_translations,
+        None, // TODO: Support dwarf packages for components.
     )?;
     let (types, ty) = types.finish(
         &compilation_artifacts.modules,
@@ -649,6 +654,7 @@ impl FunctionIndices {
         engine: &'a Engine,
         compiled_funcs: Vec<(String, Box<dyn Any + Send>)>,
         translations: PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
+        dwarf_package_bytes: Option<&[u8]>,
     ) -> Result<(wasmtime_environ::ObjectBuilder<'a>, Artifacts)> {
         // Append all the functions to the ELF file.
         //
@@ -713,7 +719,13 @@ impl FunctionIndices {
                     })
                     .collect();
                 if !funcs.is_empty() {
-                    compiler.append_dwarf(&mut obj, translation, &funcs)?;
+                    compiler.append_dwarf(
+                        &mut obj,
+                        translation,
+                        &funcs,
+                        dwarf_package_bytes,
+                        tunables,
+                    )?;
                 }
             }
         }
