@@ -202,6 +202,7 @@ where
 /// it came from. Comparisons with this value are how panics are generated for
 /// mismatching the item that a store belongs to.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[repr(transparent)] // NB: relied on in the C API
 pub struct StoreId(NonZeroU64);
 
 impl StoreId {

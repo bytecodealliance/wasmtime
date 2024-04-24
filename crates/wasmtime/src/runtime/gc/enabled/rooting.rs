@@ -1209,6 +1209,16 @@ where
     _phantom: std::marker::PhantomData<T>,
 }
 
+const _: () = {
+    use crate::{AnyRef, ExternRef};
+
+    // NB: these match the C API which should also be updated if this changes
+    assert!(std::mem::size_of::<ManuallyRooted<AnyRef>>() == 16);
+    assert!(std::mem::align_of::<ManuallyRooted<AnyRef>>() == 8);
+    assert!(std::mem::size_of::<ManuallyRooted<ExternRef>>() == 16);
+    assert!(std::mem::align_of::<ManuallyRooted<ExternRef>>() == 8);
+};
+
 impl<T: GcRef> Debug for ManuallyRooted<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = format!("ManuallyRooted<{}>", std::any::type_name::<T>());
