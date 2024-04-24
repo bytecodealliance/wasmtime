@@ -1231,7 +1231,7 @@ impl<I: VCodeInst> VCode<I> {
         self.block_order.lowered_order()[block.index()].orig_block()
     }
 
-    pub fn resolve_vreg_alias(&self, from: regalloc2::VReg) -> regalloc2::VReg {
+    fn resolve_vreg_alias(&self, from: regalloc2::VReg) -> regalloc2::VReg {
         Self::resolve_vreg_alias_impl(&self.vreg_aliases, from)
     }
 
