@@ -94,12 +94,13 @@ int main() {
 
   // Create a new `anyref` value from an i31 (`i31ref` is a subtype of
   // `anyref`).
-  wasmtime_anyref_t *anyref = wasmtime_anyref_from_i31(context, 1234);
-  assert(anyref != NULL);
+  wasmtime_anyref_t anyref;
+  wasmtime_anyref_from_i31(context, 1234, &anyref);
+  assert(!wasmtime_anyref_is_null(&anyref));
 
   // The `anyref`'s inner i31 value should be 1234.
   uint32_t i31val = 0;
-  bool is_i31 = wasmtime_anyref_i31_get_u(context, anyref, &i31val);
+  bool is_i31 = wasmtime_anyref_i31_get_u(context, &anyref, &i31val);
   assert(is_i31);
   assert(i31val == 1234);
 
@@ -128,10 +129,10 @@ int main() {
   assert(elem.kind == WASMTIME_ANYREF);
   is_i31 = false;
   i31val = 0;
-  is_i31 = wasmtime_anyref_i31_get_u(context, elem.of.anyref, &i31val);
+  is_i31 = wasmtime_anyref_i31_get_u(context, &elem.of.anyref, &i31val);
   assert(is_i31);
   assert(i31val == 1234);
-  wasmtime_val_delete(context, &elem);
+  wasmtime_val_unroot(context, &elem);
 
   printf("Touching `anyref` global...\n");
 
@@ -152,10 +153,10 @@ int main() {
   assert(global_val.kind == WASMTIME_ANYREF);
   is_i31 = false;
   i31val = 0;
-  is_i31 = wasmtime_anyref_i31_get_u(context, global_val.of.anyref, &i31val);
+  is_i31 = wasmtime_anyref_i31_get_u(context, &global_val.of.anyref, &i31val);
   assert(is_i31);
   assert(i31val == 1234);
-  wasmtime_val_delete(context, &global_val);
+  wasmtime_val_unroot(context, &global_val);
 
   printf("Passing `anyref` into func...\n");
 
@@ -190,11 +191,11 @@ int main() {
   assert(results[0].kind == WASMTIME_ANYREF);
   is_i31 = false;
   i31val = 0;
-  is_i31 = wasmtime_anyref_i31_get_u(context, results[0].of.anyref, &i31val);
+  is_i31 = wasmtime_anyref_i31_get_u(context, &results[0].of.anyref, &i31val);
   assert(is_i31);
   assert(i31val == 42);
-  wasmtime_val_delete(context, &results[0]);
-  wasmtime_val_delete(context, &anyref_val);
+  wasmtime_val_unroot(context, &results[0]);
+  wasmtime_val_unroot(context, &anyref_val);
 
   // We can GC any now-unused references to our anyref that the store is
   // holding.

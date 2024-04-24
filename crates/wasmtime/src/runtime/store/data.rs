@@ -202,6 +202,7 @@ where
 /// it came from. Comparisons with this value are how panics are generated for
 /// mismatching the item that a store belongs to.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[repr(transparent)] // NB: relied on in the C API
 pub struct StoreId(NonZeroU64);
 
 impl StoreId {
@@ -234,6 +235,16 @@ impl StoreId {
             return;
         }
         store_id_mismatch();
+    }
+
+    /// Raw accessor for the C API.
+    pub fn as_raw(&self) -> NonZeroU64 {
+        self.0
+    }
+
+    /// Raw constructor for the C API.
+    pub fn from_raw(id: NonZeroU64) -> StoreId {
+        StoreId(id)
     }
 }
 

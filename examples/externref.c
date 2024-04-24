@@ -94,11 +94,12 @@ int main() {
   //
   // Note that the NULL here is a finalizer callback, but we don't need one for
   // this example.
-  wasmtime_externref_t *externref =
-      wasmtime_externref_new(context, "Hello, World!", NULL);
+  wasmtime_externref_t externref;
+  ok = wasmtime_externref_new(context, "Hello, World!", NULL, &externref);
+  assert(ok);
 
   // The `externref`'s wrapped data should be the string "Hello, World!".
-  void *data = wasmtime_externref_data(context, externref);
+  void *data = wasmtime_externref_data(context, &externref);
   assert(strcmp((char *)data, "Hello, World!") == 0);
 
   wasmtime_extern_t item;
@@ -124,9 +125,9 @@ int main() {
     ok = wasmtime_table_get(context, &item.of.table, 3, &elem);
     assert(ok);
     assert(elem.kind == WASMTIME_EXTERNREF);
-    assert(strcmp((char *)wasmtime_externref_data(context, elem.of.externref),
+    assert(strcmp((char *)wasmtime_externref_data(context, &elem.of.externref),
                   "Hello, World!") == 0);
-    wasmtime_val_delete(context, &elem);
+    wasmtime_val_unroot(context, &elem);
   }
 
   printf("Touching `externref` global...\n");
@@ -148,9 +149,9 @@ int main() {
     wasmtime_global_get(context, &item.of.global, &global_val);
     assert(global_val.kind == WASMTIME_EXTERNREF);
     assert(strcmp((char *)wasmtime_externref_data(context,
-                                                  global_val.of.externref),
+                                                  &global_val.of.externref),
                   "Hello, World!") == 0);
-    wasmtime_val_delete(context, &global_val);
+    wasmtime_val_unroot(context, &global_val);
   }
 
   printf("Calling `externref` func...\n");
@@ -173,11 +174,11 @@ int main() {
     // our `externref`.
     assert(results[0].kind == WASMTIME_EXTERNREF);
     assert(strcmp((char *)wasmtime_externref_data(context,
-                                                  results[0].of.externref),
+                                                  &results[0].of.externref),
                   "Hello, World!") == 0);
-    wasmtime_val_delete(context, &results[0]);
+    wasmtime_val_unroot(context, &results[0]);
   }
-  wasmtime_val_delete(context, &externref_val);
+  wasmtime_val_unroot(context, &externref_val);
 
   // We can GC any now-unused references to our externref that the store is
   // holding.

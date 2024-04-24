@@ -107,6 +107,7 @@ use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use anyhow::anyhow;
+use std::num::NonZeroU64;
 use std::{
     fmt::Debug,
     hash::Hash,
@@ -186,11 +187,18 @@ pub(crate) use sealed::*;
 // Just `pub` to avoid `warn(private_interfaces)` in public APIs, which we can't
 // `allow(...)` on our MSRV yet.
 #[doc(hidden)]
+#[repr(C)] // NB: if this layout changes be sure to change the C API as well
 pub struct GcRootIndex {
     store_id: StoreId,
     generation: u32,
     index: PackedIndex,
 }
+
+const _: () = {
+    // NB: these match the C API which should also be updated if this changes
+    assert!(std::mem::size_of::<GcRootIndex>() == 16);
+    assert!(std::mem::align_of::<GcRootIndex>() == 8);
+};
 
 impl GcRootIndex {
     #[inline]
@@ -271,6 +279,7 @@ impl GcRootIndex {
 /// where the high bit is the discriminant and the lower 31 bits are the
 /// payload.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 struct PackedIndex(u32);
 
 impl Debug for PackedIndex {
@@ -1192,6 +1201,7 @@ where
 /// unroot. Sometimes leaking is intentional and desirable, particularly when
 /// dealing with short-lived [`Store`][crate::Store]s where unrooting would just
 /// be busy work since the whole store is about to be dropped.
+#[repr(transparent)] // NB: the C API relies on this
 pub struct ManuallyRooted<T>
 where
     T: GcRef,
@@ -1199,6 +1209,16 @@ where
     inner: GcRootIndex,
     _phantom: std::marker::PhantomData<T>,
 }
+
+const _: () = {
+    use crate::{AnyRef, ExternRef};
+
+    // NB: these match the C API which should also be updated if this changes
+    assert!(std::mem::size_of::<ManuallyRooted<AnyRef>>() == 16);
+    assert!(std::mem::align_of::<ManuallyRooted<AnyRef>>() == 8);
+    assert!(std::mem::size_of::<ManuallyRooted<ExternRef>>() == 16);
+    assert!(std::mem::align_of::<ManuallyRooted<ExternRef>>() == 8);
+};
 
 impl<T: GcRef> Debug for ManuallyRooted<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1512,6 +1532,27 @@ where
             .get_gc_ref(store.as_context().0)
             .expect("ManuallyRooted's get_gc_ref is infallible");
         gc_ref.hash(state);
+    }
+
+    #[doc(hidden)]
+    pub fn into_parts_for_c_api(self) -> (NonZeroU64, u32, u32) {
+        (
+            self.inner.store_id.as_raw(),
+            self.inner.generation,
+            self.inner.index.0,
+        )
+    }
+
+    #[doc(hidden)]
+    pub unsafe fn from_raw_parts_for_c_api(a: NonZeroU64, b: u32, c: u32) -> ManuallyRooted<T> {
+        ManuallyRooted {
+            inner: GcRootIndex {
+                store_id: StoreId::from_raw(a),
+                generation: b,
+                index: PackedIndex(c),
+            },
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
 
