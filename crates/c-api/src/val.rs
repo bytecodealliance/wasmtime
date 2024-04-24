@@ -297,12 +297,12 @@ pub unsafe extern "C" fn wasmtime_val_unroot(
     let val = val.assume_init_read();
     match val.kind {
         crate::WASMTIME_ANYREF => {
-            if let Some(val) = ManuallyDrop::into_inner(val.of.anyref).into_wasmtime() {
+            if let Some(val) = ManuallyDrop::into_inner(val.of.anyref).as_wasmtime() {
                 val.unroot(cx);
             }
         }
         crate::WASMTIME_EXTERNREF => {
-            if let Some(val) = ManuallyDrop::into_inner(val.of.externref).into_wasmtime() {
+            if let Some(val) = ManuallyDrop::into_inner(val.of.externref).as_wasmtime() {
                 val.unroot(cx);
             }
         }

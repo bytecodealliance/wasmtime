@@ -236,6 +236,16 @@ impl StoreId {
         }
         store_id_mismatch();
     }
+
+    /// Raw accessor for the C API.
+    pub fn as_raw(&self) -> NonZeroU64 {
+        self.0
+    }
+
+    /// Raw constructor for the C API.
+    pub fn from_raw(id: NonZeroU64) -> StoreId {
+        StoreId(id)
+    }
 }
 
 #[repr(C)] // used by reference in the C API

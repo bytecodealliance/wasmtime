@@ -107,6 +107,7 @@ use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use anyhow::anyhow;
+use std::num::NonZeroU64;
 use std::{
     fmt::Debug,
     hash::Hash,
@@ -1531,6 +1532,27 @@ where
             .get_gc_ref(store.as_context().0)
             .expect("ManuallyRooted's get_gc_ref is infallible");
         gc_ref.hash(state);
+    }
+
+    #[doc(hidden)]
+    pub fn into_parts_for_c_api(self) -> (NonZeroU64, u32, u32) {
+        (
+            self.inner.store_id.as_raw(),
+            self.inner.generation,
+            self.inner.index.0,
+        )
+    }
+
+    #[doc(hidden)]
+    pub unsafe fn from_raw_parts_for_c_api(a: NonZeroU64, b: u32, c: u32) -> ManuallyRooted<T> {
+        ManuallyRooted {
+            inner: GcRootIndex {
+                store_id: StoreId::from_raw(a),
+                generation: b,
+                index: PackedIndex(c),
+            },
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
 
