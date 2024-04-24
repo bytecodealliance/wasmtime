@@ -104,7 +104,7 @@ object = { workspace = true }
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
 
 [build-dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 
 [profile.release.build-override]
 opt-level = 0
