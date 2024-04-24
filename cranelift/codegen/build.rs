@@ -27,6 +27,7 @@ fn main() {
     let start_time = Instant::now();
 
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
+    let out_dir = std::path::Path::new(&out_dir);
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
 
     let all_arch = env::var("CARGO_FEATURE_ALL_ARCH").is_ok();
@@ -60,7 +61,7 @@ fn main() {
     #[cfg(feature = "isle-in-source-tree")]
     let isle_dir = explicit_isle_dir;
     #[cfg(not(feature = "isle-in-source-tree"))]
-    let isle_dir = std::path::Path::new(&out_dir);
+    let isle_dir = &out_dir;
 
     #[cfg(feature = "isle-in-source-tree")]
     {
@@ -80,7 +81,7 @@ fn main() {
         }
     }
 
-    if let Err(err) = meta::generate(&isas, &out_dir, isle_dir.to_str().unwrap()) {
+    if let Err(err) = meta::generate(&isas, &out_dir, isle_dir) {
         eprintln!("Error: {}", err);
         process::exit(1);
     }
@@ -100,7 +101,7 @@ fn main() {
             "cargo:warning=Build step took {:?}.",
             Instant::now() - start_time
         );
-        println!("cargo:warning=Generated files are in {}", out_dir);
+        println!("cargo:warning=Generated files are in {}", out_dir.display());
     }
 
     let pkg_version = env::var("CARGO_PKG_VERSION").unwrap();
@@ -166,7 +167,7 @@ fn build_isle(
 
     let mut had_error = false;
     for compilation in &isle_compilations.items {
-        for file in &compilation.inputs {
+        for file in &compilation.tracked_inputs {
             println!("cargo:rerun-if-changed={}", file.display());
         }
 
@@ -204,7 +205,7 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
 
     let code = {
         let file_paths = compilation
-            .inputs
+            .tracked_inputs
             .iter()
             .chain(compilation.untracked_inputs.iter());
 

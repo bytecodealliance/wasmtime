@@ -67,7 +67,7 @@ fn emit_types(fmt: &mut srcgen::Formatter) {
 }
 
 /// Generate the types file.
-pub(crate) fn generate(filename: &str, out_dir: &str) -> Result<(), error::Error> {
+pub(crate) fn generate(filename: &str, out_dir: &std::path::Path) -> Result<(), error::Error> {
     let mut fmt = srcgen::Formatter::new();
     emit_types(&mut fmt);
     fmt.update_file(filename, out_dir)?;
