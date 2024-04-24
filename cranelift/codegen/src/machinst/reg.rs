@@ -319,10 +319,16 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     }
 
     /// Add an operand.
-    fn add_operand(&mut self, operand: Operand) {
-        let vreg = (self.renamer)(operand.vreg());
-        let operand = Operand::new(vreg, operand.constraint(), operand.kind(), operand.pos());
-        self.operands.push(operand);
+    fn add_operand(
+        &mut self,
+        reg: Reg,
+        constraint: OperandConstraint,
+        kind: OperandKind,
+        pos: OperandPos,
+    ) {
+        let vreg = (self.renamer)(reg.into());
+        self.operands
+            .push(Operand::new(vreg, constraint, kind, pos));
     }
 
     /// Finish the operand collection and return the tuple giving the
@@ -337,40 +343,29 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Add a use of a fixed, nonallocatable physical register.
     pub fn reg_fixed_nonallocatable(&mut self, preg: PReg) {
         debug_assert!(!self.is_allocatable_preg(preg));
-        self.add_operand(Operand::fixed_nonallocatable(preg))
+        // Magic VReg which does not participate in register allocation.
+        let vreg = VReg::new(VReg::MAX, preg.class());
+        let constraint = OperandConstraint::FixedReg(preg);
+        // This operand won't be allocated, so kind and pos don't matter.
+        self.add_operand(Reg(vreg), constraint, OperandKind::Use, OperandPos::Early);
     }
 
     /// Add a register use, at the start of the instruction (`Before`
     /// position).
     pub fn reg_use(&mut self, reg: Reg) {
-        if let Some(rreg) = reg.to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.is_virtual());
-            self.add_operand(Operand::reg_use(reg.into()));
-        }
+        self.reg_maybe_fixed(reg, OperandKind::Use, OperandPos::Early);
     }
 
     /// Add a register use, at the end of the instruction (`After` position).
     pub fn reg_late_use(&mut self, reg: Reg) {
-        if let Some(rreg) = reg.to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.is_virtual());
-            self.add_operand(Operand::reg_use_at_end(reg.into()));
-        }
+        self.reg_maybe_fixed(reg, OperandKind::Use, OperandPos::Late);
     }
 
     /// Add a register def, at the end of the instruction (`After`
     /// position). Use only when this def will be written after all
     /// uses are read.
     pub fn reg_def(&mut self, reg: Writable<Reg>) {
-        if let Some(rreg) = reg.to_reg().to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.to_reg().is_virtual());
-            self.add_operand(Operand::reg_def(reg.to_reg().into()));
-        }
+        self.reg_maybe_fixed(reg.to_reg(), OperandKind::Def, OperandPos::Late);
     }
 
     /// Add a register "early def", which logically occurs at the
@@ -378,47 +373,47 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// when the def may be written before all uses are read; the
     /// regalloc will ensure that it does not overwrite any uses.
     pub fn reg_early_def(&mut self, reg: Writable<Reg>) {
-        if let Some(rreg) = reg.to_reg().to_real_reg() {
-            self.reg_fixed_nonallocatable(rreg.into());
-        } else {
-            debug_assert!(reg.to_reg().is_virtual());
-            self.add_operand(Operand::reg_def_at_start(reg.to_reg().into()));
-        }
+        self.reg_maybe_fixed(reg.to_reg(), OperandKind::Def, OperandPos::Early);
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at the end of the instruction.
     pub fn reg_fixed_late_use(&mut self, reg: Reg, rreg: Reg) {
-        debug_assert!(reg.is_virtual());
-        let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        debug_assert!(self.is_allocatable_preg(rreg.into()));
-        self.add_operand(Operand::new(
-            reg.into(),
-            OperandConstraint::FixedReg(rreg.into()),
-            OperandKind::Use,
-            OperandPos::Late,
-        ));
+        self.reg_fixed(reg, rreg, OperandKind::Use, OperandPos::Late);
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_use(&mut self, reg: Reg, rreg: Reg) {
-        debug_assert!(reg.is_virtual());
-        let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        debug_assert!(self.is_allocatable_preg(rreg.into()));
-        self.add_operand(Operand::reg_fixed_use(reg.into(), rreg.into()));
+        self.reg_fixed(reg, rreg, OperandKind::Use, OperandPos::Early);
     }
 
     /// Add a register "fixed def", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_def(&mut self, reg: Writable<Reg>, rreg: Reg) {
-        debug_assert!(reg.to_reg().is_virtual());
+        self.reg_fixed(reg.to_reg(), rreg, OperandKind::Def, OperandPos::Late);
+    }
+
+    /// Add an operand tying a virtual register to a physical register.
+    fn reg_fixed(&mut self, reg: Reg, rreg: Reg, kind: OperandKind, pos: OperandPos) {
+        debug_assert!(reg.is_virtual());
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
         debug_assert!(
             self.is_allocatable_preg(rreg.into()),
             "{rreg:?} is not allocatable"
         );
-        self.add_operand(Operand::reg_fixed_def(reg.to_reg().into(), rreg.into()));
+        let constraint = OperandConstraint::FixedReg(rreg.into());
+        self.add_operand(reg, constraint, kind, pos);
+    }
+
+    /// Add an operand which might already be a physical register.
+    fn reg_maybe_fixed(&mut self, reg: Reg, kind: OperandKind, pos: OperandPos) {
+        if let Some(rreg) = reg.to_real_reg() {
+            self.reg_fixed_nonallocatable(rreg.into());
+        } else {
+            debug_assert!(reg.is_virtual());
+            self.add_operand(reg, OperandConstraint::Reg, kind, pos);
+        }
     }
 
     /// Add a register def that reuses an earlier use-operand's
@@ -432,10 +427,12 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
             // fixed-nonallocatable register.
             self.reg_fixed_nonallocatable(rreg.into());
         } else {
+            debug_assert!(reg.to_reg().is_virtual());
             // The operand we're reusing must not be fixed-nonallocatable, as
             // that would imply that the register has been allocated to a
             // virtual register.
-            self.add_operand(Operand::reg_reuse_def(reg.to_reg().into(), idx));
+            let constraint = OperandConstraint::Reuse(idx);
+            self.add_operand(reg.to_reg(), constraint, OperandKind::Def, OperandPos::Late);
         }
     }
 
