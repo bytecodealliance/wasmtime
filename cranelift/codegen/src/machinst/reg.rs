@@ -157,11 +157,11 @@ impl std::fmt::Debug for VirtualReg {
 /// temporary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Writable<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> {
+pub struct Writable<T> {
     reg: T,
 }
 
-impl<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> Writable<T> {
+impl<T> Writable<T> {
     /// Explicitly construct a `Writable<T>` from a `T`. As noted in
     /// the documentation for `Writable`, this is not hidden or
     /// disallowed from the outside; anyone can perform the "cast";
@@ -176,11 +176,7 @@ impl<T: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash> Writabl
     }
 
     /// Map the underlying register to another value or type.
-    pub fn map<U, F>(self, f: F) -> Writable<U>
-    where
-        U: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash,
-        F: Fn(T) -> U,
-    {
+    pub fn map<U>(self, f: impl Fn(T) -> U) -> Writable<U> {
         Writable { reg: f(self.reg) }
     }
 }
