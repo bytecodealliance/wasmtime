@@ -10,7 +10,7 @@ use crate::{settings, CodegenError, CodegenResult};
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
-use regalloc2::{PRegSet, VReg};
+use regalloc2::PRegSet;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Write;
 use std::string::{String, ToString};
@@ -396,10 +396,7 @@ impl Inst {
 //=============================================================================
 // Instructions: get_regs
 
-fn memarg_operands<F: Fn(VReg) -> VReg>(
-    memarg: &mut AMode,
-    collector: &mut OperandCollector<'_, F>,
-) {
+fn memarg_operands(memarg: &mut AMode, collector: &mut impl OperandVisitor) {
     // This should match `AMode::with_allocs()`.
     match memarg {
         AMode::Unscaled { rn, .. } | AMode::UnsignedOffset { rn, .. } => {
@@ -423,10 +420,7 @@ fn memarg_operands<F: Fn(VReg) -> VReg>(
     }
 }
 
-fn pairmemarg_operands<F: Fn(VReg) -> VReg>(
-    pairmemarg: &mut PairAMode,
-    collector: &mut OperandCollector<'_, F>,
-) {
+fn pairmemarg_operands(pairmemarg: &mut PairAMode, collector: &mut impl OperandVisitor) {
     // This should match `PairAMode::with_allocs()`.
     match pairmemarg {
         PairAMode::SignedOffset { reg, .. } => {
@@ -436,10 +430,7 @@ fn pairmemarg_operands<F: Fn(VReg) -> VReg>(
     }
 }
 
-fn aarch64_get_operands<F: Fn(VReg) -> VReg>(
-    inst: &mut Inst,
-    collector: &mut OperandCollector<'_, F>,
-) {
+fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     match inst {
         Inst::AluRRR { rd, rn, rm, .. } => {
             collector.reg_def(rd);
@@ -997,7 +988,7 @@ impl MachInst for Inst {
     // debugging.
     const TRAP_OPCODE: &'static [u8] = &0xc11f_u32.to_le_bytes();
 
-    fn get_operands<F: Fn(VReg) -> VReg>(&mut self, collector: &mut OperandCollector<'_, F>) {
+    fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         aarch64_get_operands(self, collector);
     }
 

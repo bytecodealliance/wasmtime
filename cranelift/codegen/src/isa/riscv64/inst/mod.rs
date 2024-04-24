@@ -13,7 +13,7 @@ use crate::{settings, CodegenError, CodegenResult};
 pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
-use regalloc2::{PRegSet, RegClass, VReg};
+use regalloc2::{PRegSet, RegClass};
 use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
 use std::fmt::Write;
@@ -317,10 +317,7 @@ impl Inst {
 
 //=============================================================================
 
-fn vec_mask_operands<F: Fn(VReg) -> VReg>(
-    mask: &mut VecOpMasking,
-    collector: &mut OperandCollector<'_, F>,
-) {
+fn vec_mask_operands(mask: &mut VecOpMasking, collector: &mut impl OperandVisitor) {
     match mask {
         VecOpMasking::Enabled { reg } => {
             collector.reg_fixed_use(reg, pv_reg(0).into());
@@ -328,10 +325,7 @@ fn vec_mask_operands<F: Fn(VReg) -> VReg>(
         VecOpMasking::Disabled => {}
     }
 }
-fn vec_mask_late_operands<F: Fn(VReg) -> VReg>(
-    mask: &mut VecOpMasking,
-    collector: &mut OperandCollector<'_, F>,
-) {
+fn vec_mask_late_operands(mask: &mut VecOpMasking, collector: &mut impl OperandVisitor) {
     match mask {
         VecOpMasking::Enabled { reg } => {
             collector.reg_fixed_late_use(reg, pv_reg(0).into());
@@ -340,10 +334,7 @@ fn vec_mask_late_operands<F: Fn(VReg) -> VReg>(
     }
 }
 
-fn riscv64_get_operands<F: Fn(VReg) -> VReg>(
-    inst: &mut Inst,
-    collector: &mut OperandCollector<'_, F>,
-) {
+fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     match inst {
         Inst::Nop0 | Inst::Nop4 => {}
         Inst::BrTable {
@@ -789,7 +780,7 @@ impl MachInst for Inst {
         }
     }
 
-    fn get_operands<F: Fn(VReg) -> VReg>(&mut self, collector: &mut OperandCollector<'_, F>) {
+    fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         riscv64_get_operands(self, collector);
     }
 

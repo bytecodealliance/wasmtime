@@ -310,33 +310,6 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         }
     }
 
-    /// Returns true if no reuse_def constraints have been added.
-    pub fn no_reuse_def(&self) -> bool {
-        !self.operands[self.operands_start..]
-            .iter()
-            .any(|operand| match operand.constraint() {
-                OperandConstraint::Reuse(_) => true,
-                _ => false,
-            })
-    }
-
-    fn is_allocatable_preg(&self, reg: PReg) -> bool {
-        self.allocatable.contains(reg)
-    }
-
-    /// Add an operand.
-    fn add_operand(
-        &mut self,
-        reg: &mut Reg,
-        constraint: OperandConstraint,
-        kind: OperandKind,
-        pos: OperandPos,
-    ) {
-        reg.0 = (self.renamer)(reg.0);
-        self.operands
-            .push(Operand::new(reg.0, constraint, kind, pos));
-    }
-
     /// Finish the operand collection and return the tuple giving the
     /// range of indices in the flattened operand array, and the
     /// clobber set.
@@ -345,10 +318,29 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         let end = self.operands.len() as u32;
         ((start, end), self.clobbers)
     }
+}
 
+pub trait OperandVisitor {
+    fn add_operand(
+        &mut self,
+        reg: &mut Reg,
+        constraint: OperandConstraint,
+        kind: OperandKind,
+        pos: OperandPos,
+    );
+
+    fn debug_assert_is_allocatable_preg(&self, _reg: PReg, _expected: bool) {}
+
+    /// Add a register clobber set. This is a set of registers that
+    /// are written by the instruction, so must be reserved (not used)
+    /// for the whole instruction, but are not used afterward.
+    fn reg_clobbers(&mut self, _regs: PRegSet) {}
+}
+
+pub trait OperandVisitorImpl: OperandVisitor {
     /// Add a use of a fixed, nonallocatable physical register.
-    pub fn reg_fixed_nonallocatable(&mut self, preg: PReg) {
-        debug_assert!(!self.is_allocatable_preg(preg));
+    fn reg_fixed_nonallocatable(&mut self, preg: PReg) {
+        self.debug_assert_is_allocatable_preg(preg, false);
         // Magic VReg which does not participate in register allocation.
         let mut reg = Reg(VReg::new(VReg::MAX, preg.class()));
         let constraint = OperandConstraint::FixedReg(preg);
@@ -358,19 +350,19 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
 
     /// Add a register use, at the start of the instruction (`Before`
     /// position).
-    pub fn reg_use(&mut self, reg: &mut impl AsMut<Reg>) {
+    fn reg_use(&mut self, reg: &mut impl AsMut<Reg>) {
         self.reg_maybe_fixed(reg.as_mut(), OperandKind::Use, OperandPos::Early);
     }
 
     /// Add a register use, at the end of the instruction (`After` position).
-    pub fn reg_late_use(&mut self, reg: &mut impl AsMut<Reg>) {
+    fn reg_late_use(&mut self, reg: &mut impl AsMut<Reg>) {
         self.reg_maybe_fixed(reg.as_mut(), OperandKind::Use, OperandPos::Late);
     }
 
     /// Add a register def, at the end of the instruction (`After`
     /// position). Use only when this def will be written after all
     /// uses are read.
-    pub fn reg_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>) {
+    fn reg_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>) {
         self.reg_maybe_fixed(reg.reg.as_mut(), OperandKind::Def, OperandPos::Late);
     }
 
@@ -378,25 +370,25 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// beginning of the instruction, alongside all uses. Use this
     /// when the def may be written before all uses are read; the
     /// regalloc will ensure that it does not overwrite any uses.
-    pub fn reg_early_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>) {
+    fn reg_early_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>) {
         self.reg_maybe_fixed(reg.reg.as_mut(), OperandKind::Def, OperandPos::Early);
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at the end of the instruction.
-    pub fn reg_fixed_late_use(&mut self, reg: &mut impl AsMut<Reg>, rreg: Reg) {
+    fn reg_fixed_late_use(&mut self, reg: &mut impl AsMut<Reg>, rreg: Reg) {
         self.reg_fixed(reg.as_mut(), rreg, OperandKind::Use, OperandPos::Late);
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at this point.
-    pub fn reg_fixed_use(&mut self, reg: &mut impl AsMut<Reg>, rreg: Reg) {
+    fn reg_fixed_use(&mut self, reg: &mut impl AsMut<Reg>, rreg: Reg) {
         self.reg_fixed(reg.as_mut(), rreg, OperandKind::Use, OperandPos::Early);
     }
 
     /// Add a register "fixed def", which ties a vreg to a particular
     /// RealReg at this point.
-    pub fn reg_fixed_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>, rreg: Reg) {
+    fn reg_fixed_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>, rreg: Reg) {
         self.reg_fixed(reg.reg.as_mut(), rreg, OperandKind::Def, OperandPos::Late);
     }
 
@@ -404,10 +396,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     fn reg_fixed(&mut self, reg: &mut Reg, rreg: Reg, kind: OperandKind, pos: OperandPos) {
         debug_assert!(reg.is_virtual());
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        debug_assert!(
-            self.is_allocatable_preg(rreg.into()),
-            "{rreg:?} is not allocatable"
-        );
+        self.debug_assert_is_allocatable_preg(rreg.into(), true);
         let constraint = OperandConstraint::FixedReg(rreg.into());
         self.add_operand(reg, constraint, kind, pos);
     }
@@ -425,7 +414,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Add a register def that reuses an earlier use-operand's
     /// allocation. The index of that earlier operand (relative to the
     /// current instruction's start of operands) must be known.
-    pub fn reg_reuse_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>, idx: usize) {
+    fn reg_reuse_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>, idx: usize) {
         let reg = reg.reg.as_mut();
         if let Some(rreg) = reg.to_real_reg() {
             // In some cases we see real register arguments to a reg_reuse_def
@@ -442,11 +431,33 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
             self.add_operand(reg, constraint, OperandKind::Def, OperandPos::Late);
         }
     }
+}
 
-    /// Add a register clobber set. This is a set of registers that
-    /// are written by the instruction, so must be reserved (not used)
-    /// for the whole instruction, but are not used afterward.
-    pub fn reg_clobbers(&mut self, regs: PRegSet) {
+impl<T: OperandVisitor> OperandVisitorImpl for T {}
+
+impl<'a, F: Fn(VReg) -> VReg> OperandVisitor for OperandCollector<'a, F> {
+    fn add_operand(
+        &mut self,
+        reg: &mut Reg,
+        constraint: OperandConstraint,
+        kind: OperandKind,
+        pos: OperandPos,
+    ) {
+        reg.0 = (self.renamer)(reg.0);
+        self.operands
+            .push(Operand::new(reg.0, constraint, kind, pos));
+    }
+
+    fn debug_assert_is_allocatable_preg(&self, reg: PReg, expected: bool) {
+        debug_assert_eq!(
+            self.allocatable.contains(reg),
+            expected,
+            "{reg:?} should{} be allocatable",
+            if expected { "" } else { " not" }
+        );
+    }
+
+    fn reg_clobbers(&mut self, regs: PRegSet) {
         self.clobbers.union_from(regs);
     }
 }

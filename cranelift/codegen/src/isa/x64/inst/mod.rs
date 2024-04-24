@@ -11,7 +11,7 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
-use regalloc2::{Allocation, PRegSet, VReg};
+use regalloc2::{Allocation, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -1895,7 +1895,7 @@ impl fmt::Debug for Inst {
     }
 }
 
-fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &mut Inst, collector: &mut OperandCollector<'_, F>) {
+fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     // Note: because we need to statically know the indices of each
     // reg in the operands list in order to fetch its allocation
     // later, we put the variable-operand-count bits (the RegMem,
@@ -2523,7 +2523,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &mut Inst, collector: &mut Operan
 impl MachInst for Inst {
     type ABIMachineSpec = X64ABIMachineSpec;
 
-    fn get_operands<F: Fn(VReg) -> VReg>(&mut self, collector: &mut OperandCollector<'_, F>) {
+    fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         x64_get_operands(self, collector)
     }
 
