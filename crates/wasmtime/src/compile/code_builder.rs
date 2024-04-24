@@ -81,6 +81,10 @@ impl<'a> CodeBuilder<'a> {
         self.wasm = Some(wasm_bytes.into());
         self.wasm_path = wasm_path.map(|p| p.into());
 
+        if self.wasm_path.is_some() {
+            self.dwarf_package_from_wasm_path()?;
+        }
+
         Ok(self)
     }
 
