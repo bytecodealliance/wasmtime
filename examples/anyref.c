@@ -96,7 +96,7 @@ int main() {
   // `anyref`).
   wasmtime_anyref_t anyref;
   wasmtime_anyref_from_i31(context, 1234, &anyref);
-  assert(!WASMTIME_ANYREF_IS_NULL(anyref));
+  assert(!wasmtime_anyref_is_null(&anyref));
 
   // The `anyref`'s inner i31 value should be 1234.
   uint32_t i31val = 0;
