@@ -161,12 +161,22 @@ impl Assembler {
         });
     }
 
-    pub fn fmov64_rr(&mut self, rm: Reg, rd: Reg) {
-        let writable_rd = Writable::from_reg(rd.into());
-        self.emit(Inst::FpuMove64 {
-            rd: writable_rd,
-            rn: rm.into(),
-        })
+    /// Floating point register to register move.
+    pub fn fmov_rr(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        let writable = Writable::from_reg(rd.into());
+        let inst = match size {
+            OperandSize::S32 => Inst::FpuMove32 {
+                rd: writable,
+                rn: rn.into(),
+            },
+            OperandSize::S64 => Inst::FpuMove64 {
+                rd: writable,
+                rn: rn.into(),
+            },
+            _ => unreachable!(),
+        };
+
+        self.emit(inst);
     }
 
     pub fn mov_to_fpu(&mut self, rn: Reg, rd: Reg, size: OperandSize) {

@@ -24,7 +24,7 @@
 ;;       movk    w16, #0x3f8c, lsl #16
 ;;       fmov    s1, w16
 ;;       fmul    s1, s1, s0
-;;       fmov    d0, d1
+;;       fmov    s0, s1
 ;;       add     sp, sp, #0x10
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10
