@@ -33,7 +33,7 @@ extern "C" {
  * #wasmtime_anyref_unroot to enable them to be garbage-collected.
  *
  * Null anyref values are represented by this structure and can be tested and
- * created with the #wasmtime_anyref_is_null and #wasmtime_anyref_set_null
+ * created with the `wasmtime_anyref_is_null` and `wasmtime_anyref_set_null`
  * functions.
  */
 typedef struct wasmtime_anyref {
@@ -168,8 +168,8 @@ WASM_API_EXTERN bool wasmtime_anyref_i31_get_s(wasmtime_context_t *context,
  * enable garbage collection.
  *
  * Note that null is represented with this structure and created with
- * #wasmtime_externref_set_null. Null can be tested for with the
- * #wasmtime_externref_is_null function.
+ * `wasmtime_externref_set_null`. Null can be tested for with the
+ * `wasmtime_externref_is_null` function.
  */
 typedef struct wasmtime_externref {
   /// Internal metadata tracking within the store, embedders should not
