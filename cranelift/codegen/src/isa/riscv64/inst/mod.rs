@@ -478,7 +478,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::FpuRRRR {
             rd, rs1, rs2, rs3, ..
         } => {
-            collector.reg_uses(&[rs1, rs2, rs3]);
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
+            collector.reg_use(rs3);
             collector.reg_def(rd);
         }
 
@@ -500,8 +502,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         } => {
             collector.reg_use(condition.rs1);
             collector.reg_use(condition.rs2);
-            collector.reg_uses(x.regs());
-            collector.reg_uses(y.regs());
+            for &reg in x.regs() {
+                collector.reg_use(reg);
+            }
+            for &reg in y.regs() {
+                collector.reg_use(reg);
+            }
             // If there's more than one destination register then use
             // `reg_early_def` to prevent destination registers from overlapping
             // with any operands. This ensures that the lowering doesn't have to
@@ -511,12 +517,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // When there's only one destination register though don't use an
             // early def because once the register is written no other inputs
             // are read so it's ok for the destination to overlap the sources.
-            if dst.regs().len() > 1 {
-                for d in dst.regs() {
-                    collector.reg_early_def(d.clone());
+            match dst.regs() {
+                [reg] => collector.reg_def(*reg),
+                regs => {
+                    for d in regs {
+                        collector.reg_early_def(*d);
+                    }
                 }
-            } else {
-                collector.reg_defs(dst.regs());
             }
         }
         &Inst::AtomicCas {
@@ -528,7 +535,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             v,
             ..
         } => {
-            collector.reg_uses(&[offset, e, addr, v]);
+            collector.reg_use(offset);
+            collector.reg_use(e);
+            collector.reg_use(addr);
+            collector.reg_use(v);
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
@@ -550,7 +560,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             t0,
             ..
         } => {
-            collector.reg_uses(&[offset, p, x]);
+            collector.reg_use(offset);
+            collector.reg_use(p);
+            collector.reg_use(x);
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
