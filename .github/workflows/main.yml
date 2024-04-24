@@ -649,7 +649,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
         RUST_BACKTRACE: 1
-        LLDB: lldb-15
+        LLDB: lldb-15 # override default version, 14
 
     # NB: the test job here is explicitly lacking in cancellation of this run if
     # something goes wrong. These take the longest anyway and otherwise if

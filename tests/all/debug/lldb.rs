@@ -271,7 +271,7 @@ pub fn test_debug_dwarf5_fission_lldb() -> Result<()> {
             "-Ddebug-info",
             "tests/all/debug/testsuite/dwarf_fission.wasm",
         ],
-        r#"breakpoint set --file 1.c --line 6
+        r#"breakpoint set --file dwarf_fission.c --line 6
 r
 fr v
 s
