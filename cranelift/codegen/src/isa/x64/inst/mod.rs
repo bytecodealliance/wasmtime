@@ -1912,29 +1912,29 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::AluRmiR {
             src1, src2, dst, ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src1);
+            collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
         }
-        Inst::AluConstOp { dst, .. } => collector.reg_def(dst.to_writable_reg()),
+        &Inst::AluConstOp { dst, .. } => collector.reg_def(dst),
         Inst::AluRM { src1_dst, src2, .. } => {
-            collector.reg_use(src2.to_reg());
+            collector.reg_use(src2);
             src1_dst.get_operands(collector);
         }
         Inst::AluRmRVex {
             src1, src2, dst, ..
         } => {
-            collector.reg_def(dst.to_writable_reg());
-            collector.reg_use(src1.to_reg());
+            collector.reg_def(*dst);
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
-        Inst::Not { src, dst, .. } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+        &Inst::Not { src, dst, .. } => {
+            collector.reg_use(src);
+            collector.reg_reuse_def(dst, 0);
         }
-        Inst::Neg { src, dst, .. } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+        &Inst::Neg { src, dst, .. } => {
+            collector.reg_use(src);
+            collector.reg_reuse_def(dst, 0);
         }
         Inst::Div {
             dividend_lo,
@@ -1952,22 +1952,22 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             match inst {
                 Inst::Div { divisor, .. } => divisor.get_operands(collector),
-                Inst::CheckedSRemSeq { divisor, .. } => collector.reg_use(divisor.to_reg()),
+                Inst::CheckedSRemSeq { divisor, .. } => collector.reg_use(divisor),
                 _ => {}
             }
-            collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
-            collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
-            collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
-            collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
+            collector.reg_fixed_use(dividend_lo, regs::rax());
+            collector.reg_fixed_use(dividend_hi, regs::rdx());
+            collector.reg_fixed_def(*dst_quotient, regs::rax());
+            collector.reg_fixed_def(*dst_remainder, regs::rdx());
         }
         Inst::Div8 { dividend, dst, .. } | Inst::CheckedSRemSeq8 { dividend, dst, .. } => {
             match inst {
                 Inst::Div8 { divisor, .. } => divisor.get_operands(collector),
-                Inst::CheckedSRemSeq8 { divisor, .. } => collector.reg_use(divisor.to_reg()),
+                Inst::CheckedSRemSeq8 { divisor, .. } => collector.reg_use(divisor),
                 _ => {}
             }
-            collector.reg_fixed_use(dividend.to_reg(), regs::rax());
-            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+            collector.reg_fixed_use(dividend, regs::rax());
+            collector.reg_fixed_def(*dst, regs::rax());
         }
         Inst::Mul {
             src1,
@@ -1976,53 +1976,53 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst_hi,
             ..
         } => {
-            collector.reg_fixed_use(src1.to_reg(), regs::rax());
-            collector.reg_fixed_def(dst_lo.to_writable_reg(), regs::rax());
-            collector.reg_fixed_def(dst_hi.to_writable_reg(), regs::rdx());
+            collector.reg_fixed_use(src1, regs::rax());
+            collector.reg_fixed_def(*dst_lo, regs::rax());
+            collector.reg_fixed_def(*dst_hi, regs::rdx());
             src2.get_operands(collector);
         }
         Inst::Mul8 {
             src1, src2, dst, ..
         } => {
-            collector.reg_fixed_use(src1.to_reg(), regs::rax());
-            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+            collector.reg_fixed_use(src1, regs::rax());
+            collector.reg_fixed_def(*dst, regs::rax());
             src2.get_operands(collector);
         }
         Inst::IMul {
             src1, src2, dst, ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src1);
+            collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
         }
         Inst::IMulImm { src1, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src1.get_operands(collector);
         }
-        Inst::SignExtendData { size, src, dst } => {
+        &Inst::SignExtendData { size, src, dst } => {
             match size {
                 OperandSize::Size8 => {
                     // Note `rax` on both src and dest: 8->16 extend
                     // does AL -> AX.
-                    collector.reg_fixed_use(src.to_reg(), regs::rax());
-                    collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+                    collector.reg_fixed_use(src, regs::rax());
+                    collector.reg_fixed_def(dst, regs::rax());
                 }
                 _ => {
                     // All other widths do RAX -> RDX (AX -> DX:AX,
                     // EAX -> EDX:EAX).
-                    collector.reg_fixed_use(src.to_reg(), regs::rax());
-                    collector.reg_fixed_def(dst.to_writable_reg(), regs::rdx());
+                    collector.reg_fixed_use(src, regs::rax());
+                    collector.reg_fixed_def(dst, regs::rdx());
                 }
             }
         }
         Inst::UnaryRmR { src, dst, .. }
         | Inst::UnaryRmRVex { src, dst, .. }
         | Inst::UnaryRmRImmVex { src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmRImm { src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::XmmUnaryRmREvex { src, dst, .. }
@@ -2030,21 +2030,21 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         | Inst::XmmUnaryRmRUnaligned { src, dst, .. }
         | Inst::XmmUnaryRmRVex { src, dst, .. }
         | Inst::XmmUnaryRmRImmVex { src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::XmmRmR {
             src1, src2, dst, ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src1);
+            collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
         }
         Inst::XmmRmRUnaligned {
             src1, src2, dst, ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src1);
+            collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
         }
         Inst::XmmRmRBlend {
@@ -2054,35 +2054,34 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst,
             op,
         } => {
-            assert!(
-                *op == SseOpcode::Blendvpd
-                    || *op == SseOpcode::Blendvps
-                    || *op == SseOpcode::Pblendvb
-            );
-            collector.reg_use(src1.to_reg());
-            collector.reg_fixed_use(mask.to_reg(), regs::xmm0());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            assert!(matches!(
+                op,
+                SseOpcode::Blendvpd | SseOpcode::Blendvps | SseOpcode::Pblendvb
+            ));
+            collector.reg_use(src1);
+            collector.reg_fixed_use(mask, regs::xmm0());
+            collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
         }
         Inst::XmmRmiRVex {
             src1, src2, dst, ..
         } => {
-            collector.reg_def(dst.to_writable_reg());
-            collector.reg_use(src1.to_reg());
+            collector.reg_def(*dst);
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
         Inst::XmmRmRImmVex {
             src1, src2, dst, ..
         } => {
-            collector.reg_def(dst.to_writable_reg());
-            collector.reg_use(src1.to_reg());
+            collector.reg_def(*dst);
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
         Inst::XmmVexPinsr {
             src1, src2, dst, ..
         } => {
-            collector.reg_def(dst.to_writable_reg());
-            collector.reg_use(src1.to_reg());
+            collector.reg_def(*dst);
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
         Inst::XmmRmRVex3 {
@@ -2092,9 +2091,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst,
             ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
-            collector.reg_use(src2.to_reg());
+            collector.reg_use(src1);
+            collector.reg_reuse_def(*dst, 0);
+            collector.reg_use(src2);
             src3.get_operands(collector);
         }
         Inst::XmmRmRBlendVex {
@@ -2104,10 +2103,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst,
             ..
         } => {
-            collector.reg_def(dst.to_writable_reg());
-            collector.reg_use(src1.to_reg());
+            collector.reg_def(*dst);
+            collector.reg_use(src1);
             src2.get_operands(collector);
-            collector.reg_use(mask.to_reg());
+            collector.reg_use(mask);
         }
         Inst::XmmRmREvex {
             op,
@@ -2117,9 +2116,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             assert_ne!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_use(src1.to_reg());
+            collector.reg_use(src1);
             src2.get_operands(collector);
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
         }
         Inst::XmmRmREvex3 {
             op,
@@ -2130,10 +2129,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             assert_eq!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_use(src1.to_reg());
-            collector.reg_use(src2.to_reg());
+            collector.reg_use(src1);
+            collector.reg_use(src2);
             src3.get_operands(collector);
-            collector.reg_reuse_def(dst.to_writable_reg(), 0); // Reuse `src1`.
+            collector.reg_reuse_def(*dst, 0); // Reuse `src1`.
         }
         Inst::XmmRmRImm {
             src1, src2, dst, ..
@@ -2142,101 +2141,101 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
         }
-        Inst::XmmUninitializedValue { dst } => collector.reg_def(dst.to_writable_reg()),
-        Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
-            collector.reg_use(rhs.to_reg());
-            collector.reg_use(lhs.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0); // Reuse RHS.
+        &Inst::XmmUninitializedValue { dst } => collector.reg_def(dst),
+        &Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
+            collector.reg_use(rhs);
+            collector.reg_use(lhs);
+            collector.reg_reuse_def(dst, 0); // Reuse RHS.
         }
         Inst::XmmRmiReg {
             src1, src2, dst, ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0); // Reuse RHS.
+            collector.reg_use(src1);
+            collector.reg_reuse_def(*dst, 0); // Reuse RHS.
             src2.get_operands(collector);
         }
         Inst::XmmMovRM { src, dst, .. }
         | Inst::XmmMovRMVex { src, dst, .. }
         | Inst::XmmMovRMImm { src, dst, .. }
         | Inst::XmmMovRMImmVex { src, dst, .. } => {
-            collector.reg_use(src.to_reg());
+            collector.reg_use(src);
             dst.get_operands(collector);
         }
         Inst::XmmCmpRmR { src1, src2, .. } => {
-            collector.reg_use(src1.to_reg());
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
         Inst::XmmCmpRmRVex { src1, src2, .. } => {
-            collector.reg_use(src1.to_reg());
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
-        Inst::Imm { dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+        &Inst::Imm { dst, .. } => {
+            collector.reg_def(dst);
         }
-        Inst::MovRR { src, dst, .. } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_def(dst.to_writable_reg());
+        &Inst::MovRR { src, dst, .. } => {
+            collector.reg_use(src);
+            collector.reg_def(dst);
         }
-        Inst::MovFromPReg { dst, src } => {
+        &Inst::MovFromPReg { dst, src } => {
             debug_assert!(dst.to_reg().to_reg().is_virtual());
-            collector.reg_fixed_nonallocatable(*src);
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_fixed_nonallocatable(src);
+            collector.reg_def(dst);
         }
         Inst::MovToPReg { dst, src } => {
             debug_assert!(src.to_reg().is_virtual());
-            collector.reg_use(src.to_reg());
+            collector.reg_use(src);
             collector.reg_fixed_nonallocatable(*dst);
         }
-        Inst::XmmToGpr { src, dst, .. }
-        | Inst::XmmToGprVex { src, dst, .. }
-        | Inst::XmmToGprImm { src, dst, .. }
-        | Inst::XmmToGprImmVex { src, dst, .. } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_def(dst.to_writable_reg());
+        &Inst::XmmToGpr { src, dst, .. }
+        | &Inst::XmmToGprVex { src, dst, .. }
+        | &Inst::XmmToGprImm { src, dst, .. }
+        | &Inst::XmmToGprImmVex { src, dst, .. } => {
+            collector.reg_use(src);
+            collector.reg_def(dst);
         }
         Inst::GprToXmm { src, dst, .. } | Inst::GprToXmmVex { src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::CvtIntToFloat {
             src1, src2, dst, ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src1);
+            collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
         }
         Inst::CvtIntToFloatVex {
             src1, src2, dst, ..
         } => {
-            collector.reg_def(dst.to_writable_reg());
-            collector.reg_use(src1.to_reg());
+            collector.reg_def(*dst);
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
-        Inst::CvtUint64ToFloatSeq {
+        &Inst::CvtUint64ToFloatSeq {
             src,
             dst,
             tmp_gpr1,
             tmp_gpr2,
             ..
         } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_early_def(dst.to_writable_reg());
-            collector.reg_early_def(tmp_gpr1.to_writable_reg());
-            collector.reg_early_def(tmp_gpr2.to_writable_reg());
+            collector.reg_use(src);
+            collector.reg_early_def(dst);
+            collector.reg_early_def(tmp_gpr1);
+            collector.reg_early_def(tmp_gpr2);
         }
-        Inst::CvtFloatToSintSeq {
+        &Inst::CvtFloatToSintSeq {
             src,
             dst,
             tmp_xmm,
             tmp_gpr,
             ..
         } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_early_def(dst.to_writable_reg());
-            collector.reg_early_def(tmp_gpr.to_writable_reg());
-            collector.reg_early_def(tmp_xmm.to_writable_reg());
+            collector.reg_use(src);
+            collector.reg_early_def(dst);
+            collector.reg_early_def(tmp_gpr);
+            collector.reg_early_def(tmp_xmm);
         }
-        Inst::CvtFloatToUintSeq {
+        &Inst::CvtFloatToUintSeq {
             src,
             dst,
             tmp_gpr,
@@ -2244,11 +2243,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             tmp_xmm2,
             ..
         } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_early_def(dst.to_writable_reg());
-            collector.reg_early_def(tmp_gpr.to_writable_reg());
-            collector.reg_early_def(tmp_xmm.to_writable_reg());
-            collector.reg_early_def(tmp_xmm2.to_writable_reg());
+            collector.reg_use(src);
+            collector.reg_early_def(dst);
+            collector.reg_early_def(tmp_gpr);
+            collector.reg_early_def(tmp_xmm);
+            collector.reg_early_def(tmp_xmm2);
         }
 
         Inst::MovImmM { dst, .. } => {
@@ -2256,44 +2255,44 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::MovzxRmR { src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::Mov64MR { src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::MovsxRmR { src, dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
             src.get_operands(collector);
         }
         Inst::MovRM { src, dst, .. } => {
-            collector.reg_use(src.to_reg());
+            collector.reg_use(src);
             dst.get_operands(collector);
         }
         Inst::ShiftR {
             num_bits, src, dst, ..
         } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src);
+            collector.reg_reuse_def(*dst, 0);
             if let &Imm8Reg::Reg { reg } = num_bits.as_imm8_reg() {
                 collector.reg_fixed_use(reg, regs::rcx());
             }
         }
         Inst::CmpRmiR { src1, src2, .. } => {
-            collector.reg_use(src1.to_reg());
+            collector.reg_use(src1);
             src2.get_operands(collector);
         }
         Inst::Setcc { dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
         }
         Inst::Bswap { src, dst, .. } => {
-            collector.reg_use(src.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src);
+            collector.reg_reuse_def(*dst, 0);
         }
         Inst::Cmove {
             consequent,
@@ -2301,8 +2300,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst,
             ..
         } => {
-            collector.reg_use(alternative.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(alternative);
+            collector.reg_reuse_def(*dst, 0);
             consequent.get_operands(collector);
         }
         Inst::XmmCmove {
@@ -2311,15 +2310,15 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst,
             ..
         } => {
-            collector.reg_use(alternative.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
-            collector.reg_use(consequent.to_reg());
+            collector.reg_use(alternative);
+            collector.reg_reuse_def(*dst, 0);
+            collector.reg_use(consequent);
         }
         Inst::Push64 { src } => {
             src.get_operands(collector);
         }
         Inst::Pop64 { dst } => {
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_def(*dst);
         }
         Inst::StackProbeLoop { tmp, .. } => {
             collector.reg_early_def(*tmp);
@@ -2363,7 +2362,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 
         Inst::ReturnCallKnown { callee, info } => {
             let ReturnCallInfo { uses, tmp, .. } = &**info;
-            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
+            collector.reg_fixed_def(*tmp, regs::r11());
             // Same as in the `Inst::CallKnown` branch.
             debug_assert_ne!(*callee, ExternalName::LibCall(LibCall::Probestack));
             for u in uses {
@@ -2381,24 +2380,21 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // safe to use.
             collector.reg_fixed_use(*callee, regs::r10());
 
-            collector.reg_fixed_def(tmp.to_writable_reg(), regs::r11());
+            collector.reg_fixed_def(*tmp, regs::r11());
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
         }
 
-        Inst::JmpTableSeq {
-            ref idx,
-            ref tmp1,
-            ref tmp2,
-            ..
+        &Inst::JmpTableSeq {
+            idx, tmp1, tmp2, ..
         } => {
-            collector.reg_use(*idx);
-            collector.reg_early_def(*tmp1);
+            collector.reg_use(idx);
+            collector.reg_early_def(tmp1);
             // In the sequence emitted for this pseudoinstruction in emit.rs,
             // tmp2 is only written after idx is read, so it doesn't need to be
             // an early def.
-            collector.reg_def(*tmp2);
+            collector.reg_def(tmp2);
         }
 
         Inst::JmpUnknown { target } => {
@@ -2466,8 +2462,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // No registers are used.
         }
 
-        Inst::ElfTlsGetAddr { dst, .. } | Inst::MachOTlsGetAddr { dst, .. } => {
-            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+        &Inst::ElfTlsGetAddr { dst, .. } | &Inst::MachOTlsGetAddr { dst, .. } => {
+            collector.reg_fixed_def(dst, regs::rax());
             // All caller-saves are clobbered.
             //
             // We use the SysV calling convention here because the
@@ -2479,15 +2475,15 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(clobbers);
         }
 
-        Inst::CoffTlsGetAddr { dst, tmp, .. } => {
+        &Inst::CoffTlsGetAddr { dst, tmp, .. } => {
             // We also use the gs register. But that register is not allocatable by the
             // register allocator, so we don't need to mark it as used here.
 
             // We use %rax to set the address
-            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+            collector.reg_fixed_def(dst, regs::rax());
 
             // We use %rcx as a temporary variable to load the _tls_index
-            collector.reg_fixed_def(tmp.to_writable_reg(), regs::rcx());
+            collector.reg_fixed_def(tmp, regs::rcx());
         }
 
         Inst::Unwind { .. } => {}
