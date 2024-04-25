@@ -1094,10 +1094,6 @@ pub struct Callee<M: ABIMachineSpec> {
     /// Register-argument defs, to be provided to the `args`
     /// pseudo-inst, and pregs to constrain them to.
     reg_args: Vec<ArgPair>,
-    /// Clobbered registers, from regalloc.
-    clobbered: Vec<Writable<RealReg>>,
-    /// Total number of spillslots, including for 'dynamic' types, from regalloc.
-    spillslots: Option<usize>,
     /// Finalized frame layout for this function.
     frame_layout: Option<FrameLayout>,
     /// The register holding the return-area pointer, if needed.
@@ -1243,8 +1239,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             outgoing_args_size: 0,
             tail_args_size,
             reg_args: vec![],
-            clobbered: vec![],
-            spillslots: None,
             frame_layout: None,
             ret_area_ptr: None,
             arg_temp_reg: vec![],
@@ -1777,16 +1771,6 @@ impl<M: ABIMachineSpec> Callee<M> {
 /// These methods of `Callee` may only be called after
 /// regalloc.
 impl<M: ABIMachineSpec> Callee<M> {
-    /// Update with the number of spillslots, post-regalloc.
-    pub fn set_num_spillslots(&mut self, slots: usize) {
-        self.spillslots = Some(slots);
-    }
-
-    /// Update with the clobbered registers, post-regalloc.
-    pub fn set_clobbered(&mut self, clobbered: Vec<Writable<RealReg>>) {
-        self.clobbered = clobbered;
-    }
-
     /// Generate a stack map, given a list of spillslots and the emission state
     /// at a given program point (prior to emission of the safepointing
     /// instruction).
@@ -1823,16 +1807,21 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// Compute the final frame layout, post-regalloc.
     ///
     /// This must be called before gen_prologue or gen_epilogue.
-    pub fn compute_frame_layout(&mut self, sigs: &SigSet) {
+    pub fn compute_frame_layout(
+        &mut self,
+        sigs: &SigSet,
+        spillslots: usize,
+        clobbered: Vec<Writable<RealReg>>,
+    ) {
         let bytes = M::word_bytes();
-        let total_stacksize = self.stackslots_size + bytes * self.spillslots.unwrap() as u32;
+        let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
         let mask = M::stack_align(self.call_conv) - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
         self.frame_layout = Some(M::compute_frame_layout(
             self.call_conv,
             &self.flags,
             self.signature(),
-            &self.clobbered,
+            &clobbered,
             self.is_leaf,
             self.stack_args_size(sigs),
             self.tail_args_size,

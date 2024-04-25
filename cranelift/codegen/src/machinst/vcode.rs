@@ -772,9 +772,8 @@ impl<I: VCodeInst> VCode<I> {
         // setting clobbers is fairly minimal so this should be
         // relatively cheap.
         let clobbers = self.compute_clobbers(regalloc);
-        self.abi.set_num_spillslots(regalloc.num_spillslots);
-        self.abi.set_clobbered(clobbers);
-        self.abi.compute_frame_layout(&self.sigs);
+        self.abi
+            .compute_frame_layout(&self.sigs, regalloc.num_spillslots, clobbers);
 
         // Emit blocks.
         let mut cur_srcloc = None;
