@@ -85,7 +85,13 @@
                       (iconst_u ty 1)))
       (subsume x))
 
-;; TODO: strength reduction: div to shifts
+;; TODO: strength reduction: div to shifts when negative power of two
+;; x/c == x>>log2(c) when c is a power of two.
+(rule (simplify (udiv ty x (iconst _ (imm64_power_of_two c))))
+      (ushr ty x (iconst ty (imm64 c))))
+
+(rule (simplify (sdiv ty x (iconst _ (imm64_power_of_two c))))
+      (sshr ty x (iconst ty (imm64 c))))
 ;; TODO: div/rem by constants -> magic multiplications
 
 ;; x*2 == x+x.
