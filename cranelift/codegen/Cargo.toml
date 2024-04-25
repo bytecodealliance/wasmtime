@@ -28,7 +28,7 @@ target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
-bincode = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }
 gimli = { workspace = true, features = ["write"], optional = true }
 smallvec = { workspace = true }
 regalloc2 = { workspace = true, features = ["checker", "trace-log"] }
@@ -100,7 +100,7 @@ enable-serde = [
 # Enable the incremental compilation cache for hot-reload use cases.
 incremental-cache = [
     "enable-serde",
-    "bincode",
+    "postcard",
     "sha2"
 ]
 

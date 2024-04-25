@@ -290,7 +290,7 @@ test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
 humantime = "2.0.0"
-bincode = "1.2.1"
+postcard = { version = "1.0.8", default-features = false, features = ['alloc'] }
 
 # =============================================================================
 #

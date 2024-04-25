@@ -1,5 +1,5 @@
 //! Definitions of runtime structures and metadata which are serialized into ELF
-//! with `bincode` as part of a module's compilation process.
+//! with `postcard` as part of a module's compilation process.
 
 use crate::{
     obj, CompiledFunctionInfo, CompiledModuleInfo, DebugInfoData, DefinedFuncIndex, FunctionLoc,
@@ -261,7 +261,7 @@ impl<'a> ObjectBuilder<'a> {
             obj::ELF_WASMTIME_INFO.as_bytes().to_vec(),
             SectionKind::ReadOnlyData,
         );
-        let data = bincode::serialize(info).unwrap();
+        let data = postcard::to_allocvec(info).unwrap();
         self.obj.set_section_data(section, data, 1);
     }
 

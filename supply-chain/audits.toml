@@ -1062,6 +1062,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.2.0"
 
+[[audits.cobs]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.3"
+notes = "No `unsafe` code in the crate and no usage of `std`"
+
 [[audits.codespan-reporting]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1196,6 +1202,12 @@ notes = """
 This diff brings in a number of minor updates of which none are related to
 `unsafe` code or anything system-related like filesystems.
 """
+
+[[audits.embedded-io]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.4.0"
+notes = "No `unsafe` code and only uses `std` in ways one would expect the crate to do so."
 
 [[audits.errno]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -2005,6 +2017,15 @@ delta = "0.3.26 -> 0.3.29"
 notes = """
 No `unsafe` additions or anything outside of the purview of the crate in this
 change.
+"""
+
+[[audits.postcard]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.8"
+notes = """
+I've audited the unsafe code to do what it looks like it's doing. Otherwise the
+crate is a standard serializer/deserializer crate.
 """
 
 [[audits.pretty_env_logger]]

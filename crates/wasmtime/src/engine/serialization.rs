@@ -15,7 +15,7 @@
 //! 1. A version byte, currently `VERSION`.
 //! 2. A byte indicating how long the next field is.
 //! 3. A version string of the length of the previous byte value.
-//! 4. A `bincode`-encoded `Metadata` structure.
+//! 4. A `postcard`-encoded `Metadata` structure.
 //!
 //! This is hoped to help distinguish easily Wasmtime-based ELF files from
 //! other random ELF files, as well as provide better error messages for
@@ -110,7 +110,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         }
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
-    bincode::deserialize::<Metadata<'_>>(data)?.check_compatible(engine)
+    postcard::from_bytes::<Metadata<'_>>(data)?.check_compatible(engine)
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -134,7 +134,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     );
     data.push(version.len() as u8);
     data.extend_from_slice(version.as_bytes());
-    bincode::serialize_into(&mut data, metadata).unwrap();
+    data.extend(postcard::to_allocvec(metadata).unwrap());
     obj.set_section_data(section, data, 1);
 }
 

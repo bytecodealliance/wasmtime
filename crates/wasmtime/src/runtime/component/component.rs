@@ -375,7 +375,7 @@ impl Component {
             static_modules,
         } = match artifacts {
             Some(artifacts) => artifacts,
-            None => bincode::deserialize(code_memory.wasmtime_info())?,
+            None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
 
         // Validate that the component can be used with the current instance
