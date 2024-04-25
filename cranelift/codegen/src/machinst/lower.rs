@@ -989,14 +989,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &arg in branch_args {
                 let arg = self.f.dfg.resolve_aliases(arg);
                 let regs = self.put_value_in_regs(arg);
-                for &vreg in regs.regs() {
-                    let vreg = self.vcode.vcode.resolve_vreg_alias(vreg.into());
-                    branch_arg_vregs.push(vreg.into());
-                }
+                branch_arg_vregs.extend_from_slice(regs.regs());
             }
             self.vcode.add_succ(succ, &branch_arg_vregs[..]);
         }
-        self.finish_ir_inst(Default::default());
     }
 
     fn collect_branches_and_targets(
