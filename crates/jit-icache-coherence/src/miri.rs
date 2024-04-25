@@ -1,5 +1,5 @@
-use std::ffi::c_void;
-use std::io::Result;
+pub use anyhow::Result;
+use core::ffi::c_void;
 
 pub(crate) fn pipeline_flush_mt() -> Result<()> {
     Ok(())

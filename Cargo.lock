@@ -3803,6 +3803,7 @@ dependencies = [
 name = "wasmtime-jit-icache-coherence"
 version = "21.0.0"
 dependencies = [
+ "anyhow",
  "cfg-if",
  "libc",
  "windows-sys 0.52.0",

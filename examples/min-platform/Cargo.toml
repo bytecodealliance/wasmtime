@@ -9,6 +9,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 libloading = "0.8"
 object = { workspace = true }

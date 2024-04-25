@@ -32,14 +32,14 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
-wasi-common = { workspace = true, default-features = true, features = ["exit" ], optional = true }
+wasi-common = { workspace = true, default-features = true, features = ["exit"], optional = true }
 wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
 wasmtime-runtime = { workspace = true, optional = true }
 clap = { workspace = true }
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 target-lexicon = { workspace = true }
 once_cell = { workspace = true }
 listenfd = { version = "1.0.0", optional = true }
@@ -104,7 +104,7 @@ object = { workspace = true }
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
 
 [build-dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 
 [profile.release.build-override]
 opt-level = 0
@@ -248,7 +248,7 @@ wit-component = "0.206.0"
 # --------------------------
 object = { version = "0.33", default-features = false, features = ['read_core', 'elf', 'std'] }
 gimli = { version = "0.28.0", default-features = false, features = ['read', 'std'] }
-anyhow = "1.0.22"
+anyhow = { version = "1.0.22", default-features = false }
 windows-sys = "0.52.0"
 env_logger = "0.10"
 log = { version = "0.4.8", default-features = false }

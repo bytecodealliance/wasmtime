@@ -1,8 +1,12 @@
+extern crate std;
+
 use std::ffi::c_void;
-use std::io::{Error, Result};
+use std::io::Error;
 use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
 use windows_sys::Win32::System::Threading::FlushProcessWriteBuffers;
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+pub use std::io::Result;
 
 /// See docs on [crate::pipeline_flush_mt] for a description of what this function is trying to do.
 #[inline]

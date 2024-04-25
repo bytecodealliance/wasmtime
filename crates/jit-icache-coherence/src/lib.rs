@@ -34,7 +34,7 @@
 //! #   len: usize,
 //! # }
 //! #
-//! # fn main() -> io::Result<()> {
+//! # fn main() -> anyhow::Result<()> {
 //! #
 //! # let run_code = || {};
 //! # let code = vec![0u8; 64];
@@ -67,8 +67,9 @@
 //!
 //! [ARM Community - Caches and Self-Modifying Code]: https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-and-self-modifying-code
 
-use std::ffi::c_void;
-use std::io::Result;
+#![no_std]
+
+use core::ffi::c_void;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "windows")] {
@@ -91,7 +92,7 @@ cfg_if::cfg_if! {
 /// after all calls to [clear_cache].
 ///
 /// If the architecture does not require a pipeline flush, this function does nothing.
-pub fn pipeline_flush_mt() -> Result<()> {
+pub fn pipeline_flush_mt() -> imp::Result<()> {
     imp::pipeline_flush_mt()
 }
 
@@ -103,6 +104,6 @@ pub fn pipeline_flush_mt() -> Result<()> {
 ///
 /// It is necessary to call [pipeline_flush_mt] after this function if you are running in a multi-threaded
 /// environment.
-pub unsafe fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
+pub unsafe fn clear_cache(ptr: *const c_void, len: usize) -> imp::Result<()> {
     imp::clear_cache(ptr, len)
 }

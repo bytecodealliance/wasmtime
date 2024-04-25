@@ -10,7 +10,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
 wasi = "0.11.0"
 wasi-nn = "0.6.0"
 wit-bindgen = { workspace = true, features = ['default'] }
