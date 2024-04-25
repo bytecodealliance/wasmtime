@@ -2321,6 +2321,35 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             // Indefinite sleeping is not supported in preview1.
             return Err(types::Errno::Inval.into());
         }
+
+        // This is a special case where `poll_oneoff` is just sleeping
+        // on a single relative timer event. This special case was added
+        // after experimental observations showed that std::thread::sleep
+        // results in more consistent sleep times. This design ensures that
+        // wasmtime can handle real-time requirements more accurately.
+        if nsubscriptions == 1 {
+            let sub = subs.read()?;
+            if let types::SubscriptionU::Clock(clocksub) = sub.u {
+                if !clocksub
+                    .flags
+                    .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
+                    && self.ctx().allow_blocking_current_thread
+                {
+                    std::thread::sleep(std::time::Duration::from_nanos(clocksub.timeout));
+                    events.write(types::Event {
+                        userdata: sub.userdata,
+                        error: types::Errno::Success,
+                        type_: types::Eventtype::Clock,
+                        fd_readwrite: types::EventFdReadwrite {
+                            flags: types::Eventrwflags::empty(),
+                            nbytes: 1,
+                        },
+                    })?;
+                    return Ok(1);
+                }
+            }
+        }
+
         let subs = subs.as_array(nsubscriptions);
         let events = events.as_array(nsubscriptions);
 
