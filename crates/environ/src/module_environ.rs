@@ -876,6 +876,7 @@ and for re-adding support for interface types you can see this issue:
                 | wasmparser::Name::Element(_)
                 | wasmparser::Name::Data(_)
                 | wasmparser::Name::Tag(_)
+                | wasmparser::Name::Field(_)
                 | wasmparser::Name::Unknown { .. } => {}
             }
         }
