@@ -291,8 +291,8 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
     }
 
-    pub fn init_abi(&mut self, temps: Vec<Writable<Reg>>) {
-        self.vcode.abi.init(&self.vcode.sigs, temps);
+    pub fn init_retval_area(&mut self, vregs: &mut VRegAllocator<I>) -> CodegenResult<()> {
+        self.vcode.abi.init_retval_area(&self.vcode.sigs, vregs)
     }
 
     /// Access the ABI object.

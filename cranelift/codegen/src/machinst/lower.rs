@@ -1019,15 +1019,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     ) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
 
-        // Initialize the ABI object, giving it temps if requested.
-        let temps = self
-            .vcode
-            .abi()
-            .temps_needed(self.sigs())
-            .into_iter()
-            .map(|temp_ty| self.alloc_tmp(temp_ty).only_reg().unwrap())
-            .collect::<Vec<_>>();
-        self.vcode.init_abi(temps);
+        self.vcode.init_retval_area(&mut self.vregs)?;
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).
