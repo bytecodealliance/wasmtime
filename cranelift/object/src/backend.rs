@@ -39,10 +39,10 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
-    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [ir::LibCall]
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [`ir::LibCall`]
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use [cranelift_module::default_libcall_names]().
+    /// argument, use [`cranelift_module::default_libcall_names`].
     pub fn new<V: Into<Vec<u8>>>(
         isa: OwnedTargetIsa,
         name: V,
