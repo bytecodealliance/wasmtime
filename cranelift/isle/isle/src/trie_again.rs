@@ -211,7 +211,7 @@ pub struct RuleSet {
 /// Construct a [RuleSet] for each term in `termenv` that has rules.
 pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
     let mut errors = Vec::new();
-    let mut term = HashMap::new();
+    let mut term = crate::StableMap::new();
     for rule in termenv.rules.iter() {
         term.entry(rule.root_term)
             .or_insert_with(RuleSetBuilder::default)
@@ -222,6 +222,7 @@ pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Erro
     // same output every time when given the same ISLE source. Rules are added to terms in `RuleId`
     // order, so it's not necessary to sort within a `RuleSet`.
     let mut result: Vec<_> = term
+        .0
         .into_iter()
         .map(|(term, builder)| (term, builder.rules))
         .collect();
