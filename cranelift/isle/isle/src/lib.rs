@@ -81,6 +81,18 @@ impl<K: Hash + Eq, V> StableMap<K, V> {
         self.0.get(k)
     }
 
+    fn get_mut(&mut self, k: &K) -> Option<&mut V> {
+        self.0.get_mut(k)
+    }
+
+    fn remove(&mut self, k: &K) -> Option<V> {
+        self.0.remove(k)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     fn entry(&mut self, k: K) -> Entry<K, V> {
         self.0.entry(k)
     }
@@ -99,7 +111,7 @@ impl<K: Hash + Eq, V> Index<&K> for StableMap<K, V> {
 /// have at least two members, and can only be formed by the `merge` operation.
 #[derive(Clone, Debug, Default)]
 pub struct DisjointSets<T> {
-    parent: HashMap<T, (T, u8)>,
+    parent: StableMap<T, (T, u8)>,
 }
 
 impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
@@ -220,7 +232,7 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     {
         let mut set = Vec::new();
         if let Some(x) = self.find_mut(x) {
-            set.extend(self.parent.keys().copied());
+            set.extend(self.parent.0.keys().copied());
             // It's important to use `find_mut` here to avoid quadratic worst-case time.
             set.retain(|&y| self.find_mut(y).unwrap() == x);
             for y in set.iter() {
