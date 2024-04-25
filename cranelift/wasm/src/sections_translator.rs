@@ -381,6 +381,7 @@ pub fn parse_name_section<'data>(
             | wasmparser::Name::Element(_)
             | wasmparser::Name::Data(_)
             | wasmparser::Name::Tag(_)
+            | wasmparser::Name::Field(_)
             | wasmparser::Name::Unknown { .. } => {}
         }
     }
