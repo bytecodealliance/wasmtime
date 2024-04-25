@@ -53,9 +53,13 @@ pub mod dfg;
 #[cfg(feature = "compile")]
 mod translate;
 #[cfg(feature = "compile")]
+mod types_builder;
+#[cfg(feature = "compile")]
 pub use self::compiler::*;
 #[cfg(feature = "compile")]
 pub use self::translate::*;
+#[cfg(feature = "compile")]
+pub use self::types_builder::*;
 
 /// Helper macro to iterate over the transcoders that the host will provide
 /// adapter modules through libcalls.
