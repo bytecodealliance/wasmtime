@@ -658,18 +658,12 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     fn compute_clobbers(&self, regalloc: &regalloc2::Output) -> Vec<Writable<RealReg>> {
-        // Compute clobbered registers.
-        let mut clobbered = vec![];
-        let mut clobbered_set = FxHashSet::default();
+        let mut clobbered = PRegSet::default();
 
         // All moves are included in clobbers.
-        for edit in &regalloc.edits {
-            let Edit::Move { to, .. } = edit.1;
+        for (_, Edit::Move { to, .. }) in &regalloc.edits {
             if let Some(preg) = to.as_reg() {
-                let reg = RealReg::from(preg);
-                if clobbered_set.insert(reg) {
-                    clobbered.push(Writable::from_reg(reg));
-                }
+                clobbered.add(preg);
             }
         }
 
@@ -689,33 +683,23 @@ impl<I: VCodeInst> VCode<I> {
             let operands = &self.operands[start..end];
             let allocs = &regalloc.allocs[start..end];
             for (operand, alloc) in operands.iter().zip(allocs.iter()) {
-                // We're interested only in writes (Mods or Defs).
-                if operand.kind() == OperandKind::Use {
-                    continue;
-                }
-                if let Some(preg) = alloc.as_reg() {
-                    let reg = RealReg::from(preg);
-                    if clobbered_set.insert(reg) {
-                        clobbered.push(Writable::from_reg(reg));
+                if operand.kind() == OperandKind::Def {
+                    if let Some(preg) = alloc.as_reg() {
+                        clobbered.add(preg);
                     }
                 }
             }
 
             // Also add explicitly-clobbered registers.
-            for preg in self
-                .clobbers
-                .get(&InsnIndex::new(i))
-                .cloned()
-                .unwrap_or_default()
-            {
-                let reg = RealReg::from(preg);
-                if clobbered_set.insert(reg) {
-                    clobbered.push(Writable::from_reg(reg));
-                }
+            if let Some(&inst_clobbered) = self.clobbers.get(&InsnIndex::new(i)) {
+                clobbered.union_from(inst_clobbered);
             }
         }
 
         clobbered
+            .into_iter()
+            .map(|preg| Writable::from_reg(RealReg::from(preg)))
+            .collect()
     }
 
     /// Emit the instructions to a `MachBuffer`, containing fixed-up
