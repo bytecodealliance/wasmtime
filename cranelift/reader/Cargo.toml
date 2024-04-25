@@ -13,7 +13,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-anyhow.workspace = true
+anyhow = { workspace = true, features = ['std'] }
 cranelift-codegen = { workspace = true }
 smallvec = { workspace = true }
 target-lexicon = { workspace = true }
