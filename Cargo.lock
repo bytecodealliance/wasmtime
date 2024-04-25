@@ -162,15 +162,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -474,6 +465,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2da6da31387c7e4ef160ffab6d5e7f00c42626fe39aea70a7b0f1773f7dd6c1b"
 
 [[package]]
+name = "cobs"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
+
+[[package]]
 name = "codespan-reporting"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -599,7 +596,6 @@ name = "cranelift-codegen"
 version = "0.108.0"
 dependencies = [
  "anyhow",
- "bincode",
  "bumpalo",
  "capstone",
  "cranelift-bforest",
@@ -612,6 +608,7 @@ dependencies = [
  "gimli",
  "hashbrown 0.14.0",
  "log",
+ "postcard",
  "regalloc2",
  "serde",
  "serde_derive",
@@ -1044,6 +1041,12 @@ name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+
+[[package]]
+name = "embedded-io"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
 
 [[package]]
 name = "embedding"
@@ -2088,6 +2091,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521fa9638fa597e1dc53e9412a4f9cefb01187ee1f7413076f9e6749e2885ba9"
 dependencies = [
  "plotters-backend",
+]
+
+[[package]]
+name = "postcard"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a55c51ee6c0db07e68448e336cf8ea4131a620edefebf9893e759b2d793420f8"
+dependencies = [
+ "cobs",
+ "embedded-io",
+ "serde",
 ]
 
 [[package]]
@@ -3408,7 +3422,6 @@ dependencies = [
  "addr2line",
  "anyhow",
  "async-trait",
- "bincode",
  "bumpalo",
  "cfg-if",
  "encoding_rs",
@@ -3421,6 +3434,7 @@ dependencies = [
  "object 0.33.0",
  "once_cell",
  "paste",
+ "postcard",
  "rayon",
  "rustix",
  "semver",
@@ -3509,11 +3523,11 @@ version = "21.0.0"
 dependencies = [
  "anyhow",
  "base64",
- "bincode",
  "directories-next",
  "filetime",
  "log",
  "once_cell",
+ "postcard",
  "pretty_env_logger",
  "rustix",
  "serde",
@@ -3653,7 +3667,6 @@ name = "wasmtime-environ"
 version = "21.0.0"
 dependencies = [
  "anyhow",
- "bincode",
  "clap",
  "cpp_demangle",
  "cranelift-entity",
@@ -3662,6 +3675,7 @@ dependencies = [
  "indexmap 2.0.0",
  "log",
  "object 0.33.0",
+ "postcard",
  "rustc-demangle",
  "serde",
  "serde_derive",

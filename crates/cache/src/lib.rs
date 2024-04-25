@@ -54,8 +54,8 @@ impl<'config> ModuleCacheEntry<'config> {
         self.get_data_raw(
             &state,
             compute,
-            |_state, data| bincode::serialize(data).ok(),
-            |_state, data| bincode::deserialize(&data).ok(),
+            |_state, data| postcard::to_allocvec(data).ok(),
+            |_state, data| postcard::from_bytes(&data).ok(),
         )
     }
 

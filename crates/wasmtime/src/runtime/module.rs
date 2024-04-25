@@ -445,7 +445,7 @@ impl Module {
         // already.
         let (info, types) = match info_and_types {
             Some((info, types)) => (info, types),
-            None => bincode::deserialize(code_memory.wasmtime_info())?,
+            None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
 
         // Register function type signatures into the engine for the lifetime
