@@ -11,4 +11,4 @@ workspace = true
 [dependencies]
 wasmparser = { workspace = true }
 wat = { workspace = true }
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }
