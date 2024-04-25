@@ -165,7 +165,9 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     /// Merge the set containing `x` with the set containing `y`. This method takes amortized
     /// constant time.
     pub fn merge(&mut self, x: T, y: T) {
-        assert_ne!(x, y);
+        if x == y {
+            return;
+        }
         let mut x = if let Some(x) = self.find_mut(x) {
             self.parent[&x]
         } else {
