@@ -1260,7 +1260,7 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     #[inline]
-    fn assert_no_vreg_aliases(&self, mut list: impl Iterator<Item = VReg>) {
+    fn debug_assert_no_vreg_aliases(&self, mut list: impl Iterator<Item = VReg>) {
         debug_assert!(list.all(|vreg| !self.vreg_aliases.contains_key(&vreg)));
     }
 
@@ -1338,7 +1338,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         let ret = &self.block_params[start as usize..end as usize];
         // Currently block params are never aliased to another vreg, but
         // double-check just to be sure.
-        self.assert_no_vreg_aliases(ret.iter().copied());
+        self.debug_assert_no_vreg_aliases(ret.iter().copied());
         ret
     }
 
@@ -1349,7 +1349,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         let (branch_block_args_start, branch_block_args_end) = succ_ranges[succ_idx];
         let ret = &self.branch_block_args
             [branch_block_args_start as usize..branch_block_args_end as usize];
-        self.assert_no_vreg_aliases(ret.iter().copied());
+        self.debug_assert_no_vreg_aliases(ret.iter().copied());
         ret
     }
 
@@ -1379,7 +1379,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         // It should be true by construction that `Operand`s do not contain any
         // aliased vregs since they're all collected and mapped when the VCode
         // is itself constructed.
-        self.assert_no_vreg_aliases(ret.iter().map(|op| op.vreg()));
+        self.debug_assert_no_vreg_aliases(ret.iter().map(|op| op.vreg()));
         ret
     }
 
@@ -1393,7 +1393,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn reftype_vregs(&self) -> &[VReg] {
         let ret = &self.reftyped_vregs;
-        self.assert_no_vreg_aliases(ret.iter().copied());
+        self.debug_assert_no_vreg_aliases(ret.iter().copied());
         ret
     }
 
@@ -1402,7 +1402,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         // generated and aliases are fully defined, so double-check that
         // aliases are not lingering.
         let ret = &self.debug_value_labels;
-        self.assert_no_vreg_aliases(ret.iter().map(|&(vreg, ..)| vreg));
+        self.debug_assert_no_vreg_aliases(ret.iter().map(|&(vreg, ..)| vreg));
         ret
     }
 
