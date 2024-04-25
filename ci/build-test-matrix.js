@@ -56,7 +56,7 @@ const array = [
     "isa": "x64"
   },
   {
-    "os": "macos-latest",
+    "os": "macos-13",
     "name": "Test macOS x86_64",
     "filter": "macos-x64",
     "extra_features": "--features wasmtime-wasi-nn/onnx"
