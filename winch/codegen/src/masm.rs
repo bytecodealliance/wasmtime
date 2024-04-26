@@ -425,6 +425,7 @@ impl From<Reg> for RegImm {
     }
 }
 
+#[derive(Debug)]
 pub enum RoundingMode {
     Nearest,
     Up,

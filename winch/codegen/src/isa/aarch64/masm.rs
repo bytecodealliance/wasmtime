@@ -316,27 +316,29 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn float_neg(&mut self, _dst: Reg, _size: OperandSize) {
-        todo!()
+    fn float_neg(&mut self, dst: Reg, size: OperandSize) {
+        self.asm.fneg_rr(dst, dst, size);
     }
 
-    fn float_abs(&mut self, _dst: Reg, _size: OperandSize) {
-        todo!()
+    fn float_abs(&mut self, dst: Reg, size: OperandSize) {
+        self.asm.fabs_rr(dst, dst, size);
     }
 
     fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext, &mut Self)>(
         &mut self,
-        _mode: RoundingMode,
+        mode: RoundingMode,
         _env: &mut FuncEnv<Self::Ptr>,
-        _context: &mut CodeGenContext,
-        _size: OperandSize,
+        context: &mut CodeGenContext,
+        size: OperandSize,
         _fallback: F,
     ) {
-        todo!();
+        let src = context.pop_to_reg(self, None);
+        self.asm.fround_rr(src.into(), src.into(), mode, size);
+        context.stack.push(src.into());
     }
 
-    fn float_sqrt(&mut self, _dst: Reg, _src: Reg, _size: OperandSize) {
-        todo!()
+    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize) {
+        self.asm.fsqrt_rr(src, dst, size);
     }
 
     fn and(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
