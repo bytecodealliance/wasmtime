@@ -2,8 +2,8 @@
 
 use crate::sema::{ExternalSig, ReturnKind, Sym, Term, TermEnv, TermId, Type, TypeEnv, TypeId};
 use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
+use crate::stablemapset::StableSet;
 use crate::trie_again::{Binding, BindingId, Constraint, RuleSet};
-use crate::StableSet;
 use std::fmt::Write;
 
 /// Options for code generation.

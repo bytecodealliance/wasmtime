@@ -3,7 +3,8 @@
 use crate::error::{Error, Span};
 use crate::lexer::Pos;
 use crate::sema;
-use crate::{DisjointSets, StableSet};
+use crate::stablemapset::StableSet;
+use crate::DisjointSets;
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.

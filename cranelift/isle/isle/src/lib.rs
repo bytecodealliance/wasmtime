@@ -1,10 +1,8 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
-use std::ops::Index;
 
 macro_rules! declare_id {
     (
@@ -21,77 +19,6 @@ macro_rules! declare_id {
             }
         }
     };
-}
-
-/// A wrapper around a [HashSet] which prevents accidentally observing the non-deterministic
-/// iteration order.
-#[derive(Clone, Debug, Default)]
-pub struct StableSet<T>(HashSet<T>);
-
-impl<T> StableSet<T> {
-    fn new() -> Self {
-        StableSet(HashSet::new())
-    }
-}
-
-impl<T: Hash + Eq> StableSet<T> {
-    /// Adds a value to the set. Returns whether the value was newly inserted.
-    pub fn insert(&mut self, val: T) -> bool {
-        self.0.insert(val)
-    }
-
-    /// Returns true if the set contains a value.
-    pub fn contains(&self, val: &T) -> bool {
-        self.0.contains(val)
-    }
-}
-
-/// A wrapper around a [HashMap] which prevents accidentally observing the non-deterministic
-/// iteration order.
-#[derive(Clone, Debug)]
-pub struct StableMap<K, V>(HashMap<K, V>);
-
-impl<K, V> StableMap<K, V> {
-    fn new() -> Self {
-        StableMap(HashMap::new())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-// NOTE: Can't auto-derive this
-impl<K, V> Default for StableMap<K, V> {
-    fn default() -> Self {
-        StableMap(HashMap::new())
-    }
-}
-
-impl<K: Hash + Eq, V> StableMap<K, V> {
-    fn insert(&mut self, k: K, v: V) -> Option<V> {
-        self.0.insert(k, v)
-    }
-
-    fn contains_key(&self, k: &K) -> bool {
-        self.0.contains_key(k)
-    }
-
-    fn get(&self, k: &K) -> Option<&V> {
-        self.0.get(k)
-    }
-
-    fn entry(&mut self, k: K) -> Entry<K, V> {
-        self.0.entry(k)
-    }
-}
-
-impl<K: Hash + Eq, V> Index<&K> for StableMap<K, V> {
-    type Output = V;
-
-    fn index(&self, index: &K) -> &Self::Output {
-        self.0.index(index)
-    }
 }
 
 /// Stores disjoint sets and provides efficient operations to merge two sets, and to find a
@@ -268,4 +195,5 @@ pub mod overlap;
 pub mod parser;
 pub mod sema;
 pub mod serialize;
+pub mod stablemapset;
 pub mod trie_again;
