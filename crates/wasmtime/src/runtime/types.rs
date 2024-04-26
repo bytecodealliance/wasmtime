@@ -1,9 +1,9 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use std::fmt::{self, Display};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, Memory, ModuleTypes, Table, TypeTrace,
     VMSharedTypeIndex, WasmArrayType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
-    WasmRefType, WasmStorageType, WasmSubType, WasmValType,
+    WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
 };
 
 use crate::{type_registry::RegisteredType, Engine};
@@ -474,7 +474,8 @@ pub enum HeapType {
     /// This is a subtype of `any` and a supertype of `none`.
     I31,
 
-    /// The abstract `array` heap type represents a reference to any kind of array.
+    /// The abstract `array` heap type represents a reference to any kind of
+    /// array.
     ///
     /// This is a subtype of `any` and a supertype of all concrete array types,
     /// as well as a supertype of the abstract `none` heap type.
@@ -489,6 +490,23 @@ pub enum HeapType {
     //
     // TODO: add docs for subtype of `eq` once we add that heap type
     ConcreteArray(ArrayType),
+
+    /// The abstract `struct` heap type represents a reference to any kind of
+    /// struct.
+    ///
+    /// This is a subtype of `any` and a supertype of all concrete struct types,
+    /// as well as a supertype of the abstract `none` heap type.
+    //
+    // TODO: add docs for subtype of `eq` once we add that heap type
+    Struct,
+
+    /// A reference to an struct of a specific, concrete type.
+    ///
+    /// These are subtypes of the `struct` heap type (therefore also a subtype
+    /// of `any`) and supertypes of the `none` heap type.
+    //
+    // TODO: add docs for subtype of `eq` once we add that heap type
+    ConcreteStruct(StructType),
 
     /// The abstract `none` heap type represents the null internal reference.
     ///
@@ -506,9 +524,11 @@ impl Display for HeapType {
             HeapType::Any => write!(f, "any"),
             HeapType::I31 => write!(f, "i31"),
             HeapType::Array => write!(f, "array"),
+            HeapType::Struct => write!(f, "struct"),
             HeapType::None => write!(f, "none"),
             HeapType::ConcreteFunc(ty) => write!(f, "(concrete func {:?})", ty.type_index()),
             HeapType::ConcreteArray(ty) => write!(f, "(concrete array {:?})", ty.type_index()),
+            HeapType::ConcreteStruct(ty) => write!(f, "(concrete struct {:?})", ty.type_index()),
         }
     }
 }
@@ -630,6 +650,8 @@ impl HeapType {
             | HeapType::I31
             | HeapType::Array
             | HeapType::ConcreteArray(_)
+            | HeapType::Struct
+            | HeapType::ConcreteStruct(_)
             | HeapType::None => HeapType::Any,
         }
     }
@@ -672,6 +694,8 @@ impl HeapType {
                 HeapType::None
                 | HeapType::ConcreteArray(_)
                 | HeapType::Array
+                | HeapType::ConcreteStruct(_)
+                | HeapType::Struct
                 | HeapType::I31
                 | HeapType::Any,
             ) => true,
@@ -683,6 +707,13 @@ impl HeapType {
 
             (HeapType::Array, HeapType::Array | HeapType::Any) => true,
             (HeapType::Array, _) => false,
+
+            (HeapType::ConcreteStruct(_), HeapType::Struct | HeapType::Any) => true,
+            (HeapType::ConcreteStruct(a), HeapType::ConcreteStruct(b)) => a.matches(b),
+            (HeapType::ConcreteStruct(_), _) => false,
+
+            (HeapType::Struct, HeapType::Struct | HeapType::Any) => true,
+            (HeapType::Struct, _) => false,
 
             (HeapType::I31, HeapType::I31 | HeapType::Any) => true,
             (HeapType::I31, _) => false,
@@ -724,9 +755,11 @@ impl HeapType {
             | HeapType::Any
             | HeapType::I31
             | HeapType::Array
+            | HeapType::Struct
             | HeapType::None => true,
             HeapType::ConcreteFunc(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteArray(ty) => ty.comes_from_same_engine(engine),
+            HeapType::ConcreteStruct(ty) => ty.comes_from_same_engine(engine),
         }
     }
 
@@ -738,12 +771,16 @@ impl HeapType {
             HeapType::Any => WasmHeapType::Any,
             HeapType::I31 => WasmHeapType::I31,
             HeapType::Array => WasmHeapType::Array,
+            HeapType::Struct => WasmHeapType::Struct,
             HeapType::None => WasmHeapType::None,
             HeapType::ConcreteFunc(f) => {
                 WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(f.type_index()))
             }
             HeapType::ConcreteArray(a) => {
                 WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::Engine(a.type_index()))
+            }
+            HeapType::ConcreteStruct(a) => {
+                WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::Engine(a.type_index()))
             }
         }
     }
@@ -756,6 +793,7 @@ impl HeapType {
             WasmHeapType::Any => HeapType::Any,
             WasmHeapType::I31 => HeapType::I31,
             WasmHeapType::Array => HeapType::Array,
+            WasmHeapType::Struct => HeapType::Struct,
             WasmHeapType::None => HeapType::None,
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(idx)) => {
                 HeapType::ConcreteFunc(FuncType::from_shared_type_index(engine, *idx))
@@ -763,11 +801,16 @@ impl HeapType {
             WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::Engine(idx)) => {
                 HeapType::ConcreteArray(ArrayType::from_shared_type_index(engine, *idx))
             }
+            WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::Engine(idx)) => {
+                HeapType::ConcreteStruct(StructType::from_shared_type_index(engine, *idx))
+            }
 
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(_))
             | WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::RecGroup(_))
             | WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::Module(_))
-            | WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::RecGroup(_)) => {
+            | WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::RecGroup(_))
+            | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::Module(_))
+            | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonicalized-for-runtime-usage heap type")
             }
         }
@@ -777,12 +820,15 @@ impl HeapType {
         match self {
             HeapType::ConcreteFunc(f) => Some(&f.registered_type),
             HeapType::ConcreteArray(a) => Some(&a.registered_type),
+            HeapType::ConcreteStruct(a) => Some(&a.registered_type),
+
             HeapType::Extern
             | HeapType::Func
             | HeapType::NoFunc
             | HeapType::Any
             | HeapType::I31
             | HeapType::Array
+            | HeapType::Struct
             | HeapType::None => None,
         }
     }
@@ -1081,6 +1127,183 @@ impl FieldType {
         WasmFieldType {
             element_type: self.element_type.to_wasm_storage_type(),
             mutable: matches!(self.mutability, Mutability::Var),
+        }
+    }
+}
+
+/// The type of a WebAssembly struct.
+///
+/// WebAssembly structs are a static, fixed-length, ordered sequence of
+/// fields. Fields are named by index, not an identifier. Each field is mutable
+/// or constant and stores unpacked [`Val`][crate::Val]s or packed 8-/16-bit
+/// integers.
+///
+/// # Subtyping and Equality
+///
+/// `StructType` does not implement `Eq`, because reference types have a
+/// subtyping relationship, and so 99.99% of the time you actually want to check
+/// whether one type matches (i.e. is a subtype of) another type. You can use
+/// the [`StructType::matches`] method to perform these types of checks. If,
+/// however, you are in that 0.01% scenario where you need to check precise
+/// equality between types, you can use the [`StructType::eq`] method.
+//
+// TODO: Once we have array values, update above docs with a reference to the
+// future `Array::matches_ty` method
+#[derive(Debug, Clone, Hash)]
+pub struct StructType {
+    registered_type: RegisteredType,
+}
+
+impl StructType {
+    /// Construct a new `StructType` with the given field type's mutability and
+    /// storage type.
+    ///
+    /// The result will be associated with the given engine, and attempts to use
+    /// it with other engines will panic (for example, checking whether it is a
+    /// subtype of another struct type that is associated with a different
+    /// engine).
+    ///
+    /// Returns an error if the number of fields exceeds the implementation
+    /// limit.
+    pub fn new(engine: &Engine, fields: impl IntoIterator<Item = FieldType>) -> Result<Self> {
+        // Same as in `FuncType::new`: we must prevent any `RegisteredType`s
+        // from being reclaimed while constructing this struct type.
+        let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
+
+        let fields = fields
+            .into_iter()
+            .map(|ty: FieldType| {
+                if let Some(r) = ty.element_type.as_val_type().and_then(|v| v.as_ref()) {
+                    if let Some(r) = r.heap_type().as_registered_type() {
+                        registrations.push(r.clone());
+                    }
+                }
+                ty.to_wasm_field_type()
+            })
+            .collect();
+
+        Self::from_wasm_struct_type(engine, WasmStructType { fields })
+    }
+
+    /// Get the engine that this struct type is associated with.
+    pub fn engine(&self) -> &Engine {
+        self.registered_type.engine()
+    }
+
+    /// Get the `i`th field type.
+    ///
+    /// Returns `None` if `i` is out of bounds.
+    pub fn field(&self, i: usize) -> Option<FieldType> {
+        let engine = self.engine();
+        self.as_wasm_struct_type()
+            .fields
+            .get(i)
+            .map(|ty| FieldType::from_wasm_field_type(engine, ty))
+    }
+
+    /// Returns the list of field types for this function.
+    #[inline]
+    pub fn fields(&self) -> impl ExactSizeIterator<Item = FieldType> + '_ {
+        let engine = self.engine();
+        self.as_wasm_struct_type()
+            .fields
+            .iter()
+            .map(|ty| FieldType::from_wasm_field_type(engine, ty))
+    }
+
+    /// Does this struct type match the other struct type?
+    ///
+    /// That is, is this function type a subtype of the other struct type?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &StructType) -> bool {
+        assert!(self.comes_from_same_engine(other.engine()));
+
+        // Avoid matching on structure for subtyping checks when we have
+        // precisely the same type.
+        if self.type_index() == other.type_index() {
+            return true;
+        }
+
+        self.fields().len() >= other.fields().len()
+            && self
+                .fields()
+                .zip(other.fields())
+                .all(|(a, b)| a.matches(&b))
+    }
+
+    /// Is struct type `a` precisely equal to struct type `b`?
+    ///
+    /// Returns `false` even if `a` is a subtype of `b` or vice versa, if they
+    /// are not exactly the same struct type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn eq(a: &StructType, b: &StructType) -> bool {
+        assert!(a.comes_from_same_engine(b.engine()));
+        a.type_index() == b.type_index()
+    }
+
+    pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
+        Engine::same(self.registered_type.engine(), engine)
+    }
+
+    pub(crate) fn type_index(&self) -> VMSharedTypeIndex {
+        self.registered_type.index()
+    }
+
+    pub(crate) fn as_wasm_struct_type(&self) -> &WasmStructType {
+        self.registered_type.unwrap_struct()
+    }
+
+    /// Construct a `StructType` from a `WasmStructType`.
+    ///
+    /// This method should only be used when something has already registered --
+    /// and is *keeping registered* -- any other concrete Wasm types referenced
+    /// by the given `WasmStructType`.
+    ///
+    /// For example, this method may be called to convert an struct type from
+    /// within a Wasm module's `ModuleTypes` since the Wasm module itself is
+    /// holding a strong reference to all of its types, including any `(ref null
+    /// <index>)` types used as the element type for this struct type.
+    pub(crate) fn from_wasm_struct_type(engine: &Engine, ty: WasmStructType) -> Result<StructType> {
+        const MAX_FIELDS: usize = 10_000;
+        let fields_len = ty.fields.len();
+        ensure!(
+            fields_len <= MAX_FIELDS,
+            "attempted to define a struct type with {fields_len} fields, but \
+             that is more than the maximum supported number of fields \
+             ({MAX_FIELDS})",
+        );
+
+        let ty = RegisteredType::new(
+            engine,
+            WasmSubType {
+                // TODO:
+                //
+                // is_final: true,
+                // supertype: None,
+                composite_type: WasmCompositeType::Struct(ty),
+            },
+        );
+        Ok(Self {
+            registered_type: ty,
+        })
+    }
+
+    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> StructType {
+        let ty = RegisteredType::root(engine, index).expect(
+            "VMSharedTypeIndex is not registered in the Engine! Wrong \
+             engine? Didn't root the index somewhere?",
+        );
+        assert!(ty.is_struct());
+        Self {
+            registered_type: ty,
         }
     }
 }

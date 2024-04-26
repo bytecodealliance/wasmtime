@@ -378,16 +378,21 @@ impl EngineOrModuleTypeIndex {
 /// WebAssembly heap type -- equivalent of `wasmparser`'s HeapType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WasmHeapType {
+    // External types.
     Extern,
 
+    // Function types.
     Func,
     ConcreteFunc(EngineOrModuleTypeIndex),
     NoFunc,
 
+    // Internal types.
     Any,
     I31,
     Array,
     ConcreteArray(EngineOrModuleTypeIndex),
+    Struct,
+    ConcreteStruct(EngineOrModuleTypeIndex),
     None,
 }
 
@@ -413,6 +418,8 @@ impl fmt::Display for WasmHeapType {
             Self::I31 => write!(f, "i31"),
             Self::Array => write!(f, "array"),
             Self::ConcreteArray(i) => write!(f, "array {i}"),
+            Self::Struct => write!(f, "struct"),
+            Self::ConcreteStruct(i) => write!(f, "struct {i}"),
             Self::None => write!(f, "none"),
         }
     }
@@ -426,6 +433,7 @@ impl TypeTrace for WasmHeapType {
         match *self {
             Self::ConcreteArray(i) => func(i),
             Self::ConcreteFunc(i) => func(i),
+            Self::ConcreteStruct(i) => func(i),
             _ => Ok(()),
         }
     }
@@ -437,6 +445,7 @@ impl TypeTrace for WasmHeapType {
         match self {
             Self::ConcreteArray(i) => func(i),
             Self::ConcreteFunc(i) => func(i),
+            Self::ConcreteStruct(i) => func(i),
             _ => Ok(()),
         }
     }
@@ -480,6 +489,8 @@ impl WasmHeapType {
             | WasmHeapType::I31
             | WasmHeapType::Array
             | WasmHeapType::ConcreteArray(_)
+            | WasmHeapType::Struct
+            | WasmHeapType::ConcreteStruct(_)
             | WasmHeapType::None => WasmHeapTopType::Any,
         }
     }
@@ -666,16 +677,61 @@ impl TypeTrace for WasmArrayType {
     }
 }
 
+/// A concrete struct type.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct WasmStructType {
+    pub fields: Box<[WasmFieldType]>,
+}
+
+impl TypeTrace for WasmStructType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for f in self.fields.iter() {
+            f.trace(func)?;
+        }
+        Ok(())
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for f in self.fields.iter_mut() {
+            f.trace_mut(func)?;
+        }
+        Ok(())
+    }
+}
+
 /// A function, array, or struct type.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum WasmCompositeType {
     Array(WasmArrayType),
     Func(WasmFuncType),
-    //
-    // TODO: struct types.
+    Struct(WasmStructType),
 }
 
 impl WasmCompositeType {
+    #[inline]
+    pub fn is_array(&self) -> bool {
+        matches!(self, Self::Array(_))
+    }
+
+    #[inline]
+    pub fn as_array(&self) -> Option<&WasmArrayType> {
+        match self {
+            WasmCompositeType::Array(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_array(&self) -> &WasmArrayType {
+        self.as_array().unwrap()
+    }
+
     #[inline]
     pub fn is_func(&self) -> bool {
         matches!(self, Self::Func(_))
@@ -695,21 +751,21 @@ impl WasmCompositeType {
     }
 
     #[inline]
-    pub fn is_array(&self) -> bool {
-        matches!(self, Self::Array(_))
+    pub fn is_struct(&self) -> bool {
+        matches!(self, Self::Struct(_))
     }
 
     #[inline]
-    pub fn as_array(&self) -> Option<&WasmArrayType> {
+    pub fn as_struct(&self) -> Option<&WasmStructType> {
         match self {
-            WasmCompositeType::Array(f) => Some(f),
+            WasmCompositeType::Struct(f) => Some(f),
             _ => None,
         }
     }
 
     #[inline]
-    pub fn unwrap_array(&self) -> &WasmArrayType {
-        self.as_array().unwrap()
+    pub fn unwrap_struct(&self) -> &WasmStructType {
+        self.as_struct().unwrap()
     }
 }
 
@@ -721,6 +777,7 @@ impl TypeTrace for WasmCompositeType {
         match self {
             WasmCompositeType::Array(a) => a.trace(func),
             WasmCompositeType::Func(f) => f.trace(func),
+            WasmCompositeType::Struct(a) => a.trace(func),
         }
     }
 
@@ -731,6 +788,7 @@ impl TypeTrace for WasmCompositeType {
         match self {
             WasmCompositeType::Array(a) => a.trace_mut(func),
             WasmCompositeType::Func(f) => f.trace_mut(func),
+            WasmCompositeType::Struct(a) => a.trace_mut(func),
         }
     }
 }
@@ -773,6 +831,21 @@ impl WasmSubType {
     #[inline]
     pub fn unwrap_array(&self) -> &WasmArrayType {
         self.composite_type.unwrap_array()
+    }
+
+    #[inline]
+    pub fn is_struct(&self) -> bool {
+        self.composite_type.is_struct()
+    }
+
+    #[inline]
+    pub fn as_struct(&self) -> Option<&WasmStructType> {
+        self.composite_type.as_struct()
+    }
+
+    #[inline]
+    pub fn unwrap_struct(&self) -> &WasmStructType {
+        self.composite_type.unwrap_struct()
     }
 }
 
@@ -1350,7 +1423,19 @@ pub trait TypeConvert {
             wasmparser::CompositeType::Array(a) => {
                 Ok(WasmCompositeType::Array(self.convert_array_type(a)))
             }
-            wasmparser::CompositeType::Struct(_) => Err(wasm_unsupported!("wasm gc: struct types")),
+            wasmparser::CompositeType::Struct(s) => {
+                Ok(WasmCompositeType::Struct(self.convert_struct_type(s)))
+            }
+        }
+    }
+
+    fn convert_struct_type(&self, ty: &wasmparser::StructType) -> WasmStructType {
+        WasmStructType {
+            fields: ty
+                .fields
+                .iter()
+                .map(|f| self.convert_field_type(f))
+                .collect(),
         }
     }
 
@@ -1418,13 +1503,13 @@ pub trait TypeConvert {
             wasmparser::HeapType::Any => WasmHeapType::Any,
             wasmparser::HeapType::I31 => WasmHeapType::I31,
             wasmparser::HeapType::Array => WasmHeapType::Array,
+            wasmparser::HeapType::Struct => WasmHeapType::Struct,
             wasmparser::HeapType::None => WasmHeapType::None,
 
             wasmparser::HeapType::Exn
             | wasmparser::HeapType::NoExn
             | wasmparser::HeapType::NoExtern
-            | wasmparser::HeapType::Eq
-            | wasmparser::HeapType::Struct => {
+            | wasmparser::HeapType::Eq => {
                 unimplemented!("unsupported heap type {ty:?}");
             }
         }

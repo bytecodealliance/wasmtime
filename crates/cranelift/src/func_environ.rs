@@ -1220,7 +1220,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
-            // Engine-indexed types don't show up until runtime and it's a wasm
+            // Engine-indexed types don't show up until runtime and it's a Wasm
             // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(_))
@@ -1230,6 +1230,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::I31
             | WasmHeapType::Array
             | WasmHeapType::ConcreteArray(_)
+            | WasmHeapType::Struct
+            | WasmHeapType::ConcreteStruct(_)
             | WasmHeapType::None => {
                 unreachable!()
             }

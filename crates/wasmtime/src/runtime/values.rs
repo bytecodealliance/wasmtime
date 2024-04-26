@@ -251,7 +251,9 @@ impl Val {
                     HeapType::Any
                     | HeapType::I31
                     | HeapType::Array
-                    | HeapType::ConcreteArray(_) => {
+                    | HeapType::ConcreteArray(_)
+                    | HeapType::Struct
+                    | HeapType::ConcreteStruct(_) => {
                         AnyRef::from_raw(store, raw.get_anyref()).into()
                     }
 
