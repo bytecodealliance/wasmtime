@@ -82,9 +82,15 @@ impl<R: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel> ValueRegs<R> {
         }
     }
 
-    /// Return an iterator over the registers storing this value.
+    /// Return a slice of the registers storing this value.
     pub fn regs(&self) -> &[R] {
         &self.parts[0..self.len()]
+    }
+
+    /// Return a mutable slice of the registers storing this value.
+    pub fn regs_mut(&mut self) -> &mut [R] {
+        let len = self.len();
+        &mut self.parts[0..len]
     }
 }
 

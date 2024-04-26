@@ -318,164 +318,168 @@ impl Inst {
 //=============================================================================
 
 fn vec_mask_operands<F: Fn(VReg) -> VReg>(
-    mask: &VecOpMasking,
+    mask: &mut VecOpMasking,
     collector: &mut OperandCollector<'_, F>,
 ) {
     match mask {
         VecOpMasking::Enabled { reg } => {
-            collector.reg_fixed_use(*reg, pv_reg(0).into());
+            collector.reg_fixed_use(reg, pv_reg(0).into());
         }
         VecOpMasking::Disabled => {}
     }
 }
 fn vec_mask_late_operands<F: Fn(VReg) -> VReg>(
-    mask: &VecOpMasking,
+    mask: &mut VecOpMasking,
     collector: &mut OperandCollector<'_, F>,
 ) {
     match mask {
         VecOpMasking::Enabled { reg } => {
-            collector.reg_fixed_late_use(*reg, pv_reg(0).into());
+            collector.reg_fixed_late_use(reg, pv_reg(0).into());
         }
         VecOpMasking::Disabled => {}
     }
 }
 
-fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
+fn riscv64_get_operands<F: Fn(VReg) -> VReg>(
+    inst: &mut Inst,
+    collector: &mut OperandCollector<'_, F>,
+) {
     match inst {
-        &Inst::Nop0 => {}
-        &Inst::Nop4 => {}
-        &Inst::BrTable {
+        Inst::Nop0 | Inst::Nop4 => {}
+        Inst::BrTable {
             index, tmp1, tmp2, ..
         } => {
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
             collector.reg_early_def(tmp2);
         }
-        &Inst::Auipc { rd, .. } => collector.reg_def(rd),
-        &Inst::Lui { rd, .. } => collector.reg_def(rd),
-        &Inst::LoadInlineConst { rd, .. } => collector.reg_def(rd),
-        &Inst::AluRRR { rd, rs1, rs2, .. } => {
+        Inst::Auipc { rd, .. } => collector.reg_def(rd),
+        Inst::Lui { rd, .. } => collector.reg_def(rd),
+        Inst::LoadInlineConst { rd, .. } => collector.reg_def(rd),
+        Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
             collector.reg_def(rd);
         }
-        &Inst::FpuRRR { rd, rs1, rs2, .. } => {
+        Inst::FpuRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
             collector.reg_def(rd);
         }
-        &Inst::AluRRImm12 { rd, rs, .. } => {
+        Inst::AluRRImm12 { rd, rs, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
         }
-        &Inst::CsrReg { rd, rs, .. } => {
+        Inst::CsrReg { rd, rs, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
         }
-        &Inst::CsrImm { rd, .. } => {
+        Inst::CsrImm { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::Load { rd, from, .. } => {
+        Inst::Load { rd, from, .. } => {
             from.get_operands(collector);
             collector.reg_def(rd);
         }
-        &Inst::Store { to, src, .. } => {
+        Inst::Store { to, src, .. } => {
             to.get_operands(collector);
             collector.reg_use(src);
         }
 
-        &Inst::Args { ref args } => {
-            for arg in args {
-                collector.reg_fixed_def(arg.vreg, arg.preg);
+        Inst::Args { args } => {
+            for ArgPair { vreg, preg } in args {
+                collector.reg_fixed_def(vreg, *preg);
             }
         }
-        &Inst::Rets { ref rets } => {
-            for ret in rets {
-                collector.reg_fixed_use(ret.vreg, ret.preg);
+        Inst::Rets { rets } => {
+            for RetPair { vreg, preg } in rets {
+                collector.reg_fixed_use(vreg, *preg);
             }
         }
-        &Inst::Ret { .. } => {}
+        Inst::Ret { .. } => {}
 
-        &Inst::Extend { rd, rn, .. } => {
+        Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        &Inst::Call { ref info } => {
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
+        Inst::Call { info } => {
+            let CallInfo { uses, defs, .. } = &mut **info;
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
             }
-            for d in &info.defs {
-                collector.reg_fixed_def(d.vreg, d.preg);
-            }
-            collector.reg_clobbers(info.clobbers);
-        }
-        &Inst::CallInd { ref info } => {
-            collector.reg_use(info.rn);
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
-            }
-            for d in &info.defs {
-                collector.reg_fixed_def(d.vreg, d.preg);
+            for CallRetPair { vreg, preg } in defs {
+                collector.reg_fixed_def(vreg, *preg);
             }
             collector.reg_clobbers(info.clobbers);
         }
-        &Inst::ReturnCall {
-            callee: _,
-            ref info,
-        } => {
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
+        Inst::CallInd { info } => {
+            let CallIndInfo { rn, uses, defs, .. } = &mut **info;
+            collector.reg_use(rn);
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
+            for CallRetPair { vreg, preg } in defs {
+                collector.reg_fixed_def(vreg, *preg);
+            }
+            collector.reg_clobbers(info.clobbers);
+        }
+        Inst::ReturnCall { info, .. } => {
+            for CallArgPair { vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(vreg, *preg);
             }
         }
-        &Inst::ReturnCallInd { ref info, callee } => {
+        Inst::ReturnCallInd { info, callee } => {
             // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
             // This shouldn't be a fixed register constraint.
             collector.reg_fixed_use(callee, x_reg(5));
 
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
+            for CallArgPair { vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(vreg, *preg);
             }
         }
-        &Inst::Jal { .. } => {
+        Inst::Jal { .. } => {
             // JAL technically has a rd register, but we currently always
             // hardcode it to x0.
         }
-        &Inst::CondBr { kind, .. } => {
-            collector.reg_use(kind.rs1);
-            collector.reg_use(kind.rs2);
+        Inst::CondBr {
+            kind: IntegerCompare { rs1, rs2, .. },
+            ..
+        } => {
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
         }
-        &Inst::LoadExtName { rd, .. } => {
+        Inst::LoadExtName { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::ElfTlsGetAddr { rd, .. } => {
+        Inst::ElfTlsGetAddr { rd, .. } => {
             // x10 is a0 which is both the first argument and the first return value.
             collector.reg_fixed_def(rd, a0());
             let mut clobbers = Riscv64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
             clobbers.remove(px_reg(10));
             collector.reg_clobbers(clobbers);
         }
-        &Inst::LoadAddr { rd, mem } => {
+        Inst::LoadAddr { rd, mem } => {
             mem.get_operands(collector);
             collector.reg_early_def(rd);
         }
 
-        &Inst::VirtualSPOffsetAdj { .. } => {}
-        &Inst::Mov { rd, rm, .. } => {
+        Inst::VirtualSPOffsetAdj { .. } => {}
+        Inst::Mov { rd, rm, .. } => {
             collector.reg_use(rm);
             collector.reg_def(rd);
         }
-        &Inst::MovFromPReg { rd, rm } => {
-            debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
+        Inst::MovFromPReg { rd, rm } => {
+            debug_assert!([px_reg(2), px_reg(8)].contains(rm));
             collector.reg_def(rd);
         }
-        &Inst::Fence { .. } => {}
-        &Inst::EBreak => {}
-        &Inst::Udf { .. } => {}
-        &Inst::FpuRR { rd, rs, .. } => {
+        Inst::Fence { .. } => {}
+        Inst::EBreak => {}
+        Inst::Udf { .. } => {}
+        Inst::FpuRR { rd, rs, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
         }
-        &Inst::FpuRRRR {
+        Inst::FpuRRRR {
             rd, rs1, rs2, rs3, ..
         } => {
             collector.reg_use(rs1);
@@ -484,28 +488,28 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
 
-        &Inst::Jalr { rd, base, .. } => {
+        Inst::Jalr { rd, base, .. } => {
             collector.reg_use(base);
             collector.reg_def(rd);
         }
-        &Inst::Atomic { rd, addr, src, .. } => {
+        Inst::Atomic { rd, addr, src, .. } => {
             collector.reg_use(addr);
             collector.reg_use(src);
             collector.reg_def(rd);
         }
-        &Inst::Select {
-            ref dst,
-            condition,
+        Inst::Select {
+            dst,
+            condition: IntegerCompare { rs1, rs2, .. },
             x,
             y,
             ..
         } => {
-            collector.reg_use(condition.rs1);
-            collector.reg_use(condition.rs2);
-            for &reg in x.regs() {
+            collector.reg_use(rs1);
+            collector.reg_use(rs2);
+            for reg in x.regs_mut() {
                 collector.reg_use(reg);
             }
-            for &reg in y.regs() {
+            for reg in y.regs_mut() {
                 collector.reg_use(reg);
             }
             // If there's more than one destination register then use
@@ -517,16 +521,16 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // When there's only one destination register though don't use an
             // early def because once the register is written no other inputs
             // are read so it's ok for the destination to overlap the sources.
-            match dst.regs() {
-                [reg] => collector.reg_def(*reg),
+            match dst.regs_mut() {
+                [reg] => collector.reg_def(reg),
                 regs => {
                     for d in regs {
-                        collector.reg_early_def(*d);
+                        collector.reg_early_def(d);
                     }
                 }
             }
         }
-        &Inst::AtomicCas {
+        Inst::AtomicCas {
             offset,
             t0,
             dst,
@@ -543,16 +547,16 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(dst);
         }
 
-        &Inst::RawData { .. } => {}
-        &Inst::AtomicStore { src, p, .. } => {
+        Inst::RawData { .. } => {}
+        Inst::AtomicStore { src, p, .. } => {
             collector.reg_use(src);
             collector.reg_use(p);
         }
-        &Inst::AtomicLoad { rd, p, .. } => {
+        Inst::AtomicLoad { rd, p, .. } => {
             collector.reg_use(p);
             collector.reg_def(rd);
         }
-        &Inst::AtomicRmwLoop {
+        Inst::AtomicRmwLoop {
             offset,
             dst,
             p,
@@ -566,15 +570,15 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        &Inst::TrapIf { rs1, rs2, .. } => {
+        Inst::TrapIf { rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
         }
-        &Inst::Unwind { .. } => {}
-        &Inst::DummyUse { reg } => {
+        Inst::Unwind { .. } => {}
+        Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
-        &Inst::FloatRound {
+        Inst::FloatRound {
             rd,
             int_tmp,
             f_tmp,
@@ -586,7 +590,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(f_tmp);
             collector.reg_early_def(rd);
         }
-        &Inst::Popcnt {
+        Inst::Popcnt {
             sum, step, rs, tmp, ..
         } => {
             collector.reg_use(rs);
@@ -594,7 +598,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(step);
             collector.reg_early_def(sum);
         }
-        &Inst::Cltz {
+        Inst::Cltz {
             sum, step, tmp, rs, ..
         } => {
             collector.reg_use(rs);
@@ -602,7 +606,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(step);
             collector.reg_early_def(sum);
         }
-        &Inst::Brev8 {
+        Inst::Brev8 {
             rs,
             rd,
             step,
@@ -616,19 +620,19 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(tmp2);
             collector.reg_early_def(rd);
         }
-        &Inst::StackProbeLoop { .. } => {
+        Inst::StackProbeLoop { .. } => {
             // StackProbeLoop has a tmp register and StackProbeLoop used at gen_prologue.
             // t3 will do the job. (t3 is caller-save register and not used directly by compiler like writable_spilltmp_reg)
             // gen_prologue is called at emit stage.
             // no need let reg alloc know.
         }
-        &Inst::VecAluRRRR {
+        Inst::VecAluRRRR {
             op,
             vd,
             vd_src,
             vs1,
             vs2,
-            ref mask,
+            mask,
             ..
         } => {
             debug_assert_eq!(vd_src.class(), RegClass::Vector);
@@ -642,12 +646,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_reuse_def(vd, 2); // `vd` == `vd_src`.
             vec_mask_late_operands(mask, collector);
         }
-        &Inst::VecAluRRRImm5 {
+        Inst::VecAluRRRImm5 {
             op,
             vd,
             vd_src,
             vs2,
-            ref mask,
+            mask,
             ..
         } => {
             debug_assert_eq!(vd_src.class(), RegClass::Vector);
@@ -668,12 +672,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 vec_mask_operands(mask, collector);
             }
         }
-        &Inst::VecAluRRR {
+        Inst::VecAluRRR {
             op,
             vd,
             vs1,
             vs2,
-            ref mask,
+            mask,
             ..
         } => {
             debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
@@ -694,12 +698,8 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 
             vec_mask_operands(mask, collector);
         }
-        &Inst::VecAluRRImm5 {
-            op,
-            vd,
-            vs2,
-            ref mask,
-            ..
+        Inst::VecAluRRImm5 {
+            op, vd, vs2, mask, ..
         } => {
             debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
             debug_assert_eq!(vs2.class(), RegClass::Vector);
@@ -717,12 +717,8 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 
             vec_mask_operands(mask, collector);
         }
-        &Inst::VecAluRR {
-            op,
-            vd,
-            vs,
-            ref mask,
-            ..
+        Inst::VecAluRR {
+            op, vd, vs, mask, ..
         } => {
             debug_assert_eq!(vd.to_reg().class(), op.dst_regclass());
             debug_assert_eq!(vs.class(), op.src_regclass());
@@ -740,34 +736,22 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 
             vec_mask_operands(mask, collector);
         }
-        &Inst::VecAluRImm5 {
-            op, vd, ref mask, ..
-        } => {
+        Inst::VecAluRImm5 { op, vd, mask, .. } => {
             debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
             debug_assert!(!op.forbids_overlaps(mask));
 
             collector.reg_def(vd);
             vec_mask_operands(mask, collector);
         }
-        &Inst::VecSetState { rd, .. } => {
+        Inst::VecSetState { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::VecLoad {
-            to,
-            ref from,
-            ref mask,
-            ..
-        } => {
+        Inst::VecLoad { to, from, mask, .. } => {
             from.get_operands(collector);
             collector.reg_def(to);
             vec_mask_operands(mask, collector);
         }
-        &Inst::VecStore {
-            ref to,
-            from,
-            ref mask,
-            ..
-        } => {
+        Inst::VecStore { to, from, mask, .. } => {
             to.get_operands(collector);
             collector.reg_use(from);
             vec_mask_operands(mask, collector);
@@ -805,7 +789,7 @@ impl MachInst for Inst {
         }
     }
 
-    fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
+    fn get_operands<F: Fn(VReg) -> VReg>(&mut self, collector: &mut OperandCollector<'_, F>) {
         riscv64_get_operands(self, collector);
     }
 
