@@ -396,155 +396,157 @@ impl Inst {
 //=============================================================================
 // Instructions: get_regs
 
-fn memarg_operands<F: Fn(VReg) -> VReg>(memarg: &AMode, collector: &mut OperandCollector<'_, F>) {
+fn memarg_operands<F: Fn(VReg) -> VReg>(
+    memarg: &mut AMode,
+    collector: &mut OperandCollector<'_, F>,
+) {
     // This should match `AMode::with_allocs()`.
     match memarg {
-        &AMode::Unscaled { rn, .. } | &AMode::UnsignedOffset { rn, .. } => {
+        AMode::Unscaled { rn, .. } | AMode::UnsignedOffset { rn, .. } => {
             collector.reg_use(rn);
         }
-        &AMode::RegReg { rn, rm, .. }
-        | &AMode::RegScaled { rn, rm, .. }
-        | &AMode::RegScaledExtended { rn, rm, .. }
-        | &AMode::RegExtended { rn, rm, .. } => {
+        AMode::RegReg { rn, rm, .. }
+        | AMode::RegScaled { rn, rm, .. }
+        | AMode::RegScaledExtended { rn, rm, .. }
+        | AMode::RegExtended { rn, rm, .. } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &AMode::Label { .. } => {}
-        &AMode::SPPreIndexed { .. } | &AMode::SPPostIndexed { .. } => {}
-        &AMode::FPOffset { .. } | &AMode::IncomingArg { .. } => {}
-        &AMode::SPOffset { .. } | &AMode::NominalSPOffset { .. } => {}
-        &AMode::RegOffset { rn, .. } => {
+        AMode::Label { .. } => {}
+        AMode::SPPreIndexed { .. } | AMode::SPPostIndexed { .. } => {}
+        AMode::FPOffset { .. } | AMode::IncomingArg { .. } => {}
+        AMode::SPOffset { .. } | AMode::NominalSPOffset { .. } => {}
+        AMode::RegOffset { rn, .. } => {
             collector.reg_use(rn);
         }
-        &AMode::Const { .. } => {}
+        AMode::Const { .. } => {}
     }
 }
 
 fn pairmemarg_operands<F: Fn(VReg) -> VReg>(
-    pairmemarg: &PairAMode,
+    pairmemarg: &mut PairAMode,
     collector: &mut OperandCollector<'_, F>,
 ) {
     // This should match `PairAMode::with_allocs()`.
     match pairmemarg {
-        &PairAMode::SignedOffset { reg, .. } => {
+        PairAMode::SignedOffset { reg, .. } => {
             collector.reg_use(reg);
         }
-        &PairAMode::SPPreIndexed { .. } | &PairAMode::SPPostIndexed { .. } => {}
+        PairAMode::SPPreIndexed { .. } | PairAMode::SPPostIndexed { .. } => {}
     }
 }
 
-fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
+fn aarch64_get_operands<F: Fn(VReg) -> VReg>(
+    inst: &mut Inst,
+    collector: &mut OperandCollector<'_, F>,
+) {
     match inst {
-        &Inst::AluRRR { rd, rn, rm, .. } => {
+        Inst::AluRRR { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::AluRRRR { rd, rn, rm, ra, .. } => {
+        Inst::AluRRRR { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
             collector.reg_use(ra);
         }
-        &Inst::AluRRImm12 { rd, rn, .. } => {
+        Inst::AluRRImm12 { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::AluRRImmLogic { rd, rn, .. } => {
+        Inst::AluRRImmLogic { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::AluRRImmShift { rd, rn, .. } => {
+        Inst::AluRRImmShift { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::AluRRRShift { rd, rn, rm, .. } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
-            collector.reg_use(rm);
-        }
-        &Inst::AluRRRExtend { rd, rn, rm, .. } => {
+        Inst::AluRRRShift { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::BitRR { rd, rn, .. } => {
+        Inst::AluRRRExtend { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        Inst::BitRR { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::ULoad8 { rd, ref mem, .. }
-        | &Inst::SLoad8 { rd, ref mem, .. }
-        | &Inst::ULoad16 { rd, ref mem, .. }
-        | &Inst::SLoad16 { rd, ref mem, .. }
-        | &Inst::ULoad32 { rd, ref mem, .. }
-        | &Inst::SLoad32 { rd, ref mem, .. }
-        | &Inst::ULoad64 { rd, ref mem, .. } => {
+        Inst::ULoad8 { rd, mem, .. }
+        | Inst::SLoad8 { rd, mem, .. }
+        | Inst::ULoad16 { rd, mem, .. }
+        | Inst::SLoad16 { rd, mem, .. }
+        | Inst::ULoad32 { rd, mem, .. }
+        | Inst::SLoad32 { rd, mem, .. }
+        | Inst::ULoad64 { rd, mem, .. } => {
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::Store8 { rd, ref mem, .. }
-        | &Inst::Store16 { rd, ref mem, .. }
-        | &Inst::Store32 { rd, ref mem, .. }
-        | &Inst::Store64 { rd, ref mem, .. } => {
+        Inst::Store8 { rd, mem, .. }
+        | Inst::Store16 { rd, mem, .. }
+        | Inst::Store32 { rd, mem, .. }
+        | Inst::Store64 { rd, mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::StoreP64 {
-            rt, rt2, ref mem, ..
-        } => {
+        Inst::StoreP64 { rt, rt2, mem, .. } => {
             collector.reg_use(rt);
             collector.reg_use(rt2);
             pairmemarg_operands(mem, collector);
         }
-        &Inst::LoadP64 {
-            rt, rt2, ref mem, ..
-        } => {
+        Inst::LoadP64 { rt, rt2, mem, .. } => {
             collector.reg_def(rt);
             collector.reg_def(rt2);
             pairmemarg_operands(mem, collector);
         }
-        &Inst::Mov { rd, rm, .. } => {
+        Inst::Mov { rd, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
-        &Inst::MovFromPReg { rd, rm } => {
+        Inst::MovFromPReg { rd, rm } => {
             debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
-            collector.reg_fixed_nonallocatable(rm);
+            collector.reg_fixed_nonallocatable(*rm);
         }
-        &Inst::MovToPReg { rd, rm } => {
+        Inst::MovToPReg { rd, rm } => {
             debug_assert!(rm.is_virtual());
-            collector.reg_fixed_nonallocatable(rd);
+            collector.reg_fixed_nonallocatable(*rd);
             collector.reg_use(rm);
         }
-        &Inst::MovK { rd, rn, .. } => {
+        Inst::MovK { rd, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_reuse_def(rd, 0); // `rn` == `rd`.
         }
-        &Inst::MovWide { rd, .. } => {
+        Inst::MovWide { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::CSel { rd, rn, rm, .. } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
-            collector.reg_use(rm);
-        }
-        &Inst::CSNeg { rd, rn, rm, .. } => {
+        Inst::CSel { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::CSet { rd, .. } | &Inst::CSetm { rd, .. } => {
+        Inst::CSNeg { rd, rn, rm, .. } => {
             collector.reg_def(rd);
-        }
-        &Inst::CCmp { rn, rm, .. } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::CCmpImm { rn, .. } => {
+        Inst::CSet { rd, .. } | Inst::CSetm { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        Inst::CCmp { rn, rm, .. } => {
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        Inst::CCmpImm { rn, .. } => {
             collector.reg_use(rn);
         }
-        &Inst::AtomicRMWLoop {
+        Inst::AtomicRMWLoop {
             op,
             addr,
             operand,
@@ -557,22 +559,22 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_fixed_use(operand, xreg(26));
             collector.reg_fixed_def(oldval, xreg(27));
             collector.reg_fixed_def(scratch1, xreg(24));
-            if op != AtomicRMWLoopOp::Xchg {
+            if *op != AtomicRMWLoopOp::Xchg {
                 collector.reg_fixed_def(scratch2, xreg(28));
             }
         }
-        &Inst::AtomicRMW { rs, rt, rn, .. } => {
+        Inst::AtomicRMW { rs, rt, rn, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rt);
             collector.reg_use(rn);
         }
-        &Inst::AtomicCAS { rd, rs, rt, rn, .. } => {
+        Inst::AtomicCAS { rd, rs, rt, rn, .. } => {
             collector.reg_reuse_def(rd, 1); // reuse `rs`.
             collector.reg_use(rs);
             collector.reg_use(rt);
             collector.reg_use(rn);
         }
-        &Inst::AtomicCASLoop {
+        Inst::AtomicCASLoop {
             addr,
             expected,
             replacement,
@@ -586,95 +588,95 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_fixed_def(oldval, xreg(27));
             collector.reg_fixed_def(scratch, xreg(24));
         }
-        &Inst::LoadAcquire { rt, rn, .. } => {
+        Inst::LoadAcquire { rt, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rt);
         }
-        &Inst::StoreRelease { rt, rn, .. } => {
+        Inst::StoreRelease { rt, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_use(rt);
         }
-        &Inst::Fence {} | &Inst::Csdb {} => {}
-        &Inst::FpuMove32 { rd, rn } => {
+        Inst::Fence {} | Inst::Csdb {} => {}
+        Inst::FpuMove32 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuMove64 { rd, rn } => {
+        Inst::FpuMove64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuMove128 { rd, rn } => {
+        Inst::FpuMove128 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuMoveFromVec { rd, rn, .. } => {
+        Inst::FpuMoveFromVec { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuExtend { rd, rn, .. } => {
+        Inst::FpuExtend { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuRR { rd, rn, .. } => {
+        Inst::FpuRR { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuRRR { rd, rn, rm, .. } => {
+        Inst::FpuRRR { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::FpuRRI { rd, rn, .. } => {
+        Inst::FpuRRI { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuRRIMod { rd, ri, rn, .. } => {
+        Inst::FpuRRIMod { rd, ri, rn, .. } => {
             collector.reg_reuse_def(rd, 1); // reuse `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
         }
-        &Inst::FpuRRRR { rd, rn, rm, ra, .. } => {
+        Inst::FpuRRRR { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
             collector.reg_use(ra);
         }
-        &Inst::VecMisc { rd, rn, .. } => {
+        Inst::VecMisc { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
 
-        &Inst::VecLanes { rd, rn, .. } => {
+        Inst::VecLanes { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecShiftImm { rd, rn, .. } => {
+        Inst::VecShiftImm { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecShiftImmMod { rd, ri, rn, .. } => {
+        Inst::VecShiftImmMod { rd, ri, rn, .. } => {
             collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
         }
-        &Inst::VecExtract { rd, rn, rm, .. } => {
+        Inst::VecExtract { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::VecTbl { rd, rn, rm } => {
+        Inst::VecTbl { rd, rn, rm } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
             collector.reg_def(rd);
         }
-        &Inst::VecTblExt { rd, ri, rn, rm } => {
+        Inst::VecTblExt { rd, ri, rn, rm } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
             collector.reg_reuse_def(rd, 3); // `rd` == `ri`.
             collector.reg_use(ri);
         }
 
-        &Inst::VecTbl2 { rd, rn, rn2, rm } => {
+        Inst::VecTbl2 { rd, rn, rn2, rm } => {
             // Constrain to v30 / v31 so that we satisfy the "adjacent
             // registers" constraint without use of pinned vregs in
             // lowering.
@@ -683,7 +685,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rm);
             collector.reg_def(rd);
         }
-        &Inst::VecTbl2Ext {
+        Inst::VecTbl2Ext {
             rd,
             ri,
             rn,
@@ -699,276 +701,263 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_reuse_def(rd, 4); // `rd` == `ri`.
             collector.reg_use(ri);
         }
-        &Inst::VecLoadReplicate { rd, rn, .. } => {
+        Inst::VecLoadReplicate { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecCSel { rd, rn, rm, .. } => {
+        Inst::VecCSel { rd, rn, rm, .. } => {
             collector.reg_def(rd);
-            collector.reg_use(rn);
-            collector.reg_use(rm);
-        }
-        &Inst::FpuCmp { rn, rm, .. } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::FpuLoad32 { rd, ref mem, .. } => {
+        Inst::FpuCmp { rn, rm, .. } => {
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        Inst::FpuLoad32 { rd, mem, .. } => {
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::FpuLoad64 { rd, ref mem, .. } => {
+        Inst::FpuLoad64 { rd, mem, .. } => {
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::FpuLoad128 { rd, ref mem, .. } => {
+        Inst::FpuLoad128 { rd, mem, .. } => {
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::FpuStore32 { rd, ref mem, .. } => {
+        Inst::FpuStore32 { rd, mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::FpuStore64 { rd, ref mem, .. } => {
+        Inst::FpuStore64 { rd, mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::FpuStore128 { rd, ref mem, .. } => {
+        Inst::FpuStore128 { rd, mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::FpuLoadP64 {
-            rt, rt2, ref mem, ..
-        } => {
+        Inst::FpuLoadP64 { rt, rt2, mem, .. } => {
             collector.reg_def(rt);
             collector.reg_def(rt2);
             pairmemarg_operands(mem, collector);
         }
-        &Inst::FpuStoreP64 {
-            rt, rt2, ref mem, ..
-        } => {
+        Inst::FpuStoreP64 { rt, rt2, mem, .. } => {
             collector.reg_use(rt);
             collector.reg_use(rt2);
             pairmemarg_operands(mem, collector);
         }
-        &Inst::FpuLoadP128 {
-            rt, rt2, ref mem, ..
-        } => {
+        Inst::FpuLoadP128 { rt, rt2, mem, .. } => {
             collector.reg_def(rt);
             collector.reg_def(rt2);
             pairmemarg_operands(mem, collector);
         }
-        &Inst::FpuStoreP128 {
-            rt, rt2, ref mem, ..
-        } => {
+        Inst::FpuStoreP128 { rt, rt2, mem, .. } => {
             collector.reg_use(rt);
             collector.reg_use(rt2);
             pairmemarg_operands(mem, collector);
         }
-        &Inst::FpuToInt { rd, rn, .. } => {
+        Inst::FpuToInt { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::IntToFpu { rd, rn, .. } => {
+        Inst::IntToFpu { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuCSel32 { rd, rn, rm, .. } | &Inst::FpuCSel64 { rd, rn, rm, .. } => {
+        Inst::FpuCSel32 { rd, rn, rm, .. } | Inst::FpuCSel64 { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::FpuRound { rd, rn, .. } => {
+        Inst::FpuRound { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::MovToFpu { rd, rn, .. } => {
+        Inst::MovToFpu { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuMoveFPImm { rd, .. } => {
+        Inst::FpuMoveFPImm { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::MovToVec { rd, ri, rn, .. } => {
+        Inst::MovToVec { rd, ri, rn, .. } => {
             collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
         }
-        &Inst::MovFromVec { rd, rn, .. } | &Inst::MovFromVecSigned { rd, rn, .. } => {
+        Inst::MovFromVec { rd, rn, .. } | Inst::MovFromVecSigned { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecDup { rd, rn, .. } => {
+        Inst::VecDup { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecDupFromFpu { rd, rn, .. } => {
+        Inst::VecDupFromFpu { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecDupFPImm { rd, .. } => {
+        Inst::VecDupFPImm { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::VecDupImm { rd, .. } => {
+        Inst::VecDupImm { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::VecExtend { rd, rn, .. } => {
+        Inst::VecExtend { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecMovElement { rd, ri, rn, .. } => {
+        Inst::VecMovElement { rd, ri, rn, .. } => {
             collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
         }
-        &Inst::VecRRLong { rd, rn, .. } => {
+        Inst::VecRRLong { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecRRNarrowLow { rd, rn, .. } => {
+        Inst::VecRRNarrowLow { rd, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        &Inst::VecRRNarrowHigh { rd, ri, rn, .. } => {
+        Inst::VecRRNarrowHigh { rd, ri, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_reuse_def(rd, 2); // `rd` == `ri`.
             collector.reg_use(ri);
         }
-        &Inst::VecRRPair { rd, rn, .. } => {
+        Inst::VecRRPair { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecRRRLong { rd, rn, rm, .. } => {
+        Inst::VecRRRLong { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::VecRRRLongMod { rd, ri, rn, rm, .. } => {
+        Inst::VecRRRLongMod { rd, ri, rn, rm, .. } => {
             collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::VecRRPairLong { rd, rn, .. } => {
+        Inst::VecRRPairLong { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecRRR { rd, rn, rm, .. } => {
+        Inst::VecRRR { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::VecRRRMod { rd, ri, rn, rm, .. } | &Inst::VecFmlaElem { rd, ri, rn, rm, .. } => {
+        Inst::VecRRRMod { rd, ri, rn, rm, .. } | Inst::VecFmlaElem { rd, ri, rn, rm, .. } => {
             collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::MovToNZCV { rn } => {
+        Inst::MovToNZCV { rn } => {
             collector.reg_use(rn);
         }
-        &Inst::MovFromNZCV { rd } => {
+        Inst::MovFromNZCV { rd } => {
             collector.reg_def(rd);
         }
-        &Inst::Extend { rd, rn, .. } => {
+        Inst::Extend { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::Args { ref args } => {
-            for arg in args {
-                collector.reg_fixed_def(arg.vreg, arg.preg);
+        Inst::Args { args } => {
+            for ArgPair { vreg, preg } in args {
+                collector.reg_fixed_def(vreg, *preg);
             }
         }
-        &Inst::Rets { ref rets } => {
-            for ret in rets {
-                collector.reg_fixed_use(ret.vreg, ret.preg);
+        Inst::Rets { rets } => {
+            for RetPair { vreg, preg } in rets {
+                collector.reg_fixed_use(vreg, *preg);
             }
         }
-        &Inst::Ret { .. } | &Inst::AuthenticatedRet { .. } => {}
-        &Inst::Jump { .. } => {}
-        &Inst::Call { ref info, .. } => {
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
+        Inst::Ret { .. } | Inst::AuthenticatedRet { .. } => {}
+        Inst::Jump { .. } => {}
+        Inst::Call { info, .. } => {
+            let CallInfo { uses, defs, .. } = &mut **info;
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
             }
-            for d in &info.defs {
-                collector.reg_fixed_def(d.vreg, d.preg);
+            for CallRetPair { vreg, preg } in defs {
+                collector.reg_fixed_def(vreg, *preg);
             }
             collector.reg_clobbers(info.clobbers);
         }
-        &Inst::CallInd { ref info, .. } => {
-            collector.reg_use(info.rn);
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
+        Inst::CallInd { info, .. } => {
+            let CallIndInfo { rn, uses, defs, .. } = &mut **info;
+            collector.reg_use(rn);
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
             }
-            for d in &info.defs {
-                collector.reg_fixed_def(d.vreg, d.preg);
+            for CallRetPair { vreg, preg } in defs {
+                collector.reg_fixed_def(vreg, *preg);
             }
             collector.reg_clobbers(info.clobbers);
         }
-        &Inst::ReturnCall {
-            ref info,
-            callee: _,
-        } => {
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
+        Inst::ReturnCall { info, callee: _ } => {
+            for CallArgPair { vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(vreg, *preg);
             }
         }
-        &Inst::ReturnCallInd { ref info, callee } => {
+        Inst::ReturnCallInd { info, callee } => {
             // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
             // This shouldn't be a fixed register constraint, but it's not clear how to pick a
             // register that won't be clobbered by the callee-save restore code emitted with a
             // return_call_indirect.
             collector.reg_fixed_use(callee, xreg(1));
-            for u in &info.uses {
-                collector.reg_fixed_use(u.vreg, u.preg);
+            for CallArgPair { vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(vreg, *preg);
             }
         }
-        &Inst::CondBr { ref kind, .. } => match kind {
-            CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
-                collector.reg_use(*rt);
-            }
+        Inst::CondBr { kind, .. } => match kind {
+            CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => collector.reg_use(rt),
             CondBrKind::Cond(_) => {}
         },
-        &Inst::TestBitAndBranch { rn, .. } => {
+        Inst::TestBitAndBranch { rn, .. } => {
             collector.reg_use(rn);
         }
-        &Inst::IndirectBr { rn, .. } => {
+        Inst::IndirectBr { rn, .. } => {
             collector.reg_use(rn);
         }
-        &Inst::Nop0 | Inst::Nop4 => {}
-        &Inst::Brk => {}
-        &Inst::Udf { .. } => {}
-        &Inst::TrapIf { ref kind, .. } => match kind {
-            CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
-                collector.reg_use(*rt);
-            }
+        Inst::Nop0 | Inst::Nop4 => {}
+        Inst::Brk => {}
+        Inst::Udf { .. } => {}
+        Inst::TrapIf { kind, .. } => match kind {
+            CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => collector.reg_use(rt),
             CondBrKind::Cond(_) => {}
         },
-        &Inst::Adr { rd, .. } | &Inst::Adrp { rd, .. } => {
+        Inst::Adr { rd, .. } | Inst::Adrp { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::Word4 { .. } | &Inst::Word8 { .. } => {}
-        &Inst::JTSequence {
+        Inst::Word4 { .. } | Inst::Word8 { .. } => {}
+        Inst::JTSequence {
             ridx, rtmp1, rtmp2, ..
         } => {
             collector.reg_use(ridx);
             collector.reg_early_def(rtmp1);
             collector.reg_early_def(rtmp2);
         }
-        &Inst::LoadExtName { rd, .. } => {
+        Inst::LoadExtName { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::LoadAddr { rd, ref mem } => {
+        Inst::LoadAddr { rd, mem } => {
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::Paci { .. } | &Inst::Xpaclri => {
+        Inst::Paci { .. } | Inst::Xpaclri => {
             // Neither LR nor SP is an allocatable register, so there is no need
             // to do anything.
         }
-        &Inst::Bti { .. } => {}
-        &Inst::VirtualSPOffsetAdj { .. } => {}
+        Inst::Bti { .. } => {}
+        Inst::VirtualSPOffsetAdj { .. } => {}
 
-        &Inst::ElfTlsGetAddr { rd, tmp, .. } => {
+        Inst::ElfTlsGetAddr { rd, tmp, .. } => {
             // TLSDESC has a very neat calling convention. It is required to preserve
             // all registers except x0 and x30. X30 is non allocatable in cranelift since
             // its the link register.
@@ -978,19 +967,19 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_fixed_def(rd, regs::xreg(0));
             collector.reg_early_def(tmp);
         }
-        &Inst::MachOTlsGetAddr { rd, .. } => {
+        Inst::MachOTlsGetAddr { rd, .. } => {
             collector.reg_fixed_def(rd, regs::xreg(0));
             let mut clobbers =
                 AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::AppleAarch64);
             clobbers.remove(regs::xreg_preg(0));
             collector.reg_clobbers(clobbers);
         }
-        &Inst::Unwind { .. } => {}
-        &Inst::EmitIsland { .. } => {}
-        &Inst::DummyUse { reg } => {
+        Inst::Unwind { .. } => {}
+        Inst::EmitIsland { .. } => {}
+        Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
-        &Inst::StackProbeLoop { start, end, .. } => {
+        Inst::StackProbeLoop { start, end, .. } => {
             collector.reg_early_def(start);
             collector.reg_use(end);
         }
@@ -1008,7 +997,7 @@ impl MachInst for Inst {
     // debugging.
     const TRAP_OPCODE: &'static [u8] = &0xc11f_u32.to_le_bytes();
 
-    fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
+    fn get_operands<F: Fn(VReg) -> VReg>(&mut self, collector: &mut OperandCollector<'_, F>) {
         aarch64_get_operands(self, collector);
     }
 

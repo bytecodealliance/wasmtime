@@ -1071,7 +1071,7 @@ impl VecAMode {
     }
 
     pub fn get_operands<F: Fn(regalloc2::VReg) -> regalloc2::VReg>(
-        &self,
+        &mut self,
         collector: &mut OperandCollector<'_, F>,
     ) {
         match self {

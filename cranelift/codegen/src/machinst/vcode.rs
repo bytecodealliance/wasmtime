@@ -510,7 +510,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     fn collect_operands(&mut self) {
         let allocatable = PRegSet::from(self.vcode.machine_env());
-        for (i, insn) in self.vcode.insts.iter().enumerate() {
+        for (i, insn) in self.vcode.insts.iter_mut().enumerate() {
             // Push operands from the instruction onto the operand list.
             //
             // We rename through the vreg alias table as we collect
@@ -585,6 +585,9 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
         self.compute_preds_from_succs();
         self.vcode.debug_value_labels.sort_unstable();
+
+        // All aliases are resolved now, so remove them from the map.
+        self.vcode.vreg_aliases.clear();
         self.vcode
     }
 }
@@ -1254,13 +1257,13 @@ impl<I: VCodeInst> VCode<I> {
 
     /// Get the fact, if any, for a given VReg.
     pub fn vreg_fact(&self, vreg: VReg) -> Option<&Fact> {
-        let vreg = self.resolve_vreg_alias(vreg);
+        self.debug_assert_no_vreg_aliases(core::iter::once(vreg));
         self.facts[vreg.vreg()].as_ref()
     }
 
     /// Set the fact for a given VReg.
     pub fn set_vreg_fact(&mut self, vreg: VReg, fact: Fact) {
-        let vreg = self.resolve_vreg_alias(vreg);
+        self.debug_assert_no_vreg_aliases(core::iter::once(vreg));
         trace!("set fact on {}: {:?}", vreg, fact);
         self.facts[vreg.vreg()] = Some(fact);
     }
