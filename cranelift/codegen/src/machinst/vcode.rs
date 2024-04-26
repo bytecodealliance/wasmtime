@@ -18,7 +18,6 @@
 //! backend pipeline.
 
 use crate::fx::FxHashMap;
-use crate::fx::FxHashSet;
 use crate::ir::pcc::*;
 use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
 use crate::machinst::*;
@@ -1374,7 +1373,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn num_vregs(&self) -> usize {
-        std::cmp::max(self.vreg_types.len(), first_user_vreg_index())
+        self.vreg_types.len()
     }
 
     fn reftype_vregs(&self) -> &[VReg] {
@@ -1458,15 +1457,8 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
 
 /// This structure manages VReg allocation during the lifetime of the VCodeBuilder.
 pub struct VRegAllocator<I> {
-    /// Next virtual register number to allocate.
-    next_vreg: usize,
-
     /// VReg IR-level types.
     vreg_types: Vec<Type>,
-
-    /// A set with the same contents as `reftyped_vregs`, in order to
-    /// avoid inserting more than once.
-    reftyped_vregs_set: FxHashSet<VReg>,
 
     /// Reference-typed `regalloc2::VReg`s. The regalloc requires
     /// these in a dense slice (as opposed to querying the
@@ -1490,10 +1482,8 @@ impl<I: VCodeInst> VRegAllocator<I> {
     /// Make a new VRegAllocator.
     pub fn new() -> Self {
         Self {
-            next_vreg: first_user_vreg_index(),
-            vreg_types: vec![],
+            vreg_types: vec![types::INVALID; first_user_vreg_index()],
             facts: vec![],
-            reftyped_vregs_set: FxHashSet::default(),
             reftyped_vregs: vec![],
             deferred_error: None,
             _inst: core::marker::PhantomData::default(),
@@ -1505,10 +1495,9 @@ impl<I: VCodeInst> VRegAllocator<I> {
         if self.deferred_error.is_some() {
             return Err(CodegenError::CodeTooLarge);
         }
-        let v = self.next_vreg;
+        let v = self.vreg_types.len();
         let (regclasses, tys) = I::rc_for_type(ty)?;
-        self.next_vreg += regclasses.len();
-        if self.next_vreg >= VReg::MAX {
+        if v + regclasses.len() >= VReg::MAX {
             return Err(CodegenError::CodeTooLarge);
         }
 
@@ -1521,12 +1510,16 @@ impl<I: VCodeInst> VRegAllocator<I> {
             _ => panic!("Value must reside in 1 or 2 registers"),
         };
         for (&reg_ty, &reg) in tys.iter().zip(regs.regs().iter()) {
-            self.set_vreg_type(reg.to_virtual_reg().unwrap(), reg_ty);
+            let vreg = reg.to_virtual_reg().unwrap();
+            debug_assert_eq!(self.vreg_types.len(), vreg.index());
+            self.vreg_types.push(reg_ty);
+            if is_reftype(reg_ty) {
+                self.reftyped_vregs.push(vreg.into());
+            }
         }
 
         // Create empty facts for each allocated vreg.
-        self.facts
-            .resize(usize::try_from(self.next_vreg).unwrap(), None);
+        self.facts.resize(self.vreg_types.len(), None);
 
         Ok(regs)
     }
@@ -1560,20 +1553,6 @@ impl<I: VCodeInst> VRegAllocator<I> {
             &[rc0] => ValueRegs::one(VReg::new(0, rc0).into()),
             &[rc0, rc1] => ValueRegs::two(VReg::new(0, rc0).into(), VReg::new(1, rc1).into()),
             _ => panic!("Value must reside in 1 or 2 registers"),
-        }
-    }
-
-    /// Set the type of this virtual register.
-    pub fn set_vreg_type(&mut self, vreg: VirtualReg, ty: Type) {
-        if self.vreg_types.len() <= vreg.index() {
-            self.vreg_types.resize(vreg.index() + 1, ir::types::INVALID);
-        }
-        self.vreg_types[vreg.index()] = ty;
-        if is_reftype(ty) {
-            let vreg: VReg = vreg.into();
-            if self.reftyped_vregs_set.insert(vreg) {
-                self.reftyped_vregs.push(vreg);
-            }
         }
     }
 

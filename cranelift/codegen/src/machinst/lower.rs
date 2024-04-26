@@ -836,12 +836,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn add_block_params(&mut self, block: Block) -> CodegenResult<()> {
         for &param in self.f.dfg.block_params(block) {
-            let ty = self.f.dfg.value_type(param);
-            let (_reg_rcs, reg_tys) = I::rc_for_type(ty)?;
-            debug_assert_eq!(reg_tys.len(), self.value_regs[param].len());
-            for (&reg, &rty) in self.value_regs[param].regs().iter().zip(reg_tys.iter()) {
+            for &reg in self.value_regs[param].regs() {
                 let vreg = reg.to_virtual_reg().unwrap();
-                self.vregs.set_vreg_type(vreg, rty);
                 self.vcode.add_block_param(vreg);
             }
         }
