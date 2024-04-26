@@ -917,12 +917,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn finish_ir_inst(&mut self, loc: RelSourceLoc) {
-        self.vcode.set_srcloc(loc);
         // The VCodeBuilder builds in reverse order (and reverses at
         // the end), but `ir_insts` is in forward order, so reverse
         // it.
         for inst in self.ir_insts.drain(..).rev() {
-            self.vcode.push(inst);
+            self.vcode.push(inst, loc);
         }
     }
 

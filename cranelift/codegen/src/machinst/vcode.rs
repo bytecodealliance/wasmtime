@@ -248,9 +248,6 @@ pub struct VCodeBuilder<I: VCodeInst> {
     /// the concatenated branch_block_arg_range list.
     branch_block_arg_succ_start: usize,
 
-    /// Current source location.
-    cur_srcloc: RelSourceLoc,
-
     /// Debug-value label in-progress map, keyed by label. For each
     /// label, we keep disjoint ranges mapping to vregs. We'll flatten
     /// this into (vreg, range, label) tuples when done.
@@ -285,7 +282,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             succ_start: 0,
             block_params_start: 0,
             branch_block_arg_succ_start: 0,
-            cur_srcloc: Default::default(),
             debug_info: FxHashMap::default(),
         }
     }
@@ -370,20 +366,15 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     /// Push an instruction for the current BB and current IR inst
     /// within the BB.
-    pub fn push(&mut self, insn: I) {
+    pub fn push(&mut self, insn: I, loc: RelSourceLoc) {
         self.vcode.insts.push(insn);
-        self.vcode.srclocs.push(self.cur_srcloc);
+        self.vcode.srclocs.push(loc);
     }
 
     /// Add a successor block with branch args.
     pub fn add_succ(&mut self, block: BlockIndex, args: &[Reg]) {
         self.vcode.block_succs_preds.push(block);
         self.add_branch_args_for_succ(args);
-    }
-
-    /// Set the current source location.
-    pub fn set_srcloc(&mut self, srcloc: RelSourceLoc) {
-        self.cur_srcloc = srcloc;
     }
 
     /// Add a debug value label to a register.
