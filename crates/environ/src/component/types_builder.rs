@@ -14,8 +14,6 @@ use wasmparser::{types, Validator};
 use wasmtime_component_util::FlagsSize;
 use wasmtime_types::ModuleInternedTypeIndex;
 
-pub use wasmtime_types::StaticModuleIndex;
-
 mod resources;
 pub use resources::ResourcesBuilder;
 
