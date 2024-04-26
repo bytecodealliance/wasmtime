@@ -18,7 +18,7 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     /// future queries faster, and takes amortized constant time.
     ///
     /// ```
-    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// let mut sets = cranelift_isle::disjointsets::DisjointSets::default();
     /// sets.merge(1, 2);
     /// sets.merge(1, 3);
     /// sets.merge(2, 4);
@@ -43,7 +43,7 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     /// make future queries faster, so `find_mut` should be preferred.
     ///
     /// ```
-    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// let mut sets = cranelift_isle::disjointsets::DisjointSets::default();
     /// sets.merge(1, 2);
     /// sets.merge(1, 3);
     /// sets.merge(2, 4);
@@ -96,7 +96,7 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     /// part of any set, returns `false`.
     ///
     /// ```
-    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// let mut sets = cranelift_isle::disjointsets::DisjointSets::default();
     /// sets.merge(1, 2);
     /// sets.merge(1, 3);
     /// sets.merge(2, 4);
@@ -116,7 +116,7 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     /// returned in sorted order. This method takes time linear in the total size of all sets.
     ///
     /// ```
-    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// let mut sets = cranelift_isle::disjointsets::DisjointSets::default();
     /// sets.merge(1, 2);
     /// sets.merge(1, 3);
     /// sets.merge(2, 4);
@@ -144,7 +144,7 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     /// Returns true if there are no sets. This method takes constant time.
     ///
     /// ```
-    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// let mut sets = cranelift_isle::disjointsets::DisjointSets::default();
     /// assert!(sets.is_empty());
     /// sets.merge(1, 2);
     /// assert!(!sets.is_empty());
@@ -156,7 +156,7 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     /// Returns the total number of elements in all sets. This method takes constant time.
     ///
     /// ```
-    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// let mut sets = cranelift_isle::disjointsets::DisjointSets::default();
     /// sets.merge(1, 2);
     /// assert_eq!(sets.len(), 2);
     /// sets.merge(3, 4);
