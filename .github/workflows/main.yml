@@ -372,6 +372,9 @@ jobs:
     - run: cargo check -p wasmtime-asm-macros
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
+    - run: cargo check -p wasmtime-slab
+      env:
+        CARGO_BUILD_TARGET: x86_64-unknown-none
 
     # Check that wasmtime-runtime compiles with panic=abort since there's some
     # #[cfg] for specifically panic=abort there.
