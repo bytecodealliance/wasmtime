@@ -626,7 +626,7 @@ pub trait ABIMachineSpec {
     fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64;
 
     /// Get the ABI-dependent MachineEnv for managing register allocation.
-    fn get_machine_env(flags: &settings::Flags, call_conv: isa::CallConv) -> &MachineEnv;
+    fn get_machine_env(flags: &settings::Flags) -> MachineEnv;
 
     /// Get all caller-save registers, that is, registers that we expect
     /// not to be saved across a call to a callee with the given ABI.
@@ -1118,6 +1118,7 @@ pub struct Callee<M: ABIMachineSpec> {
     /// manually register-allocated and carefully only use caller-saved
     /// registers and keep nothing live after this sequence of instructions.
     stack_limit: Option<(Reg, SmallInstVec<M::I>)>,
+    machine_env: MachineEnv,
 
     _mach: PhantomData<M>,
 }
@@ -1227,6 +1228,8 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         let tail_args_size = sigs[sig].sized_stack_arg_space;
 
+        let machine_env = M::get_machine_env(&flags);
+
         Ok(Self {
             ir_sig: ensure_struct_return_ptr_is_returned(&f.signature),
             sig,
@@ -1244,6 +1247,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             isa_flags: isa_flags.clone(),
             is_leaf: f.is_leaf(),
             stack_limit,
+            machine_env,
             _mach: PhantomData,
         })
     }
@@ -1450,7 +1454,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
     /// Get the ABI-dependent MachineEnv for managing register allocation.
     pub fn machine_env(&self, sigs: &SigSet) -> &MachineEnv {
-        M::get_machine_env(&self.flags, self.call_conv(sigs))
+        &self.machine_env
     }
 
     /// The offsets of all sized stack slots (not spill slots) for debuginfo purposes.
