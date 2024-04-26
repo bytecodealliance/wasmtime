@@ -39,11 +39,7 @@ pub use object;
 #[cfg(feature = "compile")]
 mod compile;
 #[cfg(feature = "compile")]
-mod module_environ;
-#[cfg(feature = "compile")]
 pub use crate::compile::*;
-#[cfg(feature = "compile")]
-pub use crate::module_environ::*;
 
 #[cfg(feature = "component-model")]
 pub mod component;

@@ -152,9 +152,7 @@ impl ResourcesBuilder {
             .or_insert_with(|| {
                 let ty = self.resource_id_to_resource_index[&id];
                 let instance = self.current_instance.expect("current instance not set");
-                types
-                    .resource_tables
-                    .push(TypeResourceTable { ty, instance })
+                types.push_resource_table(TypeResourceTable { ty, instance })
             })
     }
 

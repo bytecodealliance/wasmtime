@@ -3,9 +3,8 @@
 
 use crate::{obj, Tunables};
 use crate::{
-    BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypesBuilder, ObjectKind, PrimaryMap, WasmError, WasmFuncType,
-    WasmFunctionInfo,
+    BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionLoc, ObjectKind,
+    PrimaryMap, WasmError, WasmFuncType, WasmFunctionInfo,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
@@ -19,10 +18,14 @@ use thiserror::Error;
 
 mod address_map;
 mod module_artifacts;
+mod module_environ;
+mod module_types;
 mod trap_encoding;
 
 pub use self::address_map::*;
 pub use self::module_artifacts::*;
+pub use self::module_environ::*;
+pub use self::module_types::*;
 pub use self::trap_encoding::*;
 
 /// An error while compiling WebAssembly to machine code.
