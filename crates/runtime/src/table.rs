@@ -11,7 +11,7 @@ use sptr::Strict;
 use std::ops::Range;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::{
-    TablePlan, Trap, WasmHeapType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
+    TablePlan, Trap, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
 };
 
 /// An element going into or coming out of a table.
@@ -247,13 +247,9 @@ impl From<DynamicGcRefTable> for Table {
 }
 
 fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
-    match ty.heap_type {
-        WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
-            TableElementType::Func
-        }
-        WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
-            TableElementType::GcRef
-        }
+    match ty.heap_type.top() {
+        WasmHeapTopType::Func => TableElementType::Func,
+        WasmHeapTopType::Any | WasmHeapTopType::Extern => TableElementType::GcRef,
     }
 }
 

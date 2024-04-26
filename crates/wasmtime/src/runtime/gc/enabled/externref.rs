@@ -2,8 +2,8 @@
 
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    AsContextMut, FuncType, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted,
-    RefType, Result, RootSet, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
+    AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
+    Result, RootSet, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
 };
 use anyhow::Context;
 use std::any::Any;
@@ -431,7 +431,7 @@ unsafe impl WasmTy for Rooted<ExternRef> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
         unreachable!()
     }
 
@@ -486,7 +486,7 @@ unsafe impl WasmTy for Option<Rooted<ExternRef>> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
         unreachable!()
     }
 
@@ -538,7 +538,7 @@ unsafe impl WasmTy for ManuallyRooted<ExternRef> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
         unreachable!()
     }
 
@@ -598,7 +598,7 @@ unsafe impl WasmTy for Option<ManuallyRooted<ExternRef>> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &FuncType) -> Result<()> {
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
         unreachable!()
     }
 

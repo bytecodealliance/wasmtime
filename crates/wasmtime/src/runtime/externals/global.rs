@@ -133,13 +133,18 @@ impl Global {
                                 .into(),
                         ),
 
-                        HeapType::Any | HeapType::I31 | HeapType::None => definition
+                        HeapType::Any
+                        | HeapType::I31
+                        | HeapType::Array
+                        | HeapType::ConcreteArray(_) => definition
                             .as_gc_ref()
                             .map(|r| {
                                 let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
                                 AnyRef::from_cloned_gc_ref(&mut store, r)
                             })
                             .into(),
+
+                        HeapType::None => Ref::Any(None),
                     };
                     debug_assert!(
                         ref_ty.is_nullable() || !reference.is_null(),

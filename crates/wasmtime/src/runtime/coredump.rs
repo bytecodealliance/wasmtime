@@ -176,19 +176,17 @@ impl WasmCoreDump {
                     // reference types. This lets us avoid needing to figure out
                     // what a concrete type reference's index is in the local
                     // core dump index space.
-                    ValType::Ref(r) => match r.heap_type() {
+                    ValType::Ref(r) => match r.heap_type().top() {
                         HeapType::Extern => wasm_encoder::ValType::EXTERNREF,
 
-                        HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => {
-                            wasm_encoder::ValType::FUNCREF
-                        }
+                        HeapType::Func => wasm_encoder::ValType::FUNCREF,
 
-                        HeapType::Any | HeapType::I31 | HeapType::None => {
-                            wasm_encoder::ValType::Ref(wasm_encoder::RefType {
-                                nullable: true,
-                                heap_type: wasm_encoder::HeapType::Any,
-                            })
-                        }
+                        HeapType::Any => wasm_encoder::ValType::Ref(wasm_encoder::RefType {
+                            nullable: true,
+                            heap_type: wasm_encoder::HeapType::Any,
+                        }),
+
+                        ty => unreachable!("not a top type: {ty:?}"),
                     },
                 };
                 let init = match g.get(&mut store) {

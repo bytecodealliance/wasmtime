@@ -10,7 +10,7 @@ use std::{alloc, any::Any, mem, ptr, sync::Arc};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, TableSegment,
-    Trap, VMOffsets, WasmValType, WASM_PAGE_SIZE,
+    Trap, VMOffsets, WasmHeapTopType, WasmValType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "gc")]
@@ -574,8 +574,8 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                 };
                 let idx = module.table_index(table);
                 let table = unsafe { instance.get_defined_table(table).as_mut().unwrap() };
-                match module.table_plans[idx].table.wasm_ty.heap_type {
-                    wasmtime_environ::WasmHeapType::Extern => {
+                match module.table_plans[idx].table.wasm_ty.heap_type.top() {
+                    WasmHeapTopType::Extern => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
                         let gc_store = unsafe { (*instance.store()).gc_store() };
                         let items = (0..table.size())
@@ -583,9 +583,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                         table.init_gc_refs(0, items)?;
                     }
 
-                    wasmtime_environ::WasmHeapType::Any
-                    | wasmtime_environ::WasmHeapType::I31
-                    | wasmtime_environ::WasmHeapType::None => {
+                    WasmHeapTopType::Any => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
                         let gc_store = unsafe { (*instance.store()).gc_store() };
                         let items = (0..table.size())
@@ -593,9 +591,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                         table.init_gc_refs(0, items)?;
                     }
 
-                    wasmtime_environ::WasmHeapType::Func
-                    | wasmtime_environ::WasmHeapType::ConcreteFunc(_)
-                    | wasmtime_environ::WasmHeapType::NoFunc => {
+                    WasmHeapTopType::Func => {
                         let funcref = raw.get_funcref().cast::<VMFuncRef>();
                         let items = (0..table.size()).map(|_| funcref);
                         table.init_func(0, items)?;

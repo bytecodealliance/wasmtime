@@ -174,6 +174,7 @@ impl ComponentTypesBuilder {
         self.module_types
             .wasm_types()
             .find(|(_, ty)| match &ty.composite_type {
+                wasmtime_types::WasmCompositeType::Array(_) => false,
                 wasmtime_types::WasmCompositeType::Func(sig) => {
                     sig.params().len() == 1
                         && sig.returns().len() == 0

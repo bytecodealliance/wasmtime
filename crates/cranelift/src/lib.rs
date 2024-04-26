@@ -11,7 +11,9 @@ use cranelift_codegen::{
     settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmHeapType, WasmValType};
+use cranelift_wasm::{
+    DefinedFuncIndex, FuncIndex, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmValType,
+};
 
 use target_lexicon::Architecture;
 use wasmtime_environ::{
@@ -266,15 +268,13 @@ fn wasm_call_signature(
 
 /// Returns the reference type to use for the provided wasm type.
 fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
-    match wasm_ht {
-        WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => pointer_type,
-        WasmHeapType::Extern | WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => {
-            match pointer_type {
-                ir::types::I32 => ir::types::R32,
-                ir::types::I64 => ir::types::R64,
-                _ => panic!("unsupported pointer type"),
-            }
-        }
+    match wasm_ht.top() {
+        WasmHeapTopType::Func => pointer_type,
+        WasmHeapTopType::Any | WasmHeapTopType::Extern => match pointer_type {
+            ir::types::I32 => ir::types::R32,
+            ir::types::I64 => ir::types::R64,
+            _ => panic!("unsupported pointer type"),
+        },
     }
 }
 

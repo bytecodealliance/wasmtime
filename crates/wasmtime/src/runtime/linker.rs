@@ -343,14 +343,11 @@ impl<T> Linker<T> {
                                     ValType::V128 => Val::V128(0_u128.into()),
                                     ValType::Ref(r) => {
                                         debug_assert!(r.is_nullable());
-                                        match r.heap_type() {
-                                            HeapType::Func
-                                            | HeapType::ConcreteFunc(_)
-                                            | HeapType::NoFunc => Val::null_func_ref(),
+                                        match r.heap_type().top() {
+                                            HeapType::Func => Val::null_func_ref(),
                                             HeapType::Extern => Val::null_extern_ref(),
-                                            HeapType::Any | HeapType::I31 | HeapType::None => {
-                                                Val::null_any_ref()
-                                            }
+                                            HeapType::Any => Val::null_any_ref(),
+                                            ty => unreachable!("not a top type: {ty:?}"),
                                         }
                                     }
                                 };

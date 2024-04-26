@@ -6,7 +6,7 @@
 
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
-    FuncType, HeapType, RefType, Result, ValType, WasmTy,
+    HeapType, RefType, Result, ValType, WasmTy,
 };
 use wasmtime_runtime::{VMGcRef, ValRaw};
 
@@ -237,7 +237,7 @@ unsafe impl WasmTy for I31 {
         &self,
         _store: &StoreOpaque,
         _nullable: bool,
-        _actual: &FuncType,
+        _actual: &HeapType,
     ) -> Result<()> {
         unreachable!()
     }
@@ -300,7 +300,7 @@ unsafe impl WasmTy for Option<I31> {
         &self,
         _store: &StoreOpaque,
         _nullable: bool,
-        _actual: &FuncType,
+        _actual: &HeapType,
     ) -> Result<()> {
         unreachable!()
     }

@@ -80,7 +80,6 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 
     let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
     let unlinked_compile_outputs = compile_inputs.compile(engine)?;
-    let types = types.finish();
     let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
     // Emplace all compiled functions into the object file with any other
@@ -99,6 +98,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+        &types,
         object,
         engine,
         compiled_funcs,
@@ -107,6 +107,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     )?;
 
     let info = compilation_artifacts.unwrap_as_module_info();
+    let types = types.finish();
     object.serialize_info(&(&info, &types));
     let result = T::finish_object(object)?;
 
@@ -159,6 +160,7 @@ pub(crate) fn build_component_artifacts<'a, T: FinishedObject>(
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+        types.module_types_builder(),
         object,
         engine,
         compiled_funcs,
@@ -493,19 +495,20 @@ impl<'a> CompileInputs<'a> {
         }
 
         for signature in sigs {
-            self.push_input(move |compiler| {
-                let wasm_func_ty = types[signature].unwrap_func();
-                let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
-                Ok(CompileOutput {
-                    key: CompileKey::wasm_to_native_trampoline(signature),
-                    symbol: format!(
-                        "signatures[{}]::wasm_to_native_trampoline",
-                        signature.as_u32()
-                    ),
-                    function: CompiledFunction::Function(trampoline),
-                    info: None,
-                })
-            });
+            if let Some(wasm_func_ty) = types[signature].as_func() {
+                self.push_input(move |compiler| {
+                    let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
+                    Ok(CompileOutput {
+                        key: CompileKey::wasm_to_native_trampoline(signature),
+                        symbol: format!(
+                            "signatures[{}]::wasm_to_native_trampoline",
+                            signature.as_u32()
+                        ),
+                        function: CompiledFunction::Function(trampoline),
+                        info: None,
+                    })
+                });
+            }
         }
     }
 
@@ -651,6 +654,7 @@ impl FunctionIndices {
     /// them to the given ELF file.
     fn link_and_append_code<'a>(
         mut self,
+        types: &ModuleTypesBuilder,
         mut obj: object::write::Object<'static>,
         engine: &'a Engine,
         compiled_funcs: Vec<(String, Box<dyn Any + Send>)>,
@@ -839,6 +843,7 @@ impl FunctionIndices {
                     .types
                     .iter()
                     .map(|(_, ty)| *ty)
+                    .filter(|idx| types[*idx].is_func())
                     .collect::<BTreeSet<_>>();
                 let wasm_to_native_trampolines = unique_and_sorted_sigs
                     .iter()

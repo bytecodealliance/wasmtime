@@ -45,11 +45,12 @@ pub fn dummy_value(val_ty: ValType) -> Result<Val> {
         ValType::F32 => Val::F32(0),
         ValType::F64 => Val::F64(0),
         ValType::V128 => Val::V128(0.into()),
-        ValType::Ref(r) => match r.heap_type() {
+        ValType::Ref(r) => match r.heap_type().top() {
             _ if !r.is_nullable() => bail!("cannot construct a dummy value of type `{r}`"),
             HeapType::Extern => Val::null_extern_ref(),
-            HeapType::NoFunc | HeapType::Func | HeapType::ConcreteFunc(_) => Val::null_func_ref(),
-            HeapType::Any | HeapType::I31 | HeapType::None => Val::null_any_ref(),
+            HeapType::Func => Val::null_func_ref(),
+            HeapType::Any => Val::null_any_ref(),
+            ty => unreachable!("not a top type: {ty:?}"),
         },
     })
 }

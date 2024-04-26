@@ -1195,6 +1195,8 @@ impl ModuleTranslation<'_> {
                 WasmHeapType::Extern
                 | WasmHeapType::Any
                 | WasmHeapType::I31
+                | WasmHeapType::Array
+                | WasmHeapType::ConcreteArray(_)
                 | WasmHeapType::None => break,
             }
 

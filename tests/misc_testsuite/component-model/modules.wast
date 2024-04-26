@@ -91,7 +91,7 @@
       ))
     ))
   )
-  "expected func of type `(i32) -> ()`, found func of type `() -> ()`")
+  "expected type `(func (param i32))`, found type `(func)`")
 
 (assert_unlinkable
   (component

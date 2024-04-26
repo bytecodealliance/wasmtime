@@ -2,7 +2,9 @@ use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{TargetEnvironment, WasmHeapType, WasmRefType, WasmResult, WasmValType};
+use cranelift_wasm::{
+    TargetEnvironment, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+};
 use wasmtime_environ::{I31_DISCRIMINANT, NON_NULL_NON_I31_MASK};
 
 /// Get the default GC compiler.
@@ -171,12 +173,9 @@ impl FuncEnvironment<'_> {
     ) -> ir::Value {
         assert!(ty.is_vmgcref_type_and_not_i31());
 
-        let might_be_i31 = match ty.heap_type {
-            WasmHeapType::Any => true,
-            WasmHeapType::Extern | WasmHeapType::None | WasmHeapType::ConcreteFunc(_) => false,
-            WasmHeapType::Func | WasmHeapType::NoFunc | WasmHeapType::I31 => {
-                unreachable!("we don't manage instances of these types with the GC")
-            }
+        let might_be_i31 = match ty.heap_type.top() {
+            WasmHeapTopType::Any => true,
+            WasmHeapTopType::Extern | WasmHeapTopType::Func => false,
         };
 
         let ptr_ty = self.pointer_type();

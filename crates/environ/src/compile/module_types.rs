@@ -1,10 +1,9 @@
-use crate::{Module, ModuleTypes, TypeConvert, TypeIndex, WasmHeapType};
-use cranelift_entity::EntityRef;
+use crate::{EntityRef, Module, ModuleTypes, TypeConvert};
 use std::{collections::HashMap, ops::Index};
 use wasmparser::{UnpackedIndex, Validator, ValidatorId};
 use wasmtime_types::{
-    EngineOrModuleTypeIndex, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, WasmResult,
-    WasmSubType,
+    EngineOrModuleTypeIndex, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, TypeIndex,
+    WasmCompositeType, WasmHeapType, WasmResult, WasmSubType,
 };
 
 /// A type marking the start of a recursion group's definition.
@@ -105,7 +104,9 @@ impl ModuleTypesBuilder {
 
         for id in validator_types.rec_group_elements(rec_group_id) {
             let ty = &validator_types[id];
-            let wasm_ty = WasmparserTypeConverter::new(self, module).convert_sub_type(ty)?;
+            let wasm_ty = WasmparserTypeConverter::new(self, module)
+                .with_rec_group(validator_types, rec_group_id)
+                .convert_sub_type(ty)?;
             self.wasm_sub_type_in_rec_group(id, wasm_ty);
         }
 
@@ -265,12 +266,31 @@ where
 pub struct WasmparserTypeConverter<'a> {
     types: &'a ModuleTypesBuilder,
     module: &'a Module,
+    rec_group_context: Option<(
+        wasmparser::types::TypesRef<'a>,
+        wasmparser::types::RecGroupId,
+    )>,
 }
 
 impl<'a> WasmparserTypeConverter<'a> {
     /// Construct a new type converter from `wasmparser` types to Wasmtime types.
     pub fn new(types: &'a ModuleTypesBuilder, module: &'a Module) -> Self {
-        Self { types, module }
+        Self {
+            types,
+            module,
+            rec_group_context: None,
+        }
+    }
+
+    /// Configure this converter to be within the context of defining the
+    /// current rec group.
+    pub fn with_rec_group(
+        &mut self,
+        wasmparser_types: wasmparser::types::TypesRef<'a>,
+        rec_group: wasmparser::types::RecGroupId,
+    ) -> &Self {
+        self.rec_group_context = Some((wasmparser_types, rec_group));
+        self
     }
 }
 
@@ -278,14 +298,62 @@ impl TypeConvert for WasmparserTypeConverter<'_> {
     fn lookup_heap_type(&self, index: UnpackedIndex) -> WasmHeapType {
         match index {
             UnpackedIndex::Id(id) => {
-                let signature = self.types.wasmparser_to_wasmtime[&id];
-                WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(signature))
+                let interned = self.types.wasmparser_to_wasmtime[&id];
+                let index = EngineOrModuleTypeIndex::Module(interned);
+
+                // If this is a forward reference to a type in this type's rec
+                // group that we haven't converted yet, then we won't have an
+                // entry in `wasm_types` yet. In this case, fallback to a
+                // different means of determining whether this is a concrete
+                // array vs struct vs func reference. In this case, we can use
+                // the validator's type context.
+                if let Some(ty) = self.types.types.get(interned) {
+                    match &ty.composite_type {
+                        WasmCompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
+                        WasmCompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
+                    }
+                } else if let Some((wasmparser_types, _)) = self.rec_group_context.as_ref() {
+                    match &wasmparser_types[id].composite_type {
+                        wasmparser::CompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
+                        wasmparser::CompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
+                        wasmparser::CompositeType::Struct(_) => unreachable!(),
+                    }
+                } else {
+                    panic!("forward reference to type outside of rec group?")
+                }
             }
+
             UnpackedIndex::Module(module_index) => {
                 let module_index = TypeIndex::from_u32(module_index);
-                let interned_index = self.module.types[module_index];
-                WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(interned_index))
+                let interned = self.module.types[module_index];
+                let index = EngineOrModuleTypeIndex::Module(interned);
+
+                // See comment above about `wasm_types` maybe not having the
+                // converted sub type yet. However in this case we don't have a
+                // `wasmparser::types::CoreTypeId` on hand, so we have to
+                // indirectly get one by looking it up inside the current rec
+                // group.
+                if let Some(ty) = self.types.types.get(interned) {
+                    match &ty.composite_type {
+                        WasmCompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
+                        WasmCompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
+                    }
+                } else if let Some((parser_types, rec_group)) = self.rec_group_context.as_ref() {
+                    let rec_group_index = interned.index() - self.types.types.len_types();
+                    let id = parser_types
+                        .rec_group_elements(*rec_group)
+                        .nth(rec_group_index)
+                        .unwrap();
+                    match &parser_types[id].composite_type {
+                        wasmparser::CompositeType::Array(_) => WasmHeapType::ConcreteArray(index),
+                        wasmparser::CompositeType::Func(_) => WasmHeapType::ConcreteFunc(index),
+                        wasmparser::CompositeType::Struct(_) => unreachable!(),
+                    }
+                } else {
+                    panic!("forward reference to type outside of rec group?")
+                }
             }
+
             UnpackedIndex::RecGroup(_) => unreachable!(),
         }
     }

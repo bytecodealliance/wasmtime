@@ -3414,6 +3414,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "smallvec",
  "target-lexicon",
  "tempfile",
  "wasi-common",

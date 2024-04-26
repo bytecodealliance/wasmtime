@@ -25,12 +25,12 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr};
-use wasmtime_environ::WasmHeapType;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     HostPtr, MemoryIndex, MemoryPlan, Module, ModuleInternedTypeIndex, PrimaryMap, TableIndex,
-    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, VMCONTEXT_MAGIC,
+    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
+    VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -877,8 +877,13 @@ impl Instance {
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
                 let mut context = ConstEvalContext::new(self, &module);
-                match module.table_plans[table_index].table.wasm_ty.heap_type {
-                    WasmHeapType::Extern => table.init_gc_refs(
+                match module.table_plans[table_index]
+                    .table
+                    .wasm_ty
+                    .heap_type
+                    .top()
+                {
+                    WasmHeapTopType::Extern => table.init_gc_refs(
                         dst,
                         exprs.iter().map(|expr| unsafe {
                             let raw = const_evaluator
@@ -887,28 +892,25 @@ impl Instance {
                             VMGcRef::from_raw_u32(raw.get_externref())
                         }),
                     )?,
-                    WasmHeapType::Any | WasmHeapType::I31 | WasmHeapType::None => table
-                        .init_gc_refs(
-                            dst,
-                            exprs.iter().map(|expr| unsafe {
-                                let raw = const_evaluator
-                                    .eval(&mut context, expr)
-                                    .expect("const expr should be valid");
-                                VMGcRef::from_raw_u32(raw.get_anyref())
-                            }),
-                        )?,
-                    WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
-                        table.init_func(
-                            dst,
-                            exprs.iter().map(|expr| unsafe {
-                                const_evaluator
-                                    .eval(&mut context, expr)
-                                    .expect("const expr should be valid")
-                                    .get_funcref()
-                                    .cast()
-                            }),
-                        )?
-                    }
+                    WasmHeapTopType::Any => table.init_gc_refs(
+                        dst,
+                        exprs.iter().map(|expr| unsafe {
+                            let raw = const_evaluator
+                                .eval(&mut context, expr)
+                                .expect("const expr should be valid");
+                            VMGcRef::from_raw_u32(raw.get_anyref())
+                        }),
+                    )?,
+                    WasmHeapTopType::Func => table.init_func(
+                        dst,
+                        exprs.iter().map(|expr| unsafe {
+                            const_evaluator
+                                .eval(&mut context, expr)
+                                .expect("const expr should be valid")
+                                .get_funcref()
+                                .cast()
+                        }),
+                    )?,
                 }
             }
         }
