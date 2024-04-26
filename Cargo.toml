@@ -73,7 +73,7 @@ tempfile = { workspace = true }
 wasmtime-runtime = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 wast = { workspace = true }
-criterion = "0.5.0"
+criterion = { workspace = true }
 num_cpus = "1.13.0"
 memchr = "2.4"
 async-trait = { workspace = true }
@@ -291,6 +291,7 @@ tracing-subscriber = { version = "0.3.1", default-features = false, features = [
 url = "2.3.1"
 humantime = "2.0.0"
 postcard = { version = "1.0.8", default-features = false, features = ['alloc'] }
+criterion = { version = "0.5.0", default-features = false, features = ["html_reports", "rayon"] }
 
 # =============================================================================
 #
