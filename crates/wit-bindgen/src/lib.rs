@@ -1391,8 +1391,19 @@ impl<'a> InterfaceGenerator<'a> {
     {
         let info = self.info(id);
 
+        // We use a BTree set to make sure we don't have any duplicates and we have a stable order
+        let additional_derives: BTreeSet<String> = self
+            .gen
+            .opts
+            .additional_derive_attributes
+            .iter()
+            .cloned()
+            .collect();
+
         for (name, mode) in self.modes_of(id) {
             let name = to_rust_upper_camel_case(&name);
+
+            let mut derives = additional_derives.clone();
 
             self.rustdoc(docs);
             let lt = self.lifetime_for(&info, mode);
@@ -1403,10 +1414,17 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("#[derive(wasmtime::component::Lower)]\n");
             self.push_str(&format!("#[component({})]\n", derive_component));
             if info.is_copy() {
-                self.push_str("#[derive(Copy, Clone)]\n");
+                derives.extend(["Copy", "Clone"].into_iter().map(|s| s.to_string()));
             } else if info.is_clone() {
-                self.push_str("#[derive(Clone)]\n");
+                derives.insert("Clone".to_string());
             }
+
+            if !derives.is_empty() {
+                self.push_str("#[derive(");
+                self.push_str(&derives.into_iter().collect::<Vec<_>>().join(", "));
+                self.push_str(")]\n")
+            }
+
             self.push_str(&format!("pub enum {name}"));
             self.print_generics(lt);
             self.push_str("{\n");

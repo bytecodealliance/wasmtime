@@ -531,9 +531,16 @@ mod custom_derives {
             package my:inline;
 
             interface blah {
+                variant abc {
+                    a,
+                    b,
+                    c
+                }
+
                 record foo {
                     field1: string,
-                    field2: list<u32>
+                    field2: list<u32>,
+                    field3: abc
                 }
 
                 bar: func(cool: foo);
@@ -548,7 +555,7 @@ mod custom_derives {
         additional_derives: [serde::Serialize, serde::Deserialize, Hash, Clone, PartialEq, Eq],
     });
 
-    use my::inline::blah::{Foo, Host};
+    use my::inline::blah::{Abc, Foo, Host};
 
     struct X;
 
@@ -558,6 +565,7 @@ mod custom_derives {
             let _blah: HashSet<Foo, RandomState> = HashSet::from_iter([Foo {
                 field1: "hello".to_string(),
                 field2: vec![1, 2, 3],
+                field3: Abc::B,
             }]);
 
             // Check that the attributes from an external crate actually work. If they don't work,
