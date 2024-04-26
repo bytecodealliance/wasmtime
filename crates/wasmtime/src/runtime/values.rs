@@ -78,13 +78,9 @@ macro_rules! accessors {
 
 impl Val {
     /// Returns the null reference for the given heap type.
-    pub fn null_ref(heap_type: HeapType) -> Val {
-        match heap_type.top() {
-            HeapType::Func => Val::FuncRef(None),
-            HeapType::Extern => Val::ExternRef(None),
-            HeapType::Any => Val::AnyRef(None),
-            _ => unreachable!(),
-        }
+    #[inline]
+    pub fn null_ref(heap_type: &HeapType) -> Val {
+        Ref::null(&heap_type).into()
     }
 
     /// Returns the null function reference value.
@@ -631,6 +627,17 @@ impl From<Option<Rooted<AnyRef>>> for Ref {
 }
 
 impl Ref {
+    /// Create a null reference to the given heap type.
+    #[inline]
+    pub fn null(heap_type: &HeapType) -> Self {
+        match heap_type.top() {
+            HeapType::Any => Ref::Any(None),
+            HeapType::Extern => Ref::Extern(None),
+            HeapType::Func => Ref::Func(None),
+            ty => unreachable!("not a heap type: {ty:?}"),
+        }
+    }
+
     /// Is this a null reference?
     #[inline]
     pub fn is_null(&self) -> bool {

@@ -619,6 +619,7 @@ impl HeapType {
     ///
     /// The returned heap type is a supertype of all types in this heap type's
     /// type hierarchy.
+    #[inline]
     pub fn top(&self) -> HeapType {
         match self {
             HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::Func,
