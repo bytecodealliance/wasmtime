@@ -637,7 +637,7 @@ impl<I: VCodeInst> VCode<I> {
 
     /// Get the ABI-dependent MachineEnv for managing register allocation.
     pub fn machine_env(&self) -> &MachineEnv {
-        self.abi.machine_env(&self.sigs)
+        self.abi.machine_env()
     }
 
     /// Get the number of blocks. Block indices will be in the range `0 ..
