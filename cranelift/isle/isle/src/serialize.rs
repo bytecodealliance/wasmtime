@@ -20,9 +20,9 @@
 //! it.
 use std::cmp::Reverse;
 
+use crate::disjointsets::DisjointSets;
 use crate::lexer::Pos;
 use crate::trie_again::{Binding, BindingId, Constraint, Rule, RuleSet};
-use crate::DisjointSets;
 
 /// Decomposes the rule-set into a tree of [Block]s.
 pub fn serialize(rules: &RuleSet) -> Block {
