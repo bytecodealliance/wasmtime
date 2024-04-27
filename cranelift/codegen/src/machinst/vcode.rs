@@ -936,9 +936,6 @@ impl<I: VCodeInst> VCode<I> {
                             }
                         }
 
-                        // Get the allocations for this inst from the regalloc result.
-                        let allocs = regalloc.inst_allocs(iix);
-
                         // If the instruction we are about to emit is
                         // a return, place an epilogue at this point
                         // (and don't emit the return; the actual
@@ -948,10 +945,17 @@ impl<I: VCodeInst> VCode<I> {
                                 do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                             }
                         } else {
+                            // Update the operands for this inst using the
+                            // allocations from the regalloc result.
+                            let allocs = regalloc.inst_allocs(iix);
+                            let mut consumer = AllocationConsumer::new(allocs);
+                            self.insts[iix.index()].get_operands(&mut consumer);
+                            debug_assert!(consumer.done());
+
                             // Emit the instruction!
                             do_emit(
                                 &self.insts[iix.index()],
-                                allocs,
+                                &[],
                                 &mut disasm,
                                 &mut buffer,
                                 &mut state,

@@ -499,52 +499,46 @@ impl<'a> AllocationConsumer<'a> {
         }
     }
 
-    pub fn next_fixed_nonallocatable(&mut self, preg: PReg) {
-        let alloc = self.allocs.next();
-        let alloc = alloc.map(|alloc| {
-            Reg::from(
-                alloc
-                    .as_reg()
-                    .expect("Should not have gotten a stack allocation"),
-            )
-        });
-
-        match alloc {
-            Some(alloc) => {
-                assert_eq!(preg, alloc.to_real_reg().unwrap().into());
-            }
-            None => {}
-        }
-    }
+    pub fn next_fixed_nonallocatable(&mut self, _preg: PReg) {}
 
     pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {
-        let alloc = self.allocs.next();
-        let alloc = alloc.map(|alloc| {
-            Reg::from(
-                alloc
-                    .as_reg()
-                    .expect("Should not have gotten a stack allocation"),
-            )
-        });
-
-        match (pre_regalloc_reg.to_real_reg(), alloc) {
-            (Some(rreg), None) => rreg.into(),
-            (Some(rreg), Some(alloc)) => {
-                debug_assert_eq!(Reg::from(rreg), alloc);
-                alloc
-            }
-            (None, Some(alloc)) => alloc,
-            _ => pre_regalloc_reg,
-        }
+        pre_regalloc_reg
     }
 
     pub fn next_writable(&mut self, pre_regalloc_reg: Writable<Reg>) -> Writable<Reg> {
-        Writable::from_reg(self.next(pre_regalloc_reg.to_reg()))
+        pre_regalloc_reg
+    }
+
+    pub fn done(mut self) -> bool {
+        self.allocs.next().is_none()
     }
 }
 
 impl<'a> std::default::Default for AllocationConsumer<'a> {
     fn default() -> Self {
         Self { allocs: [].iter() }
+    }
+}
+
+impl OperandVisitor for AllocationConsumer<'_> {
+    fn add_operand(
+        &mut self,
+        reg: &mut Reg,
+        constraint: OperandConstraint,
+        _kind: OperandKind,
+        _pos: OperandPos,
+    ) {
+        let alloc = self
+            .allocs
+            .next()
+            .expect("enough allocations for all operands")
+            .as_reg()
+            .expect("only register allocations, not stack allocations")
+            .into();
+
+        if let OperandConstraint::FixedReg(rreg) = constraint {
+            debug_assert_eq!(Reg::from(rreg), alloc);
+        }
+        *reg = alloc;
     }
 }

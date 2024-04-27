@@ -146,63 +146,16 @@ impl AMode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        // This should match `memarg_operands()`.
-        match self {
-            &AMode::Unscaled { rn, simm9 } => AMode::Unscaled {
-                rn: allocs.next(rn),
-                simm9,
-            },
-            &AMode::UnsignedOffset { rn, uimm12 } => AMode::UnsignedOffset {
-                rn: allocs.next(rn),
-                uimm12,
-            },
-            &AMode::RegReg { rn, rm } => AMode::RegReg {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-            },
-            &AMode::RegScaled { rn, rm } => AMode::RegScaled {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-            },
-            &AMode::RegScaledExtended { rn, rm, extendop } => AMode::RegScaledExtended {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-                extendop,
-            },
-            &AMode::RegExtended { rn, rm, extendop } => AMode::RegExtended {
-                rn: allocs.next(rn),
-                rm: allocs.next(rm),
-                extendop,
-            },
-            &AMode::RegOffset { rn, off } => AMode::RegOffset {
-                rn: allocs.next(rn),
-                off,
-            },
-            &AMode::SPPreIndexed { .. }
-            | &AMode::SPPostIndexed { .. }
-            | &AMode::FPOffset { .. }
-            | &AMode::SPOffset { .. }
-            | &AMode::IncomingArg { .. }
-            | &AMode::NominalSPOffset { .. }
-            | &AMode::Const { .. }
-            | AMode::Label { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 }
 
 pub use crate::isa::aarch64::lower::isle::generated_code::PairAMode;
 
 impl PairAMode {
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        // Should match `pairmemarg_operands()`.
-        match self {
-            &PairAMode::SignedOffset { reg, simm7 } => PairAMode::SignedOffset {
-                reg: allocs.next(reg),
-                simm7,
-            },
-            &PairAMode::SPPreIndexed { .. } | &PairAMode::SPPostIndexed { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 }
 

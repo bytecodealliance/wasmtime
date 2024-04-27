@@ -113,20 +113,11 @@ pub enum AMode {
 }
 
 impl AMode {
-    pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            AMode::RegOffset(reg, offset) => AMode::RegOffset(allocs.next(reg), offset),
-            AMode::SPOffset(..)
-            | AMode::FPOffset(..)
-            | AMode::NominalSPOffset(..)
-            | AMode::IncomingArg(..)
-            | AMode::Const(..)
-            | AMode::Label(..) => self,
-        }
+    pub(crate) fn with_allocs(self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self
     }
 
     /// Add the registers referenced by this AMode to `collector`.
-    /// Keep this in sync with `with_allocs`.
     pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             AMode::RegOffset(reg, ..) => collector.reg_use(reg),

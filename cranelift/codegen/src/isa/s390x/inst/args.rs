@@ -103,37 +103,8 @@ impl MemArg {
     }
 
     /// Edit registers with allocations.
-    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            &MemArg::BXD12 {
-                base,
-                index,
-                disp,
-                flags,
-            } => MemArg::BXD12 {
-                base: allocs.next(base),
-                index: allocs.next(index),
-                disp,
-                flags,
-            },
-            &MemArg::BXD20 {
-                base,
-                index,
-                disp,
-                flags,
-            } => MemArg::BXD20 {
-                base: allocs.next(base),
-                index: allocs.next(index),
-                disp,
-                flags,
-            },
-            &MemArg::RegOffset { reg, off, flags } => MemArg::RegOffset {
-                reg: allocs.next(reg),
-                off,
-                flags,
-            },
-            x => x.clone(),
-        }
+    pub fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 }
 
@@ -184,12 +155,8 @@ impl MemArgPair {
     }
 
     /// Edit registers with allocations.
-    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        MemArgPair {
-            base: allocs.next(self.base),
-            disp: self.disp,
-            flags: self.flags,
-        }
+    pub fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 }
 

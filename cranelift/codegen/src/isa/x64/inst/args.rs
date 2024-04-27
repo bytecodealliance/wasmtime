@@ -407,41 +407,8 @@ impl Amode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        // The order in which we consume allocs here must match the
-        // order in which we produce operands in get_operands() above.
-        match self {
-            &Amode::ImmReg {
-                simm32,
-                base,
-                flags,
-            } => {
-                let base = if base == regs::rsp() || base == regs::rbp() {
-                    base
-                } else {
-                    allocs.next(base)
-                };
-                Amode::ImmReg {
-                    simm32,
-                    flags,
-                    base,
-                }
-            }
-            &Amode::ImmRegRegShift {
-                simm32,
-                base,
-                index,
-                shift,
-                flags,
-            } => Amode::ImmRegRegShift {
-                simm32,
-                shift,
-                flags,
-                base: Gpr::new(allocs.next(*base)).unwrap(),
-                index: Gpr::new(allocs.next(*index)).unwrap(),
-            },
-            &Amode::RipRelative { target } => Amode::RipRelative { target },
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 
     /// Offset the amode by a fixed offset.
@@ -572,13 +539,8 @@ impl SyntheticAmode {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            SyntheticAmode::Real(addr) => SyntheticAmode::Real(addr.with_allocs(allocs)),
-            &SyntheticAmode::IncomingArg { .. }
-            | &SyntheticAmode::NominalSPOffset { .. }
-            | &SyntheticAmode::ConstantOffset { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 
     pub(crate) fn aligned(&self) -> bool {
@@ -675,16 +637,8 @@ impl RegMemImm {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            Self::Reg { reg } => Self::Reg {
-                reg: allocs.next(*reg),
-            },
-            Self::Mem { addr } => Self::Mem {
-                addr: addr.with_allocs(allocs),
-            },
-            Self::Imm { .. } => self.clone(),
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 }
 
@@ -781,15 +735,8 @@ impl RegMem {
         }
     }
 
-    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
-        match self {
-            RegMem::Reg { reg } => RegMem::Reg {
-                reg: allocs.next(*reg),
-            },
-            RegMem::Mem { addr } => RegMem::Mem {
-                addr: addr.with_allocs(allocs),
-            },
-        }
+    pub(crate) fn with_allocs(&self, _allocs: &mut AllocationConsumer<'_>) -> Self {
+        self.clone()
     }
 }
 
