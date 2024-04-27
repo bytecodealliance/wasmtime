@@ -1,7 +1,7 @@
 //! Implementation of the canonical-ABI related intrinsics for resources in the
 //! component model.
 //!
-//! This module contains all the relevant gory details of the details of the
+//! This module contains all the relevant gory details of the
 //! component model related to lifting and lowering resources. For example
 //! intrinsics like `resource.new` will bottom out in calling this file, and
 //! this is where resource tables are actually defined and modified.

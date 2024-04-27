@@ -3357,7 +3357,7 @@ pub mod wasi {
       /// This function does not return a `result`; polling in itself does not
       /// do any I/O so it doesn't fail. If any of the I/O sources identified by
       /// the pollables has an error, it is indicated by marking the source as
-      /// being reaedy for I/O.
+      /// being ready for I/O.
       pub fn poll(in_: &[&Pollable],) -> wit_bindgen::rt::vec::Vec::<u32>{
         
         #[allow(unused_imports)]
