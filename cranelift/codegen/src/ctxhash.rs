@@ -76,7 +76,7 @@ fn compute_hash<Ctx, K>(ctx: &Ctx, k: &K) -> u32
 where
     Ctx: CtxHash<K>,
 {
-    let mut hasher = fxhash::FxHasher::default();
+    let mut hasher = rustc_hash::FxHasher::default();
     ctx.ctx_hash(&mut hasher, k);
     hasher.finish() as u32
 }

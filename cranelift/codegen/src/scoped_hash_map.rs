@@ -5,7 +5,7 @@
 //! values inserted while inside a scope aren't visible outside the scope.
 
 use core::hash::Hash;
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 use smallvec::{smallvec, SmallVec};
 
 #[cfg(not(feature = "std"))]

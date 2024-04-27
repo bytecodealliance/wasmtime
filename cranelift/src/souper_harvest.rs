@@ -143,7 +143,7 @@ fn parse_input(path: PathBuf) -> Result<Vec<Function>> {
 /// A convenience functon for a quick usize hash
 #[inline]
 pub fn hash<T: std::hash::Hash + ?Sized>(v: &T) -> usize {
-    let mut state = fxhash::FxHasher::default();
+    let mut state = rustc_hash::FxHasher::default();
     v.hash(&mut state);
     std::hash::Hasher::finish(&state) as usize
 }

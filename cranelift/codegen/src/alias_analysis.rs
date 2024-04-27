@@ -71,7 +71,7 @@ use crate::{
     trace,
 };
 use cranelift_entity::{packed_option::PackedOption, EntityRef};
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.

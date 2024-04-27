@@ -13,7 +13,7 @@ use crate::trace;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use cranelift_entity::{packed_option::ReservedValue, SecondaryMap};
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
 pub(crate) struct Elaborator<'a> {

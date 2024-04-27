@@ -43,7 +43,7 @@ clap = { workspace = true, features = ['default'] }
 similar = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
-fxhash = { workspace = true }
+rustc-hash  = { workspace = true }
 # Note that this just enables `trace-log` for `clif-util` and doesn't turn it on
 # for all of Cranelift, which would be bad.
 regalloc2 = { workspace = true, features = ["trace-log"] }

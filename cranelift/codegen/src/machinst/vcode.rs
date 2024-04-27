@@ -24,11 +24,11 @@ use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 use crate::{LabelValueLoc, ValueLocRange};
-use fxhash::FxHashMap;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand, OperandKind,
     PRegSet, RegClass,
 };
+use rustc_hash::FxHashMap;
 
 use cranelift_entity::{entity_impl, Keys};
 use std::collections::hash_map::Entry;

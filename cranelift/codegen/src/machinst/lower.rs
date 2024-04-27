@@ -22,7 +22,7 @@ use crate::settings::Flags;
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
