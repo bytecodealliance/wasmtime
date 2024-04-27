@@ -316,8 +316,6 @@ impl<T> Linker<T> {
         &mut self,
         module: &Module,
     ) -> anyhow::Result<()> {
-        use crate::HeapType;
-
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
                 if let ExternType::Func(func_ty) = import_err.ty() {
@@ -343,12 +341,7 @@ impl<T> Linker<T> {
                                     ValType::V128 => Val::V128(0_u128.into()),
                                     ValType::Ref(r) => {
                                         debug_assert!(r.is_nullable());
-                                        match r.heap_type().top() {
-                                            HeapType::Func => Val::null_func_ref(),
-                                            HeapType::Extern => Val::null_extern_ref(),
-                                            HeapType::Any => Val::null_any_ref(),
-                                            ty => unreachable!("not a top type: {ty:?}"),
-                                        }
+                                        Val::null_ref(r.heap_type())
                                     }
                                 };
                             }

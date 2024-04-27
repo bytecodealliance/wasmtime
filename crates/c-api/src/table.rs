@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use std::mem::MaybeUninit;
-use wasmtime::{Extern, HeapType, Ref, RootScope, Table, TableType};
+use wasmtime::{Extern, Ref, RootScope, Table, TableType};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -33,13 +33,8 @@ impl wasm_table_t {
 }
 
 fn option_wasm_ref_t_to_ref(r: Option<&wasm_ref_t>, table_ty: &TableType) -> Ref {
-    match (r.map(|r| r.r.clone()), table_ty.element().heap_type().top()) {
-        (Some(r), _) => r,
-        (None, HeapType::Func) => Ref::Func(None),
-        (None, HeapType::Extern) => Ref::Extern(None),
-        (None, HeapType::Any) => Ref::Any(None),
-        (None, ty) => unreachable!("not a top type: {ty:?}"),
-    }
+    r.map(|r| r.r.clone())
+        .unwrap_or_else(|| Ref::null(table_ty.element().heap_type()))
 }
 
 #[no_mangle]
