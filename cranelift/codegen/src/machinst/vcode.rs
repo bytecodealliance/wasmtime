@@ -30,6 +30,7 @@ use regalloc2::{
     PRegSet, RegClass,
 };
 
+use core::mem::take;
 use cranelift_entity::{entity_impl, Keys};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -132,20 +133,6 @@ pub struct VCode<I: VCodeInst> {
     /// For a given block, indices in `branch_block_arg_range`
     /// corresponding to all of its successors.
     branch_block_arg_succ_range: Vec<(u32, u32)>,
-
-    /// VReg aliases. Each key in this table is translated to its
-    /// value when gathering Operands from instructions. Aliases are
-    /// not chased transitively (we do not further look up the
-    /// translated reg to see if it is another alias).
-    ///
-    /// We use these aliases to rename an instruction's expected
-    /// result vregs to the returned vregs from lowering, which are
-    /// usually freshly-allocated temps.
-    ///
-    /// Operands and branch arguments will already have been
-    /// translated through this alias table; but it helps to make
-    /// sense of instructions when pretty-printed, for example.
-    vreg_aliases: FxHashMap<regalloc2::VReg, regalloc2::VReg>,
 
     /// Block-order information.
     block_order: BlockLoweringOrder,
@@ -393,14 +380,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         labels.push((last, inst, reg.into()));
     }
 
-    pub fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
-        let from = from.into();
-        let resolved_to = self.vcode.resolve_vreg_alias(to.into());
-        // Disallow cycles (see below).
-        assert_ne!(resolved_to, from);
-        self.vcode.vreg_aliases.insert(from, resolved_to);
-    }
-
     /// Access the constants.
     pub fn constants(&mut self) -> &mut VCodeConstants {
         &mut self.vcode.constants
@@ -438,7 +417,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// Called once, when a build in Backward order is complete, to
     /// perform the overall reversal (into final forward order) and
     /// finalize metadata accordingly.
-    fn reverse_and_finalize(&mut self) {
+    fn reverse_and_finalize(&mut self, vregs: &VRegAllocator<I>) {
         let n_insts = self.vcode.insts.len();
         if n_insts == 0 {
             return;
@@ -482,7 +461,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // Generate debug-value labels based on per-label maps.
         for (label, tuples) in &self.debug_info {
             for &(start, end, vreg) in tuples {
-                let vreg = self.vcode.resolve_vreg_alias(vreg);
+                let vreg = vregs.resolve_vreg_alias(vreg);
                 let fwd_start = translate(end);
                 let fwd_end = translate(start);
                 self.vcode
@@ -498,7 +477,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .sort_unstable_by_key(|(vreg, _, _, _)| *vreg);
     }
 
-    fn collect_operands(&mut self) {
+    fn collect_operands(&mut self, vregs: &VRegAllocator<I>) {
         let allocatable = PRegSet::from(self.vcode.machine_env());
         for (i, insn) in self.vcode.insts.iter_mut().enumerate() {
             // Push operands from the instruction onto the operand list.
@@ -512,10 +491,9 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             // need to do the `match` over the instruction to visit
             // its register fields (which is slow, branchy code) once.
 
-            let vreg_aliases = &self.vcode.vreg_aliases;
             let mut op_collector =
                 OperandCollector::new(&mut self.vcode.operands, allocatable, |vreg| {
-                    VCode::<I>::resolve_vreg_alias_impl(vreg_aliases, vreg)
+                    vregs.resolve_vreg_alias(vreg)
                 });
             insn.get_operands(&mut op_collector);
             let (ops, clobbers) = op_collector.finish();
@@ -543,22 +521,22 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
         // Translate blockparam args via the vreg aliases table as well.
         for arg in &mut self.vcode.branch_block_args {
-            let new_arg = VCode::<I>::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *arg);
+            let new_arg = vregs.resolve_vreg_alias(*arg);
             trace!("operandcollector: block arg {:?} -> {:?}", arg, new_arg);
             *arg = new_arg;
         }
     }
 
     /// Build the final VCode.
-    pub fn build(mut self, vregs: VRegAllocator<I>) -> VCode<I> {
-        self.vcode.vreg_types = vregs.vreg_types;
-        self.vcode.facts = vregs.facts;
-        self.vcode.reftyped_vregs = vregs.reftyped_vregs;
+    pub fn build(mut self, mut vregs: VRegAllocator<I>) -> VCode<I> {
+        self.vcode.vreg_types = take(&mut vregs.vreg_types);
+        self.vcode.facts = take(&mut vregs.facts);
+        self.vcode.reftyped_vregs = take(&mut vregs.reftyped_vregs);
 
         if self.direction == VCodeBuildDirection::Backward {
-            self.reverse_and_finalize();
+            self.reverse_and_finalize(&vregs);
         }
-        self.collect_operands();
+        self.collect_operands(&vregs);
 
         // Apply register aliases to the `reftyped_vregs` list since this list
         // will be returned directly to `regalloc2` eventually and all
@@ -568,7 +546,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // Also note that `reftyped_vregs` can't have duplicates, so after the
         // aliases are applied duplicates are removed.
         for reg in self.vcode.reftyped_vregs.iter_mut() {
-            *reg = VCode::<I>::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *reg);
+            *reg = vregs.resolve_vreg_alias(*reg);
         }
         self.vcode.reftyped_vregs.sort();
         self.vcode.reftyped_vregs.dedup();
@@ -576,8 +554,37 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         self.compute_preds_from_succs();
         self.vcode.debug_value_labels.sort_unstable();
 
-        // All aliases are resolved now, so remove them from the map.
-        self.vcode.vreg_aliases.clear();
+        // At this point, nothing in the vcode should mention any
+        // VReg which has been aliased. All the appropriate rewriting
+        // should have happened above. Just to be sure, let's
+        // double-check each field which has vregs.
+        // Note: can't easily check vcode.insts, resolved in collect_operands.
+        // Operands are resolved in collect_operands.
+        vregs.debug_assert_no_vreg_aliases(self.vcode.operands.iter().map(|op| op.vreg()));
+        // Currently block params are never aliased to another vreg.
+        vregs.debug_assert_no_vreg_aliases(self.vcode.block_params.iter().copied());
+        // Branch block args are resolved in collect_operands.
+        vregs.debug_assert_no_vreg_aliases(self.vcode.branch_block_args.iter().copied());
+        // Reftyped vregs are resolved above in this function.
+        vregs.debug_assert_no_vreg_aliases(self.vcode.reftyped_vregs.iter().copied());
+        // Debug value labels are resolved in reverse_and_finalize.
+        vregs.debug_assert_no_vreg_aliases(
+            self.vcode.debug_value_labels.iter().map(|&(vreg, ..)| vreg),
+        );
+        // Facts are resolved eagerly during set_vreg_alias.
+        vregs.debug_assert_no_vreg_aliases(
+            self.vcode
+                .facts
+                .iter()
+                .zip(&vregs.vreg_types)
+                .enumerate()
+                .filter(|(_, (fact, _))| fact.is_some())
+                .map(|(vreg, (_, &ty))| {
+                    let (regclasses, _) = I::rc_for_type(ty).unwrap();
+                    VReg::new(vreg, regclasses[0])
+                }),
+        );
+
         self.vcode
     }
 }
@@ -623,7 +630,6 @@ impl<I: VCodeInst> VCode<I> {
             reftyped_vregs: vec![],
             constants,
             debug_value_labels: vec![],
-            vreg_aliases: FxHashMap::with_capacity_and_hasher(10 * n_blocks, Default::default()),
             facts: vec![],
         }
     }
@@ -1207,39 +1213,6 @@ impl<I: VCodeInst> VCode<I> {
         self.block_order.lowered_order()[block.index()].orig_block()
     }
 
-    fn resolve_vreg_alias(&self, from: regalloc2::VReg) -> regalloc2::VReg {
-        Self::resolve_vreg_alias_impl(&self.vreg_aliases, from)
-    }
-
-    /// Implementation of alias resolution. Separate helper that does
-    /// not borrow `self` in order to allow working around borrowing
-    /// restrictions.
-    fn resolve_vreg_alias_impl(
-        aliases: &FxHashMap<regalloc2::VReg, regalloc2::VReg>,
-        from: regalloc2::VReg,
-    ) -> regalloc2::VReg {
-        // We prevent cycles from existing by resolving targets of
-        // aliases eagerly before setting them. If the target resolves
-        // to the origin of the alias, then a cycle would be created
-        // and the alias is disallowed. Because of the structure of
-        // SSA code (one instruction can refer to another's defs but
-        // not vice-versa, except indirectly through
-        // phis/blockparams), cycles should not occur as we use
-        // aliases to redirect vregs to the temps that actually define
-        // them.
-
-        let mut vreg = from;
-        while let Some(to) = aliases.get(&vreg) {
-            vreg = *to;
-        }
-        vreg
-    }
-
-    #[inline]
-    fn debug_assert_no_vreg_aliases(&self, mut list: impl Iterator<Item = VReg>) {
-        debug_assert!(list.all(|vreg| !self.vreg_aliases.contains_key(&vreg)));
-    }
-
     /// Get the type of a VReg.
     pub fn vreg_type(&self, vreg: VReg) -> Type {
         self.vreg_types[vreg.vreg()]
@@ -1247,13 +1220,11 @@ impl<I: VCodeInst> VCode<I> {
 
     /// Get the fact, if any, for a given VReg.
     pub fn vreg_fact(&self, vreg: VReg) -> Option<&Fact> {
-        self.debug_assert_no_vreg_aliases(core::iter::once(vreg));
         self.facts[vreg.vreg()].as_ref()
     }
 
     /// Set the fact for a given VReg.
     pub fn set_vreg_fact(&mut self, vreg: VReg, fact: Fact) {
-        self.debug_assert_no_vreg_aliases(core::iter::once(vreg));
         trace!("set fact on {}: {:?}", vreg, fact);
         self.facts[vreg.vreg()] = Some(fact);
     }
@@ -1311,11 +1282,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         }
 
         let (start, end) = self.block_params_range[block.index()];
-        let ret = &self.block_params[start as usize..end as usize];
-        // Currently block params are never aliased to another vreg, but
-        // double-check just to be sure.
-        self.debug_assert_no_vreg_aliases(ret.iter().copied());
-        ret
+        &self.block_params[start as usize..end as usize]
     }
 
     fn branch_blockparams(&self, block: BlockIndex, _insn: InsnIndex, succ_idx: usize) -> &[VReg] {
@@ -1323,10 +1290,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         let succ_ranges =
             &self.branch_block_arg_range[succ_range_start as usize..succ_range_end as usize];
         let (branch_block_args_start, branch_block_args_end) = succ_ranges[succ_idx];
-        let ret = &self.branch_block_args
-            [branch_block_args_start as usize..branch_block_args_end as usize];
-        self.debug_assert_no_vreg_aliases(ret.iter().copied());
-        ret
+        &self.branch_block_args[branch_block_args_start as usize..branch_block_args_end as usize]
     }
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
@@ -1351,12 +1315,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn inst_operands(&self, insn: InsnIndex) -> &[Operand] {
         let (start, end) = self.operand_ranges[insn.index()];
-        let ret = &self.operands[start as usize..end as usize];
-        // It should be true by construction that `Operand`s do not contain any
-        // aliased vregs since they're all collected and mapped when the VCode
-        // is itself constructed.
-        self.debug_assert_no_vreg_aliases(ret.iter().map(|op| op.vreg()));
-        ret
+        &self.operands[start as usize..end as usize]
     }
 
     fn inst_clobbers(&self, insn: InsnIndex) -> PRegSet {
@@ -1368,18 +1327,11 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn reftype_vregs(&self) -> &[VReg] {
-        let ret = &self.reftyped_vregs;
-        self.debug_assert_no_vreg_aliases(ret.iter().copied());
-        ret
+        &self.reftyped_vregs
     }
 
     fn debug_value_labels(&self) -> &[(VReg, InsnIndex, InsnIndex, u32)] {
-        // VRegs here are inserted into `debug_value_labels` after code is
-        // generated and aliases are fully defined, so double-check that
-        // aliases are not lingering.
-        let ret = &self.debug_value_labels;
-        self.debug_assert_no_vreg_aliases(ret.iter().map(|&(vreg, ..)| vreg));
-        ret
+        &self.debug_value_labels
     }
 
     fn spillslot_size(&self, regclass: RegClass) -> usize {
@@ -1394,12 +1346,9 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 }
 
-impl<I: VCodeInst> fmt::Debug for VCode<I> {
+impl<I: VCodeInst> Debug for VRegAllocator<I> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "VCode {{")?;
-        writeln!(f, "  Entry block: {}", self.entry.index())?;
-
-        let mut state = Default::default();
+        writeln!(f, "VRegAllocator {{")?;
 
         let mut alias_keys = self.vreg_aliases.keys().cloned().collect::<Vec<_>>();
         alias_keys.sort_unstable();
@@ -1407,6 +1356,23 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
             let dest = self.vreg_aliases.get(&key).unwrap();
             writeln!(f, "  {:?} := {:?}", Reg::from(key), Reg::from(*dest))?;
         }
+
+        for (vreg, fact) in self.facts.iter().enumerate() {
+            if let Some(fact) = fact {
+                writeln!(f, "  v{} ! {}", vreg, fact)?;
+            }
+        }
+
+        writeln!(f, "}}")
+    }
+}
+
+impl<I: VCodeInst> fmt::Debug for VCode<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "VCode {{")?;
+        writeln!(f, "  Entry block: {}", self.entry.index())?;
+
+        let mut state = Default::default();
 
         for block in 0..self.num_blocks() {
             let block = BlockIndex::new(block);
@@ -1418,12 +1384,6 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
                 writeln!(f, "    (successor: Block {})", succ.index())?;
             }
             let (start, end) = self.block_ranges[block.index()];
-            writeln!(
-                f,
-                "    (instruction range: {} .. {})",
-                start.index(),
-                end.index()
-            )?;
             for inst in start.index()..end.index() {
                 writeln!(
                     f,
@@ -1431,10 +1391,12 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
                     inst,
                     self.insts[inst].pretty_print_inst(&[], &mut state)
                 )?;
-                for operand in self.inst_operands(InsnIndex::new(inst)) {
-                    if operand.kind() == OperandKind::Def {
-                        if let Some(fact) = &self.facts[operand.vreg().vreg()] {
-                            writeln!(f, "    v{} ! {}", operand.vreg().vreg(), fact)?;
+                if !self.operands.is_empty() {
+                    for operand in self.inst_operands(InsnIndex::new(inst)) {
+                        if operand.kind() == OperandKind::Def {
+                            if let Some(fact) = &self.facts[operand.vreg().vreg()] {
+                                writeln!(f, "    v{} ! {}", operand.vreg().vreg(), fact)?;
+                            }
                         }
                     }
                 }
@@ -1456,6 +1418,14 @@ pub struct VRegAllocator<I> {
     /// reftype-status of each vreg) for efficient iteration.
     reftyped_vregs: Vec<VReg>,
 
+    /// VReg aliases. When the final VCode is built we rewrite all
+    /// uses of the keys in this table to their replacement values.
+    ///
+    /// We use these aliases to rename an instruction's expected
+    /// result vregs to the returned vregs from lowering, which are
+    /// usually freshly-allocated temps.
+    vreg_aliases: FxHashMap<regalloc2::VReg, regalloc2::VReg>,
+
     /// A deferred error, to be bubbled up to the top level of the
     /// lowering algorithm. We take this approach because we cannot
     /// currently propagate a `Result` upward through ISLE code (the
@@ -1471,12 +1441,16 @@ pub struct VRegAllocator<I> {
 
 impl<I: VCodeInst> VRegAllocator<I> {
     /// Make a new VRegAllocator.
-    pub fn new() -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
+        let capacity = first_user_vreg_index() + capacity;
+        let mut vreg_types = Vec::with_capacity(capacity);
+        vreg_types.resize(first_user_vreg_index(), types::INVALID);
         Self {
-            vreg_types: vec![types::INVALID; first_user_vreg_index()],
-            facts: vec![],
+            vreg_types,
             reftyped_vregs: vec![],
+            vreg_aliases: FxHashMap::with_capacity_and_hasher(capacity, Default::default()),
             deferred_error: None,
+            facts: Vec::with_capacity(capacity),
             _inst: core::marker::PhantomData::default(),
         }
     }
@@ -1547,25 +1521,58 @@ impl<I: VCodeInst> VRegAllocator<I> {
         }
     }
 
+    /// Rewrite any mention of `from` into `to`.
+    pub fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
+        let from = from.into();
+        let resolved_to = self.resolve_vreg_alias(to.into());
+        // Disallow cycles (see below).
+        assert_ne!(resolved_to, from);
+
+        // Maintain the invariant that PCC facts only exist on vregs
+        // which aren't aliases. We want to preserve whatever was
+        // stated about the vreg before its producer was lowered.
+        if let Some(fact) = self.facts[from.vreg()].take() {
+            self.set_fact(resolved_to, fact);
+        }
+
+        let old_alias = self.vreg_aliases.insert(from, resolved_to);
+        debug_assert_eq!(old_alias, None);
+    }
+
+    fn resolve_vreg_alias(&self, mut vreg: regalloc2::VReg) -> regalloc2::VReg {
+        // We prevent cycles from existing by resolving targets of
+        // aliases eagerly before setting them. If the target resolves
+        // to the origin of the alias, then a cycle would be created
+        // and the alias is disallowed. Because of the structure of
+        // SSA code (one instruction can refer to another's defs but
+        // not vice-versa, except indirectly through
+        // phis/blockparams), cycles should not occur as we use
+        // aliases to redirect vregs to the temps that actually define
+        // them.
+        while let Some(to) = self.vreg_aliases.get(&vreg) {
+            vreg = *to;
+        }
+        vreg
+    }
+
+    #[inline]
+    fn debug_assert_no_vreg_aliases(&self, mut list: impl Iterator<Item = VReg>) {
+        debug_assert!(list.all(|vreg| !self.vreg_aliases.contains_key(&vreg)));
+    }
+
     /// Set the proof-carrying code fact on a given virtual register.
     ///
     /// Returns the old fact, if any (only one fact can be stored).
-    pub fn set_fact(&mut self, vreg: VirtualReg, fact: Fact) -> Option<Fact> {
+    fn set_fact(&mut self, vreg: regalloc2::VReg, fact: Fact) -> Option<Fact> {
         trace!("vreg {:?} has fact: {:?}", vreg, fact);
-        self.facts[vreg.index()].replace(fact)
-    }
-
-    /// Take (and remove) a fact about a VReg. Used when setting up
-    /// aliases: we want to move a fact from the alias vreg to the
-    /// aliased vreg, to preserve facts about a value that were stated
-    /// before we lowered its producer.
-    pub fn take_fact(&mut self, vreg: VirtualReg) -> Option<Fact> {
-        self.facts[vreg.index()].take()
+        debug_assert!(!self.vreg_aliases.contains_key(&vreg));
+        self.facts[vreg.vreg()].replace(fact)
     }
 
     /// Set a fact only if one doesn't already exist.
     pub fn set_fact_if_missing(&mut self, vreg: VirtualReg, fact: Fact) {
-        if self.facts[vreg.index()].is_none() {
+        let vreg = self.resolve_vreg_alias(vreg.into());
+        if self.facts[vreg.vreg()].is_none() {
             self.set_fact(vreg, fact);
         }
     }
@@ -1583,7 +1590,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
         // into multiple VRegs.
         assert!(result.len() == 1 || fact.is_none());
         if let Some(fact) = fact {
-            self.set_fact(result.regs()[0].to_virtual_reg().unwrap(), fact);
+            self.set_fact(result.regs()[0].into(), fact);
         }
 
         Ok(result)
