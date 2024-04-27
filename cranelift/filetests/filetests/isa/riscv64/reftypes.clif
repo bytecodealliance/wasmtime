@@ -97,7 +97,7 @@ block3(v7: r64, v8: r64):
 ;   mv a3,a0
 ;   mv s5,a2
 ;   sd a1,16(nominal_sp)
-;   mv a3,a0
+;   mv a0,a3
 ;   mv s9,a3
 ;   load_sym a5,%f+0
 ;   sd s9,8(nominal_sp)
