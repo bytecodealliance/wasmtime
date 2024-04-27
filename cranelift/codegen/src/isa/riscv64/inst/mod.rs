@@ -1552,8 +1552,8 @@ impl Inst {
                 format!("virtual_sp_offset_adj {:+}", amount)
             }
             &MInst::Mov { rd, rm, ty } => {
-                let rd = format_reg(rd.to_reg(), allocs);
                 let rm = format_reg(rm, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
 
                 let op = match ty {
                     F32 => "fmv.s",
