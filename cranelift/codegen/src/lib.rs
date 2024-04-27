@@ -70,7 +70,6 @@ mod context;
 mod ctxhash;
 mod dce;
 mod egraph;
-mod fx;
 mod inst_predicates;
 mod isle_prelude;
 mod iterators;

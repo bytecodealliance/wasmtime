@@ -17,7 +17,6 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
-use crate::fx::FxHashMap;
 use crate::ir::pcc::*;
 use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
 use crate::machinst::*;
@@ -25,6 +24,7 @@ use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 use crate::{LabelValueLoc, ValueLocRange};
+use fxhash::FxHashMap;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand, OperandKind,
     PRegSet, RegClass,

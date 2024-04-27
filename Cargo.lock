@@ -605,6 +605,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
+ "fxhash",
  "gimli",
  "hashbrown 0.14.3",
  "log",
