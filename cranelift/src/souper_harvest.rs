@@ -82,7 +82,7 @@ pub fn run(options: &Options) -> Result<()> {
                     let i = lhs.find('\n').unwrap();
                     &lhs[i + 1..]
                 };
-                let hash = fxhash::hash(lhs.as_bytes());
+                let hash = hash(lhs.as_bytes());
                 if already_harvested.insert(hash) {
                     let output_path = output_dir.join(hash.to_string());
                     let mut output =
@@ -138,4 +138,12 @@ fn parse_input(path: PathBuf) -> Result<Vec<Function>> {
     let funcs = cranelift_reader::parse_functions(&contents)
         .with_context(|| format!("parse error in {}", path.display()))?;
     Ok(funcs)
+}
+
+/// A convenience functon for a quick usize hash
+#[inline]
+pub fn hash<T: std::hash::Hash + ?Sized>(v: &T) -> usize {
+    let mut state = rustc_hash::FxHasher::default();
+    v.hash(&mut state);
+    std::hash::Hasher::finish(&state) as usize
 }

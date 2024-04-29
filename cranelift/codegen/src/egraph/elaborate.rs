@@ -4,7 +4,6 @@
 use super::cost::Cost;
 use super::Stats;
 use crate::dominator_tree::DominatorTreePreorder;
-use crate::fx::{FxHashMap, FxHashSet};
 use crate::hash_map::Entry as HashEntry;
 use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{Block, Function, Inst, Value, ValueDef};
@@ -14,6 +13,7 @@ use crate::trace;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use cranelift_entity::{packed_option::ReservedValue, SecondaryMap};
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
 pub(crate) struct Elaborator<'a> {

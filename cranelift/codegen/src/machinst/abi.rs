@@ -105,7 +105,6 @@
 //! ABI. See each platform's `abi.rs` implementation for details.
 
 use crate::entity::SecondaryMap;
-use crate::fx::FxHashMap;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, Signature};
 use crate::isa::TargetIsa;
@@ -114,6 +113,7 @@ use crate::CodegenError;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use regalloc2::{MachineEnv, PReg, PRegSet};
+use rustc_hash::FxHashMap;
 use smallvec::smallvec;
 use std::collections::HashMap;
 use std::marker::PhantomData;

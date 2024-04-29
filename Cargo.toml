@@ -292,6 +292,7 @@ url = "2.3.1"
 humantime = "2.0.0"
 postcard = { version = "1.0.8", default-features = false, features = ['alloc'] }
 criterion = { version = "0.5.0", default-features = false, features = ["html_reports", "rayon"] }
+rustc-hash = "1.1.0"
 
 # =============================================================================
 #

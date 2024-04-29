@@ -17,7 +17,6 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
-use crate::fx::FxHashMap;
 use crate::ir::pcc::*;
 use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
 use crate::machinst::*;
@@ -29,6 +28,7 @@ use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand, OperandKind,
     PRegSet, RegClass,
 };
+use rustc_hash::FxHashMap;
 
 use cranelift_entity::{entity_impl, Keys};
 use std::collections::hash_map::Entry;

@@ -64,7 +64,6 @@
 use crate::{
     cursor::{Cursor, FuncCursor},
     dominator_tree::DominatorTree,
-    fx::{FxHashMap, FxHashSet},
     inst_predicates::{
         has_memory_fence_semantics, inst_addr_offset_type, inst_store_data, visit_block_succs,
     },
@@ -72,6 +71,7 @@ use crate::{
     trace,
 };
 use cranelift_entity::{packed_option::PackedOption, EntityRef};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.

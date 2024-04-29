@@ -4,8 +4,8 @@
 //! container that has a concept of scopes that can be entered and exited, such that
 //! values inserted while inside a scope aren't visible outside the scope.
 
-use crate::fx::FxHashMap;
 use core::hash::Hash;
+use rustc_hash::FxHashMap;
 use smallvec::{smallvec, SmallVec};
 
 #[cfg(not(feature = "std"))]
@@ -90,7 +90,7 @@ where
     /// Creates an empty `ScopedHashMap`.
     pub fn new() -> Self {
         Self {
-            map: FxHashMap(),
+            map: FxHashMap::default(),
             generation: 0,
             generation_by_depth: smallvec![0],
         }
