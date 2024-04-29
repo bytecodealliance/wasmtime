@@ -1,5 +1,7 @@
 #![cfg_attr(docsrs, doc(cfg(feature = "runtime")))]
 
+pub use wasmtime_runtime as vm;
+
 #[macro_use]
 pub(crate) mod func;
 
