@@ -78,6 +78,9 @@ if(ANDROID)
 endif()
 include(ExternalProject)
 find_program(WASMTIME_CARGO_BINARY cargo)
+if(NOT WASMTIME_CARGO_BINARY)
+    message(FATAL_ERROR [["cargo" was not found. Ensure "cargo" is in PATH. Aborting...]])
+endif()
 ExternalProject_Add(
 	wasmtime-crate
 	DOWNLOAD_COMMAND ""
