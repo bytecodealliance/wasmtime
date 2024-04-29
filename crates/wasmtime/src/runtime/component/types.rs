@@ -425,7 +425,7 @@ impl ResultType {
         ResultType(Handle::new(index, ty))
     }
 
-    /// Retrieve the `ok` type parameter for this `option`.
+    /// Retrieve the `ok` type parameter for this `result`.
     pub fn ok(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].ok.as_ref()?,
@@ -433,7 +433,7 @@ impl ResultType {
         ))
     }
 
-    /// Retrieve the `err` type parameter for this `option`.
+    /// Retrieve the `err` type parameter for this `result`.
     pub fn err(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].err.as_ref()?,

@@ -60,9 +60,9 @@ impl DiffValue {
                 ];
                 let bits = biased_arbitrary_value(u, known_f32_values)?;
 
-                // If the chosen bits are NAN then always use the canonical bit
-                // pattern of nan to enable better compatibility with engines
-                // where arbitrary nan patterns can't make their way into wasm
+                // If the chosen bits are NaN then always use the canonical bit
+                // pattern of NaN to enable better compatibility with engines
+                // where arbitrary NaN patterns can't make their way into wasm
                 // (e.g. v8 through JS can't do that).
                 let bits = if f32::from_bits(bits).is_nan() {
                     f32::NAN.to_bits()
@@ -85,7 +85,7 @@ impl DiffValue {
                     f64::MAX.to_bits(),
                 ];
                 let bits = biased_arbitrary_value(u, known_f64_values)?;
-                // See `f32` above for why canonical nan patterns are always
+                // See `f32` above for why canonical NaN patterns are always
                 // used.
                 let bits = if f64::from_bits(bits).is_nan() {
                     f64::NAN.to_bits()
@@ -302,7 +302,7 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
                 (true, HeapType::Any) => Ok(Self::AnyRef),
                 (true, HeapType::I31) => Ok(Self::AnyRef),
                 (true, HeapType::None) => Ok(Self::AnyRef),
-                _ => Err("non-funcref and non-externref reference types are not suported yet"),
+                _ => Err("non-funcref and non-externref reference types are not supported yet"),
             },
         }
     }

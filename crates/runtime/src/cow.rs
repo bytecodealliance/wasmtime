@@ -299,7 +299,7 @@ impl MemoryImageSlot {
     /// Create a new MemoryImageSlot. Assumes that there is an anonymous
     /// mmap backing in the given range to start.
     ///
-    /// The `accessible` parameter descibes how much of linear memory is
+    /// The `accessible` parameter describes how much of linear memory is
     /// already mapped as R/W with all zero-bytes. The `static_size` value is
     /// the maximum size of this image which `accessible` cannot grow beyond,
     /// and all memory from `accessible` from `static_size` should be mapped as

@@ -29,9 +29,9 @@ pub struct ExportFunction {
     pub func_ref: NonNull<VMFuncRef>,
 }
 
-// It's part of the contract of using `ExportFunction` that synchronization
-// properties are upheld, so declare that despite the raw pointers inside this
-// is send/sync.
+// As part of the contract for using `ExportFunction`, synchronization
+// properties must be upheld. Therefore, despite containing raw pointers,
+// it is declared as Send/Sync.
 unsafe impl Send for ExportFunction {}
 unsafe impl Sync for ExportFunction {}
 

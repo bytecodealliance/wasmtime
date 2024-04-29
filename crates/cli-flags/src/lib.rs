@@ -258,11 +258,11 @@ wasmtime_option_group! {
         pub cli: Option<bool>,
         /// Deprecated alias for `cli`
         pub common: Option<bool>,
-        /// Enable suport for WASI neural network API (experimental)
+        /// Enable support for WASI neural network API (experimental)
         pub nn: Option<bool>,
-        /// Enable suport for WASI threading API (experimental)
+        /// Enable support for WASI threading API (experimental)
         pub threads: Option<bool>,
-        /// Enable suport for WASI HTTP API (experimental)
+        /// Enable support for WASI HTTP API (experimental)
         pub http: Option<bool>,
         /// Inherit environment variables and file descriptors following the
         /// systemd listen fd specification (UNIX only)
