@@ -127,10 +127,7 @@ impl AMode {
 
     /// Add the registers referenced by this AMode to `collector`.
     /// Keep this in sync with `with_allocs`.
-    pub(crate) fn get_operands<F: Fn(regalloc2::VReg) -> regalloc2::VReg>(
-        &mut self,
-        collector: &mut OperandCollector<'_, F>,
-    ) {
+    pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             AMode::RegOffset(reg, ..) => collector.reg_use(reg),
             // Registers used in these modes aren't allocatable.

@@ -8,7 +8,6 @@ use crate::ir::MemFlags;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
-use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::String;
@@ -166,10 +165,7 @@ macro_rules! newtype_of_reg {
                 }
 
                 #[allow(dead_code)] // Used by some newtypes and not others.
-                pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-                    &mut self,
-                    collector: &mut OperandCollector<'_, F>,
-                ) {
+                pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
                     self.0.get_operands(collector);
                 }
             }
@@ -234,10 +230,7 @@ macro_rules! newtype_of_reg {
                 }
 
                 #[allow(dead_code)] // Used by some newtypes and not others.
-                pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-                    &mut self,
-                    collector: &mut OperandCollector<'_, F>,
-                ) {
+                pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
                     self.0.get_operands(collector);
                 }
             }
@@ -370,10 +363,7 @@ impl Amode {
     }
 
     /// Add the registers mentioned by `self` to `collector`.
-    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-        &mut self,
-        collector: &mut OperandCollector<'_, F>,
-    ) {
+    pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             Amode::ImmReg { base, .. } => {
                 if *base != regs::rbp() && *base != regs::rsp() {
@@ -395,10 +385,7 @@ impl Amode {
     }
 
     /// Same as `get_operands`, but add the registers in the "late" phase.
-    pub(crate) fn get_operands_late<F: Fn(VReg) -> VReg>(
-        &mut self,
-        collector: &mut OperandCollector<'_, F>,
-    ) {
+    pub(crate) fn get_operands_late(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             Amode::ImmReg { base, .. } => {
                 collector.reg_late_use(base);
@@ -535,10 +522,7 @@ impl SyntheticAmode {
     }
 
     /// Add the registers mentioned by `self` to `collector`.
-    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-        &mut self,
-        collector: &mut OperandCollector<'_, F>,
-    ) {
+    pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             SyntheticAmode::Real(addr) => addr.get_operands(collector),
             SyntheticAmode::IncomingArg { .. } => {
@@ -552,10 +536,7 @@ impl SyntheticAmode {
     }
 
     /// Same as `get_operands`, but add the register in the "late" phase.
-    pub(crate) fn get_operands_late<F: Fn(VReg) -> VReg>(
-        &mut self,
-        collector: &mut OperandCollector<'_, F>,
-    ) {
+    pub(crate) fn get_operands_late(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             SyntheticAmode::Real(addr) => addr.get_operands_late(collector),
             SyntheticAmode::IncomingArg { .. } => {
@@ -686,10 +667,7 @@ impl RegMemImm {
     }
 
     /// Add the regs mentioned by `self` to `collector`.
-    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-        &mut self,
-        collector: &mut OperandCollector<'_, F>,
-    ) {
+    pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             Self::Reg { reg } => collector.reg_use(reg),
             Self::Mem { addr } => addr.get_operands(collector),
@@ -796,10 +774,7 @@ impl RegMem {
         }
     }
     /// Add the regs mentioned by `self` to `collector`.
-    pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-        &mut self,
-        collector: &mut OperandCollector<'_, F>,
-    ) {
+    pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             RegMem::Reg { reg } => collector.reg_use(reg),
             RegMem::Mem { addr, .. } => addr.get_operands(collector),
