@@ -90,18 +90,23 @@ pub struct VCode<I: VCodeInst> {
     /// Block instruction indices.
     block_ranges: Vec<(InsnIndex, InsnIndex)>,
 
-    /// Block successors: index range in the `block_succs_preds` list.
+    /// Block successors: index range in the `block_succs` list.
     block_succ_range: Vec<(u32, u32)>,
 
-    /// Block predecessors: index range in the `block_succs_preds` list.
+    /// Block successor lists, concatenated into one vec. The
+    /// `block_succ_range` list of tuples above gives (start, end)
+    /// ranges within this list that correspond to each basic block's
+    /// successors.
+    block_succs: Vec<regalloc2::Block>,
+
+    /// Block predecessors: index range in the `block_preds` list.
     block_pred_range: Vec<(u32, u32)>,
 
-    /// Block successor and predecessor lists, concatenated into one
-    /// Vec. The `block_succ_range` and `block_pred_range` lists of
-    /// tuples above give (start, end) ranges within this list that
-    /// correspond to each basic block's successors or predecessors,
-    /// respectively.
-    block_succs_preds: Vec<regalloc2::Block>,
+    /// Block predecessor lists, concatenated into one vec. The
+    /// `block_pred_range` list of tuples above gives (start, end)
+    /// ranges within this list that correspond to each basic block's
+    /// predecessors.
+    block_preds: Vec<regalloc2::Block>,
 
     /// Block parameters: index range in `block_params` below.
     block_params_range: Vec<(u32, u32)>,
@@ -316,7 +321,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .block_ranges
             .push((InsnIndex::new(start_idx), InsnIndex::new(end_idx)));
         // End the successors list.
-        let succ_end = self.vcode.block_succs_preds.len();
+        let succ_end = self.vcode.block_succs.len();
         self.vcode
             .block_succ_range
             .push((self.succ_start as u32, succ_end as u32));
@@ -360,7 +365,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     /// Add a successor block with branch args.
     pub fn add_succ(&mut self, block: BlockIndex, args: &[Reg]) {
-        self.vcode.block_succs_preds.push(block);
+        self.vcode.block_succs.push(block);
         self.add_branch_args_for_succ(args);
     }
 
@@ -386,32 +391,42 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     fn compute_preds_from_succs(&mut self) {
-        // Compute predecessors from successors. In order to gather
-        // all preds for a block into a contiguous sequence, we build
-        // a list of (succ, pred) tuples and then sort.
-        let mut succ_pred_edges: Vec<(BlockIndex, BlockIndex)> =
-            Vec::with_capacity(self.vcode.block_succs_preds.len());
+        // Do a linear-time counting sort: first determine how many
+        // times each block appears as a successor.
+        let mut starts = vec![0u32; self.vcode.num_blocks()];
+        for succ in &self.vcode.block_succs {
+            starts[succ.index()] += 1;
+        }
+
+        // Determine for each block the starting index where that
+        // block's predecessors should go. This is equivalent to the
+        // ranges we need to store in block_pred_range.
+        self.vcode.block_pred_range.reserve(starts.len());
+        let mut end = 0;
+        for count in starts.iter_mut() {
+            let start = end;
+            end += *count;
+            *count = start;
+            self.vcode.block_pred_range.push((start, end));
+        }
+        let end = end as usize;
+        debug_assert_eq!(end, self.vcode.block_succs.len());
+
+        // Walk over the successors again, this time grouped by
+        // predecessor, and push the predecessor at the current
+        // starting position of each of its successors. Visiting
+        // predecessor groups in ascending order means we build each
+        // group of predecessors in sorted order too.
+        self.vcode.block_preds.resize(end, BlockIndex::invalid());
         for (pred, &(start, end)) in self.vcode.block_succ_range.iter().enumerate() {
             let pred = BlockIndex::new(pred);
-            for i in start..end {
-                let succ = BlockIndex::new(self.vcode.block_succs_preds[i as usize].index());
-                succ_pred_edges.push((succ, pred));
+            for succ in &self.vcode.block_succs[start as usize..end as usize] {
+                let pos = &mut starts[succ.index()];
+                self.vcode.block_preds[*pos as usize] = pred;
+                *pos += 1;
             }
         }
-        succ_pred_edges.sort_unstable();
-
-        let mut i = 0;
-        for succ in 0..self.vcode.num_blocks() {
-            let succ = BlockIndex::new(succ);
-            let start = self.vcode.block_succs_preds.len();
-            while i < succ_pred_edges.len() && succ_pred_edges[i].0 == succ {
-                let pred = succ_pred_edges[i].1;
-                self.vcode.block_succs_preds.push(pred);
-                i += 1;
-            }
-            let end = self.vcode.block_succs_preds.len();
-            self.vcode.block_pred_range.push((start as u32, end as u32));
-        }
+        debug_assert!(self.vcode.block_preds.iter().all(|pred| pred.is_valid()));
     }
 
     /// Called once, when a build in Backward order is complete, to
@@ -617,8 +632,9 @@ impl<I: VCodeInst> VCode<I> {
             entry: BlockIndex::new(0),
             block_ranges: Vec::with_capacity(n_blocks),
             block_succ_range: Vec::with_capacity(n_blocks),
-            block_succs_preds: Vec::with_capacity(2 * n_blocks),
-            block_pred_range: Vec::with_capacity(n_blocks),
+            block_succs: Vec::with_capacity(n_blocks),
+            block_pred_range: Vec::new(),
+            block_preds: Vec::new(),
             block_params_range: Vec::with_capacity(n_blocks),
             block_params: Vec::with_capacity(5 * n_blocks),
             branch_block_args: Vec::with_capacity(10 * n_blocks),
@@ -648,12 +664,6 @@ impl<I: VCodeInst> VCode<I> {
     /// The number of lowered instructions.
     pub fn num_insts(&self) -> usize {
         self.insts.len()
-    }
-
-    /// Get the successors for a block.
-    pub fn succs(&self, block: BlockIndex) -> &[BlockIndex] {
-        let (start, end) = self.block_succ_range[block.index()];
-        &self.block_succs_preds[start as usize..end as usize]
     }
 
     fn compute_clobbers(&self, regalloc: &regalloc2::Output) -> Vec<Writable<RealReg>> {
@@ -1266,12 +1276,12 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn block_succs(&self, block: BlockIndex) -> &[BlockIndex] {
         let (start, end) = self.block_succ_range[block.index()];
-        &self.block_succs_preds[start as usize..end as usize]
+        &self.block_succs[start as usize..end as usize]
     }
 
     fn block_preds(&self, block: BlockIndex) -> &[BlockIndex] {
         let (start, end) = self.block_pred_range[block.index()];
-        &self.block_succs_preds[start as usize..end as usize]
+        &self.block_preds[start as usize..end as usize]
     }
 
     fn block_params(&self, block: BlockIndex) -> &[VReg] {
@@ -1380,7 +1390,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
             if let Some(bb) = self.bindex_to_bb(block) {
                 writeln!(f, "    (original IR block: {})", bb)?;
             }
-            for succ in self.succs(block) {
+            for succ in self.block_succs(block) {
                 writeln!(f, "    (successor: Block {})", succ.index())?;
             }
             let (start, end) = self.block_ranges[block.index()];
