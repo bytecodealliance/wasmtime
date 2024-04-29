@@ -373,10 +373,22 @@ pub(crate) fn define() -> TargetIsa {
         "Zen (second generation) microarchitecture.",
         preset!(znver1),
     );
-    settings.add_preset(
+    let znver3 = settings.add_preset(
         "znver3",
         "Zen (third generation) microarchitecture.",
         preset!(znver2),
+    );
+    settings.add_preset(
+        "znver4",
+        "Zen (fourth generation) microarchitecture.",
+        preset!(
+            znver3
+                && has_avx512bitalg
+                && has_avx512dq
+                && has_avx512f
+                && has_avx512vbmi
+                && has_avx512vl
+        ),
     );
 
     // Generic
