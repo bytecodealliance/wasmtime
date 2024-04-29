@@ -362,7 +362,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             VCodeBuildDirection::Backward,
         );
 
-        let mut vregs = VRegAllocator::new();
+        // We usually need two VRegs per instruction result, plus extras for
+        // various temporaries, but two per Value is a good starting point.
+        let mut vregs = VRegAllocator::with_capacity(f.dfg.num_values() * 2);
 
         let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
 
@@ -784,20 +786,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     debug_assert_eq!(regs.len(), dsts.len());
                     for (&dst, &temp) in dsts.regs().iter().zip(regs.regs()) {
                         trace!("set vreg alias: {result:?} = {dst:?}, lowering = {temp:?}");
-                        self.vcode.set_vreg_alias(dst, temp);
-
-                        // If there was any PCC fact about the
-                        // original VReg, move it to the aliased reg
-                        // instead. Lookup goes through the alias, but
-                        // we want to preserve whatever was stated
-                        // about the vreg before its producer was
-                        // lowered.
-                        if let Some(fact) =
-                            self.vregs.take_fact(dst.to_virtual_reg().unwrap().into())
-                        {
-                            self.vregs
-                                .set_fact(temp.to_virtual_reg().unwrap().into(), fact);
-                        }
+                        self.vregs.set_vreg_alias(dst, temp);
                     }
                 }
             }
@@ -1096,8 +1085,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the
         // VCodeBuilder, let's build the VCode.
+        trace!(
+            "built vcode:\n{:?}Backwards {:?}",
+            &self.vregs,
+            &self.vcode.vcode
+        );
         let vcode = self.vcode.build(self.vregs);
-        trace!("built vcode: {:?}", vcode);
 
         Ok(vcode)
     }
