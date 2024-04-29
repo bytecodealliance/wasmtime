@@ -1,4 +1,5 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
+use crate::runtime::vm::{VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AsContext, AsContextMut, Engine, Func, FuncType, HeapType, NoFunc, RefType, StoreContextMut,
@@ -11,7 +12,6 @@ use std::num::NonZeroUsize;
 use std::os::raw::c_void;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::VMSharedTypeIndex;
-use wasmtime_runtime::{VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext};
 
 /// A statically typed WebAssembly function.
 ///
@@ -571,7 +571,7 @@ unsafe impl WasmTy for Option<NoFunc> {
 }
 
 unsafe impl WasmTy for Func {
-    type Abi = NonNull<wasmtime_runtime::VMFuncRef>;
+    type Abi = NonNull<crate::runtime::vm::VMFuncRef>;
 
     #[inline]
     fn valtype() -> ValType {
@@ -604,7 +604,7 @@ unsafe impl WasmTy for Func {
     unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
         let p = (*raw).get_funcref();
         debug_assert!(!p.is_null());
-        NonNull::new_unchecked(p.cast::<wasmtime_runtime::VMFuncRef>())
+        NonNull::new_unchecked(p.cast::<crate::runtime::vm::VMFuncRef>())
     }
 
     #[inline]
@@ -624,7 +624,7 @@ unsafe impl WasmTy for Func {
 }
 
 unsafe impl WasmTy for Option<Func> {
-    type Abi = *mut wasmtime_runtime::VMFuncRef;
+    type Abi = *mut crate::runtime::vm::VMFuncRef;
 
     #[inline]
     fn valtype() -> ValType {

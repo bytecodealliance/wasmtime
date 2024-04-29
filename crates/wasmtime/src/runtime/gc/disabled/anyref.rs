@@ -1,8 +1,8 @@
+use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     AsContext, AsContextMut, GcRefImpl, Result, Rooted, I31,
 };
-use wasmtime_runtime::VMGcRef;
 
 /// Support for `anyref` disabled at compile time because the `gc` cargo feature
 /// was not enabled.

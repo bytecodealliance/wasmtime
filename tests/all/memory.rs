@@ -2,7 +2,6 @@ use rayon::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
 use std::time::{Duration, Instant};
 use wasmtime::*;
-use wasmtime_runtime::mpk;
 
 fn module(engine: &Engine) -> Result<Module> {
     let mut wat = format!("(module\n");
@@ -247,7 +246,7 @@ fn guards_present_pooling() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn guards_present_pooling_mpk() -> Result<()> {
-    if !mpk::is_supported() {
+    if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
         println!("skipping `guards_present_pooling_mpk` test; mpk is not supported");
         return Ok(());
     }

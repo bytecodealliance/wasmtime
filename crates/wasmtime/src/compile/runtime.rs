@@ -1,12 +1,12 @@
 use crate::compile::HashedEngineCompileEnv;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
+use crate::runtime::vm::MmapVec;
 use crate::{CodeBuilder, CodeMemory, Engine, Module};
 use anyhow::{Context, Error, Result};
 use object::write::WritableBuffer;
 use std::sync::Arc;
 use wasmtime_environ::{FinishedObject, ObjectBuilder, ObjectKind};
-use wasmtime_runtime::MmapVec;
 
 impl<'a> CodeBuilder<'a> {
     fn compile_cached<T>(

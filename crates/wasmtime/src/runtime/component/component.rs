@@ -1,5 +1,9 @@
 use crate::component::matching::InstanceType;
 use crate::component::types;
+use crate::runtime::vm::component::ComponentRuntimeInfo;
+use crate::runtime::vm::{
+    VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
+};
 use crate::{
     code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
     ResourcesRequired,
@@ -15,12 +19,7 @@ use wasmtime_environ::component::{
     AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, GlobalInitializer,
     InstantiateModule, StaticModuleIndex, TrampolineIndex, TypeComponentIndex, VMComponentOffsets,
 };
-
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
-use wasmtime_runtime::component::ComponentRuntimeInfo;
-use wasmtime_runtime::{
-    VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
-};
 
 /// A compiled WebAssembly Component.
 ///

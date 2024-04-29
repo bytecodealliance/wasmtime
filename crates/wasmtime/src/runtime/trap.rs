@@ -70,18 +70,18 @@ use wasmtime_environ::{
 pub use wasmtime_environ::Trap;
 
 // Same safety requirements and caveats as
-// `wasmtime_runtime::raise_user_trap`.
+// `crate::runtime::vm::raise_user_trap`.
 pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
     let needs_backtrace = error.downcast_ref::<WasmBacktrace>().is_none();
-    wasmtime_runtime::raise_user_trap(error, needs_backtrace)
+    crate::runtime::vm::raise_user_trap(error, needs_backtrace)
 }
 
 #[cold] // traps are exceptional, this helps move handling off the main path
 pub(crate) fn from_runtime_box(
     store: &mut StoreOpaque,
-    runtime_trap: Box<wasmtime_runtime::Trap>,
+    runtime_trap: Box<crate::runtime::vm::Trap>,
 ) -> Error {
-    let wasmtime_runtime::Trap {
+    let crate::runtime::vm::Trap {
         reason,
         backtrace,
         coredumpstack,
@@ -100,7 +100,7 @@ pub(crate) fn from_runtime_box(
         // provide useful information to debug with for the embedder/caller,
         // otherwise the information about what the wasm was doing when the
         // error was generated would be lost.
-        wasmtime_runtime::TrapReason::User {
+        crate::runtime::vm::TrapReason::User {
             error,
             needs_backtrace,
         } => {
@@ -109,7 +109,7 @@ pub(crate) fn from_runtime_box(
             );
             (error, None)
         }
-        wasmtime_runtime::TrapReason::Jit {
+        crate::runtime::vm::TrapReason::Jit {
             pc,
             faulting_addr,
             trap,
@@ -125,7 +125,7 @@ pub(crate) fn from_runtime_box(
             }
             (err, Some(pc))
         }
-        wasmtime_runtime::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
+        crate::runtime::vm::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
     };
 
     if let Some(bt) = backtrace {
@@ -201,7 +201,7 @@ pub struct WasmBacktrace {
     // This is currently only present for the `Debug` implementation for extra
     // context.
     #[allow(dead_code)]
-    runtime_trace: wasmtime_runtime::Backtrace,
+    runtime_trace: crate::runtime::vm::Backtrace,
 }
 
 impl WasmBacktrace {
@@ -260,7 +260,7 @@ impl WasmBacktrace {
             WasmBacktrace {
                 wasm_trace: Vec::new(),
                 hint_wasm_backtrace_details_env: false,
-                runtime_trace: wasmtime_runtime::Backtrace::empty(),
+                runtime_trace: crate::runtime::vm::Backtrace::empty(),
             }
         }
     }
@@ -275,14 +275,14 @@ impl WasmBacktrace {
         let store = store.as_context();
         Self::from_captured(
             store.0,
-            wasmtime_runtime::Backtrace::new(store.0.runtime_limits()),
+            crate::runtime::vm::Backtrace::new(store.0.runtime_limits()),
             None,
         )
     }
 
     fn from_captured(
         store: &StoreOpaque,
-        runtime_trace: wasmtime_runtime::Backtrace,
+        runtime_trace: crate::runtime::vm::Backtrace,
         trap_pc: Option<usize>,
     ) -> Self {
         let mut wasm_trace = Vec::<FrameInfo>::with_capacity(runtime_trace.frames().len());
@@ -310,7 +310,7 @@ impl WasmBacktrace {
             };
 
             // NB: The PC we are looking up _must_ be a Wasm PC since
-            // `wasmtime_runtime::Backtrace` only contains Wasm frames.
+            // `crate::runtime::vm::Backtrace` only contains Wasm frames.
             //
             // However, consider the case where we have multiple, nested calls
             // across stores (with host code in between, by necessity, since
@@ -326,13 +326,13 @@ impl WasmBacktrace {
             //     | Wasm in store B |  V
             //     +-----------------+
             //
-            // In this scenario, the `wasmtime_runtime::Backtrace` will contain
-            // two frames: Wasm in store B followed by Wasm in store A. But
-            // `store.modules()` will only have the module information for
-            // modules instantiated within this store. Therefore, we use `if let
-            // Some(..)` instead of the `unwrap` you might otherwise expect and
-            // we ignore frames from modules that were not registered in this
-            // store's module registry.
+            // In this scenario, the `crate::runtime::vm::Backtrace` will
+            // contain two frames: Wasm in store B followed by Wasm in store
+            // A. But `store.modules()` will only have the module information
+            // for modules instantiated within this store. Therefore, we use `if
+            // let Some(..)` instead of the `unwrap` you might otherwise expect
+            // and we ignore frames from modules that were not registered in
+            // this store's module registry.
             if let Some((info, module)) = store.modules().lookup_frame_info(pc_to_lookup) {
                 wasm_trace.push(info);
 

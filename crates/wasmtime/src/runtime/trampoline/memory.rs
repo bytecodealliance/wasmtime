@@ -1,5 +1,12 @@
 use crate::memory::{LinearMemory, MemoryCreator};
 use crate::module::BareModuleInfo;
+use crate::runtime::vm::mpk::ProtectionKey;
+use crate::runtime::vm::{
+    CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
+    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator,
+    RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex,
+    VMMemoryDefinition,
+};
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use anyhow::{anyhow, Result};
@@ -8,13 +15,6 @@ use std::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
     VMOffsets, WASM_PAGE_SIZE,
-};
-use wasmtime_runtime::mpk::ProtectionKey;
-use wasmtime_runtime::{
-    CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator,
-    RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex,
-    VMMemoryDefinition,
 };
 
 #[cfg(feature = "component-model")]
@@ -270,8 +270,8 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     #[cfg(feature = "gc")]
     fn allocate_gc_heap(
         &self,
-        _gc_runtime: &dyn wasmtime_runtime::GcRuntime,
-    ) -> Result<(GcHeapAllocationIndex, Box<dyn wasmtime_runtime::GcHeap>)> {
+        _gc_runtime: &dyn crate::runtime::vm::GcRuntime,
+    ) -> Result<(GcHeapAllocationIndex, Box<dyn crate::runtime::vm::GcHeap>)> {
         unreachable!()
     }
 
@@ -279,7 +279,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     fn deallocate_gc_heap(
         &self,
         _allocation_index: GcHeapAllocationIndex,
-        _gc_heap: Box<dyn wasmtime_runtime::GcHeap>,
+        _gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
     ) {
         unreachable!()
     }

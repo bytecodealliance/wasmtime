@@ -1,3 +1,4 @@
+use crate::runtime::vm::{TableElement, VMGcRef};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType, Rooted, RootedGcRefImpl,
@@ -5,9 +6,8 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use std::ptr;
-use wasmtime_runtime::{TableElement, VMGcRef};
 
-pub use wasmtime_runtime::ValRaw;
+pub use crate::runtime::vm::ValRaw;
 
 /// Possible runtime values that a WebAssembly module can either consume or
 /// produce.

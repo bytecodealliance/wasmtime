@@ -4,10 +4,10 @@ use once_cell::sync::Lazy;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
-    Config, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store, Strategy,
+    Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
+    Strategy,
 };
 use wasmtime_environ::WASM_PAGE_SIZE;
-use wasmtime_runtime::MpkEnabled;
 use wasmtime_wast::{SpectestConfig, WastContext};
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));

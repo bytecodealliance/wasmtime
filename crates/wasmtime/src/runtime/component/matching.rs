@@ -1,6 +1,7 @@
 use crate::component::func::HostFunc;
 use crate::component::linker::{Definition, NameMap, Strings};
 use crate::component::ResourceType;
+use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
 use crate::Module;
 use anyhow::{anyhow, bail, Context, Result};
@@ -11,7 +12,6 @@ use wasmtime_environ::component::{
     TypeResourceTableIndex,
 };
 use wasmtime_environ::PrimaryMap;
-use wasmtime_runtime::component::ComponentInstance;
 
 pub struct TypeChecker<'a> {
     pub types: &'a Arc<ComponentTypes>,

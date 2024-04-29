@@ -87,7 +87,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 /// This trait is used to store a raw pointer trait object within each
 /// `VMContext`. This raw pointer trait object points back to the
-/// `wasmtime::Store` internally but is type-erased so this `wasmtime_runtime`
+/// `wasmtime::Store` internally but is type-erased so this `wasmtime-runtime`
 /// crate doesn't need the entire `wasmtime` crate to build.
 ///
 /// Note that this is an extra-unsafe trait because no heed is paid to the

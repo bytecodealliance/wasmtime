@@ -3,11 +3,11 @@
     allow(unused_imports)
 )]
 
+use crate::runtime::vm::V128Abi;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{Result, ValRaw, ValType, WasmTy};
 use std::cmp::Ordering;
 use std::fmt;
-use wasmtime_runtime::V128Abi;
 
 /// Representation of a 128-bit vector type, `v128`, for WebAssembly.
 ///
