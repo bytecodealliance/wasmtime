@@ -376,9 +376,9 @@ jobs:
       env:
         CARGO_BUILD_TARGET: x86_64-unknown-none
 
-    # Check that wasmtime-runtime compiles with panic=abort since there's some
-    # #[cfg] for specifically panic=abort there.
-    - run: cargo check -p wasmtime-runtime
+    # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
+    # for specifically panic=abort there.
+    - run: cargo check -p wasmtime
       env:
         RUSTFLAGS: -Cpanic=abort
 
@@ -824,7 +824,6 @@ jobs:
         cargo miri nextest run -j4 --no-fail-fast \
           -p wasmtime \
           -p wasmtime-cli \
-          -p wasmtime-runtime \
           -p wasmtime-environ
       env:
         MIRIFLAGS: -Zmiri-strict-provenance

@@ -10,11 +10,11 @@ this using the `wasmtime` runtime.
     - [Compiling to WASI](#compiling-to-wasi)
         - [From C](#from-c)
         - [From Rust](#from-rust)
-    - [Executing in `wasmtime` runtime](#executing-in-wasmtime-runtime)
+    - [Executing in Wasmtime](#executing-in-wasmtime)
   - [Web assembly text example](#web-assembly-text-example)
 
 ## Running common languages with WASI
-## Compiling to WASI
+### Compiling to WASI
 #### From C
 Let's start with a simple C program which performs a file copy, which will
 show to compile and run programs, as well as perform simple sandbox
@@ -165,7 +165,7 @@ $ file target/wasm32-wasi/debug/demo.wasm
 demo.wasm: WebAssembly (wasm) binary module version 0x1 (MVP)
 ```
 
-## Executing in `wasmtime` runtime
+### Executing in Wasmtime
 The resultant WebAssembly module `demo.wasm` compiled either from C or Rust is simply
 a single file containing a self-contained wasm module, that doesn't require
 any supporting JS code.

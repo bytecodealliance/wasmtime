@@ -63,7 +63,7 @@ their implications in Wasmtime:
   other. A `Store` cannot be used simultaneously from multiple threads (almost
   all operations require `&mut self`).
 
-* `crate::runtime::vm::InstanceHandle` - this is the low-level representation of a
+* `wasmtime::runtime::vm::InstanceHandle` - this is the low-level representation of a
   WebAssembly instance. At the same time this is also used as the representation
   for all host-defined objects. For example if you call `wasmtime::Memory::new`
   it'll create an `InstanceHandle` under the hood. This is a very `unsafe` type
@@ -315,11 +315,11 @@ traps.
 Wasmtime today implements traps with `longjmp` and `setjmp`. The `setjmp`
 function cannot be defined in Rust (even unsafely --
 (https://github.com/rust-lang/rfcs/issues/2625) so the
-`crates/runtime/src/helpers.c` file actually calls setjmp/longjmp. Note that in
-general the operation of `longjmp` is not safe to execute in Rust because it
-skips stack-based destructors, so after `setjmp` when we call back into Rust to
-execute wasm we need to be careful in Wasmtime to not have any significant
-destructors on the stack once wasm is called.
+`crates/wasmtime/src/runtime/vm/helpers.c` file actually calls
+setjmp/longjmp. Note that in general the operation of `longjmp` is not safe to
+execute in Rust because it skips stack-based destructors, so after `setjmp` when
+we call back into Rust to execute wasm we need to be careful in Wasmtime to not
+have any significant destructors on the stack once wasm is called.
 
 Traps can happen from a few different sources:
 
@@ -457,10 +457,9 @@ values that are actively in use on the stack.
 The main Wasmtime internal crates are:
 
 * `wasmtime` - the safe public API of `wasmtime`.
-* `wasmtime-runtime` - low-level runtime implementation of Wasmtime. This
-  is where `VMContext` and `InstanceHandle` live. This crate is theoretically
-  agnostic to how JIT code was compiled and the runtime that it's running
-  within.
+  * `wasmtime::runtime::vm` - low-level runtime implementation of Wasmtime. This
+    is where `VMContext` and `InstanceHandle` live. This module used to be a
+    crate, but has since been folding into `wasmtime`.
 * `wasmtime-environ` - low-level compilation support. This is where translation
   of the `Module` and its environment happens, although no compilation actually
   happens in this crate (although it defines an interface for compilers). The

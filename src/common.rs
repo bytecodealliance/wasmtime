@@ -174,10 +174,10 @@ impl RunCommon {
         // modules on disk that they're opened once to detect what they are and
         // then again internally in Wasmtime as part of the `deserialize_file`
         // API. Currently there's no way to pass the `MmapVec` here through to
-        // Wasmtime itself (that'd require making `wasmtime-runtime` a public
-        // dependency or `MmapVec` a public type, both of which aren't ready to
-        // happen at this time). It's hoped though that opening a file twice
-        // isn't too bad in the grand scheme of things with respect to the CLI.
+        // Wasmtime itself (that'd require making `MmapVec` a public type, both
+        // which isn't ready to happen at this time). It's hoped though that
+        // opening a file twice isn't too bad in the grand scheme of things with
+        // respect to the CLI.
         match wasmtime::_internal::MmapVec::from_file(path) {
             Ok(map) => self.load_module_contents(
                 engine,

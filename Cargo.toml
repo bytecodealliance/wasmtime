@@ -168,7 +168,6 @@ wasmtime-explorer = { path = "crates/explorer", version = "=21.0.0" }
 wasmtime-fiber = { path = "crates/fiber", version = "=21.0.0" }
 wasmtime-types = { path = "crates/types", version = "21.0.0" }
 wasmtime-jit-debug = { path = "crates/jit-debug", version = "=21.0.0" }
-wasmtime-runtime = { path = "crates/runtime", version = "=21.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=21.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "21.0.0", default-features = false }
 wasmtime-wasi-http = { path = "crates/wasi-http", version = "=21.0.0", default-features = false }
@@ -244,6 +243,7 @@ wit-component = "0.206.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
+cc = "1.0"
 object = { version = "0.33", default-features = false, features = ['read_core', 'elf', 'std'] }
 gimli = { version = "0.28.0", default-features = false, features = ['read', 'std'] }
 anyhow = { version = "1.0.22", default-features = false }
@@ -262,6 +262,13 @@ async-trait = "0.1.71"
 heck = "0.4"
 similar = "2.1.0"
 toml = "0.8.10"
+mach2 = "0.4.1"
+memfd = "0.6.2"
+memoffset = "0.9.0"
+psm = "0.1.11"
+proptest = "1.0.0"
+rand = { version = "0.8.3", features = ["small_rng"] }
+sptr = "0.3.2"
 # serde and serde_derive must have the same version
 serde = "1.0.188"
 serde_derive = "1.0.188"
