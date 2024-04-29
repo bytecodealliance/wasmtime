@@ -301,3 +301,10 @@ fn _assertions_lib() {
     _assert_send_and_sync::<Engine>();
     _assert_send_and_sync::<Config>();
 }
+
+#[cfg(feature = "runtime")]
+#[doc(hidden)]
+pub mod _internal {
+    // Exported just for the CLI.
+    pub use crate::runtime::vm::MmapVec;
+}

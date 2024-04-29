@@ -178,7 +178,7 @@ impl RunCommon {
         // dependency or `MmapVec` a public type, both of which aren't ready to
         // happen at this time). It's hoped though that opening a file twice
         // isn't too bad in the grand scheme of things with respect to the CLI.
-        match wasmtime_runtime::MmapVec::from_file(path) {
+        match wasmtime::_internal::MmapVec::from_file(path) {
             Ok(map) => self.load_module_contents(
                 engine,
                 path,
