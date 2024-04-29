@@ -375,7 +375,11 @@ impl Table {
     }
 
     pub(crate) fn trace_roots(&self, store: &mut StoreOpaque, gc_roots_list: &mut GcRootsList) {
-        if !self._ty(store).element().is_gc_heap_type() {
+        if !self
+            ._ty(store)
+            .element()
+            .is_vmgcref_type_and_points_to_object()
+        {
             return;
         }
 

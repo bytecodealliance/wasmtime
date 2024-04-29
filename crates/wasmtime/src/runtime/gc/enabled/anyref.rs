@@ -265,11 +265,6 @@ unsafe impl WasmTy for Rooted<AnyRef> {
     }
 
     #[inline]
-    fn is_non_i31_gc_ref(&self) -> bool {
-        true
-    }
-
-    #[inline]
     unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
         let raw = (*raw).get_externref();
         debug_assert_ne!(raw, 0);
@@ -320,8 +315,8 @@ unsafe impl WasmTy for Option<Rooted<AnyRef>> {
     }
 
     #[inline]
-    fn is_non_i31_gc_ref(&self) -> bool {
-        true
+    fn is_vmgcref_and_points_to_object(&self) -> bool {
+        self.is_some()
     }
 
     #[inline]
@@ -369,11 +364,6 @@ unsafe impl WasmTy for ManuallyRooted<AnyRef> {
     #[inline]
     fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
         unreachable!()
-    }
-
-    #[inline]
-    fn is_non_i31_gc_ref(&self) -> bool {
-        true
     }
 
     #[inline]
@@ -432,8 +422,8 @@ unsafe impl WasmTy for Option<ManuallyRooted<AnyRef>> {
     }
 
     #[inline]
-    fn is_non_i31_gc_ref(&self) -> bool {
-        true
+    fn is_vmgcref_and_points_to_object(&self) -> bool {
+        self.is_some()
     }
 
     #[inline]

@@ -244,11 +244,6 @@ unsafe impl WasmTy for I31 {
     }
 
     #[inline]
-    fn is_non_i31_gc_ref(&self) -> bool {
-        false
-    }
-
-    #[inline]
     unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
         let raw = (*raw).get_anyref();
         if cfg!(debug_assertions) {
@@ -304,11 +299,6 @@ unsafe impl WasmTy for Option<I31> {
         _actual: &HeapType,
     ) -> Result<()> {
         unreachable!()
-    }
-
-    #[inline]
-    fn is_non_i31_gc_ref(&self) -> bool {
-        false
     }
 
     #[inline]

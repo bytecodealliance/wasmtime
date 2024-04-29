@@ -238,6 +238,16 @@ impl ValType {
         a.matches(b) && b.matches(a)
     }
 
+    /// Is this a `VMGcRef` type that is not i31 and is not an uninhabited
+    /// bottom type?
+    #[inline]
+    pub(crate) fn is_vmgcref_type_and_points_to_object(&self) -> bool {
+        match self {
+            ValType::Ref(r) => r.is_vmgcref_type_and_points_to_object(),
+            ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::V128 => false,
+        }
+    }
+
     pub(crate) fn ensure_matches(&self, engine: &Engine, other: &ValType) -> Result<()> {
         if !self.comes_from_same_engine(engine) || !other.comes_from_same_engine(engine) {
             bail!("type used with wrong engine");
@@ -425,7 +435,7 @@ impl RefType {
         }
     }
 
-    pub(crate) fn is_gc_heap_type(&self) -> bool {
+    pub(crate) fn is_vmgcref_type_and_points_to_object(&self) -> bool {
         self.heap_type().is_vmgcref_type_and_points_to_object()
     }
 }
@@ -1032,7 +1042,11 @@ impl HeapType {
     /// bottom type?
     #[inline]
     pub(crate) fn is_vmgcref_type_and_points_to_object(&self) -> bool {
-        self.is_vmgcref_type() && !matches!(self, HeapType::I31 | HeapType::NoFunc | HeapType::None)
+        self.is_vmgcref_type()
+            && !matches!(
+                self,
+                HeapType::I31 | HeapType::NoExtern | HeapType::NoFunc | HeapType::None
+            )
     }
 }
 

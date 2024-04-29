@@ -90,12 +90,14 @@ impl NoFunc {
 
     /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
     /// [`Ref`].
+    #[inline]
     pub fn null_ref() -> Ref {
         Ref::Func(None)
     }
 
     /// Get the null `(ref null nofunc)` (aka `nullfuncref`) reference as a
     /// [`Val`].
+    #[inline]
     pub fn null_val() -> Val {
         Val::FuncRef(None)
     }
@@ -620,25 +622,27 @@ impl Func {
     /// function being called is known statically so the type signature can
     /// be inferred. Rust types will map to WebAssembly types as follows:
     ///
-    /// | Rust Argument Type                | WebAssembly Type                      |
-    /// |-----------------------------------|---------------------------------------|
-    /// | `i32`                             | `i32`                                 |
-    /// | `u32`                             | `i32`                                 |
-    /// | `i64`                             | `i64`                                 |
-    /// | `u64`                             | `i64`                                 |
-    /// | `f32`                             | `f32`                                 |
-    /// | `f64`                             | `f64`                                 |
-    /// | `V128` on x86-64 and aarch64 only | `v128`                                |
-    /// | `Option<Func>`                    | `funcref` aka `(ref null func)`       |
-    /// | `Func`                            | `(ref func)`                          |
-    /// | `Option<Nofunc>`                  | `nullfuncref` aka `(ref null nofunc)` |
-    /// | `NoFunc`                          | `(ref nofunc)`                        |
-    /// | `Option<ExternRef>`               | `externref` aka `(ref null extern)`   |
-    /// | `ExternRef`                       | `(ref extern)`                        |
-    /// | `Option<AnyRef>`                  | `anyref` aka `(ref null any)`         |
-    /// | `AnyRef`                          | `(ref any)`                           |
-    /// | `Option<I31>`                     | `i31ref` aka `(ref null i31)`         |
-    /// | `I31`                             | `(ref i31)`                           |
+    /// | Rust Argument Type                | WebAssembly Type                          |
+    /// |-----------------------------------|-------------------------------------------|
+    /// | `i32`                             | `i32`                                     |
+    /// | `u32`                             | `i32`                                     |
+    /// | `i64`                             | `i64`                                     |
+    /// | `u64`                             | `i64`                                     |
+    /// | `f32`                             | `f32`                                     |
+    /// | `f64`                             | `f64`                                     |
+    /// | `V128` on x86-64 and aarch64 only | `v128`                                    |
+    /// | `Option<Func>`                    | `funcref` aka `(ref null func)`           |
+    /// | `Func`                            | `(ref func)`                              |
+    /// | `Option<Nofunc>`                  | `nullfuncref` aka `(ref null nofunc)`     |
+    /// | `NoFunc`                          | `(ref nofunc)`                            |
+    /// | `Option<ExternRef>`               | `externref` aka `(ref null extern)`       |
+    /// | `ExternRef`                       | `(ref extern)`                            |
+    /// | `Option<NoExtern>`                | `nullexternref` aka `(ref null noextern)` |
+    /// | `NoExtern`                        | `(ref noextern)`                          |
+    /// | `Option<AnyRef>`                  | `anyref` aka `(ref null any)`             |
+    /// | `AnyRef`                          | `(ref any)`                               |
+    /// | `Option<I31>`                     | `i31ref` aka `(ref null i31)`             |
+    /// | `I31`                             | `(ref i31)`                               |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
@@ -1391,25 +1395,27 @@ impl Func {
     ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
-    /// | WebAssembly                           | Rust                                  |
-    /// |---------------------------------------|---------------------------------------|
-    /// | `i32`                                 | `i32` or `u32`                        |
-    /// | `i64`                                 | `i64` or `u64`                        |
-    /// | `f32`                                 | `f32`                                 |
-    /// | `f64`                                 | `f64`                                 |
-    /// | `externref` aka `(ref null extern)`   | `Option<ExternRef>`                   |
-    /// | `(ref extern)`                        | `ExternRef`                           |
-    /// | `anyref` aka `(ref null any)`         | `Option<AnyRef>`                      |
-    /// | `(ref any)`                           | `AnyRef`                              |
-    /// | `i31ref` aka `(ref null i31)`         | `Option<I31>`                         |
-    /// | `(ref i31)`                           | `I31`                                 |
-    /// | `funcref` aka `(ref null func)`       | `Option<Func>`                        |
-    /// | `(ref func)`                          | `Func`                                |
-    /// | `(ref null <func type index>)`        | `Option<Func>`                        |
-    /// | `(ref <func type index>)`             | `Func`                                |
-    /// | `nullfuncref` aka `(ref null nofunc)` | `Option<NoFunc>`                      |
-    /// | `(ref nofunc)`                        | `NoFunc`                              |
-    /// | `v128`                                | `V128` on `x86-64` and `aarch64` only |
+    /// | WebAssembly                               | Rust                                  |
+    /// |-------------------------------------------|---------------------------------------|
+    /// | `i32`                                     | `i32` or `u32`                        |
+    /// | `i64`                                     | `i64` or `u64`                        |
+    /// | `f32`                                     | `f32`                                 |
+    /// | `f64`                                     | `f64`                                 |
+    /// | `externref` aka `(ref null extern)`       | `Option<ExternRef>`                   |
+    /// | `(ref extern)`                            | `ExternRef`                           |
+    /// | `(ref noextern)`                          | `NoExtern`                            |
+    /// | `nullexternref` aka `(ref null noextern)` | `Option<NoExtern>`                    |
+    /// | `anyref` aka `(ref null any)`             | `Option<AnyRef>`                      |
+    /// | `(ref any)`                               | `AnyRef`                              |
+    /// | `i31ref` aka `(ref null i31)`             | `Option<I31>`                         |
+    /// | `(ref i31)`                               | `I31`                                 |
+    /// | `funcref` aka `(ref null func)`           | `Option<Func>`                        |
+    /// | `(ref func)`                              | `Func`                                |
+    /// | `(ref null <func type index>)`            | `Option<Func>`                        |
+    /// | `(ref <func type index>)`                 | `Func`                                |
+    /// | `nullfuncref` aka `(ref null nofunc)`     | `Option<NoFunc>`                      |
+    /// | `(ref nofunc)`                            | `NoFunc`                              |
+    /// | `v128`                                    | `V128` on `x86-64` and `aarch64` only |
     ///
     /// (Note that this mapping is the same as that of [`Func::wrap`]).
     ///

@@ -105,11 +105,6 @@ unsafe impl WasmTy for V128 {
     }
 
     #[inline]
-    fn is_non_i31_gc_ref(&self) -> bool {
-        false
-    }
-
-    #[inline]
     unsafe fn abi_from_raw(raw: *mut ValRaw) -> Self::Abi {
         V128::from((*raw).get_v128()).0
     }

@@ -28,6 +28,7 @@ mod memory_creator;
 mod module;
 mod module_serialize;
 mod name;
+mod noextern;
 mod piped_tests;
 mod pooling_allocator;
 mod relocs;
