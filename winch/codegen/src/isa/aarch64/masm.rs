@@ -318,8 +318,8 @@ impl Masm for MacroAssembler {
             OperandSize::S64 => 0x3f,
             _ => unreachable!(),
         };
-        self.asm.fushr_rr(rhs, rhs, max_shift, size);
-        self.asm.fsli_rrr(lhs, rhs, dst, max_shift, size);
+        self.asm.fushr_rri(rhs, rhs, max_shift, size);
+        self.asm.fsli_rri_mod(lhs, rhs, dst, max_shift, size);
     }
 
     fn float_neg(&mut self, dst: Reg, size: OperandSize) {

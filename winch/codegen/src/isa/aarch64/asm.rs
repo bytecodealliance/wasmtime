@@ -300,7 +300,8 @@ impl Assembler {
         self.emit_fpu_round(fpu_mode, rn, rd)
     }
 
-    pub fn fushr_rr(&mut self, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
+    /// Float unsigned shift right with two registers and an immediate.
+    pub fn fushr_rri(&mut self, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
         let imm = FPURightShiftImm {
             amount: amount,
             lane_size_in_bits: size.num_bits(),
@@ -313,7 +314,9 @@ impl Assembler {
         self.emit_fpu_rri(ushr, rn, rd)
     }
 
-    pub fn fsli_rrr(&mut self, ri: Reg, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
+    /// Float unsigned shift left and insert with three registers
+    /// and an immediate.
+    pub fn fsli_rri_mod(&mut self, ri: Reg, rn: Reg, rd: Reg, amount: u8, size: OperandSize) {
         let imm = FPULeftShiftImm {
             amount: amount,
             lane_size_in_bits: size.num_bits(),
