@@ -913,6 +913,7 @@ mod test_vmruntime_limits {
 /// direct code pointer (with the same vmctx, i.e., in the same
 /// instance) to call if this index matches.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // not actually used in Rust runtime code; only in generated code.
 #[repr(C)]
 pub struct VMCallIndirectCache {
     /// Function pointer for this funcref if being called via the Wasm
