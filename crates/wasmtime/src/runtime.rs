@@ -24,6 +24,7 @@ pub(crate) mod types;
 pub(crate) mod uninhabited;
 pub(crate) mod v128;
 pub(crate) mod values;
+pub(crate) mod vm;
 
 #[cfg(feature = "component-model")]
 pub mod component;

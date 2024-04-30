@@ -20,11 +20,9 @@ workspace = true
 features = ["component-model"]
 
 [dependencies]
-wasmtime-runtime = { workspace = true, optional = true }
+wasmtime-asm-macros = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
-wasmtime-jit-debug = { workspace = true, features = [
-  "perf_jitdump",
-], optional = true }
+wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int", "perf_jitdump"], optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
@@ -33,6 +31,8 @@ wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 wasmtime-slab = { workspace = true, optional = true }
+wasmtime-versioned-export-macros = { workspace = true }
+wasmtime-wmemcheck = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
@@ -44,6 +44,7 @@ wat = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
+sptr = { workspace = true }
 postcard = { workspace = true }
 indexmap = { workspace = true }
 paste = "1.0.3"
@@ -60,20 +61,45 @@ gimli = { workspace = true }
 addr2line = { version = "0.21.0", default-features = false, optional = true }
 semver = { version = "1.0.17", optional = true }
 smallvec = { workspace = true, optional = true }
+memoffset = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
-features = ["Win32_System_Diagnostics_Debug"]
+optional = true
+features = [
+  "Win32_Foundation",
+  "Win32_System_Kernel",
+  "Win32_System_Memory",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_SystemInformation",
+  "Win32_Storage_FileSystem",
+  "Win32_Security",
+]
 
 [target.'cfg(all(target_arch = "x86_64", not(target_os = "android")))'.dependencies]
 ittapi = { version = "0.4.0", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rustix = { workspace = true, features = ['thread'] }
+memfd = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mach2 = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "s390x")'.dependencies]
+psm = { workspace = true, optional = true }
 
 [dev-dependencies]
-tempfile = "3.0"
+proptest = { workspace = true }
+rand = { workspace = true }
+tempfile = { workspace = true }
 wasi-common = { path = "../wasi-common", default-features = true }
+
+[build-dependencies]
+cc = { workspace = true, optional = true }
+wasmtime-versioned-export-macros = { workspace = true, optional = true }
 
 # =============================================================================
 #
@@ -122,6 +148,8 @@ profiling = [
   "dep:fxprof-processed-profile",
   "dep:wasmtime-jit-debug",
   "dep:ittapi",
+  "dep:rustix",
+  "rustix/thread"
 ]
 
 # Enables parallel compilation of WebAssembly code.
@@ -134,14 +162,13 @@ cache = ["dep:wasmtime-cache"]
 # `async fn` and calling functions asynchronously.
 async = [
   "dep:wasmtime-fiber",
-  "wasmtime-runtime/async",
   "dep:async-trait",
   "wasmtime-component-macro?/async",
   "runtime",
 ]
 
 # Enables support for the pooling instance allocation strategy
-pooling-allocator = ["runtime", "wasmtime-runtime/pooling-allocator"]
+pooling-allocator = ["runtime"]
 
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
@@ -155,32 +182,44 @@ component-model = [
   "wasmtime-environ/component-model",
   "wasmtime-cranelift?/component-model",
   "wasmtime-winch?/component-model",
-  "wasmtime-runtime?/component-model",
   "dep:wasmtime-component-macro",
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
   "dep:semver",
 ]
 
-wmemcheck = ["wasmtime-runtime?/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
+wmemcheck = [
+  "dep:wasmtime-wmemcheck",
+  "wasmtime-cranelift?/wmemcheck",
+  "wasmtime-environ/wmemcheck",
+]
 
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
 demangle = ["wasmtime-environ/demangle"]
 
 # Enable support for generating core dumps on traps.
-coredump = ["dep:wasm-encoder", "runtime", "wasmtime-runtime/coredump"]
+coredump = ["dep:wasm-encoder", "runtime"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["wasmtime-runtime?/debug-builtins"]
+debug-builtins = ["dep:wasmtime-jit-debug"]
 
 # Enable support for executing compiled Wasm modules.
 runtime = [
-  "dep:wasmtime-runtime",
+  "dep:cc",
+  "dep:smallvec",
+  "dep:mach2",
+  "dep:memfd",
+  "dep:memoffset",
+  "dep:wasmtime-asm-macros",
   "dep:wasmtime-jit-icache-coherence",
   "dep:wasmtime-slab",
-  "dep:smallvec",
+  "dep:wasmtime-versioned-export-macros",
+  "dep:windows-sys",
+  "dep:psm",
+  "dep:rustix",
+  "rustix/mm"
 ]
 
 # Enable support for garbage collection-related things.
@@ -197,7 +236,7 @@ runtime = [
 #
 # When the `runtime` Cargo feature is enabled, this feature gates the ability to
 # load and run Wasm that uses those proposals.
-gc = ["wasmtime-environ/gc", "wasmtime-runtime?/gc", "wasmtime-cranelift?/gc"]
+gc = ["wasmtime-environ/gc", "wasmtime-cranelift?/gc"]
 
 # Enable runtime support for the WebAssembly threads proposal.
-threads = ["wasmtime-runtime?/threads", "wasmtime-cranelift?/threads"]
+threads = ["wasmtime-cranelift?/threads"]

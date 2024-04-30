@@ -1,6 +1,8 @@
 use crate::component::func::{Func, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
+use crate::runtime::vm::component::ComponentInstance;
+use crate::runtime::vm::SendSyncPtr;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
 use std::borrow::Cow;
@@ -14,8 +16,6 @@ use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, VariantInfo, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS,
 };
-use wasmtime_runtime::component::ComponentInstance;
-use wasmtime_runtime::SendSyncPtr;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.

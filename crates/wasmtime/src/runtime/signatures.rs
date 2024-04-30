@@ -1,13 +1,13 @@
 //! Implement a registry of function signatures, for fast indirect call
 //! signature checking.
 
+use crate::runtime::vm::VMSharedSignatureIndex;
 use std::{
     collections::{hash_map::Entry, HashMap},
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
 use wasmtime_environ::{ModuleTypes, PrimaryMap, SignatureIndex, WasmFuncType};
-use wasmtime_runtime::VMSharedSignatureIndex;
 
 /// Represents a collection of shared signatures.
 ///

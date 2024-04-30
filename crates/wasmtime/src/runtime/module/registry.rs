@@ -3,6 +3,7 @@
 use crate::code::CodeObject;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
+use crate::runtime::vm::VMWasmCallFunction;
 use crate::{code_memory::CodeMemory, FrameInfo, Module, Trap};
 use once_cell::sync::Lazy;
 use std::collections::btree_map::Entry;
@@ -12,7 +13,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 use wasmtime_environ::VMSharedTypeIndex;
-use wasmtime_runtime::VMWasmCallFunction;
 
 /// Used for registering modules with a store.
 ///
@@ -68,7 +68,7 @@ impl ModuleRegistry {
     }
 
     /// Fetches information about a registered module given a program counter value.
-    pub fn lookup_module_info(&self, pc: usize) -> Option<&dyn wasmtime_runtime::ModuleInfo> {
+    pub fn lookup_module_info(&self, pc: usize) -> Option<&dyn crate::runtime::vm::ModuleInfo> {
         let (module, _) = self.module_and_offset(pc)?;
         Some(module.module_info())
     }

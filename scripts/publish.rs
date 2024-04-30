@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Output, Stdio};
 use std::thread;
 use std::time::Duration;
 
@@ -54,7 +54,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-fiber",
     "wasmtime-environ",
     "wasmtime-wmemcheck",
-    "wasmtime-runtime",
     "wasmtime-cranelift",
     "wasmtime-cache",
     "winch-codegen",
@@ -151,11 +150,7 @@ fn main() {
             // update C API version in wasmtime.h
             update_capi_version();
             // update the lock file
-            assert!(Command::new("cargo")
-                .arg("fetch")
-                .status()
-                .unwrap()
-                .success());
+            run_cmd(Command::new("cargo").arg("fetch"));
         }
 
         "publish" => {
@@ -197,6 +192,32 @@ fn main() {
 
         s => panic!("unknown command: {}", s),
     }
+}
+
+fn cmd_output(cmd: &mut Command) -> Output {
+    eprintln!("Running: `{:?}`", cmd);
+    match cmd.output() {
+        Ok(o) => o,
+        Err(e) => panic!("Failed to run `{:?}`: {}", cmd, e),
+    }
+}
+
+fn cmd_status(cmd: &mut Command) -> ExitStatus {
+    eprintln!("Running: `{:?}`", cmd);
+    match cmd.status() {
+        Ok(s) => s,
+        Err(e) => panic!("Failed to run `{:?}`: {}", cmd, e),
+    }
+}
+
+fn run_cmd(cmd: &mut Command) {
+    let status = cmd_status(cmd);
+    assert!(
+        status.success(),
+        "Command `{:?}` exited with failure status: {}",
+        cmd,
+        status
+    );
 }
 
 fn find_crates(dir: &Path, ws: &Workspace, dst: &mut Vec<Crate>) {
@@ -398,10 +419,9 @@ fn publish(krate: &Crate) -> bool {
 
     // First make sure the crate isn't already published at this version. This
     // script may be re-run and there's no need to re-attempt previous work.
-    let output = Command::new("curl")
-        .arg(&format!("https://crates.io/api/v1/crates/{}", krate.name))
-        .output()
-        .expect("failed to invoke `curl`");
+    let output = cmd_output(
+        Command::new("curl").arg(&format!("https://crates.io/api/v1/crates/{}", krate.name)),
+    );
     if output.status.success()
         && String::from_utf8_lossy(&output.stdout)
             .contains(&format!("\"newest_version\":\"{}\"", krate.version))
@@ -413,12 +433,12 @@ fn publish(krate: &Crate) -> bool {
         return true;
     }
 
-    let status = Command::new("cargo")
-        .arg("publish")
-        .current_dir(krate.manifest.parent().unwrap())
-        .arg("--no-verify")
-        .status()
-        .expect("failed to run cargo");
+    let status = cmd_status(
+        Command::new("cargo")
+            .arg("publish")
+            .current_dir(krate.manifest.parent().unwrap())
+            .arg("--no-verify"),
+    );
     if !status.success() {
         println!("FAIL: failed to publish `{}`: {}", krate.name, status);
         return false;
@@ -427,13 +447,10 @@ fn publish(krate: &Crate) -> bool {
     // After we've published then make sure that the `wasmtime-publish` group is
     // added to this crate for future publications. If it's already present
     // though we can skip the `cargo owner` modification.
-    let output = Command::new("curl")
-        .arg(&format!(
-            "https://crates.io/api/v1/crates/{}/owners",
-            krate.name
-        ))
-        .output()
-        .expect("failed to invoke `curl`");
+    let output = cmd_output(Command::new("curl").arg(&format!(
+        "https://crates.io/api/v1/crates/{}/owners",
+        krate.name
+    )));
     if output.status.success()
         && String::from_utf8_lossy(&output.stdout).contains("wasmtime-publish")
     {
@@ -447,19 +464,13 @@ fn publish(krate: &Crate) -> bool {
     // Note that the status is ignored here. This fails most of the time because
     // the owner is already set and present, so we only want to add this to
     // crates which haven't previously been published.
-    let status = Command::new("cargo")
-        .arg("owner")
-        .arg("-a")
-        .arg("github:bytecodealliance:wasmtime-publish")
-        .arg(&krate.name)
-        .status()
-        .expect("failed to run cargo");
-    if !status.success() {
-        panic!(
-            "FAIL: failed to add wasmtime-publish as owner `{}`: {}",
-            krate.name, status
-        );
-    }
+    run_cmd(
+        Command::new("cargo")
+            .arg("owner")
+            .arg("-a")
+            .arg("github:bytecodealliance:wasmtime-publish")
+            .arg(&krate.name),
+    );
 
     true
 }
@@ -474,11 +485,7 @@ fn verify(crates: &[Crate]) {
 
     drop(fs::remove_dir_all(".cargo"));
     drop(fs::remove_dir_all("vendor"));
-    let vendor = Command::new("cargo")
-        .arg("vendor")
-        .stderr(Stdio::inherit())
-        .output()
-        .unwrap();
+    let vendor = cmd_output(Command::new("cargo").arg("vendor").stderr(Stdio::inherit()));
     assert!(vendor.status.success());
 
     fs::create_dir_all(".cargo").unwrap();
@@ -500,18 +507,16 @@ fn verify(crates: &[Crate]) {
         if krate.name.contains("wasi-nn") {
             cmd.arg("--no-verify");
         }
-        let status = cmd.status().unwrap();
-        assert!(status.success(), "failed to verify {:?}", &krate.manifest);
-        let tar = Command::new("tar")
-            .arg("xf")
-            .arg(format!(
-                "../target/package/{}-{}.crate",
-                krate.name, krate.version
-            ))
-            .current_dir("./vendor")
-            .status()
-            .unwrap();
-        assert!(tar.success());
+        run_cmd(&mut cmd);
+        run_cmd(
+            Command::new("tar")
+                .arg("xf")
+                .arg(format!(
+                    "../target/package/{}-{}.crate",
+                    krate.name, krate.version
+                ))
+                .current_dir("./vendor"),
+        );
         fs::write(
             format!(
                 "./vendor/{}-{}/.cargo-checksum.json",

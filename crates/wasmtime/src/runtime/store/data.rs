@@ -22,10 +22,10 @@ impl InstanceId {
 pub struct StoreData {
     id: StoreId,
     funcs: Vec<crate::func::FuncData>,
-    tables: Vec<wasmtime_runtime::ExportTable>,
-    globals: Vec<wasmtime_runtime::ExportGlobal>,
+    tables: Vec<crate::runtime::vm::ExportTable>,
+    globals: Vec<crate::runtime::vm::ExportGlobal>,
     instances: Vec<crate::instance::InstanceData>,
-    memories: Vec<wasmtime_runtime::ExportMemory>,
+    memories: Vec<crate::runtime::vm::ExportMemory>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
 }
@@ -48,10 +48,10 @@ macro_rules! impl_store_data {
 
 impl_store_data! {
     funcs => crate::func::FuncData,
-    tables => wasmtime_runtime::ExportTable,
-    globals => wasmtime_runtime::ExportGlobal,
+    tables => crate::runtime::vm::ExportTable,
+    globals => crate::runtime::vm::ExportGlobal,
     instances => crate::instance::InstanceData,
-    memories => wasmtime_runtime::ExportMemory,
+    memories => crate::runtime::vm::ExportMemory,
 }
 
 impl StoreData {

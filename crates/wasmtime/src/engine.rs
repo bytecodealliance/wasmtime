@@ -1,5 +1,7 @@
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
+#[cfg(feature = "runtime")]
+use crate::runtime::vm::GcRuntime;
 use crate::Config;
 use anyhow::{Context, Result};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -12,8 +14,6 @@ use std::sync::Arc;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
-#[cfg(feature = "runtime")]
-use wasmtime_runtime::GcRuntime;
 
 mod serialization;
 
@@ -50,7 +50,7 @@ struct EngineInner {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler: Box<dyn wasmtime_environ::Compiler>,
     #[cfg(feature = "runtime")]
-    allocator: Box<dyn wasmtime_runtime::InstanceAllocator + Send + Sync>,
+    allocator: Box<dyn crate::runtime::vm::InstanceAllocator + Send + Sync>,
     #[cfg(feature = "runtime")]
     gc_runtime: Arc<dyn GcRuntime>,
     #[cfg(feature = "runtime")]
@@ -60,7 +60,7 @@ struct EngineInner {
     #[cfg(feature = "runtime")]
     epoch: AtomicU64,
     #[cfg(feature = "runtime")]
-    unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator,
+    unique_id_allocator: crate::runtime::vm::CompiledModuleIdAllocator,
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
@@ -89,12 +89,16 @@ impl Engine {
     pub fn new(config: &Config) -> Result<Engine> {
         #[cfg(feature = "runtime")]
         {
-            // Ensure that wasmtime_runtime's signal handlers are configured. This
-            // is the per-program initialization required for handling traps, such
-            // as configuring signals, vectored exception handlers, etc.
-            wasmtime_runtime::init_traps(crate::module::get_wasm_trap, config.macos_use_mach_ports);
+            // Ensure that crate::runtime::vm's signal handlers are
+            // configured. This is the per-program initialization required for
+            // handling traps, such as configuring signals, vectored exception
+            // handlers, etc.
+            crate::runtime::vm::init_traps(
+                crate::module::get_wasm_trap,
+                config.macos_use_mach_ports,
+            );
             #[cfg(feature = "debug-builtins")]
-            wasmtime_runtime::debug_builtins::ensure_exported();
+            crate::runtime::vm::debug_builtins::ensure_exported();
         }
 
         let config = config.clone();
@@ -118,7 +122,7 @@ impl Engine {
                 #[cfg(feature = "runtime")]
                 epoch: AtomicU64::new(0),
                 #[cfg(feature = "runtime")]
-                unique_id_allocator: wasmtime_runtime::CompiledModuleIdAllocator::new(),
+                unique_id_allocator: crate::runtime::vm::CompiledModuleIdAllocator::new(),
                 compatible_with_native_host: OnceCell::new(),
                 config,
                 tunables,
@@ -591,10 +595,10 @@ impl Engine {
     /// latency of WebAssembly calls are extra-important, which is not
     /// necessarily true of all embeddings.
     pub fn tls_eager_initialize() {
-        wasmtime_runtime::tls_eager_initialize();
+        crate::runtime::vm::tls_eager_initialize();
     }
 
-    pub(crate) fn allocator(&self) -> &dyn wasmtime_runtime::InstanceAllocator {
+    pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
         self.inner.allocator.as_ref()
     }
 
@@ -652,7 +656,7 @@ impl Engine {
         self.inner.epoch.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(crate) fn unique_id_allocator(&self) -> &wasmtime_runtime::CompiledModuleIdAllocator {
+    pub(crate) fn unique_id_allocator(&self) -> &crate::runtime::vm::CompiledModuleIdAllocator {
         &self.inner.unique_id_allocator
     }
 
@@ -697,7 +701,7 @@ impl Engine {
         bytes: &[u8],
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
-        self.load_code(wasmtime_runtime::MmapVec::from_slice(bytes)?, expected)
+        self.load_code(crate::runtime::vm::MmapVec::from_slice(bytes)?, expected)
     }
 
     /// Like `load_code_bytes`, but creates a mmap from a file on disk.
@@ -707,7 +711,7 @@ impl Engine {
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
         self.load_code(
-            wasmtime_runtime::MmapVec::from_file(path).with_context(|| {
+            crate::runtime::vm::MmapVec::from_file(path).with_context(|| {
                 format!("failed to create file mapping for: {}", path.display())
             })?,
             expected,
@@ -716,7 +720,7 @@ impl Engine {
 
     pub(crate) fn load_code(
         &self,
-        mmap: wasmtime_runtime::MmapVec,
+        mmap: crate::runtime::vm::MmapVec,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
         serialization::check_compatible(self, &mmap, expected)?;

@@ -61,7 +61,7 @@ unsafe impl GlobalAlloc for MyGlobalDmalloc {
     }
 }
 
-// Hand-copied from `crates/runtime/src/sys/custom/capi.rs`.
+// Hand-copied from `crates/wasmtime/src/runtime/vm/sys/custom/capi.rs`.
 const PROT_READ: u32 = 1 << 0;
 const PROT_WRITE: u32 = 1 << 1;
 extern "C" {

@@ -1,3 +1,7 @@
+use crate::runtime::vm::{
+    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
+    VMNativeCallFunction, VMWasmCallFunction,
+};
 use crate::{
     code::CodeObject,
     code_memory::CodeMemory,
@@ -18,10 +22,6 @@ use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledModuleInfo, DefinedFuncIndex, DefinedMemoryIndex, EntityIndex, HostPtr, ModuleTypes,
     ObjectKind, VMOffsets, VMSharedTypeIndex,
-};
-use wasmtime_runtime::{
-    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
-    VMNativeCallFunction, VMWasmCallFunction,
 };
 mod registry;
 
@@ -896,13 +896,13 @@ impl Module {
 
     /// Returns the `ModuleInner` cast as `ModuleRuntimeInfo` for use
     /// by the runtime.
-    pub(crate) fn runtime_info(&self) -> Arc<dyn wasmtime_runtime::ModuleRuntimeInfo> {
+    pub(crate) fn runtime_info(&self) -> Arc<dyn crate::runtime::vm::ModuleRuntimeInfo> {
         // N.B.: this needs to return a clone because we cannot
         // statically cast the &Arc<ModuleInner> to &Arc<dyn Trait...>.
         self.inner.clone()
     }
 
-    pub(crate) fn module_info(&self) -> &dyn wasmtime_runtime::ModuleInfo {
+    pub(crate) fn module_info(&self) -> &dyn crate::runtime::vm::ModuleInfo {
         &*self.inner
     }
 
@@ -1056,7 +1056,7 @@ fn _assert_send_sync() {
     _assert::<Module>();
 }
 
-impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
+impl crate::runtime::vm::ModuleRuntimeInfo for ModuleInner {
     fn module(&self) -> &Arc<wasmtime_environ::Module> {
         self.module.module()
     }
@@ -1135,7 +1135,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 }
 
-impl wasmtime_runtime::ModuleInfo for ModuleInner {
+impl crate::runtime::vm::ModuleInfo for ModuleInner {
     fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
         let text_offset = pc - self.module.text().as_ptr() as usize;
         let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
@@ -1187,12 +1187,12 @@ impl BareModuleInfo {
         }
     }
 
-    pub(crate) fn into_traitobj(self) -> Arc<dyn wasmtime_runtime::ModuleRuntimeInfo> {
+    pub(crate) fn into_traitobj(self) -> Arc<dyn crate::runtime::vm::ModuleRuntimeInfo> {
         Arc::new(self)
     }
 }
 
-impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
+impl crate::runtime::vm::ModuleRuntimeInfo for BareModuleInfo {
     fn module(&self) -> &Arc<wasmtime_environ::Module> {
         &self.module
     }

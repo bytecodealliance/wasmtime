@@ -1,6 +1,9 @@
+//! Lifetime management of `VMFuncRef`s inside of stores, and filling in their
+//! trampolines.
+
 use crate::module::ModuleRegistry;
+use crate::runtime::vm::{SendSyncPtr, VMFuncRef, VMNativeCallHostFuncContext};
 use std::{ptr::NonNull, sync::Arc};
-use wasmtime_runtime::{SendSyncPtr, VMFuncRef, VMNativeCallHostFuncContext};
 
 /// An arena of `VMFuncRef`s.
 ///

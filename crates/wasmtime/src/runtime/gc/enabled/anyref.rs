@@ -1,12 +1,12 @@
 //! Implementation of `anyref` in Wasmtime.
 
+use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType, Result,
     RootSet, Rooted, ValRaw, ValType, WasmTy, I31,
 };
 use std::num::NonZeroU64;
-use wasmtime_runtime::VMGcRef;
 
 /// An `anyref` GC reference.
 ///

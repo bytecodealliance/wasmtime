@@ -25,7 +25,7 @@ set -ex
 #   cargo install cbindgen
 #
 # which ensures that Rust & C agree on types and such.
-cbindgen ../../crates/runtime/src/sys/custom/capi.rs \
+cbindgen ../../crates/wasmtime/src/runtime/vm/sys/custom/capi.rs \
     --lang C \
     --cpp-compat > embedding/wasmtime-platform.h
 clang -shared -O2 -o libwasmtime-platform.so ./embedding/wasmtime-platform.c \

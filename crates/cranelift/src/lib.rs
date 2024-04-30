@@ -507,5 +507,5 @@ impl BuiltinFunctionSignatures {
 /// unboxed `i31`.
 ///
 /// Must be kept in sync with
-/// `wasmtime_runtime::gc::VMGcRef::I31_REF_DISCRIMINANT`.
+/// `crate::runtime::vm::gc::VMGcRef::I31_REF_DISCRIMINANT`.
 const I31_REF_DISCRIMINANT: u32 = 1;
