@@ -1,6 +1,10 @@
 ;;! target = "x86_64"
 ;;! flags = [ "-Wcache-call-indirects=y" ]
 
+;; This test checks that we do *not* get the indirect-call caching optimization
+;; when it must not be used: in this case, because the table is updated with a
+;; `table.set` instruction (invalidating the cache, which we would not detect).
+
 (module
  (table 10 10 funcref)
 

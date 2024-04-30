@@ -173,7 +173,8 @@ impl Config {
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map);
+            .generate_address_map(self.wasmtime.generate_address_map)
+            .cache_call_indirects(self.wasmtime.cache_call_indirects);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -476,6 +477,8 @@ pub struct WasmtimeConfig {
     native_unwind_info: bool,
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
+    /// Whether we enable indirect-call caching.
+    cache_call_indirects: bool,
 
     /// Whether or not fuzzing should enable PCC.
     pcc: bool,

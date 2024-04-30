@@ -11,9 +11,9 @@ use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap,
-    HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize, TargetEnvironment,
-    TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
+    CallIndirectSiteIndex, EngineOrModuleTypeIndex, FuncIndex, FuncTranslationState, GlobalIndex,
+    GlobalVariable, Heap, HeapData, HeapStyle, MemoryIndex, TableData, TableIndex, TableSize,
+    TargetEnvironment, TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
 };
 use std::mem;
 use wasmparser::Operator;
@@ -1007,6 +1007,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             _ => unreachable!(),
         }
     }
+
+    /// Allocate the next CallIndirectSiteIndex for indirect-target caching purposes.
+    fn alloc_call_indirect_index(&mut self) -> CallIndirectSiteIndex {
+        let idx = CallIndirectSiteIndex::from_u32(
+            u32::try_from(self.call_indirect_index)
+                .expect("More than 2^32 callsites; should be limited by impl limits"),
+        );
+        self.call_indirect_index += 1;
+        idx
+    }
 }
 
 struct Call<'a, 'func, 'module_env> {
@@ -1118,6 +1128,68 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
     }
 
+    /// Get the address of the call-indirect cache slot for a given callsite.
+    pub fn call_indirect_cache_slot_addr(
+        &mut self,
+        call_site: CallIndirectSiteIndex,
+        vmctx: ir::Value,
+    ) -> ir::Value {
+        let offset = self.env.offsets.vmctx_call_indirect_cache(call_site);
+        self.builder.ins().iadd_imm(vmctx, i64::from(offset))
+    }
+
+    /// Load the cached index and code pointer for an indirect call.
+    ///
+    /// Generates IR like:
+    ///
+    /// ```ignore
+    /// v1 = load.i64 cache_ptr+0 ;; cached index (cache key)
+    /// v2 = load.i64 cache_ptr+8 ;; cached raw code pointer (cache value)
+    /// ```
+    ///
+    /// and returns `(index, code_ptr)` (e.g. from above, `(v1, v2)`).
+    fn load_cached_indirect_index_and_code_ptr(
+        &mut self,
+        cache_ptr: ir::Value,
+    ) -> (ir::Value, ir::Value) {
+        let cached_index = self.builder.ins().load(
+            I32,
+            MemFlags::trusted(),
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
+        );
+        let cached_code_ptr = self.builder.ins().load(
+            self.env.pointer_type(),
+            MemFlags::trusted(),
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
+        );
+
+        (cached_index, cached_code_ptr)
+    }
+
+    /// Update the indirect-call cache: store a new index and raw code
+    /// pointer in the slot for a given callsite.
+    fn store_cached_indirect_index_and_code_ptr(
+        &mut self,
+        cache_ptr: ir::Value,
+        index: ir::Value,
+        code_ptr: ir::Value,
+    ) {
+        self.builder.ins().store(
+            MemFlags::trusted(),
+            index,
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
+        );
+        self.builder.ins().store(
+            MemFlags::trusted(),
+            code_ptr,
+            cache_ptr,
+            Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
+        );
+    }
+
     /// Do an indirect call through the given funcref table.
     pub fn indirect_call(
         mut self,
@@ -1130,68 +1202,73 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // If we are performing call-indirect caching with this table, check the cache.
         let caching = if self.env.tunables.cache_call_indirects {
             let plan = &self.env.module.table_plans[table_index];
-            // We can do the indireaching optimization only if table
-            // elements will not change (no opcodes exist that could
-            // write the table, and table not exported), and if we can
-            // use the zero-index as a sentinenl for "no cache entry"
-            // (initial zeroed vmctx state).
+            // We can do the indirect call caching optimization only
+            // if table elements will not change (no opcodes exist
+            // that could write the table, and table not exported),
+            // and if we can use the zero-index as a sentinenl for "no
+            // cache entry" (initial zeroed vmctx state).
             !plan.written && !plan.non_null_zero
         } else {
             false
         };
 
         let (code_ptr, callee_vmctx) = if caching {
-            let index = self.env.call_indirect_index;
-            self.env.call_indirect_index += 1;
+            // Get a local copy of `vmctx`.
             let vmctx = self.env.vmctx(self.builder.func);
             let vmctx = self
                 .builder
                 .ins()
                 .global_value(self.env.pointer_type(), vmctx);
-            let offset = self
-                .env
-                .offsets
-                .vmctx_call_indirect_cache(u32::try_from(index).unwrap());
-            let call_indirect_cache_ptr = self.builder.ins().iadd_imm(vmctx, i64::from(offset));
 
-            let cached_index = self.builder.ins().load(
-                I32,
-                MemFlags::trusted(),
-                call_indirect_cache_ptr,
-                Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
-            );
-            let hit = self.builder.ins().icmp(IntCC::Equal, cached_index, callee);
+            // Allocate a cache slot in the vmctx struct and get the
+            // address of this slot.
+            let call_site = self.env.alloc_call_indirect_index();
+            let slot = self.call_indirect_cache_slot_addr(call_site, vmctx);
 
+            // Create the following CFG and generate code with the following outline:
+            //
+            //   (load cached index and code pointer)
+            //   hit = icmp eq (cached index), (callee)
+            //   brif hit, call_block((cached code ptr), vmctx), miss_block
+            //
+            // miss_block:
+            //   (compute actual code pointer, with checks)
+            //   same_instance = icmp eq (callee vmctx), (vmctx)
+            //   brif same_instance update_block, call_block((actual code ptr), (callee vmctx))
+            //
+            // update_block:
+            //   (store actual index and actual code pointer)
+            //   jump call_block((actual code ptr), (callee vmctx))
+            //
+            // call_block(code_ptr, callee_vmctx):
+            //   (unchecked call-indirect sequence)
+
+            // Create two-level conditionals with CFG.
             let current_block = self.builder.current_block().unwrap();
-            let hit_block = self.builder.create_block();
             let miss_block = self.builder.create_block();
-            self.builder.insert_block_after(hit_block, current_block);
-            self.builder.insert_block_after(miss_block, hit_block);
+            let call_block = self.builder.create_block();
+            let update_block = self.builder.create_block();
+
+            self.builder.insert_block_after(miss_block, current_block);
+            self.builder.insert_block_after(update_block, miss_block);
+            self.builder.insert_block_after(call_block, update_block);
             self.builder.set_cold_block(miss_block);
-            let continue_block = self.builder.create_block();
-            self.builder.insert_block_after(continue_block, miss_block);
+            self.builder.set_cold_block(update_block);
 
+            // Load cached values, check for hit, branch to
+            // call block or miss block.
+
+            let (cached_index, cached_code_ptr) =
+                self.load_cached_indirect_index_and_code_ptr(slot);
+            let hit = self.builder.ins().icmp(IntCC::Equal, cached_index, callee);
             self.builder
                 .ins()
-                .brif(hit, hit_block, &[], miss_block, &[]);
+                .brif(hit, call_block, &[cached_code_ptr, vmctx], miss_block, &[]);
 
-            self.builder.seal_block(hit_block);
+            // Miss block: compute actual callee code pointer and
+            // vmctx, and update cache if same-instance.
+
             self.builder.seal_block(miss_block);
-
-            self.builder.switch_to_block(hit_block);
-
-            let cached_code_ptr = self.builder.ins().load(
-                self.env.pointer_type(),
-                MemFlags::trusted(),
-                call_indirect_cache_ptr,
-                Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
-            );
-            let callee_vmctx = vmctx;
-
-            self.builder
-                .ins()
-                .jump(continue_block, &[cached_code_ptr, callee_vmctx]);
-
             self.builder.switch_to_block(miss_block);
 
             if let Some((code_ptr, callee_vmctx)) =
@@ -1200,47 +1277,34 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 // If callee vmctx is equal to ours, update the cache.
                 let same_instance = self.builder.ins().icmp(IntCC::Equal, callee_vmctx, vmctx);
 
-                let update_block = self.builder.create_block();
-                self.builder.insert_block_after(update_block, miss_block);
-                self.builder.set_cold_block(update_block);
                 self.builder.ins().brif(
                     same_instance,
                     update_block,
                     &[],
-                    continue_block,
+                    call_block,
                     &[code_ptr, callee_vmctx],
                 );
 
                 self.builder.seal_block(update_block);
-
                 self.builder.switch_to_block(update_block);
-                self.builder.ins().store(
-                    MemFlags::trusted(),
-                    callee,
-                    call_indirect_cache_ptr,
-                    Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_index()),
-                );
-                self.builder.ins().store(
-                    MemFlags::trusted(),
-                    code_ptr,
-                    call_indirect_cache_ptr,
-                    Offset32::from(self.env.offsets.ptr.vmcall_indirect_cache_wasm_call()),
-                );
 
+                self.store_cached_indirect_index_and_code_ptr(slot, callee, code_ptr);
                 self.builder
                     .ins()
-                    .jump(continue_block, &[code_ptr, callee_vmctx]);
+                    .jump(call_block, &[code_ptr, callee_vmctx]);
             }
 
-            self.builder.seal_block(continue_block);
+            // Call block: do the call.
 
-            self.builder.switch_to_block(continue_block);
+            self.builder.seal_block(call_block);
+            self.builder.switch_to_block(call_block);
+
             let code_ptr = self
                 .builder
-                .append_block_param(continue_block, self.env.pointer_type());
+                .append_block_param(call_block, self.env.pointer_type());
             let callee_vmctx = self
                 .builder
-                .append_block_param(continue_block, self.env.pointer_type());
+                .append_block_param(call_block, self.env.pointer_type());
             (code_ptr, callee_vmctx)
         } else {
             match self.check_and_load_code_and_callee_vmctx(table_index, ty_index, callee, false)? {

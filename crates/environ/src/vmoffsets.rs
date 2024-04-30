@@ -27,8 +27,8 @@
 // }
 
 use crate::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, FuncRefIndex,
-    GlobalIndex, MemoryIndex, Module, TableIndex,
+    CallIndirectSiteIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    FuncRefIndex, GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use wasmtime_types::OwnedMemoryIndex;
@@ -930,23 +930,26 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `VMCallIndirectCache` for the given
     /// call-indirect site.
     #[inline]
-    pub fn vmctx_call_indirect_cache(&self, index: u32) -> u32 {
-        assert!(index < self.num_call_indirect_caches);
+    pub fn vmctx_call_indirect_cache(&self, call_site: CallIndirectSiteIndex) -> u32 {
+        assert!(call_site.as_u32() < self.num_call_indirect_caches);
         self.vmctx_call_indirec_caches_begin()
-            + index * u32::from(self.ptr.size_of_vmcall_indirect_cache())
+            + call_site.as_u32() * u32::from(self.ptr.size_of_vmcall_indirect_cache())
     }
 
-    /// Return the offset to the `wasm_call` field in `*const VMCallIndirectCache` index `index`.
+    /// Return the offset to the `wasm_call` field in `*const
+    /// VMCallIndirectCache` with call-site ID `call_site`.
     #[inline]
-    pub fn vmctx_call_indirect_cache_wasm_call(&self, index: u32) -> u32 {
-        self.vmctx_call_indirect_cache(index)
+    pub fn vmctx_call_indirect_cache_wasm_call(&self, call_site: CallIndirectSiteIndex) -> u32 {
+        self.vmctx_call_indirect_cache(call_site)
             + u32::from(self.ptr.vmcall_indirect_cache_wasm_call())
     }
 
-    /// Return the offset to the `index` field in `*const VMCallIndirectCache` index `index`.
+    /// Return the offset to the `index` field in `*const
+    /// VMCallIndirectCache` with call-site ID `call_site`.
     #[inline]
-    pub fn vmctx_call_indirect_cache_index(&self, index: u32) -> u32 {
-        self.vmctx_call_indirect_cache(index) + u32::from(self.ptr.vmcall_indirect_cache_index())
+    pub fn vmctx_call_indirect_cache_index(&self, call_site: CallIndirectSiteIndex) -> u32 {
+        self.vmctx_call_indirect_cache(call_site)
+            + u32::from(self.ptr.vmcall_indirect_cache_index())
     }
 }
 

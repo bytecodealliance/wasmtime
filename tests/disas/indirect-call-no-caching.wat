@@ -1,5 +1,13 @@
 ;;! target = "x86_64"
 
+;; This test checks that we do *not* get the indirect-call caching optimization
+;; when it is not enabled, because it is off by default.
+;;
+;; The key bit in the expectation below is that the call sequence in
+;; `u0:3` below goes straight to the bounds-check (v5), lazy-table
+;; init (masking of bits with v13), and loading of the funcref fields
+;; in block3, with no caching fastpath.
+
 (module
  (table 10 10 funcref)
 

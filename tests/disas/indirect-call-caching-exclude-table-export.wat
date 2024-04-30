@@ -1,6 +1,10 @@
 ;;! target = "x86_64"
 ;;! flags = [ "-Wcache-call-indirects=y" ]
 
+;; This test checks that we do *not* get the indirect-call caching optimization
+;; when it must not be used: in this case, because the table is exported so
+;; could be mutated (invalidating the cache, which we would not detect).
+
 (module
  (table (export "t") 10 10 funcref)
 

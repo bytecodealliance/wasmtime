@@ -1,6 +1,12 @@
 ;;! target = "x86_64"
 ;;! flags = [ "-Wcache-call-indirects=y" ]
 
+;; This test checks that we get the indirect-call caching optimization
+;; where it should be applicable (immutable table, null 0-index).
+;;
+;; The key bit in the expectation below is the cached-index load (v6),
+;; compare (v7), branch, fastpath in block2/block4.
+
 (module
  (table 10 10 funcref)
 
@@ -70,14 +76,11 @@
 ;; @0050                               v4 = global_value.i64 gv3
 ;; @0050                               v5 = iadd_imm v4, 272
 ;; @0050                               v6 = load.i32 notrap aligned v5+8
-;; @0050                               v7 = icmp eq v6, v2
-;; @0050                               brif v7, block2, block3
+;; @0050                               v7 = load.i64 notrap aligned v5
+;; @0050                               v8 = icmp eq v6, v2
+;; @0050                               brif v8, block3(v7, v4), block2
 ;;
-;;                                 block2:
-;; @0050                               v8 = load.i64 notrap aligned v5
-;; @0050                               jump block4(v8, v4)
-;;
-;;                                 block3 cold:
+;;                                 block2 cold:
 ;; @0050                               v9 = iconst.i32 10
 ;; @0050                               v10 = icmp.i32 uge v2, v9  ; v9 = 10
 ;; @0050                               v11 = uextend.i64 v2
@@ -90,12 +93,12 @@
 ;; @0050                               v18 = band_imm v17, -2
 ;; @0050                               brif v17, block6(v18), block5
 ;;
-;;                                 block7 cold:
+;;                                 block4 cold:
 ;; @0050                               store.i32 notrap aligned v2, v5+8
 ;; @0050                               store.i64 notrap aligned v28, v5
-;; @0050                               jump block4(v28, v29)
+;; @0050                               jump block3(v28, v29)
 ;;
-;;                                 block4(v31: i64, v32: i64):
+;;                                 block3(v31: i64, v32: i64):
 ;; @0050                               v33 = call_indirect sig0, v31(v32, v0)
 ;; @0053                               jump block1(v33)
 ;;
@@ -115,7 +118,7 @@
 ;; @0050                               v28 = load.i64 notrap aligned readonly v19+16
 ;; @0050                               v29 = load.i64 notrap aligned readonly v19+32
 ;; @0050                               v30 = icmp eq v29, v4
-;; @0050                               brif v30, block7, block4(v28, v29)
+;; @0050                               brif v30, block4, block3(v28, v29)
 ;;
 ;;                                 block1(v3: i32):
 ;; @0053                               return v3

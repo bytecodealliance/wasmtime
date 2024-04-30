@@ -951,6 +951,26 @@ impl Config {
     }
 
     /// Configures whether we enable the "indirect call cache" optimization.
+    ///
+    /// This feature adds, for each `call_indirect` instruction in a
+    /// Wasm module (i.e., a function-pointer call in guest code), a
+    /// one-entry cache that speeds up the translation from a table
+    /// index to the actual machine code. By default, the VM's
+    /// implementation of this translation requires several
+    /// indirections and checks (table bounds-check, function
+    /// signature-check, table lazy-initialization logic). The intent
+    /// of this feature is to speed up indirect calls substantially
+    /// when they are repeated frequently in hot code.
+    ///
+    /// While it accelerates repeated calls, this feature has the
+    /// potential to slow down instantiation slightly, because it adds
+    /// additional state (the cache storage -- usually 16 bytes per
+    /// `call_indirect` instruction for each instance) that has to be
+    /// initialized. In practice, we have not seen
+    /// measurable/statistically-significant impact from this, though.
+    ///
+    /// Until we have further experience with this feature, it will
+    /// remain off: it is `false` by default.
     pub fn cache_call_indirects(&mut self, enable: bool) -> &mut Self {
         self.tunables.cache_call_indirects = Some(enable);
         self

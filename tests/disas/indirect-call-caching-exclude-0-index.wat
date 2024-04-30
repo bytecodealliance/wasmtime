@@ -1,6 +1,11 @@
 ;;! target = "x86_64"
 ;;! flags = [ "-Wcache-call-indirects=y" ]
 
+;; This test checks that we do *not* get the indirect-call caching optimization
+;; when it must not be used: in this case, because there is a non-null element
+;; at index 0 in the table (`0` is the default value for vmctx struct initialization
+;; and so is our "not yet cached" sentinel).
+
 (module
  (table 10 10 funcref)
 

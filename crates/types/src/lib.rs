@@ -924,6 +924,12 @@ entity_impl!(ModuleInternedTypeIndex);
 pub struct VMSharedTypeIndex(u32);
 entity_impl!(VMSharedTypeIndex);
 
+/// Index of a `call_indirect` instruction in a module, used for
+/// caching that callsite's target in the VMContext.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct CallIndirectSiteIndex(u32);
+entity_impl!(CallIndirectSiteIndex);
+
 impl VMSharedTypeIndex {
     /// Create a new `VMSharedTypeIndex`.
     #[inline]

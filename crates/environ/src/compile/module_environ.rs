@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
+use wasmparser::OperatorsReader;
 use wasmparser::{
     types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeRef,
@@ -577,26 +578,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             params: sig.params().into(),
                         });
                 }
-                if self.tunables.cache_call_indirects {
-                    for op in body.get_operators_reader()? {
-                        let op = op?;
-                        match op {
-                            Operator::TableSet { table }
-                            | Operator::TableFill { table }
-                            | Operator::TableInit { table, .. }
-                            | Operator::TableCopy {
-                                dst_table: table, ..
-                            } => {
-                                self.flag_written_table(TableIndex::from_u32(table));
-                            }
-                            Operator::CallIndirect { .. } => {
-                                self.result.module.num_call_indirect_caches += 1;
-                            }
-
-                            _ => {}
-                        }
-                    }
-                }
+                self.prescan_code_section(body.get_operators_reader()?)?;
                 body.allow_memarg64(self.validator.features().contains(WasmFeatures::MEMORY64));
                 self.result.function_body_inputs.push(FunctionBodyData {
                     validator,
@@ -729,6 +711,30 @@ and for re-adding support for interface types you can see this issue:
             other => {
                 self.validator.payload(&other)?;
                 panic!("unimplemented section in wasm file {:?}", other);
+            }
+        }
+        Ok(())
+    }
+
+    fn prescan_code_section(&mut self, reader: OperatorsReader<'data>) -> Result<()> {
+        if self.tunables.cache_call_indirects {
+            for op in reader {
+                let op = op?;
+                match op {
+                    Operator::TableSet { table }
+                    | Operator::TableFill { table }
+                    | Operator::TableInit { table, .. }
+                    | Operator::TableCopy {
+                        dst_table: table, ..
+                    } => {
+                        self.flag_written_table(TableIndex::from_u32(table));
+                    }
+                    Operator::CallIndirect { .. } => {
+                        self.result.module.num_call_indirect_caches += 1;
+                    }
+
+                    _ => {}
+                }
             }
         }
         Ok(())
