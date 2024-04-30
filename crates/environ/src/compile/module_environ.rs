@@ -716,11 +716,32 @@ and for re-adding support for interface types you can see this issue:
         Ok(())
     }
 
+    /// Check various properties in function bodies in a "pre-pass" as
+    /// needed, before we actually generate code. Currently this is
+    /// used for:
+    ///
+    /// - Call-indirect caching: we need to know whether a table is
+    ///   "immutable", i.e., there are opcodes that could update its
+    ///   entries. If this is the case then the optimization isn't
+    ///   applicable. We can check this by simply scanning all functions
+    ///   for the relevant opcodes.
+    ///
+    ///   We also need to know how many `call_indirect` opcodes are in
+    ///   the whole module so that we know how large a `vmctx` struct
+    ///   to reserve and what its layout will be; and the starting
+    ///   index in this count for each function, so we can generate
+    ///   its code (with accesses to its own `call_indirect` callsite
+    ///   caches) in parallel.
     fn prescan_code_section(&mut self, reader: OperatorsReader<'data>) -> Result<()> {
         if self.tunables.cache_call_indirects {
             for op in reader {
                 let op = op?;
                 match op {
+                    // Check whether a table may be mutated by any
+                    // opcode. (Note that we separately check for
+                    // table exports so we can detect mutations from
+                    // the outside; here we are only concerned with
+                    // mutations by our own module's code.)
                     Operator::TableSet { table }
                     | Operator::TableFill { table }
                     | Operator::TableInit { table, .. }
@@ -729,6 +750,8 @@ and for re-adding support for interface types you can see this issue:
                     } => {
                         self.flag_written_table(TableIndex::from_u32(table));
                     }
+                    // Count the `call_indirect` sites so we can
+                    // assign them unique slots (see above).
                     Operator::CallIndirect { .. } => {
                         self.result.module.num_call_indirect_caches += 1;
                     }
