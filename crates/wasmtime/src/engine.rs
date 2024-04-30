@@ -322,6 +322,7 @@ impl Engine {
             "enable_heap_access_spectre_mitigation"
             | "enable_table_access_spectre_mitigation"
             | "enable_nan_canonicalization"
+            | "ensure_precise_store_traps"
             | "enable_jump_tables"
             | "enable_float"
             | "enable_verifier"

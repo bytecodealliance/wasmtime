@@ -20,6 +20,7 @@ use crate::legalizer::simple_legalize;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
+use crate::precise_store_traps::do_precise_store_traps;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
@@ -177,6 +178,9 @@ impl Context {
         if isa.flags().enable_nan_canonicalization() {
             self.canonicalize_nans(isa)?;
         }
+        if isa.flags().ensure_precise_store_traps() {
+            self.ensure_precise_store_traps(isa)?;
+        }
 
         self.legalize(isa)?;
 
@@ -292,6 +296,13 @@ impl Context {
             _ => true,
         };
         do_nan_canonicalization(&mut self.func, has_vector_support);
+        self.verify_if(isa)
+    }
+
+    /// Translate all stores to load-then-store pairs to ensure
+    /// precise traps on store-tearing hardware.
+    pub fn ensure_precise_store_traps(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        do_precise_store_traps(&mut self.func);
         self.verify_if(isa)
     }
 

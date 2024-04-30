@@ -524,6 +524,7 @@ is_pic = false
 use_colocated_libcalls = false
 enable_float = true
 enable_nan_canonicalization = false
+ensure_precise_store_traps = false
 enable_pinned_reg = false
 enable_atomics = true
 enable_safepoints = false

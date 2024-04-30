@@ -76,6 +76,7 @@ mod iterators;
 mod legalizer;
 mod nan_canonicalization;
 mod opts;
+mod precise_store_traps;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
