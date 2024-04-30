@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     // on much. Wasmtime build in a "minimal platform" mode is allowed to
     // depend on some standard C symbols such as `memcpy` but any OS-related
     // symbol must be prefixed by `wasmtime_*` and be documented in
-    // `crates/runtime/src/sys/custom/capi.rs`.
+    // `crates/wasmtime/src/runtime/vm/sys/custom/capi.rs`.
     //
     // This is effectively a double-check of the above assesrtion and showing
     // how running `libembedding.so` in this case requires only minimal

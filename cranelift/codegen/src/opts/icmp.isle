@@ -14,15 +14,33 @@
 (rule (simplify (sle (ty_int ty) x x)) (subsume (iconst_u ty 1)))
 
 ;; Optimize icmp-of-icmp.
+;; ne(icmp(ty, cc, x, y), 0) == icmp(ty, cc, x, y)
+;; e.g. neq(ugt(x, y), 0) == ugt(x, y) 
 (rule (simplify (ne ty
                       (uextend_maybe _ inner @ (icmp ty _ _ _))
                       (iconst_u _ 0)))
       (subsume inner))
 
+;; eq(icmp(ty, cc, x, y), 0) == icmp(ty, cc_complement, x, y)
+;; e.g. eq(ugt(x, y), 0) == ule(x, y) 
 (rule (simplify (eq ty
                       (uextend_maybe _ (icmp ty cc x y))
                       (iconst_u _ 0)))
       (subsume (icmp ty (intcc_complement cc) x y)))
+
+;; ne(icmp(ty, cc, x, y), 1) == icmp(ty, cc_complement, x, y)
+;; e.g. ne(ugt(x, y), 1) == ule(x, y)
+(rule (simplify (ne ty
+                      (uextend_maybe _ (icmp ty cc x y))
+                      (iconst_u _ 1)))
+      (subsume (icmp ty (intcc_complement cc) x y)))
+
+;; eq(icmp(ty, cc, x, y), 1) == icmp(ty, cc, x, y)
+;; e.g. eq(ugt(x, y), 1) == ugt(x, y)
+(rule (simplify (eq ty
+                      (uextend_maybe _ inner @ (icmp _ _ _ _))
+                      (iconst_u _ 1)))
+      (subsume inner))
 
 ;; Optimize select-of-uextend-of-icmp to select-of-icmp, because
 ;; select can take an I8 condition too.

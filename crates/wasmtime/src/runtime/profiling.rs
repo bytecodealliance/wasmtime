@@ -1,3 +1,4 @@
+use crate::runtime::vm::Backtrace;
 use crate::{instantiate::CompiledModule, AsContext, Module};
 #[allow(unused_imports)]
 use anyhow::bail;
@@ -11,7 +12,6 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wasmtime_environ::demangle_function_name_or_index;
-use wasmtime_runtime::Backtrace;
 
 // TODO: collect more data
 // - Provide additional hooks for recording host-guest transitions, to be

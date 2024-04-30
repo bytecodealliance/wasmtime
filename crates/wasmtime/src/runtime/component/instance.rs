@@ -3,6 +3,8 @@ use crate::component::matching::InstanceType;
 use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
+use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
+use crate::runtime::vm::VMFuncRef;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
@@ -12,8 +14,6 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
-use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
-use wasmtime_runtime::VMFuncRef;
 
 /// An instantiated component.
 ///
@@ -153,16 +153,16 @@ impl Instance {
 }
 
 impl InstanceData {
-    pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
+    pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> crate::runtime::vm::Export {
         match def {
             CoreDef::Export(e) => self.lookup_export(store, e),
             CoreDef::Trampoline(idx) => {
-                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                crate::runtime::vm::Export::Function(crate::runtime::vm::ExportFunction {
                     func_ref: self.state.trampoline_func_ref(*idx),
                 })
             }
             CoreDef::InstanceFlags(idx) => {
-                wasmtime_runtime::Export::Global(wasmtime_runtime::ExportGlobal {
+                crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
                     vmctx: std::ptr::null_mut(),
                     global: Global {
@@ -178,7 +178,7 @@ impl InstanceData {
         &self,
         store: &mut StoreOpaque,
         item: &CoreExport<T>,
-    ) -> wasmtime_runtime::Export
+    ) -> crate::runtime::vm::Export
     where
         T: Copy + Into<EntityIndex>,
     {
@@ -410,7 +410,7 @@ impl<'a> Instantiator<'a> {
             .as_ref()
             .map(|dtor| self.data.lookup_def(store, dtor));
         let dtor = dtor.map(|export| match export {
-            wasmtime_runtime::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         });
         let index = self
@@ -425,7 +425,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
         let mem = match self.data.lookup_export(store, &memory.export) {
-            wasmtime_runtime::Export::Memory(m) => m,
+            crate::runtime::vm::Export::Memory(m) => m,
             _ => unreachable!(),
         };
         self.data
@@ -435,7 +435,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
         let func_ref = match self.data.lookup_def(store, &realloc.def) {
-            wasmtime_runtime::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
         self.data.state.set_runtime_realloc(realloc.index, func_ref);
@@ -443,7 +443,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
         let func_ref = match self.data.lookup_def(store, &post_return.def) {
-            wasmtime_runtime::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
         self.data
@@ -500,7 +500,7 @@ impl<'a> Instantiator<'a> {
         // here. This can otherwise fail `Extern::from_wasmtime_export` because
         // there's no guarantee that there exists a trampoline for `f` so this
         // can't fall through to the case below
-        if let wasmtime_runtime::Export::Function(f) = &export {
+        if let crate::runtime::vm::Export::Function(f) = &export {
             let expected = match expected.unwrap_func() {
                 EngineOrModuleTypeIndex::Engine(e) => Some(e),
                 EngineOrModuleTypeIndex::Module(m) => module.signatures().shared_type(m),

@@ -17,23 +17,23 @@ use crate::memory::MemoryCreator;
 #[cfg(feature = "runtime")]
 use crate::profiling_agent::{self, ProfilingAgent};
 #[cfg(feature = "runtime")]
-use crate::trampoline::MemoryCreatorProxy;
-#[cfg(feature = "runtime")]
-use wasmtime_runtime::{
+use crate::runtime::vm::{
     GcRuntime, InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator,
 };
+#[cfg(feature = "runtime")]
+use crate::trampoline::MemoryCreatorProxy;
 
 #[cfg(feature = "async")]
 use crate::stack::{StackCreator, StackCreatorProxy};
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
+#[cfg(feature = "pooling-allocator")]
+use crate::runtime::vm::mpk;
+#[cfg(feature = "pooling-allocator")]
+pub use crate::runtime::vm::MpkEnabled;
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
-#[cfg(feature = "pooling-allocator")]
-use wasmtime_runtime::mpk;
-#[cfg(feature = "pooling-allocator")]
-pub use wasmtime_runtime::MpkEnabled;
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -1826,7 +1826,7 @@ impl Config {
             InstanceAllocationStrategy::Pooling(config) => {
                 let mut config = config.config;
                 config.stack_size = stack_size;
-                Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(
+                Ok(Box::new(crate::runtime::vm::PoolingInstanceAllocator::new(
                     &config, tunables,
                 )?))
             }
@@ -1835,7 +1835,7 @@ impl Config {
 
     #[cfg(feature = "runtime")]
     pub(crate) fn build_gc_runtime(&self) -> Result<Arc<dyn GcRuntime>> {
-        Ok(Arc::new(wasmtime_runtime::default_gc_runtime()) as Arc<dyn GcRuntime>)
+        Ok(Arc::new(crate::runtime::vm::default_gc_runtime()) as Arc<dyn GcRuntime>)
     }
 
     #[cfg(feature = "runtime")]
@@ -2027,7 +2027,7 @@ fn round_up_to_pages(val: u64) -> u64 {
 
 #[cfg(feature = "runtime")]
 fn round_up_to_pages(val: u64) -> u64 {
-    let page_size = wasmtime_runtime::page_size() as u64;
+    let page_size = crate::runtime::vm::page_size() as u64;
     debug_assert!(page_size.is_power_of_two());
     val.checked_add(page_size - 1)
         .map(|val| val & !(page_size - 1))
@@ -2264,7 +2264,7 @@ pub enum WasmBacktraceDetails {
 #[cfg(feature = "pooling-allocator")]
 #[derive(Debug, Clone, Default)]
 pub struct PoolingAllocationConfig {
-    config: wasmtime_runtime::PoolingInstanceAllocatorConfig,
+    config: crate::runtime::vm::PoolingInstanceAllocatorConfig,
 }
 
 #[cfg(feature = "pooling-allocator")]

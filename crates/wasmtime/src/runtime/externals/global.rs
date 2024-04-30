@@ -1,3 +1,4 @@
+use crate::runtime::vm::{GcRootsList, SendSyncPtr};
 use crate::{
     store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
     trampoline::generate_global_export,
@@ -8,7 +9,6 @@ use anyhow::{bail, Context, Result};
 use std::ptr;
 use std::ptr::NonNull;
 use wasmtime_environ::TypeTrace;
-use wasmtime_runtime::{GcRootsList, SendSyncPtr};
 
 /// A WebAssembly `global` value which can be read and written to.
 ///
@@ -24,7 +24,7 @@ use wasmtime_runtime::{GcRootsList, SendSyncPtr};
 /// methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
-pub struct Global(pub(super) Stored<wasmtime_runtime::ExportGlobal>);
+pub struct Global(pub(super) Stored<crate::runtime::vm::ExportGlobal>);
 
 impl Global {
     /// Creates a new WebAssembly `global` value with the provide type `ty` and
@@ -226,14 +226,14 @@ impl Global {
     }
 
     pub(crate) unsafe fn from_wasmtime_global(
-        mut wasmtime_export: wasmtime_runtime::ExportGlobal,
+        mut wasmtime_export: crate::runtime::vm::ExportGlobal,
         store: &mut StoreOpaque,
     ) -> Global {
         wasmtime_export
             .global
             .wasm_ty
             .canonicalize_for_runtime_usage(&mut |module_index| {
-                wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
+                crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
                     instance.engine_type_index(module_index)
                 })
             });
@@ -245,8 +245,8 @@ impl Global {
         &data[self.0].global
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMGlobalImport {
-        wasmtime_runtime::VMGlobalImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMGlobalImport {
+        crate::runtime::vm::VMGlobalImport {
             from: store[self.0].definition,
         }
     }

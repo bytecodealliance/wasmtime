@@ -1,6 +1,8 @@
 use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower};
+use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTables};
+use crate::runtime::vm::{SendSyncPtr, VMFuncRef, ValRaw};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{AsContextMut, StoreContextMut, Trap};
 use anyhow::{bail, ensure, Result};
@@ -14,8 +16,6 @@ use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType, ResourceIndex,
     TypeResourceTableIndex,
 };
-use wasmtime_runtime::component::{ComponentInstance, InstanceFlags, ResourceTables};
-use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
 
 /// Representation of a resource type in the component model.
 ///

@@ -125,3 +125,48 @@ block0(v0: i8):
 ;     return v4
 ; }
 
+function %eq_one_of_icmp(i8) -> i8 fast {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %eq_one_of_icmp(i8) -> i8 fast {
+; block0(v0: i8):
+;     v1 = iconst.i8 5
+;     v2 = icmp eq v0, v1  ; v1 = 5
+;     return v2
+; }
+
+function %ne_one_of_icmp(i8) -> i8 fast {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %ne_one_of_icmp(i8) -> i8 fast {
+; block0(v0: i8):
+;     v1 = iconst.i8 5
+;     v5 = icmp ne v0, v1  ; v1 = 5
+;     return v5
+; }
+
+function %negate_lt(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+    v2 = icmp ult v0, v1
+    v3 = iconst.i8 1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %negate_lt(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp uge v0, v1
+;     return v5
+; }

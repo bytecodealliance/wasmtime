@@ -1,7 +1,7 @@
+use crate::runtime::vm::{StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
 use std::ptr;
-use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
 #[repr(C)]
 pub struct VMHostGlobalContext {
@@ -13,7 +13,7 @@ pub fn generate_global_export(
     store: &mut StoreOpaque,
     ty: GlobalType,
     val: Val,
-) -> Result<wasmtime_runtime::ExportGlobal> {
+) -> Result<crate::runtime::vm::ExportGlobal> {
     let global = wasmtime_environ::Global {
         wasm_ty: ty.content().to_wasm_type(),
         mutability: match ty.mutability() {
@@ -60,7 +60,7 @@ pub fn generate_global_export(
     };
 
     store.host_globals().push(ctx);
-    Ok(wasmtime_runtime::ExportGlobal {
+    Ok(crate::runtime::vm::ExportGlobal {
         definition,
         vmctx: std::ptr::null_mut(),
         global,

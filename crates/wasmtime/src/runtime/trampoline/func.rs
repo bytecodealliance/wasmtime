@@ -1,12 +1,12 @@
 //! Support for a calling of an imported function.
 
+use crate::runtime::vm::{
+    StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
+};
 use crate::type_registry::RegisteredType;
 use crate::{code_memory::CodeMemory, Engine, FuncType, ValRaw};
 use anyhow::Result;
 use std::ptr::NonNull;
-use wasmtime_runtime::{
-    StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
-};
 
 struct TrampolineState<F> {
     func: F,
@@ -46,7 +46,7 @@ unsafe extern "C" fn array_call_shim<F>(
     // below will trigger a longjmp, which won't run local destructors if we
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
-    let result = wasmtime_runtime::catch_unwind_and_longjmp(|| {
+    let result = crate::runtime::vm::catch_unwind_and_longjmp(|| {
         let vmctx = VMArrayCallHostFuncContext::from_opaque(vmctx);
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also

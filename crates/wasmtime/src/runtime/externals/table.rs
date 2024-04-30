@@ -1,12 +1,12 @@
 use std::ptr::NonNull;
 
+use crate::runtime::vm::{self as runtime};
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_table_export;
 use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
 use anyhow::{anyhow, bail, Context, Result};
 use runtime::{GcRootsList, SendSyncPtr};
 use wasmtime_environ::TypeTrace;
-use wasmtime_runtime::{self as runtime};
 
 /// A WebAssembly `table`, or an array of values.
 ///
@@ -23,7 +23,7 @@ use wasmtime_runtime::{self as runtime};
 /// methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
-pub struct Table(pub(super) Stored<wasmtime_runtime::ExportTable>);
+pub struct Table(pub(super) Stored<crate::runtime::vm::ExportTable>);
 
 impl Table {
     /// Creates a new [`Table`] with the given parameters.
@@ -138,7 +138,7 @@ impl Table {
     ) -> *mut runtime::Table {
         unsafe {
             let export = &store[self.0];
-            wasmtime_runtime::Instance::from_vmctx(export.vmctx, |handle| {
+            crate::runtime::vm::Instance::from_vmctx(export.vmctx, |handle| {
                 let idx = handle.table_index(&*export.definition);
                 handle.get_defined_table_with_lazy_init(idx, lazy_init_range)
             })
@@ -388,7 +388,7 @@ impl Table {
     }
 
     pub(crate) unsafe fn from_wasmtime_table(
-        mut wasmtime_export: wasmtime_runtime::ExportTable,
+        mut wasmtime_export: crate::runtime::vm::ExportTable,
         store: &mut StoreOpaque,
     ) -> Table {
         // Ensure that the table's type is engine-level canonicalized.
@@ -397,7 +397,7 @@ impl Table {
             .table
             .wasm_ty
             .canonicalize_for_runtime_usage(&mut |module_index| {
-                wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
+                crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
                     instance.engine_type_index(module_index)
                 })
             });
@@ -409,9 +409,9 @@ impl Table {
         &data[self.0].table.table
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMTableImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTableImport {
         let export = &store[self.0];
-        wasmtime_runtime::VMTableImport {
+        crate::runtime::vm::VMTableImport {
             from: export.definition,
             vmctx: export.vmctx,
         }

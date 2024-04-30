@@ -1,4 +1,8 @@
 use crate::linker::{Definition, DefinitionType};
+use crate::runtime::vm::{
+    Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext, VMTableImport,
+};
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
@@ -12,10 +16,6 @@ use std::sync::Arc;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::{
     EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TypeTrace,
-};
-use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
-    VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -703,9 +703,9 @@ impl OwnedImports {
     /// Note that this is unsafe as the validity of `item` is not verified and
     /// it contains a bunch of raw pointers.
     #[cfg(feature = "component-model")]
-    pub(crate) unsafe fn push_export(&mut self, item: &wasmtime_runtime::Export) {
+    pub(crate) unsafe fn push_export(&mut self, item: &crate::runtime::vm::Export) {
         match item {
-            wasmtime_runtime::Export::Function(f) => {
+            crate::runtime::vm::Export::Function(f) => {
                 let f = f.func_ref.as_ref();
                 self.functions.push(VMFunctionImport {
                     wasm_call: f.wasm_call.unwrap(),
@@ -714,16 +714,16 @@ impl OwnedImports {
                     vmctx: f.vmctx,
                 });
             }
-            wasmtime_runtime::Export::Global(g) => {
+            crate::runtime::vm::Export::Global(g) => {
                 self.globals.push(VMGlobalImport { from: g.definition });
             }
-            wasmtime_runtime::Export::Table(t) => {
+            crate::runtime::vm::Export::Table(t) => {
                 self.tables.push(VMTableImport {
                     from: t.definition,
                     vmctx: t.vmctx,
                 });
             }
-            wasmtime_runtime::Export::Memory(m) => {
+            crate::runtime::vm::Export::Memory(m) => {
                 self.memories.push(VMMemoryImport {
                     from: m.definition,
                     vmctx: m.vmctx,

@@ -102,6 +102,7 @@
 //! can. However, if you really must, consider also using an `AutoAssertNoGc`
 //! across the block of code that is manipulating raw GC references.
 
+use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
 use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
@@ -113,7 +114,6 @@ use std::{
     hash::Hash,
     ops::{Deref, DerefMut},
 };
-use wasmtime_runtime::{GcRootsList, GcStore, VMGcRef};
 use wasmtime_slab::{Id as SlabId, Slab};
 
 mod sealed {

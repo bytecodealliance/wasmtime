@@ -4,11 +4,11 @@
 //! in order to get doc comments with example code that shows the use of `I31`
 //! with typed functions and such, we need to wrap it in a newtype.
 
+use crate::runtime::vm::{VMGcRef, ValRaw};
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     HeapType, RefType, Result, ValType, WasmTy,
 };
-use wasmtime_runtime::{VMGcRef, ValRaw};
 
 /// A 31-bit integer.
 ///
@@ -74,7 +74,7 @@ use wasmtime_runtime::{VMGcRef, ValRaw};
 /// # }
 /// ```
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct I31(wasmtime_runtime::I31);
+pub struct I31(crate::runtime::vm::I31);
 
 impl std::fmt::Debug for I31 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -85,14 +85,14 @@ impl std::fmt::Debug for I31 {
     }
 }
 
-impl From<wasmtime_runtime::I31> for I31 {
+impl From<crate::runtime::vm::I31> for I31 {
     #[inline]
-    fn from(value: wasmtime_runtime::I31) -> Self {
+    fn from(value: crate::runtime::vm::I31) -> Self {
         Self(value)
     }
 }
 
-impl From<I31> for wasmtime_runtime::I31 {
+impl From<I31> for crate::runtime::vm::I31 {
     #[inline]
     fn from(value: I31) -> Self {
         value.0
@@ -100,8 +100,8 @@ impl From<I31> for wasmtime_runtime::I31 {
 }
 
 impl I31 {
-    /// Get this `wasmtime::I31`'s internal `wasmtime_runtime::I31`.
-    pub(crate) fn runtime_i31(self) -> wasmtime_runtime::I31 {
+    /// Get this `wasmtime::I31`'s internal `crate::runtime::vm::I31`.
+    pub(crate) fn runtime_i31(self) -> crate::runtime::vm::I31 {
         self.0
     }
 
@@ -122,7 +122,7 @@ impl I31 {
     /// ```
     #[inline]
     pub fn new_u32(value: u32) -> Option<Self> {
-        wasmtime_runtime::I31::new_u32(value).map(Self)
+        crate::runtime::vm::I31::new_u32(value).map(Self)
     }
 
     /// Construct a new `I31` from the given signed value.
@@ -142,7 +142,7 @@ impl I31 {
     /// ```
     #[inline]
     pub fn new_i32(value: i32) -> Option<Self> {
-        wasmtime_runtime::I31::new_i32(value).map(Self)
+        crate::runtime::vm::I31::new_i32(value).map(Self)
     }
 
     /// Construct a new `I31` from the given unsigned value.
@@ -164,7 +164,7 @@ impl I31 {
     /// ```
     #[inline]
     pub fn wrapping_u32(value: u32) -> Self {
-        Self(wasmtime_runtime::I31::wrapping_u32(value))
+        Self(crate::runtime::vm::I31::wrapping_u32(value))
     }
 
     /// Construct a new `I31` from the given signed value.
@@ -186,7 +186,7 @@ impl I31 {
     /// ```
     #[inline]
     pub fn wrapping_i32(value: i32) -> Self {
-        Self(wasmtime_runtime::I31::wrapping_i32(value))
+        Self(crate::runtime::vm::I31::wrapping_i32(value))
     }
 
     /// Get this `I31`'s value as an unsigned integer.

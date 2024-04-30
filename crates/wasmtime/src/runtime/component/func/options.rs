@@ -1,16 +1,16 @@
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::ResourceType;
+use crate::runtime::vm::component::{
+    CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
+};
+use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{FuncType, StoreContextMut};
 use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
-use wasmtime_runtime::component::{
-    CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
-};
-use wasmtime_runtime::{VMFuncRef, VMMemoryDefinition};
 
 /// Runtime representation of canonical ABI options in the component model.
 ///

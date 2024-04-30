@@ -1,3 +1,4 @@
+use crate::runtime::vm::{RuntimeLinearMemory, VMMemoryImport};
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
 use crate::Trap;
@@ -8,9 +9,8 @@ use std::ops::Range;
 use std::slice;
 use std::time::Instant;
 use wasmtime_environ::MemoryPlan;
-use wasmtime_runtime::{RuntimeLinearMemory, VMMemoryImport};
 
-pub use wasmtime_runtime::WaitResult;
+pub use crate::runtime::vm::WaitResult;
 
 /// Error for out of bounds [`Memory`] access.
 #[derive(Debug)]
@@ -201,7 +201,7 @@ impl std::error::Error for MemoryAccessError {}
 /// be provided.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
-pub struct Memory(Stored<wasmtime_runtime::ExportMemory>);
+pub struct Memory(Stored<crate::runtime::vm::ExportMemory>);
 
 impl Memory {
     /// Creates a new WebAssembly memory given the configuration of `ty`.
@@ -544,17 +544,17 @@ impl Memory {
         store.on_fiber(|store| self.grow(store, delta)).await?
     }
 
-    fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut wasmtime_runtime::Memory {
+    fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut crate::runtime::vm::Memory {
         unsafe {
             let export = &store[self.0];
-            wasmtime_runtime::Instance::from_vmctx(export.vmctx, |handle| {
+            crate::runtime::vm::Instance::from_vmctx(export.vmctx, |handle| {
                 handle.get_defined_memory(export.index)
             })
         }
     }
 
     pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: wasmtime_runtime::ExportMemory,
+        wasmtime_export: crate::runtime::vm::ExportMemory,
         store: &mut StoreOpaque,
     ) -> Memory {
         Memory(store.store_data_mut().insert(wasmtime_export))
@@ -564,9 +564,9 @@ impl Memory {
         &store[self.0].memory.memory
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
         let export = &store[self.0];
-        wasmtime_runtime::VMMemoryImport {
+        crate::runtime::vm::VMMemoryImport {
             from: export.definition,
             vmctx: export.vmctx,
             index: export.index,
@@ -719,7 +719,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// # }
 /// ```
 #[derive(Clone)]
-pub struct SharedMemory(wasmtime_runtime::SharedMemory, Engine);
+pub struct SharedMemory(crate::runtime::vm::SharedMemory, Engine);
 
 impl SharedMemory {
     /// Construct a [`SharedMemory`] by providing both the `minimum` and
@@ -735,7 +735,7 @@ impl SharedMemory {
 
         let tunables = engine.tunables();
         let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
-        let memory = wasmtime_runtime::SharedMemory::new(plan)?;
+        let memory = crate::runtime::vm::SharedMemory::new(plan)?;
         Ok(Self(memory, engine.clone()))
     }
 
@@ -902,7 +902,7 @@ impl SharedMemory {
 
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
-    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
+    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
         let export_memory = generate_memory_export(store, &self.ty(), Some(&self.0)).unwrap();
         VMMemoryImport {
             from: export_memory.definition,
@@ -915,10 +915,10 @@ impl SharedMemory {
     /// function is available to handle the case in which a Wasm module exports
     /// shared memory and the user wants host-side access to it.
     pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: wasmtime_runtime::ExportMemory,
+        wasmtime_export: crate::runtime::vm::ExportMemory,
         store: &mut StoreOpaque,
     ) -> Self {
-        wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
+        crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
             let memory = handle
                 .get_defined_memory(wasmtime_export.index)
                 .as_mut()

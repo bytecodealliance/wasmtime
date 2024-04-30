@@ -2,6 +2,10 @@ use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
+use crate::runtime::vm::component::{
+    InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
+};
+use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
 use std::any::Any;
@@ -12,10 +16,6 @@ use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, StringEncoding, TypeFuncIndex, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS,
 };
-use wasmtime_runtime::component::{
-    InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
-};
-use wasmtime_runtime::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
 
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
@@ -290,7 +290,7 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 }
 
 unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
-    match wasmtime_runtime::catch_unwind_and_longjmp(func) {
+    match crate::runtime::vm::catch_unwind_and_longjmp(func) {
         Ok(()) => {}
         Err(e) => crate::trap::raise(e),
     }

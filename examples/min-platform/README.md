@@ -20,9 +20,10 @@ The example is organized into a few locations:
   customized and these files are only examples.
 
 * `examples/min-platform/embedding/wasmtime-platform.{h,c}` - an example
-  implementation of the platform dependencies that Wasmtime requires. This
-  is defined and documented in `crates/runtime/src/sys/custom/capi.rs`. The
-  example here implements the required functions with Linux syscalls.
+  implementation of the platform dependencies that Wasmtime requires. This is
+  defined and documented in
+  `crates/wasmtime/src/runtime/vm/sys/custom/capi.rs`. The example here
+  implements the required functions with Linux syscalls.
 
 * `examples/min-platform/{Cargo.toml,src}` - an example "host embedding" which
   loads and runs the `embedding` from above. This is a bit contrived and mostly

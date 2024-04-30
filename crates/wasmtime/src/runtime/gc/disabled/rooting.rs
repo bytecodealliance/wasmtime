@@ -1,3 +1,4 @@
+use crate::runtime::vm::{GcStore, VMExternRef, VMGcRef};
 use crate::{
     runtime::Uninhabited,
     store::{AutoAssertNoGc, StoreOpaque},
@@ -8,7 +9,6 @@ use std::ffi::c_void;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::Deref;
-use wasmtime_runtime::{GcStore, VMExternRef, VMGcRef};
 
 mod sealed {
     use super::*;

@@ -1,0 +1,56 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target x86_64
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+
+function %eq_eq_zero(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; run: %eq_eq_zero(5) == 0
+; run: %eq_eq_zero(3) == 1
+
+function %ne_eq_one(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; run: %ne_eq_one(5) == 0
+; run: %ne_eq_one(3) == 1
+
+function %ne_eq_zero(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; run: %ne_eq_zero(5) == 1
+; run: %ne_eq_zero(3) == 0
+
+function %eq_eq_one(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; run: %eq_eq_one(5) == 1
+; run: %eq_eq_one(3) == 0

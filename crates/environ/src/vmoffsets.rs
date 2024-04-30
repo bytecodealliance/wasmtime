@@ -1,5 +1,5 @@
-//! Offsets and sizes of various structs in wasmtime-runtime's vmcontext
-//! module.
+//! Offsets and sizes of various structs in `wasmtime::runtime::vm::*` that are
+//! accessed directly by compiled Wasm code.
 
 // Currently the `VMContext` allocation by field looks like this:
 //

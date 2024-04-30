@@ -133,9 +133,6 @@ audit-as-crates-io = true
 [policy.wasmtime-jit-icache-coherence]
 audit-as-crates-io = true
 
-[policy.wasmtime-runtime]
-audit-as-crates-io = true
-
 [policy.wasmtime-slab]
 audit-as-crates-io = true
 

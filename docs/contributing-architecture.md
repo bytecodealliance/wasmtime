@@ -63,7 +63,7 @@ their implications in Wasmtime:
   other. A `Store` cannot be used simultaneously from multiple threads (almost
   all operations require `&mut self`).
 
-* `wasmtime_runtime::InstanceHandle` - this is the low-level representation of a
+* `wasmtime::runtime::vm::InstanceHandle` - this is the low-level representation of a
   WebAssembly instance. At the same time this is also used as the representation
   for all host-defined objects. For example if you call `wasmtime::Memory::new`
   it'll create an `InstanceHandle` under the hood. This is a very `unsafe` type
@@ -82,13 +82,13 @@ their implications in Wasmtime:
   `wasmtime::Table::new`), but for an instantiated WebAssembly module these
   fields will have more information. After an `InstanceHandle` in memory is a
   `VMContext`, which will be discussed next. `InstanceHandle` values are the
-  main internal runtime representation and what the `wasmtime_runtime` crate
+  main internal runtime representation and what the `crate::runtime::vm` code
   works with. The `wasmtime::Store` holds onto all these `InstanceHandle` values
   and deallocates them at the appropriate time. From the runtime perspective it
   simplifies things so the graph of wasm modules communicating to each other is
   reduced to simply `InstanceHandle` values all talking to themselves.
 
-* `wasmtime_runtime::VMContext` - this is a raw pointer, within an allocation of
+* `crate::runtime::vm::VMContext` - this is a raw pointer, within an allocation of
   an `InstanceHandle`, that is passed around in JIT code. A `VMContext` does not
   have a structure defined in Rust (it's a 0-sized structure) because its
   contents are dynamically determined based on the `VMOffsets`, or the source
@@ -111,7 +111,7 @@ their implications in Wasmtime:
     stack overflow.
   * Hold a pointer to a `VMExternRefActivationsTable` for fast-path insertion of
     `externref` values into the table.
-  * Hold a pointer to a `*mut dyn wasmtime_runtime::Store` so store-level
+  * Hold a pointer to a `*mut dyn crate::runtime::vm::Store` so store-level
     operations can be performed in libcalls.
 
   A comment about the layout of a `VMContext` can be found in the `vmoffsets.rs`
@@ -268,11 +268,11 @@ The rough flow of instantiation looks like:
    completed before instantiation is finished. For MVP wasm this only involves
    loading the import into the correct index array, but for module linking this
    could involve instantiating other modules, handling `alias` fields, etc. In
-   any case the result of this step is a `wasmtime_runtime::Imports` array which
-   has the values for all imported items into the wasm module. Note that in
-   this case an import is typically some sort of raw pointer to the actual
-   state plus the `VMContext` of the instance that was imported from. The
-   final result of this step is an `InstanceAllocationRequest`, which is then
+   any case the result of this step is a `crate::runtime::vm::Imports` array
+   which has the values for all imported items into the wasm module. Note that
+   in this case an import is typically some sort of raw pointer to the actual
+   state plus the `VMContext` of the instance that was imported from. The final
+   result of this step is an `InstanceAllocationRequest`, which is then
    submitted to the configured instance allocator, either on-demand or pooling.
 
 3. The `InstanceHandle` corresponding to this instance is allocated. How this
@@ -315,11 +315,11 @@ traps.
 Wasmtime today implements traps with `longjmp` and `setjmp`. The `setjmp`
 function cannot be defined in Rust (even unsafely --
 (https://github.com/rust-lang/rfcs/issues/2625) so the
-`crates/runtime/src/helpers.c` file actually calls setjmp/longjmp. Note that in
-general the operation of `longjmp` is not safe to execute in Rust because it
-skips stack-based destructors, so after `setjmp` when we call back into Rust to
-execute wasm we need to be careful in Wasmtime to not have any significant
-destructors on the stack once wasm is called.
+`crates/wasmtime/src/runtime/vm/helpers.c` file actually calls
+setjmp/longjmp. Note that in general the operation of `longjmp` is not safe to
+execute in Rust because it skips stack-based destructors, so after `setjmp` when
+we call back into Rust to execute wasm we need to be careful in Wasmtime to not
+have any significant destructors on the stack once wasm is called.
 
 Traps can happen from a few different sources:
 
@@ -457,10 +457,9 @@ values that are actively in use on the stack.
 The main Wasmtime internal crates are:
 
 * `wasmtime` - the safe public API of `wasmtime`.
-* `wasmtime-runtime` - low-level runtime implementation of Wasmtime. This
-  is where `VMContext` and `InstanceHandle` live. This crate is theoretically
-  agnostic to how JIT code was compiled and the runtime that it's running
-  within.
+  * `wasmtime::runtime::vm` - low-level runtime implementation of Wasmtime. This
+    is where `VMContext` and `InstanceHandle` live. This module used to be a
+    crate, but has since been folding into `wasmtime`.
 * `wasmtime-environ` - low-level compilation support. This is where translation
   of the `Module` and its environment happens, although no compilation actually
   happens in this crate (although it defines an interface for compilers). The

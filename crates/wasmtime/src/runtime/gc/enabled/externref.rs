@@ -1,5 +1,6 @@
 //! Implementation of `externref` in Wasmtime.
 
+use crate::runtime::vm::VMGcRef;
 use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
@@ -8,7 +9,6 @@ use crate::{
 use anyhow::Context;
 use std::any::Any;
 use std::num::NonZeroU64;
-use wasmtime_runtime::VMGcRef;
 
 /// An opaque, GC-managed reference to some host data that can be passed to
 /// WebAssembly.

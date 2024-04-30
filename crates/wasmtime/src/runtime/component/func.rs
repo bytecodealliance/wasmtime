@@ -2,6 +2,8 @@ use crate::component::instance::{Instance, InstanceData};
 use crate::component::storage::storage_as_slice;
 use crate::component::types::Type;
 use crate::component::values::Val;
+use crate::runtime::vm::component::ResourceTables;
+use crate::runtime::vm::{Export, ExportFunction};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
@@ -12,8 +14,6 @@ use wasmtime_environ::component::{
     CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
     TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
-use wasmtime_runtime::component::ResourceTables;
-use wasmtime_runtime::{Export, ExportFunction};
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.

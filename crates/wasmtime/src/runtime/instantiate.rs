@@ -3,6 +3,7 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
+use crate::runtime::vm::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use anyhow::Result;
 use std::str;
@@ -12,7 +13,6 @@ use wasmtime_environ::{
     FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap, StackMapInformation,
     WasmFunctionInfo,
 };
-use wasmtime_runtime::{CompiledModuleId, CompiledModuleIdAllocator, MmapVec};
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
@@ -22,7 +22,7 @@ pub struct CompiledModule {
     meta: Metadata,
     code_memory: Arc<CodeMemory>,
     #[cfg(feature = "debug-builtins")]
-    dbg_jit_registration: Option<wasmtime_runtime::GdbJitImageRegistration>,
+    dbg_jit_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
     func_names: Vec<FunctionName>,
@@ -78,7 +78,7 @@ impl CompiledModule {
                 (text.as_ptr(), text.len()),
             )
             .context("failed to create jit image for gdb")?;
-            let reg = wasmtime_runtime::GdbJitImageRegistration::register(bytes);
+            let reg = crate::runtime::vm::GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
         }
         profiler.register_module(&self.code_memory.mmap()[..], &|addr| {

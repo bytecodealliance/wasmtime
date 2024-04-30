@@ -975,8 +975,8 @@ impl Compiler {
         // Note that loads and stores are unconditionally done in the
         // little-endian format rather than the host's native-endianness,
         // despite this load/store being unrelated to execution in wasm itself.
-        // For more details on this see the `ValRaw` type in the
-        // `wasmtime-runtime` crate.
+        // For more details on this see the `ValRaw` type in
+        // `wasmtime::runtime::vm`.
         let flags = ir::MemFlags::new()
             .with_notrap()
             .with_endianness(ir::Endianness::Little);
@@ -1295,7 +1295,7 @@ fn save_last_wasm_exit_fp_and_pc(
         trampoline_fp,
         // The FP always points to the next older FP for all supported
         // targets. See assertion in
-        // `crates/runtime/src/traphandlers/backtrace.rs`.
+        // `crates/wasmtime/src/runtime/vm/traphandlers/backtrace.rs`.
         0,
     );
     builder.ins().store(
