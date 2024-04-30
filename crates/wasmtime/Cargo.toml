@@ -95,7 +95,7 @@ psm = { workspace = true, optional = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
-wasi-common = { workspace = true, default-features = true }
+wasi-common = { path = "../wasi-common", default-features = true }
 
 [build-dependencies]
 cc = { workspace = true, optional = true }
