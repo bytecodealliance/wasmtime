@@ -54,25 +54,30 @@ fn main() -> anyhow::Result<()> {
             // Skip running spec_testsuite tests if the submodule isn't checked
             // out.
             if spec_tests > 0 {
-                test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/extended-const",
+                    strategy,
+                )?;
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/function-references",
                     strategy,
                 )?;
                 test_directory_module(out, "tests/spec_testsuite/proposals/gc", strategy)?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/multi-memory",
                     strategy,
                 )?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/tail-call", strategy)?;
                 test_directory_module(out, "tests/spec_testsuite/proposals/threads", strategy)?;
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/relaxed-simd",
                     strategy,
                 )?;
-                test_directory_module(out, "tests/spec_testsuite/proposals/tail-call", strategy)?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \

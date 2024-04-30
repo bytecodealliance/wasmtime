@@ -287,6 +287,7 @@ impl Config {
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
+        ret.wasm_extended_const(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
         // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
@@ -942,6 +943,20 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/memory64
     pub fn wasm_memory64(&mut self, enable: bool) -> &mut Self {
         self.features.set(WasmFeatures::MEMORY64, enable);
+        self
+    }
+
+    /// Configures whether the WebAssembly extended constant expressions
+    /// [proposal] will be enabled for compilation.
+    ///
+    /// Note that Wasmtime may have bugs for this feature since it hasn't been
+    /// exercised much.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/extended-const
+    pub fn wasm_extended_const(&mut self, enable: bool) -> &mut Self {
+        self.features.set(WasmFeatures::EXTENDED_CONST, enable);
         self
     }
 

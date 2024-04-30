@@ -3,7 +3,7 @@
 use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
 use anyhow::{anyhow, bail, Result};
 use smallvec::SmallVec;
-use wasmtime_environ::{ConstExpr, FuncIndex, GlobalIndex, Module};
+use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex, Module};
 
 /// An interpreter for const expressions.
 ///
@@ -64,15 +64,33 @@ impl ConstExprEvaluator {
 
         for op in expr.ops() {
             match op {
-                wasmtime_environ::ConstOp::I32Const(i) => self.stack.push(ValRaw::i32(*i)),
-                wasmtime_environ::ConstOp::I64Const(i) => self.stack.push(ValRaw::i64(*i)),
-                wasmtime_environ::ConstOp::F32Const(f) => self.stack.push(ValRaw::f32(*f)),
-                wasmtime_environ::ConstOp::F64Const(f) => self.stack.push(ValRaw::f64(*f)),
-                wasmtime_environ::ConstOp::V128Const(v) => self.stack.push(ValRaw::v128(*v)),
-                wasmtime_environ::ConstOp::GlobalGet(g) => self.stack.push(context.global_get(*g)?),
-                wasmtime_environ::ConstOp::RefNull => self.stack.push(ValRaw::null()),
-                wasmtime_environ::ConstOp::RefFunc(f) => self.stack.push(context.ref_func(*f)?),
-                wasmtime_environ::ConstOp::RefI31 => {
+                ConstOp::I32Const(i) => self.stack.push(ValRaw::i32(*i)),
+                ConstOp::I64Const(i) => self.stack.push(ValRaw::i64(*i)),
+                ConstOp::F32Const(f) => self.stack.push(ValRaw::f32(*f)),
+                ConstOp::F64Const(f) => self.stack.push(ValRaw::f64(*f)),
+                ConstOp::V128Const(v) => self.stack.push(ValRaw::v128(*v)),
+                ConstOp::I32Add => {
+                    self.binop(|a, b| ValRaw::i32(a.get_i32().wrapping_add(b.get_i32())))?
+                }
+                ConstOp::I64Add => {
+                    self.binop(|a, b| ValRaw::i64(a.get_i64().wrapping_add(b.get_i64())))?
+                }
+                ConstOp::I32Sub => {
+                    self.binop(|a, b| ValRaw::i32(a.get_i32().wrapping_sub(b.get_i32())))?
+                }
+                ConstOp::I64Sub => {
+                    self.binop(|a, b| ValRaw::i64(a.get_i64().wrapping_sub(b.get_i64())))?
+                }
+                ConstOp::I32Mul => {
+                    self.binop(|a, b| ValRaw::i32(a.get_i32().wrapping_mul(b.get_i32())))?
+                }
+                ConstOp::I64Mul => {
+                    self.binop(|a, b| ValRaw::i64(a.get_i64().wrapping_mul(b.get_i64())))?
+                }
+                ConstOp::GlobalGet(g) => self.stack.push(context.global_get(*g)?),
+                ConstOp::RefNull => self.stack.push(ValRaw::null()),
+                ConstOp::RefFunc(f) => self.stack.push(context.ref_func(*f)?),
+                ConstOp::RefI31 => {
                     let i = self.pop()?.get_i32();
                     let i31 = I31::wrapping_i32(i);
                     let raw = VMGcRef::from_i31(i31).as_raw_u32();
@@ -98,5 +116,12 @@ impl ConstExprEvaluator {
                  evaluation stack"
             )
         })
+    }
+
+    fn binop(&mut self, f: impl FnOnce(ValRaw, ValRaw) -> ValRaw) -> Result<()> {
+        let b = self.pop()?;
+        let a = self.pop()?;
+        self.stack.push(f(a, b));
+        Ok(())
     }
 }
