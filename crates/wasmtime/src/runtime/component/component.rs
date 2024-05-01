@@ -603,7 +603,7 @@ impl Component {
     /// compiled code resides at.
     ///
     /// For more information see
-    /// [`Module;:image_range`](crate::Module::image_range).
+    /// [`Module::image_range`](crate::Module::image_range).
     pub fn image_range(&self) -> Range<*const u8> {
         self.inner.code.code_memory().mmap().image_range()
     }
