@@ -1200,6 +1200,19 @@ impl ConstExpr {
     pub fn ops(&self) -> &[ConstOp] {
         &self.ops
     }
+
+    /// Is this ConstExpr a possibly zero integer value?
+    pub fn is_possibly_zero_i32(&self) -> bool {
+        assert!(self.ops.len() > 0);
+        if self.ops.len() > 1 {
+            return false;
+        }
+        match self.ops[0] {
+            ConstOp::I32Const(0) => true,
+            ConstOp::GlobalGet(_) => true, // The global *may* be zero.
+            _ => false,
+        }
+    }
 }
 
 /// The subset of Wasm opcodes that are constant.
