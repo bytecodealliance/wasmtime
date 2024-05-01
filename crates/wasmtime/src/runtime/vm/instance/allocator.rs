@@ -5,12 +5,12 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, Store, VMFuncRef, VMGcRef};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use std::{alloc, any::Any, mem, ptr, sync::Arc};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, Trap,
-    VMOffsets, WasmHeapTopType, WasmValType, WASM_PAGE_SIZE,
+    VMOffsets, WasmHeapTopType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "gc")]
@@ -623,36 +623,33 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     Ok(())
 }
 
-fn get_memory_init_start(init: &MemoryInitializer, instance: &mut Instance) -> Result<u64> {
-    match init.base {
-        Some(base) => {
-            let mem64 = instance.module().memory_plans[init.memory_index]
-                .memory
-                .memory64;
-            let val = unsafe {
-                let global = instance.defined_or_imported_global_ptr(base);
-                if mem64 {
-                    *(*global).as_u64()
-                } else {
-                    u64::from(*(*global).as_u32())
-                }
-            };
-
-            init.offset
-                .checked_add(val)
-                .ok_or_else(|| anyhow!("data segment global base overflows"))
+fn get_memory_init_start(
+    init: &MemoryInitializer,
+    instance: &mut Instance,
+    module: &Module,
+) -> Result<u64> {
+    let mem64 = instance.module().memory_plans[init.memory_index]
+        .memory
+        .memory64;
+    let mut context = ConstEvalContext::new(instance, module);
+    let mut const_evaluator = ConstExprEvaluator::default();
+    unsafe { const_evaluator.eval(&mut context, &init.offset) }.map(|v| {
+        if mem64 {
+            v.get_u64()
+        } else {
+            v.get_u32().into()
         }
-        None => Ok(init.offset),
-    }
+    })
 }
 
 fn check_memory_init_bounds(
     instance: &mut Instance,
+    module: &Module,
     initializers: &[MemoryInitializer],
 ) -> Result<()> {
     for init in initializers {
         let memory = instance.get_memory(init.memory_index);
-        let start = get_memory_init_start(init, instance)?;
+        let start = get_memory_init_start(init, instance, module)?;
         let end = usize::try_from(start)
             .ok()
             .and_then(|start| start.checked_add(init.data.len()));
@@ -671,21 +668,6 @@ fn check_memory_init_bounds(
 }
 
 fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
-    let memory_size_in_pages = &|instance: &mut Instance, memory| {
-        (instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE)
-    };
-
-    // Loads the `global` value and returns it as a `u64`, but sign-extends
-    // 32-bit globals which can be used as the base for 32-bit memories.
-    let get_global_as_u64 = &mut |instance: &mut Instance, global| unsafe {
-        let def = instance.defined_or_imported_global_ptr(global);
-        if module.globals[global].wasm_ty == WasmValType::I64 {
-            *(*def).as_u64()
-        } else {
-            u64::from(*(*def).as_u32())
-        }
-    };
-
     // Delegates to the `init_memory` method which is sort of a duplicate of
     // `instance.memory_init_segment` but is used at compile-time in other
     // contexts so is shared here to have only one method of memory
@@ -694,26 +676,52 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
     // This call to `init_memory` notably implements all the bells and whistles
     // so errors only happen if an out-of-bounds segment is found, in which case
     // a trap is returned.
-    let ok = module.memory_initialization.init_memory(
-        instance,
-        InitMemory::Runtime {
-            memory_size_in_pages,
-            get_global_as_u64,
-        },
-        |instance, memory_index, init| {
+
+    struct InitMemoryAtInstantiation<'a> {
+        instance: &'a mut Instance,
+        module: &'a Module,
+        const_evaluator: ConstExprEvaluator,
+    }
+
+    impl InitMemory for InitMemoryAtInstantiation<'_> {
+        fn memory_size_in_pages(&mut self, memory: wasmtime_environ::MemoryIndex) -> u64 {
+            (self.instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE)
+        }
+
+        fn eval_offset(
+            &mut self,
+            memory: wasmtime_environ::MemoryIndex,
+            expr: &wasmtime_environ::ConstExpr,
+        ) -> Option<u64> {
+            let mem64 = self.instance.module().memory_plans[memory].memory.memory64;
+            let mut context = ConstEvalContext::new(self.instance, self.module);
+            let val = unsafe { self.const_evaluator.eval(&mut context, expr) }
+                .expect("const expression should be valid");
+            Some(if mem64 {
+                val.get_u64()
+            } else {
+                val.get_u32().into()
+            })
+        }
+
+        fn write(
+            &mut self,
+            memory_index: wasmtime_environ::MemoryIndex,
+            init: &wasmtime_environ::StaticMemoryInitializer,
+        ) -> bool {
             // If this initializer applies to a defined memory but that memory
             // doesn't need initialization, due to something like copy-on-write
             // pre-initializing it via mmap magic, then this initializer can be
             // skipped entirely.
-            if let Some(memory_index) = module.defined_memory_index(memory_index) {
-                if !instance.memories[memory_index].1.needs_init() {
+            if let Some(memory_index) = self.module.defined_memory_index(memory_index) {
+                if !self.instance.memories[memory_index].1.needs_init() {
                     return true;
                 }
             }
-            let memory = instance.get_memory(memory_index);
+            let memory = self.instance.get_memory(memory_index);
 
             unsafe {
-                let src = instance.wasm_data(init.data.clone());
+                let src = self.instance.wasm_data(init.data.clone());
                 let dst = memory.base.add(usize::try_from(init.offset).unwrap());
                 // FIXME audit whether this is safe in the presence of shared
                 // memory
@@ -721,8 +729,16 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
                 ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len())
             }
             true
-        },
-    );
+        }
+    }
+
+    let ok = module
+        .memory_initialization
+        .init_memory(&mut InitMemoryAtInstantiation {
+            instance,
+            module,
+            const_evaluator: ConstExprEvaluator::default(),
+        });
     if !ok {
         return Err(Trap::MemoryOutOfBounds.into());
     }
@@ -735,7 +751,7 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
 
     match &module.memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
-            check_memory_init_bounds(instance, initializers)?;
+            check_memory_init_bounds(instance, module, initializers)?;
         }
         // Statically validated already to have everything in-bounds.
         MemoryInitialization::Static { .. } => {}
