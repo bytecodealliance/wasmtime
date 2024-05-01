@@ -535,25 +535,29 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
-        let r_rsp = regs::rsp();
-        let r_rbp = regs::rbp();
-        let w_rbp = Writable::from_reg(r_rbp);
+        let setup_frame = frame_layout.setup_area_size > 0;
         let mut insts = SmallVec::new();
-        // `push %rbp`
-        // RSP before the call will be 0 % 16.  So here, it is 8 % 16.
-        insts.push(Inst::push64(RegMemImm::reg(r_rbp)));
 
-        if flags.unwind_info() {
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::PushFrameRegs {
-                    offset_upward_to_caller_sp: frame_layout.setup_area_size,
-                },
-            });
+        if setup_frame {
+            let r_rsp = regs::rsp();
+            let r_rbp = regs::rbp();
+            let w_rbp = Writable::from_reg(r_rbp);
+            // `push %rbp`
+            // RSP before the call will be 0 % 16.  So here, it is 8 % 16.
+            insts.push(Inst::push64(RegMemImm::reg(r_rbp)));
+
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::PushFrameRegs {
+                        offset_upward_to_caller_sp: frame_layout.setup_area_size,
+                    },
+                });
+            }
+
+            // `mov %rsp, %rbp`
+            // RSP is now 0 % 16
+            insts.push(Inst::mov_r_r(OperandSize::Size64, r_rsp, w_rbp));
         }
-
-        // `mov %rsp, %rbp`
-        // RSP is now 0 % 16
-        insts.push(Inst::mov_r_r(OperandSize::Size64, r_rsp, w_rbp));
 
         insts
     }
@@ -562,17 +566,21 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &x64_settings::Flags,
-        _frame_layout: &FrameLayout,
+        frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
+        let setup_frame = frame_layout.setup_area_size > 0;
         let mut insts = SmallVec::new();
-        // `mov %rbp, %rsp`
-        insts.push(Inst::mov_r_r(
-            OperandSize::Size64,
-            regs::rbp(),
-            Writable::from_reg(regs::rsp()),
-        ));
-        // `pop %rbp`
-        insts.push(Inst::pop64(Writable::from_reg(regs::rbp())));
+
+        if setup_frame {
+            // `mov %rbp, %rsp`
+            insts.push(Inst::mov_r_r(
+                OperandSize::Size64,
+                regs::rbp(),
+                Writable::from_reg(regs::rsp()),
+            ));
+            // `pop %rbp`
+            insts.push(Inst::pop64(Writable::from_reg(regs::rbp())));
+        }
         insts
     }
 
@@ -966,7 +974,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
-        _is_leaf: bool,
+        is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
         fixed_frame_storage_size: u32,
@@ -999,7 +1007,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let clobber_size = compute_clobber_size(&regs);
 
         // Compute setup area size.
-        let setup_area_size = 16; // RBP, return address
+        let setup_area_size = if flags.preserve_frame_pointers()
+            || !dbg!(is_leaf)
+            || incoming_args_size > 0
+            || clobber_size > 0
+            || fixed_frame_storage_size > 0
+        {
+            16 // RBP, return address
+        } else {
+            0
+        };
+
+        dbg!(setup_area_size);
 
         // Return FrameLayout structure.
         FrameLayout {
