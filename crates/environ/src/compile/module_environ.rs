@@ -1154,7 +1154,7 @@ impl ModuleTranslation<'_> {
             // include it in the statically-built array of initial
             // contents.
             let offset = match segment.offset.ops() {
-                &[ConstOp::I32Const(offset)] => offset as u32,
+                &[ConstOp::I32Const(offset)] => offset.unsigned(),
                 _ => break,
             };
 
