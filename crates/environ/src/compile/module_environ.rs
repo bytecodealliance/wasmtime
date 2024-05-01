@@ -494,19 +494,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             offset_expr,
                         } => {
                             let table_index = TableIndex::from_u32(table_index.unwrap_or(0));
-                            let mut offset_expr_reader = offset_expr.get_binary_reader();
-                            let (base, offset) = match offset_expr_reader.read_operator()? {
-                                Operator::I32Const { value } => (None, value.unsigned()),
-                                Operator::GlobalGet { global_index } => {
-                                    (Some(GlobalIndex::from_u32(global_index)), 0)
-                                }
-                                ref s => {
-                                    bail!(WasmError::Unsupported(format!(
-                                        "unsupported init expr in element section: {:?}",
-                                        s
-                                    )));
-                                }
-                            };
+                            let (offset, escaped) = ConstExpr::from_wasmparser(offset_expr)?;
+                            debug_assert!(escaped.is_empty());
 
                             self.result
                                 .module
@@ -514,7 +503,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 .segments
                                 .push(TableSegment {
                                     table_index,
-                                    base,
                                     offset,
                                     elements: elements.into(),
                                 });
@@ -1165,14 +1153,15 @@ impl ModuleTranslation<'_> {
             // If the base of this segment is dynamic, then we can't
             // include it in the statically-built array of initial
             // contents.
-            if segment.base.is_some() {
-                break;
-            }
+            let offset = match segment.offset.ops() {
+                &[ConstOp::I32Const(offset)] => offset.unsigned(),
+                _ => break,
+            };
 
             // Get the end of this segment. If out-of-bounds, or too
             // large for our dense table representation, then skip the
             // segment.
-            let top = match segment.offset.checked_add(segment.elements.len()) {
+            let top = match offset.checked_add(segment.elements.len()) {
                 Some(top) => top,
                 None => break,
             };
@@ -1228,7 +1217,7 @@ impl ModuleTranslation<'_> {
             if precomputed.len() < top as usize {
                 precomputed.resize(top as usize, FuncIndex::reserved_value());
             }
-            let dst = &mut precomputed[(segment.offset as usize)..(top as usize)];
+            let dst = &mut precomputed[offset as usize..top as usize];
             dst.copy_from_slice(&function_elements);
 
             // advance the iterator to see the next segment

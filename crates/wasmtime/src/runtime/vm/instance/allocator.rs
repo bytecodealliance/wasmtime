@@ -9,8 +9,8 @@ use anyhow::{anyhow, bail, Result};
 use std::{alloc, any::Any, mem, ptr, sync::Arc};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, TableSegment,
-    Trap, VMOffsets, WasmHeapTopType, WasmValType, WASM_PAGE_SIZE,
+    MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, Trap,
+    VMOffsets, WasmHeapTopType, WasmValType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "gc")]
@@ -525,24 +525,18 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
 // must use the defaults. This blanket impl provides both of those things.
 impl<T: InstanceAllocatorImpl> InstanceAllocator for T {}
 
-fn get_table_init_start(init: &TableSegment, instance: &mut Instance) -> Result<u32> {
-    match init.base {
-        Some(base) => {
-            let val = unsafe { *(*instance.defined_or_imported_global_ptr(base)).as_u32() };
-
-            init.offset
-                .checked_add(val)
-                .ok_or_else(|| anyhow!("element segment global base overflows"))
-        }
-        None => Ok(init.offset),
-    }
-}
-
 fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
+    let mut const_evaluator = ConstExprEvaluator::default();
+
     for segment in module.table_initialization.segments.iter() {
         let table = unsafe { &*instance.get_table(segment.table_index) };
-        let start = get_table_init_start(segment, instance)?;
-        let start = usize::try_from(start).unwrap();
+        let mut context = ConstEvalContext::new(instance, module);
+        let start = unsafe {
+            const_evaluator
+                .eval(&mut context, &segment.offset)
+                .expect("const expression should be valid")
+        };
+        let start = usize::try_from(start.get_u32()).unwrap();
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
         match end {
@@ -610,12 +604,17 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
     for segment in module.table_initialization.segments.iter() {
-        let start = get_table_init_start(segment, instance)?;
+        let mut context = ConstEvalContext::new(instance, module);
+        let start = unsafe {
+            const_evaluator
+                .eval(&mut context, &segment.offset)
+                .expect("const expression should be valid")
+        };
         instance.table_init_segment(
             &mut const_evaluator,
             segment.table_index,
             &segment.elements,
-            start,
+            start.get_u32(),
             0,
             segment.elements.len(),
         )?;
