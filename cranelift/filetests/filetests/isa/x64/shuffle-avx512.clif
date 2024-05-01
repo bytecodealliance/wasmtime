@@ -15,7 +15,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movdqa  %xmm0, %xmm5
 ;   movdqu  const(0), %xmm0
 ;   movdqa  %xmm5, %xmm6
-;   vpermi2b %xmm0, %xmm6, %xmm1, %xmm0
+;   vpermi2b %xmm1, %xmm6, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -54,7 +54,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movdqa  %xmm0, %xmm5
 ;   movdqu  const(0), %xmm0
 ;   movdqa  %xmm5, %xmm6
-;   vpermi2b %xmm0, %xmm6, %xmm1, %xmm0
+;   vpermi2b %xmm1, %xmm6, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
