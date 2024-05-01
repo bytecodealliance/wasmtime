@@ -152,6 +152,67 @@
 (rule (simplify (bxor ty (bxor ty (bxor ty a b) c) d))
       (subsume (bxor ty (bxor ty a b) (bxor ty c d))))
 
+
+;; Similar rules but for associating combinations of + and -
+
+;; a -(b-(c-d)) = (a-b) + (c-d)
+(rule (simplify (isub ty a (isub ty b (isub ty c d))))
+      (subsume (iadd ty (isub ty a b) (isub ty c d))))
+
+;; a -(b-(c+d)) = (a-b) + (c+d)
+(rule (simplify (isub ty a (isub ty b (iadd ty c d))))
+      (subsume (iadd ty (isub ty a b) (iadd ty c d))))
+
+;; a -(b+(c-d)) = (a-b) - (c-d)
+(rule (simplify (isub ty a (iadd ty b (isub ty c d))))
+      (subsume (isub ty (isub ty a b) (isub ty c d))))
+
+;; a -(b+(c+d)) = (a-b) - (c+d)
+(rule (simplify (isub ty a (iadd ty b (iadd ty c d))))
+      (subsume (isub ty (isub ty a b) (iadd ty c d))))
+
+;; a +(b-(c-d)) = (a+b) - (c-d)
+(rule (simplify (iadd ty a (isub ty b (isub ty c d))))
+      (subsume (isub ty (iadd ty a b) (isub ty c d))))
+
+;; a +(b-(c+d)) = (a+b) - (c+d)
+(rule (simplify (iadd ty a (isub ty b (iadd ty c d))))
+      (subsume (isub ty (iadd ty a b) (iadd ty c d))))
+
+;; a +(b+(c-d)) = (a+b) + (c-d)
+(rule (simplify (iadd ty a (iadd ty b (isub ty c d))))
+      (subsume (iadd ty (iadd ty a b) (isub ty c d))))
+
+;; and nested the other way
+
+;; ((a-b)-c)-d = (a-b) - (c+d)
+(rule (simplify (isub ty (isub ty (isub ty a b) c) d))
+      (subsume (isub ty (isub ty a b) (iadd ty c d))))
+
+;; ((a-b)-c)+d = (a-b) - (c-d)
+(rule (simplify (iadd ty (isub ty (isub ty a b) c) d))
+      (subsume (isub ty (isub ty a b) (isub ty c d))))
+
+;; ((a-b)+c)-d = (a-b) + (c-d)
+(rule (simplify (isub ty (iadd ty (isub ty a b) c) d))
+      (subsume (iadd ty (isub ty a b) (isub ty c d))))
+
+;; ((a-b)+c)+d = (a-b) + (c+d)
+(rule (simplify (iadd ty (iadd ty (isub ty a b) c) d))
+      (subsume (iadd ty (isub ty a b) (iadd ty c d))))
+
+;; ((a+b)-c)-d = (a+b) - (c+d)
+(rule (simplify (isub ty (isub ty (iadd ty a b) c) d))
+      (subsume (isub ty (iadd ty a b) (iadd ty c d))))
+
+;; ((a+b)-c)+d = (a+b) - (c-d)
+(rule (simplify (iadd ty (isub ty (iadd ty a b) c) d))
+      (subsume (isub ty (iadd ty a b) (isub ty c d))))
+
+;; ((a+b)+c)-d = (a+b) + (c-d)
+(rule (simplify (isub ty (iadd ty (iadd ty a b) c) d))
+      (subsume (iadd ty (iadd ty a b) (isub ty c d))))
+
 ;; Detect people open-coding `mulhi`: (x as big * y as big) >> bits
 ;; LLVM doesn't have an intrinsic for it, so you'll see it in code like
 ;; <https://github.com/rust-lang/rust/blob/767453eb7ca188e991ac5568c17b984dd4893e77/library/core/src/num/mod.rs#L174-L180>

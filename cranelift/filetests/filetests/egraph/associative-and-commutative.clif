@@ -117,3 +117,171 @@ block0(v0: i8):
     v28 = ireduce.i16 v27
     return v28
 }
+
+function %iadd_sub_1_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v2, v3
+    v5 = isub v1, v4
+    v6 = isub v0, v5
+    return v6
+; check:  v7 = isub v0, v1
+; nextln: v4 = isub v2, v3
+; nextln: v8 = iadd v7, v4
+; check: return v8
+}
+
+function %iadd_sub_2_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v2, v3
+    v5 = isub v1, v4
+    v6 = isub v0, v5
+    return v6
+; check:  v7 = isub v0, v1
+; nextln: v4 = iadd v2, v3
+; nextln: v8 = iadd v7, v4
+; check: return v8
+}
+
+function %iadd_sub_3_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v2, v3
+    v5 = iadd v1, v4
+    v6 = isub v0, v5
+    return v6
+; check:  v7 = isub v0, v1
+; nextln: v4 = isub v2, v3
+; nextln: v8 = isub v7, v4
+; check: return v8
+}
+
+function %iadd_sub_4_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v2, v3
+    v5 = iadd v1, v4
+    v6 = isub v0, v5
+    return v6
+; check:  v7 = isub v0, v1
+; nextln: v4 = iadd v2, v3
+; nextln: v8 = isub v7, v4
+; check: return v8
+}
+
+function %iadd_sub_5_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v2, v3
+    v5 = isub v1, v4
+    v6 = iadd v0, v5
+    return v6
+; check:  v7 = iadd v0, v1
+; nextln: v4 = isub v2, v3
+; nextln: v8 = isub v7, v4
+; check: return v8
+}
+
+function %iadd_sub_6_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v2, v3
+    v5 = isub v1, v4
+    v6 = iadd v0, v5
+    return v6
+; check:  v7 = iadd v0, v1
+; nextln: v4 = iadd v2, v3
+; nextln: v8 = isub v7, v4
+; check: return v8
+}
+
+function %iadd_sub_7_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v2, v3
+    v5 = iadd v1, v4
+    v6 = iadd v0, v5
+    return v6
+; check:  v7 = iadd v0, v1
+; nextln: v4 = isub v2, v3
+; nextln: v8 = iadd v7, v4
+; check: return v8
+}
+
+function %isub_add_1_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v0, v1
+    v5 = isub v4, v2
+    v6 = isub v5, v3
+    return v6
+; check:  v4 = isub v0, v1
+; nextln: v7 = iadd v2, v3
+; nextln: v8 = isub v4, v7
+; check: return v8
+}
+
+function %isub_add_2_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v0, v1
+    v5 = isub v4, v2
+    v6 = iadd v5, v3
+    return v6
+; check:  v4 = isub v0, v1
+; nextln: v7 = isub v2, v3
+; nextln: v8 = isub v4, v7
+; check: return v8
+}
+
+function %isub_add_3_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v0, v1
+    v5 = iadd v4, v2
+    v6 = isub v5, v3
+    return v6
+; check:  v4 = isub v0, v1
+; nextln: v7 = isub v2, v3
+; nextln: v8 = iadd v4, v7
+; check: return v8
+}
+
+function %isub_add_4_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = isub v0, v1
+    v5 = iadd v4, v2
+    v6 = iadd v5, v3
+    return v6
+; check:  v4 = isub v0, v1
+; nextln: v7 = iadd v2, v3
+; nextln: v8 = iadd v4, v7
+; check: return v8
+}
+
+function %isub_add_5_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v0, v1
+    v5 = isub v4, v2
+    v6 = isub v5, v3
+    return v6
+; check:  v4 = iadd v0, v1
+; nextln: v7 = iadd v2, v3
+; nextln: v8 = isub v4, v7
+; check: return v8
+}
+
+function %isub_add_6_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v0, v1
+    v5 = isub v4, v2
+    v6 = iadd v5, v3
+    return v6
+; check:  v4 = iadd v0, v1
+; nextln: v7 = isub v2, v3
+; nextln: v8 = isub v4, v7
+; check: return v8
+}
+
+function %isub_add_7_shallow_and_wide(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iadd v0, v1
+    v5 = iadd v4, v2
+    v6 = isub v5, v3
+    return v6
+; check:  v4 = iadd v0, v1
+; nextln: v7 = isub v2, v3
+; nextln: v8 = iadd v4, v7
+; check: return v8
+}
