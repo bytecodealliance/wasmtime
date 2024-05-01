@@ -699,11 +699,18 @@ impl CallThreadState {
             return TrapTest::NotWasm;
         };
 
+        let stack_overflow_trap = if let Some(faulting_address) = faulting_addr {
+            (regs.sp - 128 <= faulting_address && faulting_address <= regs.sp + 4096)
+                .then_some(wasmtime_environ::Trap::StackOverflow)
+        } else {
+            None
+        };
+
         // If the fault was at a location that was not marked as potentially
         // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
         // catch the trap and pretend this isn't wasm so the program likely
         // aborts.
-        let Some(trap) = code.lookup_trap_code(text_offset) else {
+        let Some(trap) = stack_overflow_trap.or_else(|| code.lookup_trap_code(text_offset)) else {
             return TrapTest::NotWasm;
         };
 
